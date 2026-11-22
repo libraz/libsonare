@@ -6,6 +6,7 @@
 
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_field_tables.h"
 #include "mastering/api/param_map.h"
 #include "mastering/api/retired_names.h"
 #include "mastering/saturation/amp_presets.h"
@@ -400,7 +401,7 @@ std::string amp_preset_catalog_json() {
   for (size_t index = 0; index < names.size(); ++index) {
     const sat::AmpSimConfig config = sat::amp_preset_config(static_cast<sat::AmpPreset>(index));
     json::Object params;
-    params["topology"] = static_cast<int>(config.topology);
+    detail::put_enum(params, "topology", config.topology);
     params["inputDb"] = static_cast<double>(config.input_db);
     params["drive"] = static_cast<double>(config.drive);
     params["bassDb"] = static_cast<double>(config.bass_db);
@@ -409,9 +410,9 @@ std::string amp_preset_catalog_json() {
     params["presenceDb"] = static_cast<double>(config.presence_db);
     params["levelDb"] = static_cast<double>(config.level_db);
     params["cab"] = config.cab;
-    params["ampModel"] = static_cast<int>(config.amp_model);
-    params["cabModel"] = static_cast<int>(config.cab_model);
-    params["micModel"] = static_cast<int>(config.mic_model);
+    detail::put_enum(params, "ampModel", config.amp_model);
+    detail::put_enum(params, "cabModel", config.cab_model);
+    detail::put_enum(params, "micModel", config.mic_model);
     params["power"] = static_cast<double>(config.power);
     params["sag"] = static_cast<double>(config.sag);
     params["transformer"] = static_cast<double>(config.transformer);
@@ -419,7 +420,7 @@ std::string amp_preset_catalog_json() {
     params["micAxis"] = static_cast<double>(config.mic_axis);
     params["micDistanceCm"] = static_cast<double>(config.mic_distance_cm);
     params["micBlend"] = static_cast<double>(config.mic_blend);
-    params["micBModel"] = static_cast<int>(config.mic_b_model);
+    detail::put_enum(params, "micBModel", config.mic_b_model);
     params["micBAxis"] = static_cast<double>(config.mic_b_axis);
     params["micBDistanceCm"] = static_cast<double>(config.mic_b_distance_cm);
     params["micBInvert"] = config.mic_b_invert;
@@ -428,7 +429,7 @@ std::string amp_preset_catalog_json() {
     params["preampStages"] = static_cast<int>(config.preamp_stages);
     params["biasShift"] = static_cast<double>(config.bias_shift);
     params["crossover"] = static_cast<double>(config.crossover);
-    params["powerTube"] = static_cast<int>(config.power_tube);
+    detail::put_enum(params, "powerTube", config.power_tube);
 
     json::Object entry;
     entry["index"] = static_cast<int>(index);

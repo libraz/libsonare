@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "effects/common/mix_law.h"
+#include "mastering/api/param_field_tables.h"
 #include "midi/controller_numbers.h"
 #include "midi/synth/channel_mapping.h"
 #include "midi/synth/gs_address_table.h"
@@ -676,6 +677,11 @@ class ParamsJson {
   void number(const char* key, float value) { append(key, std::to_string(value)); }
   void integer(const char* key, int value) { append(key, std::to_string(value)); }
   void text(const char* key, const char* value) { append(key, '"' + std::string(value) + '"'); }
+  /// An enum-valued key, written as the token the insert reads it by.
+  template <typename Enum>
+  void enumerated(const char* key, Enum value) {
+    text(key, sonare::mastering::api::detail::enum_choice_name(value));
+  }
   std::string str() const { return out_.empty() ? "{}" : out_ + "}"; }
 
  private:
@@ -695,26 +701,23 @@ uint8_t efx_byte(const GsEfx& efx, int slot) noexcept {
   return static_cast<uint8_t>(efx.params[static_cast<size_t>(slot)] & 0x7Fu);
 }
 
-/// eq.parametric band-type selectors, in the order processor_params.h decodes.
-constexpr int kEqBandPeak = 0;
-constexpr int kEqBandLowShelf = 1;
-constexpr int kEqBandHighShelf = 2;
+using sonare::mastering::eq::EqBandType;
 
 /// Writes one band's type. What the band reads -- corner, centre, width, gain --
 /// is a bound byte or a fixed corner the caller writes beside it.
-void append_band(ParamsJson& out, int band, int type) {
-  out.integer(("band" + std::to_string(band) + ".type").c_str(), type);
+void append_band(ParamsJson& out, int band, EqBandType type) {
+  out.enumerated(("band" + std::to_string(band) + ".type").c_str(), type);
 }
 
 /// Writes one shelf's type and order. Its corner and gain are bound bytes.
-void append_shelf(ParamsJson& out, int band, int type) {
+void append_shelf(ParamsJson& out, int band, EqBandType type) {
   append_band(out, band, type);
   // The insert's slope is 6 dB/oct a pole, which is how it selects the order.
   out.integer(("band" + std::to_string(band) + ".slopeDbOct").c_str(), 6 * kGsEfxShelfOrder);
 }
 
 /// Writes one shelf on a corner no byte selects. The gain is a bound byte.
-void append_fixed_shelf(ParamsJson& out, int band, int type, float corner_hz) {
+void append_fixed_shelf(ParamsJson& out, int band, EqBandType type, float corner_hz) {
   append_shelf(out, band, type);
   out.number(("band" + std::to_string(band) + ".frequencyHz").c_str(), corner_hz);
 }
@@ -724,10 +727,10 @@ void append_fixed_shelf(ParamsJson& out, int band, int type, float corner_hz) {
 /// the two corner bytes included.
 std::string gs_stereo_eq_json() {
   ParamsJson out;
-  append_shelf(out, 0, kEqBandLowShelf);
-  append_band(out, 1, kEqBandPeak);
-  append_band(out, 2, kEqBandPeak);
-  append_shelf(out, 3, kEqBandHighShelf);
+  append_shelf(out, 0, EqBandType::LowShelf);
+  append_band(out, 1, EqBandType::Peak);
+  append_band(out, 2, EqBandType::Peak);
+  append_shelf(out, 3, EqBandType::HighShelf);
   return out.str();
 }
 
@@ -759,6 +762,62 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
   }
 }
 
+namespace {
+
+/// An insert key a binding row reaches that holds an enum, and its name table.
+struct GsEfxEnumKey {
+  std::string_view stage;
+  std::string_view key;
+  GsEfxEnumNameFn name_of;
+};
+
+template <typename Enum>
+constexpr GsEfxEnumKey enum_key(std::string_view stage, std::string_view key) {
+  return {stage, key, &sonare::mastering::api::detail::enum_choice_name_of<Enum>};
+}
+
+namespace fx = sonare::effects;
+namespace sat = sonare::mastering::saturation;
+
+constexpr std::array<GsEfxEnumKey, 12> kGsEfxEnumKeys = {{
+    enum_key<fx::delay::StereoDelayCrossMode>("effects.delay.stereo", "crossMode"),
+    enum_key<fx::modulation::AutoWahDirection>("effects.modulation.autoWah", "direction"),
+    enum_key<fx::modulation::WahFilterType>("effects.modulation.autoWah", "filterType"),
+    enum_key<fx::modulation::PreFilterMode>("effects.modulation.chorus", "preFilterMode"),
+    enum_key<fx::modulation::PreFilterMode>("effects.modulation.flanger", "preFilterMode"),
+    enum_key<fx::modulation::LfoShape>("effects.modulation.ringModulator", "shape"),
+    enum_key<fx::modulation::WahFilterType>("effects.modulation.wah", "filterType"),
+    enum_key<fx::reverb::DattorroGateType>("effects.reverb.plate", "gateType"),
+    enum_key<sat::BitCrusherDiscType>("saturation.bitcrusher", "discType"),
+    enum_key<sat::BitCrusherFilterType>("saturation.bitcrusher", "filterType"),
+    enum_key<fx::modulation::LfoShape>("stereo.autoPan", "shape"),
+    enum_key<sonare::mastering::stereo::BinauralOutput>("stereo.binaural", "output"),
+}};
+
+}  // namespace
+
+GsEfxEnumNameFn gs_efx_enum_key_names(std::string_view stage, std::string_view key) noexcept {
+  for (const GsEfxEnumKey& entry : kGsEfxEnumKeys) {
+    if (entry.stage == stage && entry.key == key) return entry.name_of;
+  }
+  return nullptr;
+}
+
+bool gs_efx_enum_token_value(std::string_view stage, std::string_view key, std::string_view token,
+                             int& value) noexcept {
+  const GsEfxEnumNameFn name_of = gs_efx_enum_key_names(stage, key);
+  if (name_of == nullptr) return false;
+  for (int candidate = 0; candidate <= sonare::mastering::api::detail::kEnumOrdinalScanLimit;
+       ++candidate) {
+    const char* name = name_of(candidate);
+    if (name != nullptr && token == name) {
+      value = candidate;
+      return true;
+    }
+  }
+  return false;
+}
+
 uint16_t gs_efx_binding_type(const GsEfxRowView& view, uint16_t type) noexcept {
   for (size_t i = 0; i < view.n_rows; ++i) {
     if (view.rows[i].type == type) return type;
@@ -771,9 +830,18 @@ uint16_t gs_efx_binding_type(const GsEfxRowView& view, uint16_t type) noexcept {
 
 namespace {
 
-/// Writes one bound byte as the value the row's own law gives it.
-void write_bound(ParamsJson& out, const char* key, const GsEfxBindingRow& row, uint8_t byte) {
-  out.number(key, gs_efx_binding_value(row, byte));
+/// Writes one bound byte as the value the row's own law gives it, as its token
+/// where the key holds an enum.
+void write_bound(ParamsJson& out, std::string_view stage, const char* key,
+                 const GsEfxBindingRow& row, uint8_t byte) {
+  const float value = gs_efx_binding_value(row, byte);
+  if (const GsEfxEnumNameFn name_of = gs_efx_enum_key_names(stage, key)) {
+    if (const char* name = name_of(static_cast<int>(std::lround(value)))) {
+      out.text(key, name);
+      return;
+    }
+  }
+  out.number(key, value);
 }
 
 bool raw_pan_law(const GsEfxStage& stage) noexcept {
@@ -800,8 +868,8 @@ void write_output_stage_constants(ParamsJson& out, std::string_view stage) {
   if (stage != "eq.parametric") return;
   // The module applies one tone pair after the effect, whatever the effect is:
   // two first-order shelves on fixed corners, each taking one gain byte.
-  append_fixed_shelf(out, 0, kEqBandLowShelf, kGsEfxOutputToneLowHz);
-  append_fixed_shelf(out, 1, kEqBandHighShelf, kGsEfxOutputToneHighHz);
+  append_fixed_shelf(out, 0, EqBandType::LowShelf, kGsEfxOutputToneLowHz);
+  append_fixed_shelf(out, 1, EqBandType::HighShelf, kGsEfxOutputToneHighHz);
 }
 
 /// Removes @p key and its value from a params object; the skeleton writes only
@@ -856,28 +924,28 @@ namespace {
 /// Lagrange delay reads, the pitch shifter's pre-write anti-aliasing, the
 /// geometric rotary, octave-linear wah sweeps and ADAA on the enhancer's
 /// shaper. The inserts' own defaults stay today's behaviour; only this chain
-/// asks for the newer one, and it writes integer method keys and no constants.
+/// asks for the newer one, and it writes method keys and no constants.
 void write_method_keys(std::vector<GsEfxStage>& chain) {
-  constexpr int kLagrange3 = 1;        // DelayInterpolation::kLagrange3
-  constexpr int kGeometricRotary = 1;  // RotaryModel, the two-microphone model
-  constexpr int kOctaveSweep = 1;      // WahSweepLaw::kLinearOctave
-  constexpr int kAdaa1 = 1;            // rt::AliasingControl::Adaa1
+  constexpr auto kLagrange3 = sonare::effects::modulation::DelayInterpolation::kLagrange3;
+  constexpr auto kGeometricRotary = sonare::effects::modulation::RotaryModel::kGeometric;
+  constexpr auto kOctaveSweep = sonare::effects::modulation::WahSweepLaw::kLinearOctave;
+  constexpr auto kAdaa1 = sonare::rt::AliasingControl::Adaa1;
   for (GsEfxStage& stage : chain) {
     ParamsJson keys;
     const std::string& name = stage.name;
     if (name == "effects.modulation.chorus" || name == "effects.modulation.flanger" ||
         name == "effects.modulation.ensemble" || name == "effects.delay.stereo") {
-      keys.integer("interpolation", kLagrange3);
+      keys.enumerated("interpolation", kLagrange3);
     } else if (name == "effects.modulation.rotary") {
-      keys.integer("interpolation", kLagrange3);
-      keys.integer("model", kGeometricRotary);
+      keys.enumerated("interpolation", kLagrange3);
+      keys.enumerated("model", kGeometricRotary);
     } else if (name == "effects.modulation.pitchShifter") {
-      keys.integer("interpolation", kLagrange3);
+      keys.enumerated("interpolation", kLagrange3);
       keys.integer("antiAlias", 1);
     } else if (name == "effects.modulation.wah" || name == "effects.modulation.autoWah") {
-      keys.integer("sweepLaw", kOctaveSweep);
+      keys.enumerated("sweepLaw", kOctaveSweep);
     } else if (name == "spectral.presenceEnhancer") {
-      keys.integer("aliasing", kAdaa1);
+      keys.enumerated("aliasing", kAdaa1);
     } else {
       continue;
     }
@@ -926,7 +994,7 @@ void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEf
     }
 
     ParamsJson one;
-    write_bound(one, std::string(key).c_str(), row, efx_byte(efx, row.slot));
+    write_bound(one, stage, std::string(key).c_str(), row, efx_byte(efx, row.slot));
     if (row.conv_class == kGsEfxClassPan && stage == "stereo.stereoBalance" && key == "balance") {
       one.number("gain", gs_efx_pan_gain(efx_byte(efx, row.slot), raw_pan_law(*found)));
     }
@@ -934,7 +1002,7 @@ void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEf
     // as the measured direct and effect gains.
     if (row.conv_class == kGsEfxClassBalance && row.law.form == kGsEfxFormNone) {
       drop_key(found->params_json, "mixLaw");
-      one.integer("mixLaw", static_cast<int>(sonare::effects::common::MixLaw::kTwoRamps));
+      one.enumerated("mixLaw", sonare::effects::common::MixLaw::kTwoRamps);
     }
     const std::string rendered = one.str();
     // ParamsJson closes itself, so unwrap the pairs it just wrote.
@@ -986,15 +1054,15 @@ std::vector<GsEfxStage> gs_efx_single_chain(uint16_t type) {
 constexpr std::string_view kGsOverdrive = "saturation.overdrive";
 constexpr std::string_view kGsDistortion = "saturation.distortion";
 
-/// saturation::CabModel values the amp stages sit on.
-constexpr int kGsCabGuitar4x12 = 0;
-constexpr int kGsCabGuitar1x12Combo = 2;
-constexpr int kGsCabGuitar2x12Open = 3;
+/// The cabinets the amp stages sit on.
+constexpr auto kGsCabGuitar4x12 = sonare::mastering::saturation::CabModel::kGuitar4x12;
+constexpr auto kGsCabGuitar1x12Combo = sonare::mastering::saturation::CabModel::kGuitar1x12Combo;
+constexpr auto kGsCabGuitar2x12Open = sonare::mastering::saturation::CabModel::kGuitar2x12Open;
 
 /// One amp stage of an OD/DS block: an amp preset and the cabinet under it.
 struct GsAmpVoicing {
   const char* preset;
-  int cab_model;
+  sonare::mastering::saturation::CabModel cab_model;
 };
 
 /// The printed Amp Type states in order (Small, BltIn, 2-Stk, 3-Stk), one amp
@@ -1014,7 +1082,7 @@ constexpr std::size_t kGsBassMultiAmpTypes = 3;
 GsEfxStage gs_amp_stage(const GsAmpVoicing& voicing) {
   ParamsJson out;
   out.text("preset", voicing.preset);
-  out.integer("cabModel", voicing.cab_model);
+  out.enumerated("cabModel", voicing.cab_model);
   return {"saturation.ampSim", out.str()};
 }
 
@@ -1071,7 +1139,7 @@ void append_half(std::vector<GsEfxStage>& chain, const std::array<uint16_t, 2>& 
   chain.push_back({"utility.gain", "{}", branch});
   // The raw constant-power law, so the half's pan byte moves its pair.
   ParamsJson pan;
-  pan.integer("law", 1);
+  pan.enumerated("law", sonare::mastering::stereo::StereoBalanceLaw::kRawConstantPower);
   chain.push_back({"stereo.stereoBalance", pan.str(), branch});
 }
 
@@ -1095,9 +1163,9 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   // pair the archive measured on one such type; every byte the bands read is bound.
   const auto eq = [] {
     ParamsJson out;
-    append_fixed_shelf(out, 0, kEqBandLowShelf, kGsEfxCombinationEqLowHz);
-    append_band(out, 1, kEqBandPeak);
-    append_fixed_shelf(out, 2, kEqBandHighShelf, kGsEfxCombinationEqHighHz);
+    append_fixed_shelf(out, 0, EqBandType::LowShelf, kGsEfxCombinationEqLowHz);
+    append_band(out, 1, EqBandType::Peak);
+    append_fixed_shelf(out, 2, EqBandType::HighShelf, kGsEfxCombinationEqHighHz);
     return GsEfxStage{"eq.parametric", out.str()};
   };
   const auto cf = [] { return GsEfxStage{"effects.modulation.chorus", "{}"}; };

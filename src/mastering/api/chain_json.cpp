@@ -47,12 +47,7 @@ void add_field(sonare::util::json::Object& params, const char* key, Int value) {
 // Enum config fields serialize as the name the reader resolves back to the value.
 template <typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>, typename = void>
 void add_field(sonare::util::json::Object& params, const char* key, Enum value) {
-  const char* name = detail::enum_choice_name(value);
-  if (name == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " holds a value with no name");
-  }
-  params.emplace(key, JsonValue(std::string(name)));
+  params.emplace(key, detail::enum_param_value(key, value));
 }
 
 sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cfg) {

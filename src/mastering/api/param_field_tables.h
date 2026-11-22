@@ -58,6 +58,7 @@
 #include "mastering/saturation/waveshaper.h"
 #include "mastering/stereo/binaural_panner.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "midi/synth/gs_efx_realization.h"
 #include "rt/aliasing_control.h"
 #include "util/exception.h"
 #include "util/json_schema.h"
@@ -769,6 +770,16 @@ constexpr const char* enum_choice_name(sonare::mastering::saturation::MicModel v
   return nullptr;
 }
 
+constexpr const char* enum_choice_name(sonare::midi::synth::GsEfxRealization value) {
+  switch (value) {
+    case sonare::midi::synth::GsEfxRealization::kModern:
+      return "modern";
+    case sonare::midi::synth::GsEfxRealization::kClassic:
+      return "classic";
+  }
+  return nullptr;
+}
+
 /// Highest underlying value scanned for declared enumerators.
 inline constexpr int kEnumOrdinalScanLimit = 63;
 
@@ -806,6 +817,22 @@ inline std::vector<EnumChoice> enum_choices(EnumNameFn name_of) {
 template <typename Enum>
 std::vector<EnumChoice> enum_choices() {
   return enum_choices(&enum_choice_name_of<Enum>);
+}
+
+/// @brief The token a params JSON document carries for @p value under @p key.
+template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
+sonare::util::json::Value enum_param_value(const std::string& key, Enum value) {
+  const char* name = enum_choice_name(value);
+  if (name == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, key + " holds a value with no name");
+  }
+  return sonare::util::json::Value(std::string(name));
+}
+
+/// @brief Writes an enum-valued param into a params JSON object as its token.
+template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
+void put_enum(sonare::util::json::Object& params, const std::string& key, Enum value) {
+  params.insert_or_assign(key, enum_param_value(key, value));
 }
 
 }  // namespace sonare::mastering::api::detail

@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/api/param_field_tables.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/eq_band.h"
 #include "mastering/eq/parametric.h"
@@ -545,8 +546,7 @@ std::string parametric_params_json(const std::vector<BandCut>& cuts) {
   util::json::Object params;
   for (std::size_t index = 0; index < cuts.size(); ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
-    params.emplace(prefix + "type",
-                   util::json::Value(static_cast<int>(mastering::eq::EqBandType::Peak)));
+    mastering::api::detail::put_enum(params, prefix + "type", mastering::eq::EqBandType::Peak);
     params.emplace(prefix + "frequencyHz", util::json::Value(cuts[index].center_hz));
     params.emplace(prefix + "gainDb", util::json::Value(-cuts[index].depth_db));
     params.emplace(prefix + "q", util::json::Value(kCutQ));
@@ -559,8 +559,8 @@ std::string high_pass_params_json(float frequency_hz) {
   util::json::Object params;
   util::json::put(params, "highPassFrequencyHz", frequency_hz);
   util::json::put(params, "highPassQ", kButterworthQ);
-  util::json::put(params, "highPassSlope",
-                  static_cast<int>(mastering::eq::CutFilterSlope::Db12PerOct));
+  mastering::api::detail::put_enum(params, "highPassSlope",
+                                   mastering::eq::CutFilterSlope::Db12PerOct);
   util::json::put(params, "highPassEnabled", true);
   // The low-pass half is deliberately left out rather than sent disabled: the
   // assistant has no opinion about the top end, and an explicit key would read

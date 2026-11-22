@@ -6,6 +6,7 @@
 #include <string>
 
 #include "mixing_test_helpers.h"
+#include "util/json.h"
 
 TEST_CASE("AutomationLane enforces bounded monotonic SPSC events", "[mixing]") {
   sonare::mixing::AutomationLane lane(2);
@@ -406,4 +407,20 @@ TEST_CASE("Mixing scene presets declare only bus roles the mixer accepts", "[mix
       REQUIRE(std::find(declared.begin(), declared.end(), bus.role) != declared.end());
     }
   }
+}
+
+TEST_CASE("Mixing scene presets write enum insert params as tokens", "[mixing]") {
+  const auto scene = sonare::mixing::api::scene_preset(
+      sonare::mixing::api::scene_preset_from_string("vocalReverbSend"));
+  bool found = false;
+  for (const auto& strip : scene.strips) {
+    for (const auto& insert : strip.inserts) {
+      if (insert.processor_name != "eq.parametric") continue;
+      const auto params = sonare::util::json::parse_strict(insert.params_json);
+      REQUIRE(params["band0.type"].is_string());
+      CHECK(params["band0.type"].as_string() == "highPass");
+      found = true;
+    }
+  }
+  CHECK(found);
 }

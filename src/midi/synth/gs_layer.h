@@ -40,6 +40,7 @@
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_convert.h"
+#include "midi/synth/gs_efx_realization.h"
 #include "midi/synth/sf2_voice.h"
 
 namespace sonare::midi::synth {
@@ -609,11 +610,6 @@ inline constexpr uint8_t kGsEfxBranchHalfB = 2;
 inline constexpr uint8_t kGsEfxBranchBack = 3;
 /// @}
 
-/// Which sound-making layer realises every insertion unit. Both share the
-/// protocol layer above; kModern runs the insert chain gs_efx_insert_chain
-/// describes, kClassic runs the generated 32 kHz graph of the type.
-enum class GsEfxRealization : uint8_t { kModern, kClassic };
-
 /// One stage of a realised EFX chain: an `insert_factory` processor name and
 /// its JSON params.
 struct GsEfxStage {
@@ -660,6 +656,19 @@ void gs_efx_fit_to_rate(std::vector<GsEfxStage>& chain, double sample_rate);
 /// Multi one way (020C/0300) and the defaults table the other, so a type no row
 /// names has one more spelling to try before it binds nothing.
 uint16_t gs_efx_binding_type(const GsEfxRowView& rows, uint16_t type) noexcept;
+
+/// Names one value of an enum-valued insert key, or null for an undeclared one.
+using GsEfxEnumNameFn = const char* (*)(int value);
+
+/// The table naming the values of @p key on stage @p stage when a binding row
+/// can write an enum there, or null for a numeric key. Chain params carry such a
+/// key as its token.
+GsEfxEnumNameFn gs_efx_enum_key_names(std::string_view stage, std::string_view key) noexcept;
+
+/// The wire value @p token names for @p key on @p stage; false when the key is
+/// not one gs_efx_enum_key_names covers or the token names nothing.
+bool gs_efx_enum_token_value(std::string_view stage, std::string_view key, std::string_view token,
+                             int& value) noexcept;
 
 // --- NRPN offset scalings (documented approximations, see file header) ---
 

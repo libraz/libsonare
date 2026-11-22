@@ -1,9 +1,26 @@
 #include "mixing/api/presets.h"
 
+#include <string>
+#include <utility>
+
+#include "mastering/api/param_field_tables.h"
+#include "mastering/eq/eq_band.h"
 #include "util/exception.h"
+#include "util/json.h"
 
 namespace sonare::mixing::api {
 namespace {
+
+// 80 Hz high-pass on band0 plus a 2 dB presence peak at 4 kHz on band1, which
+// keeps the default peak type. eq.parametric only reads `band{N}.*` keys.
+std::string vocal_eq_params() {
+  util::json::Object params;
+  mastering::api::detail::put_enum(params, "band0.type", mastering::eq::EqBandType::HighPass);
+  params.emplace("band0.frequencyHz", util::json::Value(80.0));
+  params.emplace("band1.frequencyHz", util::json::Value(4000.0));
+  params.emplace("band1.gainDb", util::json::Value(2.0));
+  return util::json::dump(util::json::Value(std::move(params)));
+}
 
 Scene make_vocal_reverb_send() {
   Scene scene;
@@ -13,11 +30,7 @@ Scene make_vocal_reverb_send() {
   Strip vocal;
   vocal.id = "vocal";
   vocal.fader_db = -3.0f;
-  // 80 Hz high-pass (band0, type 4 = HighPass) + 2 dB presence peak at 4 kHz
-  // (band1, default Peak type). eq.parametric only reads `band{N}.*` keys.
-  vocal.inserts.push_back({InsertSlot::PreFader, "eq.parametric",
-                           "{\"band0.type\":4,\"band0.frequencyHz\":80,"
-                           "\"band1.frequencyHz\":4000,\"band1.gainDb\":2}"});
+  vocal.inserts.push_back({InsertSlot::PreFader, "eq.parametric", vocal_eq_params()});
   vocal.inserts.push_back(
       {InsertSlot::PreFader, "dynamics.compressor", "{\"thresholdDb\":-18,\"ratio\":2.5}"});
   vocal.sends.push_back({"vocal-to-verb", "vocal-verb", -14.0f, SendTiming::PostFader});

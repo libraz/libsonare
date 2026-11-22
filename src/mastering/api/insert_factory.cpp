@@ -290,6 +290,11 @@ std::vector<Param> insert_params_from_root(const Value* root, const std::string&
       // through to the rejection below, so a key aimed at the wrong processor is
       // reported instead of dropped.
       continue;
+    } else if (const auto ordinal = value.is_string()
+                                        ? mastering_enum_value(insert_name, key, value.as_string())
+                                        : std::nullopt) {
+      // An enum-valued key carries its token; the flat map holds its wire value.
+      params.push_back(Param{key, *ordinal});
     } else {
       refuse_param_type(key, "must be a number or a boolean");
     }
@@ -1168,13 +1173,7 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
     refuse_param("typeMsb", sonare::util::refusal::integer_range_predicate(0, 127));
   if (lsb < 0 || lsb > 127)
     refuse_param("typeLsb", sonare::util::refusal::integer_range_predicate(0, 127));
-  const int realization_value = detail::i(params, "realization", 0);
-  if (params.records_declarations()) {
-    params.note_choices("realization", {{"modern", 0}, {"classic", 1}});
-  }
-  if (realization_value < 0 || realization_value > 1) {
-    refuse_param("realization", "must be 0 (modern) or 1 (classic)");
-  }
+  const auto realization = detail::read_enum(params, "realization", GsEfxRealization::kModern);
 
   GsEfx state;
   state.type = static_cast<uint16_t>((msb << 8) | lsb);
@@ -1202,7 +1201,6 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
     }
   }
 
-  const auto realization = static_cast<GsEfxRealization>(realization_value);
   const sonare::midi::synth::GsEfxStageFactory stage_factory = [](std::string_view stage_name,
                                                                   std::string_view stage_params) {
     return make_insert(std::string(stage_name), std::string(stage_params));

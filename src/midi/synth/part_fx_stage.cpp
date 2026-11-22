@@ -24,8 +24,9 @@ constexpr size_t kDestinationRig = 16;
 
 /// Reads the numeric value for @p key out of a flat JSON object string
 /// (`{"key":number,...}`). The realised EFX stage params are always flat
-/// key -> number objects, so a full JSON parser is unnecessary here. Returns
-/// false (leaving @p out untouched) when the key is absent or has no number.
+/// objects of numbers and enum tokens, so a full JSON parser is unnecessary
+/// here. Returns false (leaving @p out untouched) when the key is absent or has
+/// no number.
 bool json_find_number(std::string_view json, std::string_view key, float& out) {
   std::string needle;
   needle.reserve(key.size() + 2);
@@ -51,6 +52,23 @@ bool json_find_number(std::string_view json, std::string_view key, float& out) {
   const double v = std::strtod(token.c_str(), &end);
   if (end == token.c_str()) return false;
   out = static_cast<float>(v);
+  return true;
+}
+
+/// Reads an enum key's token for @p key out of the same flat object as its wire
+/// value, through the name table of the stage's insert. False when the key is
+/// absent, numeric or not an enum key of @p stage.
+bool json_find_enum_token(std::string_view json, std::string_view stage, std::string_view key,
+                          float& out) {
+  const std::string needle = "\"" + std::string(key) + "\":\"";
+  const size_t at = json.find(needle);
+  if (at == std::string_view::npos) return false;
+  const size_t start = at + needle.size();
+  const size_t end = json.find('"', start);
+  if (end == std::string_view::npos) return false;
+  int value = 0;
+  if (!gs_efx_enum_token_value(stage, key, json.substr(start, end - start), value)) return false;
+  out = static_cast<float>(value);
   return true;
 }
 
@@ -898,7 +916,10 @@ bool PartFxStage::append_param_updates(size_t unit, const std::array<uint8_t, 20
     if (proc == nullptr) continue;
     for (const rt::ParamDescriptor& d : proc->parameter_descriptors()) {
       float value = 0.0f;
-      if (!json_find_number(stages[s].params_json, d.key, value)) continue;
+      if (!json_find_number(stages[s].params_json, d.key, value) &&
+          !json_find_enum_token(stages[s].params_json, stages[s].name, d.key, value)) {
+        continue;
+      }
       // A parameter that is not realtime-safe would allocate/rebuild in
       // set_parameter, which is illegal on the audio thread -> rebuild instead.
       if (!proc->parameter_is_realtime_safe(d.id)) return true;

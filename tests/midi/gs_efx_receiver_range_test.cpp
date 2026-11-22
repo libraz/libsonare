@@ -584,7 +584,7 @@ TEST_CASE("every stage a balance row reaches runs the two-ramp law", "[gs][gs-ef
     for (const s::GsEfxStage& stage : s::gs_efx_insert_chain(efx)) {
       if (stage.name != s::kGsEfxRowStages[row.stage] || stage.ordinal != row.ordinal) continue;
       found = true;
-      CHECK(stage.params_json.find("\"mixLaw\":1") != std::string::npos);
+      CHECK(stage.params_json.find("\"mixLaw\":\"twoRamps\"") != std::string::npos);
     }
     CHECK(found);
     ++checked;

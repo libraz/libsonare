@@ -563,8 +563,13 @@ TEST_CASE("eq writes params the parametric equalizer can read", "[mixing][assist
     INFO("param key " << key);
     REQUIRE(split_band_key(key, &index, &field));
     band_indices.insert(index);
-    // The insert factory's strict parse accepts nothing else.
-    CHECK((value.is_number() || value.is_bool()));
+    // An enum-valued field carries its token; every other field is a number or a switch.
+    if (field == "type") {
+      REQUIRE(value.is_string());
+      CHECK(value.as_string() == "peak");
+    } else {
+      CHECK((value.is_number() || value.is_bool()));
+    }
   }
 
   // Bands are numbered contiguously from zero.
@@ -675,7 +680,12 @@ TEST_CASE("eq high-passes each source class at its own corner when asked to",
     CHECK(params["highPassEnabled"].as_bool());
     // The stage has no opinion about the top end and must not imply one.
     CHECK_FALSE(params.contains("lowPassEnabled"));
+    // The slope is an enum and carries its token.
+    REQUIRE(params.contains("highPassSlope"));
+    REQUIRE(params["highPassSlope"].is_string());
+    CHECK(params["highPassSlope"].as_string() == "db12PerOct");
     for (const auto& [key, value] : params.as_object()) {
+      if (key == "highPassSlope") continue;
       INFO("param key " << key);
       CHECK((value.is_number() || value.is_bool()));
     }

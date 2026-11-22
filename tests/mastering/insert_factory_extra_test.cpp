@@ -415,6 +415,34 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
       nullptr);
 }
 
+TEST_CASE("Inserts read an enum parameter from its token", "[mastering][insert_factory][effects]") {
+  struct Row {
+    const char* processor;
+    const char* key;
+    const char* token;
+    double ordinal;
+  };
+  const std::array<Row, 3> rows = {{
+      {"effects.modulation.wah", "filterType", "lowPass", 1},
+      {"stereo.autoPan", "shape", "sawUp", 3},
+      {"effects.delay.stereo", "crossMode", "cross", 2},
+  }};
+  for (const Row& row : rows) {
+    CAPTURE(row.processor, row.key, row.token);
+    const std::string by_token = std::string("{\"") + row.key + "\":\"" + row.token + "\"}";
+    CHECK(ConstructedValue(row.processor, by_token, row.key) == static_cast<float>(row.ordinal));
+  }
+  // A token the key does not declare is refused with the names it does.
+  try {
+    (void)make_insert("effects.modulation.wah", R"({"filterType":"notch"})");
+    FAIL("an undeclared token was accepted");
+  } catch (const sonare::SonareException& e) {
+    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK_THAT(std::string(e.what()), Catch::Matchers::ContainsSubstring("bandPass") &&
+                                          Catch::Matchers::ContainsSubstring("lowPass"));
+  }
+}
+
 #ifdef SONARE_WITH_ACOUSTIC_SIM
 TEST_CASE("effects.reverb.room synthesizes a geometry-driven RIR insert",
           "[mastering][insert_factory][effects][acoustic]") {

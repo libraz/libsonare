@@ -265,7 +265,7 @@ TEST_CASE("a parallel-2 type is two halves side by side, each ending in its own 
       REQUIRE(pan != nullptr);
       CHECK(static_cast<int>(gain->branch) ==
             (ordinal == 0 ? kGsEfxBranchHalfA : kGsEfxBranchHalfB));
-      CHECK(carries(*pan, "\"law\":1"));
+      CHECK(carries(*pan, "\"law\":\"rawConstantPower\""));
     }
   }
 

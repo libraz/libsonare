@@ -119,7 +119,7 @@ std::string processor_catalog_json();
 /// @details One entry per saturation::AmpPreset in amp_preset_names() order:
 /// {"index","name","params"}, where params holds the rig's resolved
 /// AmpSimConfig under the camelCase keys the saturation.ampSim insert accepts
-/// (enums as their integer ordinals). Values come from amp_preset_config(), so
+/// (enums as their names). Values come from amp_preset_config(), so
 /// the catalog cannot drift from the DSP presets.
 std::string amp_preset_catalog_json();
 

@@ -210,6 +210,33 @@ bool json_number(const std::string& json, const std::string& key, double& out) {
   return true;
 }
 
+/// Reads a JSON string field out of an insert's params object. Returns false
+/// when the key is absent or holds no string.
+bool json_text(const std::string& json, const std::string& key, std::string& out) {
+  const std::string needle = "\"" + key + "\":\"";
+  const size_t at = json.find(needle);
+  if (at == std::string::npos) return false;
+  const size_t begin = at + needle.size();
+  const size_t end = json.find('"', begin);
+  if (end == std::string::npos) return false;
+  out = json.substr(begin, end - begin);
+  return true;
+}
+
+/// Reads a control's wire value: a number as written, or an enum token resolved
+/// through the live update path's own table.
+bool json_control(const std::string& json, const std::string& stage, const std::string& key,
+                  double& out) {
+  std::string token;
+  if (json_text(json, key, token)) {
+    int value = 0;
+    if (!s::gs_efx_enum_token_value(stage, key, token, value)) return false;
+    out = value;
+    return true;
+  }
+  return json_number(json, key, out);
+}
+
 /// A GS DT1 message writing @p values from EFX block address 40 03 @p offset,
 /// with the Roland checksum.
 /// Applies @p msg to a unit array holding @p efx as unit 0 and reads unit 0
@@ -552,16 +579,17 @@ TEST_CASE("the chain skeleton selects the modern method of each insert",
           "[midi][sf2][gs][efxtypes]") {
   // The inserts default to today's behaviour; the GS modern chain asks for the
   // newer method, so a stage that lost its key would fall back in silence.
-  const std::map<std::string, std::vector<std::pair<std::string, double>>> kMethods = {
-      {"effects.modulation.chorus", {{"interpolation", 1}}},
-      {"effects.modulation.flanger", {{"interpolation", 1}}},
-      {"effects.modulation.ensemble", {{"interpolation", 1}}},
-      {"effects.delay.stereo", {{"interpolation", 1}}},
-      {"effects.modulation.rotary", {{"interpolation", 1}, {"model", 1}}},
-      {"effects.modulation.pitchShifter", {{"interpolation", 1}, {"antiAlias", 1}}},
-      {"effects.modulation.wah", {{"sweepLaw", 1}}},
-      {"effects.modulation.autoWah", {{"sweepLaw", 1}}},
-      {"spectral.presenceEnhancer", {{"aliasing", 1}}},
+  // An enum-valued key carries its token; antiAlias is a plain switch.
+  const std::map<std::string, std::vector<std::pair<std::string, std::string>>> kMethods = {
+      {"effects.modulation.chorus", {{"interpolation", "lagrange3"}}},
+      {"effects.modulation.flanger", {{"interpolation", "lagrange3"}}},
+      {"effects.modulation.ensemble", {{"interpolation", "lagrange3"}}},
+      {"effects.delay.stereo", {{"interpolation", "lagrange3"}}},
+      {"effects.modulation.rotary", {{"interpolation", "lagrange3"}, {"model", "geometric"}}},
+      {"effects.modulation.pitchShifter", {{"interpolation", "lagrange3"}, {"antiAlias", "1"}}},
+      {"effects.modulation.wah", {{"sweepLaw", "linearOctave"}}},
+      {"effects.modulation.autoWah", {{"sweepLaw", "linearOctave"}}},
+      {"spectral.presenceEnhancer", {{"aliasing", "adaa1"}}},
   };
   Tally tally;
   std::set<std::string> seen;
@@ -571,15 +599,64 @@ TEST_CASE("the chain skeleton selects the modern method of each insert",
       if (found == kMethods.end()) continue;
       seen.insert(stage.name);
       for (const auto& [key, value] : found->second) {
-        double carried = 0.0;
-        tally.same(json_number(stage.params_json, key, carried) && carried == value,
-                   hex4(row.type) + " " + stage.name + " does not select " + key);
+        std::string token;
+        double number = 0.0;
+        const bool held = json_text(stage.params_json, key, token)
+                              ? token == value
+                              : json_number(stage.params_json, key, number) &&
+                                    std::to_string(static_cast<int>(number)) == value;
+        tally.same(held, hex4(row.type) + " " + stage.name + " does not select " + key);
       }
     }
   }
   // Every insert the table names is reached by some type, or the entry is stale.
   tally.same(seen.size() == kMethods.size(), "an insert with a modern method is in no chain");
   WARN("comparisons: " << tally.count());
+}
+
+TEST_CASE("the EFX chain writes every enum control as a token its insert reads",
+          "[midi][sf2][gs][efxtypes]") {
+  // Each stage's params go through the insert factory's reader, so an enum key
+  // written as a number, or as a token the insert does not declare, would be
+  // refused when the chain is built.
+  Tally tally;
+  int tokens = 0;
+  for (const s::GsEfxJoinRow& row : s::kGsEfxJoin) {
+    for (uint8_t value : boundary_bytes(row)) {
+      GsEfx efx = make_efx(row.type);
+      efx.params[row.slot] = value;
+      for (const GsEfxStage& stage : gs_efx_insert_chain(efx)) {
+        const auto params = sonare::util::json::parse_strict(stage.params_json);
+        for (const auto& [key, field] : params.as_object()) {
+          const std::string label = hex4(row.type) + " " + stage.name + "." + key;
+          const auto names = sonare::mastering::api::mastering_enum_names(stage.name, key);
+          const bool is_enum = names.has_value() && !names->empty();
+          if (!field.is_string()) {
+            tally.same(!is_enum, label + " is an enum written as a number");
+            continue;
+          }
+          // A string that names no enum (a preset name) is not a token.
+          if (!is_enum) continue;
+          ++tokens;
+          int live = -1;
+          const auto ordinal =
+              sonare::mastering::api::mastering_enum_value(stage.name, key, field.as_string());
+          tally.same(ordinal.has_value(), label + " carries a token its insert does not read");
+          // The live update path resolves the token to the same wire value.
+          if (s::gs_efx_enum_key_names(stage.name, key) != nullptr) {
+            tally.same(s::gs_efx_enum_token_value(stage.name, key, field.as_string(), live) &&
+                           ordinal.has_value() && live == static_cast<int>(*ordinal),
+                       label + " resolves live to another value");
+          }
+        }
+      }
+    }
+  }
+  tally.same(tokens > 0, "no stage carried a token");
+  int unused = 0;
+  tally.same(!s::gs_efx_enum_token_value("effects.modulation.wah", "filterType", "notch", unused),
+             "an undeclared token resolved live");
+  WARN("comparisons: " << tally.count() << ", tokens: " << tokens);
 }
 
 TEST_CASE("EFX parameter translations move their insert control monotonically",
@@ -860,7 +937,7 @@ TEST_CASE("every adjudicated EFX byte does what its binding file says",
         const auto chain = gs_efx_insert_chain(efx);
         const GsEfxStage* found = find_stage(chain, stage, binding->ordinal);
         double number = 0.0;
-        if (found == nullptr || !json_number(found->params_json, key, number)) {
+        if (found == nullptr || !json_control(found->params_json, stage, key, number)) {
           tally.same(false, what + " is not emitted at byte " + std::to_string(value));
           break;
         }
