@@ -10,7 +10,7 @@ once omitted `.mm` the same way.
 
 The version pins are the same shape of claim. Each workflow installs a pinned
 tool with a comment saying the pin is "the resolved version in
-requirements-dev.lock" -- true when written and enforced by nothing, so a lock
+uv.lock" -- true when written and enforced by nothing, so a lock
 bump silently leaves CI checking with a different tool than `make lint` uses.
 
 Stdlib only, no build. Run directly:
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -33,7 +34,7 @@ WORKFLOWS = (
     REPO_ROOT / ".github/workflows/ci.yml",
     REPO_ROOT / ".github/workflows/develop-ci.yml",
 )
-LOCK = REPO_ROOT / "bindings/python/requirements-dev.lock"
+LOCK = REPO_ROOT / "bindings/python/uv.lock"
 PYPROJECT = REPO_ROOT / "bindings/python/pyproject.toml"
 
 #: `ruff check <target>`, however the interpreter in front of it is spelled and
@@ -84,13 +85,22 @@ def clang_format_specs(text: str) -> list[tuple[str, ...]]:
 
 
 def locked_versions(text: str) -> dict[str, str]:
-    """The lock's pinned versions, keyed by normalized package name."""
-    versions = {}
-    for line in text.splitlines():
-        line = line.split("#")[0].strip()
-        m = re.fullmatch(r"(?P<name>[A-Za-z0-9._-]+)==(?P<version>[^\s;]+)", line)
-        if m:
-            versions[normalize(m.group("name"))] = m.group("version")
+    """The versions a uv.lock resolves, keyed by normalized package name.
+
+    Raises ValueError on a lock that is not TOML or resolves no package, so a moved
+    or truncated lock fails rather than agreeing with every pin.
+    """
+    try:
+        packages = tomllib.loads(text).get("package", [])
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(f"the lock is not TOML: {e}") from e
+    versions = {
+        normalize(p["name"]): p["version"]
+        for p in packages
+        if isinstance(p, dict) and "name" in p and "version" in p
+    }
+    if not versions:
+        raise ValueError("the lock resolves no package")
     return versions
 
 
@@ -150,7 +160,7 @@ def main() -> int:
     checked = 0
     for name, text in sources.items():
         if name == "Makefile":
-            continue  # the Makefile installs through rye, which reads the lock itself
+            continue  # the Makefile installs through uv, which reads the lock itself
         for package, version in pinned_installs(text):
             want = locked.get(normalize(package))
             if want is None:

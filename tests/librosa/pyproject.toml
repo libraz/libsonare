@@ -14,7 +14,3 @@ dependencies = [
 
 [tool.uv]
 package = false
-
-[tool.rye]
-managed = true
-virtual = true

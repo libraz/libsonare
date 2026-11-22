@@ -17,7 +17,7 @@ the guard put back, which must report nothing -- the two together are what say
 the verdict tracks the code rather than the shape of the tree.
 
 Stdlib only, and no ``libsonare`` import: this file runs under system python3
-beside the checker, off the built dylib and off rye. Proving the guards it
+beside the checker, off the built dylib and off uv. Proving the guards it
 trusts actually refuse a value is a runtime question and lives with the binding's
 own suite, in ``bindings/python/tests/test_public_integer_domains.py``, which
 reads its probe population out of this checker rather than restating it.

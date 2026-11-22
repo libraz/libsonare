@@ -21,7 +21,3 @@ package = false
 
 [tool.uv.sources]
 libsonare = { path = "../bindings/python", editable = true }
-
-[tool.rye]
-managed = true
-virtual = true

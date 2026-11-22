@@ -25,7 +25,7 @@ import pytest
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = PACKAGE_ROOT / "pyproject.toml"
-RUNTIME_LOCK = PACKAGE_ROOT / "requirements.lock"
+LOCK = PACKAGE_ROOT / "uv.lock"
 
 _RELEASE = re.compile(r"(\d+(?:\.\d+)*)")
 
@@ -55,12 +55,28 @@ def _declared_floor(distribution: str) -> tuple[int, ...]:
     return max(_release(floor) for floor in floors)
 
 
+def _locked_packages() -> dict[str, str]:
+    """Every package uv.lock resolves, by lower-case name."""
+    data = tomllib.loads(LOCK.read_text(encoding="utf-8"))
+    return {
+        str(p["name"]).lower(): str(p["version"])
+        for p in data.get("package", [])
+        if "name" in p and "version" in p
+    }
+
+
 def _locked_release(distribution: str) -> tuple[int, ...]:
-    for line in RUNTIME_LOCK.read_text(encoding="utf-8").splitlines():
-        name, separator, version = line.partition("==")
-        if separator and name.strip().lower() == distribution:
-            return _release(version)
-    pytest.fail(f"{distribution} is not pinned in {RUNTIME_LOCK.name}")
+    version = _locked_packages().get(distribution)
+    if version is None:
+        pytest.fail(f"{distribution} is not resolved in {LOCK.name}")
+    return _release(version)
+
+
+def test_the_lock_resolves_this_package_and_its_runtime_dependency() -> None:
+    """An empty or unread lock would leave every comparison below without a pin."""
+    locked = _locked_packages()
+    assert "libsonare" in locked
+    assert "numpy" in locked
 
 
 def test_numpy_floor_is_not_above_the_pinned_version() -> None:

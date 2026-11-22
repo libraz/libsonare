@@ -15,7 +15,7 @@ The plugin wraps the binding's single refusal translation point, records each
 is not a parameter of any declaration answering to that entry key. It reads only
 what a test happens to provoke, so its reach is printed beside the verdict.
 
-Usage: rye run pytest -p refusal_subject_plugin (with tests/conformance on PYTHONPATH)
+Usage: uv run --project bindings/python pytest -p refusal_subject_plugin (with tests/conformance on PYTHONPATH)
 """
 
 from __future__ import annotations

@@ -128,8 +128,21 @@ def test_a_pin_is_read_off_a_pip_install_line() -> None:
 
 
 def test_the_lock_is_parsed_by_normalized_name() -> None:
-    locked = mod.locked_versions("Ruff_Tool==1.0\n# comment\nnumpy==2.4.6\n")
-    assert locked == {"ruff-tool": "1.0", "numpy": "2.4.6"}
+    lock = (
+        'version = 1\n'
+        '[[package]]\nname = "Ruff_Tool"\nversion = "1.0"\n'
+        '[[package]]\nname = "numpy"\nversion = "2.4.6"\n'
+    )
+    assert mod.locked_versions(lock) == {"ruff-tool": "1.0", "numpy": "2.4.6"}
+
+
+def test_an_empty_or_unparsed_lock_fails_rather_than_agreeing() -> None:
+    for text in ("", "version = 1\n", "ruff==0.15.14\n"):
+        try:
+            mod.locked_versions(text)
+        except ValueError:
+            continue
+        raise AssertionError(f"{text!r} was read as a lock")
 
 
 def test_the_repository_agrees_with_itself() -> None:

@@ -24,8 +24,8 @@ OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
 GOLDEN_BUILD_DIR := build-golden
 ACCURACY_REPORT_JSON ?= $(CURDIR)/build-optional-fixtures/accuracy-report.json
 INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
-RYE ?= rye
-PY_RUN := $(RYE) run --pyproject bindings/python/pyproject.toml
+UV ?= uv
+PY_RUN := $(UV) run --locked --project bindings/python
 # librosa build test-librosa-live checks against; defaults to upstream main.
 # Point it at a local checkout to test unreleased changes offline.
 LIBROSA_SOURCE ?= git+https://github.com/librosa/librosa.git@main
@@ -109,28 +109,28 @@ fixtures:
 	python3 tools/scripts/k_weighting_reference.py
 
 # The C++ suite on its own: cmake, a C++17 compiler and python3, with no Node
-# and no rye. A change confined to the core can be verified with this, which is
+# and no uv. A change confined to the core can be verified with this, which is
 # what CONTRIBUTING points a contributor at.
 test-cxx: build fixtures
 	ctest --test-dir $(BUILD_DIR) --output-on-failure --parallel
 
 # The full local run. The calibration harness rides on it because `tools/` is
 # outside ctest and outside the drift gates, so a harness left to be remembered
-# is a harness that rots -- but it needs rye, which a contributor touching only
+# is a harness that rots -- but it needs uv, which a contributor touching only
 # C++ has no other reason to install, so its absence reports itself and does not
 # fail a green C++ run. CI covers the harness in a build-free job of its own, so
 # nothing goes unchecked when this branch is taken.
 test: test-cxx
-	@if command -v $(RYE) >/dev/null 2>&1; then \
+	@if command -v $(UV) >/dev/null 2>&1; then \
 	  $(MAKE) test-voicematch; \
 	else \
-	  echo "note: skipping the calibration harness -- $(RYE) is not installed."; \
+	  echo "note: skipping the calibration harness -- $(UV) is not installed."; \
 	  echo "      run 'make test-voicematch' once it is, or let CI cover it."; \
 	fi
 
 # The cases read only the tracked capture definitions and reference profiles --
 # no rendered corpus, no plugin, no built library -- so they pass on a fresh
-# clone in about half a minute. Invoked directly, this reports a missing rye as
+# clone in about half a minute. Invoked directly, this reports a missing uv as
 # the error it is; `test` is the target that treats it as a skip.
 test-voicematch:
 	$(PY_RUN) python -m pytest tools/voicematch tools/audition tools/playback -q
@@ -161,11 +161,11 @@ test-golden: fixtures
 	$(CMAKE) -B $(GOLDEN_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build $(GOLDEN_BUILD_DIR) $(BUILD_PARALLEL) --target sonare_tests
 	$(GOLDEN_BUILD_DIR)/bin/sonare_tests "[golden]"
-	@if command -v $(RYE) >/dev/null 2>&1; then \
+	@if command -v $(UV) >/dev/null 2>&1; then \
 	  $(MAKE) build-bank-shared || { echo "bank-versions-check: building the registry library failed"; exit 1; }; \
 	  $(MAKE) bank-versions-check || { echo "bank-versions-check: a unit's values moved without a version bump"; exit 1; }; \
 	else \
-	  echo "note: skipping bank-versions-check -- $(RYE) is not installed."; \
+	  echo "note: skipping bank-versions-check -- $(UV) is not installed."; \
 	  echo "      run 'make bank-versions-check' once it is."; \
 	fi
 
@@ -188,10 +188,10 @@ accuracy-report:
 	python3 tools/eval/summarize_accuracy.py $(ACCURACY_REPORT_JSON) --markdown
 
 test-librosa-live: build
-	$(RYE) sync --pyproject tests/librosa/pyproject.toml
-	$(RYE) run --pyproject tests/librosa/pyproject.toml python -m ensurepip --upgrade
-	$(RYE) run --pyproject tests/librosa/pyproject.toml python -m pip install $(LIBROSA_SOURCE)
-	$(RYE) run --pyproject tests/librosa/pyproject.toml python tests/librosa/run_live_reference_check.py --build-dir $(BUILD_DIR)
+	$(UV) sync --locked --project tests/librosa
+	$(UV) pip install --python tests/librosa/.venv $(LIBROSA_SOURCE)
+# --no-sync: a sync would put the locked librosa back over the build just installed.
+	$(UV) run --no-sync --project tests/librosa python tests/librosa/run_live_reference_check.py --build-dir $(BUILD_DIR)
 
 clean:
 	rm -rf build build-*/ cmake-build-*/ build-*.log
@@ -225,7 +225,7 @@ format:
 	cd bindings/wasm && yarn lint:fix
 	cd bindings/node && yarn lint:fix
 	cd tools/audition/web && yarn lint:fix
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) sync --locked --project bindings/python
 	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff format
 	git ls-files -z -- '*.py' '*.pyi' '*pyproject.toml' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check --fix
 	$(MAKE) lint
@@ -403,7 +403,7 @@ lint:
 	cd bindings/node && yarn test:types
 	cd tools/audition/web && yarn lint
 	cd tools/audition/web && yarn typecheck
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) sync --locked --project bindings/python
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check .
 # The Python half of the type check that `yarn test:types` above already does for
 # Node. CI has run it all along and nothing local did, so a stub that stopped
@@ -412,9 +412,9 @@ lint:
 # happened yet. Second invocation is the non-vacuity guard, as in CI: a file that
 # must NOT type-check, so a configuration that silently checks nothing fails here
 # instead of certifying everything.
-	cd bindings/python && UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject pyproject.toml \
+	cd bindings/python && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run --locked \
 		mypy --strict src/libsonare ../../tests/typing/python_smoke.py
-	@cd bindings/python && if UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject pyproject.toml \
+	@cd bindings/python && if UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run --locked \
 		mypy --strict ../../tests/typing/python_catalog_invalid.py; then \
 		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; \
 	fi
@@ -541,14 +541,14 @@ build-wasm-binding:
 	cd bindings/wasm && yarn install --immutable && yarn build
 
 test-python: build-shared
-	$(RYE) sync --pyproject bindings/python/pyproject.toml
+	$(UV) sync --locked --project bindings/python
 # The refusal-subject plugin fails the run when a refusal names no parameter of its entry.
 	PYTHONPATH=tests/conformance $(PY_RUN) python -m pytest bindings/python/tests/ -v -p refusal_subject_plugin
 
 # Tests marked @pytest.mark.slow are excluded by the default addopts
 # (-m "not slow"); the explicit -m here overrides that and runs just them.
 test-python-slow: build-shared
-	$(RYE) sync --pyproject bindings/python/pyproject.toml
+	$(UV) sync --locked --project bindings/python
 	$(PY_RUN) python -m pytest bindings/python/tests/ -v -m slow
 
 test-node: build-node
@@ -1084,8 +1084,8 @@ check-binding-warning-flags:
 # is an acceptance run over already-built artifacts, with an explicit preflight
 # so a clean tree fails with the exact build targets to run first.
 test-gm-cross-surface:
-	@command -v "$(RYE)" >/dev/null 2>&1 || { \
-		echo "test-gm-cross-surface: required command not found: $(RYE)" >&2; \
+	@command -v "$(UV)" >/dev/null 2>&1 || { \
+		echo "test-gm-cross-surface: required command not found: $(UV)" >&2; \
 		exit 1; \
 	}
 	@set -eu; \
@@ -1111,8 +1111,8 @@ test-gm-cross-surface:
 # invisible to the parity checker, so this runs the surfaces instead of reading
 # them. Like the GM check, it builds nothing and preflights the artifacts.
 test-mix-assistant-cross-surface:
-	@command -v "$(RYE)" >/dev/null 2>&1 || { \
-		echo "test-mix-assistant-cross-surface: required command not found: $(RYE)" >&2; \
+	@command -v "$(UV)" >/dev/null 2>&1 || { \
+		echo "test-mix-assistant-cross-surface: required command not found: $(UV)" >&2; \
 		exit 1; \
 	}
 	@set -eu; \
