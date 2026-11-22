@@ -25,6 +25,8 @@ inline constexpr float kMaxRirMixingTimeMs = 10000.0f;
 inline constexpr float kMaxRirCrossfadeMs = 1000.0f;
 /// Largest receiver-pair spacing (m) `validate_receiver_pair` accepts.
 inline constexpr float kMaxReceiverSpacingM = 4.0f;
+/// Receiver-pair spacing (m) wherever the pair fits inside the room.
+inline constexpr float kDefaultReceiverSpacingM = 0.5f;
 
 /// @brief Configuration for room-impulse-response synthesis.
 struct RirSynthConfig {
@@ -136,6 +138,14 @@ struct ReceiverPair {
 /// listener's left in a z-up right-handed frame. left = listener + (s/2) a and
 /// right = listener - (s/2) a, so both receivers are equidistant from the source.
 ReceiverPair receiver_pair(const SourceListener& placement, float spacing_m) noexcept;
+
+/// @brief The default receiver spacing for @p placement in a room of @p dims.
+/// @details A spacing is a physical quantity, so it does not scale with the room: it is
+///          kDefaultReceiverSpacingM wherever that pair lies inside the room, and otherwise the
+///          largest spacing whose pair `validate_receiver_pair` accepts. Zero when the listener
+///          sits on a side wall the pair axis crosses, which leaves no spacing to accept.
+float default_receiver_spacing(const RoomDimensions& dims,
+                               const SourceListener& placement) noexcept;
 
 /// @brief Validate a receiver pair: `acoustic.receiver_spacing_out_of_range` when the spacing
 ///        is not finite or outside (0, 4] m, `acoustic.receiver_outside_room` naming the

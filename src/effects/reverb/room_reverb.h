@@ -35,7 +35,7 @@ struct RoomReverbConfig {
   sonare::acoustic::AirAbsorption air{};
   /// Spacing (m) of the omnidirectional receiver pair centred on the listener, in (0, 4].
   /// Read only by the stereo layout (`ReceiverLayout::MonoAndPair`).
-  float receiver_spacing_m = 0.5f;
+  float receiver_spacing_m = sonare::acoustic::kDefaultReceiverSpacingM;
 };
 
 /// @brief Convolution reverb whose impulse response is synthesized from room

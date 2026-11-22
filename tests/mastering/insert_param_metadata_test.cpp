@@ -29,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+#include "acoustic/rir_synthesizer.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
@@ -1823,11 +1824,23 @@ std::vector<double> legal_sibling_values(const std::string& name, const json::Va
   return legal;
 }
 
-// Tight room geometry: the receiver pair meets the length wall first, which the default
-// geometry never shows.
+// An omitted spacing shrinks to fit the room, so the pair couples the plan view only once a
+// caller gives one.
+const Settings& given_receiver_spacing() {
+  static const Settings geometry = {
+      {"receiverSpacingM", static_cast<double>(sonare::acoustic::kDefaultReceiverSpacingM)}};
+  return geometry;
+}
+
+// Tight room geometry with a given spacing: the receiver pair meets the length wall first, which
+// the default geometry never shows.
 const Settings& tight_room_geometry() {
   static const Settings geometry = {
-      {"sourceX", 3.0}, {"sourceY", 0.5}, {"listenerX", 6.0}, {"listenerY", 4.0}};
+      {"sourceX", 3.0},
+      {"sourceY", 0.5},
+      {"listenerX", 6.0},
+      {"listenerY", 4.0},
+      {"receiverSpacingM", static_cast<double>(sonare::acoustic::kDefaultReceiverSpacingM)}};
   return geometry;
 }
 
@@ -1840,6 +1853,7 @@ std::vector<std::string> vacuous_couplings(const std::vector<std::string>& names
     const json::Array params = param_info(name);
     std::vector<Settings> geometries = {{}};
     if (find_param(params, "receiverSpacingM") != nullptr) {
+      geometries.push_back(given_receiver_spacing());
       geometries.push_back(tight_room_geometry());
     }
     for (const json::Value& parameter : params) {

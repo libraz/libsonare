@@ -936,6 +936,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
+    config.receiver_spacing_m =
+        sonare::acoustic::default_receiver_spacing(config.dims, {config.source, config.listener});
     read_air_and_spacing(params, config);
     return make<RoomReverb>(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
@@ -971,6 +973,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
     // Same climate convention as effects.reverb.room above.
+    config.receiver_spacing_m =
+        sonare::acoustic::default_receiver_spacing(config.target.dims, config.placement);
     read_air_and_spacing(params, config);
     return make<effects::acoustic::RoomMorphProcessor>(
         config, sonare::acoustic::ReceiverLayout::MonoAndPair);

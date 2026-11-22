@@ -527,6 +527,38 @@ ReceiverPair receiver_pair(const SourceListener& placement, float spacing_m) noe
   return {placement.listener + offset, placement.listener - offset};
 }
 
+float default_receiver_spacing(const RoomDimensions& dims,
+                               const SourceListener& placement) noexcept {
+  const auto fits = [&](float spacing_m) {
+    const ReceiverPair pair = receiver_pair(placement, spacing_m);
+    for (const Vec3& p : {pair.left, pair.right}) {
+      if (!(p.x >= 0.0f && p.x <= dims.length && p.y >= 0.0f && p.y <= dims.width)) return false;
+    }
+    return true;
+  };
+  if (fits(kDefaultReceiverSpacingM)) return kDefaultReceiverSpacingM;
+  // A listener outside the plan view leaves no spacing for the validator to accept.
+  if (!fits(0.0f)) return 0.0f;
+  // Half the spacing reaches the nearer wall along the pair axis on each horizontal extent.
+  const ReceiverPair unit = receiver_pair(placement, 2.0f);
+  const Vec3 axis = unit.left - placement.listener;
+  float half = kDefaultReceiverSpacingM;
+  const std::pair<float, float> extents[] = {{placement.listener.x, dims.length},
+                                             {placement.listener.y, dims.width}};
+  const float components[] = {axis.x, axis.y};
+  for (int i = 0; i < 2; ++i) {
+    const float reach = std::fabs(components[i]);
+    if (reach > 0.0f) {
+      half =
+          std::min(half, std::min(extents[i].first, extents[i].second - extents[i].first) / reach);
+    }
+  }
+  float spacing = std::max(0.0f, 2.0f * half);
+  // Rounding in the pair's positions can land a receiver one ulp past the wall.
+  while (spacing > 0.0f && !fits(spacing)) spacing = std::nextafter(spacing, 0.0f);
+  return spacing;
+}
+
 std::vector<Diagnostic> validate_receiver_pair(const ShoeboxRoom& room,
                                                const SourceListener& placement, float spacing_m) {
   std::vector<Diagnostic> diagnostics;

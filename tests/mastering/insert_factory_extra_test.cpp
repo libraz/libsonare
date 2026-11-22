@@ -52,6 +52,7 @@
 // AirAbsorption carries the ISO reference climate the acoustic ABI's zero
 // sentinel resolves to; the tests read it instead of restating the literals.
 #include "acoustic/late_reverb.h"
+#include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
 #endif
 
@@ -2221,13 +2222,28 @@ TEST_CASE("the default placement lies inside every room the room validator accep
     const sonare::acoustic::ShoeboxRoom room =
         sonare::acoustic::uniform_shoebox({length, width, height}, 0.2f);
     CHECK_FALSE(sonare::has_error(sonare::acoustic::validate_shoebox(room, placement)));
+    // The receiver pair keeps its physical spacing wherever it fits and narrows only to fit.
+    const float spacing = sonare::acoustic::default_receiver_spacing(room.dims, placement);
+    CAPTURE(spacing);
+    CHECK(spacing > 0.0f);
+    CHECK(spacing <= sonare::acoustic::kDefaultReceiverSpacingM);
+    if (width >= 2.0f && length >= 2.0f)
+      CHECK(spacing == sonare::acoustic::kDefaultReceiverSpacingM);
+    CHECK(sonare::acoustic::validate_receiver_pair(room, placement, spacing).empty());
+    if (spacing < sonare::acoustic::kDefaultReceiverSpacingM) {
+      const float wider =
+          std::nextafter(spacing, sonare::acoustic::kDefaultReceiverSpacingM) * 1.001f;
+      CHECK(sonare::has_error(sonare::acoustic::validate_receiver_pair(room, placement, wider)));
+    }
   }
 }
 
 TEST_CASE("a room insert given only its dimensions places source and listener inside them",
           "[mastering][insert_factory]") {
-  // From the smallest plan the default 0.5 m receiver pair fits beside the listener upward.
-  const std::array<std::array<double, 3>, 5> rooms = {{{2.0, 1.5, 2.0},
+  // Below about 1.25 m of width the receiver pair narrows to fit beside the listener.
+  const std::array<std::array<double, 3>, 7> rooms = {{{0.5, 0.4, 0.3},
+                                                       {1.0, 0.8, 1.0},
+                                                       {2.0, 1.5, 2.0},
                                                        {4.0, 3.0, 2.6},
                                                        {7.0, 5.0, 3.0},
                                                        {40.0, 30.0, 12.0},
