@@ -158,7 +158,7 @@ bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
                                   int (&numerators)[SONARE_MAX_METER_CANDIDATE_NUMERATORS],
                                   size_t* count);
 
-/// @brief Read a required sample rate that must be a whole number of hertz in the supported range.
+/// @brief Read a required sample rate that must be an integer in the supported audio range.
 /// @return false with one pending JS exception: TypeError for a non-number, RangeError otherwise.
 bool ReadWholeHertzSampleRate(Napi::Env env, const Napi::Value& value, int* out);
 

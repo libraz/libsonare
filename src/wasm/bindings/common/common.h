@@ -452,7 +452,7 @@ void requireIntegral(double number, const char* key);
 ///          driving the embind classes directly.
 /// @throws WasmArgumentError naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
-/// @brief Reads a sample rate that must be a whole number of hertz in the supported range.
+/// @brief Reads a sample rate that must be an integer in the supported audio range.
 /// @throws WasmTypeError for a non-number, WasmRangeError otherwise.
 int wholeHertzSampleRateFromVal(const val& value);
 /// @brief Reads the hop of a resynthesizing call for the core: 0 (which the facades
