@@ -7224,10 +7224,25 @@ test = "bindings/python/tests/test_vocal_edit.py::test_a_vocal_note_edit_mode_is
 [[entry]]
 kind = "field"
 old = "VocalMergeNotes.merge_policy"
-changed = "takes a VocalMergePolicy token ('preserve' default); an ordinal is TypeError"
+changed = "renamed policy, as the TypeScript operation spells it, and takes a VocalMergePolicy token ('preserve' default); an ordinal is TypeError"
+to = "VocalMergeNotes.policy"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_edit.py::test_a_merge_policy_is_an_exact_token"
+
+[[entry]]
+kind = "field"
+old = "VocalSplitNote.cut_source_sample"
+new = "VocalSplitNote.source_sample"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "field"
+old = "VocalSplitNote.cut_source_sec"
+new = "VocalSplitNote.source_sec"
+domain = "project"
+rule = "vocal-edit-model"
 
 [[entry]]
 kind = "field"

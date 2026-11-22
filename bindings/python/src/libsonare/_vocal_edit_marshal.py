@@ -567,19 +567,17 @@ def _operation_to_c(
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
         bound = _operation_position(
             "VocalSplitNote",
-            operation.cut_source_sample,
-            operation.cut_source_sec,
+            operation.source_sample,
+            operation.source_sec,
             sample_rate,
-            "cut_source_sample",
-            "cut_source_sec",
+            "source_sample",
+            "source_sec",
         )
         raw.cut_source_sample = bound.value
         respelled.update(bound.respelled)
     elif isinstance(operation, VocalMergeNotes):
         raw.kind = _operation_kind("merge")
-        raw.merge_policy = _token_ordinal(
-            operation.merge_policy, _VOCAL_MERGE_POLICIES, "merge_policy"
-        )
+        raw.merge_policy = _token_ordinal(operation.policy, _VOCAL_MERGE_POLICIES, "policy")
         ids = (ctypes.c_uint32 * len(operation.note_ids))()
         for i, value in enumerate(operation.note_ids):
             ids[i] = _uint32(value, "note_ids", allow_zero=False)

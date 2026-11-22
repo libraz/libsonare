@@ -382,13 +382,13 @@ class VocalSetNoteSourceSpan:
 
 @dataclass(frozen=True, slots=True)
 class VocalSplitNote:
-    """Cut a note at ``cut_source_sample`` or at ``cut_source_sec`` seconds."""
+    """Cut a note at ``source_sample`` or at ``source_sec`` seconds."""
 
     note_id: int
     """Id of the note to split."""
-    cut_source_sample: int | None = None
+    source_sample: int | None = None
     """Cut position in the source, in samples."""
-    cut_source_sec: float | None = None
+    source_sec: float | None = None
     """Cut position in the source, in seconds."""
 
 
@@ -398,7 +398,7 @@ class VocalMergeNotes:
 
     note_ids: Sequence[int]
     """Ids of the adjacent notes to merge, in order."""
-    merge_policy: VocalMergePolicy = "preserve"
+    policy: VocalMergePolicy = "preserve"
     """Whether the merged note keeps the first note's edit or starts from defaults
     (``VocalMergePolicy``)."""
 

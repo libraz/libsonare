@@ -265,9 +265,9 @@ def test_a_merge_policy_is_an_exact_token() -> None:
         ids = tuple(note.id for note in notes[:2])
         with session.begin_edit() as draft:
             for value, error in ((0, TypeError), ("Preserve", SonareValueError)):
-                with pytest.raises(error, match="merge_policy"):
+                with pytest.raises(error, match=r"\bpolicy must be"):
                     draft.apply(
-                        [VocalMergeNotes(ids, merge_policy=value)],  # type: ignore[arg-type]
+                        [VocalMergeNotes(ids, policy=value)],  # type: ignore[arg-type]
                         expected_generation=draft.token().generation,
                     )
 

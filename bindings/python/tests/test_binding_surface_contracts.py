@@ -208,3 +208,18 @@ def test_source_span_destination_positions_are_required_and_zero_is_a_position()
     )
     with pytest.raises(SonareValueError):
         _operation_to_c(lib, both, 48000)
+
+
+def test_a_split_takes_the_cut_position_in_samples_or_seconds() -> None:
+    from libsonare import SonareValueError, VocalSplitNote
+    from libsonare._runtime import _get_lib
+    from libsonare.vocal_edit import _operation_to_c
+
+    lib = _get_lib()
+    assert _operation_to_c(lib, VocalSplitNote(1, source_sample=0), 48000)[0].cut_source_sample == 0
+    seconds = VocalSplitNote(1, source_sec=0.5)
+    assert _operation_to_c(lib, seconds, 48000)[0].cut_source_sample == 24000
+    with pytest.raises(SonareValueError, match="source_sample or source_sec"):
+        _operation_to_c(lib, VocalSplitNote(1), 48000)
+    with pytest.raises(SonareValueError):
+        _operation_to_c(lib, VocalSplitNote(1, source_sample=0, source_sec=0.5), 48000)

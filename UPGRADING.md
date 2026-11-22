@@ -3414,7 +3414,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `VocalFormantMode.PRESERVE` | `VocalFormantMode='preserve'` |
 | `VocalFormantMode.SHIFT` | `VocalFormantMode='shift'` |
 | `VocalFormantMode` | Literal['preserve', 'shift']; the IntEnum and its members are removed |
-| `VocalMergeNotes.merge_policy` | takes a VocalMergePolicy token ('preserve' default); an ordinal is TypeError |
+| `VocalMergeNotes.merge_policy` | `VocalMergeNotes.policy`: renamed policy, as the TypeScript operation spells it, and takes a VocalMergePolicy token ('preserve' default); an ordinal is TypeError |
 | `VocalMergePolicy.PRESERVE` | `VocalMergePolicy='preserve'` |
 | `VocalMergePolicy.RESET` | `VocalMergePolicy='reset'` |
 | `VocalMergePolicy` | Literal['preserve', 'reset']; the IntEnum and its members are removed |
@@ -3582,6 +3582,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `VocalCapabilities.api_version` | `VocalCapabilities.abi_version` |
+
+#### Vocal editing has one model on Python and JavaScript
+
+| 1.x | 2.0.0 |
+|---|---|
+| `VocalSplitNote.cut_source_sample` | `VocalSplitNote.source_sample` |
+| `VocalSplitNote.cut_source_sec` | `VocalSplitNote.source_sec` |
 
 #### Every public Python type imports from libsonare
 
@@ -14253,7 +14260,7 @@ const latency = engine.graphLatencySamples;
 
 ### Vocal editing has one model on Python and JavaScript
 
-Operation and field names agree across surfaces, so `VocalSplitOperation(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call.
+Operation and field names agree across surfaces, so `VocalSplitNote(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call.
 
 WASM, 1.x:
 
@@ -14280,7 +14287,7 @@ op = VocalSplitNote(note_id=3, cut_source_sample=48000)
 Python, 2.0.0:
 
 ```python
-op = VocalSplitOperation(note_id=3, source_sample=48000)
+op = VocalSplitNote(note_id=3, source_sample=48000)
 ```
 
 ### CLI input is a positional argument

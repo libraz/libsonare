@@ -1087,7 +1087,7 @@ const latency = engine.graphLatencySamples;
 [[rule]]
 slug = "vocal-edit-model"
 title = "Vocal editing has one model on Python and JavaScript"
-summary = "Operation and field names agree across surfaces, so `VocalSplitOperation(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call."
+summary = "Operation and field names agree across surfaces, so `VocalSplitNote(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -1106,7 +1106,7 @@ before = '''
 op = VocalSplitNote(note_id=3, cut_source_sample=48000)
 '''
 after = '''
-op = VocalSplitOperation(note_id=3, source_sample=48000)
+op = VocalSplitNote(note_id=3, source_sample=48000)
 '''
 
 [[rule]]
