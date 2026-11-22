@@ -150,20 +150,28 @@ function optionalNonZeroInteger(value: unknown, argName: string): number | undef
   return number;
 }
 
-/** An optional uint32 id whose `0` would mean "none": absent stays `undefined`, and an explicit `0` is refused. */
-function optionalId(argName: string, value: unknown): number | undefined {
+/**
+ * An optional uint32 id whose `0` would mean "none": absent stays `undefined`, and an explicit `0`
+ * is refused. `hint` finishes "omit it ...".
+ */
+function optionalId(argName: string, value: unknown, hint = 'for the default'): number | undefined {
   if (isAbsent(value)) {
     return undefined;
   }
-  const number = requireFiniteInteger(value, argName);
-  if (number === 0) {
-    throw refuse(`${argName} must not be 0; omit it for the default`);
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be an integer`);
   }
-  if (!Number.isInteger(number) || number < 1 || number > 0xffffffff) {
+  if (value === 0) {
+    throw refuse(`${argName} must not be 0; omit it ${hint}`);
+  }
+  if (!Number.isInteger(value) || value < 1 || value > 0xffffffff) {
     throw refuse(`${argName} must be an integer in [1, 4294967295]`);
   }
-  return number;
+  return value;
 }
+
+/** What omitting an output bus id does, for its `0` refusal. */
+const MASTER_MIX_HINT = 'to route to the master mix';
 
 /** An optional positive integer count: absent stays `undefined`, and an explicit `0` is refused. */
 function optionalCount(argName: string, value: unknown): number | undefined {
@@ -303,7 +311,7 @@ function normalizeSends(sends: EngineTrackSend[], where: string): EngineTrackSen
 
 /** Output bus of a lane or bus: absent is the master mix, an explicit `0` is refused. */
 function outputBusField(value: unknown, label: string): number | undefined {
-  return optionalNonZeroInteger(value, `${label}.outputBusId`);
+  return optionalId(`${label}.outputBusId`, value, MASTER_MIX_HINT);
 }
 
 function laneToNative(requestName: 'setTrackLanes', lane: EngineTrackLane, index: number): unknown {
@@ -1157,7 +1165,7 @@ export class RealtimeEngine {
    * membership and threading contract as {@link setTrackSends}.
    */
   setTrackOutputBus(trackId: number, busId: number | null): void {
-    this.native.setTrackOutputBus(trackId, optionalNonZeroInteger(busId, 'busId') ?? 0);
+    this.native.setTrackOutputBus(trackId, optionalId('busId', busId, MASTER_MIX_HINT) ?? 0);
   }
 
   /**

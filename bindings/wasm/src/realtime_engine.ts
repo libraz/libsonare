@@ -303,16 +303,7 @@ function graphName(path: string, value: unknown): void {
 
 /** An optional id that names a bus: absent routes to the master mix, so an explicit `0` is refused. */
 function optionalBusId(argName: string, value: unknown): number {
-  if (isAbsent(value)) {
-    return 0;
-  }
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (value === 0) {
-    throw refuse(`${argName} must not be 0; omit it to route to the master mix`);
-  }
-  return value;
+  return optionalId(argName, value, false, 'to route to the master mix') ?? 0;
 }
 
 function requireObject(argName: string, value: unknown): void {
