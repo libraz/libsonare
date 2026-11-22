@@ -551,6 +551,11 @@ export interface SonareEngineSyncArticulationMessage {
   articulation: Articulation;
 }
 
+export interface SonareEngineSyncParamSmoothingMessage {
+  type: 'syncParamSmoothing';
+  smoothingMs: number;
+}
+
 export interface SonareEngineSyncSf2InstrumentMessage {
   type: 'syncSf2Instrument';
   destinationId: number;
@@ -718,6 +723,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncBuiltinInstrumentMessage
   | SonareEngineSyncSynthInstrumentMessage
   | SonareEngineSyncArticulationMessage
+  | SonareEngineSyncParamSmoothingMessage
   | SonareEngineSyncSf2InstrumentMessage
   | SonareEngineSyncLoadSoundFontMessage
   | SonareEngineSyncMidiFxMessage

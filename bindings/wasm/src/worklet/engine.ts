@@ -86,7 +86,10 @@ import {
   type SonareEngineTransportFacade,
 } from './engine-offline.js';
 import type { SonareEngineOptions, SuspendableAudioContext } from './engine-options.js';
-import type { EngineParameterContext } from './engine-parameter-facade.js';
+import type {
+  EngineParameterContext,
+  SonareEngineSetParamOptions,
+} from './engine-parameter-facade.js';
 import * as parameter from './engine-parameter-facade.js';
 import type { EngineStripContext } from './engine-strips.js';
 import * as strips from './engine-strips.js';
@@ -390,9 +393,27 @@ export class SonareEngine {
     return tempo.cachedTransportState(this.tempoContext);
   }
 
-  /** Sets one registered parameter by id or name, at the next block head. */
-  setParam(nodeId: string, param: string | number, value: number): void {
-    parameter.setParam(this.parameterContext, nodeId, param, value);
+  /**
+   * Sets one registered parameter by id or name, at the next block head unless
+   * `renderFrame` names the frame. `{ smoothed: true }` ramps to the value through
+   * the engine smoother, as {@link RealtimeEngine.setParameter} does; the refusals
+   * are that method's.
+   */
+  setParam(
+    nodeId: string,
+    param: string | number,
+    value: number,
+    options?: SonareEngineSetParamOptions,
+  ): void {
+    parameter.setParam(this.parameterContext, nodeId, param, value, options);
+  }
+
+  /**
+   * Sets the ramp time (ms) of the engine-level smoother in the worklet; the
+   * domain, default and refusals are {@link RealtimeEngine.setParamSmoothingMs}'s.
+   */
+  setParamSmoothingMs(smoothingMs: number): void {
+    parameter.setParamSmoothingMs(this.parameterContext, smoothingMs);
   }
 
   /** Adds one breakpoint to the automation lane of a registered parameter. */
@@ -2080,17 +2101,7 @@ export class SonareEngine {
   // Mirrors a smoothed parameter into the offline engine and pushes a
   // sample-accurate smoothed-param command to the realtime runtime.
   private sendSmoothedParam(paramId: number, value: number, commitCache?: () => void): void {
-    commitCommand(
-      this.commitContext,
-      {
-        type: SonareEngineCommandType.SetParamSmoothed,
-        targetId: paramId,
-        renderFrame: -1,
-        argFloat: value,
-      },
-      (offline) => offline.setParameter(paramId, value),
-      commitCache,
-    );
+    parameter.commitParameter(this.commitContext, paramId, value, true, undefined, commitCache);
   }
 
   // The transaction every control edit commits through (see engine-commit.ts).

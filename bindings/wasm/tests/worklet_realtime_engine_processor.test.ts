@@ -3035,6 +3035,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         lanes: [{ trackId: 10, sends: [{ busId: 200, levelDb: 0, enabled: true }] }],
         buses: [{ busId: 200, gainDb: 0 }],
       },
+      syncParamSmoothing: { type: 'syncParamSmoothing', smoothingMs: 5 },
       syncParameters: {
         type: 'syncParameters',
         parameters: [

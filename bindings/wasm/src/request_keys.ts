@@ -374,6 +374,7 @@ import type {
 } from './repair_trim.js';
 import type { TranscribeRequest } from './transcribe.js';
 import type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.js';
+import type { SonareEngineSetParamOptions } from './worklet/engine-parameter-facade.js';
 
 /** Declared keys of `T`, without the index-signature widening. */
 type KnownKeys<T> = keyof {
@@ -2286,6 +2287,10 @@ const CapturePunchKeys = keysOf<CapturePunch>()([
 const EngineProcessRequestKeys = keysOf<EngineProcessOptions>()(['withMonitor']);
 const ArmCaptureRequestKeys = keysOf<{ armed: boolean }>()(['armed']);
 const ScheduleParamRequestKeys = keysOf<EngineAutomationPoint>()(['ppq', 'value', 'curveToNext']);
+const SonareEngineSetParamRequestKeys = keysOf<SonareEngineSetParamOptions>()([
+  'smoothed',
+  'renderFrame',
+]);
 const SonareEngineRenderOfflineRequestKeys = keysOf<SonareEngineRenderOfflineRequest>()([
   'totalFrames',
   'blockSize',
@@ -2747,6 +2752,7 @@ export const REQUEST_SHAPES = {
   processPrepared: { keys: EngineProcessRequestKeys },
   scheduleParam: { keys: ScheduleParamRequestKeys },
   'SonareEngine.renderOffline': { keys: SonareEngineRenderOfflineRequestKeys },
+  'SonareEngine.setParam': { keys: SonareEngineSetParamRequestKeys },
   bounceOffline: { keys: BounceOfflineRequestKeys },
   freezeOffline: { keys: FreezeOfflineRequestKeys },
   setParameter: { keys: SetParameterRequestKeys },

@@ -858,6 +858,9 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncArticulation':
         this.engine.setArticulation(message.destinationId, message.channel, message.articulation);
         break;
+      case 'syncParamSmoothing':
+        this.engine.setParamSmoothingMs(message.smoothingMs);
+        break;
       case 'syncLoadSoundFont':
         this.engine.loadSoundFont(message.data);
         break;

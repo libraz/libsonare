@@ -7,7 +7,7 @@ import type {
 } from '../index.js';
 import { refuseType } from '../internal/entry.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
-import { requestObject, resolveRenderFrame } from '../validation.js';
+import { optionalBoolean, requestObject, resolveRenderFrame } from '../validation.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import { SonareEngineCommandType } from './protocol.js';
 
@@ -27,17 +27,60 @@ export interface EngineParameterContext extends EngineCommitContext {
   ensureBus(busId: number): number;
 }
 
+/** Options for {@link SonareEngine.setParam}. */
+export interface SonareEngineSetParamOptions {
+  /** Ramp to the value through the engine smoother (kSetParamSmoothed) instead of applying it at once. Default `false`. */
+  smoothed?: boolean;
+  /** Render frame the change lands on. Omit it to apply at the next block head. */
+  renderFrame?: number;
+}
+
 export function setParam(
   ctx: EngineParameterContext,
   nodeId: string,
   param: string | number,
   value: number,
+  options?: SonareEngineSetParamOptions,
 ): void {
-  const paramId = ctx.resolveParamId(nodeId, param);
+  let smoothed = false;
+  let renderFrame: number | undefined;
+  if (options !== undefined) {
+    requestObject('SonareEngine.setParam', options, 'options', true);
+    smoothed = optionalBoolean(options.smoothed, 'smoothed', false);
+    renderFrame = options.renderFrame;
+  }
+  commitParameter(ctx, ctx.resolveParamId(nodeId, param), value, smoothed, renderFrame);
+}
+
+/** Every parameter change the facade sends, plain or smoothed, mirrored into the offline engine first. */
+export function commitParameter(
+  ctx: EngineCommitContext,
+  paramId: number,
+  value: number,
+  smoothed: boolean,
+  renderFrame?: number,
+  commitCache?: () => void,
+): void {
   commitCommand(
     ctx,
-    { type: SonareEngineCommandType.SetParam, targetId: paramId, renderFrame: -1, argFloat: value },
-    (offline) => offline.setParameter(paramId, value),
+    {
+      type: smoothed ? SonareEngineCommandType.SetParamSmoothed : SonareEngineCommandType.SetParam,
+      targetId: paramId,
+      renderFrame: resolveRenderFrame(renderFrame),
+      argFloat: value,
+    },
+    (offline) =>
+      offline.setParameter(paramId, value, renderFrame, smoothed ? { smoothed } : undefined),
+    commitCache,
+  );
+}
+
+/** Sets the engine-level smoother's ramp time; see {@link RealtimeEngine.setParamSmoothingMs}. */
+export function setParamSmoothingMs(ctx: EngineParameterContext, smoothingMs: number): void {
+  commitSync(
+    ctx,
+    (offline) => offline.setParamSmoothingMs(smoothingMs),
+    () => ctx.postSync({ type: 'syncParamSmoothing', smoothingMs }),
   );
 }
 

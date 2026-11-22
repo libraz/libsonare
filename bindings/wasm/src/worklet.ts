@@ -93,6 +93,7 @@ export type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.j
 export { SonareRealtimeEngineNode } from './worklet/engine-node.js';
 export type { SonareEngineTransportFacade } from './worklet/engine-offline.js';
 export type { SonareEngineOptions } from './worklet/engine-options.js';
+export type { SonareEngineSetParamOptions } from './worklet/engine-parameter-facade.js';
 export { SonareRealtimeEngineWorkletProcessor } from './worklet/engine-processor.js';
 export { registerSonareRealtimeEngineWorkletProcessor } from './worklet/engine-register.js';
 export {
