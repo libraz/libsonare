@@ -5,6 +5,7 @@ import type {
   SendTiming,
 } from '../public_types_mixing.js';
 import { refuse, refuseType } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 import { isNonArrayObject } from './value_guards.js';
 
 // The per-strip and per-bus setters take these settings as call arguments, so a wrong type or an unknown token is
@@ -90,6 +91,7 @@ function stripToNative(strip: unknown, path: string): Loose {
   assertStripMetering(out.metering, `${path}.metering`);
   const sends = listOf(out.sends, `${path}.sends`);
   if (sends !== undefined) {
+    requireListBudget(sends, `${path}.sends`);
     out.sends = sends.map((send, i) =>
       sendToNative(send as MixSceneSendInput, `${path}.sends[${i}]`),
     );

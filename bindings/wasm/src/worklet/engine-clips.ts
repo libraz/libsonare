@@ -1,5 +1,6 @@
 import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index.js';
 import { refuseType } from '../internal/entry.js';
+import { requireListBudget } from '../internal/list_budget.js';
 import { requireOneOf } from '../internal/one_of.js';
 import type {
   SonareEngineSyncedClip,
@@ -101,7 +102,13 @@ export function setMidiClips(
   clips: readonly EngineMidiClipSchedule[],
 ): void {
   const staged = new Map<number, EngineMidiClipSchedule>();
+  if (Array.isArray(clips)) {
+    requireListBudget(clips, 'clips');
+  }
   for (const clip of clips) {
+    if (Array.isArray(clip?.events)) {
+      requireListBudget(clip.events, 'events');
+    }
     const id = clip.id ?? ctx.allocateClipId();
     staged.set(id, { ...clip, id, events: clip.events.map((event) => ({ ...event })) });
   }

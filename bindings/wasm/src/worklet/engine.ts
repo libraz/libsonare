@@ -41,8 +41,10 @@ import { RealtimeEngine } from '../index.js';
 import { opfsClipPageProviderFactoryFor } from '../internal/clip_page_native.js';
 import { entryClass, invalidState, refuse } from '../internal/entry.js';
 import { assertHandleLive } from '../internal/handle_guard.js';
+import { stringifyWithinBudget } from '../internal/list_budget.js';
 import { packMidi2ProgramRequest } from '../internal/midi_program_pack.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
+import { boundedUmpWords } from '../internal/ump_events.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import {
   createOpfsClipPageProvider,
@@ -756,7 +758,7 @@ export class SonareEngine {
    * no lane yet.
    */
   setStrip(target: string | number, settings: MixSceneStripInput): void {
-    const sceneJson = JSON.stringify({ strips: [mixSceneStripToNative(settings)] });
+    const sceneJson = stringifyWithinBudget({ strips: [mixSceneStripToNative(settings)] }, 'strip');
     if (target === 'master') {
       mixer.setMasterStripJson(this.mixerContext, sceneJson);
       return;
@@ -777,7 +779,7 @@ export class SonareEngine {
 
   /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
   setBusStrip(busId: number, settings: MixSceneBusInput): void {
-    const sceneJson = JSON.stringify({ buses: [mixSceneBusToNative(settings)] });
+    const sceneJson = stringifyWithinBudget({ buses: [mixSceneBusToNative(settings)] }, 'bus');
     mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
   }
 
@@ -1660,7 +1662,10 @@ export class SonareEngine {
       offsetInBlockSamples,
       options,
     );
-    const copiedWords = words instanceof Uint32Array ? new Uint32Array(words) : words.slice();
+    const copiedWords =
+      words instanceof Uint32Array
+        ? new Uint32Array(words)
+        : (Array.isArray(words) ? boundedUmpWords(words) : words).slice();
     this.offlineEngine.pushMidiInputUmp(copiedWords, timing.offsetInBlockSamples);
     this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, ...timing });
   }

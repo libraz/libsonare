@@ -24,6 +24,7 @@ import {
   refuseUnknownKey,
 } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import {
   AUTOMATION_TARGET_KINDS,
@@ -338,6 +339,7 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
   if (!Array.isArray(inserts)) {
     throw refuseType('inserts must be an array');
   }
+  requireListBudget(inserts, 'inserts');
   return JSON.stringify(
     inserts.map((insert, index) => {
       if (typeof insert !== 'object' || insert === null) {

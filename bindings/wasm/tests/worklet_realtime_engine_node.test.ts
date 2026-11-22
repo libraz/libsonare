@@ -3532,6 +3532,97 @@ describe('SonareRealtimeEngineNode', () => {
       engine.destroy();
     });
 
+    it('refuses every list-taking setter past the native budget without reading an entry', async () => {
+      const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: () => undefined,
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+            start: () => undefined,
+          }),
+      });
+      let reads = 0;
+      const oversized = new Proxy([] as unknown[], {
+        get(target, key, receiver) {
+          if (key === 'length') {
+            return 64 * 1024 * 1024 + 1;
+          }
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            reads++;
+            throw new Error('entry read');
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      }) as never;
+      const cases: Array<[string, string, () => unknown]> = [
+        [
+          'setTempoSegments',
+          'segments exceeds the WASM Float32 input budget',
+          () => engine.setTempoSegments(oversized),
+        ],
+        [
+          'setTimeSignatureSegments',
+          'segments exceeds the WASM Float32 input budget',
+          () => engine.setTimeSignatureSegments(oversized),
+        ],
+        [
+          'setAutomationLane',
+          'points exceeds the WASM Float32 input budget',
+          () => engine.setAutomationLane(1, oversized),
+        ],
+        [
+          'setTrackLanes',
+          'lanes exceeds the WASM Float32 input budget',
+          () => engine.setTrackLanes(oversized),
+        ],
+        [
+          'setTrackLanes',
+          'sends exceeds the WASM Float32 input budget',
+          () => engine.setTrackLanes([{ trackId: 1, sends: oversized }]),
+        ],
+        [
+          'setTrackSends',
+          'sends exceeds the WASM Float32 input budget',
+          () => engine.setTrackSends(1, oversized),
+        ],
+        [
+          'setMidiClips',
+          'clips exceeds the WASM Float32 input budget',
+          () => engine.setMidiClips(oversized),
+        ],
+        [
+          'setMidiClips',
+          'events exceeds the WASM Float32 input budget',
+          () => engine.setMidiClips([{ events: oversized } as never]),
+        ],
+        [
+          'setStrip',
+          'strip.sends exceeds the WASM Float32 input budget',
+          () => engine.setStrip('master', { sends: oversized } as never),
+        ],
+        ['pushMidiUmp', 'words must hold 1 to 4 words', () => engine.pushMidiUmp(1, oversized)],
+        [
+          'pushMidiInputUmp',
+          'words must hold 1 to 4 words',
+          () => engine.pushMidiInputUmp(oversized),
+        ],
+      ];
+      for (const [method, text, call] of cases) {
+        reads = 0;
+        expect(call, `${method} ${text}`).toThrow(
+          expect.objectContaining({
+            name: 'RangeError',
+            message: `SonareEngine.${method}: ${text}`,
+          }),
+        );
+        expect(reads, `${method} ${text} reads`).toBe(0);
+      }
+      engine.destroy();
+    });
+
     it('replaces and clears automation lanes via setAutomationLane', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {

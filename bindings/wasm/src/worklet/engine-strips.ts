@@ -14,6 +14,7 @@ import type {
 import { codedError, refuse, refuseType } from '../internal/entry.js';
 import { eqBandJson } from '../internal/eq_band_json.js';
 import { packMidi2ProgramRequest } from '../internal/midi_program_pack.js';
+import { boundedUmpWords } from '../internal/ump_events.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { SurroundPan } from '../public_types.js';
 import type { MidiFxConfig } from '../public_types_engine.js';
@@ -651,7 +652,7 @@ export function pushMidiUmp(
     umpWords instanceof Uint32Array
       ? new Uint32Array(umpWords)
       : Array.isArray(umpWords)
-        ? umpWords.slice()
+        ? boundedUmpWords(umpWords).slice()
         : umpWords;
   postMidiUmp(ctx, trackId, words, renderFrame, timing);
 }

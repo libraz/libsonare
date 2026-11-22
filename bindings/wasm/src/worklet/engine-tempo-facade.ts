@@ -4,6 +4,7 @@ import type {
   EngineTransportState,
   RealtimeEngine,
 } from '../index.js';
+import { requireListBudget } from '../internal/list_budget.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { EngineLoop } from '../public_types_engine.js';
 import { requestObject } from '../validation.js';
@@ -68,6 +69,9 @@ export function setTempoSegments(
   ctx: EngineTempoContext,
   segments: readonly EngineTempoSegment[],
 ): void {
+  if (Array.isArray(segments)) {
+    requireListBudget(segments, 'segments');
+  }
   const copied = segments.map((segment) => ({ ...segment }));
   commitSync(
     ctx,
@@ -100,6 +104,9 @@ export function setTimeSignatureSegments(
   ctx: EngineTempoContext,
   segments: readonly EngineTimeSignatureSegment[],
 ): void {
+  if (Array.isArray(segments)) {
+    requireListBudget(segments, 'segments');
+  }
   const copied = segments.map((segment) => ({ ...segment }));
   commitSync(
     ctx,

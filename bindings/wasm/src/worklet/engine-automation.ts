@@ -1,4 +1,5 @@
 import type { EngineAutomationPoint, RealtimeEngine } from '../index.js';
+import { requireListBudget } from '../internal/list_budget.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import { requestObject } from '../validation.js';
 import { commitStore } from './engine-commit.js';
@@ -56,6 +57,9 @@ export function setAutomationLane(
   paramId: number,
   points: ReadonlyArray<EngineAutomationPoint>,
 ): void {
+  if (Array.isArray(points)) {
+    requireListBudget(points, 'points');
+  }
   const sorted = points.map((point) => ({ ...point })).sort((a, b) => a.ppq - b.ppq);
   commitLane(ctx, paramId, sorted);
 }

@@ -1,4 +1,5 @@
 import { type Respelled, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import type { Matrix2D } from './public_types.js';
@@ -663,10 +664,13 @@ export function assertKnownRequestKeys(requestName: RequestFn, request: object):
   for (const [field, keys] of Object.entries(shape.nested ?? {})) {
     const value = (request as Record<string, unknown>)[field];
     // A nested field is one object, or an array whose elements each carry the declared keys.
-    const items: [string, unknown][] = Array.isArray(value)
-      ? value.map((item, i) => [`${field}[${i}]`, item])
-      : [[field, value]];
-    for (const [path, item] of items) {
+    const list: readonly unknown[] = Array.isArray(value) ? value : [value];
+    if (Array.isArray(value)) {
+      requireListBudget(value, field);
+    }
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const path = Array.isArray(value) ? `${field}[${i}]` : field;
       if (!isNonArrayObject(item)) {
         continue;
       }

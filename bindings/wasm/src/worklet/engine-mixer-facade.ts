@@ -4,6 +4,7 @@ import { ErrorCode, type SonareError } from '../errors.js';
 import type { EngineBus, EngineTrackLane, EngineTrackSend, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { codedError, refuse, refuseType } from '../internal/entry.js';
+import { requireListBudget } from '../internal/list_budget.js';
 import { isNonArrayObject } from '../internal/value_guards.js';
 import type {
   SonareEngineSyncMessage,
@@ -646,9 +647,15 @@ export function replayInsertParamOverrides(
  * @param lanes Lane descriptors in the desired lane order.
  */
 export function setTrackLanes(ctx: EngineMixerContext, lanes: readonly EngineTrackLane[]): void {
+  if (Array.isArray(lanes)) {
+    requireListBudget(lanes, 'lanes');
+  }
   for (const [i, lane] of lanes.entries()) {
     if (typeof lane !== 'object' || lane === null) {
       throw refuseType('each lane must be an EngineTrackLane object');
+    }
+    if (Array.isArray(lane.sends)) {
+      requireListBudget(lane.sends, 'sends');
     }
     if (lane.sourceChannelLayout !== undefined && lane.sourceChannelLayout !== 'stereo') {
       throw codedError(
@@ -870,6 +877,9 @@ export function setTrackSends(
   target: string | number,
   sends: EngineTrackSend[],
 ): void {
+  if (Array.isArray(sends)) {
+    requireListBudget(sends, 'sends');
+  }
   const draft = cloneMixerRouting(ctx);
   const laneIndex = ensureTrackLaneInDraft(draft, target);
   const trackId = draft.trackLaneIds[laneIndex];

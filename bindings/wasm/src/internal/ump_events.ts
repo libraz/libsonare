@@ -6,6 +6,24 @@ import { refuse } from './entry.js';
 const MIDI2_U16_MAX = 0xffff;
 const MIDI2_U32_MAX = 0xffffffff;
 
+/** Most words one UMP packet holds. */
+export const UMP_MAX_WORDS = 4;
+
+/** Refuses a word list that holds no word or more than one packet's worth. */
+export function assertUmpWordCount(words: ArrayLike<number>): void {
+  if (words.length < 1 || words.length > UMP_MAX_WORDS) {
+    throw refuse(`words must hold 1 to ${UMP_MAX_WORDS} words`);
+  }
+}
+
+/** Refuses an oversized word array before it is copied; a short one is left to the engine's own refusal. */
+export function boundedUmpWords(words: number[]): number[] {
+  if (words.length > UMP_MAX_WORDS) {
+    assertUmpWordCount(words);
+  }
+  return words;
+}
+
 /** Refuses a ppq that is not a non-negative finite number. */
 export function assertEventPpq(ppq: number): void {
   if (!(Number.isFinite(ppq) && ppq >= 0 && ppq <= MAX_PUBLIC_PPQ)) {

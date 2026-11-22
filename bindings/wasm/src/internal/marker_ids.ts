@@ -1,18 +1,3 @@
-import { refuse } from './entry.js';
-
-/** `kMaxWasmFloat32Elements` in src/wasm/bindings/common/common.h, the native setter's list budget. */
-const MARKER_LIST_BUDGET = 64 * 1024 * 1024;
-
-/**
- * Refuses a marker list longer than the native setter accepts, before any walk
- * over it: a sparse array can carry that length without holding the entries.
- */
-export function requireMarkerListBudget(markers: ReadonlyArray<unknown>): void {
-  if (markers.length > MARKER_LIST_BUDGET) {
-    throw refuse('markers exceeds the WASM Float32 input budget');
-  }
-}
-
 /** A marker entry whose `id` is optional; an absent id is allocated. */
 export type MarkerIdInput = { id?: number };
 

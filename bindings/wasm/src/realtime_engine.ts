@@ -30,7 +30,8 @@ import {
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive } from './internal/handle_guard.js';
-import { assignMarkerIds, requireMarkerListBudget } from './internal/marker_ids.js';
+import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
+import { assignMarkerIds } from './internal/marker_ids.js';
 import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
@@ -38,6 +39,7 @@ import { deinterleavePlanes } from './internal/pod_config.js';
 import { MARKER_KINDS, WARP_MODES } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { assertUmpWordCount } from './internal/ump_events.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -198,9 +200,7 @@ function assertUmpWords(words: UmpWords): UmpWords {
   if (!(words instanceof Uint32Array) && !Array.isArray(words)) {
     throw refuseType(`words must be a Uint32Array or a number array`);
   }
-  if (words.length < 1 || words.length > 4) {
-    throw refuse(`words must hold 1 to 4 words`);
-  }
+  assertUmpWordCount(words);
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     if (
@@ -382,6 +382,9 @@ function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
   finalize: boolean;
 } {
   requestObject('renderOffline', request, 'request', true);
+  if (Array.isArray(request.channels)) {
+    requireListBudget(request.channels, 'channels');
+  }
   for (const [plane, channel] of (request.channels ?? []).entries()) {
     for (let i = 0; i < (channel?.length ?? 0); i++) {
       if (!Number.isFinite(channel[i])) {
@@ -460,6 +463,7 @@ function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknow
   if (!Array.isArray(clips)) {
     return clips;
   }
+  requireListBudget(clips, 'clips');
   return clips.map((clip) => {
     if (typeof clip !== 'object' || clip === null) {
       return clip;
@@ -667,11 +671,11 @@ function programBank(
 }
 
 function sceneStripJson(strip: MixSceneStripInput): string {
-  return JSON.stringify({ strips: [mixSceneStripToNative(strip)] });
+  return stringifyWithinBudget({ strips: [mixSceneStripToNative(strip)] }, 'strip');
 }
 
 function sceneBusJson(bus: MixSceneBusInput): string {
-  return JSON.stringify({ buses: [mixSceneBusToNative(bus)] });
+  return stringifyWithinBudget({ buses: [mixSceneBusToNative(bus)] }, 'bus');
 }
 
 function bandJson(band: unknown): string {
@@ -1824,6 +1828,9 @@ export class RealtimeEngine {
    * `curveToNext` is an {@link AutomationCurve} string; an ordinal is a `TypeError`.
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
+    if (Array.isArray(points)) {
+      requireListBudget(points, 'points');
+    }
     this.native.setAutomationLane(
       paramId,
       Array.isArray(points)
@@ -1848,7 +1855,7 @@ export class RealtimeEngine {
       this.native.setMarkers(markers as never);
       return [];
     }
-    requireMarkerListBudget(markers);
+    requireListBudget(markers, 'markers');
     let floor = this.nextMarkerId;
     for (const stored of this.markers()) {
       floor = Math.max(floor, stored.id + 1);
@@ -2001,6 +2008,9 @@ export class RealtimeEngine {
    * leaves the previous set unchanged. Control thread only.
    */
   setClips(clips: EngineClip[]): void {
+    if (Array.isArray(clips)) {
+      requireListBudget(clips, 'clips');
+    }
     this.native.setClips(clips.map((clip, i) => nativeClip(clip, `clips[${i}]`)));
   }
 
@@ -2043,6 +2053,9 @@ export class RealtimeEngine {
    * Shared by track lanes and buses, which carry the same send shape.
    */
   private static normalizeSends(sends: EngineTrackSend[], where: string): WasmEngineTrackSend[] {
+    if (Array.isArray(sends)) {
+      requireListBudget(sends, 'sends');
+    }
     return sends.map((send, i) => {
       const { sendTiming, ...rest } = send;
       return sendTiming === undefined
@@ -2057,6 +2070,9 @@ export class RealtimeEngine {
    * `outputBusId` is an explicit `0` (omit it to stay on the master mix).
    */
   setTrackLanes(lanes: readonly EngineTrackLane[]): void {
+    if (Array.isArray(lanes)) {
+      requireListBudget(lanes, 'lanes');
+    }
     const nativeLanes = lanes.map((lane, i) => {
       const { sourceChannelLayout, outputBusId, ...rest } = lane;
       return {
@@ -2164,6 +2180,9 @@ export class RealtimeEngine {
     // meant to probe the native array-length read: passing it through
     // unmodified lets that guard see the real (missing) length rather than
     // failing here on a `.map` that array-likes do not implement.
+    if (Array.isArray(buses)) {
+      requireListBudget(buses, 'buses');
+    }
     this.native.setTrackBuses(
       Array.isArray(buses)
         ? buses.map((bus, i) => {

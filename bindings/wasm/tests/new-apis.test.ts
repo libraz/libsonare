@@ -1513,6 +1513,76 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('refuses every list-taking setter past the native budget without reading an entry', () => {
+      const reads = { count: 0 };
+      const oversized = new Proxy([] as unknown[], {
+        get(target, key, receiver) {
+          if (key === 'length') {
+            return 64 * 1024 * 1024 + 1;
+          }
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            reads.count++;
+            throw new Error('entry read');
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      }) as never;
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      const cases: Array<[string, string, () => unknown]> = [
+        ['setMidiClips', 'clips', () => engine.setMidiClips(oversized)],
+        ['setAutomationLane', 'points', () => engine.setAutomationLane(1, oversized)],
+        [
+          'setGraph',
+          'nodes',
+          () =>
+            engine.setGraph({
+              inputNode: 'in',
+              outputNode: 'out',
+              nodes: oversized,
+              connections: [],
+            }),
+        ],
+        [
+          'setGraph',
+          'connections',
+          () =>
+            engine.setGraph({
+              inputNode: 'in',
+              outputNode: 'out',
+              nodes: [],
+              connections: oversized,
+            }),
+        ],
+        ['setClips', 'clips', () => engine.setClips(oversized)],
+        ['setTrackLanes', 'lanes', () => engine.setTrackLanes(oversized)],
+        ['setTrackLanes', 'sends', () => engine.setTrackLanes([{ trackId: 1, sends: oversized }])],
+        ['setTrackSends', 'sends', () => engine.setTrackSends(1, oversized)],
+        ['setTrackBuses', 'buses', () => engine.setTrackBuses(oversized)],
+        ['setTrackBuses', 'sends', () => engine.setTrackBuses([{ busId: 1, sends: oversized }])],
+        ['setStrip', 'strip.sends', () => engine.setStrip(1, { sends: oversized } as never)],
+        [
+          'setPartRig',
+          'inserts',
+          () => engine.setPartRig({ destinationId: 1, part: 0, mode: 'chain', inserts: oversized }),
+        ],
+        [
+          'setSynthInstrument',
+          'modRoutings',
+          () => engine.setSynthInstrument(1, { modRoutings: oversized } as never),
+        ],
+        ['setMidiFx', 'config', () => engine.setMidiFx(1, { chordIntervals: oversized })],
+        ['renderOffline', 'channels', () => engine.renderOffline({ channels: oversized })],
+      ];
+      for (const [method, subject, call] of cases) {
+        reads.count = 0;
+        expect(expectRefusalOf(call, RangeError).message, `${method} ${subject}`).toBe(
+          `RealtimeEngine.${method}: ${subject} exceeds the WASM Float32 input budget`,
+        );
+        expect(reads.count, `${method} ${subject} reads`).toBe(0);
+      }
+      engine.destroy();
+    });
+
     it('round-trips marker kind and key signature through setMarkers/markers', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setMarkers([

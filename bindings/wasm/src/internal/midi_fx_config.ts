@@ -1,5 +1,6 @@
 import type { MidiFxConfig } from '../public_types_engine.js';
 import { refuseType } from './entry.js';
+import { requireListBudget, stringifyWithinBudget } from './list_budget.js';
 import { isNonArrayObject } from './value_guards.js';
 
 /**
@@ -13,5 +14,10 @@ export function midiFxConfigJson(config: MidiFxConfig): string {
   if (!isNonArrayObject(config)) {
     throw refuseType(`config must be an object`);
   }
-  return JSON.stringify(config);
+  for (const list of [config.chordIntervals, config.arpeggiatorIntervals]) {
+    if (Array.isArray(list)) {
+      requireListBudget(list, 'config');
+    }
+  }
+  return stringifyWithinBudget(config, 'config');
 }
