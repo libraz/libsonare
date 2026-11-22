@@ -109,7 +109,7 @@ of magnitude larger and are untouched by any conversion, and on the injection
 ablation -- one added embind function taking one narrow integer parameter is
 reported as ungraded no matter how small the graded population has become.
 The inline ``.as<int>`` population went the same way: caller-supplied array
-lengths now read through ``wasmArrayLikeLength``, so its ``files`` and
+lengths now read through ``wasmArrayLength``, so its ``files`` and
 ``narrowings`` floors guard only against an empty scan, and ``containers`` and
 ``readers`` carry the evidence.
 

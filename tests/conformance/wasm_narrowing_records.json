@@ -9,7 +9,7 @@
     {
       "name": "array_length",
       "receiver_pattern": "\\[\"length\"\\]$",
-      "reason": "An array's own length, not a caller-supplied number. A JS array cannot be longer than the safe-integer range, so the read has nothing to saturate; the budget on that length is the array-length guard's, which the shared wasmArrayLikeLength applies."
+      "reason": "An array's own length, not a caller-supplied number. A JS array cannot be longer than the safe-integer range, so the read has nothing to saturate; the budget on that length is the array-length guard's, which the shared wasmArrayLength applies."
     }
   ],
   "narrowings": [],
@@ -42,7 +42,7 @@
     {
       "file": "bindings/realtime/midi_io.cpp",
       "symbol": "umpWordsFromVal",
-      "reason": "Delegates every element's narrowing to the shared checkedWordFromVal and the array's length to the shared wasmArrayLikeLength, so the conversion contract is single-sourced. What is local is the message's own domain: a UMP carries one to four words, which only the two raw-UMP push entry points ask."
+      "reason": "Delegates every element's narrowing to the shared checkedWordFromVal and the array's length to the shared wasmArrayLength, so the conversion contract is single-sourced. What is local is the message's own domain: a UMP carries one to four words, which only the two raw-UMP push entry points ask."
     }
   ],
   "positional": {
