@@ -159,7 +159,6 @@ TEST_CASE("The dB conversions refuse a saturated reference", "[conformance][wasm
   const std::vector<float> values(16, 1.0f);
   REQUIRE(refuses([&] { power_to_db(values, kSaturated, 1e-10f, 80.0f); }));
   REQUIRE(refuses([&] { power_to_db(values, 1.0f, kSaturated, 80.0f); }));
-  REQUIRE(refuses([&] { power_to_db(values, 1.0f, 1e-10f, kSaturated); }));
   REQUIRE(refuses([&] { amplitude_to_db(values, kSaturated, 1e-5f, 80.0f); }));
   REQUIRE(refuses([&] { db_to_power(values, kSaturated); }));
   REQUIRE(refuses([&] { db_to_amplitude(values, kSaturated); }));
@@ -170,6 +169,23 @@ TEST_CASE("The dB conversions refuse a saturated reference", "[conformance][wasm
   // green run.
   REQUIRE(std::abs(power_to_db(values, 1.0f, 1e-10f, 80.0f)[0] -
                    power_to_db(values, 4.0f, 1e-10f, 80.0f)[0]) > 1.0f);
+}
+
+TEST_CASE("A saturated top_db is no clipping and a negative one is refused",
+          "[conformance][wasm]") {
+  // 1e-12 sits below amin, so it reads -100 dB against a 0 dB maximum: 80 dB clips it, +inf
+  // leaves it.
+  const std::vector<float> power = {1.0f, 1e-12f};
+  REQUIRE(power_to_db(power, 1.0f, 1e-10f, 80.0f)[1] == Catch::Approx(-80.0f));
+  REQUIRE(power_to_db(power, 1.0f, 1e-10f, kSaturated)[1] == Catch::Approx(-100.0f));
+  const std::vector<float> amplitude = {1.0f, 1e-6f};
+  REQUIRE(amplitude_to_db(amplitude, 1.0f, 1e-5f, 80.0f)[1] == Catch::Approx(-80.0f));
+  REQUIRE(amplitude_to_db(amplitude, 1.0f, 1e-5f, kSaturated)[1] == Catch::Approx(-100.0f));
+
+  REQUIRE(refuses([&] { power_to_db(power, 1.0f, 1e-10f, -1.0f); }));
+  REQUIRE(refuses([&] { power_to_db(power, 1.0f, 1e-10f, -kSaturated); }));
+  REQUIRE(refuses([&] { power_to_db(power, 1.0f, 1e-10f, kNaN); }));
+  REQUIRE(refuses([&] { amplitude_to_db(amplitude, 1.0f, 1e-5f, -1.0f); }));
 }
 
 TEST_CASE("The generators refuse a saturated duration or frequency", "[conformance][wasm]") {

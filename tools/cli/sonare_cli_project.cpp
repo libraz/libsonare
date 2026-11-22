@@ -43,34 +43,7 @@ void project_report_error(const std::string& what, SonareError err) {
 // keeps the class it actually carries (a file that does not exist stays a
 // file-not-found, a rejected preset stays an invalid parameter) all the way out
 // to the caller, which is what makes the two CLIs agree per condition.
-int project_exit_code(SonareError err) {
-  switch (err) {
-    case SONARE_ERROR_FILE_NOT_FOUND:
-      return cli_exit_code_for_error(sonare::ErrorCode::FileNotFound);
-    case SONARE_ERROR_INVALID_FORMAT:
-      return cli_exit_code_for_error(sonare::ErrorCode::InvalidFormat);
-    case SONARE_ERROR_DECODE_FAILED:
-      return cli_exit_code_for_error(sonare::ErrorCode::DecodeFailed);
-    case SONARE_ERROR_INVALID_PARAMETER:
-      return cli_exit_code_for_error(sonare::ErrorCode::InvalidParameter);
-    case SONARE_ERROR_OUT_OF_MEMORY:
-      return cli_exit_code_for_error(sonare::ErrorCode::OutOfMemory);
-    case SONARE_ERROR_NOT_SUPPORTED:
-      return cli_exit_code_for_error(sonare::ErrorCode::NotSupported);
-    case SONARE_ERROR_INVALID_STATE:
-      return kExitInvalidState;
-    case SONARE_ERROR_CANCELLED:
-      return cli_exit_code_for_error(sonare::ErrorCode::Cancelled);
-    case SONARE_ERROR_ENCODE_FAILED:
-      return cli_exit_code_for_error(sonare::ErrorCode::EncodeFailed);
-    case SONARE_ERROR_STALE_RESULT:
-      return cli_exit_code_for_error(sonare::ErrorCode::StaleResult);
-    case SONARE_OK:
-    case SONARE_ERROR_UNKNOWN:
-    default:
-      return kExitInvalidParameter;
-  }
-}
+int project_exit_code(SonareError err) { return cli_exit_code_for_c_error(err); }
 
 // Reports a failed write of the caller's output artifact. Every project handler
 // that writes one routes here, so the six copies of this rejection cannot drift

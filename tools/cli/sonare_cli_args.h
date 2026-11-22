@@ -3,6 +3,8 @@
 /// @file sonare_cli_args.h
 /// @brief The parsed native CLI invocation and the parser that produces it.
 
+#include <sonare/sonare_c.h>
+
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -138,6 +140,9 @@ struct CliValidationError {
 
 /// Maps a core error to the stable native CLI exit-code contract.
 int cli_exit_code_for_error(sonare::ErrorCode error) noexcept;
+
+/// Maps a C ABI failure code to the same contract, through the core code it names.
+int cli_exit_code_for_c_error(SonareError error) noexcept;
 
 class ArgParser {
  public:

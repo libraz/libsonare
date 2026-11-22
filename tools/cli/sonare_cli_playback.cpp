@@ -1,6 +1,7 @@
 /// @file sonare_cli_playback.cpp
 /// @brief `sonare playback`: render movie audio to speakers or headphones.
 
+#include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
 
 #ifdef SONARE_WITH_PLAYBACK
@@ -27,16 +28,12 @@ std::vector<uint8_t> read_hrtf_file(const std::string& path) {
   return bytes;
 }
 
-// SonareError and sonare::ErrorCode share the same numeric values for every
-// code the C ABI can return here (SONARE_ERROR_UNKNOWN, 99, has no C++
-// counterpart and is the one case handled separately).
 [[noreturn]] void throw_playback_error(const std::string& what, SonareError err) {
   std::string message = what + ": " + sonare_error_message(err);
   // The core's own wording names the refused key, so it travels with the code.
   const char* detail = sonare_last_error_message();
   if (detail != nullptr && detail[0] != '\0') message += std::string(": ") + detail;
-  if (err == SONARE_OK || err == SONARE_ERROR_UNKNOWN) throw std::runtime_error(message);
-  throw sonare::SonareException(static_cast<sonare::ErrorCode>(err), message);
+  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err), message);
 }
 
 // Overlays the CLI's flags onto the (optional) --config document; an absent

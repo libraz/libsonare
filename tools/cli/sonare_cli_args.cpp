@@ -10,6 +10,7 @@
 #include <stdexcept>
 
 #include "analysis/key_profiles.h"
+#include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli_registry.h"
 #include "util/exception.h"
 #include "util/refusal_predicates.h"
@@ -44,6 +45,10 @@ int cli_exit_code_for_error(sonare::ErrorCode error) noexcept {
     default:
       return 10;
   }
+}
+
+int cli_exit_code_for_c_error(SonareError error) noexcept {
+  return cli_exit_code_for_error(sonare_c_detail::error_code_from_c_error(error));
 }
 
 namespace {

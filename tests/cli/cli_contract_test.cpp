@@ -1365,8 +1365,7 @@ TEST_CASE("CLI exit codes are the contract's named table", "[cli][contract]") {
   for (std::size_t i = 0; i < rows.size(); ++i) {
     CAPTURE(rows[i]["codeName"].as_string());
     const auto code = static_cast<SonareError>(rows[i]["code"].as_int());
-    CHECK(cli_exit_code_for_error(sonare_c_detail::error_code_from_c_error(code)) ==
-          exit_codes[rows[i]["cliExit"].as_string()].as_int());
+    CHECK(cli_exit_code_for_c_error(code) == exit_codes[rows[i]["cliExit"].as_string()].as_int());
   }
 }
 
