@@ -7,6 +7,7 @@
 #include <limits>
 #include <string>
 
+#include "metering/clipping.h"
 #include "metering/waveform.h"
 #include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
@@ -166,14 +167,10 @@ float js_metering_true_peak_db(val samples, const val& sample_rate_val,
 val js_metering_detect_clipping(val samples, const val& sample_rate_val, const val& threshold_val,
                                 const val& min_region_samples_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  // An infinity goes on to the core, which refuses it in its own domain text.
-  const bool threshold_infinite =
-      threshold_val.isNumber() && std::isinf(threshold_val.as<double>());
+  // Absent is the C ABI's NaN, the library's clip level; a written NaN is refused.
   const float threshold_db =
-      threshold_val.isUndefined()
-          ? std::numeric_limits<float>::quiet_NaN()
-          : (threshold_infinite ? static_cast<float>(threshold_val.as<double>())
-                                : checkedFloatFromVal(threshold_val, "thresholdDb"));
+      optionalDomainValue<float>(threshold_val, "thresholdDb", metering::kClippingThresholdDbDomain)
+          .value_or(std::numeric_limits<float>::quiet_NaN());
   const int min_region_samples = checkedIntFromVal(min_region_samples_val, "minRegionSamples");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   if (min_region_samples < 0) {

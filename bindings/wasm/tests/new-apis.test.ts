@@ -1662,9 +1662,9 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => cqt(signal, 7999)).toThrow(/sampleRate/);
       expect(() => cqt(signal, SR, { hopLength: 0 })).toThrow(/hopLength/);
       // An omitted gamma is the automatic ERB-derived bandwidth; 0 is the
-      // constant-Q transform. NaN reads as not given; negative and infinite gamma are refused.
+      // constant-Q transform. A written NaN, a negative and an infinite gamma are refused.
       const grid = { hopLength: 512, fminHz: 32.7, nBins: 24, binsPerOctave: 12 };
-      for (const gamma of [Number.POSITIVE_INFINITY, -1]) {
+      for (const gamma of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
         expect(() => vqt(signal, SR, { ...grid, gamma })).toThrow(/gamma/);
       }
       expect(Array.from(vqt(signal, SR, grid).magnitude.data)).not.toEqual(

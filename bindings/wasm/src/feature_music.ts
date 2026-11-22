@@ -25,7 +25,6 @@ import {
   assertSamples,
   optionalBoolean,
   requestOnly,
-  resolveOptionalNonNegative,
   sampleOneShot,
   toMatrix2D,
   toMatrix2DByRows,
@@ -373,7 +372,7 @@ export function vqtToAudio(request: VqtToAudioRequest): Float32Array {
       c.hopLength,
       c.fminHz,
       c.binsPerOctave,
-      resolveOptionalNonNegative(r.gamma, 'gamma'),
+      r.gamma ?? undefined,
       c.nIter,
     );
   });

@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  Audio,
   analyzePolyphonic,
   fixFrames,
   init,
@@ -9,11 +10,13 @@ import {
   noteMove,
   noteStretch,
   Project,
+  pcen,
   RealtimeEngine,
   renderNotes,
   renderPercussiveEvents,
   spectralEdit,
   vqt,
+  vqtToAudio,
 } from '../src/index';
 import { createVocalEditSession } from '../src/vocal_edit';
 
@@ -428,12 +431,57 @@ describe('absent is omission and -1 is refused', () => {
     expect(() => fixFrames({ frames, xMax: -1 })).toThrow(RangeError);
   });
 
-  it('vqt gamma: omitted or NaN is automatic, 0 is constant-Q, negative is refused', () => {
+  it('vqt gamma: omitted is automatic, 0 is constant-Q, a written NaN or negative is refused', () => {
     const samples = tone(SR / 2);
     const automatic = vqt({ samples, sampleRate: SR, nBins: 24 });
-    expect(vqt({ samples, sampleRate: SR, nBins: 24, gamma: Number.NaN })).toEqual(automatic);
+    expect(vqt({ samples, sampleRate: SR, nBins: 24, gamma: automatic.gamma })).toEqual(automatic);
     expect(vqt({ samples, sampleRate: SR, nBins: 24, gamma: 0 })).not.toEqual(automatic);
-    expect(() => vqt({ samples, sampleRate: SR, nBins: 24, gamma: -1 })).toThrow(RangeError);
+    for (const gamma of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      expect(() => vqt({ samples, sampleRate: SR, nBins: 24, gamma }), `${gamma}`).toThrow(
+        /gamma must be finite and at least 0/,
+      );
+    }
+  });
+
+  it('vqtToAudio gamma: omitted is automatic, a written NaN or negative is refused', () => {
+    const samples = tone(SR / 2);
+    const forward = vqt({ samples, sampleRate: SR, nBins: 24 });
+    const inverse = { magnitude: forward.magnitude, sampleRate: SR, nIter: 4 };
+    const omitted = Array.from(vqtToAudio(inverse));
+    expect(Array.from(vqtToAudio({ ...inverse, gamma: forward.gamma }))).toEqual(omitted);
+    expect(Array.from(vqtToAudio({ ...inverse, gamma: 0 }))).not.toEqual(omitted);
+    for (const gamma of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      expect(() => vqtToAudio({ ...inverse, gamma }), `${gamma}`).toThrow(
+        /gamma must be finite and at least 0/,
+      );
+    }
+  });
+
+  it('detectClipping thresholdDb: omitted is the library level, a written NaN is refused', () => {
+    const audio = Audio.fromBuffer(tone(SR / 2), SR);
+    expect(audio.detectClipping({ thresholdDb: -0.01 }).clippedSamples).not.toBe(
+      audio.detectClipping({ thresholdDb: -14 }).clippedSamples,
+    );
+    expect(() => audio.detectClipping()).not.toThrow();
+    for (const thresholdDb of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => audio.detectClipping({ thresholdDb }), `${thresholdDb}`).toThrow(RangeError);
+      expect(() => audio.detectClipping({ thresholdDb }), `${thresholdDb}`).toThrow(/thresholdDb/);
+    }
+  });
+
+  it('pcen options: a written non-finite value is refused by its key', () => {
+    const values = {
+      data: Float32Array.from({ length: 64 }, (_, i) => 1 + (i % 7)),
+      rows: 8,
+      cols: 8,
+    };
+    expect(pcen({ values, gain: 0.98 }).data).not.toEqual(pcen({ values, gain: 0.5 }).data);
+    for (const key of ['timeConstant', 'gain', 'bias', 'power', 'eps']) {
+      for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(() => pcen({ values, [key]: value }), `${key} ${value}`).toThrow(RangeError);
+        expect(() => pcen({ values, [key]: value }), `${key} ${value}`).toThrow(new RegExp(key));
+      }
+    }
   });
 
   it('metering percentiles: omitted is the default, 0 is real, negative is refused', () => {

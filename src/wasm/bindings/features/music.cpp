@@ -14,6 +14,7 @@
 #include "feature/chroma.h"
 #include "feature/cqt.h"
 #include "feature/nnls_chroma.h"
+#include "feature/vqt.h"
 #include "util/constants.h"
 #include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
@@ -404,11 +405,10 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
       domainNumberFromVal<int>(bins_per_octave, "binsPerOctave", kCqtCountDomain);
   config.filter_scale =
       optionalDomainNumber(filter_scale_val, "filterScale").value_or(config.filter_scale);
-  // Absent or NaN is the automatic ERB-derived bandwidth, as on the C ABI; a given value is an
-  // offset in Hz.
-  const std::optional<float> gamma = optionalDomainNumber(gamma_val, "gamma");
-  if (gamma.has_value() && !std::isnan(*gamma)) util::check::at_least(*gamma, 0.0, "gamma");
-  config.gamma = gamma.value_or(std::numeric_limits<float>::quiet_NaN());
+  // Absent is the C ABI's NaN, the ERB-derived automatic bandwidth; a given value is an offset in
+  // Hz.
+  config.gamma = optionalDomainValue<float>(gamma_val, "gamma", kVqtGammaDomain)
+                     .value_or(std::numeric_limits<float>::quiet_NaN());
 
   return cqtResultToVal(
       util::check::with_camel_paths([&] { return vqt(audio, config); }, kCqtRequestKeys),

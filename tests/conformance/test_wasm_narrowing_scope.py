@@ -1064,11 +1064,11 @@ class RealTreeFloatTest(unittest.TestCase):
     def test_the_passthroughs_are_the_conversions_documented_as_total(self) -> None:
         # Pinned by name rather than only by count. A passthrough lets a
         # saturated value reach the core, so which parameters hold that verdict
-        # is the fact worth asserting -- a seventh appearing under a count that
-        # still reads 6 is exactly the change to catch.
+        # is the fact worth asserting -- a sixth appearing under a count that
+        # still reads 5 is exactly the change to catch.
         self.assertEqual(
             sorted(entry["js"] for entry in self.records.passthroughs),
-            ["hzToMel", "hzToMidi", "hzToNote", "melToHz", "midiToHz", "vqtToAudio"],
+            ["hzToMel", "hzToMidi", "hzToNote", "melToHz", "midiToHz"],
         )
 
     def test_the_float_section_states_a_citation_and_not_a_verdict(self) -> None:

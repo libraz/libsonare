@@ -3437,7 +3437,7 @@ export interface SonareModule {
     hopLength: number,
     fmin: number,
     binsPerOctave: number,
-    gamma: number,
+    gamma: number | undefined,
     nIter: number,
   ) => Float32Array;
   analyzeSections: (

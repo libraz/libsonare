@@ -348,16 +348,15 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
     ).toThrow();
   });
 
-  it('vqt reads a NaN gamma as not given, the automatic bandwidth', () => {
-    // NaN is the C ABI's "not given" for gamma, so it must agree exactly with an
-    // omitted gamma, while gamma = 0 (the CQT-equivalent bandwidth) must not and
-    // a negative offset is refused.
+  it('vqt reads an omitted gamma as the automatic bandwidth and refuses a written NaN', () => {
+    // Absent is the C ABI's NaN, so omitting gamma must agree exactly with giving the
+    // bandwidth the transform resolved, while gamma = 0 (the CQT-equivalent one) must not.
     const vqt = (gamma?: number) => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, undefined, gamma);
-    const auto = Array.from(vqt(Number.NaN).magnitude);
-    const omitted = Array.from(vqt(undefined).magnitude);
-    const cqtEquivalent = Array.from(vqt(0).magnitude);
-    expect(auto).toEqual(omitted);
-    expect(auto).not.toEqual(cqtEquivalent);
+    const omitted = vqt(undefined);
+    expect(omitted.gamma).toBeGreaterThan(0);
+    expect(Array.from(vqt(omitted.gamma).magnitude)).toEqual(Array.from(omitted.magnitude));
+    expect(Array.from(vqt(0).magnitude)).not.toEqual(Array.from(omitted.magnitude));
+    expect(() => vqt(Number.NaN)).toThrow('vqt: gamma must be finite and at least 0');
     expect(() => vqt(-1)).toThrow('vqt: gamma must be finite and at least 0');
   });
 

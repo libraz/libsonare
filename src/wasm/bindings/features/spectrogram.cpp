@@ -3,12 +3,15 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <limits>
+
 #include "c_api/feature_input_domains.h"
 #include "c_api/inverse_input_domains.h"
 #include "core/spectrum.h"
 #include "feature/cqt.h"
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/vqt.h"
 #include "filters/mel.h"
 #include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
@@ -379,7 +382,7 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
 
 val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
                     const val& sample_rate_val, const val& hop_length_val, const val& fmin_val,
-                    const val& bins_per_octave_val, float gamma, const val& n_iter_val) {
+                    const val& bins_per_octave_val, const val& gamma_val, const val& n_iter_val) {
   const int n_bins = domainNumberFromVal<int>(n_bins_val, "nBins", kCqtCountDomain);
   const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames",
                                                 sonare_c_detail::kInverseSpectrogramExtentDomain);
@@ -394,13 +397,14 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   validate_positive(hop_length, "hopLength");
   validate_positive(bins_per_octave, "binsPerOctave");
   validate_cqt_fmin(fmin);
-  validate_vqt_gamma(gamma);
   VqtConfig config;
   config.hop_length = hop_length;
   config.fmin = fmin;
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
-  config.gamma = gamma;
+  // Absent is the C ABI's NaN, the ERB-derived automatic bandwidth.
+  config.gamma = optionalDomainValue<float>(gamma_val, "gamma", kVqtGammaDomain)
+                     .value_or(std::numeric_limits<float>::quiet_NaN());
   const Audio result = sonare::util::check::with_camel_paths(
       [&] {
         return sonare::detail::with_fixed_filter_scale(
