@@ -84,6 +84,9 @@ jobs:
         # as src/sonare.js.d.ts, so tsc needs no toolchain and dist/sonare.wasm
         # is left alone.
         run: yarn build:types
+      - name: Type-check the WASM binding's tests
+        # Against the declarations just emitted, which is what a consumer sees.
+        run: yarn test:types
       - name: Lint and type-check the Node binding
         # Neither check needs the native addon built: tsconfig.test.json
         # excludes dist/ and build/, and the tests import from ../src rather
