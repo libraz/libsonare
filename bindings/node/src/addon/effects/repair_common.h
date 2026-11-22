@@ -144,11 +144,7 @@ inline Napi::Array EmitLinkedChannels(Napi::Env env, const LinkedPlanes& planes)
 /// @brief Packs the planes of a library-allocated linked result into JS arrays, in channel order.
 inline Napi::Array EmitLinkedResultChannels(Napi::Env env, float** channels, size_t num_channels,
                                             size_t length) {
-  Napi::Array out = Napi::Array::New(env, num_channels);
-  for (size_t index = 0; index < num_channels; ++index) {
-    out.Set(static_cast<uint32_t>(index), Float32ArrayFrom(env, channels[index], length));
-  }
-  return out;
+  return Float32ArraysFrom(env, channels, num_channels, length);
 }
 
 /// @brief Argument check shared by the channel-linked entries, which both take

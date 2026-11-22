@@ -212,17 +212,6 @@ Napi::Value SonareWrap::MelDelta(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-namespace {
-
-/// @brief Copies a C-owned float array into a Float32Array and frees the C copy.
-Napi::Float32Array TakeCFloats(Napi::Env env, float* data, size_t length) {
-  Napi::Float32Array out = Float32ArrayFrom(env, data, length);
-  sonare_free_floats(data);
-  return out;
-}
-
-}  // namespace
-
 Napi::Value SonareWrap::MelFilterbank(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

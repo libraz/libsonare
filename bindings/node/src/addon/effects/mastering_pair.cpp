@@ -62,13 +62,8 @@ struct StereoResultGuard {
 Napi::Object MasteringStereoResultToObject(Napi::Env env,
                                            const SonareMasteringStereoResult& result) {
   Napi::Object out = Napi::Object::New(env);
-  Napi::Float32Array left = Napi::Float32Array::New(env, result.length);
-  Napi::Float32Array right = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0 && result.left != nullptr && result.right != nullptr) {
-    const size_t bytes = result.length * sizeof(float);
-    std::memcpy(left.Data(), result.left, bytes);
-    std::memcpy(right.Data(), result.right, bytes);
-  }
+  Napi::Float32Array left = Float32ArrayFrom(env, result.left, result.length);
+  Napi::Float32Array right = Float32ArrayFrom(env, result.right, result.length);
   out.Set("left", left);
   out.Set("right", right);
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -86,13 +81,8 @@ Napi::Object LoudnessMatchStereoToObject(Napi::Env env, const float* out_left,
                                          const float* out_right, size_t length, int sample_rate,
                                          const SonareLoudnessMatch& match) {
   Napi::Object out = Napi::Object::New(env);
-  Napi::Float32Array left = Napi::Float32Array::New(env, length);
-  Napi::Float32Array right = Napi::Float32Array::New(env, length);
-  if (length > 0 && out_left != nullptr && out_right != nullptr) {
-    const size_t bytes = length * sizeof(float);
-    std::memcpy(left.Data(), out_left, bytes);
-    std::memcpy(right.Data(), out_right, bytes);
-  }
+  Napi::Float32Array left = Float32ArrayFrom(env, out_left, length);
+  Napi::Float32Array right = Float32ArrayFrom(env, out_right, length);
   out.Set("left", left);
   out.Set("right", right);
   out.Set("sampleRate", Napi::Number::New(env, sample_rate));
@@ -294,11 +284,7 @@ Napi::Value SonareWrap::MasteringAbMatchLoudness(const Napi::CallbackInfo& info)
     ThrowSonareError(env, err);
     return env.Undefined();
   }
-  Napi::Float32Array samples = Napi::Float32Array::New(env, matched_length);
-  if (matched_length > 0 && matched != nullptr) {
-    std::memcpy(samples.Data(), matched, matched_length * sizeof(float));
-  }
-  sonare_free_floats(matched);
+  Napi::Float32Array samples = TakeCFloats(env, matched, matched_length);
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", samples);
   out.Set("sampleRate", Napi::Number::New(env, sr));

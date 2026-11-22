@@ -250,11 +250,11 @@ Napi::Value RealtimeEngineWrap::Process(const Napi::CallbackInfo& info) {
                                  with_monitor ? monitor.pointers.data() : nullptr,
                                  static_cast<int>(block.pointers.size()), block.frames));
   if (env.IsExceptionPending()) return env.Undefined();
-  if (!with_monitor) return ChannelsToJs(env, block);
+  if (!with_monitor) return sonare_node::Float32ArraysFrom(env, block.storage);
 
   Napi::Object result = Napi::Object::New(env);
-  result.Set("output", ChannelsToJs(env, block));
-  result.Set("monitor", ChannelsToJs(env, monitor));
+  result.Set("output", sonare_node::Float32ArraysFrom(env, block.storage));
+  result.Set("monitor", sonare_node::Float32ArraysFrom(env, monitor.storage));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -279,7 +279,7 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
                                                  static_cast<int>(block.pointers.size()),
                                                  block.frames, block_size, &render_options));
   if (env.IsExceptionPending()) return env.Undefined();
-  return ChannelsToJs(env, block);
+  return sonare_node::Float32ArraysFrom(env, block.storage);
   SONARE_NODE_CATCH(env)
 }
 

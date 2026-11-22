@@ -226,16 +226,6 @@ inline ChannelBlock ReadChannels(const Napi::CallbackInfo& info, size_t index) {
   return block;
 }
 
-inline Napi::Array ChannelsToJs(Napi::Env env, const ChannelBlock& block) {
-  Napi::Array out = Napi::Array::New(env, block.storage.size());
-  for (size_t ch = 0; ch < block.storage.size(); ++ch) {
-    auto array = Napi::Float32Array::New(env, block.storage[ch].size());
-    std::memcpy(array.Data(), block.storage[ch].data(), block.storage[ch].size() * sizeof(float));
-    out.Set(static_cast<uint32_t>(ch), array);
-  }
-  return out;
-}
-
 // The shared argument/property readers come from sonare_wrap_options.h
 // (namespace sonare_node); re-exported here so the engine TUs that
 // `using namespace sonare_node::engine` keep finding them. Nothing in this
@@ -271,6 +261,7 @@ using sonare_node::OptionalUint32Arg;
 using sonare_node::ReadBuiltinWaveform;
 using sonare_node::RequiredArrayValue;
 using sonare_node::RequiredBoolArg;
+using sonare_node::RequiredBytesArg;
 using sonare_node::RequiredDomainArg;
 using sonare_node::RequiredDoubleArg;
 using sonare_node::RequiredDoubleProperty;

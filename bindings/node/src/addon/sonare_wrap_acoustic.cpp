@@ -78,7 +78,7 @@ std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* ke
   if (value.IsUndefined() || value.IsNull()) {
     return {};
   }
-  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
+  if (IsFloat32Array(value)) {
     auto typed = value.As<Napi::Float32Array>();
     return std::vector<float>(typed.Data(), typed.Data() + typed.ElementLength());
   }

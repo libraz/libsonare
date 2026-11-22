@@ -339,7 +339,7 @@ Napi::Value PolyphonicAnalysisWrap::Curve(const Napi::CallbackInfo& info, CurveR
     ThrowIfError(env, err);
     return env.Undefined();
   }
-  return CopyToFloat32(env, values.data(), written);
+  return Float32ArrayFrom(env, values.data(), written);
 }
 
 Napi::Value PolyphonicAnalysisWrap::NoteF0(const Napi::CallbackInfo& info) {
@@ -399,7 +399,7 @@ Napi::Value PolyphonicAnalysisWrap::NoteEnvelope(const Napi::CallbackInfo& info)
     ThrowIfError(env, err);
     return env.Undefined();
   }
-  return CopyToFloat32(env, points.data(), written);
+  return Float32ArrayFrom(env, points.data(), written);
   SONARE_NODE_CATCH(env)
 }
 
@@ -419,7 +419,7 @@ Napi::Value PolyphonicAnalysisWrap::NoteInharmonicity(const Napi::CallbackInfo& 
     ThrowIfError(env, err);
     return env.Undefined();
   }
-  return CopyToFloat32(env, stretches.data(), written);
+  return Float32ArrayFrom(env, stretches.data(), written);
   SONARE_NODE_CATCH(env)
 }
 
@@ -450,9 +450,7 @@ Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
     ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto result = CopyToFloat32(env, out, out_length);
-  sonare_free_floats(out);
-  return result;
+  return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
 }
 

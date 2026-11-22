@@ -57,10 +57,6 @@ Array TypedArrayFromVec(Napi::Env env, const std::vector<Value>& vec) {
   return out;
 }
 
-Napi::Float32Array Float32FromVec(Napi::Env env, const std::vector<float>& vec) {
-  return Float32ArrayFrom(env, vec);
-}
-
 Napi::Int32Array Int32FromVec(Napi::Env env, const std::vector<int>& vec) {
   return TypedArrayFromVec<Napi::Int32Array>(env, vec);
 }
@@ -76,16 +72,16 @@ void SetFrameBufferMetadata(Napi::Env env, Napi::Object& out, const Buffer& buff
 Napi::Object FrameBufferToObject(Napi::Env env, const sonare::FrameBuffer& buffer) {
   Napi::Object out = Napi::Object::New(env);
   SetFrameBufferMetadata(env, out, buffer);
-  out.Set("timestampsSec", Float32FromVec(env, buffer.timestamps));
-  out.Set("mel", Float32FromVec(env, buffer.mel));
-  out.Set("chroma", Float32FromVec(env, buffer.chroma));
-  out.Set("onsetStrength", Float32FromVec(env, buffer.onset_strength));
-  out.Set("rmsEnergy", Float32FromVec(env, buffer.rms_energy));
-  out.Set("spectralCentroid", Float32FromVec(env, buffer.spectral_centroid));
-  out.Set("spectralFlatness", Float32FromVec(env, buffer.spectral_flatness));
+  out.Set("timestampsSec", Float32ArrayFrom(env, buffer.timestamps));
+  out.Set("mel", Float32ArrayFrom(env, buffer.mel));
+  out.Set("chroma", Float32ArrayFrom(env, buffer.chroma));
+  out.Set("onsetStrength", Float32ArrayFrom(env, buffer.onset_strength));
+  out.Set("rmsEnergy", Float32ArrayFrom(env, buffer.rms_energy));
+  out.Set("spectralCentroid", Float32ArrayFrom(env, buffer.spectral_centroid));
+  out.Set("spectralFlatness", Float32ArrayFrom(env, buffer.spectral_flatness));
   out.Set("chordRoot", Int32FromVec(env, buffer.chord_root));
   out.Set("chordQuality", Int32FromVec(env, buffer.chord_quality));
-  out.Set("chordConfidence", Float32FromVec(env, buffer.chord_confidence));
+  out.Set("chordConfidence", Float32ArrayFrom(env, buffer.chord_confidence));
   return out;
 }
 
@@ -93,7 +89,7 @@ template <typename Array, typename Buffer>
 Napi::Object QuantizedFrameBufferToObject(Napi::Env env, const Buffer& buffer) {
   Napi::Object out = Napi::Object::New(env);
   SetFrameBufferMetadata(env, out, buffer);
-  out.Set("timestampsSec", Float32FromVec(env, buffer.timestamps));
+  out.Set("timestampsSec", Float32ArrayFrom(env, buffer.timestamps));
   out.Set("mel", TypedArrayFromVec<Array>(env, buffer.mel));
   out.Set("chroma", TypedArrayFromVec<Array>(env, buffer.chroma));
   out.Set("onsetStrength", TypedArrayFromVec<Array>(env, buffer.onset_strength));

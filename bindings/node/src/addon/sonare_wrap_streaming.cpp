@@ -968,8 +968,7 @@ Napi::Value StreamingRetuneWrap::ProcessMono(const Napi::CallbackInfo& info) {
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
   // The C entry point works in place, so copy the caller's samples into the
   // result buffer first and never mutate the argument.
-  Napi::Float32Array out = Napi::Float32Array::New(env, input.ElementLength());
-  std::memcpy(out.Data(), input.Data(), input.ElementLength() * sizeof(float));
+  Napi::Float32Array out = Float32ArrayFrom(env, input.Data(), input.ElementLength());
   ThrowIfError(env, sonare_streaming_retune_process_mono(retune_, out.Data(), out.ElementLength()));
   if (env.IsExceptionPending()) return env.Undefined();
   return out;

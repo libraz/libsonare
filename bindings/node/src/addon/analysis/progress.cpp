@@ -139,10 +139,7 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
     boundaries.Set(static_cast<uint32_t>(i), obj);
   }
 
-  auto novelty = Napi::Float32Array::New(env, result.novelty_length);
-  if (result.novelty_length > 0 && result.novelty_curve != nullptr) {
-    std::memcpy(novelty.Data(), result.novelty_curve, result.novelty_length * sizeof(float));
-  }
+  auto novelty = Float32ArrayFrom(env, result.novelty_curve, result.novelty_length);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("boundaries", boundaries);

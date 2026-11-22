@@ -502,19 +502,6 @@ Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event) {
   return out;
 }
 
-bool IsFloat32Array(const Napi::Value& value) {
-  return value.IsTypedArray() &&
-         value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array;
-}
-
-bool IsUint8Array(const Napi::Value& value) {
-  return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
-}
-
-bool IsInt32Array(const Napi::Value& value) {
-  return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array;
-}
-
 bool ValidateMatrixDims(Napi::Env env, int rows, int cols, size_t length) {
   if (rows < 0 || cols < 0) {
     Napi::RangeError::New(env, "dimensions must be integers in [0, " + node_int_max_text() + "]")

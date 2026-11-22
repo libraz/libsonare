@@ -385,18 +385,7 @@ Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  if (info.Length() > 1 && info[1].IsBuffer()) {
-    Napi::Buffer<uint8_t> buf = info[1].As<Napi::Buffer<uint8_t>>();
-    bytes = buf.Data();
-    len = buf.ElementLength();
-  } else if (info.Length() > 1 && sonare_node::IsUint8Array(info[1])) {
-    Napi::Uint8Array arr = info[1].As<Napi::Uint8Array>();
-    bytes = arr.Data();
-    len = arr.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequiredBytesArg(env, info, 1, "data", &bytes, &len)) return env.Undefined();
   int64_t deadline = -1;
   if (!OptionalInt64Arg(env, info, 2, "renderFrame", -1, &deadline)) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_sysex(engine_, destination_id, bytes, len, deadline));

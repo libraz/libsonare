@@ -662,18 +662,7 @@ void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN_VOID(env, project_, "Project");
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  if (info.Length() > 0 && info[0].IsBuffer()) {
-    Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
-    bytes = buf.Data();
-    len = buf.ElementLength();
-  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
-    Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
-    bytes = arr.Data();
-    len = arr.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return;
-  }
+  if (!RequiredBytesArg(env, info, 0, "data", &bytes, &len)) return;
   ThrowIfError(env, sonare_project_load_soundfont(project_, bytes, len));
   SONARE_NODE_CATCH_VOID(env)
 }

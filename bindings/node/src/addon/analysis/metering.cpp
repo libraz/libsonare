@@ -24,20 +24,27 @@ using namespace sonare_node;
 
 namespace {
 
+template <typename T, void (*FreeFn)(T*)>
+class CResultGuard {
+ public:
+  explicit CResultGuard(T* result) : result_(result) {}
+  CResultGuard(const CResultGuard&) = delete;
+  CResultGuard& operator=(const CResultGuard&) = delete;
+  ~CResultGuard() {
+    if (result_) FreeFn(result_);
+  }
+
+ private:
+  T* result_;
+};
+
 // Marshals a SonareSpectrumResult into the JS spectrum object shape shared by
 // meteringSpectrum (Welch-averaged) and meteringSpectrumFrame (single frame).
 Napi::Value EmitSpectrumResult(Napi::Env env, const SonareSpectrumResult& result) {
-  const size_t bytes = result.bin_count * sizeof(float);
-  auto freq = Napi::Float32Array::New(env, result.bin_count);
-  auto mag = Napi::Float32Array::New(env, result.bin_count);
-  auto pwr = Napi::Float32Array::New(env, result.bin_count);
-  auto db = Napi::Float32Array::New(env, result.bin_count);
-  if (result.bin_count > 0) {
-    std::memcpy(freq.Data(), result.frequencies, bytes);
-    std::memcpy(mag.Data(), result.magnitude, bytes);
-    std::memcpy(pwr.Data(), result.power, bytes);
-    std::memcpy(db.Data(), result.db, bytes);
-  }
+  auto freq = Float32ArrayFrom(env, result.frequencies, result.bin_count);
+  auto mag = Float32ArrayFrom(env, result.magnitude, result.bin_count);
+  auto pwr = Float32ArrayFrom(env, result.power, result.bin_count);
+  auto db = Float32ArrayFrom(env, result.db, result.bin_count);
   Napi::Object out = Napi::Object::New(env);
   out.Set("frequencies", freq);
   out.Set("magnitude", mag);
@@ -48,24 +55,10 @@ Napi::Value EmitSpectrumResult(Napi::Env env, const SonareSpectrumResult& result
   return out;
 }
 
-// Copies a heap float series into a JS Float32Array. An empty series arrives as
-// a null pointer with a zero count, which becomes an empty array.
-Napi::Float32Array EmitFloatSeries(Napi::Env env, const float* values, size_t count) {
-  auto out = Napi::Float32Array::New(env, count);
-  if (count > 0 && values != nullptr) {
-    std::memcpy(out.Data(), values, count * sizeof(float));
-  }
-  return out;
-}
-
 Napi::Value EmitWaveformPeaksResult(Napi::Env env, const SonareWaveformPeaksResult& result) {
   const size_t total = static_cast<size_t>(result.num_channels) * result.bucket_count;
-  auto min_values = Napi::Float32Array::New(env, total);
-  auto max_values = Napi::Float32Array::New(env, total);
-  if (total > 0) {
-    std::memcpy(min_values.Data(), result.min, total * sizeof(float));
-    std::memcpy(max_values.Data(), result.max, total * sizeof(float));
-  }
+  auto min_values = Float32ArrayFrom(env, result.min, total);
+  auto max_values = Float32ArrayFrom(env, result.max, total);
   Napi::Object out = Napi::Object::New(env);
   out.Set("min", min_values);
   out.Set("max", max_values);
@@ -118,9 +111,7 @@ Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto result = Float32ArrayFrom(env, out, count);
-  sonare_free_floats(out);
-  return result;
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -139,9 +130,7 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto result = Float32ArrayFrom(env, out, count);
-  sonare_free_floats(out);
-  return result;
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -216,10 +205,8 @@ Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
   }
 
   Napi::Object result = Napi::Object::New(env);
-  result.Set("momentary", EmitFloatSeries(env, momentary, momentary_count));
-  result.Set("shortTerm", EmitFloatSeries(env, short_term, short_term_count));
-  sonare_free_floats(momentary);
-  sonare_free_floats(short_term);
+  result.Set("momentary", TakeCFloats(env, momentary, momentary_count));
+  result.Set("shortTerm", TakeCFloats(env, short_term, short_term_count));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -366,6 +353,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
+  CResultGuard<SonareClippingResult, sonare_free_clipping_result> guard(&result);
   Napi::Array regions = Napi::Array::New(env, result.region_count);
   for (size_t i = 0; i < result.region_count; ++i) {
     Napi::Object region = Napi::Object::New(env);
@@ -382,7 +370,6 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   out.Set("clippingRatio", Napi::Number::New(env, result.clipping_ratio));
   out.Set("maxClippedPeak", Napi::Number::New(env, result.max_clipped_peak));
   out.Set("regions", regions);
-  sonare_free_clipping_result(&result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -411,16 +398,13 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto windows = Napi::Float32Array::New(env, result.window_count);
-  if (result.window_count > 0 && result.window_rms_db != nullptr) {
-    std::memcpy(windows.Data(), result.window_rms_db, result.window_count * sizeof(float));
-  }
+  CResultGuard<SonareDynamicRangeResult, sonare_free_dynamic_range_result> guard(&result);
+  auto windows = Float32ArrayFrom(env, result.window_rms_db, result.window_count);
   Napi::Object out = Napi::Object::New(env);
   out.Set("dynamicRangeDb", Napi::Number::New(env, result.dynamic_range_db));
   out.Set("lowPercentileDb", Napi::Number::New(env, result.low_percentile_db));
   out.Set("highPercentileDb", Napi::Number::New(env, result.high_percentile_db));
   out.Set("windowRmsDb", windows);
-  sonare_free_dynamic_range_result(&result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -536,20 +520,6 @@ Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
 namespace {
 
 using StereoScalarFn = SonareError (*)(const float*, const float*, size_t, int, float*);
-
-template <typename T, void (*FreeFn)(T*)>
-class CResultGuard {
- public:
-  explicit CResultGuard(T* result) : result_(result) {}
-  CResultGuard(const CResultGuard&) = delete;
-  CResultGuard& operator=(const CResultGuard&) = delete;
-  ~CResultGuard() {
-    if (result_) FreeFn(result_);
-  }
-
- private:
-  T* result_;
-};
 
 Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn) {
   Napi::Env env = info.Env();
@@ -944,10 +914,7 @@ Napi::Value SonareWrap::DynamicRangeInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   CResultGuard<SonareDynamicRangeResult, sonare_free_dynamic_range_result> guard(&result);
-  auto windows = Napi::Float32Array::New(env, result.window_count);
-  if (result.window_count > 0 && result.window_rms_db != nullptr) {
-    std::memcpy(windows.Data(), result.window_rms_db, result.window_count * sizeof(float));
-  }
+  auto windows = Float32ArrayFrom(env, result.window_rms_db, result.window_count);
   Napi::Object out = Napi::Object::New(env);
   out.Set("dynamicRangeDb", Napi::Number::New(env, result.dynamic_range_db));
   out.Set("lowPercentileDb", Napi::Number::New(env, result.low_percentile_db));

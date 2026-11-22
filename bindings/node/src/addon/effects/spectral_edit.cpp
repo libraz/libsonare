@@ -132,11 +132,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  auto result = Napi::Float32Array::New(env, out_length);
-  if (out_length > 0 && out != nullptr) {
-    std::memcpy(result.Data(), out, out_length * sizeof(float));
-    sonare_free_floats(out);
-  }
+  auto result = TakeCFloats(env, out, out_length);
   return result;
   SONARE_NODE_CATCH(env)
 }

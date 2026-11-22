@@ -47,7 +47,7 @@ Napi::Value SonareWrap::Tonnetz(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_tonnetz(arr.Data(), n_chroma, n_frames, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -59,7 +59,8 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+  if (!OptionalDomainArg(env, info, 2, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kRhythmCountDomain, &hop)) {
     return env.Undefined();
   }
   int win{};
@@ -85,7 +86,7 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);
   result.Set("winLength", win);
-  result.Set("data", FloatResult(env, out, count));
+  result.Set("data", TakeCFloats(env, out, count));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -100,7 +101,8 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int hop{};
-  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+  if (!OptionalDomainArg(env, info, 2, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kRhythmCountDomain, &hop)) {
     return env.Undefined();
   }
   int win{};
@@ -123,7 +125,7 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);
   result.Set("nBins", n_bins);
-  result.Set("data", FloatResult(env, out, count));
+  result.Set("data", TakeCFloats(env, out, count));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -139,7 +141,8 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int hop{};
-  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+  if (!OptionalDomainArg(env, info, 2, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kRhythmCountDomain, &hop)) {
     return env.Undefined();
   }
   const sonare::PlpConfig plp_defaults;
@@ -158,7 +161,7 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_plp(arr.Data(), arr.ElementLength(), sr, hop, bpm_min, bpm_max, win, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -170,9 +173,11 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "nFft", sonare::constants::kDefaultNFft, &n_fft))
+    return env.Undefined();
   int hop{};
-  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kStftHopDomain, &hop)) {
+  if (!OptionalDomainArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kStftHopDomain, &hop)) {
     return env.Undefined();
   }
   int n_mels{};
@@ -184,7 +189,7 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_onset_strength(arr.Data(), arr.ElementLength(), sr, n_fft, hop, n_mels, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -196,9 +201,11 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 2, "nFft", sonare::constants::kDefaultNFft, &n_fft))
+    return env.Undefined();
   int hop{};
-  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kStftHopDomain, &hop)) {
+  if (!OptionalDomainArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kStftHopDomain, &hop)) {
     return env.Undefined();
   }
   int n_mels{};
@@ -219,7 +226,7 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("nBands", Napi::Number::New(env, n_bands));
   result.Set("nFrames", Napi::Number::New(env, n_frames));
-  result.Set("data", FloatResult(env, out, count));
+  result.Set("data", TakeCFloats(env, out, count));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -232,7 +239,8 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   int hop{};
-  if (!OptionalDomainArg(env, info, 2, "hopLength", 512, sonare::kRhythmCountDomain, &hop)) {
+  if (!OptionalDomainArg(env, info, 2, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kRhythmCountDomain, &hop)) {
     return env.Undefined();
   }
   int win{};
@@ -257,7 +265,7 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("nBins", Napi::Number::New(env, n_bins));
   result.Set("nFrames", Napi::Number::New(env, n_frames));
-  result.Set("data", FloatResult(env, out, count));
+  result.Set("data", TakeCFloats(env, out, count));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -288,7 +296,7 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   SonareError err = sonare_tempogram_ratio(arr.Data(), arr.ElementLength(), win, sr, hop,
                                            factors_ptr, n_factors, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -327,7 +335,7 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("nChroma", Napi::Number::New(env, n_chroma));
   result.Set("nFrames", Napi::Number::New(env, n_frames));
-  result.Set("data", FloatResult(env, out, count));
+  result.Set("data", TakeCFloats(env, out, count));
   return result;
   SONARE_NODE_CATCH(env)
 }

@@ -47,31 +47,6 @@ using namespace sonare_node::repair_detail;
 
 namespace {
 
-// Copy a heap C buffer into a Float32Array and free the C allocation.
-Napi::Float32Array EffectsFloatResult(Napi::Env env, float* data, size_t count) {
-  auto out = Napi::Float32Array::New(env, count);
-  if (count > 0 && data != nullptr) {
-    std::memcpy(out.Data(), data, count * sizeof(float));
-  }
-  sonare_free_floats(data);
-  return out;
-}
-
-// Copy a heap C int buffer into an Int32Array and free the C allocation.
-Napi::Int32Array EffectsIntResult(Napi::Env env, int* data, size_t count) {
-  auto out = Napi::Int32Array::New(env, count);
-  if (count > 0 && data != nullptr) {
-    std::memcpy(out.Data(), data, count * sizeof(int));
-  }
-  sonare_free_ints(data);
-  return out;
-}
-
-Napi::Value EffectsCheckCResult(Napi::Env env, SonareError err) {
-  sonare_node::ThrowSonareError(env, err);
-  return env.Undefined();
-}
-
 // Shared by decomposeStems and decomposeStemsLinked. @p init receives the
 // "init" string so its storage outlives the C call that reads config.init.
 SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, std::string* init) {
@@ -131,7 +106,7 @@ Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInf
   const char* id =
       sonare_voice_character_preset_id(static_cast<SonareVoiceCharacterPreset>(ordinal));
   if (id == nullptr || id[0] == '\0') {
-    return EffectsCheckCResult(env, SONARE_ERROR_INVALID_PARAMETER);
+    return CheckCResult(env, SONARE_ERROR_INVALID_PARAMETER);
   }
   namespace vc = sonare::editing::voice_changer;
   return RealtimeVoiceChangerConfigObject(
@@ -183,15 +158,15 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   size_t out_h_length = 0;
   SonareError err = sonare_decompose(arr.Data(), n_features, n_frames, n_components, n_iter, beta,
                                      &options, &out_w, &out_w_length, &out_h, &out_h_length);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object w = Napi::Object::New(env);
   w.Set("rows", Napi::Number::New(env, n_features));
   w.Set("cols", Napi::Number::New(env, n_components));
-  w.Set("data", EffectsFloatResult(env, out_w, out_w_length));
+  w.Set("data", TakeCFloats(env, out_w, out_w_length));
   Napi::Object h = Napi::Object::New(env);
   h.Set("rows", Napi::Number::New(env, n_components));
   h.Set("cols", Napi::Number::New(env, n_frames));
-  h.Set("data", EffectsFloatResult(env, out_h, out_h_length));
+  h.Set("data", TakeCFloats(env, out_h, out_h_length));
   Napi::Object result = Napi::Object::New(env);
   result.Set("w", w);
   result.Set("h", h);
@@ -235,8 +210,8 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   sonare_free_floats(out);
   Napi::Object result = Napi::Object::New(env);
   result.Set("components", components);
-  result.Set("w", EffectsFloatResult(env, out_w, out_w_length));
-  result.Set("h", EffectsFloatResult(env, out_h, out_h_length));
+  result.Set("w", TakeCFloats(env, out_w, out_w_length));
+  result.Set("h", TakeCFloats(env, out_h, out_h_length));
   result.Set("sampleRate", Napi::Number::New(env, sr));
   return result;
   SONARE_NODE_CATCH(env)
@@ -288,8 +263,8 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
   sonare_free_floats(out);
   Napi::Object result = Napi::Object::New(env);
   result.Set("components", components);
-  result.Set("w", EffectsFloatResult(env, out_w, out_w_length));
-  result.Set("h", EffectsFloatResult(env, out_h, out_h_length));
+  result.Set("w", TakeCFloats(env, out_w, out_w_length));
+  result.Set("h", TakeCFloats(env, out_h, out_h_length));
   result.Set("sampleRate", Napi::Number::New(env, sr));
   return result;
   SONARE_NODE_CATCH(env)
@@ -334,11 +309,11 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   size_t out_length = 0;
   SonareError err = sonare_nn_filter(arr.Data(), n_features, n_frames, aggregate.c_str(), k, width,
                                      &out, &out_length);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("rows", Napi::Number::New(env, n_features));
   result.Set("cols", Napi::Number::New(env, n_frames));
-  result.Set("data", EffectsFloatResult(env, out, out_length));
+  result.Set("data", TakeCFloats(env, out, out_length));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -359,8 +334,8 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   size_t out_length = 0;
   SonareError err = sonare_remix(arr.Data(), arr.ElementLength(), sr, intervals.data(),
                                  intervals.size() / 2, align_zeros, &out, &out_length);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
-  return EffectsFloatResult(env, out, out_length);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
 }
 
@@ -381,8 +356,8 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_remix_aligned_intervals(arr.Data(), arr.ElementLength(), sr, intervals.data(),
                                      intervals.size() / 2, align_zeros, &out, &out_count);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
-  return EffectsIntResult(env, out, out_count * 2);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return TakeCInts(env, out, out_count * 2);
   SONARE_NODE_CATCH(env)
 }
 
@@ -406,7 +381,7 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   size_t out_length = 0;
   SonareError err = sonare_phase_vocoder(arr.Data(), arr.ElementLength(), sr, rate, n_fft,
                                          hop_length, &out, &out_length);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
-  return EffectsFloatResult(env, out, out_length);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
 }

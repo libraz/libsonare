@@ -33,6 +33,22 @@ void ThrowCurrentException(Napi::Env env);
 /// @brief Number.MAX_SAFE_INTEGER, the largest integer a JS number holds exactly.
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
+/// @brief Whether @p value is a Float32Array.
+inline bool IsFloat32Array(const Napi::Value& value) {
+  return value.IsTypedArray() &&
+         value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array;
+}
+
+/// @brief Whether @p value is a Uint8Array.
+inline bool IsUint8Array(const Napi::Value& value) {
+  return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_uint8_array;
+}
+
+/// @brief Whether @p value is an Int32Array.
+inline bool IsInt32Array(const Napi::Value& value) {
+  return value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array;
+}
+
 /// @brief Elements a caller-supplied JS array may hold; the WASM surface applies the same budget.
 constexpr uint32_t kNodeListBudget = 64u * 1024u * 1024u;
 
@@ -741,8 +757,7 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return {};
   if (value.IsTypedArray()) {
-    auto typed = value.As<Napi::TypedArray>();
-    if (typed.TypedArrayType() != napi_float32_array) {
+    if (!IsFloat32Array(value)) {
       throw Napi::TypeError::New(obj.Env(),
                                  std::string(key) + " must be a Float32Array or a number array");
     }
@@ -913,13 +928,13 @@ inline bool RequiredFiniteDoubleValue(Napi::Env env, const Napi::Value& value,
 ///        [@p minimum, @p maximum] (default: the whole safe-integer range).
 inline bool RequiredSafeIntegerValue(Napi::Env env, const Napi::Value& value,
                                      const std::string& label, int64_t* out,
-                                     int64_t minimum = -9007199254740991LL,
-                                     int64_t maximum = 9007199254740991LL) {
+                                     int64_t minimum = -static_cast<int64_t>(kMaxSafeInteger),
+                                     int64_t maximum = static_cast<int64_t>(kMaxSafeInteger)) {
   if (!RequireNumberValue(env, value, label)) return false;
-  *out = static_cast<int64_t>(
-      node_narrow_number(env, value, label.c_str(),
-                         static_cast<double>(std::max<int64_t>(minimum, -9007199254740991LL)),
-                         static_cast<double>(std::min<int64_t>(maximum, 9007199254740991LL))));
+  constexpr int64_t kSafe = static_cast<int64_t>(kMaxSafeInteger);
+  *out = static_cast<int64_t>(node_narrow_number(env, value, label.c_str(),
+                                                 static_cast<double>(std::max(minimum, -kSafe)),
+                                                 static_cast<double>(std::min(maximum, kSafe))));
   return true;
 }
 
@@ -965,8 +980,7 @@ inline bool RequiredPlaneListValue(Napi::Env env, const Napi::Value& value,
 inline bool RequiredFloat32ArrayValue(Napi::Env env, const Napi::Value& value,
                                       const std::string& label, Napi::Float32Array* out) {
   if (env.IsExceptionPending()) return false;
-  if (!value.IsTypedArray() ||
-      value.As<Napi::TypedArray>().TypedArrayType() != napi_float32_array) {
+  if (!IsFloat32Array(value)) {
     Napi::TypeError::New(env, label + " must be a Float32Array").ThrowAsJavaScriptException();
     return false;
   }
@@ -978,7 +992,7 @@ inline bool RequiredFloat32ArrayValue(Napi::Env env, const Napi::Value& value,
 inline bool RequiredUint8ArrayValue(Napi::Env env, const Napi::Value& value,
                                     const std::string& label, Napi::Uint8Array* out) {
   if (env.IsExceptionPending()) return false;
-  if (!value.IsTypedArray() || value.As<Napi::TypedArray>().TypedArrayType() != napi_uint8_array) {
+  if (!IsUint8Array(value)) {
     Napi::TypeError::New(env, label + " must be a Uint8Array").ThrowAsJavaScriptException();
     return false;
   }
@@ -1045,7 +1059,7 @@ inline bool RequiredUint16Value(Napi::Env env, const Napi::Value& value, const s
 ///   faithful representation at all. A facade caller never reaches this check.
 /// @return false without touching @p out on rejection.
 inline bool Int32Value(Napi::Env env, const Napi::Value& value, const char* name, int* out) {
-  if (env.IsExceptionPending() || out == nullptr) return false;
+  if (env.IsExceptionPending()) return false;
   if (!value.IsNumber()) {
     Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
     return false;
@@ -1193,7 +1207,7 @@ inline bool RequiredStringProperty(Napi::Env env, const Napi::Object& obj, const
 ///        @p fallback, anything else goes through the strict int read.
 inline bool Int32Property(Napi::Env env, const Napi::Object& obj, const char* key, int fallback,
                           int* out) {
-  if (env.IsExceptionPending() || out == nullptr) return false;
+  if (env.IsExceptionPending()) return false;
   const Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) {
     *out = fallback;
@@ -1348,7 +1362,7 @@ inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t
 ///   the int cannot hold, this one also refuses a wrong type and a fraction.
 inline bool Int32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index, const char* name,
                      int fallback, int* out) {
-  if (env.IsExceptionPending() || out == nullptr) return false;
+  if (env.IsExceptionPending()) return false;
   const Napi::Value value = info[index];
   if (value.IsUndefined() || value.IsNull()) {
     *out = fallback;
@@ -1567,11 +1581,33 @@ inline bool node_read_size_t_domain(Napi::Env env, const Napi::Value& value, con
 inline bool NonNegativeSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                                 const char* name, size_t* out) {
   if (env.IsExceptionPending()) return false;
-  if (out == nullptr || info.Length() <= index || !info[index].IsNumber()) {
+  if (info.Length() <= index || !info[index].IsNumber()) {
     Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
     return false;
   }
   return node_read_size_t_domain(env, info[index], name, out);
+}
+
+/// @brief Read a required Buffer or Uint8Array argument as its bytes: a missing or other-typed
+///        argument is a TypeError reading "<label> must be a Buffer or Uint8Array". @p data and
+///        @p len alias the JS buffer, so they are valid only for the duration of the call.
+inline bool RequiredBytesArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                             const char* label, const uint8_t** data, size_t* len) {
+  if (env.IsExceptionPending()) return false;
+  if (info.Length() > index && info[index].IsBuffer()) {
+    auto buffer = info[index].As<Napi::Buffer<uint8_t>>();
+    *data = buffer.Data();
+    *len = buffer.ElementLength();
+  } else if (info.Length() > index && IsUint8Array(info[index])) {
+    auto array = info[index].As<Napi::Uint8Array>();
+    *data = array.Data();
+    *len = array.ByteLength();
+  } else {
+    Napi::TypeError::New(env, std::string(label) + " must be a Buffer or Uint8Array")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
 }
 
 }  // namespace sonare_node

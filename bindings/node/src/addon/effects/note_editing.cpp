@@ -468,9 +468,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
     ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto result = CopyToFloat32(env, out, out_length);
-  sonare_free_floats(out);
-  return result;
+  return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
 }
 
@@ -521,9 +519,9 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
   // A note with no usable pitch comes back as a zero centre and NULL curves,
   // which marshal to two empty arrays rather than to an error.
   out.Set("driftCents",
-          CopyToFloat32(env, decomposition.value.drift_cents, decomposition.value.count));
+          Float32ArrayFrom(env, decomposition.value.drift_cents, decomposition.value.count));
   out.Set("vibratoCents",
-          CopyToFloat32(env, decomposition.value.vibrato_cents, decomposition.value.count));
+          Float32ArrayFrom(env, decomposition.value.vibrato_cents, decomposition.value.count));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -654,18 +652,7 @@ Napi::Value SonareWrap::NoteTargetsFromSmf(const Napi::CallbackInfo& info) {
   // (bytes, track?)
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  if (info.Length() > 0 && info[0].IsBuffer()) {
-    Napi::Buffer<uint8_t> buffer = info[0].As<Napi::Buffer<uint8_t>>();
-    bytes = buffer.Data();
-    len = buffer.ElementLength();
-  } else if (info.Length() > 0 && IsUint8Array(info[0])) {
-    Napi::Uint8Array typed = info[0].As<Napi::Uint8Array>();
-    bytes = typed.Data();
-    len = typed.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequiredBytesArg(env, info, 0, "data", &bytes, &len)) return env.Undefined();
   // An index is an ordinal, so the strict reader: 1.5 truncating to 1 would read
   // a track the caller never named. A negative one is the C ABI's to refuse.
   int track_index = 0;
@@ -829,8 +816,6 @@ Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
     ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto result = CopyToFloat32(env, out, out_length);
-  sonare_free_floats(out);
-  return result;
+  return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
 }

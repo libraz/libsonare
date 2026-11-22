@@ -746,23 +746,7 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   const uint8_t* data = nullptr;
   size_t len = 0;
 
-  if (info.Length() < 1) {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  if (info[0].IsBuffer()) {
-    auto buf = info[0].As<Napi::Buffer<uint8_t>>();
-    data = buf.Data();
-    len = buf.ElementLength();
-  } else if (IsUint8Array(info[0])) {
-    auto arr = info[0].As<Napi::Uint8Array>();
-    data = arr.Data();
-    len = arr.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequiredBytesArg(env, info, 0, "data", &data, &len)) return env.Undefined();
 
   SonareAudio* audio_raw = nullptr;
   SonareError err = sonare_audio_from_memory(data, len, &audio_raw);
@@ -786,18 +770,7 @@ Napi::Value SonareWrap::DecodeChannels(const Napi::CallbackInfo& info) {
 
   const uint8_t* data = nullptr;
   size_t len = 0;
-  if (info.Length() >= 1 && info[0].IsBuffer()) {
-    auto buf = info[0].As<Napi::Buffer<uint8_t>>();
-    data = buf.Data();
-    len = buf.ElementLength();
-  } else if (info.Length() >= 1 && IsUint8Array(info[0])) {
-    auto arr = info[0].As<Napi::Uint8Array>();
-    data = arr.Data();
-    len = arr.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequiredBytesArg(env, info, 0, "data", &data, &len)) return env.Undefined();
 
   float* planar = nullptr;
   size_t frames = 0;
@@ -810,13 +783,7 @@ Napi::Value SonareWrap::DecodeChannels(const Napi::CallbackInfo& info) {
   }
   std::unique_ptr<float, decltype(&sonare_free_floats)> guard(planar, sonare_free_floats);
 
-  Napi::Array planes = Napi::Array::New(env, static_cast<size_t>(channels));
-  for (int channel = 0; channel < channels; ++channel) {
-    auto plane = Napi::Float32Array::New(env, frames);
-    std::memcpy(plane.Data(), planar + static_cast<size_t>(channel) * frames,
-                frames * sizeof(float));
-    planes.Set(static_cast<uint32_t>(channel), plane);
-  }
+  Napi::Array planes = Float32ArraysFromPlanar(env, planar, static_cast<size_t>(channels), frames);
   Napi::Object result = Napi::Object::New(env);
   result.Set("sampleRate", Napi::Number::New(env, sample_rate));
   result.Set("channels", planes);
@@ -872,13 +839,7 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
 
   const size_t out_channels =
       static_cast<size_t>(sonare::channel_count(static_cast<sonare::ChannelLayout>(target)));
-  Napi::Array planes = Napi::Array::New(env, out_channels);
-  for (size_t channel = 0; channel < out_channels; ++channel) {
-    auto plane = Napi::Float32Array::New(env, frames);
-    std::memcpy(plane.Data(), out + channel * frames, frames * sizeof(float));
-    planes.Set(static_cast<uint32_t>(channel), plane);
-  }
-  return planes;
+  return Float32ArraysFromPlanar(env, out, out_channels, frames);
   SONARE_NODE_CATCH(env)
 }
 
@@ -896,10 +857,7 @@ Napi::Value SonareWrap::GetData(const Napi::CallbackInfo& info) {
   const float* data = sonare_audio_data(audio_);
   size_t length = sonare_audio_length(audio_);
 
-  auto result = Napi::Float32Array::New(env, length);
-  if (length > 0 && data != nullptr) {
-    std::memcpy(result.Data(), data, length * sizeof(float));
-  }
+  auto result = Float32ArrayFrom(env, data, length);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -1124,11 +1082,7 @@ Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  auto result = Napi::Float32Array::New(env, count);
-  if (count > 0 && times != nullptr) {
-    std::memcpy(result.Data(), times, count * sizeof(float));
-    sonare_free_floats(times);
-  }
+  auto result = TakeCFloats(env, times, count);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -1150,11 +1104,7 @@ Napi::Value SonareWrap::DetectDownbeatsInstance(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
 
-  auto result = Napi::Float32Array::New(env, count);
-  if (count > 0 && times != nullptr) {
-    std::memcpy(result.Data(), times, count * sizeof(float));
-    sonare_free_floats(times);
-  }
+  auto result = TakeCFloats(env, times, count);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -1176,11 +1126,7 @@ Napi::Value SonareWrap::DetectOnsetsInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  auto result = Napi::Float32Array::New(env, count);
-  if (count > 0 && times != nullptr) {
-    std::memcpy(result.Data(), times, count * sizeof(float));
-    sonare_free_floats(times);
-  }
+  auto result = TakeCFloats(env, times, count);
   return result;
   SONARE_NODE_CATCH(env)
 }

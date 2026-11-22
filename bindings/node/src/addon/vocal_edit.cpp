@@ -25,7 +25,7 @@ bool ReadArrayNumber(Napi::Env env, const Napi::Value& value, const char* field,
                      std::vector<float>* out) {
   out->clear();
   if (value.IsUndefined() || value.IsNull()) return true;
-  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
+  if (IsFloat32Array(value)) {
     const auto array = value.As<Napi::Float32Array>();
     out->assign(array.Data(), array.Data() + array.ElementLength());
   } else if (value.IsArray()) {
@@ -476,10 +476,7 @@ Napi::Object NoteToObject(Napi::Env env, const SonareVocalNote& note) {
   result.Set("medianHz", note.median_hz);
   result.Set("centerMidi", note.center_midi);
   result.Set("f0Stability", note.f0_stability);
-  Napi::Float32Array amplitude = Napi::Float32Array::New(env, note.amplitude_count);
-  if (note.amplitude_count != 0) {
-    std::memcpy(amplitude.Data(), note.amplitude, note.amplitude_count * sizeof(float));
-  }
+  Napi::Float32Array amplitude = Float32ArrayFrom(env, note.amplitude, note.amplitude_count);
   result.Set("amplitude", amplitude);
   result.Set("edit", EditToObject(env, note.edit));
   return result;
@@ -609,11 +606,8 @@ Napi::Object PitchResultToObject(Napi::Env env, const SonareVocalPitchResult& re
 
 Napi::Object RenderResultToObject(Napi::Env env, const SonareVocalRenderResult& result) {
   Napi::Object object = Napi::Object::New(env);
-  Napi::Float32Array samples = Napi::Float32Array::New(env, result.sample_count);
-  if (result.sample_count != 0) {
-    std::memcpy(samples.Data(), result.samples,
-                static_cast<size_t>(result.sample_count) * sizeof(float));
-  }
+  Napi::Float32Array samples =
+      Float32ArrayFrom(env, result.samples, static_cast<size_t>(result.sample_count));
   object.Set("samples", samples);
   object.Set("startSample", Napi::Number::New(env, static_cast<double>(result.start_sample)));
   object.Set("token", TokenToObject(env, result.token));

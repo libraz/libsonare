@@ -10,18 +10,9 @@
 #include <vector>
 
 #include "sonare_wrap_options.h"
+#include "sonare_wrap_utils.h"
 
 namespace sonare_node {
-
-/// @brief Copies @p count floats into a fresh Float32Array; a NULL source reads
-///        as zeros rather than being read past.
-inline Napi::Float32Array CopyToFloat32(Napi::Env env, const float* values, size_t count) {
-  auto array = Napi::Float32Array::New(env, count);
-  if (count > 0 && values != nullptr) {
-    std::memcpy(array.Data(), values, count * sizeof(float));
-  }
-  return array;
-}
 
 /// @brief Reads an edit off its own JS object onto @p out, which the caller started from
 ///        sonare_note_edit_init (the identity), so an omitted key is a no-op.
@@ -76,7 +67,7 @@ inline Napi::Object NoteEditToJs(Napi::Env env, const SonareNoteEdit& edit, cons
   out.Set("vibratoDepthChange", Napi::Number::New(env, edit.vibrato_depth_change));
   out.Set("driftChange", Napi::Number::New(env, edit.drift_change));
   out.Set("muted", Napi::Boolean::New(env, edit.muted != 0));
-  out.Set("amplitudeEnvelope", CopyToFloat32(env, envelope, envelope_count));
+  out.Set("amplitudeEnvelope", Float32ArrayFrom(env, envelope, envelope_count));
   return out;
 }
 
@@ -98,7 +89,7 @@ inline Napi::Object NoteObjectToJs(Napi::Env env, const SonareNoteObject& note,
   row.Set("medianCents", Napi::Number::New(env, note.median_cents));
   row.Set("f0Stability", Napi::Number::New(env, note.f0_stability));
   row.Set("edit", NoteEditToJs(env, note.edit, envelope, envelope_count));
-  row.Set("amplitude", CopyToFloat32(env, amplitude, amplitude_count));
+  row.Set("amplitude", Float32ArrayFrom(env, amplitude, amplitude_count));
   return row;
 }
 

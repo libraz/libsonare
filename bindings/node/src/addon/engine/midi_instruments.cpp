@@ -190,18 +190,7 @@ Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  if (info.Length() > 0 && info[0].IsBuffer()) {
-    Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
-    bytes = buf.Data();
-    len = buf.ElementLength();
-  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
-    Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
-    bytes = arr.Data();
-    len = arr.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequiredBytesArg(env, info, 0, "data", &bytes, &len)) return env.Undefined();
   ThrowIfError(env, sonare_engine_load_soundfont(engine_, bytes, len));
   return env.Undefined();
   SONARE_NODE_CATCH(env)

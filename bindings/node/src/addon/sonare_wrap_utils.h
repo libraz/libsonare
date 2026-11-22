@@ -218,10 +218,6 @@ struct ChannelInputs {
 ///        pending on refusal.
 bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* inputs);
 
-bool IsFloat32Array(const Napi::Value& value);
-bool IsUint8Array(const Napi::Value& value);
-bool IsInt32Array(const Napi::Value& value);
-
 /// @brief The messages of the diagnostics the most recent C-ABI call published, in order.
 inline std::vector<std::string> LastDiagnosticMessages() {
   std::vector<std::string> messages;
@@ -320,6 +316,61 @@ inline Napi::Float32Array Float32ArrayFrom(Napi::Env env, const std::vector<floa
   return Float32ArrayFrom(env, values.data(), values.size());
 }
 
+/// @brief A JS array of @p n_channels Float32Arrays of @p length floats each, read from one
+///        contiguous planar buffer (channel after channel).
+inline Napi::Array Float32ArraysFromPlanar(Napi::Env env, const float* planar, size_t n_channels,
+                                           size_t length) {
+  Napi::Array out = Napi::Array::New(env, n_channels);
+  for (size_t ch = 0; ch < n_channels; ++ch) {
+    out.Set(static_cast<uint32_t>(ch), Float32ArrayFrom(env, planar + ch * length, length));
+  }
+  return out;
+}
+
+/// @brief A JS array of @p n_channels Float32Arrays of @p length floats each, one per pointer in
+///        @p channels.
+inline Napi::Array Float32ArraysFrom(Napi::Env env, const float* const* channels, size_t n_channels,
+                                     size_t length) {
+  Napi::Array out = Napi::Array::New(env, n_channels);
+  for (size_t ch = 0; ch < n_channels; ++ch) {
+    out.Set(static_cast<uint32_t>(ch), Float32ArrayFrom(env, channels[ch], length));
+  }
+  return out;
+}
+
+/// @brief A JS array holding one Float32Array per vector in @p channels, each at its own length.
+inline Napi::Array Float32ArraysFrom(Napi::Env env,
+                                     const std::vector<std::vector<float>>& channels) {
+  Napi::Array out = Napi::Array::New(env, channels.size());
+  for (size_t ch = 0; ch < channels.size(); ++ch) {
+    out.Set(static_cast<uint32_t>(ch), Float32ArrayFrom(env, channels[ch]));
+  }
+  return out;
+}
+
+/// @brief Copies @p length floats of a C-owned heap array into a Float32Array and frees the C
+///        copy; a null @p data leaves the zeros the array was created with.
+inline Napi::Float32Array TakeCFloats(Napi::Env env, float* data, size_t length) {
+  Napi::Float32Array out = Float32ArrayFrom(env, data, length);
+  sonare_free_floats(data);
+  return out;
+}
+
+/// @brief The Int32Array counterpart of TakeCFloats for a C-owned int array.
+inline Napi::Int32Array TakeCInts(Napi::Env env, int* data, size_t length) {
+  auto out = Napi::Int32Array::New(env, length);
+  if (length > 0 && data != nullptr) std::memcpy(out.Data(), data, length * sizeof(int));
+  sonare_free_ints(data);
+  return out;
+}
+
+/// @brief Throws @p err as a coded SonareError and returns undefined, for the `return` of a
+///        failed C-ABI call that has nothing to hand back.
+inline Napi::Value CheckCResult(Napi::Env env, SonareError err) {
+  ThrowIfError(env, err);
+  return env.Undefined();
+}
+
 /// @brief Coerce a JS value into a std::vector<int>, accepting an Int32Array or
 ///        a plain number[]. Throws a JS TypeError otherwise.
 /// @details A plain-array entry is read as a strict int named `@p name [i]`: a
@@ -327,7 +378,7 @@ inline Napi::Float32Array Float32ArrayFrom(Napi::Env env, const std::vector<floa
 ///   index. The Int32Array path returns as-is because its elements are already
 ///   exact ints -- there is no fold left to refuse.
 inline std::vector<int> IntVectorFromValue(const Napi::Value& value, const char* name) {
-  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array) {
+  if (IsInt32Array(value)) {
     auto arr = value.As<Napi::Int32Array>();
     return std::vector<int>(arr.Data(), arr.Data() + arr.ElementLength());
   }
@@ -349,7 +400,7 @@ inline std::vector<int> IntVectorFromValue(const Napi::Value& value, const char*
 ///   The Float32Array path cannot refuse anything: JS folded the entry before
 ///   the call, so the finite value the caller wrote is already gone.
 inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const char* name) {
-  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
+  if (IsFloat32Array(value)) {
     auto arr = value.As<Napi::Float32Array>();
     return std::vector<float>(arr.Data(), arr.Data() + arr.ElementLength());
   }

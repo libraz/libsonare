@@ -70,18 +70,7 @@ Napi::Value HrtfSetWrap::FromBytes(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   const uint8_t* data = nullptr;
   size_t size = 0;
-  if (info.Length() > 0 && info[0].IsBuffer()) {
-    auto buffer = info[0].As<Napi::Buffer<uint8_t>>();
-    data = buffer.Data();
-    size = buffer.ElementLength();
-  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
-    auto array = info[0].As<Napi::Uint8Array>();
-    data = array.Data();
-    size = array.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "bytes must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!sonare_node::RequiredBytesArg(env, info, 0, "bytes", &data, &size)) return env.Undefined();
   SonareHrtfSet* handle = nullptr;
   sonare_node::ThrowIfError(env, sonare_hrtf_set_create_from_memory(data, size, &handle));
   if (env.IsExceptionPending()) return env.Undefined();

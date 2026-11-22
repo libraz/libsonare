@@ -183,7 +183,7 @@ Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_power_to_db(arr.Data(), arr.ElementLength(), ref, amin, top_db, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -205,7 +205,7 @@ Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_amplitude_to_db(arr.Data(), arr.ElementLength(), ref, amin, top_db, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -222,7 +222,7 @@ Napi::Value SonareWrap::DbToPower(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_db_to_power(arr.Data(), arr.ElementLength(), ref, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }
 
@@ -239,6 +239,6 @@ Napi::Value SonareWrap::DbToAmplitude(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_db_to_amplitude(arr.Data(), arr.ElementLength(), ref, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return FloatResult(env, out, count);
+  return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
 }

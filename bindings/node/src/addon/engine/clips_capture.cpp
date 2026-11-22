@@ -863,11 +863,7 @@ Napi::Value RealtimeEngineWrap::CapturedAudio(const Napi::CallbackInfo& info) {
   for (size_t ch = 0; ch < capture_buffers_.size(); ++ch) {
     const std::vector<float>& source = capture_buffers_[ch];
     const size_t count = static_cast<size_t>(frames);
-    auto channel = Napi::Float32Array::New(env, count);
-    if (count > 0) {
-      std::memcpy(channel.Data(), source.data(), count * sizeof(float));
-    }
-    out.Set(static_cast<uint32_t>(ch), channel);
+    out.Set(static_cast<uint32_t>(ch), sonare_node::Float32ArrayFrom(env, source.data(), count));
   }
   return out;
   SONARE_NODE_CATCH(env)

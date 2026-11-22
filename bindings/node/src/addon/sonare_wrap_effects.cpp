@@ -33,6 +33,7 @@
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/constants.h"
 
 using namespace sonare_node;
 
@@ -142,7 +143,8 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float rate = node_narrow_float(env, info[2], "speedRatio");
   int n_fft{};
-  if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 3, "nFft", sonare::constants::kDefaultNFft, &n_fft))
+    return env.Undefined();
   int hop_length{};
   if (!OptionalResynthesisHopArg(env, info, 4, &hop_length)) return env.Undefined();
 
@@ -174,7 +176,8 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float semitones = node_narrow_float(env, info[2], "semitones");
   int n_fft{};
-  if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 3, "nFft", sonare::constants::kDefaultNFft, &n_fft))
+    return env.Undefined();
   int hop_length{};
   if (!OptionalResynthesisHopArg(env, info, 4, &hop_length)) return env.Undefined();
 
@@ -385,11 +388,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto result = Napi::Float32Array::New(env, out_length);
-  if (out_length > 0 && out != nullptr) {
-    std::memcpy(result.Data(), out, out_length * sizeof(float));
-    sonare_free_floats(out);
-  }
+  auto result = TakeCFloats(env, out, out_length);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -442,11 +441,7 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  auto samples = Napi::Float32Array::New(env, out_length);
-  if (out_length > 0 && out != nullptr) {
-    std::memcpy(samples.Data(), out, out_length * sizeof(float));
-    sonare_free_floats(out);
-  }
+  auto samples = TakeCFloats(env, out, out_length);
   Napi::Object result = Napi::Object::New(env);
   result.Set("samples", samples);
   result.Set("key", KeyToObject(env, used.root, used.mode, used.confidence));

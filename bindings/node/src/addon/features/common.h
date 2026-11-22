@@ -51,29 +51,6 @@ inline bool ReadStftFrameArgs(Napi::Env env, const Napi::CallbackInfo& info,
                            sonare::kStftHopDomain, &out->hop_length);
 }
 
-inline Napi::Float32Array FloatResult(Napi::Env env, float* data, size_t count) {
-  auto out = Napi::Float32Array::New(env, count);
-  if (count > 0 && data != nullptr) {
-    std::memcpy(out.Data(), data, count * sizeof(float));
-  }
-  sonare_free_floats(data);
-  return out;
-}
-
-inline Napi::Int32Array IntResult(Napi::Env env, int* data, size_t count) {
-  auto out = Napi::Int32Array::New(env, count);
-  if (count > 0 && data != nullptr) {
-    std::memcpy(out.Data(), data, count * sizeof(int));
-  }
-  sonare_free_ints(data);
-  return out;
-}
-
-inline Napi::Value CheckCResult(Napi::Env env, SonareError err) {
-  sonare_node::ThrowIfError(env, err);
-  return env.Undefined();
-}
-
 // IntVectorFromValue / FloatVectorFromValue come from sonare_wrap_utils.h
 // (namespace sonare_node); the features TUs `using namespace sonare_node`, so
 // the unqualified names still resolve.

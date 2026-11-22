@@ -155,8 +155,8 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
 
-  int n_fft = 2048;
-  int hop_length = 512;
+  int n_fft = sonare::constants::kDefaultNFft;
+  int hop_length = sonare::constants::kDefaultHopLength;
   bool use_hpss = false;
   bool loudness_weighted = false;
   float chroma_high_pass_hz = 80.0f;
@@ -214,8 +214,8 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
 
-  int n_fft = 2048;
-  int hop_length = 512;
+  int n_fft = sonare::constants::kDefaultNFft;
+  int hop_length = sonare::constants::kDefaultHopLength;
   bool use_hpss = false;
   bool loudness_weighted = false;
   float chroma_high_pass_hz = 80.0f;
@@ -300,11 +300,7 @@ Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  auto result = Napi::Float32Array::New(env, count);
-  if (count > 0 && times != nullptr) {
-    std::memcpy(result.Data(), times, count * sizeof(float));
-    sonare_free_floats(times);
-  }
+  auto result = TakeCFloats(env, times, count);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -328,11 +324,7 @@ Napi::Value SonareWrap::DetectDownbeats(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  auto result = Napi::Float32Array::New(env, count);
-  if (count > 0 && times != nullptr) {
-    std::memcpy(result.Data(), times, count * sizeof(float));
-    sonare_free_floats(times);
-  }
+  auto result = TakeCFloats(env, times, count);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -436,11 +428,7 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  auto result = Napi::Float32Array::New(env, count);
-  if (count > 0 && times != nullptr) {
-    std::memcpy(result.Data(), times, count * sizeof(float));
-    sonare_free_floats(times);
-  }
+  auto result = TakeCFloats(env, times, count);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -610,11 +598,12 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::BpmConfig{}.start_bpm, &start_bpm))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) {
+  if (!OptionalIntArg(env, info, 5, "nFft", sonare::constants::kDefaultNFft, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 6, "hopLength", 512, sonare::kBpmCountDomain, &hop_length)) {
+  if (!OptionalDomainArg(env, info, 6, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kBpmCountDomain, &hop_length)) {
     return env.Undefined();
   }
   int max_candidates{};
@@ -641,17 +630,11 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   }
   result.Set("candidates", candidates);
 
-  auto autocorrelation = Napi::Float32Array::New(env, analysis.autocorrelation_count);
-  if (analysis.autocorrelation_count > 0 && analysis.autocorrelation != nullptr) {
-    std::memcpy(autocorrelation.Data(), analysis.autocorrelation,
-                analysis.autocorrelation_count * sizeof(float));
-  }
+  auto autocorrelation =
+      Float32ArrayFrom(env, analysis.autocorrelation, analysis.autocorrelation_count);
   result.Set("autocorrelation", autocorrelation);
 
-  auto tempogram = Napi::Float32Array::New(env, analysis.tempogram_count);
-  if (analysis.tempogram_count > 0 && analysis.tempogram != nullptr) {
-    std::memcpy(tempogram.Data(), analysis.tempogram, analysis.tempogram_count * sizeof(float));
-  }
+  auto tempogram = Float32ArrayFrom(env, analysis.tempogram, analysis.tempogram_count);
   result.Set("tempogram", tempogram);
 
   sonare_free_bpm_analysis_result(&analysis);
@@ -820,11 +803,12 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::RhythmConfig{}.start_bpm, &start_bpm))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 5, "nFft", 2048, &n_fft)) {
+  if (!OptionalIntArg(env, info, 5, "nFft", sonare::constants::kDefaultNFft, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 6, "hopLength", 512, sonare::kBpmCountDomain, &hop_length)) {
+  if (!OptionalDomainArg(env, info, 6, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kBpmCountDomain, &hop_length)) {
     return env.Undefined();
   }
 
@@ -852,11 +836,7 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   result.Set("patternRegularity", Napi::Number::New(env, rhythm.pattern_regularity));
   result.Set("tempoStability", Napi::Number::New(env, rhythm.tempo_stability));
 
-  auto intervals = Napi::Float32Array::New(env, rhythm.beat_interval_count);
-  if (rhythm.beat_interval_count > 0 && rhythm.beat_intervals != nullptr) {
-    std::memcpy(intervals.Data(), rhythm.beat_intervals,
-                rhythm.beat_interval_count * sizeof(float));
-  }
+  auto intervals = Float32ArrayFrom(env, rhythm.beat_intervals, rhythm.beat_interval_count);
   result.Set("beatIntervals", intervals);
 
   sonare_free_rhythm_result(&rhythm);
@@ -880,7 +860,8 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kDynamicsHopDomain, &hop_length)) {
+  if (!OptionalDomainArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kDynamicsHopDomain, &hop_length)) {
     return env.Undefined();
   }
   float compression_threshold{};
@@ -905,12 +886,8 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
   SetMeasured(result, "loudnessRangeLu", dynamics.loudness_range_lu);
   result.Set("isCompressed", Napi::Boolean::New(env, dynamics.is_compressed != 0));
 
-  auto times = Napi::Float32Array::New(env, dynamics.loudness_count);
-  auto rms_db = Napi::Float32Array::New(env, dynamics.loudness_count);
-  if (dynamics.loudness_count > 0) {
-    std::memcpy(times.Data(), dynamics.loudness_times_sec, dynamics.loudness_count * sizeof(float));
-    std::memcpy(rms_db.Data(), dynamics.loudness_rms_db, dynamics.loudness_count * sizeof(float));
-  }
+  auto times = Float32ArrayFrom(env, dynamics.loudness_times_sec, dynamics.loudness_count);
+  auto rms_db = Float32ArrayFrom(env, dynamics.loudness_rms_db, dynamics.loudness_count);
   result.Set("loudnessTimesSec", times);
   result.Set("loudnessRmsDb", rms_db);
 
@@ -934,8 +911,9 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   int n_mels{};
   int n_mfcc{};
   float window_sec{};
-  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft) ||
-      !OptionalDomainArg(env, info, 3, "hopLength", 512, sonare::kTimbreCountDomain, &hop_length) ||
+  if (!OptionalIntArg(env, info, 2, "nFft", sonare::constants::kDefaultNFft, &n_fft) ||
+      !OptionalDomainArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kTimbreCountDomain, &hop_length) ||
       !OptionalDomainArg(env, info, 4, "nMels", 128, sonare::kTimbreCountDomain, &n_mels) ||
       !OptionalDomainArg(env, info, 5, "nMfcc", 13, sonare::kTimbreCountDomain, &n_mfcc) ||
       !OptionalDomainArg(env, info, 6, "windowSec", 0.5f, sonare::kTimbreWindowSecDomain,
@@ -958,25 +936,13 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   result.Set("roughness", Napi::Number::New(env, timbre.roughness));
   result.Set("complexity", Napi::Number::New(env, timbre.complexity));
 
-  auto centroid = Napi::Float32Array::New(env, timbre.spectral_centroid_count);
-  if (timbre.spectral_centroid_count > 0 && timbre.spectral_centroid != nullptr) {
-    std::memcpy(centroid.Data(), timbre.spectral_centroid,
-                timbre.spectral_centroid_count * sizeof(float));
-  }
+  auto centroid = Float32ArrayFrom(env, timbre.spectral_centroid, timbre.spectral_centroid_count);
   result.Set("spectralCentroid", centroid);
 
-  auto flatness = Napi::Float32Array::New(env, timbre.spectral_flatness_count);
-  if (timbre.spectral_flatness_count > 0 && timbre.spectral_flatness != nullptr) {
-    std::memcpy(flatness.Data(), timbre.spectral_flatness,
-                timbre.spectral_flatness_count * sizeof(float));
-  }
+  auto flatness = Float32ArrayFrom(env, timbre.spectral_flatness, timbre.spectral_flatness_count);
   result.Set("spectralFlatness", flatness);
 
-  auto rolloff = Napi::Float32Array::New(env, timbre.spectral_rolloff_count);
-  if (timbre.spectral_rolloff_count > 0 && timbre.spectral_rolloff != nullptr) {
-    std::memcpy(rolloff.Data(), timbre.spectral_rolloff,
-                timbre.spectral_rolloff_count * sizeof(float));
-  }
+  auto rolloff = Float32ArrayFrom(env, timbre.spectral_rolloff, timbre.spectral_rolloff_count);
   result.Set("spectralRolloff", rolloff);
 
   auto over_time = Napi::Array::New(env, timbre.timbre_over_time_count);
@@ -1104,12 +1070,12 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
                        &use_triads_only))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 6, "nFft", 2048, &n_fft)) {
+  if (!OptionalIntArg(env, info, 6, "nFft", sonare::constants::kDefaultNFft, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 7, "hopLength", 512, sonare::kChordHopLengthDomain,
-                         &hop_length)) {
+  if (!OptionalDomainArg(env, info, 7, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kChordHopLengthDomain, &hop_length)) {
     return env.Undefined();
   }
   bool use_beat_sync{};
@@ -1210,12 +1176,12 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
                        &use_triads_only))
     return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 8, "nFft", 2048, &n_fft)) {
+  if (!OptionalIntArg(env, info, 8, "nFft", sonare::constants::kDefaultNFft, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 9, "hopLength", 512, sonare::kChordHopLengthDomain,
-                         &hop_length)) {
+  if (!OptionalDomainArg(env, info, 9, "hopLength", sonare::constants::kDefaultHopLength,
+                         sonare::kChordHopLengthDomain, &hop_length)) {
     return env.Undefined();
   }
   bool use_beat_sync{};

@@ -90,18 +90,7 @@ Napi::Value ProjectWrap::ImportSmf(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  if (info.Length() > 0 && info[0].IsBuffer()) {
-    Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
-    bytes = buf.Data();
-    len = buf.ElementLength();
-  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
-    Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
-    bytes = arr.Data();
-    len = arr.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequiredBytesArg(env, info, 0, "data", &bytes, &len)) return env.Undefined();
   uint32_t out_id = 0;
   ThrowIfError(env, sonare_project_import_smf(project_, bytes, len, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -130,18 +119,7 @@ Napi::Value ProjectWrap::ImportClipFile(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  if (info.Length() > 0 && info[0].IsBuffer()) {
-    Napi::Buffer<uint8_t> buf = info[0].As<Napi::Buffer<uint8_t>>();
-    bytes = buf.Data();
-    len = buf.ElementLength();
-  } else if (info.Length() > 0 && sonare_node::IsUint8Array(info[0])) {
-    Napi::Uint8Array arr = info[0].As<Napi::Uint8Array>();
-    bytes = arr.Data();
-    len = arr.ByteLength();
-  } else {
-    Napi::TypeError::New(env, "data must be a Buffer or Uint8Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequiredBytesArg(env, info, 0, "data", &bytes, &len)) return env.Undefined();
   uint32_t out_id = 0;
   ThrowIfError(env, sonare_project_import_clip_file(project_, bytes, len, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
