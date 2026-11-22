@@ -93,7 +93,9 @@ interface IntFieldCase {
 
 const INT_FIELDS: readonly IntFieldCase[] = [
   { field: 'nFft', separating: [1024, 2048] },
-  { field: 'hopLength', separating: [256, 512] },
+  // Onset times are refined to the attack, so the hop moves them only through frame-counted
+  // options: a 10-frame wait spans 0.116 s at hop 256 and 0.232 s at hop 512, past the 0.2 s spacing.
+  { field: 'hopLength', context: { wait: 10 }, separating: [256, 512] },
   { field: 'preMax', separating: [1, 30] },
   { field: 'postMax', separating: [1, 30] },
   { field: 'wait', separating: [0, 60] },
