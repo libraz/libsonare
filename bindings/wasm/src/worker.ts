@@ -206,18 +206,17 @@ interface NodeParentPort {
 
 /**
  * The parent port when this module runs as a Node `worker_threads` Worker, which
- * has no global `postMessage` / `addEventListener`. The specifier is a variable
- * so a browser bundler leaves the Node built-in unresolved.
+ * has no global `postMessage` / `addEventListener`. Reached through
+ * `process.getBuiltinModule` so no bundler or dev server sees a module specifier.
  */
-async function nodeWorkerEndpoint(): Promise<OfflineWorkerEndpoint | null> {
-  const scope = globalThis as unknown as { process?: { versions?: { node?: string } } };
-  if (scope.process?.versions?.node === undefined) {
-    return null;
-  }
-  const specifier = 'node:worker_threads';
-  const { parentPort } = (await import(/* webpackIgnore: true */ /* @vite-ignore */ specifier)) as {
-    parentPort: NodeParentPort | null;
+function nodeWorkerEndpoint(): OfflineWorkerEndpoint | null {
+  const scope = globalThis as unknown as {
+    process?: { getBuiltinModule?: (id: string) => unknown };
   };
+  const workerThreads = scope.process?.getBuiltinModule?.('worker_threads') as
+    | { parentPort: NodeParentPort | null }
+    | undefined;
+  const parentPort = workerThreads?.parentPort;
   if (!parentPort) {
     return null;
   }
@@ -237,5 +236,8 @@ const endpoint = browserWorkerEndpoint();
 if (endpoint) {
   installOfflineWorkerEndpoint(endpoint);
 } else {
-  void nodeWorkerEndpoint().then((node) => node && installOfflineWorkerEndpoint(node));
+  const node = nodeWorkerEndpoint();
+  if (node) {
+    installOfflineWorkerEndpoint(node);
+  }
 }

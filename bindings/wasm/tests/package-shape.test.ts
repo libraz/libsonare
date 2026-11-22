@@ -1,6 +1,7 @@
 /**
  * Published package shape: subpath conditions, type fallbacks for legacy
- * resolution, side-effect flags and the exported binaries.
+ * resolution, side-effect flags, the exported binaries and the dynamic imports
+ * the shipped JS makes.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -142,6 +143,30 @@ describe('package.json shape', () => {
     for (const name of files) {
       expect(targetNames, `${name} is named but no export reaches it`).toContain(name);
     }
+  });
+
+  it('ships no dynamic import whose specifier a bundler or dev server cannot read', () => {
+    // A non-literal import() is rewritten by a dev server into a call an AudioWorklet cannot run.
+    const specifiers: string[] = [];
+    for (const file of listFiles(join(root, 'dist'), '.js')) {
+      const source = readFileSync(file, 'utf8');
+      const name = file.slice(join(root, 'dist').length + 1);
+      for (const match of source.matchAll(/(?<![\w$.])import\(/g)) {
+        const rest = source
+          .slice(match.index + match[0].length)
+          .replace(/^(\s|\/\*[\s\S]*?\*\/)*/, '');
+        const literal = /^(["'])([^"'\\]*)\1\s*\)/.exec(rest);
+        expect(literal, `${name}: import(${rest.slice(0, 40)}`).not.toBeNull();
+        specifiers.push(`${name} -> ${literal?.[2]}`);
+      }
+    }
+    expect(specifiers.sort()).toEqual([
+      'analysis.js -> ./sonare-analysis.js',
+      'index.js -> ./sonare.js',
+      'vocal_edit_worker.js -> ./sonare.js',
+      'worker.js -> ./sonare.js',
+      'worklet.js -> ./sonare.js',
+    ]);
   });
 
   it('declares the Node floor that supports require() of ESM', () => {

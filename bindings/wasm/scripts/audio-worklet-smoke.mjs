@@ -8,8 +8,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import * as esbuild from 'esbuild';
+import { createServer as createViteServer } from 'vite';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
+
+// `--vite-dev` serves the page and the processor unbundled from a Vite dev server, whose
+// import rewriting reaches an AudioWorklet module that a production bundle never shows it.
+const viteDev = process.argv.includes('--vite-dev');
 const chromeCandidates = [
   process.env.CHROME_BIN,
   '/tmp/libsonare-ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-mac-arm64/chrome-headless-shell',
@@ -261,7 +266,21 @@ globalThis.SonareEmbindModuleFactory = moduleFactory;
 registerSonareRealtimeEngineWorkletProcessor();
 `;
 
-/** Installs the packed package into @p scratch and bundles the page and the processor into `out/`. */
+/** The page as a Vite app imports it: asset URLs through `?url`, the processor through `?worker&url`. */
+function viteDevPageSource() {
+  const source = pageSource
+    .replace("import wasmUrl from '@libraz/libsonare/wasm';", "import wasmUrl from '@libraz/libsonare/wasm?url';\nimport processorUrl from './processor.mjs?worker&url';")
+    .replaceAll("moduleUrl: '/processor.js'", 'moduleUrl: processorUrl');
+  if (!source.includes('?worker&url') || source.includes("'/processor.js'")) {
+    throw new Error('the page source no longer has the shape the Vite dev rewrite expects');
+  }
+  return source;
+}
+
+/**
+ * Installs the packed package into @p scratch, then either bundles the page and the
+ * processor into `out/` or, under `--vite-dev`, leaves them as sources for the dev server.
+ */
 async function prepareConsumer(scratch) {
   let tarball = process.env.SONARE_SMOKE_TARBALL;
   if (!tarball) {
@@ -285,8 +304,16 @@ async function prepareConsumer(scratch) {
   if (unresolved.length > 0) {
     throw new Error(`exports keys the installed package does not resolve:\n${unresolved.join('\n')}`);
   }
-  await writeFile(path.join(scratch, 'page.mjs'), pageSource);
   await writeFile(path.join(scratch, 'processor.mjs'), processorSource);
+  if (viteDev) {
+    await writeFile(path.join(scratch, 'page.mjs'), viteDevPageSource());
+    await writeFile(
+      path.join(scratch, 'smoke.html'),
+      '<!doctype html>\n<meta charset="utf-8">\n<script type="module" src="/page.mjs"></script>\n',
+    );
+    return { outDir: scratch, keys: Object.keys(manifest.exports).length };
+  }
+  await writeFile(path.join(scratch, 'page.mjs'), pageSource);
   const outDir = path.join(scratch, 'out');
   await esbuild.build({
     absWorkingDir: scratch,
@@ -431,13 +458,40 @@ function withTimeout(promise, timeoutMs, label) {
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeout));
 }
 
+/** A Vite dev server rooted at @p scratch, with the cross-origin isolation the SAB mode needs. */
+async function startDevServer(scratch) {
+  const server = await createViteServer({
+    root: scratch,
+    configFile: false,
+    logLevel: 'error',
+    // Excluded from pre-bundling, the package's own files reach the worklet through the
+    // dev server's import rewriting, which is where a non-literal import() breaks it.
+    optimizeDeps: { exclude: ['@libraz/libsonare'] },
+    server: {
+      host: '127.0.0.1',
+      port: 0,
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+      },
+    },
+  });
+  await server.listen();
+  return { port: server.httpServer.address().port, close: () => server.close() };
+}
+
 async function main() {
   const chromePath = await findChrome();
   const scratch = await mkdtemp(path.join(os.tmpdir(), 'sonare-worklet-consumer-'));
   const { outDir, keys } = await prepareConsumer(scratch);
   console.log(`installed package resolves all ${keys} exports keys`);
-  const server = await startServer(outDir);
-  const port = server.address().port;
+  const server = viteDev
+    ? await startDevServer(outDir)
+    : await startServer(outDir).then((http) => ({
+        port: http.address().port,
+        close: () => http.close(),
+      }));
+  const port = server.port;
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sonare-chrome-'));
   const defaultChromeArgs =
     process.platform === 'darwin'
@@ -521,7 +575,7 @@ async function main() {
     browser.close();
   } finally {
     chrome.kill('SIGTERM');
-    server.close();
+    await server.close();
     await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     await rm(scratch, { recursive: true, force: true });
   }

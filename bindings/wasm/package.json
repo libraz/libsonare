@@ -110,7 +110,8 @@
     "test:browser:worker": "node scripts/offline-worker-smoke.mjs",
     "test:browser:boundary": "node scripts/boundary-smoke.mjs",
     "test:browser:vocal-worker": "node scripts/vocal-edit-worker-smoke.mjs",
-    "test:browser:all": "yarn test:browser && yarn test:browser:worker && yarn test:browser:boundary && yarn test:browser:vocal-worker",
+    "test:browser:dev": "node scripts/audio-worklet-smoke.mjs --vite-dev",
+    "test:browser:all": "yarn test:browser && yarn test:browser:dev && yarn test:browser:worker && yarn test:browser:boundary && yarn test:browser:vocal-worker",
     "test:watch": "vitest",
     "prepack": "node scripts/dist-source-manifest.mjs --check-toolchain && cp ../../LICENSE LICENSE && cp ../../NOTICE NOTICE",
     "prepublishOnly": "yarn clean && yarn build && yarn lint && yarn test && yarn test:types && yarn test:browser:all"
