@@ -875,7 +875,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "chirp"
-changed = "request-only: chirp(request: ChirpRequest)"
+changed = "request-only: chirp(request?: ChirpRequest)"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the removed positional form"
@@ -883,7 +883,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "chirp"
-changed = "request-only: chirp(request: ChirpRequest)"
+changed = "request-only: chirp(request?: ChirpRequest)"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -1900,7 +1900,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::scalar conversion
 [[entry]]
 kind = "function"
 old = "tone"
-changed = "request-only: tone(request: ToneRequest)"
+changed = "request-only: tone(request?: ToneRequest)"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the removed positional form"
@@ -1908,7 +1908,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses the remov
 [[entry]]
 kind = "function"
 old = "tone"
-changed = "request-only: tone(request: ToneRequest)"
+changed = "request-only: tone(request?: ToneRequest)"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -15789,7 +15789,7 @@ rule = "individual"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBuiltinInstrument"
-changed = "setBuiltinInstrument(destinationId, config?); config.destinationId is refused"
+changed = "setBuiltinInstrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused"
 domain = "engine"
 rule = "engine-vocabulary"
 test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination id on instrument setters"
@@ -15797,7 +15797,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination i
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setSynthInstrument"
-changed = "setSynthInstrument(destinationId, patch?); patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset })"
+changed = "setSynthInstrument(destinationId?, patch?); absent or null is destination 0; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset })"
 domain = "engine"
 rule = "engine-vocabulary"
 test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination id on instrument setters"
@@ -15805,7 +15805,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination i
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setSf2Instrument"
-changed = "setSf2Instrument(destinationId, config?); config.destinationId is refused"
+changed = "setSf2Instrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused"
 domain = "engine"
 rule = "engine-vocabulary"
 test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination id on instrument setters"
@@ -16707,7 +16707,7 @@ test = "bindings/wasm/tests/worklet/engine-node.test.ts::requires a count instea
 [[entry]]
 kind = "method"
 old = "SonareEngine.setBuiltinInstrument"
-changed = "setBuiltinInstrument(trackId, config?: BuiltinSynthConfig) takes no destinationId in the config"
+changed = "setBuiltinInstrument(trackId, config?: Omit<BuiltinSynthConfig, 'destinationId'>) takes no destinationId in the config"
 domain = "engine"
 rule = "engine-vocabulary"
 entry = "./worklet"
@@ -16716,7 +16716,7 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::binds instruments by
 [[entry]]
 kind = "method"
 old = "SonareEngine.setSynthInstrument"
-changed = "setSynthInstrument(trackId, patch?: SynthPatch | string)"
+changed = "setSynthInstrument(trackId, patch?: SynthPatch); patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset })"
 domain = "engine"
 rule = "engine-vocabulary"
 entry = "./worklet"
@@ -16725,7 +16725,7 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::binds instruments by
 [[entry]]
 kind = "method"
 old = "SonareEngine.setSf2Instrument"
-changed = "setSf2Instrument(trackId, config?: Sf2InstrumentConfig) takes no destinationId in the config"
+changed = "setSf2Instrument(trackId, config?: Omit<Sf2InstrumentConfig, 'destinationId'>) takes no destinationId in the config"
 domain = "engine"
 rule = "engine-vocabulary"
 entry = "./worklet"
@@ -18744,7 +18744,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "noteMove"
-changed = "one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array"
+changed = "one positional form (noteMove(samples, sampleRate, options: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array"
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -18863,7 +18863,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed p
 [[entry]]
 kind = "method"
 old = "Audio.noteMove"
-changed = "noteMove(options?: NoteMoveOptions)"
+changed = "noteMove(options: NoteMoveOptions)"
 domain = "core"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
@@ -24759,14 +24759,14 @@ test = "bindings/wasm/tests/mastering-assistant-preset.test.ts::rejects an unkno
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChain"
-removed = "read chainConfig from masteringAssistantSuggest(...), which is the same flat chain configuration"
+removed = "read chainConfig from masteringAssistantSuggest(...), a nested MasteringChainConfig that masterAudio takes unchanged as overrides"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChainStereo"
-removed = "read chainConfig from masteringAssistantSuggestStereo(request), which is the same flat chain configuration"
+removed = "read chainConfig from masteringAssistantSuggestStereo(request), a nested MasteringChainConfig that masterAudio takes unchanged as overrides"
 domain = "mastering"
 rule = "individual"
 

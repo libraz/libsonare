@@ -3185,7 +3185,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_master_strip_eq_band(band)` | `RealtimeEngine.set_strip_eq_band(band)`: takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first |
 | `RealtimeEngine.set_master_strip_eq_band_json` | removed: call set_strip_eq_band('master', band_index, band) with an EqBandInput mapping (json.loads the text first) |
 | `RealtimeEngine.set_master_strip_json(scene_json)` | removed: set_strip('master', settings) takes one MixSceneStripInput mapping as settings |
-| `RealtimeEngine.set_master_strip_json` | `RealtimeEngine.set_strip`: set_strip('master', settings) takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]) |
+| `RealtimeEngine.set_master_strip_json` | `RealtimeEngine.set_strip`: set_strip(ref, settings) with ref 'master' takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]) |
 | `RealtimeEngine.set_midi_fx(config_json)` | `RealtimeEngine.set_midi_fx(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
 | `RealtimeEngine.set_tempo_segments(segments)` | each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; any other key raises SonareValueError naming it instead of being ignored |
 | `RealtimeEngine.set_time_signature_segments(segments)` | each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored |
@@ -3194,7 +3194,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_track_strip_eq_band_json` | removed: call set_strip_eq_band(track_id, band_index, band) with an EqBandInput mapping (json.loads the text first) |
 | `RealtimeEngine.set_track_strip_json(scene_json)` | removed: set_strip(ref, settings) takes one MixSceneStripInput mapping as settings |
 | `RealtimeEngine.set_track_strip_json(track_id)` | removed: set_strip(ref, settings) names the strip by ref, a track id or 'master' |
-| `RealtimeEngine.set_track_strip_json` | `RealtimeEngine.set_strip`: set_strip(track_id, settings) takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]) |
+| `RealtimeEngine.set_track_strip_json` | `RealtimeEngine.set_strip`: set_strip(ref, settings) with ref a track id takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]) |
 | `render_playback(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
 
 #### Historical aliases are removed
@@ -3672,7 +3672,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Audio.nnlsChroma` | takes (options?: Omit<NnlsChromaRequest,'samples'\|'sampleRate'>) |
 | `Audio.normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `Audio.normalize` | normalize(options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>) |
-| `Audio.noteMove` | noteMove(options?: NoteMoveOptions) |
+| `Audio.noteMove` | noteMove(options: NoteMoveOptions) |
 | `Audio.noteStretch` | noteStretch(options: NoteStretchOptions) |
 | `Audio.onsetEnvelope(hopLength)` | removed: Audio.onsetEnvelope is gone; call audio.onsetStrength({ hopLength }). |
 | `Audio.onsetEnvelope(nFft)` | removed: Audio.onsetEnvelope is gone; call audio.onsetStrength({ nFft }). |
@@ -5181,7 +5181,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `normalize(mode)` | removed: pass mode as a field of NormalizeRequest |
 | `normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `normalize` | one positional form (normalize(samples, sampleRate, options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>)); request form takes NormalizeRequest; returns Float32Array |
-| `noteMove` | one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array |
+| `noteMove` | one positional form (noteMove(samples, sampleRate, options: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array |
 | `noteStretch` | one positional form (noteStretch(samples, sampleRate, options: NoteStretchOptions)); request form takes NoteStretchRequest; returns Float32Array |
 | `percussive` | one positional form (percussive(samples, sampleRate, options?: Omit<PercussiveRequest,'samples'\|'sampleRate'>)); request form takes PercussiveRequest; returns Float32Array |
 | `phaseVocoder(hopLength)` | removed: pass hopLength as a field of PhaseVocoderRequest |
@@ -5971,8 +5971,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
 | `SurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
-| `masteringAssistantSuggestChainStereo` | removed: read chainConfig from masteringAssistantSuggestStereo(request), which is the same flat chain configuration |
-| `masteringAssistantSuggestChain` | removed: read chainConfig from masteringAssistantSuggest(...), which is the same flat chain configuration |
+| `masteringAssistantSuggestChainStereo` | removed: read chainConfig from masteringAssistantSuggestStereo(request), a nested MasteringChainConfig that masterAudio takes unchanged as overrides |
+| `masteringAssistantSuggestChain` | removed: read chainConfig from masteringAssistantSuggest(...), a nested MasteringChainConfig that masterAudio takes unchanged as overrides |
 
 ### Node: Realtime engine, synthesis, MIDI and playback
 
@@ -6408,15 +6408,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineTelemetry.graphLatencySamplesQ8` | `EngineTelemetry.graphLatencySamples` |
 | `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
-| `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId, config?); the destination id leads and config.destinationId is refused |
+| `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused |
 | `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch. |
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
 | `RealtimeEngine.setInputMonitor` | removed: Call configureCapture({ capacityFrames, inputMonitor: { enabled, gain? } }); the call states the whole capture setup. |
 | `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored markers in the order given (was void) |
 | `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. |
-| `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId, config?); the destination id leads and config.destinationId is refused |
-| `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId, patch?); the destination id leads and patch.destinationId is refused; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
+| `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused |
+| `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); the destination id leads (absent or null is destination 0) and patch.destinationId is refused; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
 
 #### Every JSON document uses camelCase keys
 
@@ -7040,7 +7040,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Audio.nnlsChroma` | takes (options?: Omit<NnlsChromaRequest,'samples'\|'sampleRate'>) |
 | `Audio.normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `Audio.normalize` | normalize(options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>) |
-| `Audio.noteMove` | noteMove(options?: NoteMoveOptions) |
+| `Audio.noteMove` | noteMove(options: NoteMoveOptions) |
 | `Audio.noteStretch` | noteStretch(options: NoteStretchOptions) |
 | `Audio.onsetEnvelope(hopLength)` | removed: Audio.onsetEnvelope is gone; call audio.onsetStrength({ hopLength }). |
 | `Audio.onsetEnvelope(nFft)` | removed: Audio.onsetEnvelope is gone; call audio.onsetStrength({ nFft }). |
@@ -8289,8 +8289,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `chirp(fmin)` | removed: pass it as fminHz in ChirpRequest |
 | `chirp(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of ChirpRequest |
 | `chirp(sampleRate)` | removed: pass sampleRate as a field of ChirpRequest |
-| `chirp` (`./analysis`) | request-only: chirp(request: ChirpRequest) |
-| `chirp` | request-only: chirp(request: ChirpRequest) |
+| `chirp` (`./analysis`) | request-only: chirp(request?: ChirpRequest) |
+| `chirp` | request-only: chirp(request?: ChirpRequest) |
 | `chordFunctionalAnalysis(keyMode)` (`./analysis`) | removed: pass keyMode as a field of ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(keyMode)` | removed: pass keyMode as a field of ChordFunctionalAnalysisRequest |
 | `chordFunctionalAnalysis(keyRoot)` (`./analysis`) | removed: pass keyRoot as a field of ChordFunctionalAnalysisRequest |
@@ -8852,8 +8852,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `tone(phase)` | removed: pass phase as a field of ToneRequest |
 | `tone(sampleRate)` (`./analysis`) | removed: pass sampleRate as a field of ToneRequest |
 | `tone(sampleRate)` | removed: pass sampleRate as a field of ToneRequest |
-| `tone` (`./analysis`) | request-only: tone(request: ToneRequest) |
-| `tone` | request-only: tone(request: ToneRequest) |
+| `tone` (`./analysis`) | request-only: tone(request?: ToneRequest) |
+| `tone` | request-only: tone(request?: ToneRequest) |
 | `tonnetz(chromagram)` (`./analysis`) | removed: pass chromagram as a field of TonnetzRequest |
 | `tonnetz(chromagram)` | removed: pass chromagram as a field of TonnetzRequest |
 | `tonnetz(nChroma)` (`./analysis`) | removed: the Matrix2D input carries it as rows / cols |
@@ -9674,7 +9674,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `normalize(mode)` | removed: pass mode as a field of NormalizeRequest |
 | `normalize(targetDb)` | removed: pass targetDb as a field of NormalizeRequest |
 | `normalize` | one positional form (normalize(samples, sampleRate, options?: Omit<NormalizeRequest,'samples'\|'sampleRate'>)); request form takes NormalizeRequest; returns Float32Array |
-| `noteMove` | one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array |
+| `noteMove` | one positional form (noteMove(samples, sampleRate, options: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array |
 | `noteStretch` | one positional form (noteStretch(samples, sampleRate, options: NoteStretchOptions)); request form takes NoteStretchRequest; returns Float32Array |
 | `percussive` | one positional form (percussive(samples, sampleRate, options?: Omit<PercussiveRequest,'samples'\|'sampleRate'>)); request form takes PercussiveRequest; returns Float32Array |
 | `phaseVocoder(hopLength)` (`./analysis`) | removed: pass hopLength as a field of PhaseVocoderRequest |
@@ -10913,8 +10913,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe; drop it from a strip's surround pan and from a stored scene, where it is now refused as an unknown key (InvalidFormat) |
 | `createSonareMeterRingBuffer` (`./worklet`) | `createMeterRingBuffer`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `createSonareSpectrumRingBuffer` (`./worklet`) | `createSpectrumRingBuffer`: takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
-| `masteringAssistantSuggestChainStereo` | removed: read chainConfig from masteringAssistantSuggestStereo(request), which is the same flat chain configuration |
-| `masteringAssistantSuggestChain` | removed: read chainConfig from masteringAssistantSuggest(...), which is the same flat chain configuration |
+| `masteringAssistantSuggestChainStereo` | removed: read chainConfig from masteringAssistantSuggestStereo(request), a nested MasteringChainConfig that masterAudio takes unchanged as overrides |
+| `masteringAssistantSuggestChain` | removed: read chainConfig from masteringAssistantSuggest(...), a nested MasteringChainConfig that masterAudio takes unchanged as overrides |
 | `sonareMeterRingBufferByteLength` (`./worklet`) | `meterRingBufferByteLength`: takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 | `sonareSpectrumRingBufferByteLength` (`./worklet`) | `spectrumRingBufferByteLength`: takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError |
 
@@ -11618,15 +11618,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineTelemetry.graphLatencySamplesQ8` | `EngineTelemetry.graphLatencySamples` |
 | `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
-| `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId, config?); config.destinationId is refused |
+| `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
 | `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch. |
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
 | `RealtimeEngine.setInputMonitor` | removed: Call configureCapture({ capacityFrames, inputMonitor: { enabled, gain? } }); the call states the whole capture setup. |
 | `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given |
 | `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. |
-| `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId, config?); config.destinationId is refused |
-| `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId, patch?); patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
+| `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
+| `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); absent or null is destination 0; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
 | `SonareEngine.armRecord` (`./worklet`) | removed: Call armCapture({ armed }); capture is engine-global, and per-track record arming does not exist. |
 | `SonareEngine.configureCapture` (`./worklet`) | takes CaptureOptions { capacityFrames, numChannels?, source?, recordOffsetSamples?, inputMonitor?, punch? }; the call states the whole setup |
 | `SonareEngine.graphLatencySamplesQ8` (`./worklet`) | `SonareEngine.graphLatencySamples` |
@@ -11634,14 +11634,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareEngine.resetMasterLoudnessMeter` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.resetProcessorState` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.seekMarker` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false; an unknown marker id is a RangeError |
-| `SonareEngine.setBuiltinInstrument` (`./worklet`) | setBuiltinInstrument(trackId, config?: BuiltinSynthConfig) takes no destinationId in the config |
+| `SonareEngine.setBuiltinInstrument` (`./worklet`) | setBuiltinInstrument(trackId, config?: Omit<BuiltinSynthConfig, 'destinationId'>) takes no destinationId in the config |
 | `SonareEngine.setLoopFromMarkers` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.setMarkers` (`./worklet`) | entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[] |
 | `SonareEngine.setMetronome` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
 | `SonareEngine.setParam` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
-| `SonareEngine.setSf2Instrument` (`./worklet`) | setSf2Instrument(trackId, config?: Sf2InstrumentConfig) takes no destinationId in the config |
+| `SonareEngine.setSf2Instrument` (`./worklet`) | setSf2Instrument(trackId, config?: Omit<Sf2InstrumentConfig, 'destinationId'>) takes no destinationId in the config |
 | `SonareEngine.setStripPan` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory |
-| `SonareEngine.setSynthInstrument` (`./worklet`) | setSynthInstrument(trackId, patch?: SynthPatch \| string) |
+| `SonareEngine.setSynthInstrument` (`./worklet`) | setSynthInstrument(trackId, patch?: SynthPatch); patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
 | `SonareEngine.setTrackMonitorMode` (`./worklet`) | returns void; the mode is a string only (a number is a TypeError) |
 | `SonareEngineTelemetryRecord.graphLatencySamplesQ8` (`./worklet`) | `EngineTelemetryRecord.graphLatencySamples` |
 | `SonareEngineTransportFacade.play` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |

@@ -8357,7 +8357,7 @@ test = "bindings/node/tests/surface/engine.test.ts::renders from a request objec
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBuiltinInstrument"
-changed = "setBuiltinInstrument(destinationId, config?); the destination id leads and config.destinationId is refused"
+changed = "setBuiltinInstrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused"
 domain = "engine"
 rule = "engine-vocabulary"
 test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a destination id given first"
@@ -8365,7 +8365,7 @@ test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a des
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setSynthInstrument"
-changed = "setSynthInstrument(destinationId, patch?); the destination id leads and patch.destinationId is refused; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset })"
+changed = "setSynthInstrument(destinationId?, patch?); the destination id leads (absent or null is destination 0) and patch.destinationId is refused; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset })"
 domain = "engine"
 rule = "engine-vocabulary"
 test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a destination id given first"
@@ -8373,7 +8373,7 @@ test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a des
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setSf2Instrument"
-changed = "setSf2Instrument(destinationId, config?); the destination id leads and config.destinationId is refused"
+changed = "setSf2Instrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused"
 domain = "engine"
 rule = "engine-vocabulary"
 test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a destination id given first"
@@ -9441,7 +9441,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "noteMove"
-changed = "one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array"
+changed = "one positional form (noteMove(samples, sampleRate, options: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array"
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9560,7 +9560,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed p
 [[entry]]
 kind = "method"
 old = "Audio.noteMove"
-changed = "noteMove(options?: NoteMoveOptions)"
+changed = "noteMove(options: NoteMoveOptions)"
 domain = "core"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
@@ -13053,14 +13053,14 @@ test = "bindings/node/tests/mastering-assistant-preset.test.ts::rejects an unkno
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChain"
-removed = "read chainConfig from masteringAssistantSuggest(...), which is the same flat chain configuration"
+removed = "read chainConfig from masteringAssistantSuggest(...), a nested MasteringChainConfig that masterAudio takes unchanged as overrides"
 domain = "mastering"
 rule = "individual"
 
 [[entry]]
 kind = "function"
 old = "masteringAssistantSuggestChainStereo"
-removed = "read chainConfig from masteringAssistantSuggestStereo(request), which is the same flat chain configuration"
+removed = "read chainConfig from masteringAssistantSuggestStereo(request), a nested MasteringChainConfig that masterAudio takes unchanged as overrides"
 domain = "mastering"
 rule = "individual"
 
