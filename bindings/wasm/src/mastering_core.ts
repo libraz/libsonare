@@ -506,7 +506,7 @@ export interface MasteringAmpPresetCatalogEntry {
   /** Canonical preset identifier accepted by the amp-sim insert. */
   name: string;
   /** Effective values from the core preset, before sparse user overrides. */
-  params: Record<string, number | boolean>;
+  params: MasteringProcessorParams<'saturation.ampSim'>;
 }
 
 /**

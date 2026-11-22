@@ -144,6 +144,28 @@ describe('mastering amp-sim preset catalog', () => {
     }
   });
 
+  it('carries each parameter with the type the amp-sim insert declares', () => {
+    const declared = new Map(
+      masteringInsertParamInfo({ insert: 'saturation.ampSim' }).map((p) => [p.name, p]),
+    );
+    const misfits: string[] = [];
+    for (const entry of masteringAmpPresetCatalog()) {
+      for (const [key, value] of Object.entries(entry.params)) {
+        const param = declared.get(key);
+        const fits =
+          param?.type === 'enum'
+            ? (param.choices ?? []).some((choice) => choice.name === value)
+            : param?.type === 'boolean'
+              ? typeof value === 'boolean'
+              : typeof value === 'number' && Number.isFinite(value);
+        if (!fits) {
+          misfits.push(`${entry.name}.${key}: ${JSON.stringify(value)}`);
+        }
+      }
+    }
+    expect(misfits).toEqual([]);
+  });
+
   it('returns fresh parameter objects for read-only consumers', () => {
     const first = masteringAmpPresetCatalog();
     const originalDrive = first[0].params.drive;

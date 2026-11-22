@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, masteringAmpPresetCatalog } from '../dist/index.js';
+import { init, masteringAmpPresetCatalog, masteringInsertParamInfo } from '../dist/index.js';
 
 const PARAM_KEYS = [
   'topology',
@@ -34,13 +34,13 @@ const PARAM_KEYS = [
 ].sort();
 
 function expectParams(
-  params: Record<string, number | boolean> | undefined,
-  expected: Record<string, number | boolean>,
+  params: Record<string, number | boolean | string> | undefined,
+  expected: Record<string, number | boolean | string>,
 ) {
   expect(params).toBeDefined();
   for (const [key, value] of Object.entries(expected)) {
     const actual = params?.[key];
-    if (typeof value === 'boolean') {
+    if (typeof value !== 'number') {
       expect(actual).toBe(value);
     } else {
       expect(actual).toBeCloseTo(value, 5);
@@ -88,7 +88,7 @@ describe('amp preset catalog', () => {
     expect(bass).toBeDefined();
 
     expectParams(clean, {
-      topology: 0,
+      topology: 'voiced',
       inputDb: 0,
       drive: 0.25,
       bassDb: 2,
@@ -96,41 +96,63 @@ describe('amp preset catalog', () => {
       trebleDb: 3,
       presenceDb: 1.5,
       cab: true,
-      ampModel: 1,
+      ampModel: 'cleanCombo',
       power: 0.15,
       nfb: 0.4,
-      micModel: 1,
+      micModel: 'dynamic',
       micAxis: 0.35,
       micDistanceCm: 3,
     });
     expectParams(modern, {
-      topology: 1,
+      topology: 'circuit',
       drive: 0.8,
       bassDb: 1,
       midDb: -3,
       trebleDb: 4,
       presenceDb: 3,
       cab: true,
-      ampModel: 2,
+      ampModel: 'modernHiGain',
       power: 0.55,
       nfb: 0.45,
-      micModel: 1,
+      micModel: 'dynamic',
       micAxis: 0.2,
       micDistanceCm: 2.5,
       preampStages: 4,
     });
     expectParams(bass, {
-      topology: 0,
+      topology: 'voiced',
       drive: 0.15,
       bassDb: 2,
       midDb: 0,
       trebleDb: 1,
       cab: false,
-      ampModel: 1,
+      ampModel: 'cleanCombo',
       power: 0.2,
       nfb: 0.3,
       levelDb: -1,
     });
+  });
+
+  it('carries each parameter with the type the amp-sim insert declares', () => {
+    const declared = new Map(
+      masteringInsertParamInfo({ insert: 'saturation.ampSim' }).map((p) => [p.name, p]),
+    );
+    const misfits: string[] = [];
+    for (const entry of masteringAmpPresetCatalog()) {
+      for (const [key, value] of Object.entries(entry.params)) {
+        const param = declared.get(key);
+        const fits =
+          param?.type === 'enum'
+            ? (param.choices ?? []).some((choice) => choice.name === value)
+            : param?.type === 'boolean'
+              ? typeof value === 'boolean'
+              : typeof value === 'number' && Number.isFinite(value);
+        if (!fits) {
+          misfits.push(`${entry.name}.${key}: ${JSON.stringify(value)}`);
+        }
+      }
+    }
+    expect(misfits).toEqual([]);
   });
 
   it('returns fresh parameter objects for read-only consumers', () => {
