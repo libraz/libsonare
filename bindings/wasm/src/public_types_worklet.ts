@@ -9,6 +9,7 @@ import type { ClipPagePageRequest } from './clip_page_streamer.js';
 import type {
   PlaybackDiagnostics,
   PlaybackRendererConfig,
+  RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
   StreamConfig,
 } from './index.js';
@@ -222,6 +223,31 @@ export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
   numChannels: 1 | 2;
   /** Compiled module bytes, used when the worklet realm has not initialized the module. */
   wasmBinary?: ArrayBuffer | Uint8Array;
+}
+
+/** Options for {@link SonareRealtimeVoiceChangerNode.create}. */
+export interface SonareRealtimeVoiceChangerNodeOptions
+  extends SonareRealtimeVoiceChangerWorkletProcessorOptions {
+  /** Registered processor name. Default `'sonare-realtime-voice-changer-processor'`. */
+  processorName?: string;
+  /** Worklet module loaded with `audioWorklet.addModule` before the node is created. Omitted: no module is added. */
+  moduleUrl?: string | URL;
+  /** Creates the `AudioWorkletNode`. Omitted: `new AudioWorkletNode(context, name, options)`. */
+  nodeFactory?: (
+    context: BaseAudioContext,
+    processorName: string,
+    options: AudioWorkletNodeOptions,
+  ) => AudioWorkletNode;
+}
+
+/** What {@link SonareRealtimeVoiceChangerNode.status} reads from the worklet's changer. */
+export interface SonareRealtimeVoiceChangerStatus {
+  /** Latency of the chain in samples, as `RealtimeVoiceChanger.latencySamples` reports it. */
+  latencySamples: number;
+  /** Blocks in which the chain discarded its state over a non-finite value; see `RealtimeVoiceChanger.nonFiniteDiscardCount`. */
+  nonFiniteDiscardCount: number;
+  /** The applied configuration, as `RealtimeVoiceChanger.config()` returns it. */
+  config: RealtimeVoiceChangerConfig;
 }
 
 /** Options handed to the stream-analyzer worklet processor. */

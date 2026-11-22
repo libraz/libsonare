@@ -330,6 +330,7 @@ export function isRealtimeVoiceChangerMessage(
     return typeof value.note === 'number';
   }
   return (
+    value.type === 'status' ||
     value.type === 'setConfig' ||
     value.type === 'reset' ||
     value.type === 'destroy' ||

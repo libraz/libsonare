@@ -2,9 +2,16 @@ import { ErrorCode } from '../errors.js';
 import { RealtimeVoiceChanger } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
 import { errorText, failurePayload } from '../internal/failure_payload.js';
-import type { SonareRealtimeVoiceChangerErrorMessage } from '../internal/voice_changer_messages.js';
+import type {
+  SonareRealtimeVoiceChangerErrorMessage,
+  SonareRealtimeVoiceChangerReadyMessage,
+  SonareRealtimeVoiceChangerStatusReplyMessage,
+} from '../internal/voice_changer_messages.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
-import type { SonareRealtimeVoiceChangerWorkletProcessorOptions } from '../public_types_worklet.js';
+import type {
+  SonareRealtimeVoiceChangerStatus,
+  SonareRealtimeVoiceChangerWorkletProcessorOptions,
+} from '../public_types_worklet.js';
 import type {
   RealtimeVoiceChangerMonoBuffer,
   RealtimeVoiceChangerPlanarBuffer,
@@ -39,6 +46,8 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   // Reused so the mono fan-out never builds an array on the audio thread.
   private readonly monoPlane: Float32Array[] = [new Float32Array(0)];
   private destroyed = false;
+  /** Where a status request is answered; the registered processor points it at its port. */
+  reply?: (message: SonareRealtimeVoiceChangerStatusReplyMessage) => void;
 
   constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions) {
     assertKnownProcessorOptions('voiceChangerProcessor', options);
@@ -82,7 +91,9 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     if (this.destroyed || !isRealtimeVoiceChangerMessage(message)) {
       return;
     }
-    if (message.type === 'setConfig') {
+    if (message.type === 'status') {
+      this.reply?.({ type: 'status', status: this.status() });
+    } else if (message.type === 'setConfig') {
       this.changer.setConfig(message.config);
     } else if (message.type === 'noteOn') {
       this.changer.noteOn(message.note, message.velocity);
@@ -95,6 +106,15 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     } else if (message.type === 'destroy') {
       this.destroy();
     }
+  }
+
+  /** The changer's latency, discard counter and applied configuration. */
+  status(): SonareRealtimeVoiceChangerStatus {
+    return {
+      latencySamples: this.changer.latencySamples,
+      nonFiniteDiscardCount: this.changer.nonFiniteDiscardCount,
+      config: this.changer.config(),
+    };
   }
 
   /** Processes one render quantum: input 0 is the signal, input 1 (first plane) the optional external vocoder carrier. Returns `false` once destroyed. */
@@ -303,9 +323,16 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
         };
         const start = () => {
           // Options cross from the main thread unchecked; the constructor refuses a missing field.
-          this.bridge = new SonareRealtimeVoiceChangerWorkletProcessor(
+          const bridge = new SonareRealtimeVoiceChangerWorkletProcessor(
             processorOptions as SonareRealtimeVoiceChangerWorkletProcessorOptions,
           );
+          bridge.reply = (message) => port?.postMessage?.(message);
+          this.bridge = bridge;
+          port?.postMessage?.({
+            type: 'ready',
+            runtimeTarget: 'embind',
+            latencySamples: bridge.status().latencySamples,
+          } satisfies SonareRealtimeVoiceChangerReadyMessage);
           for (const message of this.pendingMessages.splice(0)) {
             deliver(this.bridge, message);
           }
@@ -320,10 +347,7 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
           // The module is not initialized in this realm: build it the way the
           // realtime engine processor does, then construct the changer.
           initializeEmbindInWorklet(processorOptions.wasmBinary)
-            .then(() => {
-              start();
-              port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-            })
+            .then(start)
             .catch((error: unknown) => reportError('init', error));
         }
         const onMessage = (event: { data: unknown }) => {

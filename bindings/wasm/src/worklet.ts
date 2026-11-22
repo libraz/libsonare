@@ -52,6 +52,8 @@ export type {
   SonareRealtimeEngineNodeOptions,
   SonareRealtimeEngineWorkletProcessorConstructorOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
+  SonareRealtimeVoiceChangerNodeOptions,
+  SonareRealtimeVoiceChangerStatus,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorConstructorOptions,
@@ -166,6 +168,7 @@ export {
   registerSonareStreamAnalyzerWorkletProcessor,
   SonareStreamAnalyzerWorkletProcessor,
 } from './worklet/stream-analyzer-processor.js';
+export { SonareRealtimeVoiceChangerNode } from './worklet/voice-changer-node.js';
 export {
   registerSonareRealtimeVoiceChangerWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,
