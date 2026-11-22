@@ -94,6 +94,20 @@ void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics)
   sonare_c_detail::set_last_diagnostics(diagnostics);
 }
 
+// The shared room and synthesis checks' member paths, as SonareRirSynthConfig spells them.
+const std::array<CName, 11> kRirSynthNames{
+    {{"dims.length", "config.length_m"},
+     {"dims.width", "config.width_m"},
+     {"dims.height", "config.height_m"},
+     {"source", "config.source"},
+     {"listener", "config.listener"},
+     {"ism_order", "config.ism_order"},
+     {"max_seconds", "config.max_sec"},
+     {"mixing_time_ms", "config.mixing_time_ms"},
+     {"crossfade_ms", "config.crossfade_ms"},
+     {"air.temperature_c", "config.air_temperature_c"},
+     {"air.humidity_percent", "config.air_humidity_percent"}}};
+
 static_assert(static_cast<int>(sonare::AcousticConfig::Mode::Auto) == SONARE_ACOUSTIC_MODE_AUTO &&
                   static_cast<int>(sonare::AcousticConfig::Mode::Blind) ==
                       SONARE_ACOUSTIC_MODE_BLIND &&
@@ -273,33 +287,41 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   check::finite_float(config->length_m, "config.length_m");
   check::finite_float(config->width_m, "config.width_m");
   check::finite_float(config->height_m, "config.height_m");
-  const sonare::acoustic::SourceListener placement = resolve_placement(*config).placement;
-  check::integer_within(config->ism_order, sonare::effects::common::kRirIsmOrderDomain,
-                        "config.ism_order");
-  check::within(config->max_sec, sonare::effects::common::kRirMaxSecondsDomain, "config.max_sec");
-  check::within(config->mixing_time_ms, sonare::effects::common::kRirMixingTimeMsDomain,
-                "config.mixing_time_ms");
-  check::within(config->crossfade_ms, sonare::effects::common::kRirCrossfadeMsDomain,
-                "config.crossfade_ms");
-  check_wall_material(*config);
-  sonare::acoustic::RirSynthConfig rc;
-  rc.late_model = config->prefer_eyring != 0 ? sonare::acoustic::ReverbModel::Eyring
-                                             : sonare::acoustic::ReverbModel::Sabine;
-  rc.air_absorption_enabled = config->air_absorption_enabled != 0;
-  SONARE_C_REQUIRE_NONNULL(out);
   using namespace sonare::acoustic;
-  const ShoeboxRoom room =
-      make_room(config->length_m, config->width_m, config->height_m, config->absorption,
-                config->band_absorption, config->band_absorption_count, config->band_scattering,
-                config->band_scattering_count, config->material_preset);
+  const SourceListener placement = resolve_placement(*config).placement;
+  RirSynthConfig rc;
+  rc.late_model = config->prefer_eyring != 0 ? ReverbModel::Eyring : ReverbModel::Sabine;
+  rc.air_absorption_enabled = config->air_absorption_enabled != 0;
   rc.ism_order = config->ism_order;
   rc.seed = config->seed;
   rc.max_seconds = config->max_sec;
   rc.mixing_time_ms = config->mixing_time_ms;
   rc.crossfade_ms = config->crossfade_ms;
-  // An implausible climate is left for the core to diagnose (acoustic.invalid_air_absorption).
   rc.air.temperature_c = config->air_temperature_c;
   rc.air.humidity_percent = config->air_humidity_percent;
+  const sonare::RoomDimensions dims{config->length_m, config->width_m, config->height_m};
+  try {
+    with_c_names(kRirSynthNames, [&] {
+      sonare::effects::common::check_room_geometry(dims, placement.source, placement.listener,
+                                                   {"dims", "source", "listener"});
+      sonare::effects::common::check_rir_synth_config(rc);
+    });
+  } catch (const sonare::SonareParameterRefusal&) {
+    // The header promises the refused rule's diagnostic code beside the message.
+    std::vector<sonare::Diagnostic> diagnostics =
+        validate_shoebox(uniform_shoebox(dims, 0.0f), placement, kShoeboxFieldNames);
+    const std::vector<sonare::Diagnostic> synthesis =
+        validate_rir_synth_config(rc, kRirSynthFieldNames);
+    diagnostics.insert(diagnostics.end(), synthesis.begin(), synthesis.end());
+    publish_rir_diagnostics(diagnostics);
+    throw;
+  }
+  check_wall_material(*config);
+  SONARE_C_REQUIRE_NONNULL(out);
+  const ShoeboxRoom room =
+      make_room(config->length_m, config->width_m, config->height_m, config->absorption,
+                config->band_absorption, config->band_absorption_count, config->band_scattering,
+                config->band_scattering_count, config->material_preset);
 
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
   publish_rir_diagnostics(res.diagnostics);

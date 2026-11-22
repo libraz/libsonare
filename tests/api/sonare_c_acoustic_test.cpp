@@ -114,6 +114,78 @@ TEST_CASE("sonare acoustic C API refuses invalid RIR geometry with its diagnosti
   sonare_free_rir_synth_result(&result);
 }
 
+TEST_CASE("sonare acoustic C API names each refused RIR field by its config member",
+          "[c_api][acoustic]") {
+  struct Row {
+    const char* label;
+    void (*edit)(SonareRirSynthConfig&);
+    const char* message;
+    const char* diagnostic;
+  };
+  const Row rows[] = {
+      {"length", [](SonareRirSynthConfig& c) { c.length_m = 0.0f; },
+       "config.length_m must be finite and in (0, 10000]", "acoustic.invalid_dimensions"},
+      {"width", [](SonareRirSynthConfig& c) { c.width_m = -2.0f; },
+       "config.width_m must be finite and in (0, 10000]", "acoustic.invalid_dimensions"},
+      {"height", [](SonareRirSynthConfig& c) { c.height_m = 20000.0f; },
+       "config.height_m must be finite and in (0, 10000]", "acoustic.invalid_dimensions"},
+      {"source", [](SonareRirSynthConfig& c) { c.source.z = 4.0f; },
+       "config.source.z must be finite and in [0, 3]", "acoustic.source_outside_room"},
+      {"listener", [](SonareRirSynthConfig& c) { c.listener.y = -0.5f; },
+       "config.listener.y must be finite and in [0, 5]", "acoustic.listener_outside_room"},
+      {"ism_order", [](SonareRirSynthConfig& c) { c.ism_order = -1; },
+       "config.ism_order must be an integer in [0, 2147483647]", "acoustic.invalid_rir_config"},
+      {"max_sec", [](SonareRirSynthConfig& c) { c.max_sec = 601.0f; },
+       "config.max_sec must be finite and in [0, 600]", "acoustic.invalid_rir_config"},
+      {"mixing_time_ms", [](SonareRirSynthConfig& c) { c.mixing_time_ms = 10001.0f; },
+       "config.mixing_time_ms must be finite and in [0, 10000]", "acoustic.invalid_rir_config"},
+      {"crossfade_ms", [](SonareRirSynthConfig& c) { c.crossfade_ms = -1.0f; },
+       "config.crossfade_ms must be finite and in [0, 1000]", "acoustic.invalid_rir_config"},
+      {"air_temperature_c",
+       [](SonareRirSynthConfig& c) {
+         c.air_absorption_enabled = 1;
+         c.air_temperature_c = -300.0f;
+       },
+       "config.air_temperature_c must be finite and greater than -273.15",
+       "acoustic.invalid_air_absorption"},
+      {"air_humidity_percent",
+       [](SonareRirSynthConfig& c) {
+         c.air_absorption_enabled = 1;
+         c.air_humidity_percent = 101.0f;
+       },
+       "config.air_humidity_percent must be finite and in [0, 100]",
+       "acoustic.invalid_air_absorption"},
+  };
+  for (const Row& row : rows) {
+    CAPTURE(row.label);
+    SonareRirSynthConfig cfg = valid_rir_config();
+    row.edit(cfg);
+    SonareRirSynthResult result{};
+    REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == row.message);
+    CHECK(has_diagnostic_code(row.diagnostic));
+    CHECK(result.rir == nullptr);
+    CHECK(result.length == 0);
+  }
+
+  SECTION("an implausible climate is not read while air absorption is off") {
+    SonareRirSynthConfig cfg = valid_rir_config();
+    cfg.air_absorption_enabled = 0;
+    cfg.air_temperature_c = -300.0f;
+    SonareRirSynthResult result{};
+    REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_OK);
+    sonare_free_rir_synth_result(&result);
+  }
+
+  SECTION("a refused field is reported before a NULL output") {
+    SonareRirSynthConfig cfg = valid_rir_config();
+    cfg.ism_order = -1;
+    REQUIRE(sonare_synthesize_rir(&cfg, 48000, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.ism_order must be an integer in [0, 2147483647]");
+  }
+}
+
 TEST_CASE("sonare acoustic C API publishes recoverable RIR diagnostics", "[c_api][acoustic]") {
   SonareRirSynthConfig cfg = valid_rir_config();
   cfg.max_sec = 0.001f;
