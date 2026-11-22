@@ -67,7 +67,8 @@ bool result_header_valid(const T* value) {
 }
 
 /// Refuses a result struct whose header was not valid when the call began.
-inline void require_result_header(bool valid) {
+/// @details Unread when the pitch editor is compiled out, whose bodies discard their arguments.
+[[maybe_unused]] inline void require_result_header(bool valid) {
   if (!valid) throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "result header");
 }
 
