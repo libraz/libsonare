@@ -1103,6 +1103,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Audio.detect_clipping(min_region_samples)` | omitted or 0 hands the core its default (was the literal 1) |
 | `Audio.mastering(true_peak_oversample)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError |
+| `Audio.pitch_correct_to_midi(current_midi)` | current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
+| `Audio.pitch_correct_to_midi(target_midi)` | target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 
 #### Closed sets are string unions, not numbers or IntEnums
 
@@ -2106,6 +2108,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `nn_filter(k)` | None takes the library default k (was the literal 7); k below 1 raises SonareValueError |
 | `nn_filter(width)` | None takes the library default width (was the literal 1); a negative width raises SonareValueError |
 | `phase_vocoder(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes; an explicit 0 or negative hop raises SonareValueError naming the function |
+| `pitch_correct_to_midi(current_midi)` | current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
+| `pitch_correct_to_midi(target_midi)` | target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 | `pitch_shift(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes |
 | `spectral_edit(heal_radius_frames)` | omitted hands the core its default (was the literal 2); an explicit 0 raises SonareValueError instead of selecting the default |
 | `spectral_edit(hop_length)` | omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError instead of selecting the default |

@@ -745,8 +745,8 @@ def pitch_shift(
 def pitch_correct_to_midi(
     samples: FloatSamples,
     sample_rate: int,
-    current_midi: float = 69.0,
-    target_midi: float = 69.0,
+    current_midi: float,
+    target_midi: float,
 ) -> np.ndarray[Any, Any]: ...
 def pitch_correct_timevarying(
     samples: FloatSamples,

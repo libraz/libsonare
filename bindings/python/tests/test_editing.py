@@ -41,6 +41,16 @@ def test_pitch_correct_to_midi_function() -> None:
     assert abs(cents_error) < 5.0
 
 
+def test_pitch_correct_to_midi_requires_both_notes() -> None:
+    # Nothing estimates the source pitch, so neither note has a default to fall back to.
+    for fn in (libsonare.pitch_correct_to_midi, libsonare.Audio.pitch_correct_to_midi):
+        params = inspect.signature(fn).parameters
+        for name in ("current_midi", "target_midi"):
+            assert params[name].default is inspect.Parameter.empty
+    with pytest.raises(TypeError):
+        libsonare.pitch_correct_to_midi(_tone(22050), 22050, 57.0)  # type: ignore[call-arg]
+
+
 def test_pitch_correct_to_midi_rejects_out_of_range() -> None:
     sr = 22050
     samples = _tone(sr)

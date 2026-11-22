@@ -917,9 +917,7 @@ class Audio:
         return _pitch_shift(self.data, self.sample_rate, pitch_semitones)
 
     @_entry("Audio.pitch_correct_to_midi")
-    def pitch_correct_to_midi(
-        self, current_midi: float = 69.0, target_midi: float = 69.0
-    ) -> np.ndarray:
+    def pitch_correct_to_midi(self, current_midi: float, target_midi: float) -> np.ndarray:
         """Pitch-correct audio from a current MIDI note to a target MIDI note."""
         return _pitch_correct_to_midi(self.data, self.sample_rate, current_midi, target_midi)
 

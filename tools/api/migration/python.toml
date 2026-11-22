@@ -836,6 +836,38 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 
 [[entry]]
 kind = "option"
+old = "pitch_correct_to_midi(current_midi)"
+changed = "current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_editing.py::test_pitch_correct_to_midi_requires_both_notes"
+
+[[entry]]
+kind = "option"
+old = "pitch_correct_to_midi(target_midi)"
+changed = "target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to"
+domain = "effects"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_editing.py::test_pitch_correct_to_midi_requires_both_notes"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_correct_to_midi(current_midi)"
+changed = "current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_editing.py::test_pitch_correct_to_midi_requires_both_notes"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_correct_to_midi(target_midi)"
+changed = "target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_editing.py::test_pitch_correct_to_midi_requires_both_notes"
+
+[[entry]]
+kind = "option"
 old = "pitch_correct_to_midi(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "effects"

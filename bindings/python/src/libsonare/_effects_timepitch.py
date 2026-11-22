@@ -133,8 +133,8 @@ def pitch_shift(
 def pitch_correct_to_midi(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    current_midi: float = 69.0,
-    target_midi: float = 69.0,
+    current_midi: float,
+    target_midi: float,
 ) -> np.ndarray:
     """Pitch-correct audio from a current MIDI note to a target MIDI note.
 
@@ -147,8 +147,8 @@ def pitch_correct_to_midi(
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz.
-        current_midi: Detected/current pitch as a MIDI note number.
-        target_midi: Desired pitch as a MIDI note number.
+        current_midi: MIDI note the audio currently sits on, in [0, 127]; nothing estimates it.
+        target_midi: MIDI note to move it to, in [0, 127].
 
     Returns:
         ``float32`` array of pitch-corrected samples.
