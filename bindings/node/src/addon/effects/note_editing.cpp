@@ -383,7 +383,7 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
-  const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
+  const float frame_rate = node_narrow_float(env, info[3], "frameRate");
 
   NoteTrackOptions options;
   if (!ReadNoteTrackOptions(env, info[4], n_frames, &options)) {
@@ -497,9 +497,9 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto f0 = info[0].As<Napi::Float32Array>();
-  const float frame_rate = node_narrow_finite_float(env, info[1], "frameRate");
-  const float median_hz = node_narrow_finite_float(env, info[2], "medianHz");
-  const float vibrato_cutoff_hz = node_narrow_finite_float(env, info[3], "vibratoCutoffHz");
+  const float frame_rate = node_narrow_float(env, info[1], "frameRate");
+  const float median_hz = node_narrow_float(env, info[2], "medianHz");
+  const float vibrato_cutoff_hz = node_narrow_float(env, info[3], "vibratoCutoffHz");
   Napi::Int32Array voiced;
   const int32_t* voiced_data = nullptr;
   const Napi::Value voiced_value = info.Length() > 4 ? info[4] : env.Undefined();
@@ -561,7 +561,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
-  const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
+  const float frame_rate = node_narrow_float(env, info[3], "frameRate");
   const size_t index = node_narrow_uint32(env, info[5], "index");
   const int32_t frame = node_narrow_int(env, info[6], "frame");
 
@@ -621,7 +621,7 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
-  const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
+  const float frame_rate = node_narrow_float(env, info[3], "frameRate");
   const size_t first = node_narrow_uint32(env, info[5], "first");
   const size_t last = node_narrow_uint32(env, info[6], "last");
 
@@ -727,10 +727,9 @@ Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
     }
     // Neither field documents a non-finite spelling, so the finite reader: an
     // infinity is out of domain rather than a request.
-    config.min_overlap_ratio =
-        FiniteFloatProperty(opts, "minOverlapRatio", config.min_overlap_ratio);
+    config.min_overlap_ratio = FloatProperty(opts, "minOverlapRatio", config.min_overlap_ratio);
     config.max_correction_semitones =
-        FiniteFloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
+        FloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
   }
 
   std::vector<SonareNoteObject> notes;

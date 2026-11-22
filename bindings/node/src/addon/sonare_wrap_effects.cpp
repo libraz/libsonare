@@ -140,7 +140,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
-  float rate = node_narrow_finite_float(env, info[2], "speedRatio");
+  float rate = node_narrow_float(env, info[2], "speedRatio");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -172,7 +172,7 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
-  float semitones = node_narrow_finite_float(env, info[2], "semitones");
+  float semitones = node_narrow_float(env, info[2], "semitones");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -213,8 +213,8 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
-  float current_midi = node_narrow_finite_float(env, info[2], "currentMidi");
-  float target_midi = node_narrow_finite_float(env, info[3], "targetMidi");
+  float current_midi = node_narrow_float(env, info[2], "currentMidi");
+  float target_midi = node_narrow_float(env, info[3], "targetMidi");
 
   sonare::validate_offline_audio_input("samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
@@ -248,7 +248,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
-  float target_midi = node_narrow_finite_float(env, info[3], "targetMidi");
+  float target_midi = node_narrow_float(env, info[3], "targetMidi");
   int hop_length = node_narrow_int(env, info[4], "hopLength");
   const size_t n_frames = f0.ElementLength();
 
@@ -478,7 +478,7 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sampleRate");
   int onset_sample = node_narrow_int(env, info[2], "onsetSample");
   int offset_sample = node_narrow_int(env, info[3], "offsetSample");
-  float stretch_ratio = node_narrow_finite_float(env, info[4], "stretchRatio");
+  float stretch_ratio = node_narrow_float(env, info[4], "stretchRatio");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input("samples", data, length, sr);
@@ -543,8 +543,8 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
-  float pitch_semitones = node_narrow_finite_float(env, info[2], "pitchSemitones");
-  float formant_factor = node_narrow_finite_float(env, info[3], "formantFactor");
+  float pitch_semitones = node_narrow_float(env, info[2], "pitchSemitones");
+  float formant_factor = node_narrow_float(env, info[3], "formantFactor");
   std::string formant_mode;
   if (!RequiredStringValue(env, info[4], "formantMode", &formant_mode)) {
     return env.Undefined();
@@ -611,8 +611,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float threshold_db{};
-  if (!OptionalFiniteFloatArg(env, info, 2, "thresholdDb", -60.0f, &threshold_db))
-    return env.Undefined();
+  if (!OptionalFloatArg(env, info, 2, "thresholdDb", -60.0f, &threshold_db)) return env.Undefined();
   int frame_length{};
   if (!OptionalDomainArg(env, info, 3, "frameLength", sonare::constants::kDefaultNFft,
                          sonare::kSilenceFrameLengthDomain, &frame_length)) {
@@ -675,10 +674,9 @@ Napi::Value SonareWrap::BiquadFilter(const Napi::CallbackInfo& info) {
       !RequiredIntArg(env, info, 2, "type", &config.type) ||
       !OptionalIntArg(env, info, 3, "order", config.order, &config.order) ||
       !OptionalBoolArg(env, info, 4, "zeroPhase", zero_phase, &zero_phase) ||
-      !OptionalFiniteFloatArg(env, info, 5, "cutoffHz", config.cutoff_hz, &config.cutoff_hz) ||
-      !OptionalFiniteFloatArg(env, info, 6, "centerHz", config.center_hz, &config.center_hz) ||
-      !OptionalFiniteFloatArg(env, info, 7, "bandwidthHz", config.bandwidth_hz,
-                              &config.bandwidth_hz)) {
+      !OptionalFloatArg(env, info, 5, "cutoffHz", config.cutoff_hz, &config.cutoff_hz) ||
+      !OptionalFloatArg(env, info, 6, "centerHz", config.center_hz, &config.center_hz) ||
+      !OptionalFloatArg(env, info, 7, "bandwidthHz", config.bandwidth_hz, &config.bandwidth_hz)) {
     return env.Undefined();
   }
   config.zero_phase = zero_phase ? 1 : 0;
@@ -709,7 +707,7 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float target_db{};
-  if (!OptionalFiniteFloatArg(env, info, 2, "targetDb", 0.0f, &target_db)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 2, "targetDb", 0.0f, &target_db)) return env.Undefined();
   std::string mode;
   if (!OptionalStringArg(env, info, 3, "mode", "peak", &mode)) {
     return env.Undefined();

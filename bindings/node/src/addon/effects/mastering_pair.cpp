@@ -45,10 +45,8 @@ void ReadStreamingPlatforms(const Napi::Array& input,
     float target_lufs = 0.0f;
     float ceiling_dbtp = 0.0f;
     if (!RequiredStringValue(env, field("name"), subject + ".name", &name) ||
-        !RequiredFiniteFloatValue(env, field("targetLufs"), subject + ".targetLufs",
-                                  &target_lufs) ||
-        !RequiredFiniteFloatValue(env, field("ceilingDbtp"), subject + ".ceilingDbtp",
-                                  &ceiling_dbtp)) {
+        !RequiredFloatValue(env, field("targetLufs"), subject + ".targetLufs", &target_lufs) ||
+        !RequiredFloatValue(env, field("ceilingDbtp"), subject + ".ceilingDbtp", &ceiling_dbtp)) {
       throw env.GetAndClearPendingException();
     }
     out->push_back({name, target_lufs, ceiling_dbtp});

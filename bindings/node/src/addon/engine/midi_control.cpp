@@ -60,9 +60,9 @@ bool ReadControllerBinding(Napi::Env env, const Napi::Value& value, SonareContro
   out->input = static_cast<uint8_t>(input);
   out->axis = static_cast<uint8_t>(axis);
   out->index = MidiByteProperty(env, obj, "index", 0);
-  out->lo = sonare_node::FiniteFloatProperty(obj, "lo", 0.0f);
-  out->hi = sonare_node::FiniteFloatProperty(obj, "hi", 1.0f);
-  out->curve = sonare_node::FiniteFloatProperty(obj, "curve", 1.0f);
+  out->lo = sonare_node::FloatProperty(obj, "lo", 0.0f);
+  out->hi = sonare_node::FloatProperty(obj, "hi", 1.0f);
+  out->curve = sonare_node::FloatProperty(obj, "curve", 1.0f);
   return !env.IsExceptionPending();
 }
 

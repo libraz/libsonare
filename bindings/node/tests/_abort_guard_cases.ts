@@ -2627,6 +2627,118 @@ export const CASES: AbortGuardCase[] = [
       },
     ],
   },
+  {
+    // The target fields are read by name through the value readers, so the
+    // refusal names the indexed field.
+    name: 'addon.assignNoteTargets',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'targetMidi',
+        call: () =>
+          addon.assignNoteTargets([], SR, [{ startSec: 0, endSec: 1, targetMidi: 'x' }]),
+        message: /targetMidi/,
+      },
+      {
+        argument: 'targetMidi NaN',
+        call: () =>
+          addon.assignNoteTargets([], SR, [{ startSec: 0, endSec: 1, targetMidi: Number.NaN }]),
+        error: RangeError,
+        message: /targetMidi/,
+      },
+    ],
+  },
+  ...(
+    [
+      ['addon.padCenter', (v: unknown) => addon.padCenter(samples(), 8, v)],
+      ['addon.fixLength', (v: unknown) => addon.fixLength(samples(), 8, v)],
+    ] as const
+  ).map(([name, run]) => ({
+    name,
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'padValue', call: () => run('x'), message: /padValue/ },
+      {
+        argument: 'padValue NaN',
+        call: () => run(Number.NaN),
+        error: RangeError,
+        message: /padValue/,
+      },
+    ],
+  })),
+  ...(
+    [
+      ['addon.tuningToReferenceHz', (v: unknown) => addon.tuningToReferenceHz(0, v)],
+      ['addon.referenceHzToTuning', (v: unknown) => addon.referenceHzToTuning(440, v)],
+    ] as const
+  ).map(([name, run]) => ({
+    name,
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'a4', call: () => run('x'), message: /a4/ },
+      { argument: 'a4 NaN', call: () => run(Number.NaN), error: RangeError, message: /a4/ },
+    ],
+  })),
+  ...(
+    [
+      ['addon.scaleQuantizeMidi', addon.scaleQuantizeMidi],
+      ['addon.scaleCorrectionSemitones', addon.scaleCorrectionSemitones],
+    ] as const
+  ).map(([name, fn]) => ({
+    name,
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'scaleReferenceMidi', call: () => fn(0, 0xfff, 60.5, 'x'), message: /scaleReferenceMidi/ },
+      {
+        argument: 'scaleReferenceMidi NaN',
+        call: () => fn(0, 0xfff, 60.5, Number.NaN),
+        error: RangeError,
+        message: /scaleReferenceMidi/,
+      },
+    ],
+  })),
+  {
+    name: 'addon.trim',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'thresholdDb', call: () => addon.trim(samples(), SR, 'x'), message: /thresholdDb/ },
+      {
+        argument: 'thresholdDb NaN',
+        call: () => addon.trim(samples(), SR, Number.NaN),
+        error: RangeError,
+        message: /thresholdDb/,
+      },
+    ],
+  },
+  ...(
+    [
+      ['StreamingEqualizer.setGainScale', 'setGainScale', 'scale'],
+      ['StreamingEqualizer.setOutputGainDb', 'setOutputGainDb', 'gainDb'],
+      ['StreamingEqualizer.setOutputPan', 'setOutputPan', 'pan'],
+    ] as const
+  ).map(([name, method, argument]) => {
+    const run = (v: unknown) => {
+      const eq = new addon.StreamingEqualizer({ sampleRate: SR, maxBlockSize: 512 });
+      try {
+        eq[method](v);
+      } finally {
+        eq.destroy();
+      }
+    };
+    return {
+      name,
+      missingRequired: [],
+      rejectsArgument: [
+        { argument, call: () => run('x'), message: new RegExp(argument) },
+        {
+          argument: `${argument} NaN`,
+          call: () => run(Number.NaN),
+          error: RangeError,
+          message: new RegExp(argument),
+        },
+      ],
+    };
+  }),
   ...NAMED_OPTIONAL_REFUSALS.map(([name, argument, call]) => ({
     name,
     missingRequired: [],

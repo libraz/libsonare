@@ -125,7 +125,7 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
   if (!RequireNumberValue(env, info[0], "time")) return env.Undefined();
 
   SONARE_NODE_TRY
-  float time = node_narrow_finite_float(env, info[0], "time");
+  float time = node_narrow_float(env, info[0], "time");
   int sr{};
   if (!RequiredDomainArg(env, info, 1, "sampleRate", sonare::kFrameTimeSampleRateDomain, &sr)) {
     return env.Undefined();

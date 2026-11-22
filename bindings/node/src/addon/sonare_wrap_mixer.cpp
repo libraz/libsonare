@@ -364,7 +364,7 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
   const unsigned int param_id = node_domain_number<unsigned int>(
       info[2], "paramId", sonare_c_detail::kStripInsertAutomationParamIdDomain);
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[3], "samplePos");
-  const float value = sonare_node::node_narrow_finite_float(env, info[4], "value");
+  const float value = sonare_node::node_narrow_float(env, info[4], "value");
   int curve{};
   if (!RequiredDomainArg<int>(env, info, 5, "curve", sonare_c_detail::kStripAutomationCurveDomain,
                               &curve))

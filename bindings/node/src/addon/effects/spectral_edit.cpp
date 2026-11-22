@@ -111,7 +111,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
     ops[i].start_sample = Int64Property(op, "startSample", 0);
     ops[i].end_sample = Int64Property(op, "endSample", static_cast<int64_t>(length));
     ops[i].low_hz = FloatProperty(op, "lowHz", 0.0f);
-    ops[i].high_hz = FiniteFloatProperty(op, "highHz", ops[i].high_hz);
+    ops[i].high_hz = FloatProperty(op, "highHz", ops[i].high_hz);
     ops[i].gain_db = FloatProperty(op, "gainDb", ops[i].gain_db);
 
     // Resolve mode: required string field.

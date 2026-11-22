@@ -170,7 +170,7 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
     hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyHopLengthDomain);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
-    chroma_high_pass_hz = FiniteFloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
+    chroma_high_pass_hz = FloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");
@@ -229,7 +229,7 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
     hop_length = DomainProperty<int>(options, "hopLength", hop_length, sonare::kKeyHopLengthDomain);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
-    chroma_high_pass_hz = FiniteFloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
+    chroma_high_pass_hz = FloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");

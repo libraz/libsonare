@@ -791,7 +791,7 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
     if (!RequiredDoubleProperty(env, obj, "ppq", &point.ppq)) return env.Undefined();
     const Napi::Value point_value = obj.Get("value");
     node_require_property_type(env, point_value.IsNumber(), "value", "a number");
-    point.value = node_narrow_finite_float(env, point_value, "value");
+    point.value = node_narrow_float(env, point_value, "value");
     if (!RequiredIntProperty(env, obj, "curveToNext", &point.curve_to_next)) {
       return env.Undefined();
     }

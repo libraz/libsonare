@@ -81,7 +81,7 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
       FloatProperty(opts, "minPartialSeparation", out->min_partial_separation);
   out->max_fit_residual = FloatProperty(opts, "maxFitResidual", out->max_fit_residual);
   out->max_weight_modulus = FloatProperty(opts, "maxWeightModulus", out->max_weight_modulus);
-  out->max_refine_hz = FiniteFloatProperty(opts, "maxRefineHz", out->max_refine_hz);
+  out->max_refine_hz = FloatProperty(opts, "maxRefineHz", out->max_refine_hz);
   out->f0_tolerance_cents = FloatProperty(opts, "f0ToleranceCents", out->f0_tolerance_cents);
 
   out->segmentation_threshold_cents =

@@ -761,7 +761,7 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float frame_rate{};
-  if (!RequiredFiniteFloatValue(env, info[3], "frameRate", &frame_rate)) return env.Undefined();
+  if (!RequiredFloatValue(env, info[3], "frameRate", &frame_rate)) return env.Undefined();
 
   std::vector<int32_t> flags_i32;
   if (has_flags) flags_i32.assign(voiced_flags.Data(), voiced_flags.Data() + voicing_length);

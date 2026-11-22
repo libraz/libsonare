@@ -166,7 +166,7 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float beta{};
-  if (!OptionalFiniteFloatArg(env, info, 5, "beta", sonare::kDecomposeDefaultBeta, &beta)) {
+  if (!OptionalFloatArg(env, info, 5, "beta", sonare::kDecomposeDefaultBeta, &beta)) {
     return env.Undefined();
   }
   // Optional 7th arg selects the initialiser ("random" | "nndsvd"); omitted is the default.
@@ -394,7 +394,7 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_narrow_int(env, info[1], "sampleRate");
-  float rate = node_narrow_finite_float(env, info[2], "speedRatio");
+  float rate = node_narrow_float(env, info[2], "speedRatio");
   int n_fft{};
   if (!OptionalIntArg(env, info, 3, "nFft", sonare::constants::kDefaultNFft, &n_fft))
     return env.Undefined();

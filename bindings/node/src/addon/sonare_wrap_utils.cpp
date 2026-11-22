@@ -436,14 +436,14 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   options->n_fft = IntProperty(object, "nFft", options->n_fft);
   options->hop_length =
       DomainProperty(object, "hopLength", options->hop_length, sonare::kMusicCountDomain);
-  options->bpm_min = FiniteFloatProperty(object, "bpmMin", options->bpm_min);
-  options->bpm_max = FiniteFloatProperty(object, "bpmMax", options->bpm_max);
-  options->start_bpm = FiniteFloatProperty(object, "startBpm", options->start_bpm);
+  options->bpm_min = FloatProperty(object, "bpmMin", options->bpm_min);
+  options->bpm_max = FloatProperty(object, "bpmMax", options->bpm_max);
+  options->start_bpm = FloatProperty(object, "startBpm", options->start_bpm);
   options->use_triads_only =
       BoolProperty(object, "useTriadsOnly", options->use_triads_only != 0) ? 1 : 0;
   options->use_hpss = BoolProperty(object, "useHpss", options->use_hpss != 0) ? 1 : 0;
   options->chroma_high_pass_hz =
-      FiniteFloatProperty(object, "chromaHighPassHz", options->chroma_high_pass_hz);
+      FloatProperty(object, "chromaHighPassHz", options->chroma_high_pass_hz);
   options->use_bass_weighted =
       BoolProperty(object, "useBassWeighted", options->use_bass_weighted != 0) ? 1 : 0;
   options->chroma_hop_multiplier = DomainProperty(

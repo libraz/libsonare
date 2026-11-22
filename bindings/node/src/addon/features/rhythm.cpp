@@ -108,7 +108,7 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float bpm_min = sonare::kCyclicTempogramBpmMin;
-  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMin", bpm_min, &bpm_min)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 4, "bpmMin", bpm_min, &bpm_min)) return env.Undefined();
   int n_bins{};
   if (!OptionalDomainArg(env, info, 5, "nBins", sonare::kCyclicTempogramBins,
                          sonare::kRhythmCountDomain, &n_bins)) {
@@ -144,10 +144,10 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   }
   const sonare::PlpConfig plp_defaults;
   float bpm_min{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "bpmMin", plp_defaults.tempo_min, &bpm_min))
+  if (!OptionalFloatArg(env, info, 3, "bpmMin", plp_defaults.tempo_min, &bpm_min))
     return env.Undefined();
   float bpm_max{};
-  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMax", plp_defaults.tempo_max, &bpm_max))
+  if (!OptionalFloatArg(env, info, 4, "bpmMax", plp_defaults.tempo_max, &bpm_max))
     return env.Undefined();
   int win{};
   if (!OptionalDomainArg(env, info, 5, "winLength", 384, sonare::kTempogramWinLengthDomain, &win)) {
@@ -307,8 +307,7 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float blend_weight{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "blendWeight", 0.55f, &blend_weight))
-    return env.Undefined();
+  if (!OptionalFloatArg(env, info, 3, "blendWeight", 0.55f, &blend_weight)) return env.Undefined();
   int blend_n_fft{};
   if (!OptionalIntArg(env, info, 4, "stftBlendNFft", 4096, &blend_n_fft)) return env.Undefined();
   int hop_length{};

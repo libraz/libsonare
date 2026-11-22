@@ -344,7 +344,7 @@ inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const c
     auto arr = value.As<Napi::Array>();
     std::vector<float> out(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out[i] = node_narrow_finite_float_element(value.Env(), arr.Get(i), name, i);
+      out[i] = node_narrow_float_element(value.Env(), arr.Get(i), name, i);
     }
     return out;
   }

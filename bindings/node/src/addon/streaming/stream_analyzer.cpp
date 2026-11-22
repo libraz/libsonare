@@ -503,7 +503,7 @@ Napi::Value StreamAnalyzerWrap::SetExpectedDuration(const Napi::CallbackInfo& in
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  analyzer_->set_expected_duration(node_narrow_finite_float(env, info[0], "durationSec"));
+  analyzer_->set_expected_duration(node_narrow_float(env, info[0], "durationSec"));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -516,7 +516,7 @@ Napi::Value StreamAnalyzerWrap::SetNormalizationGain(const Napi::CallbackInfo& i
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  analyzer_->set_normalization_gain(node_narrow_finite_float(env, info[0], "gain"));
+  analyzer_->set_normalization_gain(node_narrow_float(env, info[0], "gain"));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -529,7 +529,7 @@ Napi::Value StreamAnalyzerWrap::SetReferenceHz(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  analyzer_->set_tuning_ref_hz(node_narrow_finite_float(env, info[0], "referenceHz"));
+  analyzer_->set_tuning_ref_hz(node_narrow_float(env, info[0], "referenceHz"));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

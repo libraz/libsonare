@@ -183,8 +183,8 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input("samples", data, length, sr);
 
   sonare::mastering::maximizer::LoudnessOptimizeConfig config;
-  if (!OptionalFiniteFloatArg(env, info, 2, "targetLufs", -14.0f, &config.target_lufs) ||
-      !OptionalFiniteFloatArg(env, info, 3, "ceilingDbtp", -1.0f, &config.ceiling_dbtp)) {
+  if (!OptionalFloatArg(env, info, 2, "targetLufs", -14.0f, &config.target_lufs) ||
+      !OptionalFloatArg(env, info, 3, "ceilingDbtp", -1.0f, &config.ceiling_dbtp)) {
     return env.Undefined();
   }
   // 0 is the C-ABI sentinel for the library default; any other value reaches
@@ -193,7 +193,7 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   float release_ms = 0.0f;
   bool apply_gain_at_input_rate = false;
   if (!OptionalIntArg(env, info, 4, "oversampleFactor", 0, &oversample) ||
-      !OptionalFiniteFloatArg(env, info, 5, "releaseMs", 0.0f, &release_ms) ||
+      !OptionalFloatArg(env, info, 5, "releaseMs", 0.0f, &release_ms) ||
       !OptionalBoolArg(env, info, 6, "applyGainAtInputRate", false, &apply_gain_at_input_rate)) {
     return env.Undefined();
   }

@@ -24,7 +24,6 @@ constexpr uint32_t kExpectedProjectAbiVersion = SONARE_PROJECT_ABI_VERSION;
 using sonare_node::AbsentIsSentinel;
 using sonare_node::BoolProperty;
 using sonare_node::DoubleProperty;
-using sonare_node::FiniteFloatProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int32Arg;
 using sonare_node::Int32Value;

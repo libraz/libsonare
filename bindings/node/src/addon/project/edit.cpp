@@ -281,7 +281,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   desc.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
   desc.length_ppq = DoubleProperty(obj, "lengthPpq", 0.0);
   desc.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", 0.0);
-  desc.gain = FiniteFloatProperty(obj, "gain", 1.0f);
+  desc.gain = FloatProperty(obj, "gain", 1.0f);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 0);
 
   // Keep the interleaved samples alive (as a copy) for the duration of the call.

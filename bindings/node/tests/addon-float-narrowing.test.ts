@@ -87,6 +87,9 @@ const SWELLING = (() => {
 })();
 
 /** Sixteen decaying transients at 120 BPM, so a tempo bound has a peak to include or exclude. */
+/** Too short for the tempo search to hold one lag, so the BPM prior is the answer. */
+const SHORT_TONE = Float32Array.from({ length: 256 }, (_, i) => 0.5 * Math.sin(0.3 * i));
+
 const PULSED = (() => {
   const out = new Float32Array(SAMPLE_RATE * 8);
   for (let beat = 0; beat < 16; beat++) {
@@ -208,8 +211,129 @@ interface FloatArgument {
   call: (value: number) => unknown;
 }
 
+/** Four chords, eight seconds, so a chord-detection bound has segments to merge or drop. */
+const CHORDS = (() => {
+  const roots = [
+    [261.6, 329.6, 392],
+    [220, 261.6, 329.6],
+    [174.6, 220, 261.6],
+    [196, 246.9, 293.7],
+  ];
+  const out = new Float32Array(SAMPLE_RATE * 8);
+  for (let i = 0; i < out.length; i++) {
+    let sample = 0;
+    for (const hz of roots[Math.floor(i / (SAMPLE_RATE * 0.5)) % 4]) {
+      sample += 0.2 * Math.sin((2 * Math.PI * hz * i) / SAMPLE_RATE);
+    }
+    out[i] = sample;
+  }
+  return out;
+})();
+
 /**
- * Every argument routed through `OptionalFiniteFloatArg`.
+ * `detectChords` with the options the three float bounds act on: beat sync off,
+ * because the beat-synchronous path never reads the smoothing window or the
+ * threshold. Everything past the bounds is the entry point's own default.
+ */
+function detectChordsWith(minDuration: number, smoothing: number, threshold: number): unknown {
+  return JSON.stringify(
+    native.detectChords(
+      CHORDS,
+      SAMPLE_RATE,
+      minDuration,
+      smoothing,
+      threshold,
+      false,
+      2048,
+      512,
+      false,
+      false,
+      ...Array(6).fill(undefined),
+      0,
+      false,
+    ),
+  );
+}
+
+/** `chordFunctionalAnalysis`, positioned like `detectChordsWith`. */
+function functionalChordsWith(minDuration: number, smoothing: number, threshold: number): unknown {
+  return JSON.stringify(
+    native.chordFunctionalAnalysis(
+      CHORDS,
+      undefined,
+      undefined,
+      SAMPLE_RATE,
+      minDuration,
+      smoothing,
+      threshold,
+      false,
+      2048,
+      512,
+      false,
+      false,
+      ...Array(4).fill(undefined),
+      0,
+      false,
+    ),
+  );
+}
+
+/** The pulsed fixture as an Audio handle, for the instance tempo methods. */
+const PULSED_AUDIO = native.Audio.fromBuffer(PULSED, SAMPLE_RATE);
+
+/** Two click times, so a click's frequency and duration both reach the rendered samples. */
+const CLICK_TIMES = Float32Array.from([0.05, 0.2]);
+
+/** A MIDI 1.0 CC pair on controller 1 and its fine byte, which a learn run turns into a binding. */
+const CC_LEARN_EVENTS = [
+  { ppq: 0, word0: 0x40b20140 | 0 },
+  { ppq: 0.1, word0: 0x40b22100 },
+];
+
+const KNOWN_AMPLITUDES = Float32Array.from([1, 0.5, 0.01, 1e-5]);
+const KNOWN_DECIBELS = Float32Array.from([0, -10]);
+
+/** A project holding one track and one clip, read back through its serialised form. */
+function projectAfter(
+  /* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
+  act: (project: any, trackId: number, clipId: number) => void,
+): string {
+  /* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
+  const project = new native.Project() as any;
+  try {
+    const trackId = project.addTrack({ kind: 0, name: 'lead' });
+    const clipId = project.addClip({
+      trackId,
+      startPpq: 0,
+      lengthPpq: 4,
+      gain: 1,
+      audio: new Float32Array(480),
+      audioChannels: 1,
+      audioSampleRate: 48000,
+    });
+    act(project, trackId, clipId);
+    return project.toJson();
+  } finally {
+    project.destroy?.();
+  }
+}
+
+/** The output of a monitored input block at the given monitor gain. */
+function inputMonitorOutput(gain: number): number {
+  /* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
+  const engine = new native.RealtimeEngine(48000, 128) as any;
+  try {
+    engine.setInputMonitor(true, gain);
+    engine.play();
+    const block = new Float32Array(128).fill(0.25);
+    return magnitudeSum(engine.process([block, new Float32Array(block)])[0]);
+  } finally {
+    engine.destroy();
+  }
+}
+
+/**
+ * Every argument routed through `OptionalFloatArg`.
  *
  * `site` is the reader call, not the entry point: `cqt`, `pseudoCqt` and
  * `hybridCqt` share one `fmin` read through `CqtLike`, and `referenceMidi` is
@@ -622,6 +746,331 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     control: [0, 1],
     call: (v) => native.deemphasis(Float32Array.from([1, 2, 3, 4]), 0.97, v)[0],
   },
+  {
+    name: 'Audio.detectBpm bpmMin',
+    site: 'sonare_wrap.cpp DetectBpmInstance bpmMin',
+    control: [60, 130],
+    call: (v) => PULSED_AUDIO.detectBpm(v, 200),
+  },
+  {
+    name: 'Audio.detectBpm bpmMax',
+    site: 'sonare_wrap.cpp DetectBpmInstance bpmMax',
+    control: [200, 100],
+    call: (v) => PULSED_AUDIO.detectBpm(60, v),
+  },
+  {
+    name: 'Audio.detectBeats bpmMin',
+    site: 'sonare_wrap.cpp DetectBeatsInstance bpmMin',
+    control: [60, 130],
+    call: (v) => JSON.stringify(PULSED_AUDIO.detectBeats(v, 200)),
+  },
+  {
+    name: 'Audio.detectBeats bpmMax',
+    site: 'sonare_wrap.cpp DetectBeatsInstance bpmMax',
+    control: [200, 100],
+    call: (v) => JSON.stringify(PULSED_AUDIO.detectBeats(60, v)),
+  },
+  {
+    name: 'detectBpm bpmMin',
+    site: 'sonare_wrap_analysis.cpp DetectBpm bpmMin',
+    control: [60, 130],
+    call: (v) => native.detectBpm(PULSED, SAMPLE_RATE, v, 200),
+  },
+  {
+    name: 'detectBpm bpmMax',
+    site: 'sonare_wrap_analysis.cpp DetectBpm bpmMax',
+    control: [200, 100],
+    call: (v) => native.detectBpm(PULSED, SAMPLE_RATE, 60, v),
+  },
+  {
+    name: 'detectBeats bpmMin',
+    site: 'sonare_wrap_analysis.cpp DetectBeats bpmMin',
+    control: [60, 130],
+    call: (v) => JSON.stringify(native.detectBeats(PULSED, SAMPLE_RATE, v, 200)),
+  },
+  {
+    name: 'detectBeats bpmMax',
+    site: 'sonare_wrap_analysis.cpp DetectBeats bpmMax',
+    control: [200, 100],
+    call: (v) => JSON.stringify(native.detectBeats(PULSED, SAMPLE_RATE, 60, v)),
+  },
+  {
+    name: 'analyzeBpm bpmMin',
+    site: 'sonare_wrap_analysis.cpp AnalyzeBpm bpmMin',
+    control: [60, 130],
+    call: (v) => JSON.stringify(native.analyzeBpm(PULSED, SAMPLE_RATE, v, 200, 120, 2048, 512, 3)),
+  },
+  {
+    name: 'analyzeBpm bpmMax',
+    site: 'sonare_wrap_analysis.cpp AnalyzeBpm bpmMax',
+    control: [200, 100],
+    call: (v) => JSON.stringify(native.analyzeBpm(PULSED, SAMPLE_RATE, 60, v, 120, 2048, 512, 3)),
+  },
+  {
+    name: 'analyzeBpm startBpm',
+    site: 'sonare_wrap_analysis.cpp AnalyzeBpm startBpm',
+    // The prior is the answer only when the input is too short to hold one lag.
+    control: [90, 150],
+    call: (v) =>
+      JSON.stringify(native.analyzeBpm(SHORT_TONE, SAMPLE_RATE, 60, 200, v, 2048, 512, 3)),
+  },
+  {
+    name: 'analyzeRhythm startBpm',
+    site: 'sonare_wrap_analysis.cpp AnalyzeRhythm startBpm',
+    control: [90, 150],
+    call: (v) =>
+      JSON.stringify(native.analyzeRhythm(SHORT_TONE, SAMPLE_RATE, 60, 200, v, 2048, 512)),
+  },
+  {
+    name: 'analyzeRhythm bpmMin',
+    site: 'sonare_wrap_analysis.cpp AnalyzeRhythm bpmMin',
+    control: [60, 130],
+    call: (v) => JSON.stringify(native.analyzeRhythm(PULSED, SAMPLE_RATE, v, 200, 120, 2048, 512)),
+  },
+  {
+    name: 'analyzeRhythm bpmMax',
+    site: 'sonare_wrap_analysis.cpp AnalyzeRhythm bpmMax',
+    control: [200, 100],
+    call: (v) => JSON.stringify(native.analyzeRhythm(PULSED, SAMPLE_RATE, 60, v, 120, 2048, 512)),
+  },
+  {
+    name: 'detectChords minDuration',
+    site: 'sonare_wrap_analysis.cpp DetectChords minDuration',
+    control: [0, 3],
+    call: (v) => detectChordsWith(v, 2, 0.5),
+  },
+  {
+    name: 'detectChords smoothingWindow',
+    site: 'sonare_wrap_analysis.cpp DetectChords smoothingWindow',
+    control: [0, 8],
+    call: (v) => detectChordsWith(0.3, v, 0.5),
+  },
+  {
+    name: 'detectChords threshold',
+    site: 'sonare_wrap_analysis.cpp DetectChords threshold',
+    control: [0, 0.99],
+    call: (v) => detectChordsWith(0.3, 2, v),
+  },
+  {
+    name: 'chordFunctionalAnalysis minDuration',
+    site: 'sonare_wrap_analysis.cpp FunctionalAnalysis minDuration',
+    control: [0, 3],
+    call: (v) => functionalChordsWith(v, 2, 0.5),
+  },
+  {
+    name: 'chordFunctionalAnalysis smoothingWindow',
+    site: 'sonare_wrap_analysis.cpp FunctionalAnalysis smoothingWindow',
+    control: [0, 8],
+    call: (v) => functionalChordsWith(0.3, v, 0.5),
+  },
+  {
+    name: 'chordFunctionalAnalysis threshold',
+    site: 'sonare_wrap_analysis.cpp FunctionalAnalysis threshold',
+    control: [0, 0.99],
+    call: (v) => functionalChordsWith(0.3, 2, v),
+  },
+  {
+    name: 'fade fadeInSec',
+    site: 'sonare_wrap_effects.cpp Fade fadeInSec',
+    control: [0, 0.5],
+    call: (v) => magnitudeSum(native.fade(AUDIO, SAMPLE_RATE, v, 0)),
+  },
+  {
+    name: 'fade fadeOutSec',
+    site: 'sonare_wrap_effects.cpp Fade fadeOutSec',
+    control: [0, 0.5],
+    call: (v) => magnitudeSum(native.fade(AUDIO, SAMPLE_RATE, 0, v)),
+  },
+  {
+    name: 'normalizeStereo targetDb',
+    site: 'sonare_wrap_effects.cpp NormalizeStereo targetDb',
+    control: [0, -6],
+    call: (v) => JSON.stringify(native.normalizeStereo(AUDIO, AUDIO, SAMPLE_RATE, v)),
+  },
+  {
+    name: 'melSpectrogram fmin',
+    site: 'sonare_wrap_features.cpp MelSpectrogramFn fmin',
+    control: [0, 300],
+    call: (v) =>
+      JSON.stringify(native.melSpectrogram(AUDIO, SAMPLE_RATE, 1024, 256, 32, v, 0, false)),
+  },
+  {
+    name: 'melSpectrogram fmax',
+    site: 'sonare_wrap_features.cpp MelSpectrogramFn fmax',
+    control: [0, 4000],
+    call: (v) =>
+      JSON.stringify(native.melSpectrogram(AUDIO, SAMPLE_RATE, 1024, 256, 32, 0, v, false)),
+  },
+  {
+    name: 'mfcc fmin',
+    site: 'sonare_wrap_features.cpp Mfcc fmin',
+    control: [0, 300],
+    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, v)),
+  },
+  {
+    name: 'mfcc fmax',
+    site: 'sonare_wrap_features.cpp Mfcc fmax',
+    control: [0, 2000],
+    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, 0, v)),
+  },
+  {
+    name: 'mfcc lifter',
+    site: 'sonare_wrap_features.cpp Mfcc lifter',
+    control: [0, 22],
+    call: (v) => JSON.stringify(native.mfcc(AUDIO, SAMPLE_RATE, 512, 256, 32, 13, 0, 0, false, v)),
+  },
+  {
+    name: 'piptrack fminHz',
+    site: 'sonare_wrap_features.cpp Piptrack fminHz',
+    control: [150, 1000],
+    call: (v) => JSON.stringify(native.piptrack(AUDIO, SAMPLE_RATE, 1024, 256, v, 4000, 0.1)),
+  },
+  {
+    name: 'piptrack fmaxHz',
+    site: 'sonare_wrap_features.cpp Piptrack fmaxHz',
+    control: [4000, 500],
+    call: (v) => JSON.stringify(native.piptrack(AUDIO, SAMPLE_RATE, 1024, 256, 150, v, 0.1)),
+  },
+  {
+    name: 'piptrack threshold',
+    site: 'sonare_wrap_features.cpp Piptrack threshold',
+    control: [0.1, 0.9],
+    call: (v) => JSON.stringify(native.piptrack(AUDIO, SAMPLE_RATE, 1024, 256, 150, 4000, v)),
+  },
+  {
+    name: 'reassignedSpectrogram refPower',
+    site: 'sonare_wrap_features.cpp ReassignedSpectrogram refPower',
+    control: [1e-6, 1],
+    call: (v) => JSON.stringify(native.reassignedSpectrogram(AUDIO, SAMPLE_RATE, 1024, 256, v)),
+  },
+  {
+    name: 'pitchYin f0MinHz',
+    site: 'sonare_wrap_features.cpp PitchYin f0MinHz',
+    control: [65, 500],
+    call: (v) => JSON.stringify(native.pitchYin(AUDIO, SAMPLE_RATE, 2048, 512, v, 2093, 0.1)),
+  },
+  {
+    name: 'pitchYin f0MaxHz',
+    site: 'sonare_wrap_features.cpp PitchYin f0MaxHz',
+    control: [2093, 150],
+    call: (v) => JSON.stringify(native.pitchYin(AUDIO, SAMPLE_RATE, 2048, 512, 65, v, 0.1)),
+  },
+  {
+    name: 'pitchYin threshold',
+    site: 'sonare_wrap_features.cpp PitchYin threshold',
+    control: [0.1, 0.9],
+    call: (v) => JSON.stringify(native.pitchYin(AUDIO, SAMPLE_RATE, 2048, 512, 65, 2093, v)),
+  },
+  {
+    name: 'pitchPyin f0MinHz',
+    site: 'sonare_wrap_features.cpp PitchPyin f0MinHz',
+    control: [65, 500],
+    call: (v) =>
+      JSON.stringify(native.pitchPyin(AUDIO, SAMPLE_RATE, 2048, 512, v, 2093, 0.1, false)),
+  },
+  {
+    name: 'pitchPyin f0MaxHz',
+    site: 'sonare_wrap_features.cpp PitchPyin f0MaxHz',
+    control: [2093, 150],
+    call: (v) => JSON.stringify(native.pitchPyin(AUDIO, SAMPLE_RATE, 2048, 512, 65, v, 0.1, false)),
+  },
+  {
+    name: 'pitchPyin threshold',
+    site: 'sonare_wrap_features.cpp PitchPyin threshold',
+    control: [0.1, 0.9],
+    call: (v) =>
+      JSON.stringify(native.pitchPyin(AUDIO, SAMPLE_RATE, 2048, 512, 65, 2093, v, false)),
+  },
+  {
+    name: 'tone duration',
+    site: 'features/signal.cpp Tone duration',
+    control: [0.1, 0.5],
+    call: (v) => native.tone(440, SAMPLE_RATE, v).length,
+  },
+  {
+    name: 'tone phase',
+    site: 'features/signal.cpp Tone phase',
+    control: [0, 1.5],
+    call: (v) => JSON.stringify(native.tone(440, SAMPLE_RATE, 0.1, v).slice(0, 8)),
+  },
+  {
+    name: 'tone amplitude',
+    site: 'features/signal.cpp Tone amplitude',
+    control: [1, 0.5],
+    call: (v) => magnitudeSum(native.tone(440, SAMPLE_RATE, 0.1, 0, v)),
+  },
+  {
+    name: 'chirp duration',
+    site: 'features/signal.cpp Chirp duration',
+    control: [0.1, 0.5],
+    call: (v) => native.chirp(100, 1000, SAMPLE_RATE, v, true).length,
+  },
+  {
+    name: 'clicks frequency',
+    site: 'features/signal.cpp Clicks frequency',
+    control: [1000, 3000],
+    call: (v) => magnitudeSum(native.clicks(CLICK_TIMES, SAMPLE_RATE, SAMPLE_RATE, v, 0.05)),
+  },
+  {
+    name: 'clicks duration',
+    site: 'features/signal.cpp Clicks duration',
+    control: [0.01, 0.05],
+    call: (v) => magnitudeSum(native.clicks(CLICK_TIMES, SAMPLE_RATE, SAMPLE_RATE, 1000, v)),
+  },
+  {
+    name: 'amplitudeToDb topDb',
+    site: 'features/conversion.cpp AmplitudeToDb topDb',
+    control: [10, 80],
+    call: (v) => JSON.stringify(native.amplitudeToDb(KNOWN_AMPLITUDES, 1, 1e-5, v)),
+  },
+  {
+    name: 'dbToPower ref',
+    site: 'features/conversion.cpp DbToPower ref',
+    control: [1, 2],
+    call: (v) => JSON.stringify(native.dbToPower(KNOWN_DECIBELS, v)),
+  },
+  {
+    name: 'dbToAmplitude ref',
+    site: 'features/conversion.cpp DbToAmplitude ref',
+    control: [1, 2],
+    call: (v) => JSON.stringify(native.dbToAmplitude(KNOWN_DECIBELS, v)),
+  },
+  {
+    name: 'midiCcLearn minValue',
+    site: 'addon.cpp MidiCcLearn minValue',
+    control: [0, 0.5],
+    call: (v) => JSON.stringify(native.midiCcLearn(CC_LEARN_EVENTS, 77, v, 1)),
+  },
+  {
+    name: 'midiCcLearn maxValue',
+    site: 'addon.cpp MidiCcLearn maxValue',
+    control: [1, 0.5],
+    call: (v) => JSON.stringify(native.midiCcLearn(CC_LEARN_EVENTS, 77, 0, v)),
+  },
+  {
+    name: 'Project.setTrackGain gain',
+    site: 'project/edit.cpp SetTrackGain gain',
+    control: [1, 0.5],
+    call: (v) => projectAfter((project, trackId) => project.setTrackGain(trackId, v)),
+  },
+  {
+    name: 'Project.setTrackPan pan',
+    site: 'project/edit.cpp SetTrackPan pan',
+    control: [0, 0.5],
+    call: (v) => projectAfter((project, trackId) => project.setTrackPan(trackId, v)),
+  },
+  {
+    name: 'Project.setClipGain gain',
+    site: 'project/edit.cpp SetClipGain gain',
+    control: [1, 0.5],
+    call: (v) => projectAfter((project, _trackId, clipId) => project.setClipGain(clipId, v)),
+  },
+  {
+    name: 'RealtimeEngine.setInputMonitor gain',
+    site: 'engine/clips_capture.cpp SetInputMonitor gain',
+    control: [1, 0.5],
+    call: (v) => inputMonitorOutput(v),
+  },
 ];
 
 describe('an optional float argument is refused rather than saturated', () => {
@@ -684,12 +1133,11 @@ describe('a gamma is given or absent, and absent is the automatic ERB value', ()
 });
 
 describe('the table covers the whole reader population', () => {
-  it('drives every OptionalFiniteFloatArg call site in the addon', () => {
+  it('drives every OptionalFloatArg call site in the addon', () => {
     const calls = addonSources()
       .filter((source) => source.file !== 'sonare_wrap_options.h')
       .flatMap(
-        (source) =>
-          source.text.match(/OptionalFiniteFloatArg\((?:env|info\.Env\(\)), info,/g) ?? [],
+        (source) => source.text.match(/OptionalFloatArg\((?:env|info\.Env\(\)), info,/g) ?? [],
       );
     const sites = new Set(FINITE_ARGUMENTS.map((argument) => argument.site));
     expect(sites.size).toBe(calls.length);
@@ -705,7 +1153,7 @@ describe('the table covers the whole reader population', () => {
 
 /**
  * The required arguments and object keys, which read through
- * `node_narrow_finite_float` at the site rather than through an argument helper.
+ * `node_narrow_float` at the site rather than through an argument helper.
  *
  * These have no fallback: each sits after an explicit arity-and-type gate that
  * has already refused a missing or wrong-typed argument, so a helper carrying a
@@ -1334,7 +1782,7 @@ describe('setExpectedDuration reaches the core, and 1e39 does not reach it at al
 
 /**
  * The object keys and array elements that do not read through
- * `node_narrow_finite_float` at the site.
+ * `node_narrow_float` at the site.
  *
  * `gain` is a real optional key, so it takes the object-key reader and keeps
  * its 1.0 default. The two array readers take the element reader, which also
@@ -1400,15 +1848,19 @@ describe('an object key and an array element are refused rather than saturated',
 });
 
 /**
- * The one site whose argument has no in-domain control, driven by its own case
- * above rather than by a table. Counted here so the population stays exact.
+ * The sites whose value has no in-domain control or no caller, driven by their own
+ * case above rather than by a table. Counted here so the population stays exact.
  */
-const UNCONTROLLED_SITES = ['streaming/stream_analyzer.cpp SetExpectedDuration durationSeconds'];
+const UNCONTROLLED_SITES = [
+  'streaming/stream_analyzer.cpp SetExpectedDuration durationSeconds',
+  // Reads the key confidence of a result the core has just built, not a caller's argument: no entry point can hand it a value to refuse.
+  'sonare_wrap_utils.cpp EnrichFullAnalysisObject confidence',
+];
 
 /**
  * Sites in the required-argument and state tables whose reader is the bail-out
- * `RequiredFiniteFloatValue`, not `node_narrow_finite_float`: driven here for the
- * refusal, but not part of the `node_narrow_finite_float` call-site population.
+ * `RequiredFloatValue`, not `node_narrow_float`: driven here for the
+ * refusal, but not part of the `node_narrow_float` call-site population.
  */
 const BAILOUT_READER_SITES = new Set([
   'sonare_wrap_features.cpp NoteSegments frameRate',
@@ -1447,12 +1899,12 @@ describe('the tables cover the whole required-read population', () => {
     }
   });
 
-  it('drives every node_narrow_finite_float call site in the addon', () => {
+  it('drives every node_narrow_float call site in the addon', () => {
     const calls = addonSources()
       // The shared header holds the reader itself plus the members built on it,
       // none of which is a site.
       .filter((source) => source.file !== 'sonare_wrap_options.h')
-      .flatMap((source) => source.text.match(/node_narrow_finite_float\(/g) ?? []);
+      .flatMap((source) => source.text.match(/node_narrow_float\(/g) ?? []);
     const sites = new Set([
       ...REQUIRED_FLOAT_ARGUMENTS.map((argument) => argument.site).filter(
         (site) => !BAILOUT_READER_SITES.has(site) && !SHARED_READER_SITES.has(site),
@@ -1473,10 +1925,10 @@ describe('the tables cover the whole required-read population', () => {
     expect(sites.size).toBe(calls.length);
   });
 
-  it('drives every node_narrow_finite_float_element call site in the addon', () => {
+  it('drives every node_narrow_float_element call site in the addon', () => {
     const calls = addonSources()
       .filter((source) => source.file !== 'sonare_wrap_options.h')
-      .flatMap((source) => source.text.match(/node_narrow_finite_float_element\(/g) ?? []);
+      .flatMap((source) => source.text.match(/node_narrow_float_element\(/g) ?? []);
     const sites = new Set(
       KEY_AND_ELEMENT_ARGUMENTS.filter((argument) => argument.site.endsWith(' element')).map(
         (argument) => argument.site,

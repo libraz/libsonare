@@ -86,7 +86,6 @@ export const READER_FAMILIES: Readonly<
     DomainProperty: 'refuse',
     DoubleProperty: 'refuse',
     AutoFiniteFloatProperty: 'refuse',
-    FiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
     FloatDataProperty: 'refuse',
     ChoiceProperty: 'refuse',

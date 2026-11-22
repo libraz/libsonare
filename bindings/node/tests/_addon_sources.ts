@@ -138,7 +138,7 @@ export function bareHasSites(): BareHasSite[] {
  * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FloatData|FiniteFloat|AutoFiniteFloat|DomainFloat|DbfsAsLinear|Xyz|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization|NamedSelector|Choice|NumberMap|IntInRangeOrAbsent)Property|DomainProperty(?:<[\w:]+>)?|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FloatData|AutoFiniteFloat|DomainFloat|DbfsAsLinear|Xyz|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization|NamedSelector|Choice|NumberMap|IntInRangeOrAbsent)Property|DomainProperty(?:<[\w:]+>)?|OptionAt)\s*\(/;
 
 /**
  * Matches a reader call and captures its literal key, for either arity.
@@ -150,7 +150,7 @@ const OPTION_READER =
  * set of the graph entry points.
  */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FloatData|FiniteFloat|AutoFiniteFloat|DomainFloat|DbfsAsLinear|Xyz|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization|NamedSelector|Choice|NumberMap|IntInRangeOrAbsent)Property|DomainProperty(?:<[\w:]+>)?|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FloatData|AutoFiniteFloat|DomainFloat|DbfsAsLinear|Xyz|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization|NamedSelector|Choice|NumberMap|IntInRangeOrAbsent)Property|DomainProperty(?:<[\w:]+>)?|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
 
 /**
  * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter
@@ -218,7 +218,7 @@ const POSITIONAL_READER_DEFINITION =
  * covered while the table that names them still read as green.
  */
 const BAILOUT_READER =
-  /\b(?:Optional(?:Int|Uint16|Uint32|Int64|Float|Double|Bool|String|MidiByte)Arg|Required(?:Int|Int64)Arg|RequiredFiniteFloatValue|NonNegativeSizeTArg|Int32Arg|node_arg_int_no_wrap)\s*\(/;
+  /\b(?:Optional(?:Int|Uint16|Uint32|Int64|Float|Double|Bool|String|MidiByte)Arg|Required(?:Int|Int64)Arg|RequiredFloatValue|NonNegativeSizeTArg|Int32Arg|node_arg_int_no_wrap)\s*\(/;
 
 /**
  * Every positional-reader definition across the addon sources.
@@ -700,10 +700,9 @@ function enclosingDefinition(spans: DefinitionSpan[], at: number): string {
  * because neither is a modular conversion — not because neither can change a
  * caller's number. `FloatValue` saturates a double past FLT_MAX to an infinity,
  * which folds the caller's quantity onto another legal value by a non-modular
- * route. Which of the three float readers a site takes is where that route is
- * decided, not here: `node_narrow_float` refuses the overflow,
- * `node_narrow_finite_float` refuses a written non-finite as well, and
- * `node_float_as_c_abi` refuses neither, for the entry points whose core answers
+ * route. Which of the float readers a site takes is where that route is
+ * decided, not here: `node_narrow_float` refuses the overflow and a written
+ * non-finite, and `node_float_as_c_abi` refuses neither, for the entry points whose core answers
  * a non-finite input instead of failing on it. No site reads `FloatValue()`
  * inline — the one remaining call is the permissive reader's own body.
  * `addon-float-narrowing.test.ts` holds the population counts.

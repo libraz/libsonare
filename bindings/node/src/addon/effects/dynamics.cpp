@@ -89,7 +89,7 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
     // A given sidechain high-pass corner switches the filter on; absent leaves it off.
     const Napi::Value high_pass = options.Get("sidechainHighPassHz");
     if (!high_pass.IsUndefined() && !high_pass.IsNull()) {
-      config.sidechain_high_pass_hz = FiniteFloatProperty(options, "sidechainHighPassHz", 0.0f);
+      config.sidechain_high_pass_hz = FloatProperty(options, "sidechainHighPassHz", 0.0f);
       if (!(config.sidechain_high_pass_hz >= 0.0f)) {
         throw Napi::RangeError::New(env, "sidechainHighPassHz must be finite and at least 0");
       }

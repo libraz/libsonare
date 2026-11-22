@@ -38,7 +38,7 @@ Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
   const std::string send_id = node_narrow_string(env, info[1], "sendId");
   const std::string destination_bus_id = node_narrow_string(env, info[2], "destinationBusId");
   float send_db{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "sendDb", 0.0f, &send_db)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 3, "sendDb", 0.0f, &send_db)) return env.Undefined();
   int timing{};
   if (!OptionalIntArg(env, info, 4, "timing", 0, &timing)) return env.Undefined();
 
@@ -71,7 +71,7 @@ Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
   }
   const size_t send_index = sonare_node::node_narrow_uint32(env, info[1], "sendIndex");
   SonareError err =
-      sonare_strip_set_send_db(strip, send_index, node_narrow_finite_float(env, info[2], "sendDb"));
+      sonare_strip_set_send_db(strip, send_index, node_narrow_float(env, info[2], "sendDb"));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip send level: ");
   }

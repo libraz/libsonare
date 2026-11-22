@@ -133,8 +133,7 @@ Napi::Object EmitDeclipReport(Napi::Env env, const T& report) {
 ///        the two structs share their shape, this is the C-ABI mirror of that
 ///        reading.
 SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDeclipConfig config) {
-  config.clip_threshold_db =
-      FiniteFloatProperty(options, "clipThresholdDb", config.clip_threshold_db);
+  config.clip_threshold_db = FloatProperty(options, "clipThresholdDb", config.clip_threshold_db);
   config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
   config.iterations = IntProperty(options, "iterations", config.iterations);
   config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);

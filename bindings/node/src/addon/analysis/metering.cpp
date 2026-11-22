@@ -286,8 +286,7 @@ Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
   int sample_rate{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   float threshold_db{};
-  if (!OptionalFiniteFloatArg(env, info, 2, "thresholdDb", -45.0f, &threshold_db))
-    return env.Undefined();
+  if (!OptionalFloatArg(env, info, 2, "thresholdDb", -45.0f, &threshold_db)) return env.Undefined();
   int frame_length{};
   if (!OptionalIntArg(env, info, 3, "frameLength", 1024, &frame_length)) return env.Undefined();
   int hop_length{};
@@ -395,15 +394,15 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float window_sec{};
-  if (!RequiredFiniteFloatValue(env, info[2], "windowSec", &window_sec)) return env.Undefined();
+  if (!RequiredFloatValue(env, info[2], "windowSec", &window_sec)) return env.Undefined();
   float hop_sec{};
-  if (!RequiredFiniteFloatValue(env, info[3], "hopSec", &hop_sec)) return env.Undefined();
+  if (!RequiredFloatValue(env, info[3], "hopSec", &hop_sec)) return env.Undefined();
   // The C ABI treats 0.0 as a literal 0th percentile and a NEGATIVE value as
   // "use the library default", so omitted percentiles pass -1.0f (default).
   float low_p{};
-  if (!RequiredFiniteFloatValue(env, info[4], "lowP", &low_p)) return env.Undefined();
+  if (!RequiredFloatValue(env, info[4], "lowP", &low_p)) return env.Undefined();
   float high_p{};
-  if (!RequiredFiniteFloatValue(env, info[5], "highP", &high_p)) return env.Undefined();
+  if (!RequiredFloatValue(env, info[5], "highP", &high_p)) return env.Undefined();
   SonareDynamicRangeResult result{};
   SonareError err = sonare_metering_dynamic_range(typed.Data(), typed.ElementLength(), sr,
                                                   window_sec, hop_sec, low_p, high_p, &result);
@@ -440,10 +439,13 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
                          sonare::editing::pitch_editor::kScaleModeMaskDomain, mode_mask)) {
     return false;
   }
-  *midi = node_narrow_finite_float(info.Env(), info[2], "midi");
-  // NaN (not given) selects A4 (69); a given 0 is MIDI note 0.
-  return OptionalFiniteFloatArg(info.Env(), info, 3, "scaleReferenceMidi",
-                                std::numeric_limits<float>::quiet_NaN(), reference_midi);
+  *midi = node_narrow_float(info.Env(), info[2], "midi");
+  // Absent reads as NaN, which selects A4 (69); a given 0 is MIDI note 0.
+  if (!OptionalFloatArg(info.Env(), info, 3, "scaleReferenceMidi",
+                        std::numeric_limits<float>::quiet_NaN(), reference_midi)) {
+    return false;
+  }
+  return true;
 }
 
 }  // namespace
@@ -828,8 +830,7 @@ Napi::Value SonareWrap::SilenceRatioInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float threshold_db{};
-  if (!OptionalFiniteFloatArg(env, info, 0, "thresholdDb", -45.0f, &threshold_db))
-    return env.Undefined();
+  if (!OptionalFloatArg(env, info, 0, "thresholdDb", -45.0f, &threshold_db)) return env.Undefined();
   int frame_length{};
   if (!OptionalIntArg(env, info, 1, "frameLength", 1024, &frame_length)) return env.Undefined();
   int hop_length{};
@@ -930,10 +931,10 @@ Napi::Value SonareWrap::DynamicRangeInstance(const Napi::CallbackInfo& info) {
   float high_p = -1.0f;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object opts = info[0].As<Napi::Object>();
-    window_sec = FiniteFloatProperty(opts, "windowSec", window_sec);
-    hop_sec = FiniteFloatProperty(opts, "hopSec", hop_sec);
-    low_p = FiniteFloatProperty(opts, "lowPercentile", low_p);
-    high_p = FiniteFloatProperty(opts, "highPercentile", high_p);
+    window_sec = FloatProperty(opts, "windowSec", window_sec);
+    hop_sec = FloatProperty(opts, "hopSec", hop_sec);
+    low_p = FloatProperty(opts, "lowPercentile", low_p);
+    high_p = FloatProperty(opts, "highPercentile", high_p);
   }
   SonareDynamicRangeResult result{};
   SonareError err = sonare_audio_dynamic_range(audio_, window_sec, hop_sec, low_p, high_p, &result);
@@ -972,8 +973,8 @@ Napi::Value SonareWrap::SpectrumInstance(const Napi::CallbackInfo& info) {
     n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
-    db_ref = FiniteFloatProperty(opts, "dbRef", 0.0f);
-    db_amin = FiniteFloatProperty(opts, "dbAmin", 0.0f);
+    db_ref = FloatProperty(opts, "dbRef", 0.0f);
+    db_amin = FloatProperty(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err = sonare_audio_spectrum(audio_, n_fft, smooth, octave, db_ref, db_amin, &result);
@@ -1006,8 +1007,8 @@ Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
     n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
-    db_ref = FiniteFloatProperty(opts, "dbRef", 0.0f);
-    db_amin = FiniteFloatProperty(opts, "dbAmin", 0.0f);
+    db_ref = FloatProperty(opts, "dbRef", 0.0f);
+    db_amin = FloatProperty(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err = sonare_audio_spectrum_frame(audio_, frame_offset, n_fft, smooth, octave, db_ref,

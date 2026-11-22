@@ -46,7 +46,7 @@ bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
 // out-of-range inputs the C ABI/Python already refuse.
 void ValidateRirShapeAndTiming(const sonare::acoustic::RirSynthConfig& cfg) {
   using namespace sonare::acoustic;
-  // Finiteness is FiniteFloatProperty's at the read; what is left is each field's own bound.
+  // Finiteness is FloatProperty's at the read; what is left is each field's own bound.
   if (cfg.max_seconds < 0.0f || cfg.max_seconds > kMaxRirSeconds || cfg.mixing_time_ms < 0.0f ||
       cfg.mixing_time_ms > kMaxRirMixingTimeMs || cfg.crossfade_ms < 0.0f ||
       cfg.crossfade_ms > kMaxRirCrossfadeMs) {
@@ -82,7 +82,7 @@ std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* ke
     std::vector<float> out;
     out.reserve(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out.push_back(node_narrow_finite_float_element(opts.Env(), arr.Get(i), key, i));
+      out.push_back(node_narrow_float_element(opts.Env(), arr.Get(i), key, i));
     }
     return out;
   }
@@ -97,9 +97,9 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
   using namespace sonare::acoustic;
   // A non-finite dimension is refused by the reader, which names the key the
   // caller wrote rather than the three together.
-  const sonare::RoomDimensions dims{FiniteFloatProperty(opts, "lengthM", 7.0f),
-                                    FiniteFloatProperty(opts, "widthM", 5.0f),
-                                    FiniteFloatProperty(opts, "heightM", 3.0f)};
+  const sonare::RoomDimensions dims{FloatProperty(opts, "lengthM", 7.0f),
+                                    FloatProperty(opts, "widthM", 5.0f),
+                                    FloatProperty(opts, "heightM", 3.0f)};
 
   // The precedence, the [0, 1] coefficient rejection and the band-wise
   // scattering all come from the core builder the C ABI calls, so the same
@@ -172,9 +172,9 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
   cfg.seed = Uint32Property(opts, "seed", cfg.seed);
-  cfg.max_seconds = FiniteFloatProperty(opts, "maxSec", cfg.max_seconds);
-  cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
-  cfg.crossfade_ms = FiniteFloatProperty(opts, "crossfadeMs", cfg.crossfade_ms);
+  cfg.max_seconds = FloatProperty(opts, "maxSec", cfg.max_seconds);
+  cfg.mixing_time_ms = FloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
+  cfg.crossfade_ms = FloatProperty(opts, "crossfadeMs", cfg.crossfade_ms);
   cfg.air_absorption_enabled =
       BoolProperty(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
   // An implausible climate is an Error diagnostic, thrown below like the geometry errors.

@@ -186,11 +186,6 @@ inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const ch
   return node_narrow_float_keeping_nonfinite(env, value, name);
 }
 
-/// @brief Same reader as @ref node_narrow_float.
-inline float node_narrow_finite_float(Napi::Env env, const Napi::Value& value, const char* name) {
-  return node_narrow_float(env, value, name);
-}
-
 /// @brief Narrow a JS number onto a finite double, refusing a NaN or an infinity by name.
 /// @throws Napi::RangeError naming @p name.
 inline double node_narrow_double(Napi::Env env, const Napi::Value& value, const char* name) {
@@ -203,20 +198,20 @@ inline double node_narrow_double(Napi::Env env, const Napi::Value& value, const 
 
 /// @brief Read one element of a plain JS number array as a finite float, named
 ///        by index.
-/// @details The element shape of @ref node_narrow_finite_float, for the array
+/// @details The element shape of @ref node_narrow_float, for the array
 ///   readers whose caller-visible subject is `name[i]` rather than `name`. A
 ///   non-number entry is refused rather than substituted: the two array readers
 ///   this serves used to answer it as a silent 0.0f and as a dummy beside a
 ///   pending exception, and 0 is in domain on both of their fields.
 /// @throws Napi::TypeError for a non-number entry, Napi::RangeError for a value
 ///         outside the finite 32-bit float range.
-inline float node_narrow_finite_float_element(Napi::Env env, const Napi::Value& value,
-                                              const char* name, uint32_t index) {
+inline float node_narrow_float_element(Napi::Env env, const Napi::Value& value, const char* name,
+                                       uint32_t index) {
   const std::string element = std::string(name) + "[" + std::to_string(index) + "]";
   if (!value.IsNumber()) {
     throw Napi::TypeError::New(env, element + " must be a number");
   }
-  return node_narrow_finite_float(env, value, element.c_str());
+  return node_narrow_float(env, value, element.c_str());
 }
 
 /// @brief Marks a key whose 0 the library reads as "keep the default" rather
@@ -485,17 +480,6 @@ inline float FloatDataProperty(const Napi::Object& obj, const char* key, float f
   return node_narrow_float_keeping_nonfinite(obj.Env(), value, key);
 }
 
-/// @brief Read a float property that must be finite
-///        (@ref node_narrow_finite_float).
-/// @details Use where the field documents no "unspecified" spelling, so an
-///   infinity is refused by name instead of travelling on as one.
-inline float FiniteFloatProperty(const Napi::Object& obj, const char* key, float fallback) {
-  Napi::Value value = obj.Get(key);
-  if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
-  return node_narrow_finite_float(obj.Env(), value, key);
-}
-
 /// @brief Type-only float property read, for a field whose core check states its domain.
 /// @details NaN and the infinities pass, and a finite value past the float range saturates to an
 ///   infinity, so the core refuses all of them in its own domain text. A wrong type is refused by
@@ -575,14 +559,14 @@ inline std::array<float, 3> XyzProperty(const Napi::Object& obj, const char* key
     const std::string name = std::string(key) + "." + axes[i];
     const Napi::Value part = xyz.Get(axes[i]);
     node_require_property_type(obj.Env(), part.IsNumber(), name.c_str(), "a number");
-    out[i] = node_narrow_finite_float(obj.Env(), part, name.c_str());
+    out[i] = node_narrow_float(obj.Env(), part, name.c_str());
   }
   return out;
 }
 
 /// @brief Read a finite float property that also accepts the string `"auto"`.
 /// @details `"auto"` sets @p is_auto and returns @p fallback; a number is read as
-///   @ref FiniteFloatProperty does, and any other type is refused by name.
+///   @ref FloatProperty does, and any other type is refused by name.
 inline float AutoFiniteFloatProperty(const Napi::Object& obj, const char* key, float fallback,
                                      bool* is_auto) {
   *is_auto = false;
@@ -596,7 +580,7 @@ inline float AutoFiniteFloatProperty(const Napi::Object& obj, const char* key, f
     throw Napi::TypeError::New(obj.Env(), std::string(key) + " must be a number or 'auto'");
   }
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number or 'auto'");
-  return node_narrow_finite_float(obj.Env(), value, key);
+  return node_narrow_float(obj.Env(), value, key);
 }
 
 /// @brief Read a double property: undefined/null returns the fallback, any other
@@ -822,16 +806,6 @@ inline bool RequiredFloatValue(Napi::Env env, const Napi::Value& value, const st
                                float* out) {
   if (!RequireNumberValue(env, value, label)) return false;
   *out = node_narrow_float(env, value, label.c_str());
-  return true;
-}
-
-/// @brief Read a required finite float value (@ref node_narrow_finite_float).
-/// @details This composes the common number/type check with the finite float
-///        narrowing used by public fields that have no non-finite sentinel.
-inline bool RequiredFiniteFloatValue(Napi::Env env, const Napi::Value& value,
-                                     const std::string& label, float* out) {
-  if (!RequireNumberValue(env, value, label)) return false;
-  *out = node_narrow_finite_float(env, value, label.c_str());
   return true;
 }
 
@@ -1405,36 +1379,20 @@ inline bool OptionalFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size
   return RequiredFloatValue(env, value, name, out);
 }
 
-/// @brief Read an optional float positional argument whose field documents no
-///        "unspecified" spelling, refusing a non-finite value as well
-///        (@ref node_narrow_finite_float).
-inline bool OptionalFiniteFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
-                                   const char* name, float fallback, float* out) {
-  if (env.IsExceptionPending()) return false;
-  const Napi::Value value = info[index];
-  if (value.IsUndefined() || value.IsNull()) {
-    *out = fallback;
-    return true;
-  }
-  if (!RequireNumberValue(env, value, name)) return false;
-  *out = node_narrow_finite_float(env, value, name);
-  return true;
-}
-
 /// @brief Optional finite-float positional argument where only `undefined` reads as
 ///        absent: `null` is refused by name like any other wrong type, matching the
 ///        WASM and Python facades. Use it only where that parity is the contract;
-///        @ref OptionalFiniteFloatArg is the family default.
-inline bool OptionalFiniteFloatArgRefusingNull(Napi::Env env, const Napi::CallbackInfo& info,
-                                               size_t index, const char* name, float fallback,
-                                               float* out) {
+///        @ref OptionalFloatArg is the family default.
+inline bool OptionalFloatArgRefusingNull(Napi::Env env, const Napi::CallbackInfo& info,
+                                         size_t index, const char* name, float fallback,
+                                         float* out) {
   if (env.IsExceptionPending()) return false;
   const Napi::Value value = info[index];
   if (value.IsUndefined()) {
     *out = fallback;
     return true;
   }
-  return RequiredFiniteFloatValue(env, value, name, out);
+  return RequiredFloatValue(env, value, name, out);
 }
 
 /// @brief Read an optional double positional argument.

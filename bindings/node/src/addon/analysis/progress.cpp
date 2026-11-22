@@ -50,9 +50,9 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 2, "nFft", options.n_fft, &options.n_fft) ||
       !OptionalDomainArg(env, info, 3, "hopLength", options.hop_length, sonare::kSectionCountDomain,
                          &options.hop_length) ||
-      !OptionalFiniteFloatArg(env, info, 4, "minSectionSec", options.min_section_sec,
-                              &options.min_section_sec) ||
-      !OptionalFiniteFloatArg(env, info, 5, "threshold", options.threshold, &options.threshold)) {
+      !OptionalFloatArg(env, info, 4, "minSectionSec", options.min_section_sec,
+                        &options.min_section_sec) ||
+      !OptionalFloatArg(env, info, 5, "threshold", options.threshold, &options.threshold)) {
     return env.Undefined();
   }
 
@@ -107,17 +107,16 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
         DomainProperty<int>(bag, "hopLength", options.hop_length, sonare::kBoundaryCountDomain);
     options.kernel_size =
         DomainProperty<int>(bag, "kernelSize", options.kernel_size, sonare::kBoundaryCountDomain);
-    options.threshold = FiniteFloatProperty(bag, "threshold", options.threshold);
+    options.threshold = FloatProperty(bag, "threshold", options.threshold);
     options.absolute_threshold =
-        FiniteFloatProperty(bag, "absoluteThreshold", options.absolute_threshold);
+        FloatProperty(bag, "absoluteThreshold", options.absolute_threshold);
     options.n_mfcc =
         DomainProperty<int>(bag, "nMfcc", options.n_mfcc, sonare::kBoundaryCountDomain);
     options.n_chroma =
         DomainProperty<int>(bag, "nChroma", options.n_chroma, sonare::kBoundaryCountDomain);
-    options.peak_distance_sec =
-        FiniteFloatProperty(bag, "peakDistanceSec", options.peak_distance_sec);
+    options.peak_distance_sec = FloatProperty(bag, "peakDistanceSec", options.peak_distance_sec);
     options.reference_window_sec =
-        FiniteFloatProperty(bag, "referenceWindowSec", options.reference_window_sec);
+        FloatProperty(bag, "referenceWindowSec", options.reference_window_sec);
     options.use_mfcc = BoolProperty(bag, "useMfcc", options.use_mfcc != 0) ? 1 : 0;
     options.use_chroma = BoolProperty(bag, "useChroma", options.use_chroma != 0) ? 1 : 0;
   }
@@ -173,7 +172,7 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   }
   // The core states f0MaxHz only against f0MinHz, so the reader asks for a finite float.
   float fmax{};
-  if (!OptionalFiniteFloatArg(env, info, 3, "f0MaxHz", 2093.0f, &fmax)) return env.Undefined();
+  if (!OptionalFloatArg(env, info, 3, "f0MaxHz", 2093.0f, &fmax)) return env.Undefined();
   int frame_length{};
   if (!OptionalDomainArg(env, info, 4, "frameLength", 2048, sonare::kMelodyFrameDomain,
                          &frame_length)) {

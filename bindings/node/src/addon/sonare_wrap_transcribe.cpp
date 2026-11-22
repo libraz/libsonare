@@ -121,7 +121,7 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   }
   // A tempo <= 0 is the C ABI's "detect it", which is also what an omitted key
   // means, so the fallback and the sentinel are the same value.
-  const float tempo_bpm = FiniteFloatProperty(request, "tempoBpm", 0.0f);
+  const float tempo_bpm = FloatProperty(request, "tempoBpm", 0.0f);
   SonareTranscribeConfig config{};
   if (!ReadTranscribeConfig(env, request, &config)) return env.Undefined();
 
