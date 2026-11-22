@@ -1,6 +1,21 @@
 import type { ClipPageSampleRequest } from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
-import { nativeClipPageProviderOf } from './internal/clip_page_native.js';
+import {
+  bounceToNative,
+  busToNative,
+  graphToNative,
+  LATENCY_Q8_SCALE,
+  laneToNative,
+  MASTER_MIX_HINT,
+  markerFromNative,
+  markerToNative,
+  meterTelemetryFromNative,
+  normalizeSends,
+  parameterFromNative,
+  parameterToNative,
+  telemetryFromNative,
+  toNativeClip,
+} from './internal/engine_native.js';
 import {
   codedError,
   entryClass,
@@ -17,10 +32,10 @@ import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { requireOneOf } from './internal/one_of.js';
-import { optionalCount, optionalId } from './internal/optional_ints.js';
+import { optionalId } from './internal/optional_ints.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
-import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
+import { tokenOrdinal } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, isPlainRecord } from './internal/value_guards.js';
@@ -28,7 +43,6 @@ import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
   Articulation,
-  AutomationCurve,
   BuiltinSynthConfig,
   CaptureArmState,
   CaptureOptions,
@@ -99,15 +113,11 @@ import {
   type SampleBound,
 } from './validation.js';
 import {
-  AUTOMATION_CURVE_VALUES,
-  automationCurveValue,
   automationPointValue,
-  CHANNEL_LAYOUT_VALUES,
   normalizeSynthInstrument,
   panLawValue,
   panModeValue,
   partRigInsertsJson,
-  SEND_TIMING_VALUES,
 } from './value_coercion.js';
 
 export * from './clip_page_provider.js';
@@ -150,58 +160,13 @@ function optionalNonZeroInteger(value: unknown, argName: string): number | undef
   return number;
 }
 
-/** What omitting an output bus id does, for its `0` refusal. */
-const MASTER_MIX_HINT = 'to route to the master mix';
-
-/** A graph node name: a string, and never empty. */
-function graphName(path: string, value: unknown): void {
-  if (typeof value !== 'string') {
-    throw refuseType(`${path} must be a string`);
-  }
-  if (value === '') {
-    throw refuse(`${path} must not be empty`);
-  }
-}
-
 const SIDECHAIN_SOURCE_KIND = { track: 0, bus: 1 } as const;
 const TRACK_MONITOR_MODE = { off: 0, pfl: 1, afl: 2 } as const;
-const DITHER = { rpdf: 1, tpdf: 2, noiseShaped: 3 } as const;
-const GRAPH_NODE_TYPE = { passThrough: 0, gain: 1 } as const;
 /** The C ABI tags clock and transport bytes with this destination; the facade omits the field. */
 const EVERY_PORT_DESTINATION = 0xffffffff;
-const GRAPH_MIX = { replace: 0, add: 1 } as const;
-const MARKER_KIND = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
-const WARP_MODE = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
-const TELEMETRY_TYPE = { processBlock: 0, error: 1 } as const;
-const TELEMETRY_ERROR = {
-  none: 0,
-  commandQueueOverflow: 1,
-  pendingCommandOverflow: 2,
-  boundaryOverflow: 3,
-  telemetryOverflow: 4,
-  captureOverflow: 5,
-  maxBlockExceeded: 6,
-  unknownTarget: 7,
-  nonRealtimeSafeParameter: 8,
-  notPrepared: 9,
-  nonQueueableCommand: 10,
-  automationBindTargetOverflow: 11,
-  staleAutomationLanes: 12,
-  smoothedParameterCapacity: 13,
-  commandBacklogDeferred: 14,
-  clipPageUnderrun: 15,
-  insertAutomationOverflow: 16,
-  midiClockOverflow: 17,
-  metronomeOverflow: 18,
-  invalidCommand: 19,
-  maxChannelsExceeded: 20,
-  parameterBaseOverflow: 21,
-} as const;
 
 /** The C ABI value that selects every part of a part rig. */
 const PART_RIG_EVERY_PART = 0xff;
-/** Fixed-point scale of the latency the native engine reports (1/256 sample). */
-const LATENCY_Q8_SCALE = 256;
 
 /** An omitted size stays undefined, which the addon passes on as the library default. */
 interface ResolvedEngineConfig {
@@ -228,83 +193,6 @@ function resolveEngineConfig(
     telemetryCapacity: optionalNonZeroInteger(request.telemetryCapacity, 'telemetryCapacity'),
     maxChannels: optionalInteger(request.maxChannels, 'maxChannels'),
   };
-}
-
-/** The addon reads a page provider through its native handle and a warp mode by ordinal. */
-function toNativeClip(clip: EngineClip, label: string): unknown {
-  const native: Record<string, unknown> = {
-    ...clip,
-  };
-  if (clip.pageProvider !== undefined) {
-    native.pageProvider = nativeClipPageProviderOf(clip.pageProvider);
-  }
-  if (!isAbsent(clip.warpMode)) {
-    native.warpMode = tokenOrdinal(clip.warpMode, WARP_MODE, `${label}.warpMode`);
-  }
-  return native;
-}
-
-/** Resolves each send's `sendTiming` spelling to its C ABI ordinal. */
-function normalizeSends(sends: EngineTrackSend[], where: string): EngineTrackSend[] {
-  requireListBudget(sends, where);
-  return sends.map((send, i) =>
-    isAbsent(send.sendTiming)
-      ? send
-      : {
-          ...send,
-          sendTiming: tokenOrdinal(
-            send.sendTiming,
-            SEND_TIMING_VALUES,
-            `${where}[${i}].sendTiming`,
-          ) as never,
-        },
-  );
-}
-
-/** Output bus of a lane or bus: absent is the master mix, an explicit `0` is refused. */
-function outputBusField(value: unknown, label: string): number | undefined {
-  return optionalId(`${label}.outputBusId`, value, MASTER_MIX_HINT);
-}
-
-function laneToNative(requestName: 'setTrackLanes', lane: EngineTrackLane, index: number): unknown {
-  const label = `lanes[${index}]`;
-  const record = requestObject(requestName, lane, 'lane', true);
-  const native: Record<string, unknown> = { ...record };
-  const outputBusId = outputBusField(record.outputBusId, label);
-  if (outputBusId === undefined) {
-    delete native.outputBusId;
-  }
-  if (!isAbsent(record.sourceChannelLayout)) {
-    native.sourceChannelLayout = tokenOrdinal(
-      record.sourceChannelLayout,
-      CHANNEL_LAYOUT_VALUES,
-      `${label}.sourceChannelLayout`,
-    );
-  }
-  if (Array.isArray(record.sends)) {
-    native.sends = normalizeSends(record.sends as EngineTrackSend[], `${label}.sends`);
-  }
-  return native;
-}
-
-function busToNative(requestName: 'setTrackBuses', bus: EngineBus, index: number): unknown {
-  const label = `buses[${index}]`;
-  const record = requestObject(requestName, bus, 'bus', true);
-  const native: Record<string, unknown> = { ...record };
-  if (outputBusField(record.outputBusId, label) === undefined) {
-    delete native.outputBusId;
-  }
-  if (!isAbsent(record.channelLayout)) {
-    native.channelLayout = tokenOrdinal(
-      record.channelLayout,
-      CHANNEL_LAYOUT_VALUES,
-      `${label}.channelLayout`,
-    );
-  }
-  if (Array.isArray(record.sends)) {
-    native.sends = normalizeSends(record.sends as EngineTrackSend[], `${label}.sends`);
-  }
-  return native;
 }
 
 const SIDECHAIN_REFUSALS: readonly SidechainRefusal[] = [
@@ -437,133 +325,6 @@ function panModeOf(panMode: PanMode): number {
     throw refuseType(`panMode must be a string`);
   }
   return panModeValue(panMode, 'panMode');
-}
-
-function curveName(ordinal: number): AutomationCurve {
-  return tokenName(AUTOMATION_CURVE_VALUES, ordinal, 'automation curve') as AutomationCurve;
-}
-
-function parameterToNative(info: EngineParameterInfo): unknown {
-  if (typeof info !== 'object' || info === null || isAbsent(info.defaultCurve)) {
-    return info;
-  }
-  return { ...info, defaultCurve: automationCurveValue(info.defaultCurve, 'info.defaultCurve') };
-}
-
-function parameterFromNative(native: Record<string, unknown>): Required<EngineParameterInfo> {
-  return {
-    ...native,
-    defaultCurve: curveName(native.defaultCurve as number),
-  } as Required<EngineParameterInfo>;
-}
-
-function markerToNative(marker: EngineMarker, i: number): unknown {
-  if (typeof marker !== 'object' || marker === null) {
-    return marker;
-  }
-  const { name, ...rest } = marker;
-  if (name === '') {
-    throw refuse(`markers[${i}].name must not be empty; omit it for an unnamed marker`);
-  }
-  const named = isAbsent(name) ? rest : { ...rest, name };
-  if (isAbsent(marker.kind)) {
-    return named;
-  }
-  return { ...named, kind: tokenOrdinal(marker.kind, MARKER_KIND, `markers[${i}].kind`) };
-}
-
-/** An unnamed marker reads back without a `name` key, so the record can be passed to `setMarkers` again. */
-function markerFromNative(native: Record<string, unknown>): EngineMarker {
-  const { name, ...rest } = native;
-  return {
-    ...rest,
-    ...(name === '' ? {} : { name }),
-    kind: tokenName(MARKER_KIND, native.kind as number, 'marker kind'),
-  } as EngineMarker;
-}
-
-function telemetryFromNative(native: Record<string, unknown>): EngineTelemetry {
-  const { graphLatencySamplesQ8, type, error, ...rest } = native as {
-    graphLatencySamplesQ8: number;
-    type: number;
-    error: number;
-  } & Record<string, unknown>;
-  return {
-    ...rest,
-    type: tokenName(TELEMETRY_TYPE, type, 'telemetry type'),
-    error: tokenName(TELEMETRY_ERROR, error, 'telemetry error'),
-    graphLatencySamples: graphLatencySamplesQ8 / LATENCY_Q8_SCALE,
-  } as unknown as EngineTelemetry;
-}
-
-function meterTelemetryFromNative(native: Record<string, unknown>): EngineMeterTelemetry {
-  const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = native;
-  return {
-    ...rest,
-    numChannels: channelCount,
-    truePeakDbtp: truePeakDb,
-    // An absent native max stays absent.
-    ...(maxTruePeakDb !== undefined ? { maxTruePeakDbtp: maxTruePeakDb } : {}),
-  } as unknown as EngineMeterTelemetry;
-}
-
-function graphToNative(spec: EngineGraphSpec): unknown {
-  const record = requestObject('setGraph', spec, 'spec', true);
-  const nodes = Array.isArray(record.nodes)
-    ? (record.nodes as unknown as Array<Record<string, unknown>>)
-    : record.nodes;
-  const connections = Array.isArray(record.connections)
-    ? (record.connections as unknown as Array<Record<string, unknown>>)
-    : record.connections;
-  graphName('inputNode', record.inputNode);
-  graphName('outputNode', record.outputNode);
-  const numChannels = optionalCount('numChannels', record.numChannels);
-  const { numChannels: _numChannels, ...base } = record;
-  return {
-    ...base,
-    ...(numChannels === undefined ? {} : { numChannels }),
-    nodes: Array.isArray(nodes)
-      ? nodes.map((node, i) => {
-          if (typeof node !== 'object' || node === null) {
-            return node;
-          }
-          graphName(`nodes[${i}].id`, node.id);
-          const { type, ...rest } = node;
-          return {
-            ...rest,
-            ...(isAbsent(type)
-              ? {}
-              : { type: tokenOrdinal(type, GRAPH_NODE_TYPE, `nodes[${i}].type`) }),
-          };
-        })
-      : nodes,
-    connections: Array.isArray(connections)
-      ? connections.map((connection, i) => {
-          if (typeof connection !== 'object' || connection === null) {
-            return connection;
-          }
-          graphName(`connections[${i}].sourceNode`, connection.sourceNode);
-          graphName(`connections[${i}].destNode`, connection.destNode);
-          const { mix, ...rest } = connection;
-          return {
-            ...rest,
-            ...(isAbsent(mix)
-              ? {}
-              : { mix: tokenOrdinal(mix, GRAPH_MIX, `connections[${i}].mix`) }),
-          };
-        })
-      : connections,
-  };
-}
-
-function bounceToNative(options: EngineBounceOptions): Record<string, unknown> {
-  const fnName = 'bounceOffline';
-  const request = requestObject(fnName, options, 'options', true);
-  const native: Record<string, unknown> = { ...request };
-  if (!isAbsent(request.dither)) {
-    native.dither = tokenOrdinal(request.dither, DITHER, 'dither');
-  }
-  return native;
 }
 
 const CAPTURE_SOURCES = ['output', 'input'] as const;
