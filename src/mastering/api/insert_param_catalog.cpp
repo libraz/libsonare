@@ -81,6 +81,9 @@ bool read_repair_config(const std::string& name, const ParamMap& params) {
   return true;
 }
 
+// True when @p name is a repair stage, whose ids all sit under `repair.`.
+bool is_repair_stage(const std::string& name) { return name.rfind("repair.", 0) == 0; }
+
 // Set while the offline descriptor of a repair stage is measured. A stage with an insert form
 // is otherwise measured as that insert, which refuses the offline-only settings.
 thread_local bool measuring_offline_repair = false;
@@ -1090,6 +1093,9 @@ const std::vector<detail::EnumChoice>* enum_choices_of(const std::string& proces
   std::string id = processor;
   *leaf = key;
   if (processor.empty() && !chain_key_processor(key, &id, leaf)) return nullptr;
+  // A chain runs its repair stages offline, so their keys follow the offline declaration.
+  std::optional<OfflineRepairMeasurement> offline;
+  if (processor.empty() && is_repair_stage(id)) offline.emplace();
   const auto& declared_choices = empty_build(id).probed_choices();
   const auto declared = declared_choices.find(*leaf);
   return declared == declared_choices.end() ? nullptr : &declared->second;

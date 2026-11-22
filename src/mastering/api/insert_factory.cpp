@@ -1255,6 +1255,10 @@ namespace {
 // The denoise insert's settings. Its estimator defaults to Spp, the recursive one that tracks no
 // minimum: the offline default, Quantile, ranks a whole signal and the insert refuses it by name.
 repair::DenoiseClassicalConfig streaming_denoise_config(const ParamMap& params) {
+  if (params.records_declarations()) {
+    params.note_choices("noiseEstimator", detail::enum_choices_where<repair::DenoiseNoiseEstimator>(
+                                              &repair::streaming_supports));
+  }
   repair::DenoiseClassicalConfig config;
   config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
   SONARE_FIELDS_DENOISE_CLASSICAL(SONARE_READ_FIELD)
@@ -1262,11 +1266,20 @@ repair::DenoiseClassicalConfig streaming_denoise_config(const ParamMap& params) 
   return config;
 }
 
+// The decrackle insert's settings: it declares the modes a stream runs.
+repair::DecrackleConfig streaming_decrackle_config(const ParamMap& params) {
+  if (params.records_declarations()) {
+    params.note_choices(
+        "mode", detail::enum_choices_where<repair::DecrackleMode>(&repair::streaming_supports));
+  }
+  return detail::decrackle_config(params);
+}
+
 // The repair stages with a causal setting. Each refuses an offline-only setting by name rather
 // than substituting a streaming one, so a measured descriptor lists only what the insert takes.
 std::unique_ptr<Processor> build_repair(const std::string& name, const ParamMap& params) {
   if (name == "repair.decrackle") {
-    return make<repair::StreamingDecrackle>(detail::decrackle_config(params));
+    return make<repair::StreamingDecrackle>(streaming_decrackle_config(params));
   }
   if (name == "repair.denoiseClassical") {
     return make<repair::StreamingDenoise>(streaming_denoise_config(params));

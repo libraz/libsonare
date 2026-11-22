@@ -303,6 +303,29 @@ TEST_CASE("choices list exactly the values construction accepts", "[mastering][c
   REQUIRE(with_choices > 0);
 }
 
+TEST_CASE("a streaming repair insert declares the subset a stream runs, the chain the full set",
+          "[mastering][catalog]") {
+  using sonare::mastering::api::mastering_enum_names;
+  CHECK(mastering_enum_names("repair.decrackle", "mode") == "median");
+  CHECK(mastering_enum_names("", "repair.decrackle.mode") == "median, waveletShrinkage");
+  CHECK(mastering_enum_names("repair.denoiseClassical", "noiseEstimator") == "mcra, imcra, spp");
+  CHECK(mastering_enum_names("", "repair.denoise.noiseEstimator") == "quantile, mcra, imcra, spp");
+  // The insert's declaration and its measured choices are one list.
+  for (const auto& [name, key] : {std::pair<const char*, const char*>{"repair.decrackle", "mode"},
+                                  {"repair.denoiseClassical", "noiseEstimator"}}) {
+    INFO(name);
+    const json::Array params = param_info(name);
+    const json::Value* parameter = find_param(params, key);
+    REQUIRE(parameter != nullptr);
+    std::string joined;
+    for (const std::string& choice : choice_names(*parameter)) {
+      if (!joined.empty()) joined += ", ";
+      joined += choice;
+    }
+    CHECK(mastering_enum_names(name, key) == joined);
+  }
+}
+
 TEST_CASE("choices leave out what the processor refuses and name an integer set by value",
           "[mastering][catalog]") {
   const json::Array exciter = param_info("saturation.exciter");

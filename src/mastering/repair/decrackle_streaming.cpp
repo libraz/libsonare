@@ -12,7 +12,7 @@ namespace {
 
 DecrackleConfig streaming_config(const DecrackleConfig& config) {
   const auto validated = Validated<DecrackleConfig>::make(config);
-  if (validated->mode != DecrackleMode::Median) {
+  if (!streaming_supports(validated->mode)) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::NotSupported, "mode",
         "wavelet is not supported for a streaming decrackle: it shrinks a transform of the whole "

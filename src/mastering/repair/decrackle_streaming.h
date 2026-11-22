@@ -17,6 +17,12 @@
 
 namespace sonare::mastering::repair {
 
+/// @brief True when a stream can run @p mode: the wavelet mode shrinks a transform of the whole
+///        signal, so only the median mode is causal.
+constexpr bool streaming_supports(DecrackleMode mode) noexcept {
+  return mode == DecrackleMode::Median;
+}
+
 /// @brief Realtime median decrackle, each channel on its own.
 /// @details Everything is sized in prepare(); process() is in-place and allocates nothing.
 class StreamingDecrackle : public rt::ProcessorBase {

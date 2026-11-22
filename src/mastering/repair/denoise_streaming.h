@@ -31,6 +31,12 @@
 
 namespace sonare::mastering::repair {
 
+/// @brief True when a stream can run @p estimator: quantile ranks every frame of the whole
+///        signal by energy, while spp, mcra and imcra track recursively.
+constexpr bool streaming_supports(DenoiseNoiseEstimator estimator) noexcept {
+  return estimator != DenoiseNoiseEstimator::Quantile;
+}
+
 /// @brief Realtime classical denoiser: STFT analysis, one channel-linked gain
 ///        mask, overlap-add synthesis.
 /// @details The mask is built from the power summed over the block's channels

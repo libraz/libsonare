@@ -62,7 +62,7 @@ void reject_non_streaming_repair(const MasteringChainConfig& config) {
   // denoise runs block by block only with an estimator that is recursive in time; the default
   // ranks the whole signal, so it is refused by name rather than swapped behind the caller's back.
   if (config.repair.denoise.enabled &&
-      config.repair.denoise.config.noise_estimator == repair::DenoiseNoiseEstimator::Quantile) {
+      !repair::streaming_supports(config.repair.denoise.config.noise_estimator)) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::NotSupported, "repair.denoise.noiseEstimator",
         "quantile is not supported for a streaming chain: it ranks every frame of the whole "

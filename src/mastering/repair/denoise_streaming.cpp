@@ -20,7 +20,7 @@ namespace {
 ///   separate from a deliberate one.
 DenoiseClassicalConfig streaming_config(const DenoiseClassicalConfig& config) {
   const auto validated = Validated<DenoiseClassicalConfig>::make(config);
-  if (validated->noise_estimator == DenoiseNoiseEstimator::Quantile) {
+  if (!streaming_supports(validated->noise_estimator)) {
     throw SonareParameterRefusal::predicate(
         ErrorCode::NotSupported, "noise_estimator",
         "quantile is not supported for a streaming denoise: it ranks every frame of the whole "

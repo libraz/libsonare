@@ -16,6 +16,7 @@
 /// handling. Adding or renaming a parameter is a one-line table edit that all
 /// three consumers pick up.
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -817,6 +818,17 @@ inline std::vector<EnumChoice> enum_choices(EnumNameFn name_of) {
 template <typename Enum>
 std::vector<EnumChoice> enum_choices() {
   return enum_choices(&enum_choice_name_of<Enum>);
+}
+
+/// @brief The declared values of @p Enum that @p keep admits, in wire-value order.
+template <typename Enum>
+std::vector<EnumChoice> enum_choices_where(bool (*keep)(Enum)) {
+  std::vector<EnumChoice> choices = enum_choices<Enum>();
+  choices.erase(
+      std::remove_if(choices.begin(), choices.end(),
+                     [keep](const EnumChoice& c) { return !keep(static_cast<Enum>(c.value)); }),
+      choices.end());
+  return choices;
 }
 
 /// @brief The token a params JSON document carries for @p value under @p key.
