@@ -664,6 +664,15 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
   // different outcome, so a reader that refused everything could not pass it
   // by accident.
   const WRAPPING_LENGTHS = [2 ** 32 + 5, -1, 1.5, 2 ** 40, ...NON_FINITE];
+  // An object that only carries a length is not a list, so the lie rides on a real array: a Proxy
+  // passes Array.isArray and still answers `.length` with the value under test.
+  function lyingLength<T>(value: number): T[] {
+    return new Proxy([] as T[], {
+      get(target, property) {
+        return property === 'length' ? value : Reflect.get(target, property);
+      },
+    });
+  }
 
   it('routes midiRouteEvents from the real event count, not a lying `.length`', () => {
     const oneEvent = [midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 })];
@@ -676,7 +685,7 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
     expect(midiRouteEvents({ events: twoEvents }).events.length).toBe(2);
     for (const value of WRAPPING_LENGTHS) {
       expectRangeRefusal(() =>
-        midiRouteEvents({ events: { length: value } as unknown as typeof oneEvent }),
+        midiRouteEvents({ events: lyingLength<(typeof oneEvent)[number]>(value) }),
       );
     }
   });
@@ -701,21 +710,19 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
     expect(
       midiParamToCc({ bindings: [binding(7)], paramId: 1, unitValue: 0.5, group: 0, ppq: 0 }),
     ).not.toBeNull();
+    // The facade walks a binding list itself, so a length-only object is refused as not a list.
+    expect(() =>
+      midiParamToCc({
+        bindings: { length: 1 } as unknown as CcBinding[],
+        paramId: 1,
+        unitValue: 0.5,
+        group: 0,
+        ppq: 0,
+      }),
+    ).toThrow(new TypeError('midiParamToCc: bindings must be an array'));
     for (const value of WRAPPING_LENGTHS) {
       expectRangeRefusal(() =>
-        midiParamToCc({
-          bindings: { length: value } as unknown as CcBinding[],
-          paramId: 1,
-          unitValue: 0.5,
-          group: 0,
-          ppq: 0,
-        }),
-      );
-      expectRangeRefusal(() =>
-        midiCcLearn({
-          events: { length: value } as unknown as ReturnType<typeof midiNoteOn>[],
-          paramId: 1,
-        }),
+        midiCcLearn({ events: lyingLength<ReturnType<typeof midiNoteOn>>(value), paramId: 1 }),
       );
     }
   });
