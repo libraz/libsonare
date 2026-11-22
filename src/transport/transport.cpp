@@ -102,15 +102,15 @@ void Transport::set_tempo_map(const TempoMap* tempo_map) noexcept {
 }
 
 TransportState Transport::snapshot() const noexcept {
-  return snapshot_with_loop(loop_reader_.try_load());
+  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
+  const LoopState loop = loop_reader_.try_load();
+  return make_snapshot(map, sample_rate_.load(std::memory_order_acquire), playing(), loop.enabled,
+                       render_frame(), sample_position(), loop.start_ppq, loop.end_ppq);
 }
 
 TransportState Transport::snapshot_control() const noexcept {
-  return snapshot_with_loop(loop_state_.load());
-}
-
-TransportState Transport::snapshot_with_loop(const LoopState& loop) const noexcept {
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
+  const LoopState loop = loop_state_.load();
   return make_snapshot(map, sample_rate_.load(std::memory_order_acquire), playing(), loop.enabled,
                        render_frame(), sample_position(), loop.start_ppq, loop.end_ppq);
 }
