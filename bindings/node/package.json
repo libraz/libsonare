@@ -20,6 +20,7 @@
     "format": "git ls-files -z -- 'src/**' 'tests/**' | xargs -0 biome format --write",
     "test": "vitest run",
     "test:types": "tsc -p tsconfig.test.json",
+    "test:surface-scans": "vitest run --maxWorkers=4 tests/request-unknown-keys.test.ts tests/dist-declarations.test.ts tests/shared-type-shapes.test.ts tests/type-exports.test.ts tests/exported-signature-types.test.ts tests/c-entry-strip.test.ts tests/reader-family-cross-surface.test.ts tests/reader-family-scope.test.ts tests/addon-reader-contract.test.ts tests/addon-reader-conventions.test.ts tests/list-reader-refusals.test.ts && node ../../tests/conformance/native_entries.cjs --check ../..",
     "test:watch": "vitest"
   },
   "license": "Apache-2.0",
