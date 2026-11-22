@@ -13361,14 +13361,14 @@ Bare tuples, dicts and tuple-unpacking compatibility are gone; a result is a fro
 Python, 1.x:
 
 ```python
-n_frames, chroma = audio.nnls_chroma()
+channels, sample_rate = decode_channels(data)
 ```
 
 Python, 2.0.0:
 
 ```python
-result = audio.nnls_chroma()
-chroma = result.chroma
+decoded = decode_channels(data)
+channels = decoded.channels
 ```
 
 ### Python keyword arguments and attributes are snake_case only
@@ -13646,20 +13646,20 @@ if (err != SONARE_OK) { /* inspect sonare_last_error_message() */ }
 
 ### C results are released by a function named after the result
 
-A result struct the library allocates is released with `sonare_free_<result struct>`, an array of a struct that owns no memory with `sonare_free_<element struct>s`, a handle with `sonare_<handle>_destroy`, and a plain buffer with the releaser of its element kind: `sonare_free_string`, `sonare_free_floats`, `sonare_free_ints` or `sonare_free_bytes`. Static name tables return `SonareError` with a borrowed `out_names` / `out_count` pair whose lifetime the header states.
+A result struct the library allocates is released with `sonare_free_<result struct>`, an array of a struct that owns no memory with `sonare_free_<element struct>s`, a handle with `sonare_<handle>_destroy`, and a plain buffer with the releaser of its element kind: `sonare_free_string`, `sonare_free_floats`, `sonare_free_ints` or `sonare_free_bytes`. A document the library builds for the caller is written through an out parameter and released with `sonare_free_string`.
 
 C, 1.x:
 
 ```c
-const char* names = sonare_mastering_preset_names();
+const char* json = sonare_capabilities_json();
 ```
 
 C, 2.0.0:
 
 ```c
-const char* const* names = NULL;
-size_t count = 0;
-SonareError err = sonare_mastering_preset_names(&names, &count);
+char* json = NULL;
+SonareError err = sonare_capabilities_json(&json);
+sonare_free_string(json);
 ```
 
 ### C counts are size_t and returned through an out parameter
@@ -13864,7 +13864,7 @@ SonareError err = sonare_mixer_strip_count(mixer, &n);
 
 ### masterAudio is the mastering entry; mastering is renamed
 
-`masterAudio` is the main mastering entry. The 1.x `mastering(...)` only normalises loudness, so it is `masteringNormalizeLoudness` (`mastering_normalize_loudness`, `sonare_mastering_normalize_loudness`, CLI `mastering-normalize-loudness`).
+`masterAudio` is the main mastering entry. The 1.x `mastering(...)` only normalises loudness, so it is `masteringNormalizeLoudness` on Node and WASM, `sonare_mastering_normalize_loudness` in C and `mastering-normalize-loudness` on the CLI. Python keeps `mastering` and `Audio.mastering`.
 
 WASM, 1.x:
 
@@ -13876,18 +13876,6 @@ WASM, 2.0.0:
 
 ```ts
 const out = masteringNormalizeLoudness({ samples, sampleRate: 44100, targetLufs: -14 });
-```
-
-Python, 1.x:
-
-```python
-result = audio.mastering(target_lufs=-14.0)
-```
-
-Python, 2.0.0:
-
-```python
-result = audio.mastering_normalize_loudness(target_lufs=-14.0)
 ```
 
 Command line, 1.x:
@@ -14306,21 +14294,7 @@ sonare project export-smf project.json -o song.mid
 
 ### Both CLIs share command names, flags, defaults and failures
 
-The native and Python front-ends use the same command names, flags and defaults, and exit 0 on success, 2 for anything decidable from the command line alone (a value outside an option's domain, a missing required option, a cross-option conflict) before any input is read, 3 for a library refusal that needed the input and 11 when cancelled. With `--json` a failure prints `{"ok":false,"error":...,"code":"<error code name>","exit_code":n}`; `system-info` stays separate from `doctor`. CLI `--json` result keys are snake_case; a library document printed as it is keeps its own camelCase keys: the `scene` of `suggest-mix` (read back by `mix --scene`), the scene `mixing-preset` prints, the preset `voice-preset` prints, and the keys inside `chain_config` from `mastering-suggest` (read back by `mastering --chain-config`). A CLI flag name is a string literal at its registration in both front-ends, so a check reads every flag of both and compares them.
-
-Command line, 1.x:
-
-```sh
-# stdout of a failing command run with --json
-{"ok":false,"error":"File not found: missing.wav"}
-```
-
-Command line, 2.0.0:
-
-```sh
-# stdout of a failing command run with --json
-{"ok":false,"error":"File not found: missing.wav","code":"FileNotFound","exit_code":1}
-```
+The native and Python front-ends use the same command names, flags and defaults, and exit 0 on success, 2 for anything decidable from the command line alone (a value outside an option's domain, a missing required option, a cross-option conflict) before any input is read, and otherwise with the code of the failure's cause from the list at the head of the command-line section. A failure prints `Error: ...` to stderr, with or without `--json`; `system-info` stays separate from `doctor`. CLI `--json` result keys are snake_case; a library document printed as it is keeps its own camelCase keys: the `scene` of `suggest-mix` (read back by `mix --scene`), the scene `mixing-preset` prints, the preset `voice-preset` prints, and the keys inside `chain_config` from `mastering-suggest` (read back by `mastering --chain-config`). A CLI flag name is a string literal at its registration in both front-ends, so a check reads every flag of both and compares them.
 
 ### C++ consumers include <sonare/cpp/sonare.h>
 
