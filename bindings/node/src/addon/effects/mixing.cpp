@@ -299,8 +299,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   }
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToFloat32(env, out_left));
-  out.Set("right", VecToFloat32(env, out_right));
+  out.Set("left", Float32ArrayFrom(env, out_left));
+  out.Set("right", Float32ArrayFrom(env, out_right));
   out.Set("sampleRate", sample_rate);
   out.Set("meters", meters);
   return out;

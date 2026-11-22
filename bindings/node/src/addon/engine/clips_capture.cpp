@@ -62,11 +62,12 @@ bool ReadSends(Napi::Env env, const Napi::Array& sends,
                std::vector<SonareEngineTrackSend>* out_sends) {
   out_sends->reserve(sends.Length());
   for (uint32_t send_index = 0; send_index < sends.Length(); ++send_index) {
-    if (!sends.Get(send_index).IsObject()) {
+    const Napi::Value send_value = sends.Get(send_index);
+    if (!send_value.IsObject()) {
       Napi::TypeError::New(env, "send must be an object").ThrowAsJavaScriptException();
       return false;
     }
-    Napi::Object send_obj = sends.Get(send_index).As<Napi::Object>();
+    Napi::Object send_obj = send_value.As<Napi::Object>();
     SonareEngineTrackSend send{};
     if (!RequiredUint32Property(env, send_obj, "busId", &send.bus_id)) return false;
     send.level_db = FloatProperty(send_obj, "levelDb", send.level_db);
@@ -86,14 +87,15 @@ bool ReadSends(Napi::Env env, const Napi::Array& sends,
 // pending JS exception on a malformed entry.
 bool ReadOptionalSends(Napi::Env env, const Napi::Object& obj,
                        std::vector<SonareEngineTrackSend>* out_sends) {
-  if (!obj.Has("sends") || obj.Get("sends").IsUndefined() || obj.Get("sends").IsNull()) {
+  const Napi::Value sends_value = obj.Get("sends");
+  if (sends_value.IsUndefined() || sends_value.IsNull()) {
     return true;
   }
-  if (!obj.Get("sends").IsArray()) {
+  if (!sends_value.IsArray()) {
     Napi::TypeError::New(env, "sends must be an array").ThrowAsJavaScriptException();
     return false;
   }
-  return ReadSends(env, obj.Get("sends").As<Napi::Array>(), out_sends);
+  return ReadSends(env, sends_value.As<Napi::Array>(), out_sends);
 }
 
 // Backing storage a SonareEngineClip read from JS points into.
@@ -112,23 +114,18 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
     return false;
   }
   Napi::Object obj = entry.As<Napi::Object>();
-  const bool has_page_provider = obj.Has("pageProvider") &&
-                                 !obj.Get("pageProvider").IsUndefined() &&
-                                 !obj.Get("pageProvider").IsNull();
+  const Napi::Value page_provider_value = obj.Get("pageProvider");
+  const bool has_page_provider =
+      !page_provider_value.IsUndefined() && !page_provider_value.IsNull();
   Napi::Array channels = Napi::Array::New(env);
   if (!has_page_provider) {
     const Napi::Value channel_value = obj.Get("channels");
-    if (!channel_value.IsArray()) {
+    if (!channel_value.IsArray() || channel_value.As<Napi::Array>().Length() == 0) {
       Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
           .ThrowAsJavaScriptException();
       return false;
     }
     channels = channel_value.As<Napi::Array>();
-  }
-  if (!has_page_provider && channels.Length() == 0) {
-    Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
-        .ThrowAsJavaScriptException();
-    return false;
   }
   auto& clip_storage = out_storage->samples;
   auto& clip_ptrs = out_storage->pointers;
@@ -161,7 +158,7 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
   if (env.IsExceptionPending()) return false;
   if (has_page_provider) {
     SonareClipPageProvider* provider = nullptr;
-    if (!ClipPageProviderWrap::ReadHandle(env, obj.Get("pageProvider"), &provider)) return false;
+    if (!ClipPageProviderWrap::ReadHandle(env, page_provider_value, &provider)) return false;
     clip.page_provider = provider;
     clip.channels = nullptr;
     clip.num_channels = 0;
@@ -184,8 +181,8 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
   if (env.IsExceptionPending()) return false;
   clip.warp_mode = obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : clip.warp_mode;
   if (env.IsExceptionPending()) return false;
-  if (obj.Has("warpAnchors") && !obj.Get("warpAnchors").IsUndefined()) {
-    const Napi::Value anchors_value = obj.Get("warpAnchors");
+  const Napi::Value anchors_value = obj.Get("warpAnchors");
+  if (!anchors_value.IsUndefined()) {
     if (!anchors_value.IsArray()) {
       Napi::TypeError::New(env, "warpAnchors must be an array").ThrowAsJavaScriptException();
       return false;

@@ -4,6 +4,7 @@
 #include <napi.h>
 #include <sonare/sonare_c.h>
 
+#include <cstring>
 #include <exception>
 #include <new>
 #include <optional>
@@ -220,17 +221,6 @@ bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
 bool IsInt32Array(const Napi::Value& value);
 
-/// @brief Throw a JS SonareError when @p err is not SONARE_OK; no-op otherwise.
-///        Shared wrapper for the recurring
-///        `if (err != SONARE_OK) ThrowSonareError(env, err);` guard.
-///
-/// The addon is built with NAPI_DISABLE_CPP_EXCEPTIONS, where a second N-API
-/// throw raised while an exception is already pending is a fatal abort
-/// (SIGABRT) rather than a JS-visible error. A caller that already left an
-/// exception pending therefore gets no second throw here: the first error is
-/// the one the caller can act on, and it stays the reported one. This is a
-/// backstop, not a licence to call the C ABI with unread arguments — a caller
-/// must still bail out before the native call.
 /// @brief The messages of the diagnostics the most recent C-ABI call published, in order.
 inline std::vector<std::string> LastDiagnosticMessages() {
   std::vector<std::string> messages;
@@ -245,6 +235,17 @@ inline std::vector<std::string> LastDiagnosticMessages() {
   return messages;
 }
 
+/// @brief Throw a JS SonareError when @p err is not SONARE_OK; no-op otherwise.
+///        Shared wrapper for the recurring
+///        `if (err != SONARE_OK) ThrowSonareError(env, err);` guard.
+///
+/// The addon is built with NAPI_DISABLE_CPP_EXCEPTIONS, where a second N-API
+/// throw raised while an exception is already pending is a fatal abort
+/// (SIGABRT) rather than a JS-visible error. A caller that already left an
+/// exception pending therefore gets no second throw here: the first error is
+/// the one the caller can act on, and it stays the reported one. This is a
+/// backstop, not a licence to call the C ABI with unread arguments — a caller
+/// must still bail out before the native call.
 inline void ThrowIfError(Napi::Env env, SonareError err) {
   if (env.IsExceptionPending()) return;
   if (err != SONARE_OK) {
@@ -281,6 +282,30 @@ inline bool RequireFloat32Array(const Napi::CallbackInfo& info, size_t index, co
     return false;
   }
   return true;
+}
+
+/// @brief The (Float32Array samples, number sampleRate, ...) prologue every
+///        mono entry point opens with; throws the TypeError naming the first
+///        argument that does not fit and returns false.
+inline bool RequireMonoArgs(const Napi::CallbackInfo& info) {
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return false;
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(info.Env(), "sampleRate must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
+
+/// @brief Copies @p n floats from @p data into a fresh Float32Array with one memcpy;
+///        a null @p data leaves the n zeros the array was created with.
+inline Napi::Float32Array Float32ArrayFrom(Napi::Env env, const float* data, size_t n) {
+  auto array = Napi::Float32Array::New(env, n);
+  if (n > 0 && data != nullptr) std::memcpy(array.Data(), data, n * sizeof(float));
+  return array;
+}
+
+inline Napi::Float32Array Float32ArrayFrom(Napi::Env env, const std::vector<float>& values) {
+  return Float32ArrayFrom(env, values.data(), values.size());
 }
 
 /// @brief Coerce a JS value into a std::vector<int>, accepting an Int32Array or

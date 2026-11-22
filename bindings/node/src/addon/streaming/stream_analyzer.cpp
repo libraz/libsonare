@@ -35,7 +35,7 @@ sonare::QuantizeConfig QuantizeConfigFromValue(const Napi::Value& value) {
   Napi::Object object = value.As<Napi::Object>();
   // Plain quantities, none documented as reading a wrong-typed value as
   // "unspecified" (types_features.ts's StreamQuantizeConfig only documents
-  // omission, not type), so DoubleProperty rather than node_double_option.
+  // omission, not type), so DoubleProperty, which refuses a wrong type by name.
   qconfig.mel_db_min = static_cast<float>(DoubleProperty(object, "melDbMin", qconfig.mel_db_min));
   qconfig.mel_db_max = static_cast<float>(DoubleProperty(object, "melDbMax", qconfig.mel_db_max));
   qconfig.onset_max = static_cast<float>(DoubleProperty(object, "onsetMax", qconfig.onset_max));
@@ -59,7 +59,7 @@ Array TypedArrayFromVec(Napi::Env env, const std::vector<Value>& vec) {
 }
 
 Napi::Float32Array Float32FromVec(Napi::Env env, const std::vector<float>& vec) {
-  return TypedArrayFromVec<Napi::Float32Array>(env, vec);
+  return Float32ArrayFrom(env, vec);
 }
 
 Napi::Int32Array Int32FromVec(Napi::Env env, const std::vector<int>& vec) {
@@ -109,7 +109,7 @@ Napi::Object QuantizedFrameBufferToObject(Napi::Env env, const Buffer& buffer) {
 
 // Narrows an already-read config value to a native int, rejecting anything the
 // target type cannot hold exactly. Takes the value rather than (object, key) so
-// the key stays visible at the call site on the shared node_double_option
+// the key stays visible at the call site on the shared DoubleProperty
 // reader, which is what the option scanner counts.
 int CheckedConfigInt(double value, const char* key) {
   int narrowed = 0;
@@ -203,9 +203,8 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       // (types_features.ts's StreamAnalyzerConfig) as reading a wrong-typed
       // value as "unspecified" -- StreamAnalyzerConfig's own doc comment
       // requires the count fields to be refused rather than truncated, which
-      // DoubleProperty/BoolProperty give (node_double_option/node_bool_option
-      // silently fall back on a wrong TYPE before CheckedConfigInt ever sees
-      // it, so the fraction/range check downstream never runs on that case).
+      // DoubleProperty/BoolProperty give by refusing a wrong TYPE by name before
+      // CheckedConfigInt sees it.
       config.n_mels = CheckedConfigInt(DoubleProperty(opts, "nMels", config.n_mels), "nMels");
       config.fmin = static_cast<float>(DoubleProperty(opts, "fmin", config.fmin));
       config.fmax = static_cast<float>(DoubleProperty(opts, "fmax", config.fmax));
@@ -230,10 +229,12 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
           DoubleProperty(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
       if (!ParseWindowOption(opts, env, &config.window)) return;
       const Napi::Value output_format_value = opts.Get("outputFormat");
+      const double output_format_number = output_format_value.IsNumber()
+                                              ? output_format_value.As<Napi::Number>().DoubleValue()
+                                              : 0.0;
       if (!output_format_value.IsUndefined() && !output_format_value.IsNull() &&
-          (!output_format_value.IsNumber() ||
-           !std::isfinite(output_format_value.As<Napi::Number>().DoubleValue()) ||
-           output_format_value.As<Napi::Number>().DoubleValue() != 0.0)) {
+          (!output_format_value.IsNumber() || !std::isfinite(output_format_number) ||
+           output_format_number != 0.0)) {
         throw sonare::SonareException(
             sonare::ErrorCode::InvalidParameter,
             "outputFormat must be the integer 0 (Float32); use an explicit "

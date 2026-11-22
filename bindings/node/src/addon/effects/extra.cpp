@@ -142,10 +142,7 @@ Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInf
 Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   int n_features{};
   if (!RequiredDomainArg(env, info, 1, "nFeatures", sonare::kDecomposeNFeaturesDomain,
@@ -204,7 +201,7 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_narrow_int(env, info[1], "sampleRate");
@@ -299,10 +296,7 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   if (!info[1].IsNumber()) {
     Napi::TypeError::New(env, "nFeatures must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -349,10 +343,7 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   std::vector<int> intervals = ReadRemixIntervals(env, info[1]);
@@ -373,10 +364,7 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   std::vector<int> intervals = ReadRemixIntervals(env, info[1]);
@@ -399,14 +387,7 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   if (!info[2].IsNumber()) {
     Napi::TypeError::New(env, "speedRatio must be a number").ThrowAsJavaScriptException();
     return env.Undefined();

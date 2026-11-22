@@ -24,25 +24,6 @@ namespace {
 constexpr uint32_t kMaxProjectId = std::numeric_limits<uint32_t>::max() - 1u;
 constexpr uint64_t kMaxResultItems = 1ull << 28;
 
-template <typename T>
-bool ReadDomainValue(Napi::Env env, const Napi::Value& value, const char* field,
-                     const sonare::util::check::NumericDomain& domain, T* out) {
-  if (env.IsExceptionPending()) return false;
-  if (!value.IsNumber()) {
-    Napi::TypeError::New(
-        env, std::string(field) + " must be " + sonare_node::node_domain_type_text(domain))
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  try {
-    *out = sonare_node::node_domain_number<T>(value, field, domain);
-  } catch (...) {
-    sonare_node::ThrowCurrentException(env);
-    return false;
-  }
-  return true;
-}
-
 bool ReadDigest(Napi::Env env, const Napi::Value& value, const char* field, uint8_t* out) {
   std::string text;
   if (!RequiredStringValue(env, value, field, &text)) return false;
@@ -151,13 +132,14 @@ bool ReadApplyRequest(Napi::Env env, const Napi::Value& value, ApplyStorage* sto
   Napi::Object request;
   if (!RequiredObjectValue(env, value, "request", &request)) return false;
   sonare_project_vocal_edit_apply_desc_init(&storage->desc);
-  if (!ReadDomainValue(env, request.Get("clipId"), "clipId", sonare_c_detail::kVocalClipIdDomain,
-                       &storage->desc.clip_id) ||
-      !ReadDomainValue(env, request.Get("expectedSourceId"), "expectedSourceId",
-                       sonare_c_detail::kVocalSourceIdDomain, &storage->desc.expected_source_id) ||
-      !ReadDomainValue(env, request.Get("expectedSourceSampleRate"), "expectedSourceSampleRate",
-                       sonare::kAudioSampleRateDomain,
-                       &storage->desc.expected_source_sample_rate)) {
+  if (!RequiredDomainValue(env, request.Get("clipId"), "clipId",
+                           sonare_c_detail::kVocalClipIdDomain, &storage->desc.clip_id) ||
+      !RequiredDomainValue(env, request.Get("expectedSourceId"), "expectedSourceId",
+                           sonare_c_detail::kVocalSourceIdDomain,
+                           &storage->desc.expected_source_id) ||
+      !RequiredDomainValue(env, request.Get("expectedSourceSampleRate"), "expectedSourceSampleRate",
+                           sonare::kAudioSampleRateDomain,
+                           &storage->desc.expected_source_sample_rate)) {
     return false;
   }
   storage->desc.take_id = Uint32Property(request, "takeId", 0);
@@ -166,9 +148,10 @@ bool ReadApplyRequest(Napi::Env env, const Napi::Value& value, ApplyStorage* sto
         .ThrowAsJavaScriptException();
     return false;
   }
-  if (!ReadDomainValue(env, request.Get("expectedSourceSampleCount"), "expectedSourceSampleCount",
-                       sonare_c_detail::kVocalSourceSampleCountDomain,
-                       &storage->desc.expected_source_sample_count)) {
+  if (!RequiredDomainValue(env, request.Get("expectedSourceSampleCount"),
+                           "expectedSourceSampleCount",
+                           sonare_c_detail::kVocalSourceSampleCountDomain,
+                           &storage->desc.expected_source_sample_count)) {
     return false;
   }
   if (!ReadDigest(env, request.Get("expectedSourceSha256"), "expectedSourceSha256",
@@ -186,8 +169,8 @@ bool ReadApplyRequest(Napi::Env env, const Napi::Value& value, ApplyStorage* sto
         .ThrowAsJavaScriptException();
     return false;
   }
-  if (!ReadDomainValue(env, request.Get("renderedSampleRate"), "renderedSampleRate",
-                       sonare::kAudioSampleRateDomain, &storage->desc.rendered_sample_rate)) {
+  if (!RequiredDomainValue(env, request.Get("renderedSampleRate"), "renderedSampleRate",
+                           sonare::kAudioSampleRateDomain, &storage->desc.rendered_sample_rate)) {
     return false;
   }
   if (storage->desc.rendered_sample_rate != storage->desc.expected_source_sample_rate) {
@@ -247,10 +230,10 @@ bool ReadOriginals(Napi::Env env, const Napi::Value& value, OriginalStorage* sto
     if (!RequiredObjectValue(env, originals.Get(index), "originals entry", &source)) return false;
     auto& row = storage->rows[index];
     sonare_project_vocal_original_source_init(&row);
-    if (!ReadDomainValue(env, source.Get("sourceId"), "sourceId",
-                         sonare_c_detail::kVocalSourceIdDomain, &row.source_id) ||
-        !ReadDomainValue(env, source.Get("sampleRate"), "sampleRate",
-                         sonare::kAudioSampleRateDomain, &row.sample_rate)) {
+    if (!RequiredDomainValue(env, source.Get("sourceId"), "sourceId",
+                             sonare_c_detail::kVocalSourceIdDomain, &row.source_id) ||
+        !RequiredDomainValue(env, source.Get("sampleRate"), "sampleRate",
+                             sonare::kAudioSampleRateDomain, &row.sample_rate)) {
       return false;
     }
     if (std::find(ids.begin(), ids.end(), row.source_id) != ids.end()) {

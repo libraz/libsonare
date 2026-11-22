@@ -181,7 +181,7 @@ SonareDecrackleConfig read_decrackle_config_c(const Napi::Object& options,
 
 Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -254,7 +254,7 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
 
 Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -275,7 +275,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -345,7 +345,7 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -368,7 +368,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& 
 
 Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -437,7 +437,7 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
 
 Napi::Value SonareWrap::MasteringRepairDetectCrackle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

@@ -19,20 +19,6 @@
 
 namespace sonare_node::repair_detail {
 
-/// @brief Argument check shared by the mono entries, which all take
-///        (Float32Array, sampleRate, options?).
-inline bool CheckMonoArgs(Napi::Env env, const Napi::CallbackInfo& info) {
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return false;
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-  return true;
-}
-
 /// @brief The C releaser of each stereo repair result, picked by overload.
 inline void FreeStereoResult(SonareDeclickStereoResult* r) { sonare_free_declick_stereo_result(r); }
 inline void FreeStereoResult(SonareDenoiseStereoResult* r) { sonare_free_denoise_stereo_result(r); }
@@ -85,25 +71,17 @@ class StereoResultGuard {
 ///   across every stereo repair entry point.
 template <typename Result>
 inline Napi::Object EmitStereoResult(Napi::Env env, const Result& result) {
-  auto left = Napi::Float32Array::New(env, result.length);
-  auto right = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right.Data(), result.right, result.length * sizeof(float));
-  }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left);
-  out.Set("right", right);
+  out.Set("left", Float32ArrayFrom(env, result.left, result.length));
+  out.Set("right", Float32ArrayFrom(env, result.right, result.length));
   return out;
 }
 
 /// @brief Pack a mono repair result into the common `{ samples, report }` shape.
 inline Napi::Object EmitMonoResult(Napi::Env env, const sonare::Audio& audio,
                                    const Napi::Object& report) {
-  auto samples = Napi::Float32Array::New(env, audio.size());
-  if (!audio.empty()) std::memcpy(samples.Data(), audio.data(), audio.size() * sizeof(float));
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", samples);
+  out.Set("samples", Float32ArrayFrom(env, audio.data(), audio.size()));
   out.Set("report", report);
   return out;
 }
@@ -168,9 +146,7 @@ inline Napi::Array EmitLinkedResultChannels(Napi::Env env, float** channels, siz
                                             size_t length) {
   Napi::Array out = Napi::Array::New(env, num_channels);
   for (size_t index = 0; index < num_channels; ++index) {
-    auto plane = Napi::Float32Array::New(env, length);
-    if (length > 0) std::memcpy(plane.Data(), channels[index], length * sizeof(float));
-    out.Set(static_cast<uint32_t>(index), plane);
+    out.Set(static_cast<uint32_t>(index), Float32ArrayFrom(env, channels[index], length));
   }
   return out;
 }

@@ -366,14 +366,7 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, frameRate, options?)
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   if (!IsFloat32Array(info[2])) {
     Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -413,14 +406,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, notes, options?)
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   if (!info[2].IsArray()) {
     Napi::TypeError::New(env, "notes must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -545,14 +531,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, frameRate, notes, index, frame, options?)
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   if (!IsFloat32Array(info[2])) {
     Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -612,14 +591,7 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, f0Hz, frameRate, notes, first, last, options?)
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   if (!IsFloat32Array(info[2])) {
     Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -802,14 +774,7 @@ Napi::Value SonareWrap::ExtractPercussiveEvents(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, options?)
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -837,14 +802,7 @@ Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples, sampleRate, events, options?)
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   if (!info[2].IsArray()) {
     Napi::TypeError::New(env, "events must be an array").ThrowAsJavaScriptException();
     return env.Undefined();

@@ -55,10 +55,7 @@ using CqtFn = SonareError (*)(const float*, size_t, int, size_t, float, int, int
 Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
 
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
@@ -120,10 +117,7 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
 
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
@@ -176,7 +170,9 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   const int n_bins = node_narrow_int(env, info[1], "nBins");
   const int n_frames = node_narrow_int(env, info[2], "nFrames");
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 3, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate,
+                      &sample_rate))
+    return env.Undefined();
   int hop_length{};
   if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
   float fmin{};
@@ -197,7 +193,7 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   if (error != SONARE_OK) return CheckCResult(env, error);
   std::vector<float> owned(output, output + output_length);
   sonare_free_floats(output);
-  return VecToFloat32(env, owned);
+  return Float32ArrayFrom(env, owned);
   SONARE_NODE_CATCH(env)
 }
 
@@ -211,7 +207,9 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   const int n_bins = node_narrow_int(env, info[1], "nBins");
   const int n_frames = node_narrow_int(env, info[2], "nFrames");
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 3, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate,
+                      &sample_rate))
+    return env.Undefined();
   int hop_length{};
   if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
   float fmin{};
@@ -234,7 +232,7 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   if (error != SONARE_OK) return CheckCResult(env, error);
   std::vector<float> owned(output, output + output_length);
   sonare_free_floats(output);
-  return VecToFloat32(env, owned);
+  return Float32ArrayFrom(env, owned);
   SONARE_NODE_CATCH(env)
 }
 
@@ -269,8 +267,8 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sr{};
-  if (!OptionalDomainArg(env, info, 3, "sampleRate", 22050, sonare::kInverseSampleRateDomain,
-                         &sr)) {
+  if (!OptionalDomainArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate,
+                         sonare::kInverseSampleRateDomain, &sr)) {
     return env.Undefined();
   }
   int n_fft{};
@@ -299,7 +297,7 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nBins", Napi::Number::New(env, n_fft / 2 + 1));
   out.Set("nFrames", Napi::Number::New(env, n_frames));
-  out.Set("magnitude", VecToFloat32(env, stft));
+  out.Set("magnitude", Float32ArrayFrom(env, stft));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -321,8 +319,8 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sr{};
-  if (!OptionalDomainArg(env, info, 3, "sampleRate", 22050, sonare::kInverseAudioSampleRateDomain,
-                         &sr)) {
+  if (!OptionalDomainArg(env, info, 3, "sampleRate", sonare::constants::kDefaultSampleRate,
+                         sonare::kInverseAudioSampleRateDomain, &sr)) {
     return env.Undefined();
   }
   int n_fft{};
@@ -352,8 +350,7 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   config.htk = htk;
 
   sonare::Audio result = sonare::mel_to_audio(typed.Data(), n_mels, n_frames, config, n_iter, sr);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out_vec);
+  return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }
 
@@ -418,7 +415,7 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nMels", Napi::Number::New(env, n_mels));
   out.Set("nFrames", Napi::Number::New(env, n_frames));
-  out.Set("power", VecToFloat32(env, mel));
+  out.Set("power", Float32ArrayFrom(env, mel));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -443,8 +440,8 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   int n_mels{};
   if (!OptionalIntArg(env, info, 3, "nMels", 128, &n_mels)) return env.Undefined();
   int sr{};
-  if (!OptionalDomainArg(env, info, 4, "sampleRate", 22050, sonare::kInverseAudioSampleRateDomain,
-                         &sr)) {
+  if (!OptionalDomainArg(env, info, 4, "sampleRate", sonare::constants::kDefaultSampleRate,
+                         sonare::kInverseAudioSampleRateDomain, &sr)) {
     return env.Undefined();
   }
   int n_fft{};
@@ -477,8 +474,7 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
 
   sonare::Audio result =
       sonare::mfcc_to_audio(typed.Data(), n_mfcc, n_frames, config, n_iter, sr, lifter);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out_vec);
+  return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }
 
@@ -489,10 +485,7 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
@@ -528,10 +521,7 @@ Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
@@ -563,10 +553,7 @@ Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::ZeroCrossings(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   float threshold{};
   if (!OptionalFiniteFloatArg(env, info, 1, "threshold", 1e-10f, &threshold))
@@ -595,10 +582,7 @@ Napi::Value SonareWrap::ZeroCrossings(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PitchTuning(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "frequenciesHz must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "frequenciesHz must be a Float32Array")) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   float resolution{};
   if (!OptionalFiniteFloatArg(env, info, 1, "resolution", 0.01f, &resolution))
@@ -647,10 +631,7 @@ Napi::Value SonareWrap::ReferenceHzToTuning(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::EstimateTuning(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();

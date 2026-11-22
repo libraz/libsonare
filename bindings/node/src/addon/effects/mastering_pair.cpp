@@ -246,7 +246,7 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
       node_narrow_string(env, info[0], "processorName"), source.Data(), reference.Data(),
       source.ElementLength(), reference.ElementLength(), sr, reference_sr, params);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToFloat32(env, result.samples));
+  out.Set("samples", Float32ArrayFrom(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -509,14 +509,7 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
@@ -573,14 +566,7 @@ Napi::Value SonareWrap::MasteringChainConfigParams(const Napi::CallbackInfo& inf
 
 Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
@@ -599,14 +585,7 @@ Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.

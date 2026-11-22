@@ -172,14 +172,7 @@ Napi::Value RunChainWithCallbacks(Napi::Env env, mastering_api::MasteringChain& 
 Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -212,10 +205,9 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   auto result = sonare::mastering::maximizer::loudness_optimize(audio, config);
-  std::vector<float> out_vec(result.audio.data(), result.audio.data() + result.audio.size());
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToFloat32(env, out_vec));
+  out.Set("samples", Float32ArrayFrom(env, result.audio.data(), result.audio.size()));
   out.Set("sampleRate", Napi::Number::New(env, result.audio.sample_rate()));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -258,7 +250,7 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
                                                          sample_rate, params);
   });
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToFloat32(env, result.samples));
+  out.Set("samples", Float32ArrayFrom(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -312,8 +304,8 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
                                                                 left.ElementLength(), sr, params);
   });
   Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToFloat32(env, result.left));
-  out.Set("right", VecToFloat32(env, result.right));
+  out.Set("left", Float32ArrayFrom(env, result.left));
+  out.Set("right", Float32ArrayFrom(env, result.right));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -328,14 +320,7 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
@@ -368,7 +353,7 @@ Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
   }
   auto result = chain.process_mono(typed.Data(), typed.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToFloat32(env, result.samples));
+  out.Set("samples", Float32ArrayFrom(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -435,8 +420,8 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
   }
   auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToFloat32(env, result.left));
-  out.Set("right", VecToFloat32(env, result.right));
+  out.Set("left", Float32ArrayFrom(env, result.left));
+  out.Set("right", Float32ArrayFrom(env, result.right));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -466,14 +451,7 @@ Napi::Object StreamingLoudnessGainToObject(
 
 Napi::Value SonareWrap::MasteringStreamingLoudnessGain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
@@ -574,7 +552,7 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
   }
   auto result = chain.process_mono(typed.Data(), typed.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToFloat32(env, result.samples));
+  out.Set("samples", Float32ArrayFrom(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -591,21 +569,11 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Local copy of VecToFloat32 (the one on SonareWrap is private and the async
-// workers are not friends of SonareWrap).
-Napi::Float32Array VecToTypedArray(Napi::Env env, const std::vector<float>& vec) {
-  Napi::Float32Array array = Napi::Float32Array::New(env, vec.size());
-  if (!vec.empty()) {
-    std::memcpy(array.Data(), vec.data(), vec.size() * sizeof(float));
-  }
-  return array;
-}
-
 // Helper: serialise a MonoChainResult into a JS object on the main thread.
 Napi::Object MonoResultToObject(Napi::Env env,
                                 const sonare::mastering::api::MonoChainResult& result) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToTypedArray(env, result.samples));
+  out.Set("samples", Float32ArrayFrom(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -623,8 +591,8 @@ Napi::Object MonoResultToObject(Napi::Env env,
 Napi::Object StereoResultToObject(Napi::Env env,
                                   const sonare::mastering::api::StereoChainResult& result) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToTypedArray(env, result.left));
-  out.Set("right", VecToTypedArray(env, result.right));
+  out.Set("left", Float32ArrayFrom(env, result.left));
+  out.Set("right", Float32ArrayFrom(env, result.right));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
@@ -910,8 +878,8 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
   }
   auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToFloat32(env, result.left));
-  out.Set("right", VecToFloat32(env, result.right));
+  out.Set("left", Float32ArrayFrom(env, result.left));
+  out.Set("right", Float32ArrayFrom(env, result.right));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));

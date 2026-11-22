@@ -24,44 +24,36 @@ namespace sonare_node {
 
 namespace {
 
-sonare::mastering::eq::EqBandType ParseBandType(const std::string& value) {
-  const auto parsed = sonare::mastering::eq::band_type_from_string(value);
+/// @brief Parses an EQ token through @p parse, refusing an unknown one with the accepted set.
+template <typename Parse, typename Tokens>
+auto ParseEqToken(const std::string& value, const char* label, Parse parse, Tokens tokens) {
+  const auto parsed = parse(value);
   if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ band type: " + value + " (expected " +
-                                      sonare::mastering::eq::band_type_tokens() + ")");
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        std::string("unknown EQ ") + label + ": " + value + " (expected " + tokens() + ")");
   }
   return *parsed;
+}
+
+sonare::mastering::eq::EqBandType ParseBandType(const std::string& value) {
+  return ParseEqToken(value, "band type", sonare::mastering::eq::band_type_from_string,
+                      sonare::mastering::eq::band_type_tokens);
 }
 
 sonare::mastering::eq::BiquadCoeffMode ParseCoeffMode(const std::string& value) {
-  const auto parsed = sonare::mastering::eq::coeff_mode_from_string(value);
-  if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ coefficient mode: " + value + " (expected " +
-                                      sonare::mastering::eq::coeff_mode_tokens() + ")");
-  }
-  return *parsed;
+  return ParseEqToken(value, "coefficient mode", sonare::mastering::eq::coeff_mode_from_string,
+                      sonare::mastering::eq::coeff_mode_tokens);
 }
 
 sonare::mastering::eq::StereoPlacement ParsePlacement(const std::string& value) {
-  const auto parsed = sonare::mastering::eq::placement_from_string(value);
-  if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ placement: " + value + " (expected " +
-                                      sonare::mastering::eq::placement_tokens() + ")");
-  }
-  return *parsed;
+  return ParseEqToken(value, "placement", sonare::mastering::eq::placement_from_string,
+                      sonare::mastering::eq::placement_tokens);
 }
 
 sonare::mastering::eq::PhaseMode ParseBandPhase(const std::string& value) {
-  const auto parsed = sonare::mastering::eq::phase_mode_from_string(value);
-  if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ band phase mode: " + value + " (expected " +
-                                      sonare::mastering::eq::phase_mode_tokens() + ")");
-  }
-  return *parsed;
+  return ParseEqToken(value, "band phase mode", sonare::mastering::eq::phase_mode_from_string,
+                      sonare::mastering::eq::phase_mode_tokens);
 }
 
 sonare::mastering::eq::PhaseMode ParsePhaseModeInt(int mode) {
@@ -740,17 +732,10 @@ Napi::Value StreamingEqualizerWrap::Spectrum(const Napi::CallbackInfo& info) {
   out.Set("postLeft", make_channel(snapshot.post, snapshot.post_count, false));
   out.Set("postRight", make_channel(snapshot.post, snapshot.post_count, true));
 
-  Napi::Float32Array band_gain = Napi::Float32Array::New(env, snapshot.band_gain_db.size());
-  for (size_t i = 0; i < snapshot.band_gain_db.size(); ++i) {
-    band_gain[i] = snapshot.band_gain_db[i];
-  }
-  out.Set("bandGainDb", band_gain);
-
-  Napi::Float32Array profile = Napi::Float32Array::New(env, snapshot.profile_db.size());
-  for (size_t i = 0; i < snapshot.profile_db.size(); ++i) {
-    profile[i] = snapshot.profile_db[i];
-  }
-  out.Set("profileDb", profile);
+  out.Set("bandGainDb",
+          Float32ArrayFrom(env, snapshot.band_gain_db.data(), snapshot.band_gain_db.size()));
+  out.Set("profileDb",
+          Float32ArrayFrom(env, snapshot.profile_db.data(), snapshot.profile_db.size()));
   out.Set("lastAutoGainDb", Napi::Number::New(env, eq_->last_auto_gain_db()));
   out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
   return out;

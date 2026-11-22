@@ -45,14 +45,6 @@ const char* SonareWrap::ModeName(SonareMode mode) {
   }
 }
 
-Napi::Float32Array SonareWrap::VecToFloat32(Napi::Env env, const std::vector<float>& vec) {
-  auto result = Napi::Float32Array::New(env, vec.size());
-  if (!vec.empty()) {
-    std::memcpy(result.Data(), vec.data(), vec.size() * sizeof(float));
-  }
-  return result;
-}
-
 Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Audio",

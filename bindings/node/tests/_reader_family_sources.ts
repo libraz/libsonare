@@ -94,7 +94,6 @@ export const READER_FAMILIES: Readonly<
     Int32Property: 'refuse',
     Int64Property: 'refuse',
     IntProperty: 'refuse',
-    NonNegativeSizeTProperty: 'refuse',
     IntInRangeOrAbsentProperty: 'refuse',
     MidiByteProperty: 'refuse',
     NamedSelectorProperty: 'refuse',

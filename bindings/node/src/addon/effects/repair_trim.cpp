@@ -89,7 +89,7 @@ SonareTrimSilenceConfig ToCTrimConfig(const sonare::mastering::repair::TrimSilen
 
 Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -158,7 +158,7 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
 
 Napi::Value SonareWrap::MasteringRepairDetectTrimRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

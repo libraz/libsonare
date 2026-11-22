@@ -15,10 +15,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <limits>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <type_traits>
@@ -92,17 +90,6 @@ inline uint32_t node_narrow_uint32(Napi::Env env, const Napi::Value& value, cons
       env, value, name, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max())));
 }
 
-/// @brief uint16 sibling of @ref node_narrow_number.
-/// @details The narrowing cast is what makes this a member rather than a cast at
-///   the site: 65536 lands on 0 and -1 on 0xFFFF, both inside the width, so a C
-///   ABI taking a uint16_t mask or index cannot tell either from a caller's
-///   choice. A field with a domain narrower than the width still owns that
-///   bound; this only closes the wrap.
-inline uint16_t node_narrow_uint16(Napi::Env env, const Napi::Value& value, const char* name) {
-  return static_cast<uint16_t>(node_narrow_number(
-      env, value, name, 0.0, static_cast<double>(std::numeric_limits<uint16_t>::max())));
-}
-
 /// @brief Raw 32-bit word sibling of @ref node_narrow_number (a UMP word, a
 ///        packed MIDI 1.0 message).
 /// @details Deliberately NOT @ref node_narrow_uint32: the whole 32-bit range is
@@ -165,6 +152,11 @@ inline float node_float_as_c_abi(const Napi::Value& value) {
   return value.As<Napi::Number>().FloatValue();
 }
 
+/// @brief The one wording every 32-bit float range refusal reports.
+inline std::string node_float_range_message(const char* name) {
+  return std::string(name) + " must be finite and in [-3.4028235e38, 3.4028235e38]";
+}
+
 /// @brief Refuses a finite value no 32-bit float can hold, giving the float
 ///        readers the range discipline @ref node_narrow_number gives the integer
 ///        ones.
@@ -178,8 +170,7 @@ inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const ch
   const double number = value.As<Napi::Number>().DoubleValue();
   if (std::isfinite(number) &&
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw Napi::RangeError::New(
-        env, std::string(name) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
+    throw Napi::RangeError::New(env, node_float_range_message(name));
   }
   return static_cast<float>(number);
 }
@@ -195,8 +186,7 @@ inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const ch
 inline float node_narrow_finite_float(Napi::Env env, const Napi::Value& value, const char* name) {
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!std::isfinite(number)) {
-    throw Napi::RangeError::New(
-        env, std::string(name) + " must be finite and in [-3.4028235e38, 3.4028235e38]");
+    throw Napi::RangeError::New(env, node_float_range_message(name));
   }
   return node_narrow_float(env, value, name);
 }
@@ -1234,22 +1224,28 @@ inline bool RequiredBoolArg(Napi::Env env, const Napi::CallbackInfo& info, size_
 /// @details Reports through a pending exception, this family's contract: a wrong type is the
 ///   TypeError, a value outside @p domain the core's refusal.
 template <typename T>
-inline bool RequiredDomainArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
-                              const char* name, const sonare::util::check::NumericDomain& domain,
-                              T* out) {
+inline bool RequiredDomainValue(Napi::Env env, const Napi::Value& value, const char* name,
+                                const sonare::util::check::NumericDomain& domain, T* out) {
   if (env.IsExceptionPending()) return false;
-  if (!info[index].IsNumber()) {
+  if (!value.IsNumber()) {
     Napi::TypeError::New(env, std::string(name) + " must be " + node_domain_type_text(domain))
         .ThrowAsJavaScriptException();
     return false;
   }
   try {
-    *out = node_domain_number<T>(info[index], name, domain);
+    *out = node_domain_number<T>(value, name, domain);
   } catch (...) {
     ThrowCurrentException(env);
     return false;
   }
   return true;
+}
+
+template <typename T>
+inline bool RequiredDomainArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, const sonare::util::check::NumericDomain& domain,
+                              T* out) {
+  return RequiredDomainValue(env, info[index], name, domain, out);
 }
 
 /// @brief Optional sibling of @ref RequiredDomainArg: absent, undefined or null reads as
@@ -1546,23 +1542,6 @@ inline bool NonNegativeSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, s
     return false;
   }
   return node_read_size_t_domain(env, info[index], name, out);
-}
-
-/// @brief Object-key form of @ref NonNegativeSizeTArg: undefined/null reads as
-///        @p fallback, any other non-number is a TypeError.
-inline bool NonNegativeSizeTProperty(Napi::Env env, const Napi::Object& obj, const char* key,
-                                     size_t fallback, size_t* out) {
-  if (env.IsExceptionPending() || out == nullptr) return false;
-  const Napi::Value value = obj.Get(key);
-  if (value.IsUndefined() || value.IsNull()) {
-    *out = fallback;
-    return true;
-  }
-  if (!value.IsNumber()) {
-    Napi::TypeError::New(env, std::string(key) + " must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-  return node_read_size_t_domain(env, value, key, out);
 }
 
 }  // namespace sonare_node

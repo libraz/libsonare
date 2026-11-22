@@ -22,16 +22,10 @@ using namespace sonare_node;
 
 namespace {
 
-// Acoustic sample-rate bounds, kept in sync with the C ABI's
-// sonare_c_detail::kMinSampleRate / kMaxSampleRate so every binding rejects the
-// same out-of-range rates (the C++ functions are otherwise called directly).
-constexpr int kAcousticMinSampleRate = 8000;
-constexpr int kAcousticMaxSampleRate = 384000;
-
 // Throws (via ThrowAsJavaScriptException) and returns false when the rate is out
 // of range, mirroring the C ABI's validate_audio_params bound.
 bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
-  if (sample_rate < kAcousticMinSampleRate || sample_rate > kAcousticMaxSampleRate) {
+  if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
     Napi::RangeError::New(env, "sampleRate out of supported range [8000, 384000]")
         .ThrowAsJavaScriptException();
     return false;
@@ -126,11 +120,6 @@ sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts) 
           position("listener", sonare::acoustic::kDefaultPlacement.listener)};
 }
 
-std::vector<float> AudioToVector(const sonare::Audio& audio) {
-  if (audio.empty()) return {};
-  return std::vector<float>(audio.data(), audio.data() + audio.size());
-}
-
 // Wire string for a diagnostic severity, matching the RirDiagnostic type.
 const char* SeverityName(sonare::Diagnostic::Severity severity) {
   switch (severity) {
@@ -195,10 +184,9 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   sonare::acoustic::first_error_text(result.diagnostics));
   }
-  std::vector<float> rir = AudioToVector(result.rir);
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("rir", VecToFloat32(env, rir));
+  out.Set("rir", Float32ArrayFrom(env, result.rir.data(), result.rir.size()));
   out.Set("sampleRate", Napi::Number::New(env, result.rir.sample_rate()));
   out.Set("diagnostics", DiagnosticsArray(env, result.diagnostics));
   return out;
@@ -276,8 +264,8 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   out.Set("heightM", Napi::Number::New(env, est.dims.height));
   out.Set("drrDb", Napi::Number::New(env, est.drr_db));
   out.Set("confidence", Napi::Number::New(env, est.confidence));
-  out.Set("bandAbsorption", VecToFloat32(env, absorption_bands));
-  out.Set("rt60Bands", VecToFloat32(env, rt60_bands));
+  out.Set("bandAbsorption", Float32ArrayFrom(env, absorption_bands));
+  out.Set("rt60Bands", Float32ArrayFrom(env, rt60_bands));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -324,9 +312,9 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   }
   if (geometry.band_absorption_count > 0) {
     out.Set("bandAbsorption",
-            VecToFloat32(env, std::vector<float>(
-                                  geometry.band_absorption,
-                                  geometry.band_absorption + geometry.band_absorption_count)));
+            Float32ArrayFrom(env, std::vector<float>(
+                                      geometry.band_absorption,
+                                      geometry.band_absorption + geometry.band_absorption_count)));
   }
   return out;
   SONARE_NODE_CATCH(env)
@@ -379,13 +367,12 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   const auto result = sonare::util::check::with_camel_paths(
       [&] { return sonare::effects::acoustic::room_morph(audio, cfg); },
       sonare::effects::acoustic::kRoomMorphRenamedKeys);
-  std::vector<float> morphed = AudioToVector(result.audio);
 
   // Shaped like SynthesizeRir's result rather than a bare buffer: the same
   // synthesis runs underneath and its warnings describe a room the caller did
   // not ask for. An unusable request throws, so every entry here is a warning.
   Napi::Object out = Napi::Object::New(env);
-  out.Set("audio", VecToFloat32(env, morphed));
+  out.Set("audio", Float32ArrayFrom(env, result.audio.data(), result.audio.size()));
   out.Set("sampleRate", Napi::Number::New(env, result.audio.sample_rate()));
   out.Set("diagnostics", DiagnosticsArray(env, result.diagnostics));
   return out;
@@ -430,8 +417,8 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
       sonare::effects::acoustic::kRoomMorphRenamedKeys);
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToFloat32(env, AudioToVector(result.left)));
-  out.Set("right", VecToFloat32(env, AudioToVector(result.right)));
+  out.Set("left", Float32ArrayFrom(env, result.left.data(), result.left.size()));
+  out.Set("right", Float32ArrayFrom(env, result.right.data(), result.right.size()));
   out.Set("sampleRate", Napi::Number::New(env, result.left.sample_rate()));
   out.Set("diagnostics", DiagnosticsArray(env, result.diagnostics));
   return out;

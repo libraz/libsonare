@@ -163,7 +163,7 @@ SonareDehumConfig read_dehum_config_c(const Napi::Object& options, SonareDehumCo
 
 Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -249,35 +249,16 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalLinked(const Napi::Callba
   if (!CheckLinkedArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
-  Napi::Array channels = info[0].As<Napi::Array>();
-  std::vector<Napi::Float32Array> inputs;
-  std::vector<const float*> in_ptrs;
-  size_t length = 0;
-  for (size_t index = 0; index < channels.Length(); ++index) {
-    Napi::Value channel = channels.Get(index);
-    if (!IsFloat32Array(channel)) {
-      Napi::TypeError::New(env, "every channel must be a Float32Array")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    inputs.push_back(channel.As<Napi::Float32Array>());
-    if (index == 0) {
-      length = inputs.back().ElementLength();
-    } else if (inputs.back().ElementLength() != length) {
-      Napi::RangeError::New(env, "every channel must have the same length")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    in_ptrs.push_back(inputs.back().Data());
-  }
+  ChannelInputs inputs;
+  if (!ReadChannelInputs(env, info[0], &inputs)) return env.Undefined();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   SonareDenoiseClassicalConfig config = DefaultDenoiseConfig();
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = read_denoise_config(info[2].As<Napi::Object>(), config);
   }
   SonareDenoiseLinkedResult result{};
-  SonareError err = sonare_mastering_repair_denoise_classical_linked(in_ptrs.data(), in_ptrs.size(),
-                                                                     length, sr, &config, &result);
+  SonareError err = sonare_mastering_repair_denoise_classical_linked(
+      inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -293,7 +274,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalLinked(const Napi::Callba
 
 Napi::Value SonareWrap::MasteringRepairDetectNoiseFloor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -337,7 +318,7 @@ Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& i
 
 Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -413,7 +394,7 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
 
 Napi::Value SonareWrap::MasteringRepairDetectHum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

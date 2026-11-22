@@ -58,12 +58,8 @@ std::vector<float> run_dynamics_offline(Processor& processor, const float* sampl
 
 Napi::Object make_dynamics_result(Napi::Env env, const std::vector<float>& samples,
                                   int latency_samples) {
-  auto typed = Napi::Float32Array::New(env, samples.size());
-  if (!samples.empty()) {
-    std::memcpy(typed.Data(), samples.data(), samples.size() * sizeof(float));
-  }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", typed);
+  out.Set("samples", Float32ArrayFrom(env, samples));
   out.Set("latencySamples", Napi::Number::New(env, latency_samples));
   return out;
 }
@@ -72,7 +68,7 @@ Napi::Object make_dynamics_result(Napi::Env env, const std::vector<float>& sampl
 
 Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -111,7 +107,7 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -140,7 +136,7 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckMonoArgs(env, info)) return env.Undefined();
+  if (!RequireMonoArgs(info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

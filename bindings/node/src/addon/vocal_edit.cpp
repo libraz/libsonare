@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "c_api/editing_input_domains.h"
+#include "core/audio.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -697,8 +698,8 @@ struct StateGuard {
 
 bool ReadSampleRate(Napi::Env env, const Napi::Value& value, int* out) {
   int64_t rate = 0;
-  if (!RequiredSafeIntegerValue(env, value, "sampleRate", &rate, 0) || rate < 8000 ||
-      rate > 384000) {
+  if (!RequiredSafeIntegerValue(env, value, "sampleRate", &rate, 0) ||
+      rate < sonare::kMinAudioSampleRate || rate > sonare::kMaxAudioSampleRate) {
     if (!env.IsExceptionPending()) {
       Napi::RangeError::New(env, "sampleRate must be an integer in [8000, 384000]")
           .ThrowAsJavaScriptException();

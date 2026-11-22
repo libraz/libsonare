@@ -342,8 +342,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static const char* PitchClassName(SonarePitchClass pc);
   // Helper to get mode name string
   static const char* ModeName(SonareMode mode);
-  // Helper to create Float32Array from vector
-  static Napi::Float32Array VecToFloat32(Napi::Env env, const std::vector<float>& vec);
 
   SonareAudio* audio_;
 };

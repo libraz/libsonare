@@ -201,10 +201,6 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
     'Refuses a non-integer outright, as MidiByteProperty does, so no fractional value can truncate onto its zero.',
   ],
   [
-    'NonNegativeSizeTProperty',
-    'Refuses a non-integer outright, and takes an out-pointer besides, so no fractional value can truncate onto its zero.',
-  ],
-  [
     'RequiredIntProperty',
     'Takes an out-pointer instead of a fallback: a missing or wrong-typed value is an error, so there is no zero to land on.',
   ],

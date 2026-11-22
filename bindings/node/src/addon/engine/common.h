@@ -78,7 +78,7 @@ inline bool ReadParameter(const Napi::CallbackInfo& info, size_t index, SonarePa
     Napi::TypeError::New(env, "parameter id must be a number").ThrowAsJavaScriptException();
     return false;
   }
-  out->id = node_narrow_uint32(id_val.Env(), id_val, "id");
+  out->id = node_narrow_uint32(env, id_val, "id");
   // Optional name/unit: absent reads as the empty string, a non-string is refused.
   if (!CopyString(env, out->name, sizeof(out->name), sonare_node::StringProperty(obj, "name", ""),
                   "parameter name") ||
@@ -95,8 +95,7 @@ inline bool ReadParameter(const Napi::CallbackInfo& info, size_t index, SonarePa
   out->default_curve = sonare_node::IntProperty(obj, "defaultCurve", 1);
   // A wrong-typed field left a pending JS exception; bail out before the caller
   // hands this to sonare_engine_add_parameter so no bogus parameter is registered.
-  if (env.IsExceptionPending()) return false;
-  return true;
+  return !env.IsExceptionPending();
 }
 
 inline Napi::Object TelemetryToObject(Napi::Env env, const SonareEngineTelemetry& telemetry) {

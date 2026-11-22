@@ -574,7 +574,8 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) {
+  if (!OptionalIntArg(env, info, 1, "sampleRate", sonare::constants::kDefaultSampleRate,
+                      &sample_rate)) {
     return sonare_node::RejectedFromPending(env);
   }
   SonareMusicAnalyzeOptions options{};

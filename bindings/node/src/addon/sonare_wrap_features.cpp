@@ -53,9 +53,9 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   out.Set("nFft", Napi::Number::New(env, spec.n_fft()));
   out.Set("hopLength", Napi::Number::New(env, spec.hop_length()));
   out.Set("sampleRate", Napi::Number::New(env, spec.sample_rate()));
-  out.Set("magnitude", VecToFloat32(env, spec.magnitude()));
-  out.Set("power", VecToFloat32(env, spec.power()));
-  if (db) out.Set("db", VecToFloat32(env, spec.to_db()));
+  out.Set("magnitude", Float32ArrayFrom(env, spec.magnitude()));
+  out.Set("power", Float32ArrayFrom(env, spec.power()));
+  if (db) out.Set("db", Float32ArrayFrom(env, spec.to_db()));
 
   return out;
   SONARE_NODE_CATCH(env)
@@ -115,10 +115,10 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
 
   // Power values
   std::vector<float> power_vec(mel.power_data(), mel.power_data() + mel.n_mels() * mel.n_frames());
-  out.Set("power", VecToFloat32(env, power_vec));
+  out.Set("power", Float32ArrayFrom(env, power_vec));
 
   // dB values
-  out.Set("db", VecToFloat32(env, mel.to_db()));
+  out.Set("db", Float32ArrayFrom(env, mel.to_db()));
 
   return out;
   SONARE_NODE_CATCH(env)
@@ -181,7 +181,7 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   out.Set("htk", Napi::Boolean::New(env, config.htk));
   out.Set("isDb", Napi::Boolean::New(env, false));
   out.Set("lifter", Napi::Number::New(env, lifter));
-  out.Set("coefficients", VecToFloat32(env, mfcc_coeffs));
+  out.Set("coefficients", Float32ArrayFrom(env, mfcc_coeffs));
 
   return out;
   SONARE_NODE_CATCH(env)
@@ -207,8 +207,8 @@ Napi::Value SonareWrap::MelDelta(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  return VecToFloat32(env,
-                      sonare::MelSpectrogram::delta(typed.Data(), n_features, n_frames, width));
+  return Float32ArrayFrom(env,
+                          sonare::MelSpectrogram::delta(typed.Data(), n_features, n_frames, width));
   SONARE_NODE_CATCH(env)
 }
 
@@ -237,8 +237,8 @@ Napi::Value SonareWrap::Piptrack(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nBins", Napi::Number::New(env, result.n_bins));
   out.Set("nFrames", Napi::Number::New(env, result.n_frames));
-  out.Set("pitches", VecToFloat32(env, result.pitches));
-  out.Set("magnitudes", VecToFloat32(env, result.magnitudes));
+  out.Set("pitches", Float32ArrayFrom(env, result.pitches));
+  out.Set("magnitudes", Float32ArrayFrom(env, result.magnitudes));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -274,9 +274,9 @@ Napi::Value SonareWrap::ReassignedSpectrogram(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nBins", Napi::Number::New(env, n_bins));
   out.Set("nFrames", Napi::Number::New(env, n_frames));
-  out.Set("magnitude", VecToFloat32(env, result.magnitude));
-  out.Set("times", VecToFloat32(env, result.times));
-  out.Set("frequencies", VecToFloat32(env, result.frequencies));
+  out.Set("magnitude", Float32ArrayFrom(env, result.magnitude));
+  out.Set("times", Float32ArrayFrom(env, result.times));
+  out.Set("frequencies", Float32ArrayFrom(env, result.frequencies));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -315,7 +315,7 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
 
   std::vector<float> features_vec(chroma.data(),
                                   chroma.data() + chroma.n_chroma() * chroma.n_frames());
-  out.Set("features", VecToFloat32(env, features_vec));
+  out.Set("features", Float32ArrayFrom(env, features_vec));
 
   // Mean energy per pitch class
   auto mean = chroma.mean_energy();
@@ -465,7 +465,7 @@ Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
   sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config);
   std::vector<float> centroid = sonare::spectral_centroid(spec, args.sample_rate);
 
-  return VecToFloat32(env, centroid);
+  return Float32ArrayFrom(env, centroid);
   SONARE_NODE_CATCH(env)
 }
 
@@ -494,7 +494,7 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config);
   std::vector<float> bandwidth = sonare::spectral_bandwidth(spec, args.sample_rate, p);
 
-  return VecToFloat32(env, bandwidth);
+  return Float32ArrayFrom(env, bandwidth);
   SONARE_NODE_CATCH(env)
 }
 
@@ -523,7 +523,7 @@ Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config);
   std::vector<float> rolloff = sonare::spectral_rolloff(spec, args.sample_rate, roll_percent);
 
-  return VecToFloat32(env, rolloff);
+  return Float32ArrayFrom(env, rolloff);
   SONARE_NODE_CATCH(env)
 }
 
@@ -550,7 +550,7 @@ Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config);
   std::vector<float> flatness = sonare::spectral_flatness(spec);
 
-  return VecToFloat32(env, flatness);
+  return Float32ArrayFrom(env, flatness);
   SONARE_NODE_CATCH(env)
 }
 
@@ -570,7 +570,7 @@ Napi::Value SonareWrap::SpectralFlux(const Napi::CallbackInfo& info) {
   sonare::StftConfig config;
   config.n_fft = args.frame_length;
   config.hop_length = args.hop_length;
-  return VecToFloat32(
+  return Float32ArrayFrom(
       env, sonare::spectral_flux(sonare::Spectrogram::compute(
                                      sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(),
                                                                 args.sample_rate),
@@ -599,7 +599,7 @@ Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   std::vector<float> zcr = sonare::zero_crossing_rate(audio, args.frame_length, args.hop_length);
 
-  return VecToFloat32(env, zcr);
+  return Float32ArrayFrom(env, zcr);
   SONARE_NODE_CATCH(env)
 }
 
@@ -623,7 +623,7 @@ Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
   std::vector<float> rms = sonare::rms_energy(audio, args.frame_length, args.hop_length);
 
-  return VecToFloat32(env, rms);
+  return Float32ArrayFrom(env, rms);
   SONARE_NODE_CATCH(env)
 }
 
@@ -662,8 +662,8 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
       [&] { return sonare::yin_track(audio, config); }, sonare::kPitchTrackRequestKeys);
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("f0", VecToFloat32(env, result.f0));
-  out.Set("voicedProb", VecToFloat32(env, result.voiced_prob));
+  out.Set("f0", Float32ArrayFrom(env, result.f0));
+  out.Set("voicedProb", Float32ArrayFrom(env, result.voiced_prob));
 
   // Convert voiced_flag to array of bools
   Napi::Array voiced_arr = Napi::Array::New(env, result.voiced_flag.size());
@@ -713,8 +713,8 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
       [&] { return sonare::pyin(audio, config); }, sonare::kPitchTrackRequestKeys);
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("f0", VecToFloat32(env, result.f0));
-  out.Set("voicedProb", VecToFloat32(env, result.voiced_prob));
+  out.Set("f0", Float32ArrayFrom(env, result.f0));
+  out.Set("voicedProb", Float32ArrayFrom(env, result.voiced_prob));
 
   // Convert voiced_flag to array of bools
   Napi::Array voiced_arr = Napi::Array::New(env, result.voiced_flag.size());

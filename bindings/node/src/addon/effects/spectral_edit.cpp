@@ -61,14 +61,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   // (samples: Float32Array, sampleRate: number, ops: object[], options?: object)
-  if (!IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!RequireMonoArgs(info)) return env.Undefined();
   if (!info[2].IsArray()) {
     Napi::TypeError::New(env, "ops must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
