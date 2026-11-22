@@ -97,10 +97,12 @@ import type { EngineMetronomeConfig } from '../src/types.js';
 import {
   addonEntryPoints,
   bareHasSites,
+  classifyObjectKeyDefinitions,
   isSanctionedReaderName,
   optionKeysFor,
   readerShapedDefinitions,
   SHARED_READER_FILE,
+  writerShapedDefinitions,
 } from './_addon_sources.js';
 import { glide } from './_helpers.js';
 
@@ -155,10 +157,6 @@ const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   [
     'sonare_wrap_synth_patch.h:SynthFieldPresent',
     'Presence probe used to decide whether a patch field was supplied at all (distinct from reading it with a default); shared by the synth patch TUs from the same header.',
-  ],
-  [
-    'sonare_wrap_utils.h:SetMeasured',
-    'A writer, not a reader: it sets a measured scalar on an output object and omits a NaN one, so it takes (object, key, value) without reading the key.',
   ],
   [
     'sonare_wrap_utils.h:ReadMeterCandidateNumerators',
@@ -1363,6 +1361,36 @@ describe('addon JS-object readers stay on the shared helper families', () => {
     ]) {
       expect(inShared, `${name} should be seen as reader-shaped`).toContain(name);
     }
+  });
+
+  it('tells a member writer from a key reader by return type, reference and body', () => {
+    // The writer family is a shape of its own: void, a mutable object reference, and a body that
+    // only sets members. Each sample below breaks exactly one of the three and must stay a reader.
+    const sample = (signature: string, body: string) =>
+      classifyObjectKeyDefinitions('sample.h', `inline ${signature} {\n  ${body}\n}\n`);
+    const writer = sample(
+      'void Put(Napi::Object& out, const char* key, double v)',
+      'out.Set(key, v);',
+    );
+    expect(writer.writers.map((site) => site.name)).toEqual(['Put']);
+    for (const [signature, body] of [
+      ['bool Put(Napi::Object& out, const char* key, double v)', 'out.Set(key, v); return true;'],
+      ['void Put(const Napi::Object& out, const char* key, double v)', 'out.Set(key, v);'],
+      ['void Put(Napi::Object out, const char* key, double v)', 'out.Set(key, v);'],
+      ['void Put(Napi::Object& out, const char* key, double* v)', '*v = out.Get(key).ToNumber();'],
+      [
+        'void Put(Napi::Object& out, const char* key, double* v)',
+        'if (out.Has(key)) out.Set(key, *v);',
+      ],
+    ] as const) {
+      const split = sample(signature, body);
+      expect(split.writers, `${signature} { ${body} }`).toEqual([]);
+      expect(split.readers.map((site) => site.name)).toEqual(['Put']);
+    }
+    // And the live tree has the writer the level records go through.
+    expect(writerShapedDefinitions().map((site) => site.id)).toContain(
+      'sonare_wrap_utils.h:SetMeasured',
+    );
   });
 
   it('defines no key reader outside the shared header', () => {

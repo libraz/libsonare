@@ -162,7 +162,72 @@ const OPTION_READER_KEY =
  * through by writing its parameters differently.
  */
 const READER_SHAPED_DEFINITION =
-  /^[A-Za-z_][\w:<>&*,\s]*?\b(\w+)\s*\(\s*(?:(?:const\s+)?Napi::Env\s*&?\s*\w+\s*,\s*)?(?:const\s+)?Napi::Object\s*&?\s*\w+\s*,\s*(?:const\s+)?(?:char\s*\*|std::string\s*&?|std::string_view\s*&?)\s*\w+\s*[,)]/gm;
+  /^([A-Za-z_][\w:<>&*,\s]*?)\b(\w+)\s*\(\s*(?:(?:const\s+)?Napi::Env\s*&?\s*\w+\s*,\s*)?(const\s+)?Napi::Object\s*(&?)\s*(\w+)\s*,\s*(?:const\s+)?(?:char\s*\*|std::string\s*&?|std::string_view\s*&?)\s*\w+\s*[,)]/gm;
+
+/** The body of the definition whose parameter list ends at or after @p from, braces balanced. */
+function definitionBody(text: string, from: number): string {
+  const open = text.indexOf('{', from);
+  if (open < 0) {
+    return '';
+  }
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === '{') {
+      depth++;
+    } else if (text[i] === '}' && --depth === 0) {
+      return text.slice(open, i + 1);
+    }
+  }
+  return text.slice(open);
+}
+
+/**
+ * Whether an (object, key, ...) definition is a WRITER: it returns void, takes the object as a
+ * mutable reference, and only sets members on it. All three must hold, so a key reader cannot
+ * pass as a writer by changing its parameter spelling — it would still have to stop reading.
+ */
+function isWriterShaped(match: RegExpMatchArray, text: string): boolean {
+  const [, returnType, , constness, reference, object] = match;
+  if (constness || reference !== '&' || !/\bvoid\s*$/.test(returnType)) {
+    return false;
+  }
+  const body = definitionBody(text, (match.index ?? 0) + match[0].length);
+  const reads = new RegExp(`\\b${object}\\s*\\.\\s*(?:Get|Has|HasOwnProperty)\\s*\\(`);
+  const writes = new RegExp(`\\b${object}\\s*\\.\\s*Set\\s*\\(`);
+  return writes.test(body) && !reads.test(body);
+}
+
+/** The (object, key, ...) definitions in one source text, split into readers and writers. */
+export function classifyObjectKeyDefinitions(
+  file: string,
+  text: string,
+): { readers: ReaderShapedSite[]; writers: ReaderShapedSite[] } {
+  const readers: ReaderShapedSite[] = [];
+  const writers: ReaderShapedSite[] = [];
+  for (const match of text.matchAll(READER_SHAPED_DEFINITION)) {
+    const start = match.index ?? 0;
+    const site = {
+      file,
+      name: match[2],
+      line: text.slice(0, start).split('\n').length,
+      id: `${file}:${match[2]}`,
+    };
+    (isWriterShaped(match, text) ? writers : readers).push(site);
+  }
+  return { readers, writers };
+}
+
+/** Every (object, key, ...) definition across the addon sources, split into readers and writers. */
+function objectKeyDefinitions(): { readers: ReaderShapedSite[]; writers: ReaderShapedSite[] } {
+  const readers: ReaderShapedSite[] = [];
+  const writers: ReaderShapedSite[] = [];
+  for (const { file, text } of addonSources()) {
+    const split = classifyObjectKeyDefinitions(file, text);
+    readers.push(...split.readers);
+    writers.push(...split.writers);
+  }
+  return { readers, writers };
+}
 
 /**
  * Every reader-shaped definition across the addon sources.
@@ -171,21 +236,15 @@ const READER_SHAPED_DEFINITION =
  * nowhere else. A name-based scan can never enforce that — it only recognises
  * the names it was told about — so this recognises the *shape* instead, and the
  * test requires every hit outside the shared header to carry a written reason.
+ * Writers ({@link writerShapedDefinitions}) share the parameter list and are a shape of their own.
  */
 export function readerShapedDefinitions(): ReaderShapedSite[] {
-  const sites: ReaderShapedSite[] = [];
-  for (const { file, text } of addonSources()) {
-    for (const match of text.matchAll(READER_SHAPED_DEFINITION)) {
-      const start = match.index ?? 0;
-      sites.push({
-        file,
-        name: match[1],
-        line: text.slice(0, start).split('\n').length,
-        id: `${file}:${match[1]}`,
-      });
-    }
-  }
-  return sites;
+  return objectKeyDefinitions().readers;
+}
+
+/** Every (object, key, ...) definition that sets a member rather than reading one. */
+export function writerShapedDefinitions(): ReaderShapedSite[] {
+  return objectKeyDefinitions().writers;
 }
 
 /** Whether {@link OPTION_READER} recognises a call to @p name. */
