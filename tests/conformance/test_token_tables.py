@@ -205,6 +205,60 @@ _KIND_ROW = check.TokenSet(
 )
 
 
+
+_NAME_TABLE_CORE = """
+constexpr const char* kLawNames[] = {"softKnee", "hard4.5"};
+constexpr size_t kLawCount = sizeof(kLawNames) / sizeof(kLawNames[0]);
+
+const char* to_string(Law law) {
+  const auto index = static_cast<size_t>(law);
+  return index < kLawCount ? kLawNames[index] : "unknown";
+}
+
+Law law_from_string(const std::string& value) {
+  for (size_t i = 0; i < kLawCount; ++i) {
+    if (value == kLawNames[i]) return static_cast<Law>(i);
+  }
+  throw SonareException(ErrorCode::InvalidFormat, "unknown law: " + value);
+}
+"""
+
+
+class NameTableTests(unittest.TestCase):
+    """A writer and parser that index one name table are read through the table."""
+
+    def run_with(self, core: str = _NAME_TABLE_CORE) -> tuple[list[str], int, tuple[int, int]]:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for rel, text in {**_FILES, "src/core.cpp": core}.items():
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text(text)
+            problems, _, compared = check.evaluate(root, (_ROW,))
+            return problems, compared, check.name_table_reads(root, (_ROW,))
+
+    def test_the_table_is_the_written_and_accepted_set(self) -> None:
+        problems, compared, reads = self.run_with()
+        self.assertEqual(problems, [])
+        self.assertEqual(compared, len(_ROW.sources))
+        self.assertEqual(reads, (1, 2))
+        self.assertEqual(check.written_tokens(_NAME_TABLE_CORE, "Law"), ["softKnee", "hard4.5"])
+
+    def test_the_out_of_range_fallback_is_not_a_token(self) -> None:
+        self.assertNotIn("unknown", check.written_tokens(_NAME_TABLE_CORE, "Law") or [])
+
+    def test_a_wrong_table_entry_is_named(self) -> None:
+        problems, _, _ = self.run_with(_NAME_TABLE_CORE.replace('"hard4.5"}', '"hard"}'))
+        self.assertIn("law: core token 'hard' matches no SONARE_LAW_* enumerator", problems)
+        self.assertIn("law: node Law (ts/types.ts): extra token 'hard4.5'", problems)
+
+    def test_a_table_the_file_does_not_define_is_not_read_as_clean(self) -> None:
+        core = _NAME_TABLE_CORE.replace(
+            'constexpr const char* kLawNames[] = {"softKnee", "hard4.5"};\n', ""
+        )
+        problems, _, reads = self.run_with(core)
+        self.assertNotEqual(problems, [])
+        self.assertEqual(reads, (0, 0))
+
 class SourceKindTests(unittest.TestCase):
     """Field unions, annotated aliases, subset sources, a left-over legacy writer and second writers."""
 

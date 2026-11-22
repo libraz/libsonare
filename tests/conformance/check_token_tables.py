@@ -231,10 +231,6 @@ ROWS: tuple[TokenSet, ...] = (
     TokenSet(
         name="channel layout",
         core=CoreTable("src/core/channel_layout.h", "ChannelLayout", "channel_layout_from_string", "channel_layout_to_string"),
-        also_written_by=(
-            CoreTable("src/playback/config.cpp", "ChannelLayout", None, "bed_layout_name"),
-            CoreTable("src/playback/renderer.cpp", "ChannelLayout", None, "layout_text"),
-        ),
         sources=(
             _src("node", "bindings/node/src/types_engine.ts", "ts_union", "ChannelLayout"),
             _src("node", "bindings/node/src/types_playback.ts", "ts_field", "PlaybackDiagnostics.activeInputLayout"),
@@ -618,10 +614,35 @@ def _function_body(text: str, head: re.Pattern[str]) -> str | None:
     return _balanced(text, text.find("{", m.end()), "{", "}")
 
 
+def _name_table(text: str, name: str) -> list[str] | None:
+    """Entries of a ``const char* name[] = {...}`` table defined in ``text``, in order."""
+    m = re.search(rf"\bconst\s+char\s*\*\s*(?:const\s+)?{re.escape(name)}\s*\[[^\]]*\]\s*=\s*\{{", text)
+    body = m and _balanced(text, m.end() - 1, "{", "}")
+    return [tok for _q, tok in _STR.findall(body)] or None if body else None
+
+
+def _indexed_name_table(text: str, body: str, index: re.Pattern[str]) -> list[str] | None:
+    """The name table ``body`` indexes through ``index`` (group 1 the table), if any."""
+    for m in index.finditer(body):
+        table = _name_table(text, m.group(1))
+        if table:
+            return table
+    return None
+
+
+_INDEXED = re.compile(r"\b(\w+)\s*\[")
+_COMPARED_INDEXED = re.compile(r"==\s*(\w+)\s*\[")
+
+
 def read_tokens(text: str, function: str) -> list[str] | None:
-    """Tokens a ``from_string`` function accepts, in source order."""
+    """Tokens a ``from_string`` function accepts, in source order.
+
+    A parser comparing against an indexed name table accepts that table's entries.
+    """
     body = _function_body(text, re.compile(rf"\b{re.escape(function)}\s*\("))
-    return (re.findall(r'==\s*"([^"]+)"', body) or None) if body else None
+    if not body:
+        return None
+    return re.findall(r'==\s*"([^"]+)"', body) or _indexed_name_table(text, body, _COMPARED_INDEXED)
 
 
 def _returned_tokens(body: str) -> list[str]:
@@ -663,7 +684,26 @@ def written_tokens(text: str, enum: str, writer: str = "to_string") -> list[str]
                 break
     if not body:
         return None
-    return _returned_tokens(body) or None
+    # A writer indexing a name table writes the table; its out-of-range fallback is no token.
+    return _indexed_name_table(text, body, _INDEXED) or _returned_tokens(body) or None
+
+
+def name_table_reads(root: Path, rows: tuple[TokenSet, ...] = ROWS) -> tuple[int, int]:
+    """Core writers read through an indexed name table, and the entries read from them."""
+    writers = entries = 0
+    for row in rows:
+        for t in (row.core, *row.also_written_by):
+            if t is None:
+                continue
+            p = root / t.path
+            text = p.read_text(encoding="utf-8") if p.is_file() else ""
+            head = re.compile(rf"\b{re.escape(t.writer)}\s*\(\s*(?:const\s+)?{re.escape(t.enum)}\b")
+            body = _function_body(text, head)
+            table = body and _indexed_name_table(text, body, _INDEXED)
+            if table:
+                writers += 1
+                entries += len(table)
+    return writers, entries
 
 
 def c_enumerators(text: str, prefix: str) -> dict[str, int]:
@@ -1243,6 +1283,10 @@ def main() -> int:
     print(f"token tables: {rows} rows, {compared} sources compared")
     if rows == 0 or compared == 0:
         problems.append("nothing was compared")
+    table_writers, table_entries = name_table_reads(ROOT)
+    print(f"name tables: {table_writers} core writers read through one, {table_entries} entries")
+    if table_writers == 0 or table_entries == 0:
+        problems.append("no core writer was read through a name table; the name-table reader is unexercised")
     key_problems, forms, sites = evaluate_key_forms(ROOT)
     print(f"refused document keys: {forms} keys, {sites} refusal and mirror sites matched")
     if forms == 0 or sites == 0:
