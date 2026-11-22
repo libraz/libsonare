@@ -126,11 +126,10 @@ TEST_CASE("repair.declick repairs the union of both channels' runs",
   CHECK_FALSE(identical(stereo.right, mono_right));
 }
 
-TEST_CASE("repair.declip reconstructs the union of both channels' runs",
+TEST_CASE("repair.declip repairs each channel alone unless linkChannels is set",
           "[mastering][repair][stereo][named]") {
-  // The same plateau in both channels, one sample longer on the left. The
-  // contract is that the union is reconstructed, so the right channel's shorter
-  // run is widened to the left's.
+  // The same plateau in both channels, longer on the left. Linked, the union is
+  // reconstructed, so the right channel's shorter run is widened to the left's.
   constexpr size_t kLength = 4096;
   std::vector<float> left = tone(kLength, 120.0, 0.98, 0.0);
   std::vector<float> right = tone(kLength, 120.0, 0.96, 0.0);
@@ -142,8 +141,8 @@ TEST_CASE("repair.declip reconstructs the union of both channels' runs",
 
   const std::vector<api::Param> params = {
       {"clipThresholdDb", 20.0 * std::log10(0.89)}, {"lpcOrder", 16.0}, {"iterations", 2.0}};
-  const api::StereoResult stereo = run_stereo("repair.declip", left, right, params);
-  REQUIRE(stereo.left.size() == kLength);
+  std::vector<api::Param> linked_params = params;
+  linked_params.push_back({"linkChannels", 1.0});
 
   // A sample the clipping constraint pins keeps its observed value bit for bit, so an edit set
   // is a subset of the region rather than the region itself. The union shows as right-channel
@@ -156,16 +155,24 @@ TEST_CASE("repair.declip reconstructs the union of both channels' runs",
     return std::count_if(edits.begin(), edits.end(),
                          [&](size_t i) { return std::abs(right[i]) < threshold; });
   };
-  const std::vector<size_t> left_edits = edited_indices(left, stereo.left);
-  const std::vector<size_t> right_edits = edited_indices(right, stereo.right);
+
+  const api::StereoResult linked = run_stereo("repair.declip", left, right, linked_params);
+  REQUIRE(linked.left.size() == kLength);
+  const std::vector<size_t> left_edits = edited_indices(left, linked.left);
+  const std::vector<size_t> right_edits = edited_indices(right, linked.right);
   INFO("left edits " << left_edits.size() << " right edits " << right_edits.size());
   REQUIRE_FALSE(left_edits.empty());
   CHECK(std::all_of(left_edits.begin(), left_edits.end(), clipped_in_either));
   CHECK(std::all_of(right_edits.begin(), right_edits.end(), clipped_in_either));
   CHECK(widened(right_edits) > 0);
 
-  // The ablation: per channel, the right one is edited only inside its own runs.
+  // The default is the per-channel pass, bit for bit, and edits the right one only inside its
+  // own runs.
+  const api::StereoResult split = run_stereo("repair.declip", left, right, params);
+  const std::vector<float> mono_left = run_mono("repair.declip", left, params);
   const std::vector<float> mono_right = run_mono("repair.declip", right, params);
+  CHECK(identical(split.left, mono_left));
+  CHECK(identical(split.right, mono_right));
   const std::vector<size_t> mono_edits = edited_indices(right, mono_right);
   INFO("per-channel right edits " << mono_edits.size());
   REQUIRE_FALSE(mono_edits.empty());

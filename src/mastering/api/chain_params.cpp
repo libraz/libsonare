@@ -345,6 +345,11 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     mark_field(flags.declip);
     return true;
   }
+  if (key == "repair.declip.linkChannels") {
+    cfg.repair.declip.config.link_channels = v != 0.0;
+    mark_field(flags.declip);
+    return true;
+  }
 
   // ---- repair.decrackle ----
   if (key == "repair.decrackle.enabled") {

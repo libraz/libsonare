@@ -106,15 +106,19 @@ TEST_CASE("the linked declick, declip and dehum forms reproduce the mono and ste
   REQUIRE(std::equal(out[1].begin(), out[1].end(), click_pair.right.begin()));
   REQUIRE(click_reports[0].linked_runs == click_pair.left_report.linked_runs);
 
-  repair::DeclipConfig clip;
-  const Audio declipped = repair::declip(in[1], clip);
-  const Audio* clipped[1] = {&in[1]};
-  repair::declip_linked(clipped, 1, &out, clip);
-  REQUIRE(std::equal(out[0].begin(), out[0].end(), declipped.begin()));
-  const auto clip_pair = repair::declip_stereo(in[0], in[1], clip);
-  repair::declip_linked(two, 2, &out, clip);
-  REQUIRE(std::equal(out[0].begin(), out[0].end(), clip_pair.left.begin()));
-  REQUIRE(std::equal(out[1].begin(), out[1].end(), clip_pair.right.begin()));
+  for (const bool link : {false, true}) {
+    CAPTURE(link);
+    repair::DeclipConfig clip;
+    clip.link_channels = link;
+    const Audio declipped = repair::declip(in[1], clip);
+    const Audio* clipped[1] = {&in[1]};
+    repair::declip_linked(clipped, 1, &out, clip);
+    REQUIRE(std::equal(out[0].begin(), out[0].end(), declipped.begin()));
+    const auto clip_pair = repair::declip_stereo(in[0], in[1], clip);
+    repair::declip_linked(two, 2, &out, clip);
+    REQUIRE(std::equal(out[0].begin(), out[0].end(), clip_pair.left.begin()));
+    REQUIRE(std::equal(out[1].begin(), out[1].end(), clip_pair.right.begin()));
+  }
 
   repair::DehumConfig hum;
   hum.adaptive = true;

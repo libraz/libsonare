@@ -72,6 +72,10 @@ struct DeclipConfig {
   float clip_threshold = 0.98f;
   int lpc_order = 36;
   int iterations = 2;
+  /// Multichannel entry points only: reconstruct every channel over the union of all channels'
+  /// clipped runs, so the channels' repair errors agree, at the cost of re-estimating unclipped
+  /// samples in the quieter channel. Use on near-mono material; off, each channel repairs its own.
+  bool link_channels = false;
 };
 
 /// Validates every public DeclipConfig field. The mono, stereo and detection
@@ -128,8 +132,9 @@ struct DeclipReport {
   size_t linked_runs = 0;             ///< Of the repaired runs, those reaching
                                       ///  past this channel's own clipped
                                       ///  samples because the other channel's
-                                      ///  run was wider. Always 0 from the mono
-                                      ///  entrypoint.
+                                      ///  run was wider. Always 0 unless
+                                      ///  DeclipConfig::link_channels is set
+                                      ///  on a multichannel entrypoint.
 };
 
 Audio declip(const Audio& audio, const DeclipConfig& config = {});
@@ -145,23 +150,20 @@ struct DeclipStereoResult {
   DeclipReport right_report;
 };
 
-/// @brief Declips a stereo pair, taking the reconstructed regions from both
-///        channels.
-/// @details One clipped plateau rarely ends on the same sample in both
-///   channels, and a run that a single sample splits in one channel but not the
-///   other reconstructs differently on the two sides, which moves the image.
-///   The union of the two channels' clipped runs is therefore the region set,
-///   and each channel reconstructs the whole of every union run it has at least
-///   one clipped sample in. A channel with none is left untouched there:
-///   reconstructing unclipped audio to match the other side would replace real
-///   samples with an estimate.
+/// @brief Declips a stereo pair.
+/// @details By default each channel reconstructs its own clipped runs and leaves every
+///   sample it did not clip bit-identical. With DeclipConfig::link_channels the union of
+///   the two channels' runs is the region set, and each channel reconstructs the whole of
+///   every union run it has at least one clipped sample in; a channel with none is left
+///   untouched there.
 DeclipStereoResult declip_stereo(const Audio& left, const Audio& right,
                                  const DeclipConfig& config = {});
 
-/// @brief Declips any number of channels over the union of every channel's clipped runs.
-/// @details The N-channel form of @ref declip_stereo with the same rule over the whole set: a
-///   channel reconstructs every union run it has at least one clipped sample in. One channel
-///   reproduces @ref declip and two reproduce @ref declip_stereo bit for bit.
+/// @brief Declips any number of channels.
+/// @details The N-channel form of @ref declip_stereo with the same rule over the whole set:
+///   each channel its own runs, or with DeclipConfig::link_channels every union run it has at
+///   least one clipped sample in. One channel reproduces @ref declip and two reproduce
+///   @ref declip_stereo bit for bit.
 /// @param out Receives one declipped channel per input channel, in input order.
 /// @return One report per channel, in input order, each with its own channel's detection.
 std::vector<DeclipReport> declip_linked(const Audio* const* channels, size_t channel_count,

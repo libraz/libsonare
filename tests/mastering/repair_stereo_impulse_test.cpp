@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -571,12 +572,16 @@ TEST_CASE("Declip stereo with identical channels equals the mono path bit for bi
   config.clip_threshold = threshold_in_file(samples, samples);
   const uint32_t mono = digest(declip(audio, config));
 
-  const DeclipStereoResult linked = declip_stereo(audio, audio, config);
-  REQUIRE(digest(linked.left) == mono);
-  REQUIRE(digest(linked.right) == mono);
-  REQUIRE(linked.left_report.linked_runs == 0);
-  REQUIRE(linked.right_report.linked_runs == 0);
-  REQUIRE(linked.left_report.detected.sample_count == kPlantedClippedSamples);
+  for (const bool link : {false, true}) {
+    CAPTURE(link);
+    config.link_channels = link;
+    const DeclipStereoResult pair = declip_stereo(audio, audio, config);
+    REQUIRE(digest(pair.left) == mono);
+    REQUIRE(digest(pair.right) == mono);
+    REQUIRE(pair.left_report.linked_runs == 0);
+    REQUIRE(pair.right_report.linked_runs == 0);
+    REQUIRE(pair.left_report.detected.sample_count == kPlantedClippedSamples);
+  }
 }
 
 TEST_CASE("Linked declick detection beats the shared mono transfer on a common-mode click",
@@ -664,6 +669,7 @@ TEST_CASE("Linked declip detection beats the shared mono transfer on the corpus 
   const std::vector<float> dirty_right = clip_fixture(0.35);
   DeclipConfig config;
   config.clip_threshold = threshold_in_file(dirty_left, dirty_right);
+  config.link_channels = true;
   const auto repair = [&](const Audio& in) { return declip(in, config); };
 
   const auto transfer = shared_mono_transfer(dirty_left, dirty_right, repair);
@@ -712,6 +718,7 @@ TEST_CASE("Linked declip reconstructs one region in both channels at unequal lev
   const std::vector<float> dirty_right = clip_fixture(0.0, 0.9465);
   DeclipConfig config;
   config.clip_threshold = threshold_in_file(dirty_left, dirty_right);
+  config.link_channels = true;
   const auto repair = [&](const Audio& in) { return declip(in, config); };
 
   const auto transfer = shared_mono_transfer(dirty_left, dirty_right, repair);
@@ -739,6 +746,114 @@ TEST_CASE("Linked declip reconstructs one region in both channels at unequal lev
   REQUIRE(split_image < 1.0e-5);
   REQUIRE(linked_image < 4.0 * split_image);
   REQUIRE(split_image < 4.0 * linked_image);
+}
+
+// ------------------------------------------------------- link on correlated noise
+
+namespace {
+
+/// Band-limited noise at unit peak: Box-Muller over the engine's raw output, so the fixture is
+/// the same on every standard library, then two one-pole lowpasses at 3 kHz.
+std::vector<double> correlated_noise_bed(size_t frames) {
+  std::mt19937 rng(11);
+  const auto uniform = [&] { return (static_cast<double>(rng()) + 0.5) / 4294967296.0; };
+  const double pole = std::exp(-constants::kTwoPiD * 3000.0 / kSampleRate);
+  constexpr size_t kSettle = 2000;
+  std::vector<double> out(frames);
+  double first = 0.0;
+  double second = 0.0;
+  double peak = 0.0;
+  for (size_t i = 0; i < frames + kSettle; ++i) {
+    const double gaussian =
+        std::sqrt(-2.0 * std::log(uniform())) * std::cos(constants::kTwoPiD * uniform());
+    first = (1.0 - pole) * gaussian + pole * first;
+    second = (1.0 - pole) * first + pole * second;
+    if (i < kSettle) continue;
+    out[i - kSettle] = second;
+    peak = std::max(peak, std::abs(second));
+  }
+  for (double& v : out) v /= peak;
+  return out;
+}
+
+struct LinkPair {
+  std::vector<float> clean_left, clean_right, clipped_left, clipped_right;
+};
+
+/// One noise at two levels (the right at 0.9 of the left), each hard-clipped at full scale.
+LinkPair link_pair(double drive) {
+  const std::vector<double> bed = correlated_noise_bed(kSampleRate / 4);
+  LinkPair pair;
+  for (const double v : bed) {
+    const float left = static_cast<float>(drive * v);
+    const float right = static_cast<float>(0.9 * drive * v);
+    pair.clean_left.push_back(left);
+    pair.clean_right.push_back(right);
+    pair.clipped_left.push_back(std::clamp(left, -1.0f, 1.0f));
+    pair.clipped_right.push_back(std::clamp(right, -1.0f, 1.0f));
+  }
+  return pair;
+}
+
+}  // namespace
+
+TEST_CASE("Linked declip trades the quieter channel's error for agreement on correlated noise",
+          "[repair][stereo][impulse]") {
+  // Measured: side error 8-13% lower linked, the quieter channel's RMSE 4-19% higher.
+  for (const double drive : {1.6, 2.0, 3.0}) {
+    CAPTURE(drive);
+    const LinkPair p = link_pair(drive);
+    DeclipConfig config;
+    config.clip_threshold = 0.999f;
+    const DeclipStereoResult split =
+        declip_stereo(view(p.clipped_left), view(p.clipped_right), config);
+    config.link_channels = true;
+    const DeclipStereoResult linked =
+        declip_stereo(view(p.clipped_left), view(p.clipped_right), config);
+    REQUIRE(linked.right_report.linked_runs > 0);
+
+    const std::vector<float> split_left = to_vector(split.left);
+    const std::vector<float> split_right = to_vector(split.right);
+    const std::vector<float> linked_left = to_vector(linked.left);
+    const std::vector<float> linked_right = to_vector(linked.right);
+    const double split_side = image_error(split_left, split_right, p.clean_left, p.clean_right);
+    const double linked_side = image_error(linked_left, linked_right, p.clean_left, p.clean_right);
+    const double split_cost = rmse(split_right, p.clean_right);
+    const double linked_cost = rmse(linked_right, p.clean_right);
+    CAPTURE(split_side, linked_side, split_cost, linked_cost);
+    CHECK(linked_side < split_side);
+    CHECK(linked_cost > split_cost);
+    // The louder channel's runs are the union, so it is repaired identically either way.
+    CHECK(linked_left == split_left);
+  }
+}
+
+TEST_CASE("Independent declip leaves every sample a channel did not clip bit-identical",
+          "[repair][stereo][impulse]") {
+  const LinkPair p = link_pair(1.6);
+  DeclipConfig config;
+  config.clip_threshold = 0.999f;
+  const DeclipStereoResult split =
+      declip_stereo(view(p.clipped_left), view(p.clipped_right), config);
+  config.link_channels = true;
+  const DeclipStereoResult linked =
+      declip_stereo(view(p.clipped_left), view(p.clipped_right), config);
+
+  size_t left_only = 0;
+  size_t split_moved = 0;
+  size_t linked_moved = 0;
+  for (size_t i = 0; i < p.clipped_right.size(); ++i) {
+    if (std::abs(p.clipped_right[i]) >= config.clip_threshold) continue;
+    if (std::abs(p.clipped_left[i]) >= config.clip_threshold) ++left_only;
+    if (split.right.data()[i] != p.clipped_right[i]) ++split_moved;
+    if (linked.right.data()[i] != p.clipped_right[i]) ++linked_moved;
+  }
+  CAPTURE(left_only, linked_moved);
+  REQUIRE(left_only > 0);
+  REQUIRE(split.right_report.repaired_samples > 0);
+  CHECK(split_moved == 0);
+  CHECK(split.right_report.linked_runs == 0);
+  CHECK(linked_moved > 0);
 }
 
 // ------------------------------------------------------- pending clicks as context

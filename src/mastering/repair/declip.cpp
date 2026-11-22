@@ -264,12 +264,16 @@ std::vector<DeclipReport> declip_linked(const Audio* const* channels, size_t cha
   std::vector<ClipDetection> detected;
   samples.reserve(channel_count);
   detected.reserve(channel_count);
-  std::vector<ClipRun> applied;
+  std::vector<std::vector<ClipRun>> own_runs;
+  own_runs.reserve(channel_count);
+  std::vector<ClipRun> linked;
   for (size_t c = 0; c < channel_count; ++c) {
     samples.emplace_back(channels[c]->data(), channels[c]->data() + channels[c]->size());
-    const std::vector<ClipRun> runs = scan_clipped_runs(samples[c], validated->clip_threshold);
-    detected.push_back(to_detection(samples[c], runs));
-    applied = c == 0 ? runs : union_sorted_runs(applied, runs);
+    own_runs.push_back(scan_clipped_runs(samples[c], validated->clip_threshold));
+    detected.push_back(to_detection(samples[c], own_runs[c]));
+    if (validated->link_channels) {
+      linked = c == 0 ? own_runs[c] : union_sorted_runs(linked, own_runs[c]);
+    }
   }
 
   std::vector<DeclipReport> reports;
@@ -277,6 +281,7 @@ std::vector<DeclipReport> declip_linked(const Audio* const* channels, size_t cha
   out->clear();
   out->reserve(channel_count);
   for (size_t c = 0; c < channel_count; ++c) {
+    const std::vector<ClipRun>& applied = validated->link_channels ? linked : own_runs[c];
     reports.push_back(repair_channel(samples[c], applied, validated.get()));
     reports.back().detected = detected[c];
     out->push_back(Audio::from_vector(std::move(samples[c]), sample_rate));
