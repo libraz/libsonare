@@ -547,8 +547,9 @@ void BinauralRenderer::prepare(double sample_rate, int max_block_size, const Hrt
         const float frac = position - static_cast<float>(lower);
         const float gain = beta * direct / image.distance;
         ReflectionTap tap;
-        tap.delay = std::max(1, static_cast<int>(std::lround((image.distance - direct) /
-                                                             kSoundSpeedMps * sample_rate)));
+        tap.delay =
+            std::max(1, static_cast<int>(std::lround((image.distance - direct) / kSoundSpeedMps *
+                                                     rounded_sample_rate)));
         tap.ring_a = lower % kReflectionRingDirections;
         tap.ring_b = (lower + 1) % kReflectionRingDirections;
         tap.gain_a = gain * std::cos(frac * kHalfPi);
