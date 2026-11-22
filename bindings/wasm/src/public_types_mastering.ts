@@ -13469,7 +13469,7 @@ export interface MasteringNormalizeLoudnessOptions {
  * which is where the offline chain measures.
  *
  * `loudnessStaticGainDb` equals the gain {@link masterAudio} applies, ceiling
- * clamp included, and 0 for a silent or below-gate stage input. Pass it and
+ * clamp included, and is absent for a silent or below-gate stage input. Pass it and
  * `truePeakDbtp` as the chain config's `loudnessStaticGainDb` and
  * `loudnessStaticGainPeakDbtp`.
  */
@@ -14035,8 +14035,9 @@ export type MasteringChainConfigInput = MasteringChainConfig & {
  * chain config plus the stream layout and optional precomputed loudness gain.
  *
  * The streaming chain cannot measure whole-signal integrated LUFS, so an enabled
- * `loudness` stage normally throws at construction. Precompute the gain offline
- * with {@link streamingLoudnessGain} and pass it as `loudnessStaticGainDb`.
+ * `loudness` stage applies a precomputed gain: measure it offline with
+ * {@link streamingLoudnessGain} and pass it as `loudnessStaticGainDb`. Without
+ * one the stage applies no gain and its true-peak limiter still runs.
  */
 export interface StreamingMasteringChainConfig extends MasteringChainConfigInput {
   /** Stream sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
