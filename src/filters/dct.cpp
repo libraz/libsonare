@@ -9,7 +9,6 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
-#include "util/math_utils.h"
 #include "util/numeric_validation.h"
 #include "util/thread_local_cache.h"
 

@@ -17,7 +17,6 @@
 namespace sonare {
 
 using sonare::constants::kSemitonesPerOctave;
-using sonare::constants::kTwoPi;
 
 namespace detail {
 
@@ -28,6 +27,7 @@ constexpr float kAlphaFloor = 1e-6f;
 
 void validate_frequencies(const std::vector<float>& freqs) {
   for (size_t i = 0; i < freqs.size(); ++i) {
+    if (std::isfinite(freqs[i]) && freqs[i] > 0.0f) continue;
     util::check::greater_than(freqs[i], 0.0, ("freqs[" + std::to_string(i) + "]").c_str());
   }
 }
