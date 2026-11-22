@@ -192,12 +192,4 @@ struct HoldRange {
 std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds,
                                              int input_frame_count, float target_rate);
 
-/// Frames to hold from a note onset, for a note whose attack is not measured.
-/// Reassigned-time concentration stays elevated three frames from the frame the
-/// pitch track starts on, measured at 22050 Hz with a 2048-sample window and a
-/// 512-sample hop, over attacks from 0 to 30 ms. The span is in frames and the
-/// attacks are in milliseconds, so another framing covers a different duration
-/// with the same count and the figure has to be re-derived rather than reused.
-inline constexpr int kDefaultHoldFrames = 3;
-
 }  // namespace sonare

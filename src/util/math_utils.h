@@ -11,32 +11,11 @@
 #include <numeric>
 #include <vector>
 
-#include "constants.h"
 #include "util/exception.h"
 
 namespace sonare {
 
 class FFT;
-
-/// @brief Clamps a value between min and max.
-/// @details Forwards to std::clamp. The nested `std::max(min_val, std::min(...))`
-///          this replaces returned @p min_val for a NaN, because a comparison
-///          against a non-finite value is false -- so a NaN left here as a
-///          plausible in-range value with nothing downstream able to tell it
-///          from a computed one. This is a pure function returning to its
-///          caller (SampleDestination::kCallerReturn), so a NaN propagates and
-///          is itself the report. An infinity does not: it takes the caller's
-///          own bound, because that is what clamping a value past the bound
-///          means rather than a substitution this rule would cover.
-/// @tparam T Numeric type
-/// @param value Value to clamp
-/// @param min_val Minimum bound
-/// @param max_val Maximum bound
-/// @return Clamped value
-template <typename T>
-T clamp(T value, T min_val, T max_val) {
-  return std::clamp(value, min_val, max_val);
-}
 
 /// @brief pow() refused, rather than returned, when the result overflows the float range.
 /// @details For an exponent, gain or beta a caller accepted: a result past the largest
@@ -112,34 +91,6 @@ T variance(const T* data, size_t size) {
 template <typename T>
 T stddev(const T* data, size_t size) {
   return std::sqrt(variance(data, size));
-}
-
-/// @brief Computes the L2 norm (Euclidean length).
-/// @tparam T Numeric type
-/// @param data Pointer to data array
-/// @param size Number of elements
-/// @return L2 norm
-template <typename T>
-T norm_l2(const T* data, size_t size) {
-  T sum_sq = T{0};
-  for (size_t i = 0; i < size; ++i) {
-    sum_sq += data[i] * data[i];
-  }
-  return std::sqrt(sum_sq);
-}
-
-/// @brief Normalizes array to unit L2 norm in-place.
-/// @tparam T Numeric type
-/// @param data Pointer to data array
-/// @param size Number of elements
-template <typename T>
-void normalize_l2(T* data, size_t size) {
-  T n = norm_l2(data, size);
-  if (n > static_cast<T>(sonare::constants::kEpsilon)) {
-    for (size_t i = 0; i < size; ++i) {
-      data[i] /= n;
-    }
-  }
 }
 
 /// @brief Computes cosine similarity between two vectors.

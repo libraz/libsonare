@@ -73,11 +73,6 @@ inline std::string root_must_be_object() { return "the document must be an objec
 /// @brief "unknown key <path>".
 inline std::string unknown_key(std::string_view path) { return "unknown key " + std::string(path); }
 
-/// @brief "unknown key <path> (renamed to <new path>)".
-inline std::string unknown_key_renamed(std::string_view path, std::string_view renamed_to) {
-  return unknown_key(path) + " (renamed to " + std::string(renamed_to) + ")";
-}
-
 /// @brief "unknown key <path> (expected <list>)", @p expected already joined by ", ".
 inline std::string unknown_key_expected(std::string_view path, std::string_view expected) {
   return unknown_key(path) + " (expected " + std::string(expected) + ")";
@@ -116,11 +111,6 @@ inline std::string expected_keys(const std::vector<std::string>& keys) {
     joined += key;
   }
   return joined;
-}
-
-/// @brief "duplicate key <path>".
-inline std::string duplicate_key(std::string_view path) {
-  return "duplicate key " + std::string(path);
 }
 
 /// @brief "<path> must be <a kind>"; at the root, "the document must be <a kind>".
