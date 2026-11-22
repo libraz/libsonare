@@ -300,7 +300,17 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     control: [32.7, 130.81],
     call: (v) =>
       magnitudeSum(
-        native.vqtToAudio(CQT.magnitude, CQT.nBins, CQT.nFrames, SAMPLE_RATE, 512, v, 12, -1, 4),
+        native.vqtToAudio(
+          CQT.magnitude,
+          CQT.nBins,
+          CQT.nFrames,
+          SAMPLE_RATE,
+          512,
+          v,
+          12,
+          undefined,
+          4,
+        ),
       ),
   },
   {
@@ -630,24 +640,23 @@ describe('an optional float argument is refused rather than saturated', () => {
 });
 
 /**
- * The two arguments that stay on `OptionalFloatArg`, which passes a non-finite value.
+ * The two gammas, read against the core's gamma domain.
  *
- * A NaN gamma SELECTS the librosa-compatible ERB-derived automatic value at
- * `src/feature/vqt.cpp`, so the reader must let it through. The saturation defect
- * still closes: the reader refuses `1e39` under either verdict.
+ * Absent is the C ABI's NaN, the librosa-compatible ERB-derived automatic value,
+ * so a written NaN is a wrong value rather than a second spelling of absent.
  */
-const PASSTHRU_ARGUMENTS: FloatArgument[] = [
+const GAMMA_ARGUMENTS: FloatArgument[] = [
   {
     name: 'vqt gamma',
     site: 'features/advanced.cpp Vqt gamma',
-    control: [Number.NaN, 0],
+    control: [0, 5],
     call: (v) =>
       magnitudeSum(native.vqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12, undefined, v).magnitude),
   },
   {
     name: 'vqtToAudio gamma',
     site: 'features/advanced.cpp VqtToAudio gamma',
-    control: [-1, 0],
+    control: [0, 5],
     call: (v) =>
       magnitudeSum(
         native.vqtToAudio(CQT.magnitude, CQT.nBins, CQT.nFrames, SAMPLE_RATE, 512, 32.7, 12, v, 4),
@@ -655,24 +664,21 @@ const PASSTHRU_ARGUMENTS: FloatArgument[] = [
   },
 ];
 
-describe('a gamma keeps its NaN, which selects the automatic ERB value', () => {
-  it.each(PASSTHRU_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
+/** The automatic gamma the transform resolved, as `vqt` reports it. */
+const AUTOMATIC_GAMMA: number = native.vqt(AUDIO, SAMPLE_RATE, 512, 32.7, 24, 12).gamma;
+
+describe('a gamma is given or absent, and absent is the automatic ERB value', () => {
+  it.each(GAMMA_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
     '%s',
     (_name, argument) => {
-      const [automatic, standardCqt] = argument.control;
-      expect(argument.call(automatic)).not.toBe(argument.call(standardCqt));
-      // NaN resolves to the automatic value, which a finite refusal here would take away.
-      expect(argument.call(Number.NaN)).toBe(argument.call(automatic));
-      for (const value of PAST_FLOAT_RANGE) {
+      const [low, high] = argument.control;
+      expect(argument.call(low)).not.toBe(argument.call(high));
+      expect(AUTOMATIC_GAMMA).toBeGreaterThan(0);
+      expect(argument.call(undefined as unknown as number)).toBe(argument.call(AUTOMATIC_GAMMA));
+      for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE, -1]) {
         expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
+        expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(/gamma must be/);
       }
-      // An infinity is refused by the core's own finiteness check rather than by
-      // the reader, so it does not carry the reader's wording. This is why the
-      // discriminating value above has to be a finite 1e39.
-      expect(() => argument.call(Number.POSITIVE_INFINITY)).toThrow(RangeError);
-      expect(() => argument.call(Number.POSITIVE_INFINITY)).not.toThrow(
-        /must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
-      );
     },
   );
 });
@@ -689,11 +695,11 @@ describe('the table covers the whole reader population', () => {
     expect(sites.size).toBe(calls.length);
   });
 
-  it('keeps the two deliberately passed-through gammas out of that population', () => {
+  it('reads both gammas against the gamma domain, outside that population', () => {
     const gammas = addonSources()
       .filter((source) => source.file === 'features/advanced.cpp')
-      .flatMap((source) => source.text.match(/OptionalFloatArg\(env, info, \d+, "gamma"/g) ?? []);
-    expect(gammas).toHaveLength(PASSTHRU_ARGUMENTS.length);
+      .flatMap((source) => source.text.match(/OptionalDomainArg\(env, info, \d+, "gamma"/g) ?? []);
+    expect(gammas).toHaveLength(GAMMA_ARGUMENTS.length);
   });
 });
 
@@ -940,22 +946,42 @@ describe('a required float argument is refused rather than saturated', () => {
   );
 });
 
-describe('the clipping threshold reads NaN as not given', () => {
-  // Optional and type-only: NaN is the library default, a value past the float
-  // range is refused by the reader, and an infinity by the core's domain text.
+describe('the clipping threshold is given or absent', () => {
+  // Absent is the C ABI's NaN, the library's clip level; a written value meets the core's domain.
   const clipped = (v?: number) =>
     native.meteringDetectClipping(AUDIO, SAMPLE_RATE, v, 1).clippedSamples;
   it('meteringDetectClipping thresholdDb', () => {
     expect(clipped(-0.01)).not.toBe(clipped(-14));
-    expect(clipped(Number.NaN)).toBe(clipped(undefined));
-    for (const value of PAST_FLOAT_RANGE) {
+    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE, -200]) {
       expect(() => clipped(value), `thresholdDb ${value}`).toThrow(
-        /must be finite and in \[-3\.4028235e38, 3\.4028235e38\]/,
+        /thresholdDb must be finite and in \[-120, 0\]/,
       );
     }
-    expect(() => clipped(Number.POSITIVE_INFINITY)).toThrow(
-      /thresholdDb must be finite and in \[-120, 0\]/,
-    );
+  });
+
+  it('audio.detectClipping thresholdDb', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose.
+    const audio = newGatedAudio() as any;
+    const instance = (thresholdDb?: number): number =>
+      audio.detectClipping({ thresholdDb, minRegionSamples: 1 }).clippedSamples;
+    expect(instance(-0.01)).not.toBe(instance(-14));
+    for (const value of NON_FINITE) {
+      expect(() => instance(value), `thresholdDb ${value}`).toThrow(/thresholdDb must be finite/);
+    }
+  });
+});
+
+describe('a pcen option refuses a written non-finite value by its key', () => {
+  const pcen = (options: Record<string, number>) =>
+    magnitudeSum(native.pcen(STFT.magnitude, STFT.nBins, STFT.nFrames, options));
+  it.each(['timeConstant', 'gain', 'bias', 'power', 'eps'])('%s', (key) => {
+    expect(pcen({ gain: 0.98 })).not.toBe(pcen({ gain: 0.5 }));
+    for (const value of NON_FINITE) {
+      expect(() => pcen({ [key]: value }), `${key} ${value}`).toThrow(RangeError);
+      expect(() => pcen({ [key]: value }), `${key} ${value}`).toThrow(
+        new RegExp(`${key} must be finite`),
+      );
+    }
   });
 });
 

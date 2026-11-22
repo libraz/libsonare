@@ -157,16 +157,14 @@ inline std::string node_float_range_message(const char* name) {
   return std::string(name) + " must be finite and in [-3.4028235e38, 3.4028235e38]";
 }
 
-/// @brief Refuses a finite value no 32-bit float can hold, giving the float
-///        readers the range discipline @ref node_narrow_number gives the integer
-///        ones.
-/// @details Non-finite is passed through rather than refused: an infinity or a
-///   NaN is the "unspecified" spelling several of these fields document, and
-///   which of them mean it is a separate question from this one. What this
-///   reader settles is that a caller who wrote a number gets that number or an
-///   error, never an infinity the overflow invented for them.
+/// @brief Refuses a finite value no 32-bit float can hold, and nothing else.
+/// @details The one reader that lets NaN and the infinities through, kept for a
+///   value that is data rather than a setting: an element of a per-frame array,
+///   where NaN is the unvoiced frame `pyin` writes. Every setting reads through
+///   @ref node_narrow_float instead.
 /// @throws Napi::RangeError naming @p name.
-inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const char* name) {
+inline float node_narrow_float_keeping_nonfinite(Napi::Env env, const Napi::Value& value,
+                                                 const char* name) {
   const double number = value.As<Napi::Number>().DoubleValue();
   if (std::isfinite(number) &&
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
@@ -175,20 +173,32 @@ inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const ch
   return static_cast<float>(number);
 }
 
-/// @brief Finite sibling of @ref node_narrow_float, for a field with no
-///        "unspecified" spelling.
-/// @details @ref node_narrow_float passes a non-finite through because several
-///   fields document one as meaning unspecified. Where a field documents no such
-///   value, an infinity is out of domain rather than a request, and this refuses
-///   it in the same words the overflow is refused in -- one wording, because a
-///   caller cannot act on which of the two produced the value.
+/// @brief Narrow a JS number onto a finite 32-bit float, refusing a NaN, an
+///        infinity and a finite value no float can hold, all in one wording.
+/// @details "Not given" is absence, so a written NaN or infinity is a wrong value
+///   rather than a request for a default, and a caller cannot act on which of the
+///   three produced it.
 /// @throws Napi::RangeError naming @p name.
-inline float node_narrow_finite_float(Napi::Env env, const Napi::Value& value, const char* name) {
-  const double number = value.As<Napi::Number>().DoubleValue();
-  if (!std::isfinite(number)) {
+inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const char* name) {
+  if (!std::isfinite(value.As<Napi::Number>().DoubleValue())) {
     throw Napi::RangeError::New(env, node_float_range_message(name));
   }
+  return node_narrow_float_keeping_nonfinite(env, value, name);
+}
+
+/// @brief Same reader as @ref node_narrow_float.
+inline float node_narrow_finite_float(Napi::Env env, const Napi::Value& value, const char* name) {
   return node_narrow_float(env, value, name);
+}
+
+/// @brief Narrow a JS number onto a finite double, refusing a NaN or an infinity by name.
+/// @throws Napi::RangeError naming @p name.
+inline double node_narrow_double(Napi::Env env, const Napi::Value& value, const char* name) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number)) {
+    throw Napi::RangeError::New(env, std::string(name) + " must be finite");
+  }
+  return number;
 }
 
 /// @brief Read one element of a plain JS number array as a finite float, named
@@ -453,13 +463,24 @@ inline uint64_t Uint64Property(const Napi::Object& obj, const char* key, uint64_
 
 /// @brief Read a float property: undefined/null returns the fallback, any other
 ///        non-number is refused by name.
-/// @details Narrows through @ref node_narrow_float, so a finite value no 32-bit
-///   float can hold is refused rather than arriving downstream as an infinity.
+/// @details Narrows through @ref node_narrow_float, so a NaN, an infinity and a
+///   finite value no 32-bit float can hold are refused by name.
 inline float FloatProperty(const Napi::Object& obj, const char* key, float fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_float(obj.Env(), value, key);
+}
+
+/// @brief Read a float property that is data rather than a setting, where NaN and the
+///        infinities are values (@ref node_narrow_float_keeping_nonfinite).
+/// @details A note's `medianHz`, whose non-finite spelling is "no measured pitch". Only a
+///   finite value no 32-bit float can hold is refused; absent returns @p fallback.
+inline float FloatDataProperty(const Napi::Object& obj, const char* key, float fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return node_narrow_float_keeping_nonfinite(obj.Env(), value, key);
 }
 
 /// @brief Read a float property that must be finite
@@ -577,12 +598,12 @@ inline float AutoFiniteFloatProperty(const Napi::Object& obj, const char* key, f
 }
 
 /// @brief Read a double property: undefined/null returns the fallback, any other
-///        non-number is refused by name.
+///        non-number and a non-finite number are refused by name.
 inline double DoubleProperty(const Napi::Object& obj, const char* key, double fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
-  return value.As<Napi::Number>().DoubleValue();
+  return node_narrow_double(obj.Env(), value, key);
 }
 
 /// @brief Read a string-keyed map of numbers: undefined/null returns an empty
@@ -709,7 +730,8 @@ inline T ChoiceProperty(const Napi::Object& obj, const char* key, const NodeChoi
 ///   absent. Any other non-array value throws.
 /// @note One rule runs down both paths and they answer differently because the
 ///   values differ, not because the rule does. A Float32Array element arrives
-///   already folded to an infinity, which @ref node_narrow_float passes; a plain
+///   already folded to an infinity, which @ref node_narrow_float_keeping_nonfinite
+///   passes; a plain
 ///   array still holds the finite double the caller wrote, which it refuses. The
 ///   typed path CANNOT refuse -- the only copy of what was asked for was lost in
 ///   JS -- and declining to refuse the plain one would destroy the surviving copy
@@ -741,7 +763,7 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
     }
     // Indexed, because the key alone cannot say which element was refused.
     const std::string element = std::string(key) + "[" + std::to_string(i) + "]";
-    values.push_back(node_narrow_float(obj.Env(), item, element.c_str()));
+    values.push_back(node_narrow_float_keeping_nonfinite(obj.Env(), item, element.c_str()));
   }
   return values;
 }
@@ -811,12 +833,12 @@ inline bool RequiredFiniteFloatValue(Napi::Env env, const Napi::Value& value,
   return true;
 }
 
-/// @brief Read a required double value.
+/// @brief Read a required finite double value (@ref node_narrow_double).
 inline bool RequiredDoubleValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 double* out) {
   if (!RequireNumberValue(env, value, label)) return false;
-  *out = value.As<Napi::Number>().DoubleValue();
-  return !env.IsExceptionPending();
+  *out = node_narrow_double(env, value, label.c_str());
+  return true;
 }
 
 /// @brief Read a required int64 value.

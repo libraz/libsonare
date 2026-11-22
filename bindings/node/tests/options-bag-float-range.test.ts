@@ -104,14 +104,13 @@ describe('the addon float option reader refuses a value no float can hold', () =
     expect(spectrumDb(INSIDE_FLOAT_MAX)).not.toBe(spectrumDb());
   });
 
-  it('forwards a non-finite number to the C ABI, which refuses it', () => {
-    // Not a default substitution: `FloatProperty` passes a non-finite number
-    // through, so a NaN the caller wrote reaches the core and is answered there. Asserted as the outcome rather than as a throw
-    // shape, because the two are different reports of the same input.
+  it('refuses a non-finite number by name rather than reading it as a default', () => {
+    // "Not given" is absence, so a NaN or an infinity the caller wrote is a wrong
+    // value, refused in the same wording as an overflow.
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
       const caught = capture(() => spectrumDb(value));
       expect(caught, `dbRef ${value}`).toBeInstanceOf(RangeError);
-      expect((caught as Error).message).not.toContain(RANGE_MESSAGE);
+      expect((caught as RangeError).message).toBe(`meteringSpectrum: dbRef ${RANGE_MESSAGE}`);
     }
   });
 

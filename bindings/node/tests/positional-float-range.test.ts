@@ -102,26 +102,15 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
     }
   });
 
-  it('passes a non-finite bpmMin through to the core, which refuses it', () => {
-    // Deliberate: the reader settles overflow, not what a field makes of a
-    // non-finite value, so each one is answered where it is interpreted. Both
-    // are answered the same way, and asserting them separately is the point --
-    // a bound written as an ordered comparison answers NaN and an infinity
-    // differently, because NaN loses every comparison while an infinity wins
-    // one of them.
-    for (const value of [Number.POSITIVE_INFINITY, Number.NaN]) {
+  it('refuses a non-finite bpmMin by name, as it refuses an overflow', () => {
+    // Asserted separately because a bound written as an ordered comparison
+    // answers NaN and an infinity differently: NaN loses every comparison while
+    // an infinity wins one of them.
+    for (const value of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN, 1e300]) {
       const caught = capture(() => run(value));
-      expectCoreRefusal(caught);
+      expect(caught, `bpmMin ${value}`).toBeInstanceOf(RangeError);
+      expect((caught as RangeError).message).toBe(`analyzeBpm: bpmMin ${RANGE_MESSAGE}`);
     }
-  });
-
-  it('answers 1e300 differently from the Infinity it would have become', () => {
-    const overflow = capture(() => run(1e300));
-    const infinite = capture(() => run(Number.POSITIVE_INFINITY));
-    expect(overflow).toBeInstanceOf(RangeError);
-    expect((overflow as Error).message).toContain(RANGE_MESSAGE);
-    expectCoreRefusal(infinite);
-    expect((overflow as Error).message).not.toBe((infinite as Error).message);
   });
 
   it('accepts the largest bpmMin a float holds and refuses the next double up', () => {

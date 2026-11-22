@@ -11,6 +11,7 @@
 #include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
 #include "editing/pitch_editor/scale_quantizer.h"
+#include "metering/clipping.h"
 #include "metering/waveform.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_key_options.h"
@@ -345,9 +346,9 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float threshold{};
-  // Type-only: the core states the domain, so an infinity is refused in its text.
-  if (!OptionalFloatArg(env, info, 2, "thresholdDb", std::numeric_limits<float>::quiet_NaN(),
-                        &threshold))
+  // Absent is the C ABI's NaN, the library's clip level; a written NaN is refused.
+  if (!OptionalDomainArg(env, info, 2, "thresholdDb", std::numeric_limits<float>::quiet_NaN(),
+                         sonare::metering::kClippingThresholdDbDomain, &threshold))
     return env.Undefined();
   int64_t min_region_value{};
   if (!OptionalInt64Arg(env, info, 3, "minRegionValue", 1, &min_region_value))
@@ -875,11 +876,10 @@ Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Object opts = info[0].As<Napi::Object>();
-  float threshold = std::numeric_limits<float>::quiet_NaN();
-  const Napi::Value threshold_value = opts.Get("thresholdDb");
-  if (!threshold_value.IsUndefined() && !threshold_value.IsNull() &&
-      !RequiredFloatValue(env, threshold_value, "thresholdDb", &threshold))
-    return env.Undefined();
+  // Absent is the C ABI's NaN, the library's clip level; a written NaN is refused.
+  const float threshold =
+      DomainProperty(opts, "thresholdDb", std::numeric_limits<float>::quiet_NaN(),
+                     sonare::metering::kClippingThresholdDbDomain);
   const int64_t min_region_value = Int64Property(opts, "minRegionSamples", 1);
   if (min_region_value < 0) {
     Napi::RangeError::New(env, "minRegionSamples must be an integer of at least 0")

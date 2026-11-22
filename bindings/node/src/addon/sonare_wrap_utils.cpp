@@ -113,10 +113,13 @@ bool RefusalFromObject(Napi::Env env, const Napi::Object& object,
     Napi::Object d;
     if (!RequiredObjectValue(env, domain, "domain", &d)) return false;
     sonare::RefusalDomain parsed;
-    const double lo = DoubleProperty(d, "lo", std::numeric_limits<double>::quiet_NaN());
-    const double hi = DoubleProperty(d, "hi", std::numeric_limits<double>::quiet_NaN());
-    if (!std::isnan(lo)) parsed.lo = lo;
-    if (!std::isnan(hi)) parsed.hi = hi;
+    for (auto [key, bound] : {std::pair{"lo", &parsed.lo}, std::pair{"hi", &parsed.hi}}) {
+      const Napi::Value given = d.Get(key);
+      if (given.IsUndefined() || given.IsNull()) continue;
+      double number{};
+      if (!RequiredDoubleValue(env, given, key, &number)) return false;
+      *bound = number;
+    }
     parsed.lo_included = BoolProperty(d, "loIncluded", true);
     parsed.hi_included = BoolProperty(d, "hiIncluded", true);
     parts->domain = parsed;

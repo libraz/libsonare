@@ -14,7 +14,6 @@ import {
   assertPositiveFloatValue,
   assertSampleRate,
   requestOnly,
-  resolveOptionalNonNegative,
   sampleOneShot,
 } from './validation.js';
 
@@ -216,7 +215,7 @@ export function vqtToAudio(...args: unknown[]): Float32Array {
       hopLength,
       fminHz,
       r.binsPerOctave ?? 12,
-      resolveOptionalNonNegative(r.gamma, 'gamma'),
+      r.gamma ?? undefined,
       nIter,
     );
   });

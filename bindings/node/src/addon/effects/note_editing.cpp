@@ -156,7 +156,7 @@ void ReadNotes(const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes
     row.offset_sample = Int64Property(note, "offsetSample", row.offset_sample);
     row.frame_start = IntProperty(note, "frameStart", row.frame_start);
     row.frame_end = IntProperty(note, "frameEnd", row.frame_end);
-    row.median_hz = FloatProperty(note, "medianHz", row.median_hz);
+    row.median_hz = FloatDataProperty(note, "medianHz", row.median_hz);
     ReadNoteEdit(note, envelopes, &row.edit);
   }
 }
@@ -430,8 +430,9 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   float frame_rate = 0.0f;
   if (info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    config.fade_ms = FloatProperty(opts, "fadeMs", config.fade_ms);
-    config.vibrato_cutoff_hz = FloatProperty(opts, "vibratoCutoffHz", config.vibrato_cutoff_hz);
+    config.fade_ms = DomainFloatProperty(opts, "fadeMs", config.fade_ms);
+    config.vibrato_cutoff_hz =
+        DomainFloatProperty(opts, "vibratoCutoffHz", config.vibrato_cutoff_hz);
     frame_rate = FloatProperty(opts, "frameRate", 0.0f);
     const Napi::Value f0_value = opts.Get("f0Hz");
     if (!f0_value.IsUndefined() && !f0_value.IsNull() && !IsFloat32Array(f0_value)) {

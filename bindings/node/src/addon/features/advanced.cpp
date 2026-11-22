@@ -13,6 +13,7 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
+#include "feature/vqt.h"
 #include "features/common.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
@@ -142,9 +143,10 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   float filter_scale{};
   if (!OptionalFiniteFloatArg(env, info, 6, "filterScale", 1.0f, &filter_scale))
     return env.Undefined();
-  // NaN (not given) selects the ERB-derived automatic bandwidth.
+  // Absent is the C ABI's NaN, the ERB-derived automatic bandwidth.
   float gamma{};
-  if (!OptionalFloatArg(env, info, 7, "gamma", std::numeric_limits<float>::quiet_NaN(), &gamma))
+  if (!OptionalDomainArg(env, info, 7, "gamma", std::numeric_limits<float>::quiet_NaN(),
+                         sonare::kVqtGammaDomain, &gamma))
     return env.Undefined();
 
   SonareCqtResult result{};
@@ -217,8 +219,11 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   int bins_per_octave{};
   if (!OptionalIntArg(env, info, 6, "binsPerOctave", 12, &bins_per_octave)) return env.Undefined();
+  // Absent is the C ABI's NaN, the ERB-derived automatic bandwidth.
   float gamma{};
-  if (!OptionalFloatArg(env, info, 7, "gamma", -1.0f, &gamma)) return env.Undefined();
+  if (!OptionalDomainArg(env, info, 7, "gamma", std::numeric_limits<float>::quiet_NaN(),
+                         sonare::kVqtGammaDomain, &gamma))
+    return env.Undefined();
   int n_iter{};
   if (!OptionalDomainArg(env, info, 8, "nIter", 32, sonare_c_detail::kGriffinLimIterationsDomain,
                          &n_iter)) {
