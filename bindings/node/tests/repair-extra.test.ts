@@ -235,6 +235,16 @@ describe('masteringRepairDereverbConfigForRoom (Node)', () => {
     expect(config.lateDelayMs).toBeCloseTo(33, 5);
   });
 
+  it('configures only the time when the estimate could not measure the volume', () => {
+    // NaN is how estimateRoom reports an unmeasurable volume, so it is data, not a setting.
+    const config = masteringRepairDereverbConfigForRoom({
+      estimate: roomEstimate(Number.NaN),
+      lateDelayMs: 33,
+    });
+    expect(config.t60Sec).toBeCloseTo(1.5, 5);
+    expect(config.lateDelayMs).toBeCloseTo(33, 5);
+  });
+
   it('configures only the delay when no band converged', () => {
     const config = masteringRepairDereverbConfigForRoom({
       estimate: roomEstimate(900, []),

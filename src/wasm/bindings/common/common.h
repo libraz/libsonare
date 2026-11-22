@@ -415,6 +415,9 @@ float domainFloatProperty(val object, const char* key, float default_value);
 ///          number, and answering it with the default reports success carrying a
 ///          value they did not choose. A wrong TYPE is outside the convention
 ///          entirely: nothing documents a string as meaning "unspecified".
+///          The choice against @ref floatProperty: a float the caller sets is refused when
+///          non-finite; a float carrying an engine result back in, whose owner documents NaN as
+///          "unmeasurable", is read here, and the read site names the result field it mirrors.
 /// @throws WasmArgumentError naming @p key, for a wrong-typed
 ///         value and for a finite value wider than a 32-bit float.
 float floatOption(val object, const char* key, float default_value);

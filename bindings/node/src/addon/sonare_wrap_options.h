@@ -474,8 +474,10 @@ inline float FloatProperty(const Napi::Object& obj, const char* key, float fallb
 
 /// @brief Read a float property that is data rather than a setting, where NaN and the
 ///        infinities are values (@ref node_narrow_float_keeping_nonfinite).
-/// @details A note's `medianHz`, whose non-finite spelling is "no measured pitch". Only a
-///   finite value no 32-bit float can hold is refused; absent returns @p fallback.
+/// @details The choice between this and @ref FloatProperty: a float the caller sets is
+///   refused when non-finite and absent when omitted; a float carrying an engine result back
+///   in, whose owner documents NaN as "unmeasurable", is read here, and the read site names
+///   the result field it mirrors. Only a finite value no float can hold is refused.
 inline float FloatDataProperty(const Napi::Object& obj, const char* key, float fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;

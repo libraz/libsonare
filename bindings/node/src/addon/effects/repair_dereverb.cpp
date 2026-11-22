@@ -180,8 +180,9 @@ Napi::Value SonareWrap::MasteringRepairDereverbConfigForRoom(const Napi::Callbac
   // Record fields, not options: an absent band array is "did not converge"
   // rather than a zero reverberation time.
   const std::vector<float> rt60_bands = FloatArrayProperty(estimate, "rt60Bands");
+  // Mirrors RoomEstimateResult.volume, NaN when the estimate could not measure it.
   sonare::mastering::repair::apply_room_measurement(config, sonare::mid_frequency_rt60(rt60_bands),
-                                                    FloatProperty(estimate, "volume", 0.0f));
+                                                    FloatDataProperty(estimate, "volume", 0.0f));
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("threshold", Napi::Number::New(env, config.threshold));

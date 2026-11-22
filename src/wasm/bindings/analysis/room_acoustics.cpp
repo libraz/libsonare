@@ -370,6 +370,7 @@ val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val op
 // set to the mean of the finite bands. Absorption bands that did not converge are left out.
 val js_room_geometry_from_estimate(val estimate) {
   const float nan = std::numeric_limits<float>::quiet_NaN();
+  // Mirrors RoomEstimateResult.lengthM/widthM/heightM, NaN when the estimate could not measure.
   const float length = floatOption(estimate, "lengthM", nan);
   const float width = floatOption(estimate, "widthM", nan);
   const float height = floatOption(estimate, "heightM", nan);

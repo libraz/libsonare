@@ -738,6 +738,7 @@ val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
     if (!bands.isUndefined() && !bands.isNull())
       rt60_bands = float32ArrayToVector(bands, "rt60Bands");
   }
+  // Mirrors RoomEstimateResult.volume, NaN when the estimate could not measure it.
   // apply_room_measurement takes a non-positive or non-finite volume as "no
   // measurement" and leaves lateDelayMs at the caller's value, which is also
   // what the C ABI does with the same field.

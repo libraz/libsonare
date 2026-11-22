@@ -695,7 +695,10 @@ describe('named selectors and estimate-to-geometry', () => {
   it('refuses an estimate with no measurable room', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
     expect(Number.isNaN(silent.lengthM)).toBe(true);
-    expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow();
+    // The estimate's own NaN geometry reaches the library, which refuses the room, not a field.
+    expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(
+      /^roomGeometryFromEstimate: room estimate has no measurable dimensions/,
+    );
   });
 });
 

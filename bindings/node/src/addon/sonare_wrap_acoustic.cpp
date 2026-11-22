@@ -286,9 +286,10 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   const Napi::Object estimate = info[0].As<Napi::Object>();
   std::vector<float> bands = FloatArrayProperty(estimate, "bandAbsorption");
   SonareRoomEstimate c_estimate{};
-  c_estimate.length_m = FloatProperty(estimate, "lengthM", c_estimate.length_m);
-  c_estimate.width_m = FloatProperty(estimate, "widthM", c_estimate.width_m);
-  c_estimate.height_m = FloatProperty(estimate, "heightM", c_estimate.height_m);
+  // Mirrors RoomEstimateResult.lengthM/widthM/heightM, NaN when the estimate could not measure.
+  c_estimate.length_m = FloatDataProperty(estimate, "lengthM", c_estimate.length_m);
+  c_estimate.width_m = FloatDataProperty(estimate, "widthM", c_estimate.width_m);
+  c_estimate.height_m = FloatDataProperty(estimate, "heightM", c_estimate.height_m);
   c_estimate.band_absorption = bands.empty() ? nullptr : bands.data();
   c_estimate.band_count = bands.size();
 
