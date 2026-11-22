@@ -1099,9 +1099,10 @@ const std::vector<detail::EnumChoice>* enum_choices_of(const std::string& proces
   std::string id = processor;
   *leaf = key;
   if (processor.empty() && !chain_key_processor(key, &id, leaf)) return nullptr;
-  // A chain runs its repair stages offline, so their keys follow the offline declaration.
+  // A repair token names the offline form's setting, the superset a streaming insert narrows, so
+  // an insert refuses a token it cannot run as unsupported rather than as unknown.
   std::optional<OfflineFormMeasurement> offline;
-  if (processor.empty() && is_repair_stage(id)) offline.emplace();
+  if (is_repair_stage(id)) offline.emplace();
   const auto& declared_choices = empty_build(id).probed_choices();
   const auto declared = declared_choices.find(*leaf);
   return declared == declared_choices.end() ? nullptr : &declared->second;

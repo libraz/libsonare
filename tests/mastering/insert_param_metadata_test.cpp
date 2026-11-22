@@ -25,6 +25,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -312,16 +313,18 @@ TEST_CASE("choices list exactly the values construction accepts", "[mastering][c
   REQUIRE(with_choices > 0);
 }
 
-TEST_CASE("a streaming repair insert declares the subset a stream runs, the chain the full set",
+TEST_CASE("a streaming repair insert publishes the subset a stream runs, its tokens the full set",
           "[mastering][catalog]") {
   using sonare::mastering::api::mastering_enum_names;
-  CHECK(mastering_enum_names("repair.decrackle", "mode") == "median");
+  // A token names the processor's setting whichever form reads it; the insert narrows what it runs.
+  CHECK(mastering_enum_names("repair.decrackle", "mode") == "median, waveletShrinkage");
   CHECK(mastering_enum_names("", "repair.decrackle.mode") == "median, waveletShrinkage");
-  CHECK(mastering_enum_names("repair.denoiseClassical", "noiseEstimator") == "mcra, imcra, spp");
+  CHECK(mastering_enum_names("repair.denoiseClassical", "noiseEstimator") ==
+        "quantile, mcra, imcra, spp");
   CHECK(mastering_enum_names("", "repair.denoise.noiseEstimator") == "quantile, mcra, imcra, spp");
-  // The insert's declaration and its measured choices are one list.
-  for (const auto& [name, key] : {std::pair<const char*, const char*>{"repair.decrackle", "mode"},
-                                  {"repair.denoiseClassical", "noiseEstimator"}}) {
+  for (const auto& [name, key, runs] :
+       {std::tuple<const char*, const char*, const char*>{"repair.decrackle", "mode", "median"},
+        {"repair.denoiseClassical", "noiseEstimator", "mcra, imcra, spp"}}) {
     INFO(name);
     const json::Array params = param_info(name);
     const json::Value* parameter = find_param(params, key);
@@ -331,7 +334,29 @@ TEST_CASE("a streaming repair insert declares the subset a stream runs, the chai
       if (!joined.empty()) joined += ", ";
       joined += choice;
     }
-    CHECK(mastering_enum_names(name, key) == joined);
+    CHECK(joined == runs);
+  }
+}
+
+TEST_CASE("a streaming repair insert refuses an offline-only token as unsupported",
+          "[mastering][catalog]") {
+  using sonare::mastering::api::mastering_enum_value;
+  for (const auto& [name, chain_key, key, token] :
+       {std::tuple<const char*, const char*, const char*, const char*>{
+            "repair.decrackle", "repair.decrackle.mode", "mode", "waveletShrinkage"},
+        {"repair.denoiseClassical", "repair.denoise.noiseEstimator", "noiseEstimator",
+         "quantile"}}) {
+    INFO(name);
+    const std::optional<double> offline = mastering_enum_value("", chain_key, token);
+    REQUIRE(offline.has_value());
+    CHECK(mastering_enum_value(name, key, token) == offline);
+    const std::string params = std::string("{\"") + key + "\":\"" + token + "\"}";
+    try {
+      (void)make_insert(name, params);
+      FAIL("the streaming insert built with " << token);
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::NotSupported);
+    }
   }
 }
 
