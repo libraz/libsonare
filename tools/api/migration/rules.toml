@@ -231,10 +231,10 @@ summary = "Values the C JSON output writes as `null` (loudness or true peak of s
 [[rule.example]]
 surface = "wasm"
 before = '''
-if (strip.integratedLufs === null) skipStrip();
+if (strip.integratedLufs === null) { /* silent strip: no reading */ }
 '''
 after = '''
-if (strip.integratedLufs === undefined) skipStrip();
+if (strip.integratedLufs === undefined) { /* silent strip: no reading */ }
 '''
 
 [[rule]]
@@ -330,7 +330,7 @@ const json = masteringPairAnalyze(request);
 const result = JSON.parse(json) as JsonResult<typeof json>;
 '''
 after = '''
-const result = masteringPairAnalyze(request);
+const result = masteringAnalyzePair(request);
 '''
 
 [[rule]]
@@ -357,7 +357,7 @@ db = np.array(flat).reshape(n_bins, n_frames)
 beats = np.asarray(detect_beats(samples, 44100))
 '''
 after = '''
-db = audio.stft_db()  # ndarray (rows, cols)
+db = audio.stft(db=True).db  # ndarray (rows, cols)
 beats = detect_beats(samples, 44100)  # ndarray
 '''
 
@@ -384,10 +384,12 @@ summary = "WASM public declarations no longer mention `Wasm*` types or `SonareMo
 surface = "wasm"
 before = '''
 import type { SonareModule } from '@libraz/libsonare';
+import createModule from '@libraz/libsonare/module';
 const factory = async (): Promise<SonareModule> => createModule();
 '''
 after = '''
 import { init } from '@libraz/libsonare';
+import createModule from '@libraz/libsonare/module';
 await init({ moduleFactory: createModule });
 '''
 
@@ -675,7 +677,7 @@ try { new OfflineWorkerClient(); } catch (e) { /* plain Error */ }
 '''
 after = '''
 try { new OfflineWorkerClient(); } catch (e) {
-  if (isSonareError(e) && e.code === ErrorCode.NotSupported) useMainThread();
+  if (isSonareError(e) && e.code === ErrorCode.NotSupported) { /* run on the main thread */ }
 }
 '''
 
@@ -739,21 +741,21 @@ summary = "`project.tracks()`, `clips()`, `markers()`, `sources()` and `engine.l
 surface = "wasm"
 before = '''
 for (let i = 0; i < project.markerCount(); i++) {
-  use(project.markerByIndex(i));
+  console.log(project.markerByIndex(i));
 }
 '''
 after = '''
-for (const marker of project.markers()) use(marker);
+for (const marker of project.markers()) console.log(marker);
 '''
 [[rule.example]]
 surface = "python"
 before = '''
 for i in range(project.marker_count()):
-    use(project.marker_by_index(i))
+    print(project.marker_by_index(i))
 '''
 after = '''
 for marker in project.markers():
-    use(marker)
+    print(marker)
 '''
 
 [[rule]]
@@ -1049,12 +1051,12 @@ summary = "ABI versions are `*AbiVersion()` (`vocalEditApiVersion` is renamed), 
 [[rule.example]]
 surface = "wasm"
 before = '''
-if (hasFfmpegSupport() && vocalEditAvailable()) enableImport();
+if (hasFfmpegSupport() && vocalEditAvailable()) { /* offer import */ }
 const v = vocalEditApiVersion();
 '''
 after = '''
 const { features } = capabilities();
-if (features.ffmpeg && features.vocalEdit) enableImport();
+if (features.ffmpeg && features.vocalEdit) { /* offer import */ }
 const v = vocalEditAbiVersion();
 '''
 

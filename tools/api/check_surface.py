@@ -293,6 +293,325 @@ def cli_example_problems(
     return problems, skipped
 
 
+# Language words and platform built-ins an example may use; anything else it names must be public.
+_JS_WORDS = frozenset(
+    [
+        "const",
+        "let",
+        "var",
+        "new",
+        "await",
+        "async",
+        "return",
+        "function",
+        "of",
+        "in",
+        "if",
+        "else",
+        "for",
+        "while",
+        "break",
+        "continue",
+        "throw",
+        "try",
+        "catch",
+        "finally",
+        "typeof",
+        "instanceof",
+        "void",
+        "delete",
+        "true",
+        "false",
+        "null",
+        "undefined",
+        "this",
+        "import",
+        "from",
+        "export",
+        "default",
+        "type",
+        "interface",
+        "as",
+        "console",
+        "log",
+        "error",
+        "warn",
+        "Math",
+        "abs",
+        "max",
+        "min",
+        "round",
+        "floor",
+        "ceil",
+        "sqrt",
+        "Array",
+        "Object",
+        "String",
+        "Number",
+        "Boolean",
+        "Promise",
+        "Error",
+        "TypeError",
+        "RangeError",
+        "JSON",
+        "Float32Array",
+        "Float64Array",
+        "Int16Array",
+        "Int32Array",
+        "Uint8Array",
+        "Uint8ClampedArray",
+        "ArrayBuffer",
+        "Map",
+        "Set",
+        "length",
+        "map",
+        "filter",
+        "forEach",
+        "reduce",
+        "push",
+        "slice",
+        "subarray",
+        "set",
+        "get",
+        "then",
+        "fill",
+        "from",
+        "keys",
+        "values",
+        "entries",
+        "stringify",
+        "parse",
+        "AbortController",
+        "signal",
+        "abort",
+        "fetch",
+        "arrayBuffer",
+        "readFile",
+        "writeFile",
+        "Date",
+        "now",
+        "performance",
+        "Infinity",
+        "NaN",
+        "isFinite",
+    ]
+)
+_PY_WORDS = frozenset(
+    [
+        "def",
+        "return",
+        "import",
+        "from",
+        "as",
+        "for",
+        "in",
+        "if",
+        "else",
+        "elif",
+        "while",
+        "break",
+        "continue",
+        "with",
+        "not",
+        "and",
+        "or",
+        "is",
+        "None",
+        "True",
+        "False",
+        "try",
+        "except",
+        "finally",
+        "raise",
+        "lambda",
+        "yield",
+        "async",
+        "await",
+        "self",
+        "class",
+        "pass",
+        "del",
+        "print",
+        "len",
+        "range",
+        "list",
+        "dict",
+        "tuple",
+        "set",
+        "str",
+        "int",
+        "float",
+        "bool",
+        "open",
+        "read",
+        "write",
+        "enumerate",
+        "zip",
+        "sorted",
+        "min",
+        "max",
+        "abs",
+        "round",
+        "isinstance",
+        "np",
+        "numpy",
+        "ndarray",
+        "zeros",
+        "ones",
+        "array",
+        "asarray",
+        "shape",
+        "dtype",
+        "float32",
+        "float64",
+        "int16",
+        "int32",
+        "reshape",
+        "path",
+        "Path",
+        "read_bytes",
+        "write_bytes",
+        "math",
+        "inf",
+        "isinf",
+        "isnan",
+        "pytest",
+        "raises",
+    ]
+)
+_C_NAME = re.compile(r"\b(?:sonare_\w+|Sonare\w+|SONARE_\w+)\b")
+_STRING = re.compile(r"\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`[^`]*`")
+_COMMENT = {
+    "python": re.compile(r"#[^\n]*"),
+    "js": re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL),
+}
+_INLINE_KEY = re.compile(r"(\w+)\??\s*:")
+# A before line whose comment names the error it raised shows a name that was never there.
+_FAILING_LINE = re.compile(r"(?:#|//)\s*\w*Error\b")
+
+
+def _surface_names(records: list[dict], surface: str) -> tuple[set[str], dict[str, set[str]]]:
+    """Public names on one surface, and the keys of inline object parameter types by owner.
+
+    An inline object type is not an inventory record, so its keys cannot be compared; they are
+    returned apart so an example using one is reported as not compared rather than passed.
+    """
+    names: set[str] = set()
+    inline: dict[str, set[str]] = collections.defaultdict(set)
+    for r in records:
+        if r["surface"] != surface:
+            continue
+        for part in (r["name"], r.get("owner", ""), r.get("member", "")):
+            if part:
+                names.add(part)
+                names.update(re.findall(r"\w+", part))
+        for sig in r.get("sigs", []):
+            for p in sig.get("params", []):
+                text = p.get("type", "").strip()
+                if text.startswith("{"):
+                    for key in _INLINE_KEY.findall(text):
+                        inline[key].add(r["name"])
+    return names, inline
+
+
+def _example_locals(text: str) -> set[str]:
+    """Names an example binds itself: assignments, parameters, loop and import aliases."""
+    bound: set[str] = set()
+    for lhs in re.findall(
+        r"^\s*(?:const|let|var)?\s*([\w\s,{}\[\]]+?)\s*=(?![=>])", text, re.MULTILINE
+    ):
+        bound.update(re.findall(r"\w+", lhs))
+    for params in re.findall(r"(?:def|function)\s+\w+\s*\(([^)]*)\)", text):
+        bound.update(re.findall(r"(\w+)\s*(?=[:=,)]|$)", params))
+    bound.update(re.findall(r"(?:def|function|class)\s+(\w+)", text))
+    for params in re.findall(r"\(([\w\s,]*)\)\s*=>", text):
+        bound.update(re.findall(r"\w+", params))
+    bound.update(re.findall(r"(\w+)\s*=>", text))
+    bound.update(re.findall(r"\bfor\s+(?:const\s+|let\s+)?\(?([\w\s,]+?)\)?\s+(?:in|of)\b", text))
+    bound.update(re.findall(r"\bas\s+(\w+)", text))
+    bound.update(re.findall(r"\bimport\s+(\w+)\s+from\b", text))
+    return {w.strip() for b in bound for w in b.split(",") if w.strip()}
+
+
+def _example_tokens(text: str, lang: str) -> tuple[set[str], set[str]]:
+    """Identifiers an example takes from the library: (names, object-literal keys)."""
+    toks = set(re.findall(r"(?<![\w.])([A-Za-z_]\w*)\s*\(", text))
+    toks |= set(re.findall(r"\.([A-Za-z_]\w*)", text))
+    imports = re.findall(r"import\s*(?:type\s*)?\{([^}]*)\}", text)
+    if lang == "python":
+        imports += re.findall(
+            r"^\s*from[ \t]+\S+[ \t]+import[ \t]+\(?([\w ,]+)\)?", text, re.MULTILINE
+        )
+    toks |= {x.strip().split(" as ")[0].strip() for g in imports for x in g.split(",") if x.strip()}
+    keys: set[str] = set()
+    if lang == "python":
+        toks |= set(re.findall(r"[(,]\s*(\w+)\s*=(?!=)", text))
+    else:
+        keys = set(re.findall(r"[{,]\s*(\w+)\s*:", text))
+    return toks, keys
+
+
+def code_example_problems(
+    rules: list[dict], records: list[dict], base_records: list[dict] | None
+) -> tuple[list[str], list[str]]:
+    """Each code example names only identifiers its surface publishes.
+
+    `after` is read against the current tree and `before` against the baseline release, as the
+    CLI examples are. Comments and string literals are dropped first, and names the example binds
+    itself are its own. A key of an inline object parameter type, and a before line whose comment
+    names the error it raised, are reported as not compared.
+    """
+    problems: list[str] = []
+    skipped: list[str] = []
+    sides = [("after", "the current", records)]
+    if base_records is not None:
+        sides.append(("before", BASELINE_TAG, base_records))
+    else:
+        skipped.append(f"rules.toml code example before lines against {BASELINE_TAG} (no baseline)")
+    tables = {
+        (key, s): _surface_names(recs, s)
+        for key, _, recs in sides
+        for s in ("python", "node", "wasm", "c")
+    }
+    for i, r in enumerate(rules, 1):
+        slug = r.get("slug", "")
+        for ex in r.get("example", []):
+            s = ex.get("surface")
+            if s not in ("python", "node", "wasm", "c"):
+                continue
+            lang = "python" if s == "python" else "js"
+            for key, label, _ in sides:
+                names, inline = tables[(key, s)]
+                where = f"rules.toml rule {i} ({slug}): {key} {s} example"
+                lines = str(ex.get(key, "")).splitlines()
+                if key == "before":
+                    for line in filter(_FAILING_LINE.search, lines):
+                        skipped.append(f"{where}: `{line.strip()}` shows a failure")
+                    lines = [x for x in lines if not _FAILING_LINE.search(x)]
+                text = _STRING.sub('""', "\n".join(lines))
+                if s == "c":
+                    text = _COMMENT["js"].sub("", text)
+                    for name in sorted(set(_C_NAME.findall(text)) - names):
+                        problems.append(f"{where}: {label} C ABI has no {name!r}")
+                    continue
+                text = _COMMENT[lang].sub("", text)
+                words = _PY_WORDS if lang == "python" else _JS_WORDS
+                own = _example_locals(text) | words
+                toks, keys = _example_tokens(text, lang)
+                for name in sorted(toks - own - names):
+                    if not name.isdigit():
+                        problems.append(f"{where}: {label} {s} surface has no {name!r}")
+                for name in sorted(keys - own - names):
+                    if name in inline:
+                        owners = ", ".join(sorted(inline[name]))
+                        skipped.append(
+                            f"{where}: key {name!r} of an inline object parameter of {owners}"
+                        )
+                    else:
+                        problems.append(f"{where}: {label} {s} surface has no {name!r}")
+    return problems, skipped
+
+
 MIRROR_EVIDENCE = ("in-tree", "recalled")
 
 
@@ -2894,6 +3213,11 @@ def run(args) -> tuple[int, list[str], dict]:
         json.loads(contract_path.read_text(encoding="utf-8")) if contract_path.is_file() else {},
     )
     problems += example_problems
+    code_problems, code_skipped = code_example_problems(
+        rules, records, base_inv["records"] if base_inv else None
+    )
+    problems += code_problems
+    example_skipped += code_skipped
     slugs = {r.get("slug") for r in rules}
     mirrors = load_mirrors(args.mirrors_file, problems)
     allow = load_allowlist(args.allowlist_file, problems, CHECK_IDS)

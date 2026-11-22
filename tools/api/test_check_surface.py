@@ -1038,6 +1038,111 @@ class CliExamples(unittest.TestCase):
         )
 
 
+class CodeExamples(unittest.TestCase):
+    CURRENT = (
+        _rec("wasm", "function", "analyze"),
+        _rec("wasm", "field", "AnalyzeResult.bpm", owner="AnalyzeResult", member="bpm"),
+        _rec(
+            "wasm",
+            "function",
+            "init",
+            sigs=[{"params": [{"name": "options", "type": "{ wasmBinary?: ArrayBuffer; }"}]}],
+        ),
+        _rec("python", "function", "analyze"),
+        _rec("python", "option", "analyze(hop_length)", owner="analyze", member="hop_length"),
+        _rec("c", "function", "sonare_analyze"),
+    )
+    BASE = (_rec("wasm", "function", "detectBpm"), _rec("python", "function", "detect_bpm"))
+
+    def run_examples(self, surface, before, after, base=BASE):
+        rules = [
+            {
+                "slug": "typed-results",
+                "example": [{"surface": surface, "before": before, "after": after}],
+            }
+        ]
+        return check_surface.code_example_problems(
+            rules, list(self.CURRENT), list(base) if base is not None else None
+        )
+
+    def test_public_names_bound_names_and_platform_words_pass(self):
+        problems, skipped = self.run_examples(
+            "wasm",
+            "const bpm = detectBpm(samples);\n",
+            "const result = analyze(samples); // unknownWord(\n"
+            "const label = 'fake(';\n"
+            "for (const x of [result.bpm]) console.log(x);\n",
+        )
+        self.assertEqual((problems, skipped), ([], []))
+
+    def test_an_unpublished_name_fails_on_its_side(self):
+        problems, _ = self.run_examples(
+            "python",
+            "detect_tempo(samples)\n",
+            "analyze(samples, hop_length=512, n_fft=2048)\nskip_strip()\n",
+        )
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "rules.toml rule 1 (typed-results): after python example: the current python"
+                    " surface has no 'n_fft'"
+                ),
+                (
+                    "rules.toml rule 1 (typed-results): after python example: the current python"
+                    " surface has no 'skip_strip'"
+                ),
+                (
+                    "rules.toml rule 1 (typed-results): before python example: v1.10.0 python"
+                    " surface has no 'detect_tempo'"
+                ),
+            ],
+        )
+
+    def test_a_c_name_is_read_against_the_c_abi(self):
+        problems, _ = self.run_examples(
+            "c", "", "sonare_analyze(a); sonare_analyse(a);\n", base=None
+        )
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "rules.toml rule 1 (typed-results): after c example: the current C ABI has no"
+                    " 'sonare_analyse'"
+                ),
+            ],
+        )
+
+    def test_an_inline_object_key_and_a_failing_before_line_are_not_compared(self):
+        problems, skipped = self.run_examples(
+            "wasm",
+            "missingName(); // TypeError: not a function\n",
+            "await init({ wasmBinary: bytes, notAKey: 1 });\n",
+        )
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "rules.toml rule 1 (typed-results): after wasm example: the current wasm surface"
+                    " has no 'notAKey'"
+                ),
+            ],
+        )
+        self.assertEqual(
+            skipped,
+            [
+                (
+                    "rules.toml rule 1 (typed-results): after wasm example: key 'wasmBinary' of an"
+                    " inline object parameter of init"
+                ),
+                (
+                    "rules.toml rule 1 (typed-results): before wasm example: `missingName(); //"
+                    " TypeError: not a function` shows a failure"
+                ),
+            ],
+        )
+
+
 class CliHelpSentinel(CheckerCase):
     def test_python_cli_help_text_is_read(self):
         self.add(

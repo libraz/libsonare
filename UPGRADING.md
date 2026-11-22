@@ -13168,13 +13168,13 @@ Values the C JSON output writes as `null` (loudness or true peak of silence) are
 WASM, 1.x:
 
 ```ts
-if (strip.integratedLufs === null) skipStrip();
+if (strip.integratedLufs === null) { /* silent strip: no reading */ }
 ```
 
 WASM, 2.0.0:
 
 ```ts
-if (strip.integratedLufs === undefined) skipStrip();
+if (strip.integratedLufs === undefined) { /* silent strip: no reading */ }
 ```
 
 ### Every call scans its input for non-finite values
@@ -13296,7 +13296,7 @@ const result = JSON.parse(json) as JsonResult<typeof json>;
 WASM, 2.0.0:
 
 ```ts
-const result = masteringPairAnalyze(request);
+const result = masteringAnalyzePair(request);
 ```
 
 ### Python arrays are numpy arrays
@@ -13330,7 +13330,7 @@ beats = np.asarray(detect_beats(samples, 44100))
 Python, 2.0.0:
 
 ```python
-db = audio.stft_db()  # ndarray (rows, cols)
+db = audio.stft(db=True).db  # ndarray (rows, cols)
 beats = detect_beats(samples, 44100)  # ndarray
 ```
 
@@ -13360,6 +13360,7 @@ WASM, 1.x:
 
 ```ts
 import type { SonareModule } from '@libraz/libsonare';
+import createModule from '@libraz/libsonare/module';
 const factory = async (): Promise<SonareModule> => createModule();
 ```
 
@@ -13367,6 +13368,7 @@ WASM, 2.0.0:
 
 ```ts
 import { init } from '@libraz/libsonare';
+import createModule from '@libraz/libsonare/module';
 await init({ moduleFactory: createModule });
 ```
 
@@ -13730,7 +13732,7 @@ WASM, 2.0.0:
 
 ```ts
 try { new OfflineWorkerClient(); } catch (e) {
-  if (isSonareError(e) && e.code === ErrorCode.NotSupported) useMainThread();
+  if (isSonareError(e) && e.code === ErrorCode.NotSupported) { /* run on the main thread */ }
 }
 ```
 
@@ -13812,28 +13814,28 @@ WASM, 1.x:
 
 ```ts
 for (let i = 0; i < project.markerCount(); i++) {
-  use(project.markerByIndex(i));
+  console.log(project.markerByIndex(i));
 }
 ```
 
 WASM, 2.0.0:
 
 ```ts
-for (const marker of project.markers()) use(marker);
+for (const marker of project.markers()) console.log(marker);
 ```
 
 Python, 1.x:
 
 ```python
 for i in range(project.marker_count()):
-    use(project.marker_by_index(i))
+    print(project.marker_by_index(i))
 ```
 
 Python, 2.0.0:
 
 ```python
 for marker in project.markers():
-    use(marker)
+    print(marker)
 ```
 
 ### Each operation has exactly one entry point
@@ -14214,7 +14216,7 @@ ABI versions are `*AbiVersion()` (`vocalEditApiVersion` is renamed), and feature
 WASM, 1.x:
 
 ```ts
-if (hasFfmpegSupport() && vocalEditAvailable()) enableImport();
+if (hasFfmpegSupport() && vocalEditAvailable()) { /* offer import */ }
 const v = vocalEditApiVersion();
 ```
 
@@ -14222,7 +14224,7 @@ WASM, 2.0.0:
 
 ```ts
 const { features } = capabilities();
-if (features.ffmpeg && features.vocalEdit) enableImport();
+if (features.ffmpeg && features.vocalEdit) { /* offer import */ }
 const v = vocalEditAbiVersion();
 ```
 
