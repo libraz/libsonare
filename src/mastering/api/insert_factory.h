@@ -166,7 +166,7 @@ std::string insert_slot_info_json(const std::string& name);
 /// @param processor Processor id (an insert or a repair stage), or empty when @p key is a flat
 ///        mastering chain key such as `repair.denoise.noiseEstimator`. A chain key is read in
 ///        the spelling canonical_chain_param_key accepts: `dynamics.compressor.detector`,
-///        `dynamics.multibandComp.slope|mode` (the multiband insert's names) and
+///        `dynamics.multibandComp.crossover.{slope,mode}` and
 ///        `dynamics.multibandComp.bands.<i>.detector` for every band index.
 /// @details Reads the names the key declares where its processor reads it, which are the
 ///          `choices` names of the parameter catalog, plus `quantile` and any other value the

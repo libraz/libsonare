@@ -577,7 +577,7 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 //   "dynamics.multibandComp.cutoff<i>Hz"          (edits one cutoff in place)
 //   "dynamics.multibandComp.crossover.cutoffsHz.<i>" (replaces the list; bands = n + 1)
 //   "dynamics.multibandComp.bands.<i>.<field>"    (field of dynamics.compressor)
-//   "dynamics.multibandComp.{slope,mode,firKernelSize}"
+//   "dynamics.multibandComp.crossover.{slope,mode,firKernelSize}"
 //   "saturation.tape.driveDb"
 //   "saturation.exciter.amount"
 //   "spectral.airBand.amount"
@@ -604,7 +604,7 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 
 /// @brief The internal spelling of a flat chain key.
 /// @details `bands.<i>.<field>` becomes `band<i>.<field>`; every other current key is returned
-///          as given. A retired spelling (`repair.nFft`, `eq.tiltDb`, `crossover.slope`,
+///          as given. A retired spelling (`repair.nFft`, `eq.tiltDb`, a bare `slope`,
 ///          `band<i>.<field>`, `lowCutoffHz`, the low/mid/high shorthand, ...) is refused with
 ///          the current key named. Whether the result names a field is decided where it is
 ///          applied.
