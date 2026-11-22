@@ -403,7 +403,6 @@ export interface NativeProject {
     channel?: unknown,
   ): void;
   bakeMidiFx(clipId: unknown, config?: unknown, withSourceIndex?: unknown): Int32Array | undefined;
-  setMidiFx(clipId: unknown, config?: unknown): void;
   previewMidiFxCount(clipId: unknown, config?: unknown): number;
   validateMidiNotes(clipId: unknown): unknown;
   setAssistSidecar(desc: unknown): void;

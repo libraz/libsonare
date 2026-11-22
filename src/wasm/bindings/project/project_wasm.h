@@ -164,7 +164,6 @@ struct ProjectWasm {
   val bakeMidiFx(const val& clip_id, const std::string& config_json, const val& with_source_index);
   // Non-destructive: how many events the same bake would produce.
   uint32_t previewMidiFxCount(const val& clip_id, const std::string& config_json);
-  void setMidiFx(const val& clip_id, const std::string& config_json);
 
   // Pre-flight check for hanging / unmatched notes in a MIDI clip. Returns
   // { ok, unmatchedNoteOns, unmatchedNoteOffs }; throws if the clip id is

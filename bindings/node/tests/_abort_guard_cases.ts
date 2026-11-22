@@ -2358,15 +2358,6 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
-    // Delegates to bakeMidiFx, so it reaches the same bail-out reader through a
-    // call the entry point itself does not spell.
-    name: 'Project.setMidiFx',
-    missingRequired: [],
-    badProjectArguments: [
-      { argument: 'clipId', call: ({ project }) => project.setMidiFx('2', '{}') },
-    ],
-  },
-  {
     name: 'Project.previewMidiFxCount',
     missingRequired: [],
     badProjectArguments: [

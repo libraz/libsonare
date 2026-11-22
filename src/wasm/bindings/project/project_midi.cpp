@@ -149,10 +149,6 @@ uint32_t ProjectWasm::previewMidiFxCount(const val& clip_id_val, const std::stri
   return static_cast<uint32_t>(count);
 }
 
-void ProjectWasm::setMidiFx(const val& clip_id, const std::string& config_json) {
-  bakeMidiFx(clip_id, config_json, val::undefined());
-}
-
 val ProjectWasm::validateMidiNotes(const val& clip_id_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   SonareNotePairValidation result{};
@@ -520,7 +516,6 @@ void registerProjectMidi(class_<ProjectWasm>& cls) {
       .function("setProgram", &ProjectWasm::setProgram)
       .function("bakeMidiFx", &ProjectWasm::bakeMidiFx)
       .function("previewMidiFxCount", &ProjectWasm::previewMidiFxCount)
-      .function("setMidiFx", &ProjectWasm::setMidiFx)
       .function("validateMidiNotes", &ProjectWasm::validateMidiNotes)
       .function("analyzeTempo", &ProjectWasm::analyzeTempo)
       .function("autoTempo", &ProjectWasm::autoTempo)

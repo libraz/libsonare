@@ -244,13 +244,6 @@ Napi::Value ProjectWrap::PreviewMidiFxCount(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value ProjectWrap::SetMidiFx(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY return BakeMidiFx(info);
-  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  SONARE_NODE_CATCH(env)
-}
-
 Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

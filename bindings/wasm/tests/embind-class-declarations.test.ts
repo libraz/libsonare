@@ -14,11 +14,6 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
 
-/** Registered members no TypeScript caller reaches, so no handle declares them. */
-const UNDECLARED: Readonly<Record<string, string>> = {
-  'Project#setMidiFx': 'MIDI FX are set through the realtime engine',
-};
-
 /** Members of a handle interface: callable ones are methods, the rest embind properties. */
 type Handle = { methods: string[]; properties: string[] };
 
@@ -80,7 +75,6 @@ async function registeredClasses(): Promise<Map<string, EmbindClass>> {
 describe('embind class handles', async () => {
   const handles = declaredHandles(ROOT);
   const classes = await registeredClasses();
-  const undeclaredUsed = new Set<string>();
 
   it('declares as many handles as the module registers classes', () => {
     expect(handles.size).toBeGreaterThan(10);
@@ -103,16 +97,7 @@ describe('embind class handles', async () => {
     const prototype = classes.get(name)?.prototype ?? {};
     const missing = Object.getOwnPropertyNames(prototype)
       .filter((member) => member !== 'constructor' && !declared.has(member))
-      .map((member) => `${name}#${member}`)
-      .filter((key) => {
-        if (!(key in UNDECLARED)) return true;
-        undeclaredUsed.add(key);
-        return false;
-      });
+      .map((member) => `${name}#${member}`);
     expect(missing).toEqual([]);
-  });
-
-  it('excuses no member a handle now declares', () => {
-    expect(Object.keys(UNDECLARED).filter((key) => !undeclaredUsed.has(key))).toEqual([]);
   });
 });

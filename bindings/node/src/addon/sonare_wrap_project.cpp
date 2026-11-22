@@ -124,7 +124,6 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::BakeMidiFx>("bakeMidiFx", napi_default_method),
           InstanceMethod<&ProjectWrap::PreviewMidiFxCount>("previewMidiFxCount",
                                                            napi_default_method),
-          InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx", napi_default_method),
           InstanceMethod<&ProjectWrap::ValidateMidiNotes>("validateMidiNotes", napi_default_method),
           InstanceMethod<&ProjectWrap::TranscribeToClip>("transcribeToClip", napi_default_method),
           InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo", napi_default_method),
