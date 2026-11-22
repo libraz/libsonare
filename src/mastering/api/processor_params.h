@@ -285,19 +285,13 @@ inline void configure_eq_bands(Processor& processor, const ParamMap& params,
   }
 }
 
-inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& params,
-                                 const std::string& prefix = "band") {
-  configure_eq_bands(processor, params, prefix);
-}
-
-inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMap& params,
-                                const std::string& prefix = "band") {
+inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMap& params) {
   processor.set_auto_gain_enabled(b(params, "autoGain", processor.auto_gain_enabled()));
   processor.set_gain_scale(f(params, "gainScale", processor.gain_scale(), kNone));
   processor.set_output_gain_db(f(params, "outputGainDb", processor.output_gain_db(), kDb));
   processor.set_output_pan(f(params, "outputPan", processor.output_pan(), kNone));
   processor.set_phase_mode(read_enum(params, "phaseMode", processor.phase_mode()));
-  configure_eq_bands(processor, params, prefix);
+  configure_eq_bands(processor, params, "band");
 }
 
 inline dynamics::CompressorConfig compressor_config(const ParamMap& params) {
@@ -581,10 +575,6 @@ inline void configure_stepped_proportional_q(eq::SteppedProportionalQEq& p,
              f(params, "highGainDb", 0.0f, kDb));
 }
 
-inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& params) {
-  configure_eq_bands(p, params, "band");
-}
-
 inline eq::LinearPhaseEqConfig linear_phase_config(const ParamMap& params) {
   eq::LinearPhaseEqConfig config;
   config.resolution = read_enum(params, "resolution", config.resolution);
@@ -604,10 +594,6 @@ inline eq::EqualizerProcessorConfig equalizer_config(const ParamMap& params, int
   config.max_channels = max_channels;
   config.linear_phase_config = linear_phase_config(params);
   return config;
-}
-
-inline void configure_linear_phase_bands(eq::LinearPhaseEq& p, const ParamMap& params) {
-  configure_eq_bands(p, params, "band");
 }
 
 inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params) {

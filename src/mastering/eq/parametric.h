@@ -18,7 +18,7 @@ namespace sonare::mastering::eq {
 ///        exposes the parametric block-of-3 layout: band `b` occupies ids
 ///        `3*b .. 3*b+2` under the keys `band<b>.frequencyHz`, `band<b>.gainDb`
 ///        and `band<b>.q`. The keys mirror the construction-time band prefix
-///        (configure_parametric).
+///        (configure_eq_bands).
 std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count);
 
 /// @brief Builds `band<b>.<keys[f]>` descriptors for a processor whose band `b`

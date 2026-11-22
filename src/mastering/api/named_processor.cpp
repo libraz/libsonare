@@ -117,7 +117,6 @@ namespace {
 
 using detail::b;
 using detail::compressor_config;
-using detail::configure_parametric;
 using detail::crossover_config;
 using detail::f;
 using detail::i;
@@ -387,7 +386,7 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
   } else if (name == "eq.parametric") {
     eq::ParametricEq p;
     prepare_for_build_rate(p, sample_rate);
-    configure_parametric(p, params);
+    detail::configure_eq_bands(p, params, "band");
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.equalizer") {
     // The only config that has to know the channel count up front; take it from
@@ -398,11 +397,11 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
   } else if (name == "eq.minimumPhase") {
     eq::MinimumPhaseEq p;
     prepare_for_build_rate(p, sample_rate);
-    detail::configure_minimum_phase(p, params);
+    detail::configure_eq_bands(p, params, "band");
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.linearPhase") {
     eq::LinearPhaseEq p(detail::linear_phase_config(params));
-    detail::configure_linear_phase_bands(p, params);
+    detail::configure_eq_bands(p, params, "band");
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.dynamic") {
     eq::DynamicEq p;

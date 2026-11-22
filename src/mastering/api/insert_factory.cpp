@@ -363,7 +363,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   if (name == "eq.parametric") {
     auto p = std::make_unique<eq::ParametricEq>();
     prepare_for_build_rate(*p, sample_rate);
-    detail::configure_parametric(*p, params);
+    detail::configure_eq_bands(*p, params, "band");
     return p;
   }
   if (name == "eq.equalizer") {
@@ -374,12 +374,12 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   if (name == "eq.minimumPhase") {
     auto p = std::make_unique<eq::MinimumPhaseEq>();
     prepare_for_build_rate(*p, sample_rate);
-    detail::configure_minimum_phase(*p, params);
+    detail::configure_eq_bands(*p, params, "band");
     return p;
   }
   if (name == "eq.linearPhase") {
     auto p = std::make_unique<eq::LinearPhaseEq>(detail::linear_phase_config(params));
-    detail::configure_linear_phase_bands(*p, params);
+    detail::configure_eq_bands(*p, params, "band");
     return p;
   }
   if (name == "eq.dynamic") {
