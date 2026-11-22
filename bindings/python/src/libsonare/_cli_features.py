@@ -8,10 +8,14 @@ from collections.abc import Sequence
 from typing import Any
 
 from ._cli_common import (
+    _BLUE,
+    _BOLD,
+    _CYAN,
+    _YELLOW,
     _array_stats,
-    _color_enabled,
-    _load_audio_known_channels,
+    _decode_mono,
     _strict_json_dumps,
+    _styled,
 )
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
@@ -36,19 +40,6 @@ _TEMPOGRAM_RATIO_FACTORS = (0.5, 1.0, 2.0, 3.0, 4.0)
 
 # Regions the clipping report lists before summarising the rest.
 _CLIPPING_REGIONS_SHOWN = 20
-
-
-def _styled(text: str, *codes: str) -> str:
-    """Wrap text in ANSI codes when the terminal takes them."""
-    if not _color_enabled():
-        return text
-    return "".join(codes) + text + "\033[0m"
-
-
-_BOLD = "\033[1m"
-_CYAN = "\033[36m"
-_YELLOW = "\033[33m"
-_BLUE = "\033[34m"
 
 
 def _print_file_heading(args: argparse.Namespace, label: str, style: str, suffix: str = "") -> None:
@@ -269,7 +260,7 @@ def _load_reference(args: argparse.Namespace, sample_rate: int, length: int) -> 
     """The reference channel, which has to match the input's rate and length."""
     if not args.reference:
         raise ValueError("--reference is required")
-    samples, reference_rate = _load_audio_known_channels(args.reference, 0)
+    samples, reference_rate = _decode_mono(args.reference)
     if reference_rate != sample_rate:
         raise ValueError("reference sample rate must match input sample rate")
     if len(samples) != length:

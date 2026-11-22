@@ -19,6 +19,7 @@ from ._cli_options import (
     _NumericTextError,
     _read_number_text,
 )
+from ._runtime import _C_INT_MAX
 
 # The sample rates the generators accept: those the library's own decoder reads back.
 _MIN_GENERATOR_SAMPLE_RATE = 8000
@@ -32,7 +33,7 @@ _NORM_TYPES = ("max", "l1", "l2", "power")
 
 # Commands whose `--values` hold integers (frame indices).
 _INTEGER_VALUE_COMMANDS = frozenset({"fix-frames"})
-_C_INT_LIMIT = 2**31
+_C_INT_LIMIT = _C_INT_MAX + 1
 
 
 def _count_text(value: Any) -> str:

@@ -42,7 +42,7 @@ from ._cli_options import (
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._project_instruments import SynthPatch
-from ._runtime import ErrorCode, SonareError
+from ._runtime import _UINT32_MAX, ErrorCode, SonareError
 
 # A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
 # audio source carries a `uri`, so the kind decides which entries are addressable
@@ -104,7 +104,7 @@ def _parse_audio_binding(assignment: str) -> tuple[int, str]:
         source_id = _read_integer_text(source_id_text, _INT64_MIN, _INT64_MAX)
     except _NumericTextError as exc:
         raise ValueError(f"argument --audio: <source_id> {exc}") from None
-    if not 1 <= source_id <= 0xFFFFFFFF:
+    if not 1 <= source_id <= _UINT32_MAX:
         raise ValueError("argument --audio: <source_id> must be an integer in [1, 4294967295]")
     return source_id, path
 
@@ -911,7 +911,7 @@ def register_project_parsers(
             help="Audio source id whose timeline every take is aligned to",
         ),
         minimum=1,
-        maximum=0xFFFFFFFF,
+        maximum=_UINT32_MAX,
     )
     palign.add_argument(
         "--audio",

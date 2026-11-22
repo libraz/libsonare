@@ -520,8 +520,8 @@ def _as_float32_buffer(samples: object, *, arg_name: str = "samples") -> np.ndar
     boolean element type is a ``TypeError``: its values are PCM codes, not
     amplitudes. A list of Python numbers carries no element type and is cast.
 
-    ``fn_name`` / ``arg_name`` only shape those messages, so a rejection names
-    the facade the caller invoked exactly as :func:`_validate_samples` does.
+    ``arg_name`` only shapes those messages, so a rejection names
+    the argument the caller passed exactly as :func:`_validate_samples` does.
     """
     if isinstance(samples, (array.array, memoryview)):
         typed = np.asarray(samples)
@@ -678,7 +678,7 @@ def _to_c_float_array(
     array via ``_np_backing`` so it cannot be collected while the C call is
     in flight.
 
-    ``fn_name`` / ``arg_name`` are forwarded to :func:`_as_float32_buffer`, so a
+    ``arg_name`` is forwarded to :func:`_as_float32_buffer`, so a
     call site coercing an unvalidated buffer under another name reports that
     name instead of this helper's ``samples`` default.
     """
@@ -1019,7 +1019,6 @@ def _validate_c_int_field(value: object, arg_name: str) -> int:
     wording is this field's own.
 
     Args:
-        fn_name: Caller name, used to prefix the error message.
         value: Requested field value.
         arg_name: Keyword name, named in the error message.
 
@@ -1047,7 +1046,6 @@ def _validate_hpss_kernel(value: int, arg_name: str) -> int:
     :func:`_narrow_int`; odd-and-positive is this domain's own.
 
     Args:
-        fn_name: Caller name, used to prefix the error message.
         value: Requested kernel size.
         arg_name: Keyword name, named in the error message.
 

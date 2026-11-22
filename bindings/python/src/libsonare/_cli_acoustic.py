@@ -38,6 +38,7 @@ from ._cli_options import (
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
 from ._errors import SonareError
+from ._runtime import _UINT32_MAX
 
 # Upper bound of the receiver spacing, in metres; the library's own limit.
 _MAX_RECEIVER_SPACING_M = 4.0
@@ -392,7 +393,7 @@ def register_acoustic_parsers(
                 help="Deterministic late-tail seed (default: 1)",
             ),
             minimum=0,
-            maximum=0xFFFFFFFF,
+            maximum=_UINT32_MAX,
         )
         p.add_argument(
             "--max-sec",

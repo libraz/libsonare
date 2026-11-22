@@ -283,6 +283,22 @@ def _color_enabled() -> bool:
     return "NO_COLOR" not in os.environ and sys.stdout.isatty() and sys.stderr.isatty()
 
 
+_BOLD = "\033[1m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_BLUE = "\033[34m"
+_MAGENTA = "\033[35m"
+_CYAN = "\033[36m"
+_RESET = "\033[0m"
+
+
+def _styled(text: str, *codes: str) -> str:
+    """Wrap text in ANSI codes when the terminal takes them."""
+    if not _color_enabled():
+        return text
+    return "".join(codes) + text + _RESET
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Print a concise diagnostic report for the loaded libsonare build."""
     from ._analysis_music import _capabilities_document
@@ -372,14 +388,8 @@ def _load_audio(path: str) -> tuple[list[float], int]:
     the same commands, and a warning on only one of them is a difference a user
     would read as a difference in what was processed.
     """
-    channels = _source_channel_count(path)
-    if channels > 1:
-        print(
-            f"warning: {channels}-channel input is downmixed to mono by this CLI command; "
-            "use the stereo library API for channel-preserving processing",
-            file=sys.stderr,
-        )
-    return _load_audio_known_channels(path, channels, emit_warning=False)
+    _warn_downmix(_source_channel_count(path))
+    return _decode_mono(path)
 
 
 def _load_audio_channels(path: str) -> tuple[list[list[float]], int]:
@@ -397,22 +407,20 @@ def _load_audio_channels(path: str) -> tuple[list[list[float]], int]:
     return _load_audio_channels_known(path, channels)
 
 
-def _load_audio_known_channels(
-    path: str, channels: int, *, emit_warning: bool = False
-) -> tuple[list[float], int]:
-    """Load mono audio given the source channel count the caller already probed.
-
-    ``channels`` is used only for the downmix warning, so the probe runs once per
-    command rather than once per loader.
-    """
-    from .audio import Audio
-
-    if emit_warning and channels > 1:
+def _warn_downmix(channels: int) -> None:
+    """Warn on stderr that a multi-channel source is downmixed to mono."""
+    if channels > 1:
         print(
             f"warning: {channels}-channel input is downmixed to mono by this CLI command; "
             "use the stereo library API for channel-preserving processing",
             file=sys.stderr,
         )
+
+
+def _decode_mono(path: str) -> tuple[list[float], int]:
+    """Decode a file to a mono buffer without any downmix warning."""
+    from .audio import Audio
+
     with Audio.from_file(path) as audio:
         return audio.data, audio.sample_rate
 
@@ -478,7 +486,7 @@ def _read_audio_bounded(path: str) -> bytes:
 def _load_audio_channels_known(path: str, channels: int) -> tuple[list[list[float]], int]:
     """Load channel planes after a probe, decoding a multi-channel source once."""
     if channels <= 1:
-        samples, sample_rate = _load_audio_known_channels(path, channels, emit_warning=False)
+        samples, sample_rate = _decode_mono(path)
         return [samples], sample_rate
 
     from .audio import decode_channels
@@ -573,7 +581,8 @@ def _load_channels_or_downmix(path: str) -> tuple[list[list[float]], int]:
     channels = _source_channel_count(path)
     if channels == 2:
         return _load_audio_channels_known(path, channels)
-    samples, sample_rate = _load_audio_known_channels(path, channels, emit_warning=True)
+    _warn_downmix(channels)
+    samples, sample_rate = _decode_mono(path)
     return [samples], sample_rate
 
 

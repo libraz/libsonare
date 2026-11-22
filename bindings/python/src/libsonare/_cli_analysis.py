@@ -10,6 +10,10 @@ from typing import Any
 import numpy as np
 
 from ._cli_common import (
+    _BOLD,
+    _GREEN,
+    _MAGENTA,
+    _RESET,
     PITCH_NAMES,
     _color_enabled,
     _format_time,
@@ -415,9 +419,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         # Match the native CLI: both output streams must be terminals, and
         # NO_COLOR must be absent, before human output gets ANSI sequences.
         use_color = _color_enabled()
-        bpm_style = "\033[32m\033[1m" if use_color else ""
-        key_style = "\033[35m\033[1m" if use_color else ""
-        reset = "\033[0m" if use_color else ""
+        bpm_style = _GREEN + _BOLD if use_color else ""
+        key_style = _MAGENTA + _BOLD if use_color else ""
+        reset = _RESET if use_color else ""
         print(
             f"\n  {bpm_style}> Estimated BPM : {r.bpm:.2f} BPM  "
             f"(conf {r.bpm_confidence * 100:.1f}%){reset}"

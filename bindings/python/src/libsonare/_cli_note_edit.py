@@ -38,6 +38,7 @@ from ._cli_options import (
 )
 from ._effects_note_ops import _UNMATCHED_POLICIES
 from ._narrowing import _resolve_sample_bound
+from ._runtime import _UINT32_MAX
 
 if TYPE_CHECKING:
     from .analyzer import NoteEdit
@@ -860,7 +861,7 @@ def register_note_edit_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
-        maximum=0xFFFFFFFF,
+        maximum=_UINT32_MAX,
     )
     _cli_domain(
         vocal_notes_p.add_argument(
@@ -872,7 +873,7 @@ def register_note_edit_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
-        maximum=0xFFFFFFFF,
+        maximum=_UINT32_MAX,
     )
     vocal_notes_p.add_argument(
         "--f0-min-hz",

@@ -41,6 +41,7 @@ from ._cli_repair import (
 )
 from ._errors import SonareError, _unknown_error
 from ._mastering_offline import _chain_config_paths, _check_chain_document, _nest_chain_config
+from ._narrowing import _FLOAT32_MAX
 from ._result_records import _result_to_json_dict
 
 if TYPE_CHECKING:
@@ -776,7 +777,6 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
 
 # The record's keys, all required.
 _STREAMING_PLATFORM_KEYS = ("name", "target_lufs", "ceiling_dbtp")
-_FLOAT32_MAX = 3.4028234663852886e38
 
 
 def _refuse_json_constant(token: str) -> None:

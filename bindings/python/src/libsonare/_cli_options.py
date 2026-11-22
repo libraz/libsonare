@@ -44,7 +44,7 @@ from ._cli_inventory import (
     _stated_default,
     _token_of,
 )
-from ._narrowing import _FLOAT32_MAX
+from ._narrowing import _FLOAT32_MAX, _INT64_MAX, _INT64_MIN
 from ._runtime import _C_INT_MAX, _C_INT_MIN
 
 # The native CLI's numeric grammar: leading ASCII space, a sign, decimal digits
@@ -56,8 +56,6 @@ _NUMBER_TEXT = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 _INTEGER_TEXT = re.compile(r"[ \t\n\v\f\r]*[+-]?\d+", re.ASCII)
-_INT64_MIN = -(2**63)
-_INT64_MAX = 2**63 - 1
 
 
 class _NumericTextError(ValueError):
