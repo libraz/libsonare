@@ -506,22 +506,47 @@ describe('Sonare WASM Project', () => {
       const after = project.toJson();
       expect(after).not.toBe(before);
       expect(after).toContain('"warpRefId":123');
-      expect(after).toContain('"warpMode":1');
+      expect(after).toContain('"warpMode":"repitch"');
       const restored = Project.fromJson(after);
       expect(restored.toJson()).toBe(after);
       restored.destroy();
       project.undo();
-      expect(project.toJson()).toContain('"warpMode":0');
+      expect(project.toJson()).toContain('"warpMode":"off"');
       project.undo();
       expect(project.toJson()).toContain('"warpRefId":0');
       project.undo();
       expect(project.toJson()).toBe(before);
       project.setClipWarpMode(clipId, 'tempoSync');
-      expect(project.toJson()).toContain('"warpMode":2');
+      expect(project.toJson()).toContain('"warpMode":"tempoSync"');
       expect(() => project.setClipWarpMode(clipId, 'typo' as 'repitch')).toThrow();
       expect(() => project.setClipWarpMode(clipId, 99 as never)).toThrow();
     } finally {
       project.destroy();
+    }
+  });
+
+  it('refuses a warp mode ordinal or a retired spelling in a document by its tokens', () => {
+    const project = new Project();
+    let document: string;
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+      project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
+      document = project.toJson();
+    } finally {
+      project.destroy();
+    }
+    expect(document).toContain('"warpMode":"off"');
+    for (const stale of ['0', '2', '"tempo-sync"']) {
+      expect(() =>
+        Project.fromJson(document.replace('"warpMode":"off"', `"warpMode":${stale}`)),
+      ).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidFormat,
+          message: expect.stringMatching(
+            /warpMode must be one of off, repitch, tempoSync, timeStretch$/,
+          ),
+        }),
+      );
     }
   });
 

@@ -88,8 +88,8 @@ describe('Project edit ops (new bindings)', () => {
       fadeOutCurve: 'equalPower',
     });
     const json = project.toJson();
-    expect(json).toContain('"fadeIn":{"curve":2,"lengthPpq":0.5}');
-    expect(json).toContain('"fadeOut":{"curve":1,"lengthPpq":0}');
+    expect(json).toContain('"fadeIn":{"curve":"exponential","lengthPpq":0.5}');
+    expect(json).toContain('"fadeOut":{"curve":"equalPower","lengthPpq":0}');
     // Aliases and ordinals are refused rather than resolved.
     expect(() => project.setClipFade(clip, { fadeInCurve: 'EXP' as never })).toThrow(RangeError);
     expect(() => project.setClipFade(clip, { fadeOutCurve: 'equal_power' as never })).toThrow(
@@ -106,13 +106,13 @@ describe('Project edit ops (new bindings)', () => {
 
     expect(() => project.setClipFade(clip, { fadeInCurve: 'equalPower' })).not.toThrow();
     let json = project.toJson();
-    expect(json).toContain('"fadeIn":{"curve":1,"lengthPpq":0}');
-    expect(json).toContain('"fadeOut":{"curve":0,"lengthPpq":0}');
+    expect(json).toContain('"fadeIn":{"curve":"equalPower","lengthPpq":0}');
+    expect(json).toContain('"fadeOut":{"curve":"linear","lengthPpq":0}');
 
     expect(() => project.setClipFade(clip, { fadeOutCurve: 'equalPower' })).not.toThrow();
     json = project.toJson();
-    expect(json).toContain('"fadeIn":{"curve":0,"lengthPpq":0}');
-    expect(json).toContain('"fadeOut":{"curve":1,"lengthPpq":0}');
+    expect(json).toContain('"fadeIn":{"curve":"linear","lengthPpq":0}');
+    expect(json).toContain('"fadeOut":{"curve":"equalPower","lengthPpq":0}');
 
     expect(() =>
       project.setClipFade(clip, {
@@ -123,8 +123,8 @@ describe('Project edit ops (new bindings)', () => {
       }),
     ).not.toThrow();
     json = project.toJson();
-    expect(json).toContain('"fadeIn":{"curve":0,"lengthPpq":0}');
-    expect(json).toContain('"fadeOut":{"curve":0,"lengthPpq":0}');
+    expect(json).toContain('"fadeIn":{"curve":"linear","lengthPpq":0}');
+    expect(json).toContain('"fadeOut":{"curve":"linear","lengthPpq":0}');
     project.destroy();
   });
 
@@ -456,9 +456,9 @@ describe('Project edit ops (new bindings)', () => {
     const track = project.addTrack({ kind: 'audio' });
     const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
     project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2 });
-    expect(project.toJson()).toContain('"loopMode":1');
+    expect(project.toJson()).toContain('"loopMode":"loop"');
     project.setClipLoop(clip, { loopMode: 'off' });
-    expect(project.toJson()).toContain('"loopMode":0');
+    expect(project.toJson()).toContain('"loopMode":"off"');
     project.destroy();
   });
 
@@ -566,8 +566,8 @@ describe('Project edit ops (new bindings)', () => {
     });
 
     const json = project.toJson();
-    expect(json).toContain('"targetKind":1');
-    expect(json).toContain('"targetKind":2');
+    expect(json).toContain('"targetKind":"trackFaderDb"');
+    expect(json).toContain('"targetKind":"trackPan"');
 
     const restored = Project.fromJson(json);
     expect(restored.toJson()).toBe(json);
@@ -610,7 +610,7 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
-  it('serializes a curveToNext token as its ordinal and refuses the curve key by name', () => {
+  it('serializes a curveToNext token as written and refuses the curve key by name', () => {
     const project = new Project();
     try {
       const track = project.addTrack({ kind: 'audio' });
@@ -619,9 +619,9 @@ describe('Project edit ops (new bindings)', () => {
         points: [{ ppq: 0, value: 1, curveToNext: 'sCurve' }],
       });
       const lane = JSON.parse(project.toJson()) as {
-        tracks: Array<{ automationLanes: Array<{ points: Array<{ curveToNext: number }> }> }>;
+        tracks: Array<{ automationLanes: Array<{ points: Array<{ curveToNext: string }> }> }>;
       };
-      expect(lane.tracks[0].automationLanes[0].points[0].curveToNext).toBe(3);
+      expect(lane.tracks[0].automationLanes[0].points[0].curveToNext).toBe('sCurve');
       const before = project.toJson();
       expect(() =>
         project.addAutomationLane(track, {
@@ -668,7 +668,7 @@ describe('Project edit ops (new bindings)', () => {
       points: [{ ppq: 0, value: -6 }],
     });
     const json = project.toJson();
-    expect(json).toContain('"targetKind":1');
+    expect(json).toContain('"targetKind":"trackFaderDb"');
     project.destroy();
   });
 

@@ -736,15 +736,15 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
-  it('resolves every documented curve spelling to one serialized ordinal', () => {
+  it('resolves every documented curve spelling and stores it as written', () => {
     // The vocabulary comes from the shared corpus rather than being restated
     // here, and the Node suite reads the same file: a spelling one facade takes
-    // must land on the same ordinal on the other, not throw or fall back to
+    // must land on the same curve on the other, not throw or fall back to
     // Linear at the boundary.
     expect(AUTOMATION_CURVE_VALUES).toEqual(
       Object.fromEntries(curveCorpus.accepted.map(({ value, ordinal }) => [value, ordinal])),
     );
-    const laneWith = (curve: unknown): number => {
+    const laneWith = (curve: unknown): string => {
       const project = new Project();
       try {
         project.setSampleRate(48000);
@@ -754,15 +754,15 @@ describe('Sonare WASM Project edit ops', () => {
           points: [{ ppq: 0, value: 1, curveToNext: curve as ProjectAutomationCurve }],
         });
         const doc = JSON.parse(project.toJson()) as {
-          tracks: Array<{ automationLanes: Array<{ points: Array<{ curveToNext: number }> }> }>;
+          tracks: Array<{ automationLanes: Array<{ points: Array<{ curveToNext: string }> }> }>;
         };
         return doc.tracks[0].automationLanes[0].points[0].curveToNext;
       } finally {
         project.destroy();
       }
     };
-    for (const { value, ordinal } of curveCorpus.accepted) {
-      expect(laneWith(value)).toBe(ordinal);
+    for (const { value } of curveCorpus.accepted) {
+      expect(laneWith(value)).toBe(value);
     }
     // A Project curve is a token on every path, so an ordinal is a type error.
     for (const value of curveCorpus.rejected_numeric) {
@@ -829,8 +829,8 @@ describe('Sonare WASM Project edit ops', () => {
       };
       expect(serialized.tracks[0].automationLanes).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ targetParamId: 20, targetKind: 1 }),
-          expect.objectContaining({ targetParamId: 21, targetKind: 2 }),
+          expect.objectContaining({ targetParamId: 20, targetKind: 'trackFaderDb' }),
+          expect.objectContaining({ targetParamId: 21, targetKind: 'trackPan' }),
         ]),
       );
 
@@ -886,7 +886,9 @@ describe('Sonare WASM Project edit ops', () => {
         tracks: Array<{ automationLanes: Array<Record<string, unknown>> }>;
       };
       expect(edited.tracks[0].automationLanes).toEqual(
-        expect.arrayContaining([expect.objectContaining({ targetParamId: 30, targetKind: 1 })]),
+        expect.arrayContaining([
+          expect.objectContaining({ targetParamId: 30, targetKind: 'trackFaderDb' }),
+        ]),
       );
     } finally {
       project.destroy();
