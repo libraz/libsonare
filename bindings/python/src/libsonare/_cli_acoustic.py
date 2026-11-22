@@ -464,7 +464,7 @@ def register_acoustic_parsers(
             "--receiver-spacing",
             type=_finite_float,
             default=None,
-            help="Receiver spacing for a stereo input, in metres (0,4] (default: fitted to the room)",
+            help="Receiver spacing of a stereo input, metres (0,4] (default: fitted to the room)",
         ),
         minimum=0,
         exclusive_minimum=True,
