@@ -28,7 +28,16 @@ describe('Mixer.processStereoInto', () => {
     expect(
       expectRefusalOf(() => mixer().processStereoInto(notAList, notAList, outL, outR), TypeError)
         .message,
-    ).toBe('Mixer.processStereoInto: leftInputs and rightInputs length must be a number');
+    ).toBe('Mixer.processStereoInto: leftInputs must be an array');
+  });
+
+  it('names the right input list when only it is not an array', () => {
+    const outL = new Float32Array(BLOCK);
+    const outR = new Float32Array(BLOCK);
+    const notAList = {} as unknown as Float32Array[];
+    expect(
+      expectRefusalOf(() => mixer().processStereoInto([], notAList, outL, outR), TypeError).message,
+    ).toBe('Mixer.processStereoInto: rightInputs must be an array');
   });
 
   it('refuses an input channel that is not an array by name', () => {
@@ -40,7 +49,7 @@ describe('Mixer.processStereoInto', () => {
         () => mixer().processStereoInto(notAChannel, [new Float32Array(BLOCK)], outL, outR),
         TypeError,
       ).message,
-    ).toBe('Mixer.processStereoInto: leftInputs element length must be a number');
+    ).toBe('Mixer.processStereoInto: leftInputs[0] length must be a number');
   });
 });
 

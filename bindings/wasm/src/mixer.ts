@@ -40,6 +40,19 @@ export type { StripMeteringOptions } from './public_types_mixing.js';
 /** A strip addressed by 0-based index or by its scene id (a digit-only id is still an id). */
 export type StripRef = number | string;
 
+/** Refuses input lists that are not arrays, by name, before comparing their lengths. */
+function assertInputLists(leftInputs: unknown, rightInputs: unknown): void {
+  if (!Array.isArray(leftInputs)) {
+    throw refuseType('leftInputs must be an array');
+  }
+  if (!Array.isArray(rightInputs)) {
+    throw refuseType('rightInputs must be an array');
+  }
+  if (leftInputs.length !== rightInputs.length) {
+    throw refuse('leftInputs and rightInputs must have the same length.');
+  }
+}
+
 /** Role of a bus added with {@link Mixer.addBus}. */
 export type MixBusRole = 'master' | 'aux' | 'submix';
 
@@ -344,9 +357,7 @@ export class Mixer {
    */
   processStereo(leftInputs: Float32Array[], rightInputs: Float32Array[]): MixerProcessResult {
     try {
-      if (leftInputs.length !== rightInputs.length) {
-        throw refuse('leftInputs and rightInputs must have the same length.');
-      }
+      assertInputLists(leftInputs, rightInputs);
     } catch (error) {
       throw nameNativeError(error, 'Mixer.processStereo');
     }
@@ -368,9 +379,7 @@ export class Mixer {
     outRight: Float32Array,
   ): void {
     try {
-      if (leftInputs.length !== rightInputs.length) {
-        throw refuse('leftInputs and rightInputs must have the same length.');
-      }
+      assertInputLists(leftInputs, rightInputs);
       if (outLeft.length !== outRight.length) {
         throw refuse('outLeft and outRight must have the same length.');
       }

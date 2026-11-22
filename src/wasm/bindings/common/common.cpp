@@ -786,14 +786,16 @@ bool cancelCallbackRequested(const val& callback) {
   return outcome.isTrue();
 }
 
-int requireMatchedLength(const val& a, const val& b, const char* subject, bool require_non_zero) {
-  const std::size_t a_length = wasmArrayLikeLength(a, subject);
-  const std::size_t b_length = wasmArrayLikeLength(b, subject);
+int requireMatchedLength(const val& a, const char* a_subject, const val& b, const char* b_subject,
+                         bool require_non_zero) {
+  const std::size_t a_length = wasmArrayLikeLength(a, a_subject);
+  const std::size_t b_length = wasmArrayLikeLength(b, b_subject);
+  const std::string pair = std::string(a_subject) + " and " + b_subject;
   if (a_length != b_length) {
-    throw WasmRangeError(std::string(subject) + " must have the same length");
+    throw WasmRangeError(pair + " must have the same length");
   }
   if (require_non_zero && a_length == 0) {
-    throw WasmRangeError(std::string(subject) + " must not be empty");
+    throw WasmRangeError(pair + " must not be empty");
   }
   return static_cast<int>(a_length);
 }

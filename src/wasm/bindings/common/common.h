@@ -623,8 +623,8 @@ bool cancelCallbackRequested(const val& callback);
 /// @throws WasmTypeError naming @p key when it is present and not a function.
 bool callbackGiven(const val& callback, const char* key);
 /// @brief Reads the JS `.length` of @p a and @p b and requires they match.
-/// @p subject names the arrays in the error message (e.g. "leftChannels and
-/// rightChannels"). When @p require_non_zero is true (the default — this is
+/// @p a_subject and @p b_subject name each argument (e.g. "leftChannels"), so a
+/// refusal of one names that one. When @p require_non_zero is true (the default — this is
 /// the historically documented contract), an empty pair is also rejected;
 /// call sites that intentionally tolerate a zero-length pair (e.g. a
 /// zero-strip mixer configuration, which already handles `count == 0` as a
@@ -632,7 +632,7 @@ bool callbackGiven(const val& callback, const char* key);
 /// Returns the common length.
 /// @throws WasmArgumentError on mismatch, or (when required)
 /// zero length.
-int requireMatchedLength(const val& a, const val& b, const char* subject,
+int requireMatchedLength(const val& a, const char* a_subject, const val& b, const char* b_subject,
                          bool require_non_zero = true);
 /// @brief Rejects an out-of-range enum ordinal instead of letting a switch or
 /// ternary's default/else arm silently substitute whichever member it

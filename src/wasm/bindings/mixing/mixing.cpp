@@ -308,7 +308,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   // require_non_zero defaults to true: mixStereo has no meaning over zero
   // input channels, so requireMatchedLength rejects that itself now.
   const int count =
-      requireMatchedLength(left_channels, right_channels, "leftChannels and rightChannels");
+      requireMatchedLength(left_channels, "leftChannels", right_channels, "rightChannels");
   // A per-strip array may be shorter than the strip list (the rest keep their
   // defaults) but never longer: the surplus entries would belong to no strip.
   for (const char* key : {"inputTrimDb", "faderDb", "pan", "panMode", "width", "muted"}) {
