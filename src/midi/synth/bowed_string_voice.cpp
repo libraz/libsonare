@@ -16,10 +16,18 @@ namespace sonare::midi::synth {
 namespace {
 
 using sonare::constants::kDefaultDawSampleRate;
-using sonare::constants::kEpsilon;
 using sonare::constants::kLn1000D;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
+
+// Bow table reflection coefficient 1/(|s|+0.75)^4, clamped to 1.
+inline float bow_table_coeff(float s) noexcept {
+  const float base = std::fabs(s) + 0.75f;
+  const float base2 = base * base;
+  float bow_coeff = 1.0f / (base2 * base2);
+  if (bow_coeff > 1.0f) bow_coeff = 1.0f;
+  return bow_coeff;
+}
 
 // Bow-velocity calibration: the differential-velocity input the bow table sees
 // is a small quantity (a real bow moves the contact point at ~0.05-0.2 in the
@@ -452,12 +460,7 @@ float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
     // [0,1]. exponent -4 == 1/x^4, so no pow() needed. The flat top (small dv) is
     // the sticking phase; the falling tails are the slipping phase. The injected
     // velocity dv*coeff scatters equally into both delay lines.
-    const float s = bow_slope_ * dv + bow_offset_;
-    const float base = std::fabs(s) + 0.75f;
-    const float base2 = base * base;
-    float bow_coeff = 1.0f / (base2 * base2);
-    if (bow_coeff > 1.0f) bow_coeff = 1.0f;
-    v_inj = dv * bow_coeff;
+    v_inj = dv * bow_table_coeff(bow_slope_ * dv + bow_offset_);
   }
 
   // Finite-width bow: the ribbon is crossed over w / c, not in one sample.
@@ -561,11 +564,7 @@ float BowedStringVoiceCore::elasto_plastic_injection(float dv) noexcept {
   // breakaway and re-grip now happen at different relative velocities — the
   // elasto-plastic hysteresis loop that warms the "dry" memoryless slip.
   const float s = bow_slope_ * (dv - kEpHystOffset * bristle_z_) + bow_offset_;
-  const float base = std::fabs(s) + 0.75f;
-  const float base2 = base * base;
-  float bow_coeff = 1.0f / (base2 * base2);
-  if (bow_coeff > 1.0f) bow_coeff = 1.0f;
-  return dv * bow_coeff;
+  return dv * bow_table_coeff(s);
 }
 
 float BowedStringVoiceCore::hyperbolic_injection(float dv) noexcept {

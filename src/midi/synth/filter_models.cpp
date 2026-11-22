@@ -18,11 +18,6 @@ float prewarp(float cutoff_hz, double sample_rate) noexcept {
   return std::tan(constants::kPi * fc / sr);
 }
 
-/// Loop saturation shared by the ladder / Sallen-Key models: keeps the
-/// resonance feedback bounded (deterministic self-oscillation amplitude) and
-/// contributes the soft "analog" drive cue.
-float loop_tanh(float x) noexcept { return std::tanh(x); }
-
 /// Halvings of the [-1, 1] bracket in loop_fixed_point(): 2^-32 of it, below float resolution.
 constexpr int kBracketHalvings = 32;
 
@@ -86,7 +81,7 @@ float TransistorLadderFilter::process(float x) noexcept {
   const float G = g_over_gp1_;
   const float s = inv_gp1_ * (G * G * G * z1_ + G * G * z2_ + G * z3_ + z4_);
   float u = (x - k_ * s) / (1.0f + k_ * g4_);
-  u = loop_tanh(u);
+  u = std::tanh(u);
 
   float v = (u - z1_) * G;
   float y = v + z1_;
@@ -178,7 +173,7 @@ float DiodeLadderFilter::process(float x) noexcept {
   const float sigma = sg1_ * fbo1 + sg2_ * fb2 + sg3_ * fb3 + fb4;
 
   float u = (x - k_ * sigma) / (1.0f + k_ * gamma_);
-  u = loop_tanh(u);
+  u = std::tanh(u);
 
   // Stage 1 (a0 = 1), stages 2-4 (a0 = 0.5).
   float xin = u * gamma1_ + fb2 + eps1_ * fbo1;
@@ -309,7 +304,7 @@ float Korg35Filter::process(float x) noexcept {
   z1_ = lp1 + v1;
 
   float u = alpha0_ * (lp1 + s35_);
-  u = loop_tanh(u);
+  u = std::tanh(u);
 
   // LPF2.
   const float v2 = (u - z2_) * G;
@@ -345,7 +340,8 @@ void Korg35Filter::settle(float x) noexcept {
 namespace {
 
 // Section Qs of a 4th-order Butterworth lowpass: 1 / (2 cos(pi/8)) and 1 / (2 cos(3pi/8)).
-constexpr float kFourPoleLowQ = 0.54119610f;
+constexpr float kFourPoleLowQ = constants::kButterworth4QLow;
+// One ulp from constants::kButterworth4QHigh; kept so renders stay bit-identical.
 constexpr float kFourPoleHighQ = 1.30656296f;
 
 }  // namespace

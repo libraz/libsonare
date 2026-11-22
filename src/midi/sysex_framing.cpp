@@ -2,13 +2,6 @@
 
 namespace sonare::midi {
 
-namespace {
-
-constexpr uint8_t kSysExStartByte = 0xF0u;
-constexpr uint8_t kSysExEndByte = 0xF7u;
-
-}  // namespace
-
 std::vector<uint8_t> sysex_payload_from_body(const uint8_t* body, size_t size, bool terminated) {
   std::vector<uint8_t> payload;
   if (body == nullptr) size = 0;

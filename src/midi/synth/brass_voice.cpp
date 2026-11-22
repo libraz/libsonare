@@ -19,6 +19,7 @@ using sonare::constants::kDefaultDawSampleRate;
 
 namespace {
 
+using sonare::constants::kAmpEpsilon;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
@@ -199,6 +200,23 @@ SONARE_TUNABLE(kLip2Couple, 1.5f);
 std::complex<float> mute_pair_response(const rt::BiquadCoeffs& cavity, const rt::BiquadCoeffs& gap,
                                        float gap_gain, float omega) noexcept {
   return rt::biquad_response(cavity, omega) - gap_gain * rt::biquad_response(gap, omega);
+}
+
+// Pole-radius cap keeping a lip resonator strictly inside the unit circle.
+constexpr float kLipPoleRadiusMax = 0.99995f;
+
+struct LipResonatorCoeffs {
+  float a1;
+  float a2;
+  float b0;
+};
+
+// Two-pole lip resonator at f_hz with quality q, sampled at srf.
+LipResonatorCoeffs lip_resonator_coeffs(float f_hz, float q, float srf) noexcept {
+  float r = std::exp(-kPi * (f_hz / q) / srf);
+  r = std::min(r, kLipPoleRadiusMax);
+  const float w = kTwoPi * f_hz / srf;
+  return {2.0f * r * std::cos(w), -r * r, 1.0f - r};
 }
 
 }  // namespace
@@ -409,12 +427,10 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   lip2_x1_ = lip2_x2_ = lip2_z1_ = lip2_z2_ = 0.0f;
   if (dyn_lip_ > 0.0f) {
     const float f2 = std::min(std::min(f0 * lip_tune_, 0.45f * srf) * kLip2Mult, 0.45f * srf);
-    float r2 = std::exp(-kPi * (f2 / kLip2Q) / srf);
-    r2 = std::min(r2, 0.99995f);
-    const float w2 = kTwoPi * f2 / srf;
-    lip2_a1_ = 2.0f * r2 * std::cos(w2);
-    lip2_a2_ = -r2 * r2;
-    lip2_b0_ = 1.0f - r2;
+    const LipResonatorCoeffs c2 = lip_resonator_coeffs(f2, kLip2Q, srf);
+    lip2_a1_ = c2.a1;
+    lip2_a2_ = c2.a2;
+    lip2_b0_ = c2.b0;
     lip2_couple_ = kLip2Couple * dyn_lip_;
   }
 
@@ -433,24 +449,20 @@ void BrassVoiceCore::tune_lip(float f0) noexcept {
   // Constant Q: the pole radius follows the note so the lip stays as selective
   // at the bottom of the range as at the top.
   const float f_lip = std::min(f0 * lip_tune_, 0.45f * lip_srf_);
-  float lip_r = std::exp(-kPi * (f_lip / lip_q_) / lip_srf_);
-  lip_r = std::min(lip_r, 0.99995f);
-  const float w = kTwoPi * f_lip / lip_srf_;
-  lip_a1_ = 2.0f * lip_r * std::cos(w);
-  lip_a2_ = -lip_r * lip_r;
-  lip_b0_ = 1.0f - lip_r;  // peak gain ~unity; absolute gain absorbed by lip_couple_
+  const LipResonatorCoeffs c1 = lip_resonator_coeffs(f_lip, lip_q_, lip_srf_);
+  lip_a1_ = c1.a1;
+  lip_a2_ = c1.a2;
+  lip_b0_ = c1.b0;  // peak gain ~unity; absolute gain absorbed by lip_couple_
   // The second lip resonance rides on the first, so it moves with it rather
   // than being left behind on the old note. Skipped while dyn_lip_ is still
   // zero, which is the case on the note-on call: start() sets it below and
   // tunes the second resonator itself, so that path is untouched.
   if (dyn_lip_ > 0.0f) {
     const float f2 = std::min(f_lip * kLip2Mult, 0.45f * lip_srf_);
-    float r2 = std::exp(-kPi * (f2 / kLip2Q) / lip_srf_);
-    r2 = std::min(r2, 0.99995f);
-    const float w2 = kTwoPi * f2 / lip_srf_;
-    lip2_a1_ = 2.0f * r2 * std::cos(w2);
-    lip2_a2_ = -r2 * r2;
-    lip2_b0_ = 1.0f - r2;
+    const LipResonatorCoeffs c2 = lip_resonator_coeffs(f2, kLip2Q, lip_srf_);
+    lip2_a1_ = c2.a1;
+    lip2_a2_ = c2.a2;
+    lip2_b0_ = c2.b0;
   }
 }
 
@@ -586,7 +598,7 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
     // law's pressure is the loop's, against its own running amplitude, times the
     // played dynamic.
     bore_env_ = std::max(std::fabs(lp_state_), bore_env_ * cuivre_env_decay_);
-    const float p_hat = lp_state_ / std::max(bore_env_, 1.0e-9f) * played_dynamic();
+    const float p_hat = lp_state_ / std::max(bore_env_, kAmpEpsilon) * played_dynamic();
     bore_ratio = ratio * std::clamp(1.0f + kBoreSpeedSpan * bore_nonlinearity_ * p_hat, 0.5f, 1.5f);
   }
   bore_.advance(dc, bore_ratio);
@@ -626,7 +638,7 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
     // Normalised by the wave's own running amplitude, so the shock reshapes the
     // wave without limiting its envelope: an onset overshoot passes through.
     cuivre_env_ = std::max(std::fabs(outp), cuivre_env_ * cuivre_env_decay_);
-    const float env = std::max(cuivre_env_, 1.0e-9f);
+    const float env = std::max(cuivre_env_, kAmpEpsilon);
     const float xn = outp / env;
     // Asymmetric shock: the |x| term steepens the front (even harmonics), tanh
     // bounds it; rescaling by 1/tanh(drive) keeps the full-scale peak so the
@@ -637,7 +649,7 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
     // been, under 1) the wave is reshaped in proportion, so a decaying tail rounds
     // off and is never lifted.
     cuivre_peak_ = std::max(cuivre_peak_, cuivre_env_);
-    const float depth = std::min(1.0f, drive * cuivre_env_ / std::max(cuivre_peak_, 1.0e-9f));
+    const float depth = std::min(1.0f, drive * cuivre_env_ / std::max(cuivre_peak_, kAmpEpsilon));
     outp += depth * b_eff * kCuivreMixMax * (shaped - outp);
   }
 
@@ -837,7 +849,7 @@ void BrassVoiceCore::release() noexcept { breath_.release(); }
 void BrassVoiceCore::kill() noexcept {
   killed_ = true;
   decimator_.reset();
-  breath_.level = 0.0f;
+  breath_.kill();
   lp_state_ = 0.0f;
   bell_lp_.reset();
   bell_hp_.reset();
@@ -857,7 +869,6 @@ void BrassVoiceCore::kill() noexcept {
   lip2_x2_ = 0.0f;
   lip2_z1_ = 0.0f;
   lip2_z2_ = 0.0f;
-  breath_.releasing = true;
 }
 
 }  // namespace sonare::midi::synth

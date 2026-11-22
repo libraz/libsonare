@@ -8,6 +8,7 @@
 #include "midi/synth/string_loop.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/tunable.h"
 
@@ -18,7 +19,6 @@ using sonare::constants::kDefaultDawSampleRate;
 namespace {
 
 using sonare::constants::kCentsPerOctave;
-using sonare::constants::kEpsilon;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
@@ -364,7 +364,7 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
       std::clamp(kPeakBase + kPeakTilt * std::log2(std::max(1.0f, f0) / kPeakRefHz), 0.8f, 5.0f);
   output_scale_ = kOutputTargetPeak / peak_est;
   if (jet_drive_ && kJetDriveLevelTiltDb != 0.0f) {
-    output_scale_ *= std::pow(10.0f, kJetDriveLevelTiltDb * std::log2(f0 / kPeakRefHz) / 20.0f);
+    output_scale_ *= db_to_linear(kJetDriveLevelTiltDb * std::log2(f0 / kPeakRefHz));
   }
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst so the
@@ -671,7 +671,7 @@ void FluteVoiceCore::release() noexcept { breath_.release(); }
 void FluteVoiceCore::kill() noexcept {
   killed_ = true;
   decimator_.reset();
-  breath_.level = 0.0f;
+  breath_.kill();
   lp_state_ = 0.0f;
   lattice_.reset();
   bore_.out = 0.0f;
@@ -680,7 +680,6 @@ void FluteVoiceCore::kill() noexcept {
   chiff_level_ = 0.0f;
   jet_turb_state_ = 0.0f;
   breath_rad_state_ = 0.0f;
-  breath_.releasing = true;
 }
 
 }  // namespace sonare::midi::synth

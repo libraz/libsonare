@@ -113,16 +113,12 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   drive_index_ = 0;
 
   // Glottal source pitch.
-  base_freq_hz_ = note_to_hz(note);
+  const float base_freq_hz = note_to_hz(note);
   glottis_.start(sr, VaWaveform::kSaw, 0.0f, 0);
-  phase_inc_ = base_freq_hz_ / static_cast<float>(sr);
+  phase_inc_ = base_freq_hz / static_cast<float>(sr);
 
-  // Source tilt: brightness slides the glottal roll-off corner up, keeping more
-  // of the source's upper harmonics for the high formants.
+  // Brightness slides the glottal roll-off corner up (applied below by apply_excitation()).
   const float bright = std::clamp(params.brightness, 0.0f, 1.0f);
-  const float corner = std::min(kTiltCornerBaseHz * std::exp2(kTiltCornerOctSpan * bright),
-                                0.45f * static_cast<float>(sr));
-  tilt_alpha_ = 1.0f - std::exp(-kTwoPi * corner / static_cast<float>(sr));
   tilt_state_ = 0.0f;
 
   // Formant bank: RBJ constant-0dB-peak bandpass biquads at the vowel's F1..F5.
@@ -140,11 +136,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
     form_b2_[i] = c.b2;
     form_a1_[i] = -c.a1;
     form_a2_[i] = -c.a2;
-    // Brightness opens the upper formants; F1 (the vowel anchor) stays put.
-    const float open_db = (bright - 0.5f) * kBrightFormantSpanDb *
-                          (static_cast<float>(i) / static_cast<float>(kVocalFormants - 1));
     form_amp_db_[i] = fm.amp_db;
-    form_gain_[i] = db_to_linear(fm.amp_db + open_db);
     form_z1_[i] = 0.0f;
     form_z2_[i] = 0.0f;
   }
@@ -155,6 +147,8 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   excite_.bright_mod01 = 0.0f;
   bright01_target_ = bright;
   bright01_ = bright;
+  // Tilt corner and formant gains from the live brightness; brightness opens the upper formants.
+  apply_excitation();
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   excitation_live_ = false;
 

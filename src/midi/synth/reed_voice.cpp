@@ -18,7 +18,6 @@ using sonare::constants::kDefaultDawSampleRate;
 
 namespace {
 
-using sonare::constants::kEpsilon;
 using sonare::constants::kTwoPi;
 
 // Mouth-pressure calibration: a reed self-oscillates only inside a narrow
@@ -802,7 +801,7 @@ void ReedVoiceCore::release() noexcept { breath_.release(); }
 void ReedVoiceCore::kill() noexcept {
   killed_ = true;
   decimator_.reset();
-  breath_.level = 0.0f;
+  breath_.kill();
   lp_state_ = 0.0f;
   bore_.out = 0.0f;
   dc_x1_ = 0.0f;
@@ -818,7 +817,6 @@ void ReedVoiceCore::kill() noexcept {
   rad_state_ = 0.0f;
   bell_lp_.reset();
   bell_hp_.reset();
-  breath_.releasing = true;
 }
 
 }  // namespace sonare::midi::synth

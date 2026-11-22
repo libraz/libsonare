@@ -229,7 +229,6 @@ float singing_compensated_tension(float note_hz, float force, float weight) noex
 void SingingVoiceCore::start(const SingingPatchParams& params, double sample_rate, uint8_t note,
                              Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
-  sample_rate_ = sr;
   note_hz_ = note_to_hz(note);
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 0;

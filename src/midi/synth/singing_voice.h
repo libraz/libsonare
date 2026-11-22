@@ -216,7 +216,6 @@ class SingingVoiceCore {
   /// Re-draws the tongue-tip closure from the tap's phase.
   void apply_tap() noexcept;
 
-  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float note_hz_ = 220.0f;
   SingingPhonation phonation_;
   float compensation_ = 1.0f;

@@ -158,7 +158,6 @@ class VocalVoiceCore {
   void apply_excitation() noexcept;
 
   double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
-  float base_freq_hz_ = 220.0f;
 
   // Glottal source: a PolyBLEP sawtooth with a one-pole spectral tilt (the
   // glottal roll-off). phase_inc_ is the unmodulated increment in cycles/sample.

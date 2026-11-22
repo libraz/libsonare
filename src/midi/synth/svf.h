@@ -37,14 +37,11 @@ class TptSvf {
   /// input/output taps have an absolute sum bounded by two.
   static rt::TailBudget ring(float cutoff_hz, float q, double sample_rate) noexcept {
     const double rate = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
-    // Match set()'s float clamps and arithmetic before converting the matrix.
-    const float rate_f = static_cast<float>(rate);
-    const float fc = std::clamp(cutoff_hz, 10.0f, static_cast<float>(0.49 * rate));
-    const float k = 1.0f / std::clamp(q, 0.5f, 100.0f);
-    const float g = std::tan(constants::kPi * fc / rate_f);
-    const float a1 = 1.0f / (1.0f + g * (g + k));
-    const float a2 = g * a1;
-    const float a3 = g * a2;
+    // Same design as set() before converting the matrix.
+    const Design d = design(clamp_cutoff(cutoff_hz, rate), clamp_q(q), rate);
+    const float a1 = d.a1;
+    const float a2 = d.a2;
+    const float a3 = d.a3;
     // process() advances [ic1, ic2] by this matrix once its input is zero.
     const float m00 = 2.0f * a1 - 1.0f;
     const float m01 = -2.0f * a2;
@@ -68,18 +65,18 @@ class TptSvf {
   /// Set cutoff (Hz, clamped to [10, 0.49 * sample_rate]) and resonance Q
   /// (clamped to [0.5, 100]; Q > ~20 approaches self-oscillation).
   void set(float cutoff_hz, float q) noexcept {
-    const float cutoff = std::clamp(cutoff_hz, 10.0f, static_cast<float>(0.49 * sample_rate_));
-    const float clamped_q = std::clamp(q, 0.5f, 100.0f);
+    const float cutoff = clamp_cutoff(cutoff_hz, sample_rate_);
+    const float clamped_q = clamp_q(q);
     if (designed_ && cutoff == cutoff_hz_ && clamped_q == q_) return;
     cutoff_hz_ = cutoff;
     q_ = clamped_q;
     designed_ = true;
     ++design_count_;
-    const float g = std::tan(constants::kPi * cutoff_hz_ / static_cast<float>(sample_rate_));
-    k_ = 1.0f / q_;
-    a1_ = 1.0f / (1.0f + g * (g + k_));
-    a2_ = g * a1_;
-    a3_ = g * a2_;
+    const Design d = design(cutoff_hz_, q_, sample_rate_);
+    k_ = d.k;
+    a1_ = d.a1;
+    a2_ = d.a2;
+    a3_ = d.a3;
   }
 
   float cutoff_hz() const noexcept { return cutoff_hz_; }
@@ -114,6 +111,30 @@ class TptSvf {
   }
 
  private:
+  struct Design {
+    float k;
+    float a1;
+    float a2;
+    float a3;
+  };
+
+  static float clamp_cutoff(float cutoff_hz, double rate) noexcept {
+    return std::clamp(cutoff_hz, 10.0f, static_cast<float>(0.49 * rate));
+  }
+
+  static float clamp_q(float q) noexcept { return std::clamp(q, 0.5f, 100.0f); }
+
+  /// Coefficients for an already clamped cutoff and Q.
+  static Design design(float cutoff_hz, float q, double rate) noexcept {
+    const float g = std::tan(constants::kPi * cutoff_hz / static_cast<float>(rate));
+    Design d;
+    d.k = 1.0f / q;
+    d.a1 = 1.0f / (1.0f + g * (g + d.k));
+    d.a2 = g * d.a1;
+    d.a3 = g * d.a2;
+    return d;
+  }
+
   double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float cutoff_hz_ = 1000.0f;
   float q_ = constants::kButterworthQ;

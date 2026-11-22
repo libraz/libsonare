@@ -732,8 +732,7 @@ void PipeOrganVoiceCore::release() noexcept {
 void PipeOrganVoiceCore::kill() noexcept {
   killed_ = true;
   decimator_.reset();
-  breath_.releasing = true;
-  breath_.level = 0.0f;
+  breath_.kill();
   for (int r = 0; r < rank_count_; ++r) {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
     pipe.lp_state = 0.0f;

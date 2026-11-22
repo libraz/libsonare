@@ -116,10 +116,7 @@ float DahdsrEnvelope::next() noexcept {
 }
 
 int64_t DahdsrEnvelope::release_tail_samples(double sample_rate, float release_ms) noexcept {
-  if (!(sample_rate > 0.0) || !(release_ms > 0.0f) || std::isnan(sample_rate) ||
-      std::isnan(release_ms)) {
-    return 0;
-  }
+  if (!(sample_rate > 0.0) || !(release_ms > 0.0f)) return 0;
   if (!std::isfinite(sample_rate) || !std::isfinite(release_ms)) return kMaxTailSamples;
   // level(t) = exp(-t / tau) with tau = release_ms / kDecayTauScale; the tail
   // ends when level == kSilenceLevel -> t = tau * ln(1 / kSilenceLevel).
@@ -140,18 +137,13 @@ int64_t DahdsrEnvelope::one_shot_tail_samples(double sample_rate, const DahdsrCo
   const int64_t hold_samples = stage_samples_up(config.hold_ms);
 
   // One sample past the nominal attack: the stage changes after a sample crosses 1.0.
-  const double safe_attack_scale =
-      attack_scale > 0.0f && !std::isnan(attack_scale) ? static_cast<double>(attack_scale) : 0.0;
-  const double attack_ms =
-      config.attack_ms > 0.0f && !std::isnan(config.attack_ms) ? config.attack_ms : 0.0;
+  const double safe_attack_scale = attack_scale > 0.0f ? static_cast<double>(attack_scale) : 0.0;
+  const double attack_ms = config.attack_ms > 0.0f ? config.attack_ms : 0.0;
   const int64_t attack_samples = numeric::saturating_add(
       numeric::ceil_sample_count(sample_rate * attack_ms * safe_attack_scale * 0.001), int64_t{1});
 
-  const float safe_decay_scale =
-      decay_scale > 0.0f && !std::isnan(decay_scale) ? decay_scale : 0.0f;
-  const float decay_ms = config.decay_ms > 0.0f && !std::isnan(config.decay_ms)
-                             ? config.decay_ms * safe_decay_scale
-                             : 0.0f;
+  const float safe_decay_scale = decay_scale > 0.0f ? decay_scale : 0.0f;
+  const float decay_ms = config.decay_ms > 0.0f ? config.decay_ms * safe_decay_scale : 0.0f;
   const int64_t decay_samples = std::max<int64_t>(1, release_tail_samples(sample_rate, decay_ms));
   int64_t total = numeric::saturating_add(delay_samples, attack_samples);
   total = numeric::saturating_add(total, hold_samples);

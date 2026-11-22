@@ -127,10 +127,6 @@ class FoldValve {
     return 0.5f * energy;
   }
 
-  /// Phase-difference observables: the two gaps for the coming sample.
-  float lower_gap() const noexcept { return rest_ + x_[0]; }
-  float upper_gap() const noexcept { return rest_ + x_[1]; }
-
   void reset() noexcept {
     x_[0] = x_[1] = 0.0f;
     v_[0] = v_[1] = 0.0f;

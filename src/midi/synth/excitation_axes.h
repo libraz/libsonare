@@ -134,11 +134,6 @@ constexpr EngineAxisCapability engine_axis_capability(SynthEngineMode mode) noex
   return {false, kAxisNone};
 }
 
-/// True when the engine reads @p axis.
-constexpr bool engine_accepts_axis(SynthEngineMode mode, ExcitationAxisMask axis) noexcept {
-  return (engine_axis_capability(mode).mask & static_cast<uint32_t>(axis)) != 0u;
-}
-
 namespace excitation_detail {
 
 /// A continuously excited engine that names no axis is an engine wired to

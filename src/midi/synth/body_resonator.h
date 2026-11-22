@@ -241,22 +241,8 @@ class BodyResonator {
     // floor falls above a few kHz where this dry path was flat. Branch past
     // the filter at the identity (tilt off) rather than run it at alpha = 1:
     // a one-pole update is not bit-identical to a plain pass-through.
-    float floor_x = x;
-    if (tilt_active_) {
-      floor_y_ += tilt_alpha_ * (x - floor_y_);
-      floor_x = floor_y_;
-    }
-    const float bp_in = x - x2_;
-    x2_ = x1_;
-    x1_ = x;
     float body = 0.0f;
-    for (int k = 0; k < num_modes_; ++k) {
-      Mode& mode = modes_[static_cast<size_t>(k)];
-      const float y = mode.a1 * mode.y1 + mode.a2 * mode.y2 + mode.gain * bp_in;
-      mode.y2 = mode.y1;
-      mode.y1 = y;
-      body += y;
-    }
+    const float floor_x = step_floor_and_modes(x, body);
     if (strike_ != 0.0f) {
       // A pending strike joins mode 0's recursion on this sample.
       modes_[0].y1 += strike_;
@@ -281,19 +267,17 @@ class BodyResonator {
   }
 
  private:
-  /// One sample of the series admittance: highpass, then floor + modes, blended by mix_.
-  float process_series(float x) noexcept {
-    float h = hp_[0].process(x);
-    h = hp_[1].process(h);
-    float floor_x = h;
+  /// Advances the floor one-pole, the bandpass history and the mode bank by one input sample;
+  /// returns the floor output and sums the mode outputs into @p body.
+  float step_floor_and_modes(float in, float& body) noexcept {
+    float floor_x = in;
     if (tilt_active_) {
-      floor_y_ += tilt_alpha_ * (h - floor_y_);
+      floor_y_ += tilt_alpha_ * (in - floor_y_);
       floor_x = floor_y_;
     }
-    const float bp_in = h - x2_;
+    const float bp_in = in - x2_;
     x2_ = x1_;
-    x1_ = h;
-    float body = 0.0f;
+    x1_ = in;
     for (int k = 0; k < num_modes_; ++k) {
       Mode& mode = modes_[static_cast<size_t>(k)];
       const float y = mode.a1 * mode.y1 + mode.a2 * mode.y2 + mode.gain * bp_in;
@@ -301,6 +285,15 @@ class BodyResonator {
       mode.y1 = y;
       body += y;
     }
+    return floor_x;
+  }
+
+  /// One sample of the series admittance: highpass, then floor + modes, blended by mix_.
+  float process_series(float x) noexcept {
+    float h = hp_[0].process(x);
+    h = hp_[1].process(h);
+    float body = 0.0f;
+    const float floor_x = step_floor_and_modes(h, body);
     const float wet = series_gain_ * (floor_gain_ * floor_x + body);
     return x + mix_ * (wet - x);
   }
@@ -360,9 +353,8 @@ class BodyResonator {
     floor_y_ = 0.0f;
   }
 
-  // t60 (s) of a two-pole resonator of quality factor q at frequency f:
-  // Q = f / BW and BW ≈ ln(1000) / (pi * t60), so t60 = (ln(1000)/pi) * q / f.
-  static constexpr float kT60SecPerQHz = 2.19848f;  // ln(1000) / pi
+  // t60 (s) of a two-pole resonator of quality q at frequency f is kT60SecPerQHz * q / f.
+  static constexpr float kT60SecPerQHz = 2.19848f;
 
   static float q_to_t60(float freq_hz, float q) noexcept { return kT60SecPerQHz * q / freq_hz; }
 

@@ -34,7 +34,6 @@
 /// breath turbulence and onset chiff come from the counter-based
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 

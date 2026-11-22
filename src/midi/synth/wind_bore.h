@@ -47,7 +47,7 @@ struct WindBore {
     period = period_samples;
     comp = comp_samples;
     out = 0.0f;
-    const float eff = loop_budget(period, comp, 2.0f).delay;
+    const float eff = loop_delay(period, comp, 2.0f);
     const int span = static_cast<int>(eff * span_factor) + 8;
     prefill_span = std::min(capacity, std::max(16, span));
     write = capacity > 0 ? static_cast<size_t>(prefill_span % capacity) : 0;

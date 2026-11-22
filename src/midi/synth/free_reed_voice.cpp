@@ -135,6 +135,26 @@ float radiation_mix_norm(float radiation, float halfangle, float ratio,
   return 1.0f / std::sqrt(std::max(magnitude_sq, 1.0e-12f));
 }
 
+// Re-cuts a radiated tongue's normalisers for the live pitch ratio.
+void refresh_radiation_norms(float radiation, float halfangle, float ratio, float sample_rate,
+                             float& norm, float& mix_norm) noexcept {
+  norm = radiation_norm(halfangle, ratio, sample_rate);
+  mix_norm = radiation_mix_norm(radiation, halfangle, ratio, sample_rate);
+}
+
+// Dry/radiated blend, level-matched by mix_norm below full radiation.
+float blend_radiated(float radiation, float flow, float radiated, float mix_norm) noexcept {
+  return radiation >= 1.0f ? flow + radiation * (radiated - flow)
+                           : (flow + radiation * (radiated - flow)) * mix_norm;
+}
+
+// Soft-clipped asymmetric saw: the in-slot and out-of-slot half-cycles get different gains.
+float shaped_saw(float phase, float asymmetry, float drive) noexcept {
+  const float saw = 2.0f * phase - 1.0f;
+  const float gain = saw >= 0.0f ? (1.0f + asymmetry) : (1.0f - asymmetry);
+  return std::tanh(drive * gain * saw);
+}
+
 }  // namespace
 
 float free_reed_onset_overshoot_db(const FreeReedPatchParams& params, float f0_hz) noexcept {
@@ -186,13 +206,8 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   const float stiffness = std::clamp(params.reed_stiffness, 0.0f, 1.0f);
   asymmetry_ = kAsymBase + kAsymSpan * stiffness;
   drive_stiff_ = kDriveBase + kDriveStiffSpan * stiffness;
-  drive_ = drive_stiff_ + kDriveBreathSpan * level;
 
-  // Body lowpass pole from brightness (log-swept corner, clamped under Nyquist).
   const float brightness = std::clamp(params.brightness, 0.0f, 1.0f);
-  const float corner = std::min(kBodyMinHz * std::pow(kBodyMaxHz / kBodyMinHz, brightness),
-                                0.45f * static_cast<float>(sr));
-  body_alpha_ = 1.0f - std::exp(-kTwoPi * corner / static_cast<float>(sr));
 
   // Slot flow (gated): the pair of humps the tongue passes on its way through
   // the slot, radiated as a small monopole.
@@ -215,14 +230,13 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // the tilt without the level or the register slope that come with it.
   radiation_halfangle_ = static_cast<float>(kTwoPi * base_freq_hz_ / (2.0 * sr));
   radiation_ratio_ = 1.0f;
-  radiation_norm_ = radiation_norm(radiation_halfangle_, 1.0f, static_cast<float>(sr));
-  radiation_mix_norm_ =
-      radiation_mix_norm(radiation_, radiation_halfangle_, 1.0f, static_cast<float>(sr));
+  refresh_radiation_norms(radiation_, radiation_halfangle_, 1.0f, static_cast<float>(sr),
+                          radiation_norm_, radiation_mix_norm_);
   for (int i = 0; i < partner_count_; ++i) {
     Partner& t = partners_[i];
     t.halfangle = 0.5f * static_cast<float>(kTwoPi) * t.inc;
-    t.norm = radiation_norm(t.halfangle, 1.0f, static_cast<float>(sr));
-    t.mix_norm = radiation_mix_norm(radiation_, t.halfangle, 1.0f, static_cast<float>(sr));
+    refresh_radiation_norms(radiation_, t.halfangle, 1.0f, static_cast<float>(sr), t.norm,
+                            t.mix_norm);
   }
 
   // The differentiator history is primed on the first render, after its live
@@ -246,7 +260,6 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   register_gain_ = slot_duty_ > 0.0f && radiation_ > 0.0f && keytrack > 0.0f
                        ? std::pow(base_freq_hz_ / kA4Hz, keytrack)
                        : 1.0f;
-  output_scale_ = (kOutputMin + kOutputSpan * level) * slot_makeup_ * register_gain_;
 
   // Live axes start where the note put them, so nothing is armed and the
   // coefficients above stand until a control moves.
@@ -258,6 +271,8 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   excite_.bright_mod01 = 0.0f;
   bright01_target_ = brightness;
   bright01_ = brightness;
+  // drive_, output_scale_ and the body lowpass pole follow the live axes just set.
+  apply_excitation();
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   excitation_live_ = false;
   excite_.remember_base();
@@ -353,15 +368,13 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
     // live pitch ratio. Re-cut its normalizer only when radiation is active
     // and the ratio moved; ratio 1 retains start()'s original operation.
     if (radiation_ > 0.0f && ratio != radiation_ratio_) {
-      radiation_norm_ =
-          radiation_norm(radiation_halfangle_, ratio, static_cast<float>(sample_rate_));
-      radiation_mix_norm_ = radiation_mix_norm(radiation_, radiation_halfangle_, ratio,
-                                               static_cast<float>(sample_rate_));
+      refresh_radiation_norms(radiation_, radiation_halfangle_, ratio,
+                              static_cast<float>(sample_rate_), radiation_norm_,
+                              radiation_mix_norm_);
       for (int i = 0; i < partner_count_; ++i) {
         Partner& t = partners_[i];
-        t.norm = radiation_norm(t.halfangle, ratio, static_cast<float>(sample_rate_));
-        t.mix_norm =
-            radiation_mix_norm(radiation_, t.halfangle, ratio, static_cast<float>(sample_rate_));
+        refresh_radiation_norms(radiation_, t.halfangle, ratio, static_cast<float>(sample_rate_),
+                                t.norm, t.mix_norm);
       }
       radiation_ratio_ = ratio;
     }
@@ -374,17 +387,13 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
         flow -= slot_mean_;
         const float radiated = (flow - prev_flow_) * radiation_norm_;
         prev_flow_ = flow;
-        float sum = radiation_ >= 1.0f
-                        ? flow + radiation_ * (radiated - flow)
-                        : (flow + radiation_ * (radiated - flow)) * radiation_mix_norm_;
+        float sum = blend_radiated(radiation_, flow, radiated, radiation_mix_norm_);
         for (int i = 0; i < partner_count_; ++i) {
           Partner& t = partners_[i];
           const float flow_t = slot_flow_at(t.phase) - slot_mean_;
           const float radiated_t = (flow_t - t.prev_flow) * t.norm;
           t.prev_flow = flow_t;
-          sum += partner_level_ *
-                 (radiation_ >= 1.0f ? flow_t + radiation_ * (radiated_t - flow_t)
-                                     : (flow_t + radiation_ * (radiated_t - flow_t)) * t.mix_norm);
+          sum += partner_level_ * blend_radiated(radiation_, flow_t, radiated_t, t.mix_norm);
         }
         tongue = tongue_mix_ * sum;
       } else {
@@ -401,21 +410,15 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
       flow -= slot_mean_;
       const float radiated = (flow - prev_flow_) * radiation_norm_;
       prev_flow_ = flow;
-      tongue = radiation_ >= 1.0f ? flow + radiation_ * (radiated - flow)
-                                  : (flow + radiation_ * (radiated - flow)) * radiation_mix_norm_;
+      tongue = blend_radiated(radiation_, flow, radiated, radiation_mix_norm_);
     }
   } else {
-    // The soft-clipped asymmetric saw: the in-slot and out-of-slot half-cycles
-    // get different gains, giving a skewed even-and-odd harmonic buzz.
-    const float saw_a = 2.0f * phase_a_ - 1.0f;
-    const float gain_a = saw_a >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
-    tongue = std::tanh(drive_ * gain_a * saw_a);
+    // Skewed even-and-odd harmonic buzz from the asymmetric soft clip.
+    tongue = shaped_saw(phase_a_, asymmetry_, drive_);
     if (partner_count_ > 0) {
       float sum = tongue;
       for (int i = 0; i < partner_count_; ++i) {
-        const float saw_t = 2.0f * partners_[i].phase - 1.0f;
-        const float gain_t = saw_t >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
-        sum += partner_level_ * std::tanh(drive_ * gain_t * saw_t);
+        sum += partner_level_ * shaped_saw(partners_[i].phase, asymmetry_, drive_);
       }
       tongue = tongue_mix_ * sum;
     }

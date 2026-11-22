@@ -22,11 +22,17 @@
 
 namespace sonare::midi {
 
-/// True for the MIDI 1.0 SysEx start byte (also the SMF F0 event status).
-constexpr bool is_sysex_start_byte(uint8_t byte) noexcept { return byte == 0xF0u; }
+/// The MIDI 1.0 SysEx start byte (also the SMF F0 event status).
+inline constexpr uint8_t kSysExStartByte = 0xF0u;
 
-/// True for the MIDI 1.0 SysEx end byte (also the SMF F7 event status).
-constexpr bool is_sysex_end_byte(uint8_t byte) noexcept { return byte == 0xF7u; }
+/// The MIDI 1.0 SysEx end byte (also the SMF F7 event status).
+inline constexpr uint8_t kSysExEndByte = 0xF7u;
+
+/// True for the MIDI 1.0 SysEx start byte.
+constexpr bool is_sysex_start_byte(uint8_t byte) noexcept { return byte == kSysExStartByte; }
+
+/// True for the MIDI 1.0 SysEx end byte.
+constexpr bool is_sysex_end_byte(uint8_t byte) noexcept { return byte == kSysExEndByte; }
 
 /// The body of a stored SysEx payload: a view into the payload's bytes.
 struct SysExBody {
