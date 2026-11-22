@@ -846,7 +846,7 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
   return withEntry('estimateMeter', () => {
     const { beats } = requestOnly<EstimateMeterRequest>('estimateMeter', [request]);
     if (!Array.isArray(beats)) {
-      throw refuseType('beats must be an array of beats');
+      throw refuseType('beats must be an array of { timeSec, strength }');
     }
     requireListBudget(beats, 'beats');
     const times: number[] = [];

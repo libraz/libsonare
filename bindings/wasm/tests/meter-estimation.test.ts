@@ -183,6 +183,14 @@ describe('WASM estimateMeter', () => {
       expect(() => estimateMeter({ beats: [] })).toThrow(/beatTimes must not be empty/);
     });
 
+    it('refuses a non-array beats with the same text on every surface', () => {
+      for (const beats of [null, 'beats', { length: 1 }]) {
+        expect(() => estimateMeter({ beats } as never)).toThrow(
+          new TypeError('estimateMeter: beats must be an array of { timeSec, strength }'),
+        );
+      }
+    });
+
     it('still answers a single-beat series, so the line is drawn at empty not at short', () => {
       // One beat is something to score, so it keeps the low-confidence default
       // rather than being rejected. Without this the guard above would be
