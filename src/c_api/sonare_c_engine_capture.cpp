@@ -143,8 +143,10 @@ SonareError sonare_engine_set_capture_buffer(SonareEngine* engine,
 SonareError sonare_engine_arm_capture(SonareEngine* engine, int armed) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
   engine->engine.set_capture_armed(armed != 0);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_capture_punch(SonareEngine* engine, int64_t start_sample,
@@ -165,8 +167,10 @@ SonareError sonare_engine_set_capture_punch(SonareEngine* engine, int64_t start_
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_TRY
   engine->engine.set_capture_punch(start_sample, end_sample, enabled != 0);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_capture_source(SonareEngine* engine,
@@ -194,8 +198,10 @@ SonareError sonare_engine_set_capture_source(SonareEngine* engine,
 SonareError sonare_engine_set_record_offset_samples(SonareEngine* engine, int64_t offset_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
   engine->engine.set_record_offset_samples(offset_samples);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_input_monitor(SonareEngine* engine, int enabled, float gain) {
