@@ -472,8 +472,9 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'mixing/mixing_assistant.cpp',
       text: 'subject.c_str()',
-      count: 1,
-      reason: 'error-subject label built from a literal name and an element index',
+      count: 5,
+      reason:
+        'error-subject labels (tracks[i].sampleRate, left/right plane names) built from a literal name and an element index',
     },
     {
       file: 'realtime/processing.cpp',
@@ -552,6 +553,36 @@ describe('embedded NUL refusal, scan', () => {
       text: '(std::string(subject) + ".timeStretchRatio").c_str()',
       count: 1,
       reason: 'error-subject label built from a code-owned edit label and a literal key',
+    },
+    {
+      file: 'features/core.cpp',
+      text: 'channel_name.c_str()',
+      count: 2,
+      reason: 'refusal name built from a literal list name and a signal index',
+    },
+    {
+      file: 'mixing/mixing.cpp',
+      text: 'left_subject.c_str()',
+      count: 1,
+      reason: 'refusal name built from a literal list name and a strip index',
+    },
+    {
+      file: 'mixing/mixing.cpp',
+      text: 'right_subject.c_str()',
+      count: 1,
+      reason: 'refusal name built from a literal list name and a strip index',
+    },
+    {
+      file: 'realtime/clips.cpp',
+      text: 'channel_name.c_str()',
+      count: 2,
+      reason: 'refusal name built from a literal list name and a channel index',
+    },
+    {
+      file: 'realtime/processing.cpp',
+      text: 'channel_name.c_str()',
+      count: 1,
+      reason: 'refusal name built from a literal list name and a channel index',
     },
   ];
 

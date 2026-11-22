@@ -34,6 +34,7 @@ import {
   melToStft,
   mfccToAudio,
   mfccToMel,
+  midiRouteEvents,
   midiToHz,
   mixingScenePreset,
   mixStereo,
@@ -102,12 +103,19 @@ describe('argument refusal error class', () => {
   });
 
   it('refuses a length outside the safe-integer domain with a RangeError', () => {
-    withEngine((engine) => {
-      const error = thrown(() =>
-        engine.setMarkers({ length: -1 } as unknown as Parameters<typeof engine.setMarkers>[0]),
-      );
-      expect(error).toBeInstanceOf(RangeError);
+    // A length-only object is not a list, so the lie rides on a real array the facade forwards.
+    const lying = new Proxy([], {
+      get: (target, property) => (property === 'length' ? -1 : Reflect.get(target, property)),
     });
+    const error = thrown(() =>
+      midiRouteEvents({
+        events: lying as unknown as Parameters<typeof midiRouteEvents>[0]['events'],
+      }),
+    );
+    expect(error).toBeInstanceOf(RangeError);
+    expect((error as Error).message).toBe(
+      'midiRouteEvents: events length must be an integer in [0, 9007199254740991]',
+    );
   });
 
   it('refuses an engine lookup of an unknown id with a RangeError', () => {
