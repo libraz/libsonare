@@ -23,7 +23,6 @@ _UNROWED: dict[str, str] = {
     "kEngineBandIndexFloorDomain": "read only in a build without mixing; the same subjects read kEngineBandIndexDomain otherwise",
     "kEngineInsertIndexDomain": "the insert-count relation refuses first; inserts are capped below the domain's bound",
     "kEngineMidiCc14NumberDomain": "binding.cc_number's row is kEngineMidiControllerDomain; this bound is its below_32_when_14_bit relation",
-    "kMelFrequencyCountDomain": "mel_frequencies has no C entry",
     "kMultibandDynamicBandCountDomain": "the band-list builders stop at DynamicEq::kMaxBands, so no C entry reaches the bound",
     "kSilenceIndexableLengthDomain": "refuses only a buffer longer than INT_MAX samples",
     "kSilenceSignalCountDomain": "split_silence_common_ex refuses a signal_count below 1 with its own at-least check first",

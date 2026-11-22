@@ -464,6 +464,9 @@ from ._types_enums import (
     KeyProfile as KeyProfile,
 )
 from ._types_enums import (
+    MelNorm as MelNorm,
+)
+from ._types_enums import (
     MeterTap as MeterTap,
 )
 from ._types_enums import (

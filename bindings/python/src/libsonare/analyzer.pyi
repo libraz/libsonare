@@ -118,6 +118,7 @@ from .types import (
     MatchReferenceLoudnessResult,
     MatchTonalBalanceResult,
     MaterialPresetName,
+    MelNorm,
     MelodyResult,
     MelSpectrogramResult,
     MeterEstimate,
@@ -1541,6 +1542,22 @@ def phase_vocoder(
 ) -> np.ndarray[Any, Any]: ...
 def hz_to_mel(hz: float) -> float: ...
 def mel_to_hz(mel: float) -> float: ...
+def mel_frequencies(
+    n_mels: int = 128,
+    fmin: float = 0.0,
+    fmax: float = 11025.0,
+    htk: bool = False,
+) -> np.ndarray[Any, Any]: ...
+def mel_filterbank(
+    sample_rate: int,
+    n_fft: int,
+    *,
+    n_mels: int = 128,
+    fmin_hz: float = 0.0,
+    fmax_hz: float | None = None,
+    htk: bool = False,
+    norm: MelNorm = "slaney",
+) -> np.ndarray[Any, Any]: ...
 def hz_to_midi(hz: float) -> float: ...
 def midi_to_hz(midi: float) -> float: ...
 def hz_to_note(hz: float) -> str:

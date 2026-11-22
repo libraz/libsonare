@@ -117,6 +117,13 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_KEY_PROFILE_BELLMAN_BUDGE = 6
 } SonareKeyProfileType;
 
+/// How each band of a mel filterbank is scaled: left at unit peak, or divided by its width in Hz
+/// so every band integrates to the same area (Slaney).
+typedef enum SONARE_ENUM_BASE {
+  SONARE_MEL_NORM_NONE = 0,
+  SONARE_MEL_NORM_SLANEY = 1
+} SonareMelNorm;
+
 /// How a tempogram is computed from the onset envelope: autocorrelation or cosine (Fourier).
 typedef enum SONARE_ENUM_BASE {
   SONARE_TEMPOGRAM_AUTOCORRELATION = 0,

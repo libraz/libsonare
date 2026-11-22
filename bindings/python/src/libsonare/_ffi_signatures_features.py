@@ -42,6 +42,30 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_mel_spectrogram_options_init.restype = None
     lib.sonare_mel_spectrogram_options_init.argtypes = [ctypes.POINTER(SonareMelSpectrogramOptions)]
 
+    lib.sonare_mel_filterbank.restype = ctypes.c_int32
+    lib.sonare_mel_filterbank.argtypes = [
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareMelFilterbankOptions),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    lib.sonare_mel_filterbank_options_init.restype = None
+    lib.sonare_mel_filterbank_options_init.argtypes = [ctypes.POINTER(SonareMelFilterbankOptions)]
+
+    lib.sonare_mel_frequencies.restype = ctypes.c_int32
+    lib.sonare_mel_frequencies.argtypes = [
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int32,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     lib.sonare_mfcc.restype = ctypes.c_int32
     lib.sonare_mfcc.argtypes = [
         ctypes.POINTER(ctypes.c_float),

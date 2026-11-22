@@ -343,6 +343,58 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
                                    const SonareMelSpectrogramOptions* options,
                                    SonareMelResult* out);
 
+/// @brief Options for @ref sonare_mel_filterbank.
+/// @details Fill with @ref sonare_mel_filterbank_options_init before setting fields.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_mel_filterbank_options_init.
+  uint32_t struct_size;
+  /// Lower edge of the lowest band in Hz; finite and at least 0. Default 0.
+  float fmin_hz;
+  /// Upper edge of the highest band in Hz; finite and at least 0, where 0 reads as the Nyquist
+  /// and a value above the Nyquist is held at it. Must exceed @c fmin_hz once resolved. Default 0.
+  float fmax_hz;
+  /// Non-zero uses the HTK mel formula instead of Slaney's. Default 0.
+  int32_t htk;
+  /// A @ref SonareMelNorm. Default @c SONARE_MEL_NORM_SLANEY.
+  int32_t norm;
+} SonareMelFilterbankOptions;
+
+/// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_mel_filterbank_options_init(SonareMelFilterbankOptions* options);
+
+/// @brief The mel filterbank that maps an STFT power spectrum onto @p n_mels bands.
+/// @details Band @c m is a triangle over the FFT bins rising from mel point @c m to its peak at
+///          point @c m+1 and falling to point @c m+2, where the points are
+///          @ref sonare_mel_frequencies of @p n_mels + 2 over the resolved range.
+/// @param sample_rate Sample rate in Hz the spectrum was taken at.
+/// @param n_fft FFT size; the filterbank spans its n_fft / 2 + 1 bins.
+/// @param n_mels Number of bands, in [1, 4096].
+/// @param options NULL for the defaults (@ref sonare_mel_filterbank_options_init).
+/// @param out Receives the [n_mels x n_bins] filterbank row-major; free with
+///        @ref sonare_free_floats.
+/// @param out_length Receives n_mels * n_bins.
+/// @param out_n_mels Receives the band count.
+/// @param out_n_bins Receives the FFT bin count, n_fft / 2 + 1.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an argument outside its domain, or a range whose
+///         resolved upper edge is not above @c fmin_hz.
+SonareError sonare_mel_filterbank(int sample_rate, int n_fft, int n_mels,
+                                  const SonareMelFilterbankOptions* options, float** out,
+                                  size_t* out_length, int* out_n_mels, int* out_n_bins);
+
+/// @brief @p n_mels frequencies equally spaced on the mel scale from @p fmin_hz to @p fmax_hz,
+///        both included; one point is @p fmin_hz alone.
+/// @param n_mels Number of points, at least 1.
+/// @param fmin_hz First point in Hz; finite and at least 0.
+/// @param fmax_hz Last point in Hz; finite and greater than @p fmin_hz. No value stands for the
+///        Nyquist here, since no sample rate is given.
+/// @param htk Non-zero uses the HTK mel formula instead of Slaney's.
+/// @param out Receives the points in Hz; free with @ref sonare_free_floats.
+/// @param out_length Receives @p n_mels.
+/// @return SONARE_ERROR_INVALID_PARAMETER when @p n_mels is below 1, @p fmin_hz is not finite or
+///         is negative, or @p fmax_hz is not finite or not greater than @p fmin_hz.
+SonareError sonare_mel_frequencies(int n_mels, float fmin_hz, float fmax_hz, int32_t htk,
+                                   float** out, size_t* out_length);
+
 /// @brief Options for @ref sonare_mfcc.
 /// @details Fill with @ref sonare_mfcc_options_init before setting fields.
 typedef struct {

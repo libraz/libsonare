@@ -3081,6 +3081,50 @@
       "sentinel": null
     },
     {
+      "entry": "mel_filterbank",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 2,
+      "hi": 524288,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "mel_filterbank",
+      "param": "n_mels",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 4096,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "mel_filterbank",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "mel_frequencies",
+      "param": "n_mels",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "mel_spectrogram",
       "param": "hop_length",
       "kind": "integer",

@@ -34,6 +34,8 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("frames_to_time", "sample_rate"): "sr",
     ("hybrid_cqt", "fmin_hz"): "fmin",
     ("hybrid_cqt", "sample_rate"): "sr",
+    ("mel_frequencies", "fmax_hz"): "fmax",
+    ("mel_frequencies", "fmin_hz"): "fmin",
     ("mel_to_audio", "fmax_hz"): "fmax",
     ("mel_to_audio", "fmin_hz"): "fmin",
     ("mel_to_audio", "sample_rate"): "sr",

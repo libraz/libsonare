@@ -22,6 +22,7 @@ from libsonare import (
     StreamingRetune,
     mix_stereo,
 )
+from libsonare._field_spelling import surface_spelling
 
 _CORPUS = json.loads(
     (Path(__file__).resolve().parents[3] / "tests/conformance/public_input_corpus.json").read_text()
@@ -509,3 +510,28 @@ def test_project_document_enums_follow_the_corpus(case: dict[str, Any]) -> None:
     assert refused.value.code_name == _PROJECT_ENUMS["code_name"]
     assert not isinstance(refused.value, SonareValueError)
     assert case["message"] in str(refused.value)
+
+
+_MEL = _CORPUS["mel_family"]
+
+
+@pytest.mark.parametrize("entry", _MEL["entries"])
+@pytest.mark.parametrize("case", _MEL["cases"], ids=lambda case: case["id"])
+def test_mel_family_follows_the_corpus(case: dict[str, Any], entry: str) -> None:
+    if entry not in case.get("only", _MEL["entries"]):
+        pytest.skip(f"{case['id']} is not a {entry} case")
+    args = {**_MEL["base"][entry], **case["args"]}
+    kwargs = {surface_spelling(entry, k): _corpus_number(v) for k, v in args.items()}
+    fn = getattr(libsonare, entry)
+    if case.get("accepted"):
+        result = fn(**kwargs)
+        expect = case["expect"][entry]
+        if "shape" in expect:
+            assert list(result.shape) == expect["shape"]
+        if "values" in expect:
+            assert result.tolist() == expect["values"]
+        return
+    names = {k: surface_spelling(entry, k) for k in _MEL["base"][entry] | case["args"]}
+    text = f"{entry}: {case['predicate'].format(**names)}"
+    with pytest.raises(_GM_REFUSALS[case["refused"]], match=rf"^{re.escape(text)}$"):
+        fn(**kwargs)

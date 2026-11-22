@@ -541,6 +541,12 @@ from .analyzer import (
 )
 from .analyzer import mel_delta as mel_delta
 from .analyzer import (
+    mel_filterbank as mel_filterbank,
+)
+from .analyzer import (
+    mel_frequencies as mel_frequencies,
+)
+from .analyzer import (
     mel_spectrogram as mel_spectrogram,
 )
 from .analyzer import mel_to_audio as mel_to_audio
@@ -1226,6 +1232,9 @@ from .types import (
 )
 from .types import (
     MaterialPresetName as MaterialPresetName,
+)
+from .types import (
+    MelNorm as MelNorm,
 )
 from .types import (
     MelodyPoint as MelodyPoint,

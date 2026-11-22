@@ -163,6 +163,9 @@ ChordChromaMethod = Literal["stft", "nnls", "cqt"]
 NormType = Literal["max", "l1", "l2", "power"]
 """Vector normalisation: maximum magnitude, L1, L2 or power."""
 
+MelNorm = Literal["none", "slaney"]
+"""Mel band scaling: unit peak, or divided by the band width so every band has the same area."""
+
 TempogramMode = Literal["autocorrelation", "cosine"]
 """Autocorrelation or cosine-similarity tempogram."""
 
@@ -230,6 +233,7 @@ _KEY_PROFILES: tuple[KeyProfile, ...] = get_args(KeyProfile)
 _SECTION_TYPES: tuple[SectionType, ...] = get_args(SectionType)
 _CHORD_CHROMA_METHODS: tuple[ChordChromaMethod, ...] = get_args(ChordChromaMethod)
 _NORM_TYPES: tuple[NormType, ...] = get_args(NormType)
+_MEL_NORMS: tuple[MelNorm, ...] = get_args(MelNorm)
 _TEMPOGRAM_MODES: tuple[TempogramMode, ...] = get_args(TempogramMode)
 _PITCH_TARGET_MODES: tuple[PitchTargetMode, ...] = get_args(PitchTargetMode)
 _WINDOW_TYPES: tuple[WindowType, ...] = get_args(WindowType)

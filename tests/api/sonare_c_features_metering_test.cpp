@@ -1,6 +1,7 @@
 /// @file sonare_c_features_metering_test.cpp
 /// @brief Feature and metering C API tests.
 
+#include <algorithm>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstring>
@@ -1621,4 +1622,158 @@ TEST_CASE("every constant-Q entry bounds its hop at the CQT's maximum on both si
     CHECK(std::string(sonare_last_error_message()) ==
           "hop_length must be an integer in [1, 65536]");
   }
+}
+
+namespace {
+
+/// The refusal subjects of the last call, in order.
+std::vector<std::string> mel_refusal_subjects() {
+  std::vector<std::string> subjects;
+  for (size_t i = 0; i < sonare_last_refusal_subject_count(); ++i) {
+    subjects.emplace_back(sonare_last_refusal_subject(i));
+  }
+  return subjects;
+}
+
+std::vector<float> mel_points(int n, float fmin, float fmax, int32_t htk) {
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_mel_frequencies(n, fmin, fmax, htk, &out, &out_length) == SONARE_OK);
+  std::vector<float> points(out, out + out_length);
+  sonare_free_floats(out);
+  return points;
+}
+
+}  // namespace
+
+TEST_CASE("sonare_mel_filterbank shapes its bands on the mel points of n_mels + 2", "[c_api]") {
+  for (const int32_t htk : {0, 1}) {
+    SonareMelFilterbankOptions options;
+    sonare_mel_filterbank_options_init(&options);
+    options.fmin_hz = 30.0f;
+    options.fmax_hz = 8000.0f;
+    options.htk = htk;
+    options.norm = SONARE_MEL_NORM_NONE;
+    float* out = nullptr;
+    size_t out_length = 0;
+    int n_mels = 0;
+    int n_bins = 0;
+    REQUIRE(sonare_mel_filterbank(22050, 2048, 40, &options, &out, &out_length, &n_mels, &n_bins) ==
+            SONARE_OK);
+    REQUIRE(n_mels == 40);
+    REQUIRE(n_bins == 1025);
+    REQUIRE(out_length == static_cast<size_t>(n_mels) * n_bins);
+    const std::vector<float> points = mel_points(n_mels + 2, 30.0f, 8000.0f, htk);
+    const float bin_hz = 22050.0f / 2048.0f;
+    for (int m = 0; m < n_mels; ++m) {
+      // An unnormalised band is a unit triangle, so its tallest bin sits at the centre point.
+      const float* row = out + static_cast<size_t>(m) * n_bins;
+      const int peak = static_cast<int>(std::max_element(row, row + n_bins) - row);
+      CHECK(std::fabs(peak * bin_hz - points[m + 1]) <= bin_hz);
+      CHECK(row[peak] <= 1.0f + 1e-6f);
+    }
+    sonare_free_floats(out);
+  }
+}
+
+TEST_CASE("sonare_mel_filterbank reads fmax_hz 0 as the Nyquist and scales by norm", "[c_api]") {
+  auto filterbank = [](float fmax_hz, int32_t norm) {
+    SonareMelFilterbankOptions options;
+    sonare_mel_filterbank_options_init(&options);
+    options.fmax_hz = fmax_hz;
+    options.norm = norm;
+    float* out = nullptr;
+    size_t out_length = 0;
+    int n_mels = 0;
+    int n_bins = 0;
+    REQUIRE(sonare_mel_filterbank(16000, 512, 24, &options, &out, &out_length, &n_mels, &n_bins) ==
+            SONARE_OK);
+    std::vector<float> values(out, out + out_length);
+    sonare_free_floats(out);
+    return values;
+  };
+  SonareMelFilterbankOptions defaults;
+  sonare_mel_filterbank_options_init(&defaults);
+  REQUIRE(defaults.norm == SONARE_MEL_NORM_SLANEY);
+  REQUIRE(defaults.fmax_hz == 0.0f);
+  CHECK(filterbank(0.0f, SONARE_MEL_NORM_SLANEY) == filterbank(8000.0f, SONARE_MEL_NORM_SLANEY));
+  CHECK(filterbank(0.0f, SONARE_MEL_NORM_SLANEY) != filterbank(0.0f, SONARE_MEL_NORM_NONE));
+}
+
+TEST_CASE("sonare_mel_frequencies spans fmin to fmax and one point is fmin", "[c_api]") {
+  const std::vector<float> points = mel_points(40, 30.0f, 8000.0f, 0);
+  REQUIRE(points.size() == 40);
+  CHECK(std::fabs(points.front() - 30.0f) <= 1e-3f);
+  CHECK(std::fabs(points.back() - 8000.0f) <= 8000.0f * 1e-5f);
+  CHECK(std::is_sorted(points.begin(), points.end()));
+  const std::vector<float> one = mel_points(1, 30.0f, 8000.0f, 1);
+  REQUIRE(one.size() == 1);
+  CHECK(std::fabs(one[0] - 30.0f) <= 1e-3f);
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  int n_mels = 0;
+  int n_bins = 0;
+  REQUIRE(sonare_mel_filterbank(22050, 2048, 1, nullptr, &out, &out_length, &n_mels, &n_bins) ==
+          SONARE_OK);
+  CHECK(n_mels == 1);
+  sonare_free_floats(out);
+}
+
+TEST_CASE("sonare_mel_filterbank and sonare_mel_frequencies refuse by name", "[c_api]") {
+  float* out = nullptr;
+  size_t out_length = 0;
+  int n_mels = 0;
+  int n_bins = 0;
+  SonareMelFilterbankOptions options;
+  sonare_mel_filterbank_options_init(&options);
+
+  options.fmin_hz = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE(sonare_mel_filterbank(22050, 2048, 40, &options, &out, &out_length, &n_mels, &n_bins) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmin_hz must be finite and at least 0");
+  options.fmin_hz = 0.0f;
+  options.fmax_hz = std::numeric_limits<float>::infinity();
+  REQUIRE(sonare_mel_filterbank(22050, 2048, 40, &options, &out, &out_length, &n_mels, &n_bins) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmax_hz must be finite and at least 0");
+  options.fmax_hz = 0.0f;
+  options.norm = 2;
+  REQUIRE(sonare_mel_filterbank(22050, 2048, 40, &options, &out, &out_length, &n_mels, &n_bins) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"options.norm"});
+  options.norm = SONARE_MEL_NORM_SLANEY;
+
+  options.fmin_hz = 500.0f;
+  options.fmax_hz = 100.0f;
+  REQUIRE(sonare_mel_filterbank(22050, 2048, 40, &options, &out, &out_length, &n_mels, &n_bins) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmax_hz must be greater than options.fmin_hz");
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"options.fmax_hz", "options.fmin_hz"});
+  options.fmin_hz = 12000.0f;
+  options.fmax_hz = 0.0f;
+  REQUIRE(sonare_mel_filterbank(22050, 2048, 40, &options, &out, &out_length, &n_mels, &n_bins) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmax_hz must be greater than options.fmin_hz, where 0 or a value above the "
+        "Nyquist reads as the Nyquist, 11025 Hz");
+  REQUIRE(sonare_mel_filterbank(22050, 2048, 0, nullptr, &out, &out_length, &n_mels, &n_bins) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"n_mels"});
+  CHECK(out == nullptr);
+
+  REQUIRE(sonare_mel_frequencies(40, 0.0f, std::numeric_limits<float>::quiet_NaN(), 0, &out,
+                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "fmax_hz must be finite and greater than fmin_hz");
+  REQUIRE(sonare_mel_frequencies(40, -1.0f, 8000.0f, 0, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "fmin_hz must be finite and at least 0");
+  REQUIRE(sonare_mel_frequencies(0, 0.0f, 8000.0f, 0, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"n_mels"});
+  CHECK(out == nullptr);
 }

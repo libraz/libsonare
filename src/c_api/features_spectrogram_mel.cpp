@@ -2,6 +2,7 @@
 
 #include "c_api/feature_input_domains.h"
 #include "c_api/features_internal.h"
+#include "filters/mel.h"
 #include "util/parameter_checks.h"
 
 namespace {
@@ -131,6 +132,92 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
         out->db = release_array(db_out);
         return SONARE_OK;
       });
+}
+
+void sonare_mel_filterbank_options_init(SonareMelFilterbankOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->norm = SONARE_MEL_NORM_SLANEY;
+}
+
+SonareError sonare_mel_filterbank(int sample_rate, int n_fft, int n_mels,
+                                  const SonareMelFilterbankOptions* options, float** out,
+                                  size_t* out_length, int* out_n_mels, int* out_n_bins) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length, out_n_mels, out_n_bins);
+  SonareMelFilterbankOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_mel_filterbank_options_init,
+                                              "sonare_mel_filterbank_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  if (const SonareError err = run_validation([&] {
+        namespace check = sonare::util::check;
+        check::integer_within(sample_rate, sonare::kAudioSampleRateDomain, "sample_rate");
+        check::integer_within(n_fft, sonare::kStftNFftDomain, "n_fft");
+        check::integer_within(n_mels, sonare::kMelBandsDomain, "n_mels");
+        with_c_names(kMelOptionsRangeNames,
+                     [&] { validate_mel_bounds(resolved.fmin_hz, resolved.fmax_hz); });
+        check::integer_in_range(resolved.norm, SONARE_MEL_NORM_NONE, SONARE_MEL_NORM_SLANEY,
+                                "options.norm");
+        const float nyquist = static_cast<float>(sample_rate) / 2.0f;
+        const bool read_as_nyquist = resolved.fmax_hz == 0.0f || resolved.fmax_hz > nyquist;
+        if ((read_as_nyquist ? nyquist : resolved.fmax_hz) <= resolved.fmin_hz) {
+          check::refuse_relation({"options.fmax_hz", "options.fmin_hz"},
+                                 read_as_nyquist
+                                     ? "{0} must be greater than {1}, where 0 or a value above the "
+                                       "Nyquist reads as the Nyquist, " +
+                                           sonare::util::refusal::bound_text(nyquist) + " Hz"
+                                     : std::string("{0} must be greater than {1}"));
+        }
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_mels);
+  SONARE_C_REQUIRE_NONNULL(out_n_bins);
+
+  SONARE_C_TRY
+  MelFilterConfig config;
+  config.n_mels = n_mels;
+  config.fmin = resolved.fmin_hz;
+  config.fmax = resolved.fmax_hz;
+  config.htk = resolved.htk != 0;
+  config.norm = resolved.norm == SONARE_MEL_NORM_SLANEY ? MelNorm::Slaney : MelNorm::None;
+  const std::vector<float> filterbank = create_mel_filterbank(sample_rate, n_fft, config);
+  if (const SonareError err = copy_vector(filterbank, out, out_length); err != SONARE_OK) {
+    return err;
+  }
+  *out_n_mels = n_mels;
+  *out_n_bins = n_fft / 2 + 1;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mel_frequencies(int n_mels, float fmin_hz, float fmax_hz, int32_t htk,
+                                   float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length);
+  if (const SonareError err = run_validation([&] {
+        namespace check = sonare::util::check;
+        check::integer_within(n_mels, sonare::kMelFrequencyCountDomain, "n_mels");
+        check::at_least(fmin_hz, 0.0, "fmin_hz");
+        if (!(std::isfinite(fmax_hz) && fmax_hz > fmin_hz)) {
+          check::refuse_relation({"fmax_hz", "fmin_hz"}, "{0} must be finite and greater than {1}");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+
+  SONARE_C_TRY
+  return copy_vector(mel_frequency_points(n_mels, fmin_hz, fmax_hz, htk != 0), out, out_length);
+  SONARE_C_CATCH
 }
 
 void sonare_mfcc_options_init(SonareMfccOptions* options) {

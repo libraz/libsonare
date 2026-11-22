@@ -453,6 +453,32 @@ Mel mel_of(const std::string& param, double value) {
   return m;
 }
 
+SonareError probe_mel_filterbank(const std::string& param, double value) {
+  int sample_rate = kAnalysisRate;
+  int n_fft = 512;
+  int n_mels = 40;
+  if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
+  if (is_param(param, "n_fft")) n_fft = static_cast<int>(value);
+  if (is_param(param, "n_mels")) n_mels = static_cast<int>(value);
+  float* out = nullptr;
+  size_t out_length = 0;
+  int out_n_mels = 0;
+  int out_n_bins = 0;
+  const SonareError err = sonare_mel_filterbank(sample_rate, n_fft, n_mels, nullptr, &out,
+                                                &out_length, &out_n_mels, &out_n_bins);
+  sonare_free_floats(out);
+  return err;
+}
+
+SonareError probe_mel_frequencies(const std::string& param, double value) {
+  const int n_mels = is_param(param, "n_mels") ? static_cast<int>(value) : 40;
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError err = sonare_mel_frequencies(n_mels, 0.0f, 8000.0f, 0, &out, &out_length);
+  sonare_free_floats(out);
+  return err;
+}
+
 SonareError probe_mel_spectrogram(const std::string& param, double value) {
   const Mel m = mel_of(param, value);
   SonareMelSpectrogramOptions options{};
@@ -977,6 +1003,8 @@ const std::map<std::string, Probe>& probes() {
       {"cqt_to_audio", probe_cqt_to_audio},
       {"vqt_to_audio", probe_vqt_to_audio},
       {"stft", probe_stft},
+      {"mel_filterbank", probe_mel_filterbank},
+      {"mel_frequencies", probe_mel_frequencies},
       {"mel_spectrogram", probe_mel_spectrogram},
       {"mfcc", probe_mfcc},
       {"mel_delta", probe_mel_delta},

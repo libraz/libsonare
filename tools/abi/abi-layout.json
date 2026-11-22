@@ -4493,6 +4493,42 @@
     ],
     "size": 56
   },
+  "SonareMelFilterbankOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmin_hz",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmax_hz",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "htk",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "norm",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
   "SonareMelResult": {
     "align": 8,
     "fields": [

@@ -521,6 +521,20 @@ class SonareDetectKeyOptions(CStruct):
     ]
 
 
+class SonareMelFilterbankOptions(CStruct):
+    """Maps to SonareMelFilterbankOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_mel_filterbank_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("fmin_hz", ctypes.c_float),
+        ("fmax_hz", ctypes.c_float),
+        ("htk", ctypes.c_int32),
+        ("norm", ctypes.c_int32),
+    ]
+
+
 class SonareMelSpectrogramOptions(CStruct):
     """Maps to SonareMelSpectrogramOptions in sonare_c_features.h."""
 

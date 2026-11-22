@@ -13,8 +13,8 @@ import numpy.typing as npt
 
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._errors import _BARE_TEXT, _entry, _refuse
-from ._ffi import SonareNnlsChromaOptions, SonareSilenceCommonReport
-from ._narrowing import _narrow_double
+from ._ffi import SonareMelFilterbankOptions, SonareNnlsChromaOptions, SonareSilenceCommonReport
+from ._narrowing import _domain_float, _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -45,7 +45,14 @@ from ._runtime import (
     _validate_matrix,
     _validate_samples,
 )
-from ._types_enums import _NORM_TYPES, _TEMPOGRAM_MODES, NormType, TempogramMode
+from ._types_enums import (
+    _MEL_NORMS,
+    _NORM_TYPES,
+    _TEMPOGRAM_MODES,
+    MelNorm,
+    NormType,
+    TempogramMode,
+)
 
 
 @_entry("hz_to_mel")
@@ -60,6 +67,95 @@ def mel_to_hz(mel: float) -> float:
     """Convert Mel scale value to frequency in Hz."""
     lib = _get_lib()
     return float(lib.sonare_mel_to_hz(_to_c_float(mel, "mel")))
+
+
+@_entry("mel_frequencies")
+def mel_frequencies(
+    n_mels: int = 128,
+    fmin: float = 0.0,
+    fmax: float = 11025.0,
+    htk: bool = False,
+) -> np.ndarray:
+    """Return ``n_mels`` float32 frequencies in Hz equally spaced on the mel scale.
+
+    The points run from ``fmin`` to ``fmax``, both included; one point is ``fmin`` alone.
+    ``fmax`` must be finite and greater than ``fmin``.
+
+    Raises:
+        SonareValueError: If ``n_mels`` is below 1, ``fmin`` is not finite or is negative,
+            or ``fmax`` is not finite or not greater than ``fmin``.
+    """
+    lib = _get_lib()
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_mel_frequencies(
+            _to_c_int(n_mels, "n_mels"),
+            _domain_float(fmin, "fmin"),
+            _domain_float(fmax, "fmax"),
+            ctypes.c_int32(1 if htk else 0),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
+        return _from_c_float_array(out, out_length.value)
+
+
+@_entry("mel_filterbank")
+def mel_filterbank(
+    sample_rate: int,
+    n_fft: int,
+    *,
+    n_mels: int = 128,
+    fmin_hz: float = 0.0,
+    fmax_hz: float | None = None,
+    htk: bool = False,
+    norm: MelNorm = "slaney",
+) -> np.ndarray:
+    """Return the mel filterbank as a float32 array of shape ``(n_mels, n_fft // 2 + 1)``.
+
+    Band ``m`` is a triangle over the FFT bins rising from point ``m`` of
+    ``mel_frequencies(n_mels + 2, fmin_hz, fmax_hz, htk)`` to its peak at point ``m + 1`` and
+    falling to point ``m + 2``.
+
+    Args:
+        sample_rate: Sample rate in Hz the spectrum was taken at.
+        n_fft: FFT size.
+        n_mels: Number of bands, in [1, 4096] (default 128).
+        fmin_hz: Lower edge of the lowest band in Hz (default 0.0).
+        fmax_hz: Upper edge of the highest band in Hz; None (default) is the Nyquist, and a
+            value above the Nyquist is held at it. Must be greater than 0 when given.
+        htk: Use the HTK mel formula instead of Slaney's (default False).
+        norm: ``"slaney"`` (default) divides each band by its width so every band has the
+            same area; ``"none"`` leaves each at unit peak.
+
+    Raises:
+        SonareValueError: If ``sample_rate`` or ``n_fft`` is outside its domain, ``n_mels``
+            is outside [1, 4096], ``fmin_hz`` is not finite or is negative, ``fmax_hz`` is
+            given as a value that is not finite or not above 0, ``norm`` is not a known
+            token, or the upper edge, after resolving to the Nyquist, is not above ``fmin_hz``.
+    """
+    norm_id = _token_ordinal(norm, _MEL_NORMS, "norm")
+    lib = _get_lib()
+    options = SonareMelFilterbankOptions._given(
+        fmin_hz=_domain_float(fmin_hz, "fmin_hz"),
+        fmax_hz=_domain_float(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz"),
+        htk=1 if htk else 0,
+        norm=norm_id,
+    )
+    out_n_mels = ctypes.c_int()
+    out_n_bins = ctypes.c_int()
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_mel_filterbank(
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(n_mels, "n_mels"),
+            ctypes.byref(options),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(out_n_mels),
+            ctypes.byref(out_n_bins),
+        )
+        _check(rc, flattened="options")
+        return _from_c_float_matrix(out, out_n_mels.value, out_n_bins.value)
 
 
 @_entry("hz_to_midi")
