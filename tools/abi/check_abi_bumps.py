@@ -243,13 +243,12 @@ def main(argv: list[str]) -> int:
     tag_paths = [p for p in tag_paths if _owner(p) is not None]
     tree_paths = [str(p.relative_to(REPO_ROOT)) for p in (REPO_ROOT / "include/sonare").glob("*.h")]
     tree_paths.append("src/rt/command.h")
-    tag_all = [_git("show", f"{tag}:{p}") for p in tag_paths]
+    tag_blobs = {p: _git("show", f"{tag}:{p}") for p in tag_paths}
+    tag_all = list(tag_blobs.values())
     tree_all = [(REPO_ROOT / p).read_text(encoding="utf-8") for p in tree_paths]
     failed = []
     for counter in COUNTERS:
-        then = _value(
-            counter, _git("show", f"{tag}:{counter.source}") if counter.source in tag_paths else ""
-        )
+        then = _value(counter, tag_blobs.get(counter.source, ""))
         now = _value(counter, (REPO_ROOT / counter.source).read_text(encoding="utf-8"))
         if then is None:
             print(f"abi bumps: {counter.name} absent from {tag}, new counter")
@@ -257,7 +256,7 @@ def main(argv: list[str]) -> int:
         if now != then:
             print(f"abi bumps: {counter.name} {then} -> {now}")
             continue
-        tag_texts = [_git("show", f"{tag}:{p}") for p in tag_paths if _owner(p) == counter.name]
+        tag_texts = [text for p, text in tag_blobs.items() if _owner(p) == counter.name]
         diff = changed(tag_texts, tag_all, tree_all)
         if not diff:
             print(f"abi bumps: {counter.name} {now} unchanged, layout unchanged since {tag}")

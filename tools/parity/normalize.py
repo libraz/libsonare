@@ -36,12 +36,6 @@ def kebab_to_snake(name: str) -> str:
     return name.replace("-", "_").lower()
 
 
-def snake_to_camel(name: str) -> str:
-    """``mastering_repair_declick`` -> ``masteringRepairDeclick``."""
-    parts = name.split("_")
-    return parts[0] + "".join(p.title() for p in parts[1:])
-
-
 def strip_sonare_prefix(c_name: str) -> str:
     """``sonare_detect_bpm`` -> ``detect_bpm``."""
     if c_name.startswith("sonare_"):

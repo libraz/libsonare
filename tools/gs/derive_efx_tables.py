@@ -52,12 +52,10 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
 
-from _repo import REPO_ROOT  # noqa: F401
-from efx_classes import (  # noqa: F401
+from efx_classes import (
     CLASS_ORDER,
     CLASSES,
     GENERATED_BY,
-    SAMPLES,
     SOURCE_ASSIGNED,
     SOURCE_MEASURED,
     SOURCE_UNIT_OVERRIDES_ASSIGNED,
@@ -65,10 +63,9 @@ from efx_classes import (  # noqa: F401
     UNIT_CLOCK_HZ,
     parsed_address,
     parsed_type,
-    spelled_address,
     spelled_type,
 )
-from efx_tables_header import camel, cpp_float, emit_header, report  # noqa: F401
+from efx_tables_header import emit_header, report
 
 TOOLS = Path(__file__).resolve().parent
 
