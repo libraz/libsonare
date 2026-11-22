@@ -56,11 +56,11 @@ def test_nnls_chroma_routes_default_and_custom_hop_through_options(
         ({"hop_length": 0}, "hop_length must be an integer in [1, 2147483647]"),
         ({"hop_length": 1.5}, "hop_length must be an integer in [1, 2147483647]"),
         ({"stft_blend_weight": float("nan")}, "stft_blend_weight must be finite"),
-        ({"stft_blend_n_fft": 3}, "stft_blend_n_fft must be an even integer in [2, 2147483647]"),
-        ({"stft_blend_n_fft": 0}, "stft_blend_n_fft must be an even integer in [2, 2147483647]"),
+        ({"stft_blend_n_fft": 3}, "stft_blend_n_fft must be an even integer in [2, 524288]"),
+        ({"stft_blend_n_fft": 0}, "stft_blend_n_fft must be an even integer in [2, 524288]"),
         (
             {"stft_blend_n_fft": 2**31},
-            "stft_blend_n_fft must be an even integer in [2, 2147483647]",
+            "stft_blend_n_fft must be an even integer in [2, 524288]",
         ),
     ],
 )

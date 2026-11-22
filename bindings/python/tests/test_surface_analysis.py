@@ -1130,7 +1130,7 @@ _INT_MAX = "2147483647"
         ),
         (
             lambda: libsonare.nnls_chroma(_tone(), SR, stft_blend_n_fft=3),
-            "nnls_chroma: stft_blend_n_fft must be an even integer in [2, 2147483647]",
+            "nnls_chroma: stft_blend_n_fft must be an even integer in [2, 524288]",
         ),
         (
             lambda: libsonare.spectral_flux(_tone(), SR, lag=0),
