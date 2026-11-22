@@ -309,10 +309,10 @@ void sonare_master_audio_options_init(SonareMasterAudioOptions* options);
 ///   to n + 1, keeping existing bands by index; `dynamics.multibandComp.cutoff<i>Hz`,
 ///   which edits one cutoff in place; `dynamics.multibandComp.bands.<i>.<field>`, a
 ///   band's compressor field (the `dynamics.compressor.<field>` names); and
-///   `dynamics.multibandComp.{slope,mode,firKernelSize}`, the crossover settings. Key
+///   `dynamics.multibandComp.crossover.{slope,mode,firKernelSize}`, the crossover settings. Key
 ///   order does not matter. The cutoff list beside a `cutoff<i>Hz` is refused; at
 ///   most 64 bands. The stage's structure is checked whether or not it is enabled. A
-///   retired spelling (`band<i>.<field>`, `crossover.slope`, `lowCutoffHz`,
+///   retired spelling (`band<i>.<field>`, a bare `slope`, `lowCutoffHz`,
 ///   `low|mid|high{ThresholdDb,Ratio,AttackMs,ReleaseMs}`, `repair.nFft`, `eq.tiltDb`, ...)
 ///   is refused with the current key named.
 SonareError sonare_master_audio(const char* preset, const float* samples, size_t length,
