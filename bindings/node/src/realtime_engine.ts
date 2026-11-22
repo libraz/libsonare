@@ -108,6 +108,7 @@ import {
   panLawValue,
   panModeValue,
   partRigInsertsJson,
+  SEND_TIMING_VALUES,
 } from './value_coercion.js';
 
 export * from './clip_page_provider.js';
@@ -210,7 +211,6 @@ function tokenOf<T extends string>(
   return name;
 }
 
-const SEND_TIMING = { postFader: 0, preFader: 1 } as const;
 const SIDECHAIN_SOURCE_KIND = { track: 0, bus: 1 } as const;
 const TRACK_MONITOR_MODE = { off: 0, pfl: 1, afl: 2 } as const;
 const DITHER = { rpdf: 1, tpdf: 2, noiseShaped: 3 } as const;
@@ -302,7 +302,7 @@ function normalizeSends(sends: EngineTrackSend[], where: string): EngineTrackSen
           ...send,
           sendTiming: tokenOrdinal(
             send.sendTiming,
-            SEND_TIMING,
+            SEND_TIMING_VALUES,
             `${where}[${i}].sendTiming`,
           ) as never,
         },

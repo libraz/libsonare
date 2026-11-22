@@ -29,7 +29,7 @@ describe("an engine refusal names the field by its path in the caller's argument
       'setTrackLanes',
       (e: RealtimeEngine) =>
         e.setTrackLanes([{ trackId: 1, sends: [{ busId: 2, sendTiming: 'bogus' as never }] }]),
-      'lanes[0].sends[0].sendTiming must be one of postFader, preFader',
+      'lanes[0].sends[0].sendTiming must be one of preFader, postFader',
     ],
     [
       'setAutomationLane',

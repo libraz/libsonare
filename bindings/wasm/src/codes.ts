@@ -44,15 +44,16 @@ export const AUTOMATION_CURVE_VALUES = {
   sCurve: 3,
 } as const;
 
-const PAN_LAW_VALUES = {
+export const PAN_LAW_VALUES = {
   const3Db: 0,
   'const4.5Db': 1,
   const6Db: 2,
   linear0Db: 3,
 } as const;
-const PAN_MODE_VALUES = { balance: 0, stereoPan: 1, dualPan: 2 } as const;
+export const PAN_MODE_VALUES = { balance: 0, stereoPan: 1, dualPan: 2 } as const;
 const METER_TAP_VALUES = { preFader: 0, postFader: 1 } as const;
-const SEND_TIMING_VALUES = { postFader: 0, preFader: 1 } as const;
+// Keys follow the scene document's token order, which every refusal lists; post-fader stays ordinal 0.
+export const SEND_TIMING_VALUES = { preFader: 1, postFader: 0 } as const;
 const SIDECHAIN_SOURCE_KIND_VALUES = { track: 0, bus: 1 } as const;
 const TRACK_MONITOR_MODE_VALUES = { off: 0, pfl: 1, afl: 2 } as const;
 

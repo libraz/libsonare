@@ -1,8 +1,13 @@
+import {
+  PAN_LAW_VALUES,
+  PAN_MODE_VALUES,
+  resolveEnumOrdinal,
+  SEND_TIMING_VALUES,
+} from '../codes.js';
 import type {
   MixSceneBusInput,
   MixSceneSendInput,
   MixSceneStripInput,
-  SendTiming,
 } from '../public_types_mixing.js';
 import { refuse, refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
@@ -12,28 +17,11 @@ import { isAbsent, isNonArrayObject } from './value_guards.js';
 // refused here as TypeError / RangeError. A whole scene document is left to the native reader, which refuses its
 // content as InvalidFormat.
 
-/** Pan-mode tokens, indexed by the native ordinal. */
-const PAN_MODES: readonly string[] = ['balance', 'stereoPan', 'dualPan'];
-/** Pan-law tokens, indexed by the native ordinal. */
-const PAN_LAWS: readonly string[] = ['const3Db', 'const4.5Db', 'const6Db', 'linear0Db'];
-const SEND_TIMINGS: readonly SendTiming[] = ['preFader', 'postFader'];
-
 type Loose = Record<string, unknown>;
-
-function tokenOrdinal(value: unknown, argName: string, tokens: readonly string[]): number {
-  if (typeof value !== 'string') {
-    throw refuseType(`${argName} must be one of ${tokens.join(', ')}`);
-  }
-  const ordinal = tokens.indexOf(value);
-  if (ordinal < 0) {
-    throw refuse(`${argName} must be one of ${tokens.join(', ')}`);
-  }
-  return ordinal;
-}
 
 /** A pan-mode token as the native ordinal; a non-string is a `TypeError`, an unknown token a `RangeError`. */
 export function panModeToNative(value: unknown, argName = 'panMode'): number {
-  return tokenOrdinal(value, argName, PAN_MODES);
+  return resolveEnumOrdinal(value, PAN_MODE_VALUES, argName);
 }
 
 function sendToNative(send: MixSceneSendInput, path: string): Loose {
@@ -43,16 +31,16 @@ function sendToNative(send: MixSceneSendInput, path: string): Loose {
   if (isAbsent(send.timing)) {
     return { ...send };
   }
-  tokenOrdinal(send.timing, `${path}.timing`, SEND_TIMINGS);
+  resolveEnumOrdinal(send.timing, SEND_TIMING_VALUES, `${path}.timing`);
   return { ...send };
 }
 
 function panFieldsToNative(out: Loose, path: string): void {
   if (!isAbsent(out.panMode)) {
-    tokenOrdinal(out.panMode, `${path}.panMode`, PAN_MODES);
+    resolveEnumOrdinal(out.panMode, PAN_MODE_VALUES, `${path}.panMode`);
   }
   if (!isAbsent(out.panLaw)) {
-    tokenOrdinal(out.panLaw, `${path}.panLaw`, PAN_LAWS);
+    resolveEnumOrdinal(out.panLaw, PAN_LAW_VALUES, `${path}.panLaw`);
   }
 }
 

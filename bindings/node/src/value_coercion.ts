@@ -126,14 +126,14 @@ export function projectAutomationLaneValue(
   };
 }
 
-const PAN_LAW_VALUES: Record<PanLaw, number> = {
+export const PAN_LAW_VALUES: Record<PanLaw, number> = {
   const3Db: 0,
   'const4.5Db': 1,
   const6Db: 2,
   linear0Db: 3,
 };
 
-const PAN_MODE_VALUES: Record<PanMode, number> = {
+export const PAN_MODE_VALUES: Record<PanMode, number> = {
   balance: 0,
   stereoPan: 1,
   dualPan: 2,
@@ -144,11 +144,11 @@ const METER_TAP_VALUES: Record<MeterTap, number> = {
   postFader: 1,
 };
 
-// Mirrors SonareSendTiming: post-fader is 0 so a zero-initialized C ABI send
-// defaults to post-fader. (Distinct from METER_TAP_VALUES, which keeps 0=pre.)
-const SEND_TIMING_VALUES: Record<SendTiming, number> = {
-  postFader: 0,
+// Mirrors SonareSendTiming: post-fader is 0 so a zero-initialized C ABI send defaults to post-fader.
+// Keys follow the scene document's token order, which every refusal lists.
+export const SEND_TIMING_VALUES: Record<SendTiming, number> = {
   preFader: 1,
+  postFader: 0,
 };
 
 export function automationCurveValue(curve: AutomationCurve, key: string): number {
