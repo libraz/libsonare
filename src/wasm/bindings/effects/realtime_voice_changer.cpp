@@ -255,7 +255,8 @@ class RealtimeVoiceChangerWrapper {
   explicit RealtimeVoiceChangerWrapper(val config)
       : changer_(realtimeVoiceChangerConfigFromVal(config)) {}
 
-  void prepare(double sample_rate, const val& max_block_size_val, const val& channels_val) {
+  void prepare(const val& sample_rate_val, const val& max_block_size_val, const val& channels_val) {
+    const double sample_rate = checkedDoubleFromVal(sample_rate_val, "sampleRate");
     const bool block_absent = max_block_size_val.isUndefined() || max_block_size_val.isNull();
     const int max_block_size =
         block_absent ? editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock

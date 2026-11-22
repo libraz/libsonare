@@ -41,11 +41,10 @@ class StreamingMasteringChainWrapper {
       : chain_(masteringChainConfigFromDocument(config_json, true, ""),
                streamingOptionsFromVal(options)) {}
 
-  // The two block dimensions arrive as val rather than as int: embind's integer
-  // glue wraps, so 2^32 + n reaches a narrow parameter as n and asks for a block
-  // nobody requested. sample_rate is a double, which is what a JS number already
-  // is, so it has nothing to wrap into.
-  void prepare(double sample_rate, const val& max_block_size, const val& num_channels) {
+  // Every argument arrives as val: embind's integer glue wraps 2^32 + n to n, and
+  // its double glue lets a NaN or infinite sample rate through unrefused.
+  void prepare(const val& sample_rate_val, const val& max_block_size, const val& num_channels) {
+    const double sample_rate = checkedDoubleFromVal(sample_rate_val, "sampleRate");
     const int block_size = max_block_size.isUndefined() || max_block_size.isNull()
                                ? mastering::api::MasteringChain::kDefaultMaxBlock
                                : checkedIntFromVal(max_block_size, "maxBlockSize");

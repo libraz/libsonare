@@ -70,7 +70,7 @@ class RealtimeEngineWasm {
   void flushControlCommands();
   void seekSample(int64_t timeline_sample, const emscripten::val& render_frame_val);
   void seekPpq(double ppq, const emscripten::val& render_frame_val);
-  void setTempo(double bpm);
+  void setTempo(const emscripten::val& bpm);
   void setTempoSegments(emscripten::val segments);
   void setTimeSignature(const emscripten::val& numerator_val,
                         const emscripten::val& denominator_val);

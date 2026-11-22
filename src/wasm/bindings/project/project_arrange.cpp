@@ -117,7 +117,9 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   return out;
 }
 
-val ProjectWasm::addMidiClip(double start_ppq, double length_ppq) {
+val ProjectWasm::addMidiClip(const val& start_ppq_val, const val& length_ppq_val) {
+  const double start_ppq = checkedDoubleFromVal(start_ppq_val, "startPpq");
+  const double length_ppq = checkedDoubleFromVal(length_ppq_val, "lengthPpq");
   uint32_t track = 0;
   uint32_t clip = 0;
   checkCError(sonare_project_add_midi_clip(project_.get(), start_ppq, length_ppq, &track, &clip));
@@ -127,19 +129,25 @@ val ProjectWasm::addMidiClip(double start_ppq, double length_ppq) {
   return out;
 }
 
-uint32_t ProjectWasm::splitClip(const val& clip_id_val, double split_ppq) {
+uint32_t ProjectWasm::splitClip(const val& clip_id_val, const val& split_ppq_val) {
+  const double split_ppq = checkedDoubleFromVal(split_ppq_val, "splitPpq");
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   uint32_t out = 0;
   checkCError(sonare_project_split_clip(project_.get(), clip_id, split_ppq, &out));
   return out;
 }
 
-void ProjectWasm::trimClip(const val& clip_id_val, double start_ppq, double length_ppq) {
+void ProjectWasm::trimClip(const val& clip_id_val, const val& start_ppq_val,
+                           const val& length_ppq_val) {
+  const double start_ppq = checkedDoubleFromVal(start_ppq_val, "newStartPpq");
+  const double length_ppq = checkedDoubleFromVal(length_ppq_val, "newLengthPpq");
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   checkCError(sonare_project_trim_clip(project_.get(), clip_id, start_ppq, length_ppq));
 }
 
-void ProjectWasm::moveClip(const val& clip_id_val, double start_ppq, const val& track_id_val) {
+void ProjectWasm::moveClip(const val& clip_id_val, const val& start_ppq_val,
+                           const val& track_id_val) {
+  const double start_ppq = checkedDoubleFromVal(start_ppq_val, "newStartPpq");
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   // The facade spells the destination track "newTrackId"; the key names the
   // argument a caller wrote, not the C++ parameter.

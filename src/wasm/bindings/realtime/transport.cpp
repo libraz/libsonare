@@ -116,7 +116,9 @@ void RealtimeEngineWasm::seekPpq(double ppq, const val& render_frame_val) {
   }
 }
 
-void RealtimeEngineWasm::setTempo(double bpm) { engine_.set_tempo(bpm); }
+void RealtimeEngineWasm::setTempo(const val& bpm) {
+  engine_.set_tempo(checkedDoubleFromVal(bpm, "bpm"));
+}
 void RealtimeEngineWasm::setTempoSegments(val segments) {
   std::vector<sonare::transport::TempoSegment> parsed;
   if (!segments.isUndefined() && !segments.isNull()) {

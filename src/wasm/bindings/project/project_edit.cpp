@@ -162,7 +162,10 @@ void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) 
 }
 
 void ProjectWasm::setClipLoop(const val& clip_id_val, const val& loop_mode_val,
-                              double loop_length_ppq, double loop_crossfade_ppq) {
+                              const val& loop_length_ppq_val, const val& loop_crossfade_ppq_val) {
+  const double loop_length_ppq = checkedDoubleFromVal(loop_length_ppq_val, "loopLengthPpq");
+  const double loop_crossfade_ppq =
+      checkedDoubleFromVal(loop_crossfade_ppq_val, "loopCrossfadePpq");
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const int loop_mode = checkedIntFromVal(loop_mode_val, "loopMode");
   checkCError(sonare_project_set_clip_loop(project_.get(), clip_id, loop_mode, loop_length_ppq,
@@ -175,7 +178,8 @@ void ProjectWasm::setClipSource(const val& clip_id_val, const val& source_id_val
   checkCError(sonare_project_set_clip_source(project_.get(), clip_id, source_id));
 }
 
-uint32_t ProjectWasm::duplicateClip(const val& clip_id_val, double new_start_ppq) {
+uint32_t ProjectWasm::duplicateClip(const val& clip_id_val, const val& new_start_ppq_val) {
+  const double new_start_ppq = checkedDoubleFromVal(new_start_ppq_val, "newStartPpq");
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   uint32_t out = 0;
   checkCError(sonare_project_duplicate_clip(project_.get(), clip_id, new_start_ppq, &out));
@@ -294,19 +298,20 @@ double ProjectWasm::addAutomationLane(const val& track_id_val, val desc) {
   return static_cast<double>(out);
 }
 
-void ProjectWasm::editAutomationLane(const val& track_id_val, double target_param_id, val desc) {
+void ProjectWasm::editAutomationLane(const val& track_id_val, const val& target_param_id_val,
+                                     val desc) {
+  const uint32_t target_param_id = checkedUintFromVal(target_param_id_val, "targetParamId");
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   std::vector<SonareAutomationPoint> storage;
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
   d.target_kind = automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_UNCHANGED);
-  checkCError(sonare_project_edit_automation_lane(project_.get(), track_id,
-                                                  static_cast<uint32_t>(target_param_id), &d));
+  checkCError(sonare_project_edit_automation_lane(project_.get(), track_id, target_param_id, &d));
 }
 
-void ProjectWasm::removeAutomationLane(const val& track_id_val, double target_param_id) {
+void ProjectWasm::removeAutomationLane(const val& track_id_val, const val& target_param_id_val) {
+  const uint32_t target_param_id = checkedUintFromVal(target_param_id_val, "targetParamId");
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
-  checkCError(sonare_project_remove_automation_lane(project_.get(), track_id,
-                                                    static_cast<uint32_t>(target_param_id)));
+  checkCError(sonare_project_remove_automation_lane(project_.get(), track_id, target_param_id));
 }
 
 void registerProjectEdit(class_<ProjectWasm>& cls) {

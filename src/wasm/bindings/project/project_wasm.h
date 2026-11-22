@@ -127,10 +127,10 @@ struct ProjectWasm {
   val getVocalEditDependencies();
   val rehydrateVocalEdits(val originals, val cancel);
   val addLoopRecordingTakes(val desc);
-  val addMidiClip(double start_ppq, double length_ppq);
-  uint32_t splitClip(const val& clip_id, double split_ppq);
-  void trimClip(const val& clip_id, double start_ppq, double length_ppq);
-  void moveClip(const val& clip_id, double start_ppq, const val& track_id);
+  val addMidiClip(const val& start_ppq, const val& length_ppq);
+  uint32_t splitClip(const val& clip_id, const val& split_ppq);
+  void trimClip(const val& clip_id, const val& start_ppq, const val& length_ppq);
+  void moveClip(const val& clip_id, const val& start_ppq, const val& track_id);
   void setTrackKind(const val& track_id, const val& kind);
   void setClipWarpRef(const val& clip_id, const val& warp_ref_id);
   void setClipWarpMode(const val& clip_id, val mode_val);
@@ -178,7 +178,7 @@ struct ProjectWasm {
   val analyzeTempo(val audio, const val& sample_rate, val options);
   float autoTempo(val audio, const val& sample_rate, const val& candidate_index,
                   bool apply_time_signatures, val options);
-  double snapToGrid(double ppq, double strength, const val& division);
+  double snapToGrid(const val& ppq, const val& strength, const val& division);
 
   // Compiles the project into a renderable timeline, returning a small JS
   // object { diagnosticCount, hasTimeline, messages }. A true `withTimeline` also keeps the
@@ -271,10 +271,10 @@ struct ProjectWasm {
                               const std::string& external_stem_role);
   void setClipTakes(const val& clip_id, val takes_val, const val& active_take_id);
   void setClipCompSegments(const val& clip_id, val segments_val);
-  void setClipLoop(const val& clip_id, const val& loop_mode, double loop_length_ppq,
-                   double loop_crossfade_ppq);
+  void setClipLoop(const val& clip_id, const val& loop_mode, const val& loop_length_ppq,
+                   const val& loop_crossfade_ppq);
   void setClipSource(const val& clip_id, const val& source_id);
-  uint32_t duplicateClip(const val& clip_id, double new_start_ppq);
+  uint32_t duplicateClip(const val& clip_id, const val& new_start_ppq);
   void removeTrack(const val& track_id);
   void renameTrack(const val& track_id, const std::string& name);
   void setTrackRoute(const val& track_id, const std::string& channel_strip_ref,
@@ -289,8 +289,8 @@ struct ProjectWasm {
       val desc, std::vector<SonareAutomationPoint>* storage);
 
   double addAutomationLane(const val& track_id, val desc);
-  void editAutomationLane(const val& track_id, double target_param_id, val desc);
-  void removeAutomationLane(const val& track_id, double target_param_id);
+  void editAutomationLane(const val& track_id, const val& target_param_id, val desc);
+  void removeAutomationLane(const val& track_id, const val& target_param_id);
 
   // --------------------------------------------------------------------------
   // MIR annotation streams (undoable)
@@ -304,8 +304,8 @@ struct ProjectWasm {
   // --------------------------------------------------------------------------
 
   void setAssistSidecar(const std::string& module_id, const val& schema_version_val,
-                        const val& target_track_id_val, double region_start_ppq,
-                        double region_end_ppq, val payload);
+                        const val& target_track_id_val, const val& region_start_ppq,
+                        const val& region_end_ppq, val payload);
   double assistSidecarCount() const;
   val getAssistSidecar(double index) const;
 
@@ -365,7 +365,7 @@ val js_midi_gm2_drum_name(const val& bank_lsb, const val& note);
 val js_midi_cc_name(const val& controller);
 int js_midi_cc_index_for_name(const std::string& name);
 val js_midi_per_note_controller_name(const val& index);
-val js_midi_bank_program(double ppq, const val& group, const val& channel, const val& bank_msb,
+val js_midi_bank_program(const val& ppq, const val& group, const val& channel, const val& bank_msb,
                          const val& bank_lsb, const val& program);
 SonareMidiEventPod js_midi_event_from_val(val event);
 val js_midi_event_to_val(const SonareMidiEventPod& event);
@@ -376,7 +376,7 @@ val js_midi_cc_learn(val events, const val& param_id, const val& min_value, cons
                      const val& min_movement);
 val js_midi_cc_to_breakpoint(val bindings, val event);
 val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value, const val& group,
-                        double ppq);
+                        const val& ppq);
 val js_midi_route_events(val events, val config);
 
 // Standalone transcription (body in project_transcribe.cpp). Positional in the

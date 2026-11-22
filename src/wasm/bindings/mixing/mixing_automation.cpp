@@ -17,8 +17,9 @@
 // is in absolute samples from the start of processing. curve: 0 = Linear,
 // 1 = Exponential, 2 = Hold, 3 = SCurve.
 void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& insert_index_val,
-                                         const val& param_id_val, double sample_pos,
+                                         const val& param_id_val, const val& sample_pos_val,
                                          const val& value_val, const val& curve_val) {
+  const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const unsigned int insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const unsigned int param_id = domainNumberFromVal<unsigned int>(
@@ -30,8 +31,8 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
   if (strip == nullptr) {
     throwLastCError();
   }
-  SonareError err = sonare_strip_schedule_insert_automation(
-      strip, insert_index, param_id, static_cast<int64_t>(sample_pos), value, curve);
+  SonareError err = sonare_strip_schedule_insert_automation(strip, insert_index, param_id,
+                                                            sample_pos, value, curve);
   if (err != SONARE_OK) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }
@@ -75,47 +76,52 @@ double MixerWasm::busNonFiniteDiscardCount(std::string bus_id) {
 // Schedules sample-accurate fader automation on a strip. sample_pos uses the
 // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential, 2 = Hold,
 // 3 = SCurve.
-void MixerWasm::scheduleFaderAutomation(const val& strip_index_val, double sample_pos,
+void MixerWasm::scheduleFaderAutomation(const val& strip_index_val, const val& sample_pos_val,
                                         const val& fader_db_val, const val& curve_val) {
+  const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float fader_db = checkedFloatFromVal(fader_db_val, "faderDb");
   const int curve =
       domainNumberFromVal<int>(curve_val, "curve", sonare_c_detail::kStripAutomationCurveDomain);
-  checkStripError(sonare_strip_schedule_fader_automation(
-      stripAt(strip_index), static_cast<int64_t>(sample_pos), fader_db, curve));
+  checkStripError(
+      sonare_strip_schedule_fader_automation(stripAt(strip_index), sample_pos, fader_db, curve));
 }
 
-void MixerWasm::schedulePanAutomation(const val& strip_index_val, double sample_pos,
+void MixerWasm::schedulePanAutomation(const val& strip_index_val, const val& sample_pos_val,
                                       const val& pan_val, const val& curve_val) {
+  const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float pan = checkedFloatFromVal(pan_val, "pan");
   const int curve =
       domainNumberFromVal<int>(curve_val, "curve", sonare_c_detail::kStripAutomationCurveDomain);
-  checkStripValueError(sonare_strip_schedule_pan_automation(
-      stripAt(strip_index), static_cast<int64_t>(sample_pos), pan, curve));
+  checkStripValueError(
+      sonare_strip_schedule_pan_automation(stripAt(strip_index), sample_pos, pan, curve));
 }
 
-void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sample_pos,
+void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, const val& sample_pos_val,
                                         const val& width_val, const val& curve_val) {
+  const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float width = checkedFloatFromVal(width_val, "width");
   const int curve =
       domainNumberFromVal<int>(curve_val, "curve", sonare_c_detail::kStripAutomationCurveDomain);
-  checkStripValueError(sonare_strip_schedule_width_automation(
-      stripAt(strip_index), static_cast<int64_t>(sample_pos), width, curve));
+  checkStripValueError(
+      sonare_strip_schedule_width_automation(stripAt(strip_index), sample_pos, width, curve));
 }
 
 // Schedules sample-accurate send-level automation on a strip's send.
 void MixerWasm::scheduleSendAutomation(const val& strip_index_val, const val& send_index_val,
-                                       double sample_pos, const val& db_val, const val& curve_val) {
+                                       const val& sample_pos_val, const val& db_val,
+                                       const val& curve_val) {
+  const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const std::size_t send_index =
       static_cast<std::size_t>(checkedUintFromVal(send_index_val, "sendIndex"));
   const float db = checkedFloatFromVal(db_val, "db");
   const int curve =
       domainNumberFromVal<int>(curve_val, "curve", sonare_c_detail::kStripAutomationCurveDomain);
-  checkStripError(sonare_strip_schedule_send_automation(
-      stripAt(strip_index), send_index, static_cast<int64_t>(sample_pos), db, curve));
+  checkStripError(sonare_strip_schedule_send_automation(stripAt(strip_index), send_index,
+                                                        sample_pos, db, curve));
 }
 
 // Reads up to max_points of the strip's most recent goniometer samples.

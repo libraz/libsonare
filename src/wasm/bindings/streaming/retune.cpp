@@ -66,7 +66,8 @@ class StreamingRetuneWrapper {
   explicit StreamingRetuneWrapper(val config)
       : StreamingRetuneWrapper(streamingRetuneConfigFromVal(config)) {}
 
-  void prepare(double sample_rate, const val& max_block_size_val) {
+  void prepare(const val& sample_rate_val, const val& max_block_size_val) {
+    const double sample_rate = checkedDoubleFromVal(sample_rate_val, "sampleRate");
     const int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
     retune_.prepare(sample_rate, max_block_size);
     max_block_size_ = max_block_size;

@@ -230,7 +230,10 @@ float ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& c
   return bpm;
 }
 
-double ProjectWasm::snapToGrid(double ppq, double strength, const val& division_val) {
+double ProjectWasm::snapToGrid(const val& ppq_val, const val& strength_val,
+                               const val& division_val) {
+  const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
+  const double strength = checkedDoubleFromVal(strength_val, "strength");
   const int division =
       domainNumberFromVal<int>(division_val, "division", sonare_c_detail::kSnapDivisionDomain);
   double out = 0.0;
@@ -302,8 +305,9 @@ val js_midi_per_note_controller_name(const val& index) {
       sonare_midi_per_note_controller_name(checkedIntFromVal(index, "index")));
 }
 
-val js_midi_bank_program(double ppq, const val& group_val, const val& channel_val,
+val js_midi_bank_program(const val& ppq_val, const val& group_val, const val& channel_val,
                          const val& bank_msb_val, const val& bank_lsb_val, const val& program_val) {
+  const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
   const uint8_t group =
       domainNumberFromVal<uint8_t>(group_val, "group", sonare_c_detail::kMidiUmpGroupDomain);
   const uint8_t channel =
@@ -434,7 +438,8 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
 // spelling of the same field reads through checkedUintFromVal, so both paths
 // refuse what neither can represent.
 val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, const val& group_val,
-                        double ppq) {
+                        const val& ppq_val) {
+  const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
   const uint32_t requested_param_id =
       domainNumberFromVal<uint32_t>(param_id, "paramId", sonare_c_detail::kMidiTargetParamIdDomain);
   const float unit_value = checkedFloatFromVal(unit_value_val, "unitValue");

@@ -71,8 +71,10 @@ std::string js_mastering_insert_param_info(std::string name, const val& sample_r
 // (mastering::api::insert_timing). Throws for an unknown `name`, a key the
 // insert does not read, or a value its construction or prepare refuses; see
 // sonare_mastering_insert_timing for the exact error text.
-val js_mastering_insert_timing(std::string name, std::string json_params, double sample_rate) {
+val js_mastering_insert_timing(std::string name, std::string json_params,
+                               const val& sample_rate_val) {
   wasmRefuseEmbeddedNul(name, "name");
+  const double sample_rate = checkedDoubleFromVal(sample_rate_val, "sampleRate");
   // The parameter bag is refused under `params`, as the Node addon reports it through the C entry.
   const mastering::api::InsertTiming timing = sonare::util::check::under_member(
       "params", [&] { return mastering::api::insert_timing(name, json_params, sample_rate); });

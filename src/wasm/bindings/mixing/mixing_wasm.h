@@ -60,7 +60,7 @@ class MixerWasm {
   // is in absolute samples from the start of processing. curve: 0 = Linear,
   // 1 = Exponential.
   void scheduleInsertAutomation(const val& strip_index, const val& insert_index,
-                                const val& param_id, double sample_pos, const val& value,
+                                const val& param_id, const val& sample_pos_val, const val& value,
                                 const val& curve);
 
   // Borrowed strip handle by index in [0, stripCount()). Throws if out of range.
@@ -148,18 +148,18 @@ class MixerWasm {
 
   // Schedules sample-accurate fader automation on a strip. sample_pos uses the
   // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential.
-  void scheduleFaderAutomation(const val& strip_index_val, double sample_pos,
+  void scheduleFaderAutomation(const val& strip_index_val, const val& sample_pos_val,
                                const val& fader_db_val, const val& curve_val);
 
-  void schedulePanAutomation(const val& strip_index_val, double sample_pos, const val& pan_val,
-                             const val& curve_val);
+  void schedulePanAutomation(const val& strip_index_val, const val& sample_pos_val,
+                             const val& pan_val, const val& curve_val);
 
-  void scheduleWidthAutomation(const val& strip_index_val, double sample_pos, const val& width_val,
-                               const val& curve_val);
+  void scheduleWidthAutomation(const val& strip_index_val, const val& sample_pos_val,
+                               const val& width_val, const val& curve_val);
 
   // Schedules sample-accurate send-level automation on a strip's send.
   void scheduleSendAutomation(const val& strip_index_val, const val& send_index_val,
-                              double sample_pos, const val& db_val, const val& curve_val);
+                              const val& sample_pos_val, const val& db_val, const val& curve_val);
 
   // Reads up to max_points of the strip's most recent goniometer samples.
   // Returns an array of { left, right } points (oldest to newest).

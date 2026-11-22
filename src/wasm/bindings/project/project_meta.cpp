@@ -103,8 +103,10 @@ void ProjectWasm::annotateChords(val chords) {
 }
 
 void ProjectWasm::setAssistSidecar(const std::string& module_id, const val& schema_version_val,
-                                   const val& target_track_id_val, double region_start_ppq,
-                                   double region_end_ppq, val payload) {
+                                   const val& target_track_id_val, const val& region_start_ppq_val,
+                                   const val& region_end_ppq_val, val payload) {
+  const double region_start_ppq = checkedDoubleFromVal(region_start_ppq_val, "regionStartPpq");
+  const double region_end_ppq = checkedDoubleFromVal(region_end_ppq_val, "regionEndPpq");
   const uint32_t schema_version = checkedUintFromVal(schema_version_val, "schemaVersion");
   const uint32_t target_track_id = checkedUintFromVal(target_track_id_val, "targetTrackId");
   std::vector<uint8_t> bytes = uint8ArrayToVector(payload, "payload");
@@ -123,7 +125,7 @@ double ProjectWasm::assistSidecarCount() const {
 val ProjectWasm::getAssistSidecar(double index) const {
   SonareProjectAssistSidecar sidecar{};
   const SonareError err =
-      sonare_project_get_assist_sidecar(project_.get(), static_cast<size_t>(index), &sidecar);
+      sonare_project_get_assist_sidecar(project_.get(), wasmIndexArg(index, "index"), &sidecar);
   if (err != SONARE_OK) {
     throwCError(err);
   }
