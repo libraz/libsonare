@@ -7,6 +7,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { WindowType } from '../src/index';
 import {
   decompose,
   decomposeStems,
@@ -424,6 +425,18 @@ describe('newly exposed WASM functions', () => {
     }
     const kept = spectralEdit(x, SR, { ops: [{ highHz: 1e6, mode: 'gain', gainDb: 0 }] });
     expect(kept.length).toBe(x.length);
+  });
+
+  it('spectralEdit names itself on a window refusal like on every other refusal', () => {
+    const x = makeSine(0.1, 440);
+    const text = 'window must be one of hann, hamming, blackman, rectangular';
+    expect(() =>
+      spectralEdit(x, SR, { ops: [], window: 'kaiser' as unknown as WindowType }),
+    ).toThrow(new RangeError(`spectralEdit: ${text}`));
+    expect(() => spectralEdit(x, SR, { ops: [], window: 0 as unknown as WindowType })).toThrow(
+      new TypeError(`spectralEdit: ${text}`),
+    );
+    expect(spectralEdit(x, SR, { ops: [], window: 'hamming' }).length).toBe(x.length);
   });
 
   it('spectralEdit rejects an out-of-range sampleRate', () => {
