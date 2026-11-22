@@ -470,13 +470,14 @@ class SuffixDivergenceTest(_CopiedTree):
     """A planted disagreement is named by its site and its ordinal."""
 
     def test_a_chord_symbol_disagreement_names_both_sites(self) -> None:
+        """The core chord symbol is the template label, so a label edit moves it."""
         lines = self.lines(
             check.evaluate(
                 self.tree(
                     {
-                        ANALYZER: (
-                            '    case ChordQuality::Minor7:\n      name += "m7";',
-                            '    case ChordQuality::Minor7:\n      name += "min7";',
+                        CORE_NAMES: (
+                            '    case ChordQuality::Minor7:\n      return "m7";',
+                            '    case ChordQuality::Minor7:\n      return "min7";',
                         )
                     }
                 )
@@ -498,23 +499,22 @@ class SuffixDivergenceTest(_CopiedTree):
         self.assertEqual(len(lines), 1, lines)
         self.assertIn("ordinal 19 (`MinorMajor7`)", lines[0])
 
-    def test_the_template_label_may_not_drift_away_from_major(self) -> None:
-        lines = self.lines(
+    def test_a_builder_guarded_on_another_quality_is_unreadable(self) -> None:
+        """Major is the one quality the builder leaves bare; any other guard is a new rule."""
+        missing = self.lines(
             check.evaluate(
                 self.tree(
                     {
-                        CORE_NAMES: (
-                            '    case ChordQuality::Minor7:\n      return "m7";',
-                            '    case ChordQuality::Minor7:\n      return "-7";',
+                        ANALYZER: (
+                            "  if (quality != ChordQuality::Major) {",
+                            "  if (quality != ChordQuality::Minor) {",
                         )
                     }
                 )
             ),
-            "diverges from the chord symbols somewhere it is not allowed to",
+            "suffix tables could not be read",
         )
-        self.assertEqual(len(lines), 1, lines)
-        self.assertIn("ordinal 6 (`Minor7`)", lines[0])
-        self.assertIn("`-7`", lines[0])
+        self.assertTrue(any("Chord::to_string" in line for line in missing), missing)
 
     def test_a_quality_dropped_from_the_numeral_table_is_reported(self) -> None:
         lines = self.lines(
@@ -652,11 +652,19 @@ class SuffixUnreadableTest(_CopiedTree):
         floor = self.lines(failures, "no longer locates the population")
         self.assertTrue(any("suffix_symbol_tables: found 1, floor is 2" in line for line in floor), floor)
 
-    def test_an_append_that_is_not_a_literal_is_refused_rather_than_read_as_empty(self) -> None:
-        """Otherwise the arm would read as the empty suffix, which is a spelling."""
+    def test_a_second_label_append_is_refused_rather_than_read_as_the_label(self) -> None:
+        """A builder doing more than the one guarded append spells something the label does not."""
         missing = self.lines(
             check.evaluate(
-                self.tree({ANALYZER: ('      name += "sus2";', "      name += kSus2Suffix;")})
+                self.tree(
+                    {
+                        ANALYZER: (
+                            "    name += chord_quality_to_string(quality);\n",
+                            "    name += chord_quality_to_string(quality);\n"
+                            "    name += chord_quality_to_string(quality);\n",
+                        )
+                    }
+                )
             ),
             "suffix tables could not be read",
         )

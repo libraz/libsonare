@@ -35,7 +35,10 @@ not all spell the same thing, so they are not folded into one comparison:
 * ``chord_quality_to_string`` labels a template, where the quality is always
   visible, so a major chord is ``maj``.
 * ``Chord::to_string`` and the Python ``suffixes`` map spell a chord symbol,
-  where major is implied and written bare. Those two are required to agree at
+  where major is implied and written bare. ``Chord::to_string`` holds no table
+  of its own: it appends the template label for every quality but Major, so
+  its spelling is read as the label table with major bare, and only while
+  that one guarded append is the whole of it. Those two are required to agree at
   every ordinal, ordinal 0 included; theirs is the only full value comparison
   here, and an exception to it is declared per ordinal with its reason.
 * The Roman-numeral builder is a third vocabulary, not a third copy. The
@@ -276,9 +279,10 @@ SUFFIX_TABLES = (
     SuffixTable(
         "src/analysis/chord_naming.cpp",
         "Chord::to_string",
-        "cpp_switch_appends",
+        "cpp_label_delegate",
         "symbol",
-        "the chord symbol every core-side chord name is built from",
+        "the chord symbol every core-side chord name is built from: the template "
+        "label appended for every quality but Major",
     ),
     SuffixTable(
         "bindings/python/src/libsonare/_types_analysis.py",
@@ -597,6 +601,36 @@ def cpp_switch_appends(text: str, table: SuffixTable) -> tuple[int, dict[str, st
     return (line, by_enumerator) if by_enumerator else None
 
 
+def cpp_label_delegate(root: Path, text: str, table: SuffixTable) -> tuple[int, dict[str, str]] | None:
+    """A chord-symbol builder that appends the template label for every quality but Major.
+
+    Returns the label table keyed by enumerator with Major bare, which is what
+    the builder spells. It reads only while the builder is exactly that: one
+    append of the label function guarded on Major and no switch. A switch back
+    in the body, a second append of the label, or a different guard returns
+    None, so a builder that has grown its own spellings reads as a table this
+    check cannot locate rather than as a copy of the label table.
+    """
+    found = block(text, definition(table.symbol))
+    if found is None:
+        return None
+    line, body = found
+    label = next(t for t in SUFFIX_TABLES if t.group == "label")
+    call = rf"\b{re.escape(label.symbol)}\s*\("
+    guarded = re.compile(
+        rf"\bif\s*\(\s*(\w+)\s*!=\s*{re.escape(CORE_ENUM.symbol)}::Major\s*\)\s*\{{?"
+        rf"\s*\w+\s*\+=\s*{call}\s*\1\s*\)\s*;"
+    )
+    skeleton = strip_lexical(body)
+    if _SWITCH.search(skeleton) or len(re.findall(call, skeleton)) != 1 or not guarded.search(body):
+        return None
+    label_text = _read(root, label.path)
+    spelled = cpp_core_switch(label_text, label) if label_text else None
+    if not spelled or "Major" not in spelled[1]:
+        return None
+    return line, {**spelled[1], "Major": ""}
+
+
 def python_tuple(text: str, table: Table) -> tuple[int, dict[int, str]] | None:
     """The one assignment of a tuple of string literals to @p symbol, indexed by position."""
     found = []
@@ -786,6 +820,8 @@ def locate_suffix(
         found = cpp_core_switch(text, table)
     elif table.parser == "cpp_switch_appends":
         found = cpp_switch_appends(text, table)
+    elif table.parser == "cpp_label_delegate":
+        found = cpp_label_delegate(root, text, table)
     elif table.parser == "python_dict":
         found = python_dict(text, table)
     else:
