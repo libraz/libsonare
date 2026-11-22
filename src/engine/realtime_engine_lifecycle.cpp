@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <memory>
 #include <new>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::engine {
 
@@ -26,6 +28,14 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
       effective_sample_rate != applied_timeline_sample_rate_) {
     throw SonareException(ErrorCode::InvalidState,
                           "prepare: sample rate differs from the installed project timeline");
+  }
+  {
+    // The loop is held in quarter notes, so a new rate moves its length in samples.
+    CaptureLoop state = current_capture_loop();
+    const auto map =
+        build_tempo_map(effective_sample_rate, control_tempo_segments_, control_single_tempo_bpm_);
+    state.map = map.get();
+    check_capture_loop(state);
   }
 
   bool clip_sysex_prepared = true;
@@ -338,16 +348,51 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   return clip_sysex_prepared;
 }
 
-void RealtimeEngine::publish_tempo_map_snapshot() {
+std::shared_ptr<transport::TempoMap> RealtimeEngine::build_tempo_map(
+    double sample_rate, const std::vector<transport::TempoSegment>& segments,
+    double single_bpm) const {
   auto map = std::make_shared<transport::TempoMap>();
-  map->prepare(sample_rate_);
-  if (!control_tempo_segments_.empty()) {
-    map->set_segments(control_tempo_segments_);
+  map->prepare(sample_rate);
+  if (!segments.empty()) {
+    map->set_segments(segments);
   } else {
     // Empty map: fall back to the last single tempo (default 120 BPM), not a
     // hardcoded default that would discard an earlier set_tempo().
-    map->set_segments({{0.0, control_single_tempo_bpm_, 0.0}});
+    map->set_segments({{0.0, single_bpm, 0.0}});
   }
+  return map;
+}
+
+RealtimeEngine::CaptureLoop RealtimeEngine::current_capture_loop() const noexcept {
+  const transport::TransportState transport = transport_.snapshot_control();
+  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
+  CaptureLoop state;
+  state.offset_samples = record_offset_samples_.load(std::memory_order_acquire);
+  state.armed = capture_sink_.armed();
+  state.punch = capture_sink_.punch_enabled();
+  state.looping = transport.looping;
+  state.loop_start_ppq = transport.loop_start_ppq;
+  state.loop_end_ppq = transport.loop_end_ppq;
+  state.map = snapshot ? snapshot : &tempo_map_;
+  return state;
+}
+
+void RealtimeEngine::check_capture_loop(const CaptureLoop& state) {
+  if (!state.armed || !state.punch || !state.looping ||
+      !(state.loop_end_ppq > state.loop_start_ppq)) {
+    return;
+  }
+  // The wrap carries input back onto the pass just played, and only that one.
+  const int64_t pass = numeric::saturating_sub(state.map->ppq_to_sample(state.loop_end_ppq),
+                                               state.map->ppq_to_sample(state.loop_start_ppq));
+  if (state.offset_samples <= pass) return;
+  util::check::refuse_relation({"record_offset_samples"},
+                               "{0} must be at most the loop length, " + std::to_string(pass) +
+                                   " samples, while capture is armed with punch on");
+}
+
+void RealtimeEngine::publish_tempo_map_snapshot() {
+  auto map = build_tempo_map(sample_rate_, control_tempo_segments_, control_single_tempo_bpm_);
   if (!control_time_signatures_.empty()) {
     map->set_time_signatures(control_time_signatures_);
   } else {
@@ -591,8 +636,13 @@ transport::TransportState RealtimeEngine::transport_state_control() const noexce
 void RealtimeEngine::set_tempo(double bpm) {
   SONARE_CHECK_MSG(transport::valid_public_tempo(bpm), ErrorCode::InvalidParameter,
                    "tempo must be finite, positive, and at most 100000 BPM");
+  std::vector<transport::TempoSegment> segments{{0.0, bpm, 0.0}};
+  CaptureLoop state = current_capture_loop();
+  const auto map = build_tempo_map(sample_rate_, segments, bpm);
+  state.map = map.get();
+  check_capture_loop(state);
   control_single_tempo_bpm_ = bpm;
-  control_tempo_segments_ = {{0.0, bpm, 0.0}};
+  control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();
 }
 
@@ -601,6 +651,10 @@ void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> seg
     SONARE_CHECK_MSG(transport::valid_public_tempo_segment(segment), ErrorCode::InvalidParameter,
                      "tempo segments contain invalid timeline or out-of-range BPM values");
   }
+  CaptureLoop state = current_capture_loop();
+  const auto map = build_tempo_map(sample_rate_, segments, control_single_tempo_bpm_);
+  state.map = map.get();
+  check_capture_loop(state);
   control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();
 }
@@ -630,7 +684,12 @@ int64_t RealtimeEngine::sample_at_ppq(double ppq) const noexcept {
   return map.ppq_to_sample(ppq);
 }
 
-void RealtimeEngine::set_loop(double start_ppq, double end_ppq, bool enabled) noexcept {
+void RealtimeEngine::set_loop(double start_ppq, double end_ppq, bool enabled) {
+  CaptureLoop state = current_capture_loop();
+  state.looping = enabled;
+  state.loop_start_ppq = start_ppq;
+  state.loop_end_ppq = end_ppq;
+  check_capture_loop(state);
   transport_.set_loop(start_ppq, end_ppq, enabled);
 }
 
@@ -683,8 +742,17 @@ bool RealtimeEngine::seek_marker(uint32_t marker_id) noexcept {
   return transport_.seek_marker(marker_id, markers_);
 }
 
-bool RealtimeEngine::set_loop_from_markers(uint32_t start_marker_id,
-                                           uint32_t end_marker_id) noexcept {
+bool RealtimeEngine::set_loop_from_markers(uint32_t start_marker_id, uint32_t end_marker_id) {
+  transport::Marker start{};
+  transport::Marker end{};
+  if (markers_.marker_by_id(start_marker_id, &start) &&
+      markers_.marker_by_id(end_marker_id, &end)) {
+    CaptureLoop state = current_capture_loop();
+    state.looping = true;
+    state.loop_start_ppq = start.ppq;
+    state.loop_end_ppq = end.ppq;
+    check_capture_loop(state);
+  }
   return transport_.set_loop_from_markers(start_marker_id, end_marker_id, markers_);
 }
 
@@ -726,11 +794,35 @@ void RealtimeEngine::set_capture_segment(CaptureSegment segment) noexcept {
   capture_sink_.prepare(segment);
 }
 
-void RealtimeEngine::set_capture_armed(bool armed) noexcept { capture_sink_.arm(armed); }
+void RealtimeEngine::set_capture_armed(bool armed) {
+  CaptureLoop state = current_capture_loop();
+  state.armed = armed;
+  check_capture_loop(state);
+  capture_sink_.arm(armed);
+}
 
-void RealtimeEngine::set_capture_punch(int64_t start_sample, int64_t end_sample,
-                                       bool enabled) noexcept {
+void RealtimeEngine::set_capture_punch(int64_t start_sample, int64_t end_sample, bool enabled) {
+  CaptureLoop state = current_capture_loop();
+  state.punch = enabled;
+  check_capture_loop(state);
   capture_sink_.set_punch(start_sample, end_sample, enabled);
+}
+
+void RealtimeEngine::set_capture_timing(int64_t offset_samples, int64_t punch_start_sample,
+                                        int64_t punch_end_sample, bool punch_enabled) {
+  CaptureLoop state = current_capture_loop();
+  state.offset_samples = offset_samples;
+  state.punch = punch_enabled;
+  check_capture_loop(state);
+  capture_sink_.set_punch(punch_start_sample, punch_end_sample, punch_enabled);
+  record_offset_samples_.store(offset_samples, std::memory_order_release);
+}
+
+void RealtimeEngine::set_record_offset_samples(int64_t offset_samples) {
+  CaptureLoop state = current_capture_loop();
+  state.offset_samples = offset_samples;
+  check_capture_loop(state);
+  record_offset_samples_.store(offset_samples, std::memory_order_release);
 }
 
 void RealtimeEngine::reset_capture() noexcept { capture_sink_.reset(); }

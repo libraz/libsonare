@@ -516,13 +516,17 @@ class RealtimeEngine : private ClipPageRequestSink {
     const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
     return (map ? map : &tempo_map_)->time_signature_at_ppq(ppq);
   }
-  void set_loop(double start_ppq, double end_ppq, bool enabled) noexcept;
+  /// Throws InvalidParameter when an enabled loop would be shorter than the record offset of an
+  /// armed punch capture (see set_record_offset_samples).
+  void set_loop(double start_ppq, double end_ppq, bool enabled);
   void set_markers(std::vector<transport::Marker> markers);
   size_t marker_count() const noexcept { return markers_.marker_count(); }
   bool marker_by_index(size_t index, transport::Marker* out) const noexcept;
   bool marker_by_id(uint32_t id, transport::Marker* out) const noexcept;
   bool seek_marker(uint32_t marker_id) noexcept;
-  bool set_loop_from_markers(uint32_t start_marker_id, uint32_t end_marker_id) noexcept;
+  /// Returns false when either marker is unknown or the end marker is not after the start one;
+  /// throws InvalidParameter on the record-offset refusal set_loop() makes.
+  bool set_loop_from_markers(uint32_t start_marker_id, uint32_t end_marker_id);
   void set_metronome_config(MetronomeConfig config) noexcept;
   const MetronomeConfig& metronome_config() const noexcept { return metronome_.config(); }
   /// End of a @p bars-bar count-in from @p start_sample; see Metronome::count_in_end_sample for
@@ -798,8 +802,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool describe_reserved_parameter(uint32_t id, automation::ParameterDescription* out) const;
 #endif
   void set_capture_segment(CaptureSegment segment) noexcept;
-  void set_capture_armed(bool armed) noexcept;
-  void set_capture_punch(int64_t start_sample, int64_t end_sample, bool enabled) noexcept;
+  /// Arming and turning the punch on throw InvalidParameter on the record-offset refusal.
+  void set_capture_armed(bool armed);
+  void set_capture_punch(int64_t start_sample, int64_t end_sample, bool enabled);
+  /// Sets the punch window and the record offset together, checking the state they produce and
+  /// applying both or neither, so a setup does not depend on which half is set first.
+  void set_capture_timing(int64_t offset_samples, int64_t punch_start_sample,
+                          int64_t punch_end_sample, bool punch_enabled);
   void set_capture_source(CaptureSource source) noexcept {
     capture_source_.store(source, std::memory_order_release);
   }
@@ -807,10 +816,11 @@ class RealtimeEngine : private ClipPageRequestSink {
     return capture_source_.load(std::memory_order_acquire);
   }
   /// Shift the capture window on the engine timeline. A positive offset delays
-  /// capture, so output index 0 corresponds to punch_start + offset.
-  void set_record_offset_samples(int64_t offset_samples) noexcept {
-    record_offset_samples_.store(offset_samples, std::memory_order_release);
-  }
+  /// capture, so output index 0 corresponds to punch_start + offset; it has effect only with
+  /// the punch on. While looping with an armed punch capture the offset may span at most one
+  /// loop pass: this, and every loop, tempo, rate, arm or punch edit that would break it, throws
+  /// InvalidParameter naming record_offset_samples and leaves the engine unchanged.
+  void set_record_offset_samples(int64_t offset_samples);
   int64_t record_offset_samples() const noexcept {
     return record_offset_samples_.load(std::memory_order_acquire);
   }
@@ -1419,6 +1429,25 @@ class RealtimeEngine : private ClipPageRequestSink {
   void adopt_midi_destination_routes(int64_t render_frame) noexcept;
 #endif
   void publish_tempo_map_snapshot();
+  /// A tempo map of @p segments (or the single tempo @p single_bpm when empty) at @p sample_rate.
+  std::shared_ptr<transport::TempoMap> build_tempo_map(
+      double sample_rate, const std::vector<transport::TempoSegment>& segments,
+      double single_bpm) const;
+  /// What the record-offset refusal reads: the capture and loop state, and the map the loop is
+  /// measured through. A route edits its own field of current_capture_loop() and checks it.
+  struct CaptureLoop {
+    int64_t offset_samples = 0;
+    bool armed = false;
+    bool punch = false;
+    bool looping = false;
+    double loop_start_ppq = 0.0;
+    double loop_end_ppq = 0.0;
+    const transport::TempoMap* map = nullptr;
+  };
+  CaptureLoop current_capture_loop() const noexcept;
+  /// Throws InvalidParameter when @p state holds an offset past one loop pass while looping
+  /// with capture armed and the punch on.
+  static void check_capture_loop(const CaptureLoop& state);
   void adopt_tempo_map_snapshot() noexcept;
   // The whole of prepare()'s acquisition sequence. prepare() wraps it so a
   // throw from any step lands in one place. Returns false when a bound

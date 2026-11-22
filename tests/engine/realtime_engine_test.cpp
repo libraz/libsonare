@@ -5,9 +5,11 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <new>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -1224,6 +1226,187 @@ TEST_CASE("RealtimeEngine record offset keeps each loop pass whole across the wr
   for (int i = 0; i < 2 * kLoopSamples; ++i) {
     INFO("captured frame " << i);
     REQUIRE(captured[static_cast<size_t>(i)] == static_cast<float>(i + kOffset));
+  }
+}
+
+namespace {
+
+constexpr double kOffsetLoopRate = 48000.0;
+constexpr int kOffsetLoopSamples = 100;
+
+// A capture buffer and the channel table the engine keeps pointing at while it records.
+struct LoopTake {
+  std::vector<float> samples = std::vector<float>(1000, -1.0f);
+  float* channels[1] = {samples.data()};
+
+  LoopTake() = default;
+  LoopTake(const LoopTake&) = delete;
+  LoopTake& operator=(const LoopTake&) = delete;
+  float operator[](size_t i) const { return samples[i]; }
+};
+
+// A 100-sample loop at 60 bpm with capture armed, punch on and the given record offset.
+void arm_looped_capture(sonare::engine::RealtimeEngine& engine, LoopTake& take, int64_t offset) {
+  engine.prepare(kOffsetLoopRate, 64);
+  engine.set_tempo(60.0);
+  engine.set_loop(0.0, static_cast<double>(kOffsetLoopSamples) / kOffsetLoopRate, true);
+  engine.set_capture_segment({take.channels, 1, static_cast<int64_t>(take.samples.size())});
+  engine.set_capture_source(sonare::engine::CaptureSource::kInput);
+  engine.set_capture_punch(0, kOffsetLoopSamples, true);
+  engine.set_record_offset_samples(offset);
+  engine.set_capture_armed(true);
+}
+
+int64_t capture_frames_over(sonare::engine::RealtimeEngine& engine, int frames) {
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  constexpr int kBlock = 64;
+  for (int start = 0; start < frames; start += kBlock) {
+    std::array<float, kBlock> io{};
+    for (int i = 0; i < kBlock; ++i) io[static_cast<size_t>(i)] = static_cast<float>(start + i);
+    float* channels[] = {io.data()};
+    engine.process(channels, 1, kBlock);
+  }
+  return engine.captured_frames();
+}
+
+// The message of the InvalidParameter refusal @p step raises, or "<accepted>".
+std::string offset_refusal_text(const std::function<void()>& step) {
+  try {
+    step();
+  } catch (const sonare::SonareException& e) {
+    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    return e.what();
+  }
+  return "<accepted>";
+}
+
+}  // namespace
+
+TEST_CASE("RealtimeEngine record offset may span one loop pass and no more",
+          "[engine][realtime][capture]") {
+  SECTION("an offset of exactly one pass captures the input one pass late") {
+    sonare::engine::RealtimeEngine engine;
+    LoopTake take;
+    arm_looped_capture(engine, take, kOffsetLoopSamples);
+    REQUIRE(capture_frames_over(engine, 640) == 540);
+    CHECK(take[0] == static_cast<float>(kOffsetLoopSamples));
+    CHECK(take[99] == static_cast<float>(kOffsetLoopSamples + 99));
+  }
+  SECTION("one sample more is refused and leaves the offset as it was") {
+    sonare::engine::RealtimeEngine engine;
+    LoopTake take;
+    arm_looped_capture(engine, take, kOffsetLoopSamples);
+    CHECK(offset_refusal_text([&] { engine.set_record_offset_samples(kOffsetLoopSamples + 1); }) ==
+          "record_offset_samples must be at most the loop length, 100 samples, while "
+          "capture is armed with punch on");
+    CHECK(engine.record_offset_samples() == kOffsetLoopSamples);
+  }
+  SECTION("with the loop or the punch off a long offset is kept and captures") {
+    sonare::engine::RealtimeEngine unlooped;
+    LoopTake take;
+    arm_looped_capture(unlooped, take, 0);
+    unlooped.set_loop(0.0, static_cast<double>(kOffsetLoopSamples) / kOffsetLoopRate, false);
+    unlooped.set_record_offset_samples(250);
+    REQUIRE(capture_frames_over(unlooped, 640) == kOffsetLoopSamples);
+    CHECK(take[0] == 250.0f);
+    CHECK(take[99] == 349.0f);
+
+    sonare::engine::RealtimeEngine unpunched;
+    LoopTake appended;
+    arm_looped_capture(unpunched, appended, 0);
+    unpunched.set_capture_punch(0, kOffsetLoopSamples, false);
+    unpunched.set_record_offset_samples(250);
+    // With the punch off the offset has no effect: the input is appended as it arrives.
+    REQUIRE(capture_frames_over(unpunched, 640) == 640);
+    CHECK(appended[0] == 0.0f);
+  }
+}
+
+TEST_CASE("RealtimeEngine refuses every edit that would put the record offset past the loop",
+          "[engine][realtime][capture]") {
+  const std::string refusal_60_over_50 =
+      "record_offset_samples must be at most the loop length, 50 samples, while capture is "
+      "armed with punch on";
+  const std::string refusal_101_over_100 =
+      "record_offset_samples must be at most the loop length, 100 samples, while capture is "
+      "armed with punch on";
+  sonare::engine::RealtimeEngine engine;
+  LoopTake take;
+  const double loop_end = static_cast<double>(kOffsetLoopSamples) / kOffsetLoopRate;
+  const auto loop_end_now = [&] { return engine.transport_state_control().loop_end_ppq; };
+
+  SECTION("a shorter loop") {
+    arm_looped_capture(engine, take, 60);
+    CHECK(offset_refusal_text([&] { engine.set_loop(0.0, loop_end / 2.0, true); }) ==
+          refusal_60_over_50);
+    CHECK(loop_end_now() == loop_end);
+  }
+  SECTION("a shorter loop between markers") {
+    arm_looped_capture(engine, take, 60);
+    engine.set_markers({{0.0, 1, "a"}, {loop_end / 2.0, 2, "b"}});
+    CHECK(offset_refusal_text([&] { (void)engine.set_loop_from_markers(1, 2); }) ==
+          refusal_60_over_50);
+    CHECK(loop_end_now() == loop_end);
+  }
+  SECTION("a faster tempo") {
+    arm_looped_capture(engine, take, 60);
+    CHECK(offset_refusal_text([&] { engine.set_tempo(120.0); }) == refusal_60_over_50);
+    CHECK(engine.bpm_at_sample(0) == 60.0);
+  }
+  SECTION("faster tempo segments") {
+    arm_looped_capture(engine, take, 60);
+    CHECK(offset_refusal_text([&] { engine.set_tempo_segments({{0.0, 120.0, 0.0}}); }) ==
+          refusal_60_over_50);
+    CHECK(engine.bpm_at_sample(0) == 60.0);
+  }
+  SECTION("a lower sample rate") {
+    arm_looped_capture(engine, take, 60);
+    CHECK(offset_refusal_text([&] { engine.prepare(kOffsetLoopRate / 2.0, 64); }) ==
+          refusal_60_over_50);
+    CHECK(engine.sample_rate() == kOffsetLoopRate);
+  }
+  SECTION("arming over a long offset") {
+    arm_looped_capture(engine, take, 0);
+    engine.set_capture_armed(false);
+    engine.set_record_offset_samples(kOffsetLoopSamples + 1);
+    CHECK(offset_refusal_text([&] { engine.set_capture_armed(true); }) == refusal_101_over_100);
+    CHECK_FALSE(engine.capture_armed());
+  }
+  SECTION("turning the punch on over a long offset") {
+    arm_looped_capture(engine, take, 0);
+    engine.set_capture_punch(0, kOffsetLoopSamples, false);
+    engine.set_record_offset_samples(kOffsetLoopSamples + 1);
+    CHECK(offset_refusal_text([&] { engine.set_capture_punch(0, kOffsetLoopSamples, true); }) ==
+          refusal_101_over_100);
+    CHECK_FALSE(engine.capture_punch_enabled());
+  }
+  SECTION("timing set together is checked as the state it produces") {
+    arm_looped_capture(engine, take, 60);
+    engine.set_capture_punch(0, kOffsetLoopSamples, false);
+    engine.set_record_offset_samples(kOffsetLoopSamples + 1);
+    // Punch on with a shorter offset is valid, whichever half a sequence of setters would set
+    // first; set together it is accepted.
+    engine.set_capture_timing(40, 0, kOffsetLoopSamples, true);
+    CHECK(engine.record_offset_samples() == 40);
+    CHECK(engine.capture_punch_enabled());
+    // A refused setup changes neither half, and leaves the capture armed.
+    CHECK(offset_refusal_text([&] {
+            engine.set_capture_timing(kOffsetLoopSamples + 1, 10, kOffsetLoopSamples, true);
+          }) == refusal_101_over_100);
+    CHECK(engine.record_offset_samples() == 40);
+    CHECK(engine.capture_punch_enabled());
+    CHECK(engine.capture_armed());
+  }
+  SECTION("disarming, a longer loop and a slower tempo stay open") {
+    arm_looped_capture(engine, take, 60);
+    engine.set_loop(0.0, loop_end * 2.0, true);
+    engine.set_tempo(30.0);
+    engine.set_capture_armed(false);
+    engine.set_loop(0.0, loop_end / 4.0, true);
+    CHECK(loop_end_now() == loop_end / 4.0);
   }
 }
 
