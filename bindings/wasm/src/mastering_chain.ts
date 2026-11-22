@@ -3,6 +3,7 @@ import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,
+  MasteringChainConfigInput,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringPlatform,
@@ -187,7 +188,7 @@ export interface StreamingLoudnessGainRequest {
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /** The chain config the streaming chain will run; read like {@link masterAudio}'s `overrides`. */
-  config?: MasteringChainConfig;
+  config?: MasteringChainConfigInput;
 }
 
 /** Request for {@link streamingLoudnessGainStereo}. */
@@ -199,7 +200,7 @@ export interface StreamingLoudnessGainStereoRequest {
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /** The chain config the streaming chain will run; read like `masterAudio`'s `overrides`. */
-  config?: MasteringChainConfig;
+  config?: MasteringChainConfigInput;
 }
 
 // Native still names the input true peak `truePeakDb`.
@@ -295,7 +296,7 @@ export interface MasterAudioRequest {
    * it states none; so a full config, such as {@link masteringChainConfigFromJson}
    * returns, turns off every preset stage it marks `enabled: false`.
    */
-  overrides?: MasteringChainConfig;
+  overrides?: MasteringChainConfigInput;
   /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
   onProgress?: ProgressCallback;
   /** Polled between chain stages; return `true` to stop with a `Cancelled` error. */
@@ -322,7 +323,7 @@ export interface MasterAudioStereoRequest {
    * it states none; so a full config, such as {@link masteringChainConfigFromJson}
    * returns, turns off every preset stage it marks `enabled: false`.
    */
-  overrides?: MasteringChainConfig;
+  overrides?: MasteringChainConfigInput;
   /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
   onProgress?: ProgressCallback;
   /** Polled between chain stages; return `true` to stop with a `Cancelled` error. */
@@ -357,7 +358,7 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
 
 /**
  * Read a serialized chain configuration document into the nested
- * {@link MasteringChainConfig} that {@link masterAudio} takes as `overrides`.
+ * {@link MasteringChainConfig}, which {@link masterAudio} takes as `overrides`.
  *
  * The library's own parser validates the document, so a key or token outside
  * the current spelling is refused rather than read. Retired keys are refused

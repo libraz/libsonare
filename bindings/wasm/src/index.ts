@@ -857,6 +857,7 @@ export type {
   MasteringAudioProfileLoudness,
   MasteringAudioProfileSpectral,
   MasteringChainConfig,
+  MasteringChainConfigInput,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringInsertName,

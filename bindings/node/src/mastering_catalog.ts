@@ -37,7 +37,7 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
 
 /**
  * Read a serialized chain configuration document into the nested
- * {@link MasteringChainConfig} that {@link masterAudio} takes as `overrides`.
+ * {@link MasteringChainConfig}, which {@link masterAudio} takes as `overrides`.
  *
  * The library's own parser validates the document, so a key or token outside
  * the current spelling is refused rather than read. Retired keys are refused

@@ -14004,6 +14004,36 @@ export interface MasteringChainConfig {
   };
 }
 
+/** Every `[dotted path, value]` pair below a node of the nested chain config; an array is one value. */
+type ChainConfigPathEntry<T, P extends string> = {
+  [K in keyof T & string]-?: NonNullable<T[K]> extends readonly unknown[]
+    ? [`${P}${K}`, NonNullable<T[K]>]
+    : NonNullable<T[K]> extends object
+      ? [`${P}${K}`, NonNullable<T[K]>] | ChainConfigPathEntry<NonNullable<T[K]>, `${P}${K}.`>
+      : [`${P}${K}`, NonNullable<T[K]>];
+}[keyof T & string];
+
+/** The flat spelling: every dotted path of the nested config, valued with the type it holds there. */
+type ChainConfigFlatParams = {
+  [E in ChainConfigPathEntry<MasteringChainConfig, ''> as E[0] extends `${string}.${string}`
+    ? E[0]
+    : never]?: E[1];
+};
+
+/**
+ * A chain config as an input takes it. A key is a dotted path
+ * (`'loudness.targetLufs'`) and a nested object is shorthand for its prefix;
+ * giving one path both ways is refused with a TypeError, as is a path the chain
+ * does not have. The nested {@link MasteringChainConfig}, the flat form (the
+ * `params` of a saved chain document, whose `'dynamics.multibandComp'` carries
+ * the nested object below that path) and an object mixing the two for different
+ * paths are all accepted, and a dotted path is typed by the value the nested
+ * config holds there. An array is typed whole at its path; the chain also reads
+ * one element as `'<path>.<index>'`, which this type does not name. Results
+ * always return the nested form.
+ */
+export type MasteringChainConfigInput = MasteringChainConfig & ChainConfigFlatParams;
+
 /**
  * Constructor input of the block-by-block {@link StreamingMasteringChain}: a
  * chain config plus the stream layout and optional precomputed loudness gain.
@@ -14012,7 +14042,7 @@ export interface MasteringChainConfig {
  * `loudness` stage normally throws at construction. Precompute the gain offline
  * with {@link streamingLoudnessGain} and pass it as `loudnessStaticGainDb`.
  */
-export interface StreamingMasteringChainConfig extends MasteringChainConfig {
+export interface StreamingMasteringChainConfig extends MasteringChainConfigInput {
   /** Stream sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /** Largest block `process` is given, in samples per channel. Omit it for the library default; an explicit 0 is refused. */

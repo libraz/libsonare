@@ -16,7 +16,7 @@ import type {
   EqSpectrumSnapshot,
   EqStereoPlacement,
   Key,
-  MasteringChainConfig,
+  MasteringChainConfigInput,
   PitchClass,
   StreamBarChord,
   StreamChordChange,
@@ -42,7 +42,7 @@ import {
  * fields control the loudness stage in a realtime preview and are read directly
  * by the streaming chain.
  */
-export interface StreamingMasteringChainConfig extends MasteringChainConfig {
+export interface StreamingMasteringChainConfig extends MasteringChainConfigInput {
   /** Sample rate in Hz (integer). Required; `TypeError` when absent. */
   sampleRate: number;
 
