@@ -787,6 +787,48 @@ TEST_CASE("The formant mode is fixed at prepare and a live change is refused",
   REQUIRE_NOTHROW(chain.set_config(same));
 }
 
+TEST_CASE("A live change to a construction-fixed field names that field as the caller spells it",
+          "[voice_changer][formant_mode][realtime]") {
+  using sonare::editing::voice_changer::ConfigFieldSpelling;
+  const RealtimeVoiceChangerConfig base = bare_chain_config(0.0f, 1.2f, FormantMode::Relative);
+  struct Change {
+    void (*apply)(RealtimeVoiceChangerConfig&);
+    const char* member;
+    const char* flat;
+    const char* c_struct;
+  };
+  const Change changes[] = {
+      {[](RealtimeVoiceChangerConfig& c) { c.formant_mode = FormantMode::Absolute; },
+       "formant.mode", "formantMode", "formant_mode"},
+      {[](RealtimeVoiceChangerConfig& c) { c.voice_engine.engine = PitchEngine::Psola; },
+       "voiceEngine.engine", "voiceEngine", "voice_engine"},
+      {[](RealtimeVoiceChangerConfig& c) { c.voice_engine.f0_min_hz += 10.0f; },
+       "voiceEngine.f0MinHz", "voiceEngineF0MinHz", "voice_engine_f0_min_hz"},
+      {[](RealtimeVoiceChangerConfig& c) { c.vocoder.bands += 2; }, "vocoder.bands", "vocoderBands",
+       "vocoder_bands"}};
+  for (const Change& change : changes) {
+    RealtimeVoiceChangerConfig changed = base;
+    change.apply(changed);
+    const std::pair<ConfigFieldSpelling, std::string> spellings[] = {
+        {ConfigFieldSpelling::Member, change.member},
+        {ConfigFieldSpelling::FlatPod, change.flat},
+        {ConfigFieldSpelling::CStruct, change.c_struct}};
+    for (const auto& [spelling, path] : spellings) {
+      CAPTURE(path);
+      RealtimeVoiceChanger chain(base);
+      chain.prepare(48000, 128, 1);
+      try {
+        chain.set_config(changed, spelling);
+        FAIL("expected a refusal");
+      } catch (const sonare::SonareException& e) {
+        CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+        CHECK(std::string(e.what()) ==
+              path + " is fixed at construction; it cannot change on a live chain");
+      }
+    }
+  }
+}
+
 TEST_CASE("Validation refuses an unreachable absolute warp and names the formant factor range",
           "[voice_changer][formant_mode][realtime]") {
   RealtimeVoiceChangerConfig normalized;

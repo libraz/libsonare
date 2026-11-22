@@ -1112,7 +1112,8 @@ TEST_CASE("The POD config carries the formant mode, fixed at creation",
   CHECK(sonare_realtime_voice_changer_set_config(absolute, &config) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK_THAT(std::string(sonare_last_error_message()),
-             Catch::Matchers::ContainsSubstring("formant mode"));
+             Catch::Matchers::ContainsSubstring(
+                 "is fixed at construction; it cannot change on a live chain"));
 
   // A parsed preset is held to the same rule.
   SonareRealtimeVoiceChangerConfig bright;

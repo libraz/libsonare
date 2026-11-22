@@ -195,6 +195,11 @@ inline bool takes_external_carrier(const RealtimeVoiceChangerConfig& config) noe
 /// Block size @ref RealtimeVoiceChanger::prepare is given when a caller names none.
 inline constexpr int kRealtimeVoiceChangerDefaultMaxBlock = 128;
 
+/// @brief How a validator refusal spells a field: as the config member path ("retune.mix"), under
+///        a preset document's dsp object ("dsp.retune.mix"), as a flat POD key ("retuneMix"), or
+///        as the C ABI config struct's field ("retune_mix").
+enum class ConfigFieldSpelling { Member, PresetDocument, FlatPod, CStruct };
+
 class RealtimeVoiceChanger {
  public:
   /// @brief Maximum reverb decay time (ms) used to size per-channel comb buffers.
@@ -222,7 +227,9 @@ class RealtimeVoiceChanger {
   /// @throws SonareException InvalidParameter when @ref validate_realtime_voice_changer_config
   ///         refuses @p config (the previous configuration stays in effect), or when the chain is
   ///         prepared and @p config changes a field fixed at prepare(): the formant mode, the pitch
-  ///         engine, the lowest tracked f0 or the vocoder band count.
+  ///         engine, the lowest tracked f0 or the vocoder band count. The first such field is
+  ///         named "<path> is fixed at construction; it cannot change on a live chain", and every
+  ///         refusal spells its field as @p spelling does.
   /// @details Safe to call concurrently with @ref process_block on the same
   ///          instance: the validated configuration is stored into a
   ///          lock-free single-writer/single-reader cell (see @c
@@ -240,7 +247,8 @@ class RealtimeVoiceChanger {
   ///          @ref process_block, collapsing the "configuration thread" and
   ///          the audio thread into one. Still single-producer: two threads
   ///          MUST NOT call @ref set_config concurrently with each other.
-  void set_config(const RealtimeVoiceChangerConfig& config);
+  void set_config(const RealtimeVoiceChangerConfig& config,
+                  ConfigFieldSpelling spelling = ConfigFieldSpelling::Member);
   /// @brief Returns the most recently published configuration as observed by
   ///        the configuration thread.
   /// @details NOT realtime-safe and NOT safe to call concurrently with
@@ -680,11 +688,6 @@ std::vector<std::string> realtime_voice_changer_preset_names();
 ///          ask it before they build anything.
 const char* prepare_arguments_error(double sample_rate, int max_block_size,
                                     int num_channels) noexcept;
-
-/// @brief How a validator refusal spells a field: as the config member path ("retune.mix"), under
-///        a preset document's dsp object ("dsp.retune.mix"), as a flat POD key ("retuneMix"), or
-///        as the C ABI config struct's field ("retune_mix").
-enum class ConfigFieldSpelling { Member, PresetDocument, FlatPod, CStruct };
 
 /// @brief The path config field @p member (e.g. "voiceEngine.f0MinHz") takes in @p spelling.
 /// @details A flat POD key joins section and field in camel case, and an enum named after its

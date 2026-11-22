@@ -53,10 +53,12 @@ rt::BiquadCoeffs air_shelf(double sample_rate, float gain_db) {
 }
 
 // Returns @p config when it is valid; the failure text is built only on the refusing path.
-const RealtimeVoiceChangerConfig& checked_config(const RealtimeVoiceChangerConfig& config) {
-  if (validate_realtime_voice_changer_config(config, nullptr, nullptr)) return config;
+const RealtimeVoiceChangerConfig& checked_config(
+    const RealtimeVoiceChangerConfig& config,
+    ConfigFieldSpelling spelling = ConfigFieldSpelling::Member) {
+  if (validate_realtime_voice_changer_config(config, nullptr, nullptr, spelling)) return config;
   std::string error;
-  validate_realtime_voice_changer_config(config, nullptr, &error);
+  validate_realtime_voice_changer_config(config, nullptr, &error, spelling);
   throw SonareException(ErrorCode::InvalidParameter, error);
 }
 
@@ -143,7 +145,8 @@ void RealtimeVoiceChanger::reset_channels() {
   last_gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 }
 
-void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) {
+void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config,
+                                      ConfigFieldSpelling spelling) {
   // Writer side: validate, update the visible mirror used by config(), and
   // hand the value off to the audio thread via the lock-free seqlock cell.
   // We deliberately DO NOT touch derived scalars or per-channel BiquadState
@@ -153,17 +156,24 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
   // config_version_ never allocates or locks, so this whole function is
   // realtime-safe to call from the audio thread itself (see the class doc
   // comment on set_config for why WASM needs that); the refusal paths throw.
-  const RealtimeVoiceChangerConfig& accepted = checked_config(config);
-  if (!channels_.empty() && accepted.formant_mode != prepared_formant_mode_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "formant mode is fixed at prepare(); it cannot change on a live chain");
-  }
-  if (!channels_.empty() && (accepted.voice_engine.engine != prepared_engine_ ||
-                             accepted.voice_engine.f0_min_hz != prepared_f0_min_hz_ ||
-                             accepted.vocoder.bands != prepared_vocoder_bands_)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "voiceEngine.engine, voiceEngine.f0MinHz and vocoder.bands are fixed at "
-                          "prepare(); they cannot change on a live chain");
+  const RealtimeVoiceChangerConfig& accepted = checked_config(config, spelling);
+  if (!channels_.empty()) {
+    // The first changed field a prepared chain was built around is the one refused.
+    const char* fixed = nullptr;
+    if (accepted.formant_mode != prepared_formant_mode_) {
+      fixed = "formant.mode";
+    } else if (accepted.voice_engine.engine != prepared_engine_) {
+      fixed = "voiceEngine.engine";
+    } else if (accepted.voice_engine.f0_min_hz != prepared_f0_min_hz_) {
+      fixed = "voiceEngine.f0MinHz";
+    } else if (accepted.vocoder.bands != prepared_vocoder_bands_) {
+      fixed = "vocoder.bands";
+    }
+    if (fixed != nullptr) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            realtime_voice_changer_field_path(fixed, spelling) +
+                                " is fixed at construction; it cannot change on a live chain");
+    }
   }
   config_ = accepted;
   update_latency_mirrors();
