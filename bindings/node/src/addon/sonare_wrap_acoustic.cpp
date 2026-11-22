@@ -254,7 +254,8 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
       break;
   }
 
-  // The C ABI's checks, which the core does not make itself (it clamps the absorption).
+  // The core refuses these too, under its member names; checked first so the refusal names the JS
+  // field.
   {
     namespace check = sonare::util::check;
     check::greater_than(cfg.aspect_hint_lw, 0.0, "aspectHintLw");

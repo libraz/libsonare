@@ -265,7 +265,7 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
       mode, 0, static_cast<int>(sonare::acoustic::kAcousticModeSelectorNames.size()) - 1, "mode");
   config.acoustic.mode = static_cast<sonare::AcousticConfig::Mode>(mode);
 
-  // The C ABI's checks, which the core does not make itself (it clamps the absorption).
+  // The core refuses these too, under member names; checked first to name the JS field.
   {
     namespace check = sonare::util::check;
     check::greater_than(config.aspect_hint_lw, 0.0, "aspectHintLw");
