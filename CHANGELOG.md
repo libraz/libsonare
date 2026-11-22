@@ -227,6 +227,7 @@ This release gives the public interface one set of conventions on every surface 
 
 #### Realtime engine and project
 
+- The WASM `./worker` entry answers when started as a Node `worker_threads` Worker, so an `OfflineWorkerClient` given `workerFactory: (url) => new Worker(url)` settles instead of waiting forever; it answers only its own protocol's messages on the parent port.
 - On WASM, the entry points of one package build share one module per realm: `init()` through the package root also serves `./worklet`, whose `SonarePlaybackNode.create` and engine-node capability read previously found a second, uninitialised copy. A module loaded by a different build is never shared, and the AudioWorklet realm still initialises its own.
 - Python `RealtimeEngine.bounce_offline` returns the `frames`, `num_channels`, `sample_rate` and `integrated_lufs` it measured instead of zeros.
 - Python `Project.add_loop_recording_takes` refuses `audio_channels` whenever the audio is planar.

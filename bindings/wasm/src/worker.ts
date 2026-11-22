@@ -198,7 +198,44 @@ function browserWorkerEndpoint(): OfflineWorkerEndpoint | null {
   };
 }
 
+/** The part of a Node `worker_threads` parent port the endpoint uses. */
+interface NodeParentPort {
+  postMessage(message: unknown, transfer?: Transferable[]): void;
+  on(type: 'message', listener: (data: OfflineWorkerRequestMessage) => void): void;
+}
+
+/**
+ * The parent port when this module runs as a Node `worker_threads` Worker, which
+ * has no global `postMessage` / `addEventListener`. The specifier is a variable
+ * so a browser bundler leaves the Node built-in unresolved.
+ */
+async function nodeWorkerEndpoint(): Promise<OfflineWorkerEndpoint | null> {
+  const scope = globalThis as unknown as { process?: { versions?: { node?: string } } };
+  if (scope.process?.versions?.node === undefined) {
+    return null;
+  }
+  const specifier = 'node:worker_threads';
+  const { parentPort } = (await import(/* webpackIgnore: true */ /* @vite-ignore */ specifier)) as {
+    parentPort: NodeParentPort | null;
+  };
+  if (!parentPort) {
+    return null;
+  }
+  return {
+    postMessage: (message, transfer) => parentPort.postMessage(message, transfer),
+    // The port may be shared with whoever started the thread, so only this protocol is answered.
+    addEventListener: (_type, listener) =>
+      parentPort.on('message', (data: OfflineWorkerRequestMessage) => {
+        if (typeof data?.type === 'string' && data.type.startsWith('sonare:offline-')) {
+          listener({ data } as MessageEvent<OfflineWorkerRequestMessage>);
+        }
+      }),
+  };
+}
+
 const endpoint = browserWorkerEndpoint();
 if (endpoint) {
   installOfflineWorkerEndpoint(endpoint);
+} else {
+  void nodeWorkerEndpoint().then((node) => node && installOfflineWorkerEndpoint(node));
 }

@@ -281,6 +281,19 @@ describe('OfflineWorkerClient', () => {
     await client.destroy();
   });
 
+  it('answers from the shipped worker entry started as a Node worker_threads Worker', async () => {
+    // No bridge script: the default worker URL resolves to dist/worker.js, which
+    // must find its parent port by itself or the call would never settle.
+    const client = new OfflineWorkerClient({
+      workerFactory: (url) => new NodeWorker(url) as unknown as OfflineWorkerLike,
+    });
+    try {
+      expect(await client.detectBpm({ samples: makeTone(), sampleRate: 22050 })).toBeGreaterThan(0);
+    } finally {
+      await client.destroy();
+    }
+  }, 30_000);
+
   it('does not leak a cancelled-set entry when a cancel crosses an already-settled result', async () => {
     // worker.ts added `id` to its `cancelled` Set unconditionally on every
     // offline-cancel message, and the only removal was run()'s own finally
