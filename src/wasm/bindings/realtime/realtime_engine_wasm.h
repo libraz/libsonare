@@ -450,6 +450,24 @@ class RealtimeEngineWasm {
                            : block_size;
   }
 
+  // Refuses an offline run on a never-prepared engine, as the C ABI does, before any count is read.
+  void requirePrepared() const {
+    if (engine_.max_block_size() <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "the engine has not been prepared");
+    }
+  }
+
+  // Refuses a channel count outside [1, prepared channels], the one range an offline run renders.
+  void checkRenderChannels(int num_channels, const char* subject) const {
+    sonare::util::check::integer_in_range(num_channels, 1, engine_.prepared_channels(), subject);
+  }
+
+  // Refuses a resolved offline block larger than the prepared one.
+  void checkPreparedBlock(int block_size, const char* subject) const {
+    sonare::util::check::integer_in_range(block_size, 1, engine_.max_block_size(), subject);
+  }
+
   // Record budget of a drain: undefined or null selects the library default.
   struct ChannelBlock {
     std::vector<std::vector<float>> storage;

@@ -62,14 +62,10 @@ void RealtimeEngineWasm::primeOfflineParameters(const val& num_channels_val,
   int block_size = optionalDomainValue<int>(block_size_val, "blockSize",
                                             sonare_c_detail::kEngineRenderBlockSizeDomain)
                        .value_or(0);
-  sonare::util::check::integer_at_least(num_channels, 1, "num_channels");
-  if (engine_.max_block_size() <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
-  }
+  requirePrepared();
   block_size = resolveOfflineBlock(block_size);
-  if (num_channels > engine_.prepared_channels()) {
-    throw WasmRangeError("numChannels exceeds the prepared channel count");
-  }
+  checkRenderChannels(num_channels, "numChannels");
+  checkPreparedBlock(block_size, "blockSize");
   engine_.prime_offline_parameters(num_channels, block_size);
 }
 

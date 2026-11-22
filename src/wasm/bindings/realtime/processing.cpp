@@ -3,12 +3,14 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <array>
 #include <cmath>
 #include <string>
 
 #include "c_api/engine_config_domains.h"
 #include "realtime_engine_wasm.h"
 #include "sonare/sonare_c_types_engine.h"
+#include "util/refusal_predicates.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -227,10 +229,8 @@ void RealtimeEngineWasm::allocatePlanes(std::vector<std::vector<float>>& storage
 void RealtimeEngineWasm::prepareChannels(const val& num_channels_val, const val& max_frames_val) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
-  if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
-    throw WasmRangeError("channels must be within 1.." + std::to_string(kMaxPreparedChannels) +
-                         "; maxFrames must be an integer of at least 1");
-  }
+  sonare::util::check::integer_in_range(num_channels, 1, kMaxPreparedChannels, "numChannels");
+  sonare::util::check::integer_at_least(max_frames, 1, "maxFrames");
   prepared_channels_ = num_channels;
   prepared_capacity_ = max_frames;
   allocatePlanes(prepared_storage_, prepared_ptrs_, num_channels, max_frames);
@@ -278,12 +278,8 @@ void RealtimeEngineWasm::prepareMonitorChannels(const val& num_channels_val,
                                                 const val& max_frames_val) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
-  if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
-    throw WasmRangeError(
-        "channels must be "
-        "within 1.." +
-        std::to_string(kMaxPreparedChannels) + "; maxFrames must be an integer of at least 1");
-  }
+  sonare::util::check::integer_in_range(num_channels, 1, kMaxPreparedChannels, "numChannels");
+  sonare::util::check::integer_at_least(max_frames, 1, "maxFrames");
   monitor_channels_ = num_channels;
   monitor_capacity_ = max_frames;
   allocatePlanes(monitor_storage_, monitor_ptrs_, num_channels, max_frames);
@@ -355,21 +351,14 @@ val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_va
                        ? 0
                        : domainNumberFromVal<int>(block_size_val, "blockSize",
                                                   sonare_c_detail::kEngineRenderBlockSizeDomain);
-  // Mirror the C-ABI oracle (sonare_engine_render_offline): a never-prepared
-  // engine renders nothing and cannot signal through telemetry, so fail closed
-  // instead of handing back a silent buffer that reads as a completed render.
-  if (engine_.max_block_size() <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
-  }
+  // A never-prepared engine renders nothing and cannot signal through telemetry.
+  requirePrepared();
   // 0 selects the default offline block.
   block_size = resolveOfflineBlock(block_size);
   ChannelBlock block = readChannels(channels_val);
-  // More channels or a larger block than the engine was prepared for would write zeros past the
-  // bound, as the C ABI refuses.
-  if (static_cast<int>(block.storage.size()) > engine_.prepared_channels() ||
-      block_size > engine_.max_block_size()) {
-    throw WasmRangeError("channel count or block size exceeds the prepared engine");
-  }
+  // Planes past the prepared count would be written as silence rather than refused.
+  checkRenderChannels(static_cast<int>(block.storage.size()), "numChannels");
+  checkPreparedBlock(block_size, "blockSize");
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
                          block.frames, block_size, finalize);
   return channelsToJs(block);
@@ -379,9 +368,7 @@ void RealtimeEngineWasm::finishOfflineRender() {
   // Mirror the C-ABI oracle (sonare_engine_finish_offline_render): a
   // never-prepared engine has nothing to release and no way to report, so fail
   // closed rather than returning as though a render had been finalized.
-  if (engine_.max_block_size() <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
-  }
+  requirePrepared();
   engine_.finish_offline_render();
 }
 
@@ -407,65 +394,49 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
                                      : requested_source_rate;
   const int target_sample_rate =
       requested_target_rate == 0 ? source_sample_rate : requested_target_rate;
-  // Read ditherBits up front so a negative value is rejected exactly as the
-  // C-ABI oracle does (sonare_engine_bounce_offline: dither_bits < 0 ->
-  // SONARE_ERROR_INVALID_PARAMETER) instead of being silently clamped to 16.
   const int dither_bits = intProperty(options_val, "ditherBits", 16);
-  // Same for the dither type: the oracle rejects an out-of-range ordinal before
-  // it renders anything rather than silently mapping it to None, which would
-  // hand back undithered audio with no way to tell the request was ignored.
   const int dither = intProperty(options_val, "dither", 0);
-  sonare::util::check::integer_within(total_frames, sonare_c_detail::kEngineBounceFramesDomain,
-                                      "totalFrames");
-  sonare::util::check::integer_within(num_channels, sonare_c_detail::kEngineRenderChannelsDomain,
-                                      "numChannels");
-  if (dither_bits < 0) throw WasmRangeError("ditherBits must not be negative");
-  if (source_sample_rate <= 0) {
-    throw WasmRangeError("source_sample_rate is 0 and the engine has no prepared sample rate");
-  }
-  if (dither < 0 || dither > 3) throw WasmRangeError("dither must be an ordinal in [0, 3]");
-  if (!sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
-                                                  target_sample_rate, dither != 0)) {
-    throw WasmRangeError(
-        "totalFrames, numChannels and the sample rates give a result larger than the supported "
-        "size");
-  }
-  // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
-  // 6 = 5.1, 8 = 7.1); counts like 3/4/5/7 have no layout and would silently
-  // leave their extra planes unpanned. Mirror the C-ABI oracle round-trip
-  // (sonare_c_engine.cpp) so WASM rejects them instead of writing garbage planes.
-  if (sonare::channel_count(sonare::layout_from_channel_count(num_channels)) != num_channels) {
-    throw WasmRangeError("unsupported bounce channel count");
-  }
-  // Mirror the C-ABI oracle (sonare_engine_bounce_offline): a never-prepared
-  // engine renders silence with no telemetry channel, so fail closed rather than
-  // return a bounce result the caller would read as a valid silent render.
-  if (engine_.max_block_size() <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
-  }
-  block_size = resolveOfflineBlock(block_size);
-  // Bouncing more channels than the engine was prepared for would write zeros for every plane
-  // past the bound.
-  if (num_channels > engine_.prepared_channels() || block_size > engine_.max_block_size()) {
-    throw WasmRangeError("bounce channel count or block size exceeds the prepared engine");
-  }
-  // The render runs at the prepared rate, which an explicit sourceSampleRate must name exactly.
-  if (requested_source_rate > 0 &&
-      engine_.sample_rate() != static_cast<double>(requested_source_rate)) {
-    throw WasmRangeError("source_sample_rate must equal the prepared sample rate " +
-                         std::to_string(static_cast<long long>(engine_.sample_rate())));
-  }
-  if (dither != 0) {
-    sonare::util::check::integer_within(dither_bits, sonare_c_detail::kEngineDitherBitsDomain,
-                                        "ditherBits");
-  }
-  // Every option is read before the render, which consumes engine state.
   const bool normalize_lufs = boolProperty(options_val, "normalizeLufs", false);
   // As in the C ABI, every finite target is literal and only absence selects the default.
   const float target_lufs =
       floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
   const uint32_t dither_seed =
       uintProperty(options_val, "ditherSeed", SONARE_ENGINE_DEFAULT_DITHER_SEED);
+  // Refusals follow the C-ABI oracle's order (sonare_engine_bounce_offline).
+  sonare::util::check::integer_within(total_frames, sonare_c_detail::kEngineBounceFramesDomain,
+                                      "totalFrames");
+  requirePrepared();
+  checkRenderChannels(num_channels, "numChannels");
+  // Widths with no speaker layout (3, 4, 5, 7) would leave their extra planes unpanned.
+  if (sonare::channel_count(sonare::layout_from_channel_count(num_channels)) != num_channels) {
+    sonare::util::check::refuse(
+        "numChannels", sonare::util::refusal::one_of_predicate(std::array<int, 4>{1, 2, 6, 8}));
+  }
+  sonare::util::check::finite_float(target_lufs, "targetLufs");
+  sonare::util::check::one_of(dither, std::array<int, 4>{0, 1, 2, 3}, "dither");
+  if (dither != 0) {
+    sonare::util::check::integer_within(dither_bits, sonare_c_detail::kEngineDitherBitsDomain,
+                                        "ditherBits");
+  }
+  if (source_sample_rate <= 0) {
+    sonare::util::check::refuse("sourceSampleRate",
+                                "must name a rate when the engine has no prepared sample rate");
+  }
+  if (!sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
+                                                  target_sample_rate, dither != 0)) {
+    sonare::util::check::refuse_relation(
+        {"totalFrames", "numChannels", "sourceSampleRate", "targetSampleRate"},
+        "{0}, {1}, {2} and {3} give a result larger than the supported size");
+  }
+  block_size = resolveOfflineBlock(block_size);
+  checkPreparedBlock(block_size, "blockSize");
+  // The render runs at the prepared rate, which an explicit sourceSampleRate must name exactly.
+  if (requested_source_rate > 0 &&
+      engine_.sample_rate() != static_cast<double>(requested_source_rate)) {
+    sonare::util::check::refuse("sourceSampleRate",
+                                "must equal the prepared sample rate " +
+                                    std::to_string(static_cast<long long>(engine_.sample_rate())));
+  }
 
   // Offline pre-roll, as in the C-ABI oracle (sonare_engine_bounce_offline): a
   // bounce is a one-shot render, so the first audible block must open at the
@@ -515,22 +486,6 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
                                             sonare_c_detail::kEngineOfflineBlockDomain)
                        .value_or(0);
   const int num_channels = requireIntProperty(options_val, "numChannels", "");
-  if (total_frames <= 0 || num_channels <= 0 ||
-      !sonare::resource::engine_offline_shape_fits(total_frames, num_channels, 1)) {
-    throw WasmRangeError("invalid freeze options");
-  }
-  // Mirror the C-ABI oracle (sonare_engine_freeze_offline): freezing a
-  // never-prepared engine would capture pure silence with no error channel.
-  if (engine_.max_block_size() <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
-  }
-  block_size = resolveOfflineBlock(block_size);
-  // Freezing more channels than the engine was prepared for would write zeros for every plane
-  // past the bound.
-  if (num_channels > engine_.prepared_channels() || block_size > engine_.max_block_size()) {
-    throw WasmRangeError("freeze channel count or block size exceeds the prepared engine");
-  }
-
   uint32_t clip_id = uintProperty(options_val, "clipId", 1);
   if (clip_id == 0) clip_id = 1;
   // Read startPpq at full double precision to match setClips() and the
@@ -540,15 +495,24 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   const double start_ppq = hasProperty(options_val, "startPpq")
                                ? numberFromVal(objectProperty(options_val, "startPpq"), "startPpq")
                                : 0.0;
+  // A non-finite position is refused at the read, as the Node reader does.
+  sonare::util::check::finite(start_ppq, "startPpq");
   const float gain = floatProperty(options_val, "gain", 1.0f);
-  // Mirror the C-ABI oracle (sonare_c_engine.cpp): a non-finite or negative
-  // startPpq yields an undefined clip position, and a non-finite/negative gain
-  // fills NaN or phase-inverts the frozen clip. Reject up front instead of
-  // letting WASM produce a corrupt freeze where C/Node/Python error.
-  if (!std::isfinite(start_ppq) || !sonare::transport::valid_public_ppq(start_ppq) ||
-      !std::isfinite(gain) || gain < 0.0f) {
-    throw WasmRangeError("invalid freeze startPpq or gain");
+  // Refusals follow the C-ABI oracle's order (sonare_engine_freeze_offline).
+  sonare::util::check::integer_within(total_frames, sonare_c_detail::kEngineBounceFramesDomain,
+                                      "totalFrames");
+  requirePrepared();
+  checkRenderChannels(num_channels, "numChannels");
+  sonare::util::check::at_least(start_ppq, 0.0, "startPpq");
+  // A position past the public timeline has no sample a clip can start at, as setClips refuses.
+  sonare::util::check::in_range(start_ppq, 0.0, sonare::transport::kMaxPublicPpq, "startPpq");
+  sonare::util::check::at_least(gain, 0.0, "gain");
+  if (!sonare::resource::engine_offline_shape_fits(total_frames, num_channels, 1)) {
+    sonare::util::check::refuse_relation({"totalFrames", "numChannels"},
+                                         "{0} times {1} exceeds the supported size");
   }
+  block_size = resolveOfflineBlock(block_size);
+  checkPreparedBlock(block_size, "blockSize");
 
   // Offline pre-roll, as in the C-ABI oracle (sonare_engine_freeze_offline): the
   // frozen clip captures the lane at its settled values rather than a fade-in
