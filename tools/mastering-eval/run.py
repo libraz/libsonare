@@ -452,7 +452,9 @@ def mastering_rows(
         left, right = stereo[:, 0], stereo[:, 1]
 
         def stereo_job() -> tuple[np.ndarray, np.ndarray]:
-            result = libsonare.master_audio_stereo(_f32(left), _f32(right), sample_rate, preset)
+            result = libsonare.master_audio_stereo(
+                _f32(left), _f32(right), sample_rate, preset=preset
+            )
             processed = np.stack([np.asarray(result.left), np.asarray(result.right)], axis=1)
             return stereo, processed
 
@@ -462,7 +464,7 @@ def mastering_rows(
     feed_name = "downmix" if stereo.shape[1] == 2 else "mono"
 
     def mono_job() -> tuple[np.ndarray, np.ndarray]:
-        result = libsonare.master_audio(_f32(downmix), sample_rate, preset)
+        result = libsonare.master_audio(_f32(downmix), sample_rate, preset=preset)
         return downmix, np.asarray(result.samples)
 
     jobs.append((feed_name, "master_audio", mono_job))

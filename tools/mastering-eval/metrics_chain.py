@@ -25,8 +25,8 @@ point does. This is the level, so it moves by exactly an applied gain; that is t
 than the failure.
 
 **True peak.** Inter-sample peak in dBTP at :data:`TRUE_PEAK_OVERSAMPLE`, the maximum over the
-channels of ``libsonare.metering_true_peak_db``. Taking the maximum of the per-channel dB values is
-the same number as the library's own stereo planar meter takes, which maximizes in the linear
+channels of ``libsonare.metering_true_peak_dbtp``. Taking the maximum of the per-channel dB values
+is the same number as the library's own stereo planar meter takes, which maximizes in the linear
 domain and converts once: the conversion is monotonic and both channels share one silence floor.
 **This is a level, not a level-independent reading** -- it moves by exactly an applied gain, the
 same way integrated loudness does. It is in the set to be compared against a ceiling, and a
@@ -201,7 +201,7 @@ def true_peak_dbtp(x: npt.ArrayLike, sample_rate: float) -> float:
     """
     feed = _as_feed(x, "x")
     return max(
-        libsonare.metering_true_peak_db(
+        libsonare.metering_true_peak_dbtp(
             _channel(feed, index), int(sample_rate), TRUE_PEAK_OVERSAMPLE
         )
         for index in range(feed.shape[1])

@@ -201,12 +201,16 @@ def _dereverb(feed: np.ndarray, sample_rate: int, params: dict) -> np.ndarray:
 
 
 def _chain(feed: np.ndarray, sample_rate: int, overrides: dict | None) -> np.ndarray:
-    result = libsonare.master_audio(_f32(feed), sample_rate, PRESET, overrides or None)
+    result = libsonare.master_audio(
+        _f32(feed), sample_rate, preset=PRESET, overrides=overrides or None
+    )
     return np.asarray(result.samples, dtype=np.float64)
 
 
 def _chain_stereo(feed: np.ndarray, sample_rate: int) -> np.ndarray:
-    result = libsonare.master_audio_stereo(_f32(feed[:, 0]), _f32(feed[:, 1]), sample_rate, PRESET)
+    result = libsonare.master_audio_stereo(
+        _f32(feed[:, 0]), _f32(feed[:, 1]), sample_rate, preset=PRESET
+    )
     return np.stack(
         [np.asarray(result.left, dtype=np.float64), np.asarray(result.right, dtype=np.float64)],
         axis=1,
