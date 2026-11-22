@@ -1806,9 +1806,10 @@ TEST_CASE("truncated multi-track SMF import keeps every track that parsed comple
     REQUIRE(imported.clips[0].events().size() == 8);
     REQUIRE(imported.recoverable());
     // The tempo map stays usable on the recovered path: a consumer hands these
-    // straight to TempoMap::set_segments.
+    // straight to TempoMap::set_segments. The file holds no time signature, so
+    // the meter map is empty rather than an implied 4/4.
     REQUIRE_FALSE(imported.tempo_segments.empty());
-    REQUIRE_FALSE(imported.time_signatures.empty());
+    REQUIRE(imported.time_signatures.empty());
 
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);

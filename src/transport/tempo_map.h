@@ -105,6 +105,11 @@ class TempoMap {
  public:
   void prepare(double sample_rate);
   void set_segments(std::vector<TempoSegment> segments);
+  /// @brief Installs the meter map.
+  /// @details Before the first signature the span is read in that signature: its bar grid starts
+  ///          at 0, so a first signature placed after 0 leaves a pickup bar from 0 to it (counted
+  ///          as a bar). An empty map is 4/4. A stored or imported map holds only the signatures
+  ///          given to it and gets this reading here, never an inserted default.
   void set_time_signatures(std::vector<TimeSignatureSegment> time_signatures);
 
   double sample_to_ppq(int64_t sample) const noexcept;

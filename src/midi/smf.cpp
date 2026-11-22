@@ -641,9 +641,9 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
 
 // Parses the SMF byte stream into a raw result. Every failure path returns
 // early, keeping whatever complete tracks / meta data were already recovered.
-// It deliberately derives neither has_recovered_content nor the tempo /
-// time-signature defaults: import_smf() does both on its single exit path, so
-// no early return here can skip them.
+// It deliberately derives neither has_recovered_content nor the tempo default:
+// import_smf() does both on its single exit path, so no early return here can
+// skip them.
 SmfImportResult parse_smf(const uint8_t* data, size_t size,
                           const resource::MidiImportResourceLimits& limits) {
   SmfImportResult result;
@@ -859,8 +859,8 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
                            const resource::MidiImportResourceLimits& limits) {
   SmfImportResult result = parse_smf(data, size, limits);
 
-  // Derived on the importer's single exit path, before the defaults below are
-  // injected: a truncated track aborts parse_smf() at the failing chunk, and
+  // Derived on the importer's single exit path, before the tempo default below
+  // is injected: a truncated track aborts parse_smf() at the failing chunk, and
   // the complete tracks parsed ahead of it are already in the result. Deciding
   // this per return site is what previously dropped them.
   result.has_recovered_content = !result.clips.empty() || !result.tempo_segments.empty() ||
@@ -869,21 +869,16 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
 
   transport::sort_by_start(&result.tempo_segments);
   transport::sort_by_start(&result.time_signatures);
-  // Until a file's first Set Tempo / Time Signature the SMF defaults of 120 BPM
-  // and 4/4 apply, so each map starts with them unless an event sits at tick 0.
-  // This also hands TempoMap::set_segments a non-empty vector. A recovered
-  // truncated import reaches the same consumers as a clean one, so the defaults
-  // apply to every result rather than only to the clean parse.
+  // Until a file's first Set Tempo its ticks play at the SMF default of 120 BPM,
+  // so the tempo map starts with it unless an event sits at tick 0; a recovered
+  // truncated import gets it too. The implied 4/4 before the first Time
+  // Signature sets no timing and is not a signature the file holds, so the meter
+  // map is reported as the file wrote it (TempoMap::set_time_signatures).
   if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
     transport::TempoSegment seg;
     seg.start_ppq = 0.0;
     seg.bpm = sonare::constants::kDefaultBpm;
     result.tempo_segments.insert(result.tempo_segments.begin(), seg);
-  }
-  if (result.time_signatures.empty() || result.time_signatures.front().start_ppq > 0.0) {
-    transport::TimeSignatureSegment seg;
-    seg.start_ppq = 0.0;
-    result.time_signatures.insert(result.time_signatures.begin(), seg);
   }
   return result;
 }

@@ -1179,8 +1179,8 @@ TEST_CASE("SMF import skips invalid time signature denominator exponents", "[mid
 
   REQUIRE(imported.ok());
   REQUIRE(imported.skipped_events == 1);
-  REQUIRE(imported.time_signatures.size() == 1);
-  REQUIRE(imported.time_signatures[0].time_sig.denominator == 4);
+  // The skipped event was the file's only signature, so none is reported.
+  REQUIRE(imported.time_signatures.empty());
 }
 
 TEST_CASE("SMF import skips zero-numerator time signatures", "[midi]") {
@@ -1202,9 +1202,8 @@ TEST_CASE("SMF import skips zero-numerator time signatures", "[midi]") {
 
   REQUIRE(imported.ok());
   REQUIRE(imported.skipped_events == 1);
-  REQUIRE(imported.time_signatures.size() == 1);
-  REQUIRE(imported.time_signatures[0].time_sig.numerator > 0);
-  REQUIRE(imported.time_signatures[0].time_sig.denominator == 4);
+  // The skipped event was the file's only signature, so none is reported.
+  REQUIRE(imported.time_signatures.empty());
 }
 
 TEST_CASE("SMF export terminates SysEx payloads with F7", "[midi]") {
@@ -1912,7 +1911,7 @@ TEST_CASE("note_targets_from_smf refuses bytes that are not an SMF", "[midi][smf
   REQUIRE_THROWS_AS(note_targets_from_smf(nullptr, 32, 0), sonare::SonareException);
 }
 
-TEST_CASE("SMF import plays the stretch before the first tempo and meter at 120 BPM in 4/4",
+TEST_CASE("SMF import plays the stretch before the first tempo at 120 BPM and adds no meter",
           "[midi]") {
   // The first Set Tempo (60 BPM) and Time Signature (3/4) sit one quarter in.
   std::vector<uint8_t> body = {0x00, 0x90, 60, 100};
@@ -1926,12 +1925,50 @@ TEST_CASE("SMF import plays the stretch before the first tempo and meter at 120 
   CHECK(r.tempo_segments[0].bpm == Catch::Approx(sonare::constants::kDefaultBpm));
   CHECK(r.tempo_segments[1].start_ppq == Catch::Approx(1.0));
   CHECK(r.tempo_segments[1].bpm == Catch::Approx(60.0));
-  REQUIRE(r.time_signatures.size() == 2);
-  CHECK(r.time_signatures[0].start_ppq == 0.0);
-  CHECK(r.time_signatures[0].time_sig.numerator == 4);
+  // The implied 4/4 before the first Time Signature is not a signature the file holds.
+  REQUIRE(r.time_signatures.size() == 1);
+  CHECK(r.time_signatures[0].start_ppq == Catch::Approx(1.0));
+  CHECK(r.time_signatures[0].time_sig.numerator == 3);
+}
+
+TEST_CASE("SMF export then import keeps a tempo and meter map that starts after zero", "[midi]") {
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{0.25, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(MidiClipEvent{3.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)});
+  std::vector<sonare::transport::TempoSegment> tempo(1);
+  tempo[0].start_ppq = 0.5;
+  tempo[0].bpm = 100.0;
+  std::vector<sonare::transport::TimeSignatureSegment> meter(1);
+  meter[0].start_ppq = 0.5;
+  meter[0].time_sig = {3, 4};
+  const auto exported = export_smf({clip}, tempo, meter);
+  REQUIRE(exported.ok());
+  const SmfImportResult r = import_smf(exported.bytes);
+  REQUIRE(r.ok());
+
+  REQUIRE(r.time_signatures.size() == 1);
+  CHECK(r.time_signatures[0].start_ppq == Catch::Approx(0.5));
+  CHECK(r.time_signatures[0].time_sig.numerator == 3);
   CHECK(r.time_signatures[0].time_sig.denominator == 4);
-  CHECK(r.time_signatures[1].start_ppq == Catch::Approx(1.0));
-  CHECK(r.time_signatures[1].time_sig.numerator == 3);
+
+  // The exporter holds the first tempo back to tick 0, where the tempo map already reads it, so
+  // the identity is on what a TempoMap built from either map returns.
+  sonare::transport::TempoMap before;
+  sonare::transport::TempoMap after;
+  for (auto* map : {&before, &after}) map->prepare(48000.0);
+  before.set_segments(tempo);
+  before.set_time_signatures(meter);
+  after.set_segments(r.tempo_segments);
+  after.set_time_signatures(r.time_signatures);
+  for (double ppq : {0.0, 0.25, 0.5, 1.0, 2.75, 7.0}) {
+    INFO("ppq = " << ppq);
+    CHECK(after.ppq_to_seconds(ppq) == Catch::Approx(before.ppq_to_seconds(ppq)));
+    CHECK(after.time_signature_at_ppq(ppq).numerator ==
+          before.time_signature_at_ppq(ppq).numerator);
+    CHECK(after.bar_start_ppq(ppq) == Catch::Approx(before.bar_start_ppq(ppq)));
+    CHECK(after.ppq_to_bar_beat(ppq).bar == before.ppq_to_bar_beat(ppq).bar);
+    CHECK(after.ppq_to_bar_beat(ppq).beat == before.ppq_to_bar_beat(ppq).beat);
+  }
 }
 
 TEST_CASE("SMF export writes a MIDI 2.0 Registered Controller as its RPN data-entry sequence",

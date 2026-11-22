@@ -3198,3 +3198,25 @@ TEST_CASE("a MIDI event word in its earlier spelling is refused naming the curre
                                                   e.current_key) != std::string::npos);
   }
 }
+
+TEST_CASE("project JSON keeps a tempo and meter map that starts after zero", "[serialize]") {
+  Project p;
+  transport::TempoSegment tempo;
+  tempo.start_ppq = 0.5;
+  tempo.bpm = 100.0;
+  p.set_tempo_segments({tempo});
+  transport::TimeSignatureSegment meter;
+  meter.start_ppq = 0.5;
+  meter.time_sig = {3, 4};
+  p.set_time_signatures({meter});
+
+  const auto result = project_from_json(project_to_json(p, {}));
+  REQUIRE(result.ok());
+  REQUIRE(result.project->tempo_segments().size() == 1);
+  CHECK(result.project->tempo_segments()[0].start_ppq == 0.5);
+  CHECK(result.project->tempo_segments()[0].bpm == 100.0);
+  REQUIRE(result.project->time_signatures().size() == 1);
+  CHECK(result.project->time_signatures()[0].start_ppq == 0.5);
+  CHECK(result.project->time_signatures()[0].time_sig.numerator == 3);
+  CHECK(result.project->time_signatures()[0].time_sig.denominator == 4);
+}

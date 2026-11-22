@@ -73,8 +73,8 @@ struct Smf2ImportResult {
   /// Tempo map from Flex Data Set Tempo messages (sorted by start_ppq; defaults
   /// to a single 120 BPM segment when none present).
   std::vector<transport::TempoSegment> tempo_segments;
-  /// Time-signature map from Flex Data Set Time Signature messages (sorted by
-  /// start_ppq; defaults to a single 4/4 segment when none present).
+  /// Time-signature map from Flex Data Set Time Signature messages as the file
+  /// holds it (sorted by start_ppq; empty when the file has none).
   std::vector<transport::TimeSignatureSegment> time_signatures;
   /// SysEx payloads imported from SysEx7 / SysEx8 UMP data messages. Clip events
   /// reference entries here via Ump::sysex_handle. A payload whose data begins with

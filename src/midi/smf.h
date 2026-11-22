@@ -122,7 +122,8 @@ struct SmfImportResult {
   /// Tempo map extracted from set-tempo meta events (sorted by start_ppq, at
   /// least one segment — defaults to 120 BPM when none present).
   std::vector<transport::TempoSegment> tempo_segments;
-  /// Time-signature map (sorted by start_ppq, at least one 4/4 segment).
+  /// Time-signature map as the file holds it (sorted by start_ppq; empty when the
+  /// file has none). The implied SMF 4/4 before the first event is not added.
   std::vector<transport::TimeSignatureSegment> time_signatures;
   /// Markers across all tracks.
   std::vector<SmfMarker> markers;

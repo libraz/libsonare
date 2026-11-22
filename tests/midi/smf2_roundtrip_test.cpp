@@ -410,10 +410,8 @@ TEST_CASE("SMF2 import skips a non-standard or out-of-range denominator exponent
     const Smf2ImportResult imported = import_clip_file(clip_file_with_time_signature(3, exponent));
     REQUIRE(imported.ok());
     CHECK(imported.skipped_events == 1);
-    // Only the 4/4 the importer supplies at tick 0 when none was read.
-    REQUIRE(imported.time_signatures.size() == 1);
-    CHECK(imported.time_signatures.front().time_sig.numerator == 4);
-    CHECK(imported.time_signatures.front().time_sig.denominator == 4);
+    // The skipped message was the file's only signature, so none is reported.
+    CHECK(imported.time_signatures.empty());
   }
 }
 
@@ -532,12 +530,10 @@ TEST_CASE("SMF2 holds a late first tempo from tick 0 and keeps a late first time
   REQUIRE(imported.tempo_segments.size() == 1);
   REQUIRE(imported.tempo_segments.front().start_ppq == 0.0);
   REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(150.0).margin(0.01));
-  REQUIRE(imported.time_signatures.size() == 2);
-  REQUIRE(imported.time_signatures.front().start_ppq == 0.0);
-  REQUIRE(imported.time_signatures.front().time_sig.numerator == 4);
-  REQUIRE(imported.time_signatures[1].start_ppq == Catch::Approx(4.0).margin(0.01));
-  REQUIRE(imported.time_signatures[1].time_sig.numerator == 7);
-  REQUIRE(imported.time_signatures[1].time_sig.denominator == 8);
+  REQUIRE(imported.time_signatures.size() == 1);
+  REQUIRE(imported.time_signatures[0].start_ppq == Catch::Approx(4.0).margin(0.01));
+  REQUIRE(imported.time_signatures[0].time_sig.numerator == 7);
+  REQUIRE(imported.time_signatures[0].time_sig.denominator == 8);
 }
 
 TEST_CASE("SMF2 export keeps every event time under a tempo ramp and a late first segment",
@@ -1420,7 +1416,7 @@ TEST_CASE("SMF2 accepts timed packets sharing one DCS", "[midi][smf2]") {
   CHECK(imported.clips.front().events()[1].ppq == Catch::Approx(1.0));
   REQUIRE(imported.tempo_segments.size() == 2);
   CHECK(imported.tempo_segments.back().start_ppq == Catch::Approx(1.0));
-  REQUIRE(imported.time_signatures.size() == 2);
+  REQUIRE(imported.time_signatures.size() == 1);
   CHECK(imported.time_signatures.back().start_ppq == Catch::Approx(1.0));
 }
 
@@ -1518,9 +1514,9 @@ TEST_CASE("SMF2 limits configuration tempo and meter but not sequence changes", 
     REQUIRE(imported.tempo_segments.size() == 3);
     CHECK(imported.tempo_segments[1].start_ppq == Catch::Approx(1.0));
     CHECK(imported.tempo_segments[2].start_ppq == Catch::Approx(1.0));
-    REQUIRE(imported.time_signatures.size() == 3);
+    REQUIRE(imported.time_signatures.size() == 2);
+    CHECK(imported.time_signatures[0].start_ppq == Catch::Approx(1.0));
     CHECK(imported.time_signatures[1].start_ppq == Catch::Approx(1.0));
-    CHECK(imported.time_signatures[2].start_ppq == Catch::Approx(1.0));
   }
 }
 
@@ -1541,7 +1537,7 @@ TEST_CASE("SMF2 skips non-complete or non-group Flex tempo and meter packets", "
     REQUIRE(imported.ok());
     CHECK(imported.skipped_events == 2);
     REQUIRE(imported.tempo_segments.size() == 1);
-    REQUIRE(imported.time_signatures.size() == 1);
+    REQUIRE(imported.time_signatures.empty());
   }
 }
 
@@ -1742,4 +1738,39 @@ TEST_CASE("Zero-length note removal pairs notes within their own UMP group", "[m
   REQUIRE(mixed.events().size() == 2);
   CHECK(sonare::midi::ump_group_from_word0(mixed.events()[0].ump.words[0]) == 0);
   CHECK(sonare::midi::ump_group_from_word0(mixed.events()[1].ump.words[0]) == 0);
+}
+
+TEST_CASE("MIDI Clip File export then import keeps a meter map that starts after zero", "[midi]") {
+  MidiClip clip;
+  clip.add_event(ev(0.25, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  clip.add_event(ev(3.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  std::vector<sonare::transport::TempoSegment> tempo(1);
+  tempo[0].start_ppq = 0.5;
+  tempo[0].bpm = 100.0;
+  std::vector<sonare::transport::TimeSignatureSegment> meter(1);
+  meter[0].start_ppq = 0.5;
+  meter[0].time_sig = {3, 4};
+  const auto exported = export_clip_file(clip, tempo, meter, Smf2ExportOptions{});
+  REQUIRE(exported.ok());
+  const Smf2ImportResult r = import_clip_file(exported.bytes);
+  REQUIRE(r.ok());
+  REQUIRE(r.time_signatures.size() == 1);
+  CHECK(r.time_signatures[0].start_ppq == Catch::Approx(0.5));
+  CHECK(r.time_signatures[0].time_sig.numerator == 3);
+  CHECK(r.time_signatures[0].time_sig.denominator == 4);
+
+  sonare::transport::TempoMap before;
+  sonare::transport::TempoMap after;
+  for (auto* map : {&before, &after}) map->prepare(48000.0);
+  before.set_segments(tempo);
+  before.set_time_signatures(meter);
+  after.set_segments(r.tempo_segments);
+  after.set_time_signatures(r.time_signatures);
+  for (double ppq : {0.0, 0.25, 0.5, 1.0, 2.75, 7.0}) {
+    INFO("ppq = " << ppq);
+    CHECK(after.ppq_to_seconds(ppq) == Catch::Approx(before.ppq_to_seconds(ppq)));
+    CHECK(after.bar_start_ppq(ppq) == Catch::Approx(before.bar_start_ppq(ppq)));
+    CHECK(after.ppq_to_bar_beat(ppq).bar == before.ppq_to_bar_beat(ppq).bar);
+    CHECK(after.ppq_to_bar_beat(ppq).beat == before.ppq_to_bar_beat(ppq).beat);
+  }
 }

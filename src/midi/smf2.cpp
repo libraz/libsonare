@@ -922,14 +922,11 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   }
 
   result.ticks_per_quarter = dctpq;
-  // 120 BPM and 4/4 hold until the first tempo / time-signature message, which
-  // arrive in tick order.
+  // 120 BPM holds until the first tempo message, which arrive in tick order. The
+  // meter map is reported as the file wrote it, with no implied 4/4 added.
   if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
     result.tempo_segments.insert(result.tempo_segments.begin(),
                                  {0.0, sonare::constants::kDefaultBpm, 0.0});
-  }
-  if (result.time_signatures.empty() || result.time_signatures.front().start_ppq > 0.0) {
-    result.time_signatures.insert(result.time_signatures.begin(), {0.0, {4, 4}});
   }
 
   if (has_events) {

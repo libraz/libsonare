@@ -654,10 +654,9 @@ TEST_CASE("SMF import rejects channel data bytes with the status bit and keeps l
   }
 }
 
-TEST_CASE("MIDI Clip File import plays the stretch before the first tempo and meter at 120 BPM",
-          "[midi]") {
-  // The exporter holds a first tempo back to tick 0, so a file with no tempo at all
-  // and a late first meter carries the stretch the importer fills with 120 BPM in 4/4.
+TEST_CASE("MIDI Clip File import plays the stretch before the first tempo at 120 BPM", "[midi]") {
+  // The exporter holds a first tempo back to tick 0, so a file with no tempo at all carries a
+  // stretch the importer fills with 120 BPM; the late first meter is reported where it sits.
   MidiClip clip;
   clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
   clip.add_event(ev(2.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
@@ -672,9 +671,7 @@ TEST_CASE("MIDI Clip File import plays the stretch before the first tempo and me
   REQUIRE(r.tempo_segments.size() == 1);
   CHECK(r.tempo_segments[0].start_ppq == 0.0);
   CHECK(r.tempo_segments[0].bpm == Catch::Approx(120.0));
-  REQUIRE(r.time_signatures.size() == 2);
-  CHECK(r.time_signatures[0].start_ppq == 0.0);
-  CHECK(r.time_signatures[0].time_sig.numerator == 4);
-  CHECK(r.time_signatures[1].start_ppq == Catch::Approx(1.0));
-  CHECK(r.time_signatures[1].time_sig.numerator == 3);
+  REQUIRE(r.time_signatures.size() == 1);
+  CHECK(r.time_signatures[0].start_ppq == Catch::Approx(1.0));
+  CHECK(r.time_signatures[0].time_sig.numerator == 3);
 }
