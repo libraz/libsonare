@@ -14,6 +14,7 @@ import {
   masteringInsertParamNames,
   masteringProcessorCatalog,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -69,7 +70,12 @@ describe('insert param validation (WASM)', () => {
         (d) => d.name === 'ratio',
       );
     expect(ratio(44100)).toEqual(ratio());
-    expect(() => masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: 0 })).toThrow();
+    expect(
+      expectRefusalOf(
+        () => masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: 0 }),
+        RangeError,
+      ).message,
+    ).toBe('masteringInsertParamInfo: sampleRate must be an integer in [8000, 384000]');
   });
 
   it('reports realtime-automatable insert param descriptors', () => {

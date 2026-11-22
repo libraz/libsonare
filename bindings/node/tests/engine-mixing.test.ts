@@ -14,6 +14,7 @@ import {
   RealtimeEngine,
 } from '../src/index.js';
 import { rms } from './_engine_signals.js';
+import { expectRefusal } from './_helpers.js';
 
 /** First strip / bus of a scene document: the object the engine strip setters take. */
 const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
@@ -368,8 +369,16 @@ describe('RealtimeEngine native binding', () => {
     // A power-preserving pan keeps the summed plane power through the move.
     expect(Math.abs(rightTotal - leftTotal)).toBeLessThan(0.05 * leftTotal);
 
-    expect(() => engine.setStripSurroundPan(10, { azimuth: Number.NaN })).toThrow();
-    expect(() => engine.setStripSurroundPan(999, { azimuth: 0 })).toThrow();
+    expectRefusal(
+      () => engine.setStripSurroundPan(10, { azimuth: Number.NaN }),
+      RangeError,
+      /^RealtimeEngine\.setStripSurroundPan: azimuth must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+    );
+    expectRefusal(
+      () => engine.setStripSurroundPan(999, { azimuth: 0 }),
+      RangeError,
+      /^RealtimeEngine\.setStripSurroundPan: trackId must be the id of a track in this engine$/,
+    );
     engine.destroy();
   });
 
@@ -1052,8 +1061,16 @@ describe('RealtimeEngine native binding', () => {
     );
 
     // Bad arguments are rejected.
-    expect(() => engine.setStripInsertParam(0, 0, { name: 'dryWet', value: 1 })).toThrow();
-    expect(() => engine.setStripInsertParam(10, 0, { name: 'bogusParam', value: 1 })).toThrow();
+    expectRefusal(
+      () => engine.setStripInsertParam(0, 0, { name: 'dryWet', value: 1 }),
+      RangeError,
+      /^RealtimeEngine\.setStripInsertParam: trackId must be the id of a track in this engine$/,
+    );
+    expectRefusal(
+      () => engine.setStripInsertParam(10, 0, { name: 'bogusParam', value: 1 }),
+      RangeError,
+      /^RealtimeEngine\.setStripInsertParam: paramName must be the name of a parameter of the insert that can be set while running$/,
+    );
 
     engine.play();
     let dry: Float32Array<ArrayBufferLike> = new Float32Array(256);
@@ -1405,9 +1422,21 @@ describe('RealtimeEngine prime, reset, tail and latency', () => {
 
   it('validates primeOfflineParameters arguments', () => {
     const engine = makeRig(false);
-    expect(() => engine.primeOfflineParameters(0, block)).toThrow();
-    expect(() => engine.primeOfflineParameters(2, 0)).toThrow();
-    expect(() => engine.primeOfflineParameters(1000, block)).toThrow();
+    expectRefusal(
+      () => engine.primeOfflineParameters(0, block),
+      RangeError,
+      /^RealtimeEngine\.primeOfflineParameters: numChannels must be an integer in \[1, 2147483647\]$/,
+    );
+    expectRefusal(
+      () => engine.primeOfflineParameters(2, 0),
+      RangeError,
+      /^RealtimeEngine\.primeOfflineParameters: blockSize must be an integer in \[1, 2147483647\]$/,
+    );
+    expectRefusal(
+      () => engine.primeOfflineParameters(1000, block),
+      RangeError,
+      /^RealtimeEngine\.primeOfflineParameters: numChannels must be an integer in \[1, 64\]$/,
+    );
     expect(() => engine.primeOfflineParameters(2, block)).not.toThrow();
     engine.destroy();
   });
