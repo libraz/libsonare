@@ -30,6 +30,7 @@
 #include "feature/pitch.h"
 #include "feature/rhythm.h"
 #include "feature/spectral.h"
+#include "feature/vqt.h"
 
 namespace sonare_c_detail {
 
@@ -200,9 +201,11 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"time_to_frames", "sr", sonare::kFrameTimeSampleRateDomain, nullptr},
     {"tone", "sample_rate", sonare::kSynthesisSampleRateDomain, nullptr},
     {"vqt", "bins_per_octave", sonare::kCqtCountDomain, nullptr},
+    {"vqt", "gamma", sonare::kVqtGammaDomain, nullptr},
     {"vqt", "hop_length", sonare::kCqtHopLengthDomain, nullptr},
     {"vqt", "n_bins", sonare::kCqtCountDomain, nullptr},
     {"vqt_to_audio", "bins_per_octave", sonare::kCqtCountDomain, nullptr},
+    {"vqt_to_audio", "gamma", sonare::kVqtGammaDomain, nullptr},
     {"vqt_to_audio", "hop_length", sonare::kCqtHopLengthDomain, nullptr},
     {"vqt_to_audio", "n_bins", sonare::kCqtCountDomain, nullptr},
     {"zero_crossing_rate", "frame_length", sonare::kSpectralCountDomain, nullptr},

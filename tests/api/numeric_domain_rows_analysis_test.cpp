@@ -352,6 +352,7 @@ struct Cqt {
   size_t hop_length = 512;
   int n_bins = 48;
   int bins_per_octave = 12;
+  float gamma = 0.0f;
 };
 
 Cqt cqt_of(const std::string& param, double value) {
@@ -359,6 +360,7 @@ Cqt cqt_of(const std::string& param, double value) {
   if (is_param(param, "hop_length")) c.hop_length = as_size(value);
   if (is_param(param, "n_bins")) c.n_bins = static_cast<int>(value);
   if (is_param(param, "bins_per_octave")) c.bins_per_octave = static_cast<int>(value);
+  if (is_param(param, "gamma")) c.gamma = static_cast<float>(value);
   return c;
 }
 
@@ -395,7 +397,7 @@ SonareError probe_vqt(const std::string& param, double value) {
   const Cqt c = cqt_of(param, value);
   SonareCqtResult out{};
   return finish_cqt(sonare_vqt(pcm(), pcm_length(), kAnalysisRate, c.hop_length, 130.81f, c.n_bins,
-                               c.bins_per_octave, 1.0f, 0.0f, &out),
+                               c.bins_per_octave, 1.0f, c.gamma, &out),
                     &out);
 }
 
@@ -423,7 +425,7 @@ SonareError probe_vqt_to_audio(const std::string& param, double value) {
   const size_t input_length = c.n_bins > 0 ? static_cast<size_t>(c.n_bins) * 4 : 0;
   return finish_floats(
       sonare_vqt_to_audio(planes().data(), input_length, c.n_bins, 4, kAnalysisRate, c.hop_length,
-                          130.81f, c.bins_per_octave, 0.0f, 1, &out, &out_length),
+                          130.81f, c.bins_per_octave, c.gamma, 1, &out, &out_length),
       out);
 }
 

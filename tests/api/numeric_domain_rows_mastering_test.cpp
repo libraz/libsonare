@@ -314,6 +314,27 @@ SonareError probe_audio_silence_ratio(const std::string& param, double value) {
   return err;
 }
 
+SonareError probe_metering_detect_clipping(const std::string& param, double value) {
+  const float threshold_db = is_param(param, "threshold_db") ? static_cast<float>(value) : -1.0f;
+  SonareClippingResult out{};
+  const SonareError err = sonare_metering_detect_clipping(
+      analysis_samples().data(), analysis_samples().size(), kAnalysisRate, threshold_db, 1, &out);
+  sonare_free_clipping_result(&out);
+  return err;
+}
+
+SonareError probe_audio_detect_clipping(const std::string& param, double value) {
+  const float threshold_db = is_param(param, "threshold_db") ? static_cast<float>(value) : -1.0f;
+  SonareAudio* audio = nullptr;
+  REQUIRE(sonare_audio_from_buffer(analysis_samples().data(), analysis_samples().size(),
+                                   kAnalysisRate, &audio) == SONARE_OK);
+  SonareClippingResult out{};
+  const SonareError err = sonare_audio_detect_clipping(audio, threshold_db, 1, &out);
+  sonare_free_clipping_result(&out);
+  sonare_audio_destroy(audio);
+  return err;
+}
+
 SonareError probe_lufs_interleaved(const std::string& param, double value) {
   const int channels = is_param(param, "num_channels") ? as_int(value) : 2;
   SonareLufsResult out{};
@@ -819,6 +840,7 @@ SonareError probe_streaming_chain_prepare(const std::string& param, double value
 const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"audio_silence_ratio", probe_audio_silence_ratio},
+      {"audio_detect_clipping", probe_audio_detect_clipping},
       {"cqt_to_audio", probe_cqt_to_audio},
       {"frame_signal", probe_frame_signal},
       {"griffin_lim", probe_griffin_lim},
@@ -827,6 +849,7 @@ const std::map<std::string, Probe>& probes() {
       {"mel_to_audio", probe_mel_to_audio},
       {"mel_to_stft", probe_mel_to_stft},
       {"metering_silence_ratio", probe_metering_silence_ratio},
+      {"metering_detect_clipping", probe_metering_detect_clipping},
       {"mfcc_to_audio", probe_mfcc_to_audio},
       {"mfcc_to_mel", probe_mfcc_to_mel},
       {"pcen", probe_pcen},

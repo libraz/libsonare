@@ -320,6 +320,17 @@
       "sentinel": null
     },
     {
+      "entry": "audio_detect_clipping",
+      "param": "threshold_db",
+      "kind": "real",
+      "lo": -120,
+      "hi": 0,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "audio_from_file",
       "param": "options.channel_index",
       "kind": "integer",
@@ -3075,6 +3086,17 @@
       "kind": "integer",
       "lo": 0,
       "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "metering_detect_clipping",
+      "param": "threshold_db",
+      "kind": "real",
+      "lo": -120,
+      "hi": 0,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -6789,6 +6811,17 @@
     },
     {
       "entry": "vqt",
+      "param": "gamma",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "vqt",
       "param": "hop_length",
       "kind": "integer",
       "lo": 1,
@@ -6815,6 +6848,17 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "vqt_to_audio",
+      "param": "gamma",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,

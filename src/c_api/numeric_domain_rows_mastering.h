@@ -25,6 +25,7 @@
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/stereo/phase_align.h"
 #include "metering/basic.h"
+#include "metering/clipping.h"
 #include "metering/waveform.h"
 #include "streaming/stream_config.h"
 #include "util/frame.h"
@@ -33,6 +34,8 @@ namespace sonare_c_detail {
 
 /// @brief The rows, sorted by (entry, param).
 inline const NumericDomainRow kMasteringDomainRows[] = {
+    {"audio_detect_clipping", "threshold_db", sonare::metering::kClippingThresholdDbDomain,
+     nullptr},
     {"audio_silence_ratio", "frame_length", sonare::metering::kSilenceRatioFrameLengthDomain,
      nullptr},
     {"audio_silence_ratio", "hop_length", sonare::metering::kSilenceRatioHopLengthDomain, nullptr},
@@ -163,6 +166,8 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"mel_to_stft", "n_frames", sonare::kMelToStftFramesDomain, nullptr},
     {"mel_to_stft", "n_mels", sonare::kInverseMelBandsDomain, nullptr},
     {"mel_to_stft", "sample_rate", sonare::kInverseSampleRateDomain, nullptr},
+    {"metering_detect_clipping", "threshold_db", sonare::metering::kClippingThresholdDbDomain,
+     nullptr},
     {"metering_silence_ratio", "frame_length", sonare::metering::kSilenceRatioFrameLengthDomain,
      nullptr},
     {"metering_silence_ratio", "hop_length", sonare::metering::kSilenceRatioHopLengthDomain,
