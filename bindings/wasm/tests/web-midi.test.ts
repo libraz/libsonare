@@ -627,6 +627,61 @@ describe('Web MIDI helper', () => {
     expect(engine.sourceDestination).toBeNull();
   });
 
+  it('returns a held soft pedal and an off-centre bend to rest, as a source change does', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('wheel');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    input.emit([0xe1, 0, 0x50]); // bend up on channel 1
+    input.emit([0xb1, 67, 100]); // soft pedal down on channel 1
+    input.emit([0xe2, 0, 0x50]);
+    input.emit([0xe2, 0, 0x40]); // channel 2 bend back at centre: nothing owed there
+    input.emit([0xb2, 67, 127]);
+    input.emit([0xb2, 67, 10]); // channel 2 soft pedal back up
+    input.emit([0xb3, 64, 127]);
+    input.emit([0xe3, 0, 0x10]);
+    input.emit([0xb3, 121, 0]); // reset all controllers on channel 3 forgets both
+
+    engine.messages.length = 0;
+    input.state = 'disconnected';
+    access.stateChange(input);
+    expect(engine.messages).toEqual([
+      { kind: 'pitch-bend', group: 0, channel: 1, bend14: 8192, time: 0 },
+      { kind: 'cc', group: 0, channel: 1, a: 67, b: 0, time: 0 },
+    ]);
+    binding.destroy();
+  });
+
+  it('returns a raw-UMP bend to centre through raw UMP when the engine has no bend push', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('ump-wheel');
+    access.inputs.set(input.id, input);
+    const raw: number[][] = [];
+    const engine = {
+      ...Object.fromEntries(
+        [
+          'setMidiInputSource',
+          'clearMidiInputSource',
+          'bindMidiCc',
+          'pushMidiInputNoteOn',
+          'pushMidiInputNoteOff',
+          'pushMidiInputCc',
+        ].map((name) => [name, () => undefined]),
+      ),
+      pushMidiInputUmp: (words: readonly number[]) => raw.push(Array.from(words)),
+    };
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+    const bend = [((0x4 << 28) | (1 << 24) | (0xe << 20) | (2 << 16)) >>> 0, 0x90000000];
+    input.emit(bend);
+    raw.length = 0;
+    binding.destroy();
+    expect(raw).toEqual([[0x21e20040]]);
+  });
+
   it('tracks UMP notes and pedals per group, and forgets what all-notes-off and reset-all-controllers ended', async () => {
     const access = new FakeAccess();
     const input = new FakeInput('ump');

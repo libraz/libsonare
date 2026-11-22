@@ -262,16 +262,29 @@ type BoundInput = {
   held: HeldState;
 };
 
-const SUSTAIN = 64;
-const SOSTENUTO = 66;
 const RESET_ALL_CONTROLLERS = 121;
 /** All Notes Off, and the four mode messages that imply it. */
 const FIRST_ALL_NOTES_OFF = 123;
+const SWITCH_ON_VALUE = 64;
+const BEND14_CENTRE = 8192;
 
-/** Notes a port started and has not ended, and the pedals it holds down, per group and channel. */
+/**
+ * The controls a channel holds until they are written back to rest, as the engine's release of a
+ * replaced MIDI input source reads them: damper, sostenuto and soft pedal at 64 or above, pitch
+ * bend off centre. Each entry's `controller` is the CC it is lifted by; the bend has none.
+ */
+const HELD_CONTROLS = [
+  { controller: 64 },
+  { controller: 66 },
+  { controller: 67 },
+  { controller: undefined },
+] as const;
+const HELD_BEND = HELD_CONTROLS.length - 1;
+
+/** Notes a port started and has not ended, and the controls it holds, per group and channel. */
 class HeldState {
   private readonly notes = new Set<number>();
-  private readonly pedals = new Set<number>();
+  private readonly controls = new Set<number>();
 
   noteOn(group: number, channel: number, note: number): void {
     this.notes.add(heldKey(group, channel, note));
@@ -281,31 +294,50 @@ class HeldState {
     this.notes.delete(heldKey(group, channel, note));
   }
 
-  controller(group: number, channel: number, controller: number, down: boolean): void {
-    if (controller === SUSTAIN || controller === SOSTENUTO) {
-      const key = heldKey(group, channel, controller);
-      if (down) {
-        this.pedals.add(key);
-      } else {
-        this.pedals.delete(key);
-      }
+  controller(group: number, channel: number, controller: number, value7: number): void {
+    const control = HELD_CONTROLS.findIndex((entry) => entry.controller === controller);
+    if (control >= 0) {
+      this.hold(group, channel, control, value7 >= SWITCH_ON_VALUE);
     } else if (controller >= FIRST_ALL_NOTES_OFF) {
       forgetChannel(this.notes, group, channel);
     } else if (controller === RESET_ALL_CONTROLLERS) {
-      forgetChannel(this.pedals, group, channel);
+      forgetChannel(this.controls, group, channel);
     }
   }
 
-  /** Ends every held note, then lifts every held pedal, and forgets them. */
+  bend(group: number, channel: number, offCentre: boolean): void {
+    this.hold(group, channel, HELD_BEND, offCentre);
+  }
+
+  /** Ends every held note, then returns every held control to rest, and forgets them. */
   release(engine: WebMidiEngine): void {
     for (const key of this.notes) {
       engine.pushMidiInputNoteOff(key >>> 11, (key >>> 7) & 0x0f, key & 0x7f, 0);
     }
-    for (const key of this.pedals) {
-      engine.pushMidiInputCc(key >>> 11, (key >>> 7) & 0x0f, key & 0x7f, 0);
+    for (const key of this.controls) {
+      const group = key >>> 11;
+      const channel = (key >>> 7) & 0x0f;
+      const controller = HELD_CONTROLS[key & 0x7f].controller;
+      if (controller !== undefined) {
+        engine.pushMidiInputCc(group, channel, controller, 0);
+      } else if (engine.pushMidiInputPitchBend) {
+        engine.pushMidiInputPitchBend(group, channel, BEND14_CENTRE);
+      } else {
+        // A bend reached this engine only as raw UMP; return it to centre the same way.
+        engine.pushMidiInputUmp?.([(0x20e00040 | (group << 24) | (channel << 16)) >>> 0]);
+      }
     }
     this.notes.clear();
-    this.pedals.clear();
+    this.controls.clear();
+  }
+
+  private hold(group: number, channel: number, control: number, held: boolean): void {
+    const key = heldKey(group, channel, control);
+    if (held) {
+      this.controls.add(key);
+    } else {
+      this.controls.delete(key);
+    }
   }
 }
 
@@ -347,8 +379,12 @@ export function isWebMidiAvailable(): boolean {
  * replaces it.
  *
  * Each input's held notes and its held sustain and sostenuto pedals are tracked, so when the input
- * disconnects or the binding is destroyed, the binding sends that input's note-offs and pedal-ups,
- * and only that input's.
+ * disconnects or the binding is destroyed, the binding sends that input's note-offs and returns its
+ * held controls to rest (damper, sostenuto and soft pedal up, pitch bend to centre), and only that
+ * input's.
+ *
+ * Channel voice messages are forwarded; MIDI 1.0 system messages (0xF0 to 0xFF: SysEx, time code,
+ * song position and select, tune request, real-time bytes) and UMP data packets are not.
  *
  * @throws SonareError `NotSupported` when Web MIDI is unavailable.
  * @throws TypeError when `options` is not an object or holds an undeclared key.
@@ -722,13 +758,14 @@ function dispatchMidiMessage(
     }
   } else if (message === 0xb0 && b >= 0) {
     engine.pushMidiInputCc(group, channel, a, b, ...at);
-    held.controller(group, channel, a, b >= SUSTAIN);
+    held.controller(group, channel, a, b);
   } else if (message === 0xa0 && b >= 0) {
     engine.pushMidiInputPolyPressure?.(group, channel, a, b, ...at);
   } else if (message === 0xd0) {
     engine.pushMidiInputChannelPressure?.(group, channel, a, ...at);
-  } else if (message === 0xe0 && b >= 0) {
-    engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), ...at);
+  } else if (message === 0xe0 && b >= 0 && engine.pushMidiInputPitchBend) {
+    engine.pushMidiInputPitchBend(group, channel, a | (b << 7), ...at);
+    held.bend(group, channel, (a | (b << 7)) !== BEND14_CENTRE);
   } else if (message === 0xc0) {
     engine.pushMidiInputProgram?.(group, channel, a, undefined, ...at);
   }
@@ -761,7 +798,11 @@ function dispatchUmpMessages(
     if (messageType !== 0x3 && messageType !== 0x5 && (!offer || offer(packet, eventTimeMs))) {
       at ??= timing(eventTimeMs);
       dispatchUmpMessage(engine, packet, at);
-      trackUmpMessage(held, packet);
+      trackUmpMessage(
+        held,
+        packet,
+        Boolean(engine.pushMidiInputUmp || engine.pushMidiInputPitchBend),
+      );
     }
     offset += wordCount;
   }
@@ -834,7 +875,7 @@ function dispatchUmpMessage(engine: WebMidiEngine, words: Uint32Array, at: Event
 }
 
 /** Records the notes and pedals one pushed UMP channel voice packet starts or ends. */
-function trackUmpMessage(held: HeldState, words: Uint32Array): void {
+function trackUmpMessage(held: HeldState, words: Uint32Array, bendPushed: boolean): void {
   const word0 = words[0] >>> 0;
   const messageType = word0 >>> 28;
   const group = (word0 >>> 24) & 0x0f;
@@ -848,7 +889,9 @@ function trackUmpMessage(held: HeldState, words: Uint32Array): void {
     } else if (status === 0x9) {
       held.noteOn(group, channel, index);
     } else if (status === 0xb) {
-      held.controller(group, channel, index, value >= SUSTAIN);
+      held.controller(group, channel, index, value);
+    } else if (status === 0xe && bendPushed) {
+      held.bend(group, channel, (index | (value << 7)) !== BEND14_CENTRE);
     }
   } else if (messageType === 0x4 && words.length >= 2) {
     // A MIDI 2.0 note-on with velocity 0 is still a note-on.
@@ -857,7 +900,9 @@ function trackUmpMessage(held: HeldState, words: Uint32Array): void {
     } else if (status === 0x9) {
       held.noteOn(group, channel, index);
     } else if (status === 0xb) {
-      held.controller(group, channel, index, words[1] >>> 25 >= SUSTAIN);
+      held.controller(group, channel, index, words[1] >>> 25);
+    } else if (status === 0xe && bendPushed) {
+      held.bend(group, channel, words[1] >>> 0 !== 0x80000000);
     }
   }
 }
