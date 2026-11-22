@@ -594,8 +594,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (!is_supported_sample_rate(sample_rate)) {
       result.diagnostics.push_back(
           {DiagnosticSeverity::kError, "invalid_sample_rate",
-           schema::refusal("sampleRate",
-                           "must be a whole number of hertz within the supported range")});
+           schema::refusal("sampleRate", schema::integer_range_predicate(kMinAudioSampleRate,
+                                                                         kMaxAudioSampleRate))});
       return result;
     }
     project.set_sample_rate(sample_rate);

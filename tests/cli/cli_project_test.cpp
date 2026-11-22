@@ -169,8 +169,8 @@ TEST_CASE("CLI project command group", "[cli]") {
     const SplitResult result =
         exec_command_split(CLI + " project bounce " + project + " -o " + wav + " --frames 64");
     CHECK(result.exit_code == 5);
-    CHECK_THAT(result.err, ContainsSubstring("invalid_sample_rate: sampleRate must be a whole "
-                                             "number of hertz within the supported range"));
+    CHECK_THAT(result.err, ContainsSubstring("invalid_sample_rate: sampleRate must be an integer "
+                                             "in [8000, 384000]"));
     CHECK_FALSE(std::ifstream(wav).good());
     std::remove(project.c_str());
   }

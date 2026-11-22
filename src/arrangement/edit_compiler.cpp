@@ -26,6 +26,7 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/refusal_predicates.h"
 #include "util/resource_limits.h"
 
 namespace sonare::arrangement {
@@ -555,9 +556,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   validate_tempo(project, &result);
   if (!is_supported_sample_rate(project_sr)) {
     add_diag(&result, Diagnostic::Code::kInvalidSampleRate, Diagnostic::Severity::kError, 0,
-             "project sample rate must be a whole number of hertz within " +
-                 std::to_string(kMinAudioSampleRate) + ".." + std::to_string(kMaxAudioSampleRate) +
-                 " Hz");
+             "project sample rate " +
+                 util::refusal::integer_range_predicate(kMinAudioSampleRate, kMaxAudioSampleRate));
     return result;
   }
 
