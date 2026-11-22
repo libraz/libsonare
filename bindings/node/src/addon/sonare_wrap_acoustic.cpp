@@ -116,13 +116,16 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
   return make_uniform_room(dims, request);
 }
 
-sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts) {
-  const auto position = [&](const char* key, const sonare::acoustic::Vec3& fallback) {
-    const auto xyz = XyzProperty(opts, key, {fallback.x, fallback.y, fallback.z});
+// The source and listener asked for, an omitted one taking the default placement scaled to @p room.
+sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts,
+                                                      const sonare::acoustic::ShoeboxRoom& room) {
+  const sonare::acoustic::SourceListener fallback = sonare::acoustic::scaled_default_placement(
+      room.dims.length, room.dims.width, room.dims.height);
+  const auto position = [&](const char* key, const sonare::acoustic::Vec3& defaulted) {
+    const auto xyz = XyzProperty(opts, key, {defaulted.x, defaulted.y, defaulted.z});
     return sonare::acoustic::Vec3{xyz[0], xyz[1], xyz[2]};
   };
-  return {position("source", sonare::acoustic::kDefaultPlacement.source),
-          position("listener", sonare::acoustic::kDefaultPlacement.listener)};
+  return {position("source", fallback.source), position("listener", fallback.listener)};
 }
 
 // Wire string for a diagnostic severity, matching the RirDiagnostic type.
@@ -181,10 +184,10 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   cfg.air.temperature_c = FloatProperty(opts, "airTemperatureC", cfg.air.temperature_c);
   cfg.air.humidity_percent = FloatProperty(opts, "airHumidityPercent", cfg.air.humidity_percent);
 
-  const auto placement = PlacementFromOptions(opts);
+  const auto room = RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption);
+  const auto placement = PlacementFromOptions(opts, room);
   ValidateRirShapeAndTiming(cfg);
-  const auto result = sonare::acoustic::synthesize_rir(
-      RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption), placement, sample_rate, cfg);
+  const auto result = sonare::acoustic::synthesize_rir(room, placement, sample_rate, cfg);
   if (sonare::has_error(result.diagnostics)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   sonare::acoustic::first_error_text(result.diagnostics));
@@ -330,7 +333,7 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
 sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(const Napi::Object& opts) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
   cfg.target = RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption);
-  cfg.placement = PlacementFromOptions(opts);
+  cfg.placement = PlacementFromOptions(opts, cfg.target);
   cfg.source_tail_suppression =
       DomainFloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);
   cfg.wet = DomainFloatProperty(opts, "wet", cfg.wet);

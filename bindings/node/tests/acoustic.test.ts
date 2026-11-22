@@ -880,3 +880,77 @@ describe('roomMorphStereo', () => {
     );
   });
 });
+
+describe('default room placement', () => {
+  const f = Math.fround;
+  // The C ABI's default placement for the 7 x 5 x 3 m room, scaled per axis into another room.
+  const scaled = (l: number, w: number, h: number) => {
+    const axis = (p: number, extent: number, base: number) => f(f(p) * f(extent / base));
+    return {
+      source: { x: axis(1, l, 7), y: axis(1, w, 5), z: axis(1.2, h, 3) },
+      listener: { x: axis(5, l, 7), y: axis(4, w, 5), z: axis(1.7, h, 3) },
+    };
+  };
+  const small = { lengthM: 4, widthM: 3, heightM: 2.6, absorption: 0.3, maxSec: 0.2 };
+  const impulse = () => {
+    const x = new Float32Array(1000);
+    x[0] = 1;
+    return x;
+  };
+  const rir = (options: Record<string, unknown>) =>
+    Array.from(synthesizeRir({ sampleRate: 48000, ...options }).rir);
+  // A placement written out in JS rounds apart from the core's by an ulp, so compare to the peak.
+  const expectClose = (actual: ArrayLike<number>, expected: ArrayLike<number>) => {
+    expect(actual.length).toBe(expected.length);
+    const peak = Math.max(...Array.from(expected, Math.abs));
+    for (let i = 0; i < actual.length; i++) {
+      expect(Math.abs(actual[i] - expected[i])).toBeLessThanOrEqual(peak * 1e-4);
+    }
+  };
+
+  it('places an omitted source and listener inside a room smaller than the default', () => {
+    const omitted = rir(small);
+    expect(omitted.some((s) => s !== 0)).toBe(true);
+    expectClose(omitted, rir({ ...small, ...scaled(4, 3, 2.6) }));
+  });
+
+  it('keeps the default room on its unscaled placement', () => {
+    const room = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.3, maxSec: 0.2 };
+    const explicit = {
+      source: { x: 1, y: 1, z: 1.2 },
+      listener: { x: 5, y: 4, z: 1.7 },
+    };
+    expect(rir(room)).toEqual(rir({ ...room, ...explicit }));
+  });
+
+  it('reads a null placement as omitted', () => {
+    expect(rir({ ...small, source: null, listener: null })).toEqual(rir(small));
+  });
+
+  it('refuses a partly given position by name', () => {
+    expectRefusal(
+      () => rir({ ...small, source: { x: 1, y: 1 } }),
+      TypeError,
+      /^synthesizeRir: source\.z must be a number$/,
+    );
+    expectRefusal(
+      () => rir({ ...small, listener: { x: 1, y: Number.NaN, z: 1 } }),
+      RangeError,
+      /^synthesizeRir: listener\.y must be finite/,
+    );
+  });
+
+  it('morphs toward a small room with the placement omitted, in both forms', () => {
+    const positional = roomMorph(impulse(), 48000, small);
+    const request = roomMorph({ samples: impulse(), sampleRate: 48000, ...small });
+    expect(Array.from(request.audio)).toEqual(Array.from(positional.audio));
+    const explicit = roomMorph(impulse(), 48000, { ...small, ...scaled(4, 3, 2.6) });
+    expectClose(positional.audio, explicit.audio);
+  });
+
+  it('morphs a stereo pair toward a small room with the placement omitted', () => {
+    const out = roomMorphStereo({ left: impulse(), right: impulse(), sampleRate: 48000, ...small });
+    expect(out.left.length).toBe(out.right.length);
+    expect(out.left.length).toBeGreaterThan(1000);
+  });
+});
