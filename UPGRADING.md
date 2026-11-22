@@ -642,6 +642,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_assist_module_ids` | names the built-in modules sonare.builtin.chordToneGenerator and sonare.builtin.diatonicHarmonizer |
 
+#### Closed sets are string unions, not numbers or IntEnums
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_mixer_add_bus(role)` | role must be master, aux or submix (NULL is aux); any other string, including a different case, is refused with SONARE_ERROR_INVALID_PARAMETER instead of being stored |
+
 #### Results are typed values, not JSON strings
 
 | 1.x | 2.0.0 |

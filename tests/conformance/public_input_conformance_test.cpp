@@ -155,3 +155,39 @@ TEST_CASE("public input corpus keeps mixer option rejection conformant across th
   }
 }
 #endif
+
+#ifdef SONARE_WITH_MIXING
+TEST_CASE("public input corpus keeps the bus role set closed across the C ABI",
+          "[conformance][c_api][mixing]") {
+  const auto corpus = load_public_input_corpus();
+  const auto& section = corpus["mixer_bus_role"];
+  for (const auto& test_case : section["cases"].as_array()) {
+    DYNAMIC_SECTION(test_case["id"].as_string()) {
+      SonareMixer* mixer = nullptr;
+      REQUIRE(sonare_mixer_create(48000, 128, &mixer) == SONARE_OK);
+      const bool absent = test_case["role"].is_null();
+      const std::string role = absent ? std::string() : test_case["role"].as_string();
+      const SonareError result =
+          sonare_mixer_add_bus(mixer, "corpus", absent ? nullptr : role.c_str());
+      if (test_case.contains("stored")) {
+        REQUIRE(result == SONARE_OK);
+        char* json = nullptr;
+        REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+        const auto scene = sonare::util::json::parse_strict(json);
+        sonare_free_string(json);
+        bool found = false;
+        for (const auto& bus : scene["buses"].as_array()) {
+          if (bus["id"].as_string() != "corpus") continue;
+          CHECK(bus["role"].as_string() == test_case["stored"].as_string());
+          found = true;
+        }
+        CHECK(found);
+      } else {
+        CHECK(result == SONARE_ERROR_INVALID_PARAMETER);
+        CHECK(std::string(sonare_last_error_message()) == section["message"].as_string());
+      }
+      sonare_mixer_destroy(mixer);
+    }
+  }
+}
+#endif

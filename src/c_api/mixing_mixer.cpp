@@ -221,11 +221,16 @@ SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char*
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(id);
   SONARE_C_TRY
+  const std::string bus_role = role != nullptr ? std::string(role) : std::string("aux");
+  if (bus_role != "master" && bus_role != "aux" && bus_role != "submix") {
+    return sonare_c_detail::run_validation(
+        [] { check::refuse("role", "must be one of master, aux, submix"); });
+  }
   const std::string bus_id = id;
   for (const auto& bus : mixer->buses) {
     if (bus.id == bus_id) return refuse_duplicate_id("a bus");
   }
-  mixer->buses.emplace_back(bus_id, role != nullptr ? std::string(role) : std::string("aux"));
+  mixer->buses.emplace_back(bus_id, bus_role);
   mixer->compiled_dirty = true;
   return SONARE_OK;
   SONARE_C_CATCH

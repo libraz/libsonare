@@ -707,6 +707,13 @@ TEST_CASE("mixer bus entries name the refused argument", "[c_api][mixing][refusa
   REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
   CHECK(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(mixer_refusal_message() == "id must not be the id of a bus already in this mixer");
+  // The role set is closed; NULL stays the aux default and a misspelling is not one.
+  CHECK(sonare_mixer_add_bus(mixer, "group", "subgroup") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "role must be one of master, aux, submix");
+  CHECK(sonare_mixer_add_bus(mixer, "fx", "Aux") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mixer_refusal_message() == "role must be one of master, aux, submix");
+  REQUIRE(sonare_mixer_add_bus(mixer, "fx", nullptr) == SONARE_OK);
+  REQUIRE(sonare_mixer_add_bus(mixer, "group", "aux") == SONARE_OK);
 
   CHECK(sonare_mixer_remove_bus(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(mixer_refusal_message() == "mixer must not be NULL");

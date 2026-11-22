@@ -475,3 +475,19 @@ def test_scene_insert_refusal_follows_the_corpus(case: dict[str, Any]) -> None:
     assert refused.value.code_name == case["code_name"]
     assert not isinstance(refused.value, SonareValueError)
     assert str(refused.value) == f"[{int(refused.value.code)}] Mixer.from_json: {case['message']}"
+
+
+_BUS_ROLE = _CORPUS["mixer_bus_role"]
+
+
+@pytest.mark.parametrize("case", _BUS_ROLE["cases"], ids=lambda case: case["id"])
+def test_mixer_bus_role_follows_the_corpus(case: dict[str, Any]) -> None:
+    mixer = libsonare.Mixer(sample_rate=48000)
+    args = ("corpus",) if case["role"] is None else ("corpus", case["role"])
+    if "stored" not in case:
+        with pytest.raises(SonareValueError, match=re.escape(_BUS_ROLE["message"])):
+            mixer.add_bus(*args)
+        return
+    mixer.add_bus(*args)
+    buses = {bus["id"]: bus for bus in json.loads(mixer.to_json())["buses"]}
+    assert buses["corpus"]["role"] == case["stored"]

@@ -291,8 +291,8 @@ SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_c
 /// Adds a bus to the mixer topology. @c role is one of "master", "aux", "submix"
 /// (NULL defaults to "aux"). Mark the routing graph dirty; call
 /// sonare_mixer_compile (or process) to rebuild. Returns
-/// @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, or a bus with the
-/// same id already exists.
+/// @c SONARE_ERROR_INVALID_PARAMETER if mixer or id is NULL, role is any other
+/// string, or a bus with the same id already exists.
 SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char* role);
 /// Removes a bus by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id
 /// is NULL or no bus with that id exists.

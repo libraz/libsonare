@@ -410,6 +410,20 @@
       { "id": "band0_q_zero", "param": "band0.q", "value": 0, "code_name": "InvalidFormat", "message": "strips[0].inserts[0].params.band0.q must be finite and greater than 0" }
     ]
   },
+  "mixer_bus_role": {
+    "fn": "Mixer.add_bus",
+    "message": "role must be one of master, aux, submix",
+    "error": {"c": "InvalidParameter", "node": "RangeError", "wasm": "RangeError", "python": "SonareValueError"},
+    "cases": [
+      { "id": "master_accepted", "role": "master", "stored": "master" },
+      { "id": "aux_accepted", "role": "aux", "stored": "aux" },
+      { "id": "submix_accepted", "role": "submix", "stored": "submix" },
+      { "id": "absent_is_aux", "role": null, "stored": "aux" },
+      { "id": "undeclared_role", "role": "subgroup" },
+      { "id": "case_differs", "role": "Aux" },
+      { "id": "empty_role", "role": "" }
+    ]
+  },
   "insert_unknown_key": {
     "entries": ["mastering_insert_timing", "mastering_apply_processor", "mastering_apply_processor_stereo"],
     "sample_rate": 48000,
