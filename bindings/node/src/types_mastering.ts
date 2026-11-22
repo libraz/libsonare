@@ -566,15 +566,15 @@ export interface MasteringProcessorParamMap {
     bandScattering?: readonly number[];
     /** Unit: ms. Range: [0, 1000]. Default: 5. */
     crossfadeMs?: number;
-    /** Unit: m. Range: [1.7, 10000]. Default: 3. */
+    /** Unit: m. Range: (0, 10000]. Default: 3. */
     heightM?: number;
     /** Unit: count. Range: [0, inf). Default: 3. */
     ismOrder?: number;
-    /** Unit: m. Range: [5.15, 10000]. Default: 7. */
+    /** Unit: m. Range: (0, 10000]. Default: 7. */
     lengthM?: number;
-    /** Unit: m. Range: [0.242391, 6.88648]. Default: 5. */
+    /** Unit: m. Range: (0, inf). Default: 5. */
     listenerX?: number;
-    /** Unit: m. Range: [0.24567, 4.81918]. Default: 4. */
+    /** Unit: m. Range: (0, inf). Default: 4. */
     listenerY?: number;
     /** Unit: m. Range: [0, inf). Default: 1.7. */
     listenerZ?: number;
@@ -596,7 +596,7 @@ export interface MasteringProcessorParamMap {
     sourceY?: number;
     /** Unit: m. Range: [0, inf). Default: 1.2. */
     sourceZ?: number;
-    /** Unit: m. Range: [4.2, 10000]. Default: 5. */
+    /** Unit: m. Range: (0, 10000]. Default: 5. */
     widthM?: number;
   };
   /** Parameters of the `effects.delay.stereo` processor. */
@@ -1006,15 +1006,15 @@ export interface MasteringProcessorParamMap {
     airHumidityPercent?: number;
     /** Unit: degC. Range: (-273.15, inf). Default: 20. */
     airTemperatureC?: number;
-    /** Unit: m. Range: [1.7, 10000]. Default: 3. */
+    /** Unit: m. Range: (0, 10000]. Default: 3. */
     heightM?: number;
     /** Unit: count. Range: [0, inf). Default: 3. */
     ismOrder?: number;
-    /** Unit: m. Range: [5.15, 10000]. Default: 7. */
+    /** Unit: m. Range: (0, 10000]. Default: 7. */
     lengthM?: number;
-    /** Unit: m. Range: [0.242391, 6.88648]. Default: 5. */
+    /** Unit: m. Range: (0, inf). Default: 5. */
     listenerX?: number;
-    /** Unit: m. Range: [0.24567, 4.81918]. Default: 4. */
+    /** Unit: m. Range: (0, inf). Default: 4. */
     listenerY?: number;
     /** Unit: m. Range: [0, inf). Default: 1.7. */
     listenerZ?: number;
@@ -1030,7 +1030,7 @@ export interface MasteringProcessorParamMap {
     sourceY?: number;
     /** Unit: m. Range: [0, inf). Default: 1.2. */
     sourceZ?: number;
-    /** Unit: m. Range: [4.2, 10000]. Default: 5. */
+    /** Unit: m. Range: (0, 10000]. Default: 5. */
     widthM?: number;
   };
   /** Parameters of the `effects.reverb.velvet` processor. */
