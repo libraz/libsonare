@@ -16,6 +16,7 @@
 #include "acoustic/selector_names.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
 val acousticParametersToVal(const AcousticParameters& params) {
@@ -146,9 +147,9 @@ sonare::acoustic::SourceListener placementFromVal(val opts,
 // the same out-of-range rates (the C++ functions are otherwise called directly).
 void validateAcousticSampleRate(int sample_rate) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    throw WasmRangeError("sampleRate out of supported range [" +
-                         std::to_string(sonare::kMinAudioSampleRate) + ", " +
-                         std::to_string(sonare::kMaxAudioSampleRate) + "]");
+    throw WasmRangeError("sampleRate " +
+                         sonare::util::refusal::integer_range_predicate(
+                             sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate));
   }
 }
 

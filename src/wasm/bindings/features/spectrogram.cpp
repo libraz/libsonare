@@ -15,6 +15,7 @@
 #include "filters/mel.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -27,9 +28,9 @@ void validate_positive(int value, const char* arg_name) {
 
 void validate_sample_rate(int sample_rate) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    throw WasmRangeError("sampleRate out of supported range [" +
-                         std::to_string(sonare::kMinAudioSampleRate) + ", " +
-                         std::to_string(sonare::kMaxAudioSampleRate) + "]");
+    throw WasmRangeError("sampleRate " +
+                         sonare::util::refusal::integer_range_predicate(
+                             sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate));
   }
 }
 

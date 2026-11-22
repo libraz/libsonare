@@ -19,6 +19,7 @@
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 using namespace sonare_node;
 
@@ -28,7 +29,9 @@ namespace {
 // of range, mirroring the C ABI's validate_audio_params bound.
 bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    Napi::RangeError::New(env, "sampleRate out of supported range [8000, 384000]")
+    Napi::RangeError::New(
+        env, "sampleRate " + sonare::util::refusal::integer_range_predicate(
+                                 sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate))
         .ThrowAsJavaScriptException();
     return false;
   }

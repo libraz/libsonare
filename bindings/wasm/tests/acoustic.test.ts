@@ -112,6 +112,17 @@ describe('geometric room acoustics', () => {
     expect(roomMorph(samples, 48000, { ...opts, seed: 2 ** 32 - 1 }).sampleRate).toBe(48000);
   });
 
+  it('states the supported sample-rate range when refusing a room morph', () => {
+    const samples = new Float32Array(4000);
+    samples[0] = 1.0;
+    const opts = { lengthM: 12, widthM: 9, heightM: 5, maxSec: 0.2 };
+    for (const rate of [7999, 384001]) {
+      expect(() => roomMorph(samples, rate, opts)).toThrow(
+        /sampleRate must be an integer in \[8000, 384000\]$/,
+      );
+    }
+  });
+
   it("publishes the target room synthesis's own diagnostics", () => {
     // The morph synthesizes its target RIR with the same code synthesizeRir
     // uses, so the same clamp fires — and it used to be dropped, leaving a morph

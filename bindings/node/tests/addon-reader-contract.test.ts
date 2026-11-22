@@ -309,7 +309,7 @@ describe('the mixer entry points refuse a sample rate outside [8000, 384000]', (
   it('mixStereo', () => {
     for (const bad of [7999, 384001]) {
       expect(() => addon.mixStereo([tone], [tone], bad)).toThrow(
-        'mixStereo: sampleRate out of supported range [8000, 384000]',
+        'mixStereo: sampleRate must be an integer in [8000, 384000]',
       );
     }
     expect(addon.mixStereo([tone], [tone], 48000).sampleRate).toBe(48000);

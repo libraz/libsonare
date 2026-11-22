@@ -34,6 +34,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/refusal_predicates.h"
 
 using namespace sonare_node;
 
@@ -178,9 +179,9 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
 
   const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    Napi::RangeError::New(env, "sampleRate out of supported range [" +
-                                   std::to_string(sonare::kMinAudioSampleRate) + ", " +
-                                   std::to_string(sonare::kMaxAudioSampleRate) + "]")
+    Napi::RangeError::New(
+        env, "sampleRate " + sonare::util::refusal::integer_range_predicate(
+                                 sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate))
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
