@@ -95,7 +95,7 @@ class PsolaShifter {
   void process_voice_sample(Voice& v, const SampleTarget& target, std::int64_t t, float g,
                             bool newest_voiced, float* out) noexcept;
   void activate_voice(Voice& v, const VoiceTarget& target, std::int64_t t) noexcept;
-  bool start_voiced(Voice& v, const SampleTarget& target, std::int64_t t) noexcept;
+  void start_voiced(Voice& v, const SampleTarget& target, std::int64_t t) noexcept;
   void schedule_voiced(Voice& v, const SampleTarget& target, std::int64_t t) noexcept;
   bool start_chain(double alpha, std::int64_t t) noexcept;
   bool extend_chain(std::int64_t t) noexcept;

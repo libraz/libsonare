@@ -62,10 +62,6 @@ VocalNoteEdit VocalNoteEdit::identity_for(const SampleRange source_range) {
   VocalNoteEdit edit;
   edit.destination_start_sample = source_range.start;
   edit.destination_length_samples = source_range.length();
-  if (edit.destination_length_samples < 0) {
-    throw VocalEditException(VocalReason::kInvalidInput, "source range length is not representable",
-                             "source_range");
-  }
   return edit;
 }
 

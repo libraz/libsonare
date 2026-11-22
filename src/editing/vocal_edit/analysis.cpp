@@ -20,9 +20,10 @@
 namespace sonare::editing::vocal_edit {
 
 using detail::frame_ceil;
-using detail::frame_raw_position;
 using detail::frame_sample_position;
 using detail::invalid;
+using detail::kPyinAlgorithmId;
+using detail::usable_frame;
 using sonare::constants::kA4Hz;
 using sonare::constants::kCentsPerOctave;
 using sonare::constants::kCentsPerSemitone;
@@ -74,11 +75,6 @@ int64_t rounded_sample(double value) {
     invalid("analysis.grid", "analysis frame position cannot be represented as a sample");
   }
   return static_cast<int64_t>(rounded);
-}
-
-bool usable_frame(const VocalAnalysisData& analysis, size_t frame) {
-  return analysis.voiced[frame] != 0 && analysis.f0_hz[frame] > 0.0f &&
-         std::isfinite(analysis.f0_hz[frame]);
 }
 
 double median_of_sorted(const std::vector<double>& sorted) {
@@ -350,19 +346,26 @@ int64_t SampleRange::length() const noexcept {
              : -static_cast<int64_t>(difference);
 }
 
-SourceDescriptor describe_source(const Audio& source) {
+namespace {
+
+void check_source(const Audio& source) {
   if (source.empty() || source.sample_rate() <= 0) {
     invalid("source", "source audio must be non-empty and have a positive sample rate");
   }
   for (const float sample : source) {
     if (!std::isfinite(sample)) invalid("source", "source audio contains a non-finite sample");
   }
-
-  SourceDescriptor descriptor;
-  descriptor.sample_rate = static_cast<uint32_t>(source.sample_rate());
   if (source.size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
     invalid("source.sample_count", "source sample count is too large");
   }
+}
+
+}  // namespace
+
+SourceDescriptor describe_source(const Audio& source) {
+  check_source(source);
+  SourceDescriptor descriptor;
+  descriptor.sample_rate = static_cast<uint32_t>(source.sample_rate());
   descriptor.sample_count = static_cast<int64_t>(source.size());
   descriptor.digest = digest_source_pcm(source.data(), source.size());
   return descriptor;
@@ -394,7 +397,7 @@ Sha256Digest digest_analysis(const VocalAnalysisData& analysis) {
 }
 
 VocalAnalysisData validate_analysis(const Audio& source, VocalAnalysisData analysis) {
-  static_cast<void>(describe_source(source));
+  check_source(source);
   const auto& grid = analysis.grid;
   if (!std::isfinite(grid.frame_origin_sample))
     invalid("analysis.grid.frame_origin_sample", "must be finite");
@@ -413,7 +416,7 @@ VocalAnalysisData validate_analysis(const Audio& source, VocalAnalysisData analy
     invalid("analysis.amplitude", "must be empty or have the same length as f0_hz");
   }
   if (analysis.algorithm_id.empty()) invalid("analysis.algorithm_id", "must not be empty");
-  if (analysis.algorithm_id != "host" && analysis.algorithm_id != "libsonare.pyin") {
+  if (analysis.algorithm_id != "host" && analysis.algorithm_id != kPyinAlgorithmId) {
     invalid("analysis.algorithm_id", "algorithm is not supported");
   }
   if (analysis.algorithm_id.size() > std::numeric_limits<uint32_t>::max()) {
@@ -584,11 +587,6 @@ VocalNote measure_vocal_note(const Audio& source, const VocalAnalysisData& analy
     if (rounded >= frame_count) return static_cast<uint32_t>(analysis.f0_hz.size());
     return static_cast<uint32_t>(rounded);
   };
-  const double first_raw = frame_raw_position(analysis.grid, source_range.start);
-  const double last_raw = frame_raw_position(analysis.grid, source_range.end);
-  if (!std::isfinite(first_raw) || !std::isfinite(last_raw)) {
-    invalid("source_range", "source frame position is not finite");
-  }
   const uint32_t frame_start = frame_boundary(source_range.start);
   const uint32_t frame_end = std::max(frame_start, frame_boundary(source_range.end));
   if (frame_end <= frame_start) invalid("source_range", "source span contains no analysis frame");

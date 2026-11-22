@@ -98,8 +98,6 @@ class IspLimiter {
   /// peak window at the instant its own reconstruction does.
   std::vector<float> aligned_input_abs_;
   std::size_t aligned_pos_ = 0;
-  std::vector<float> history_;
-  std::vector<float> scratch_;
   // Pointer-of-pointer scratch buffers reused per block so process_block does
   // not have to take the address of stack-local variables (which would let the
   // pointer participate in escape analysis and inhibit inlining).

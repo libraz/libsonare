@@ -160,7 +160,7 @@ VocalPitchEdit canonical_merge_pitch(const std::vector<VocalNote>& selected,
     for (const auto& point : plan.points) {
       if (!point.voiced) continue;
       if (!std::isfinite(point.effective_midi) || point.effective_midi < 0.0 ||
-          point.effective_midi > 127.0) {
+          point.effective_midi > kMaxMidiNote) {
         invalid("merge.edits", "effective pitch cannot be represented by a MIDI curve");
       }
       effective.push_back({point.source_sample, point.effective_midi});
@@ -177,7 +177,8 @@ VocalPitchEdit canonical_merge_pitch(const std::vector<VocalNote>& selected,
   unique_effective.reserve(effective.size());
   for (const auto point : effective) {
     if (!unique_effective.empty() && point.source_sample == unique_effective.back().source_sample) {
-      if (std::abs(point.effective_midi - unique_effective.back().effective_midi) > 1.0e-5) {
+      if (std::abs(point.effective_midi - unique_effective.back().effective_midi) >
+          kMidiContinuityTolerance) {
         invalid("merge.edits", "internal pitch transition is discontinuous");
       }
       continue;
@@ -217,7 +218,8 @@ VocalPitchEdit canonical_merge_pitch(const std::vector<VocalNote>& selected,
   unique_points.reserve(canonical.target.points.size());
   for (const auto point : canonical.target.points) {
     if (!unique_points.empty() && point.source_sample == unique_points.back().source_sample) {
-      if (std::abs(point.target_midi - unique_points.back().target_midi) > 1.0e-5) {
+      if (std::abs(point.target_midi - unique_points.back().target_midi) >
+          kMidiContinuityTolerance) {
         invalid("merge.edits", "effective pitch has a discontinuous endpoint");
       }
       continue;

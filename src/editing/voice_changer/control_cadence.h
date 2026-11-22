@@ -19,16 +19,12 @@ class ControlCadence {
  public:
   static constexpr std::uint64_t kIntervalSamples = 32;
 
-  void reset() noexcept {
-    sample_position_ = 0;
-    next_update_ = 0;
-  }
+  void reset() noexcept { sample_position_ = 0; }
 
   /// @brief Advances one sample and reports whether its controls should update.
   bool advance() noexcept {
-    const bool due = sample_position_ == next_update_;
+    const bool due = is_due(sample_position_);
     ++sample_position_;
-    if (due) next_update_ += kIntervalSamples;
     return due;
   }
 
@@ -42,7 +38,6 @@ class ControlCadence {
 
  private:
   std::uint64_t sample_position_ = 0;
-  std::uint64_t next_update_ = 0;
 };
 
 }  // namespace sonare::editing::voice_changer

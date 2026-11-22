@@ -5,7 +5,6 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <cstring>
 #include <limits>
 #include <map>
 #include <random>
@@ -16,9 +15,6 @@
 #include "editing/vocal_edit/pitch_plan.h"
 #include "editing/vocal_edit/session_internal.h"
 #include "editing/vocal_edit/state_codec.h"
-#include "effects/formant_warp.h"
-#include "util/db.h"
-#include "util/insertion_sort.h"
 #include "util/sha256.h"
 
 namespace sonare::editing::vocal_edit {
@@ -308,6 +304,42 @@ std::vector<CompiledPitchPlan> evaluate_state(const VocalAnalysisData& analysis,
   return plans;
 }
 
+template <typename Impl>
+std::shared_ptr<const VocalRenderSnapshot> make_render_snapshot(
+    const Impl& impl, std::shared_ptr<const VocalEditState> state, const VocalStateToken& token) {
+  auto data = std::make_shared<VocalRenderSnapshotData>();
+  data->source = impl.source;
+  data->source_descriptor = impl.source_descriptor;
+  data->analysis = impl.analysis;
+  data->state = std::move(state);
+  data->output_length_samples = impl.output_length_samples;
+  data->render_settings = impl.render_settings;
+  data->token = token;
+  data->cache = impl.cache;
+  data->render_job_count = impl.render_job_count;
+  data->max_render_jobs = impl.limits.max_render_jobs;
+  return std::make_shared<VocalRenderSnapshot>(std::move(data));
+}
+
+/// Moves the history cursor to @p target_index and bumps the revision.
+template <typename Impl>
+StateChangeResult move_history_cursor(Impl& impl, size_t target_index,
+                                      const StateResultPreparation& before_publish) {
+  const auto old_state = impl.committed;
+  const auto target_state = impl.history[target_index];
+  // Compute all potentially-throwing work before publishing the new model.
+  // An allocation failure must leave both the visible state and history
+  // cursor untouched.
+  auto dirty = dirty_ranges_for_states(*old_state, *target_state, impl.output_length_samples);
+  const VocalRevision next_revision = impl.revision + 1;
+  StateChangeResult result{{impl.epoch, next_revision, 0, 0}, std::move(dirty)};
+  if (before_publish) before_publish(result);
+  impl.history_index = target_index;
+  impl.committed = target_state;
+  impl.revision = next_revision;
+  return result;
+}
+
 }  // namespace
 
 VocalEditSession VocalEditSession::create(Audio source, const VocalSessionCreateOptions& options) {
@@ -342,10 +374,6 @@ VocalEditSession VocalEditSession::create(Audio source, const VocalSessionCreate
   impl->epoch = epoch;
   auto initial = std::make_shared<VocalEditState>();
   initial->notes = extract_vocal_notes(impl->source, *impl->analysis);
-  if (initial->notes.size() > std::numeric_limits<VocalNoteId>::max()) {
-    throw VocalEditException(VocalReason::kCounterExhausted, "note ID counter exhausted",
-                             "note_id");
-  }
   impl->next_note_id = static_cast<uint64_t>(initial->notes.size()) + 1;
   validate_vocal_edit_state(*initial, *impl->analysis, descriptor.sample_count, output_length,
                             impl->render_settings);
@@ -368,16 +396,6 @@ VocalEditSession VocalEditSession::restore(Audio source, const std::vector<uint8
                              util::sha256_digest_hex(persisted.source.digest),
                              util::sha256_digest_hex(descriptor.digest));
   }
-  const uint64_t maximum_next_id =
-      static_cast<uint64_t>(std::numeric_limits<VocalNoteId>::max()) + 1u;
-  if (persisted.next_note_id == 0 || persisted.next_note_id > maximum_next_id) {
-    throw VocalEditException(VocalReason::kCounterExhausted,
-                             "note ID counter is outside its valid high-water range", "note_id");
-  }
-  if (persisted.output_length_samples < descriptor.sample_count ||
-      persisted.output_length_samples <= 0) {
-    invalid("output_length_samples", "must cover the source audio");
-  }
   const Sha256Digest stored_analysis_digest = persisted.analysis.digest;
   const std::vector<float> stored_amplitude = persisted.analysis.amplitude;
   VocalAnalysisData analysis_input = persisted.analysis;
@@ -390,13 +408,7 @@ VocalEditSession VocalEditSession::restore(Audio source, const std::vector<uint8
   }
   if (!stored_amplitude.empty() &&
       !std::equal(stored_amplitude.begin(), stored_amplitude.end(), analysis.amplitude.begin(),
-                  [](float lhs, float rhs) {
-                    uint32_t left_bits = 0;
-                    uint32_t right_bits = 0;
-                    std::memcpy(&left_bits, &lhs, sizeof(left_bits));
-                    std::memcpy(&right_bits, &rhs, sizeof(right_bits));
-                    return left_bits == right_bits;
-                  })) {
+                  [](float lhs, float rhs) { return float_bits(lhs) == float_bits(rhs); })) {
     throw VocalEditException(VocalReason::kInvalidState,
                              "analysis amplitude does not match supplied source",
                              "analysis.amplitude");
@@ -516,18 +528,7 @@ std::unique_ptr<VocalEditDraft> VocalEditSession::begin_edit(VocalRevision expec
 
 std::shared_ptr<const VocalRenderSnapshot> VocalEditSession::capture_render_snapshot() const {
   require_session_alive(impl_);
-  auto data = std::make_shared<VocalRenderSnapshotData>();
-  data->source = impl_->source;
-  data->source_descriptor = impl_->source_descriptor;
-  data->analysis = impl_->analysis;
-  data->state = impl_->committed;
-  data->output_length_samples = impl_->output_length_samples;
-  data->render_settings = impl_->render_settings;
-  data->token = token();
-  data->cache = impl_->cache;
-  data->render_job_count = impl_->render_job_count;
-  data->max_render_jobs = impl_->limits.max_render_jobs;
-  return std::make_shared<VocalRenderSnapshot>(std::move(data));
+  return make_render_snapshot(*impl_, impl_->committed, token());
 }
 
 std::vector<CompiledPitchPlan> VocalEditSession::evaluate_pitch(
@@ -562,20 +563,7 @@ StateChangeResult VocalEditSession::undo(VocalRevision expected_revision,
   if (impl_->revision == std::numeric_limits<VocalRevision>::max()) {
     throw VocalEditException(VocalReason::kCounterExhausted, "revision exhausted", "revision");
   }
-  const auto old_state = impl_->committed;
-  const size_t target_index = impl_->history_index - 1;
-  const auto target_state = impl_->history[target_index];
-  // Compute all potentially-throwing work before publishing the new model.
-  // An allocation failure must leave both the visible state and history
-  // cursor untouched.
-  auto dirty = dirty_ranges_for_states(*old_state, *target_state, impl_->output_length_samples);
-  const VocalRevision next_revision = impl_->revision + 1;
-  StateChangeResult result{{impl_->epoch, next_revision, 0, 0}, std::move(dirty)};
-  if (before_publish) before_publish(result);
-  impl_->history_index = target_index;
-  impl_->committed = target_state;
-  impl_->revision = next_revision;
-  return result;
+  return move_history_cursor(*impl_, impl_->history_index - 1, before_publish);
 }
 
 StateChangeResult VocalEditSession::redo(VocalRevision expected_revision,
@@ -589,18 +577,7 @@ StateChangeResult VocalEditSession::redo(VocalRevision expected_revision,
   if (impl_->revision == std::numeric_limits<VocalRevision>::max()) {
     throw VocalEditException(VocalReason::kCounterExhausted, "revision exhausted", "revision");
   }
-  const auto old_state = impl_->committed;
-  const size_t target_index = impl_->history_index + 1;
-  const auto target_state = impl_->history[target_index];
-  // See undo(): build the dirty result before changing the cursor or model.
-  auto dirty = dirty_ranges_for_states(*old_state, *target_state, impl_->output_length_samples);
-  const VocalRevision next_revision = impl_->revision + 1;
-  StateChangeResult result{{impl_->epoch, next_revision, 0, 0}, std::move(dirty)};
-  if (before_publish) before_publish(result);
-  impl_->history_index = target_index;
-  impl_->committed = target_state;
-  impl_->revision = next_revision;
-  return result;
+  return move_history_cursor(*impl_, impl_->history_index + 1, before_publish);
 }
 
 bool VocalEditSession::can_undo() const noexcept {
@@ -815,18 +792,8 @@ std::vector<CompiledPitchPlan> VocalEditDraft::evaluate_pitch(
 
 std::shared_ptr<const VocalRenderSnapshot> VocalEditDraft::capture_render_snapshot() const {
   require_draft_active(active_, impl_, candidate_);
-  auto data = std::make_shared<VocalRenderSnapshotData>();
-  data->source = impl_->source;
-  data->source_descriptor = impl_->source_descriptor;
-  data->analysis = impl_->analysis;
-  data->state = std::shared_ptr<const VocalEditState>(candidate_);
-  data->output_length_samples = impl_->output_length_samples;
-  data->render_settings = impl_->render_settings;
-  data->token = draft_token_;
-  data->cache = impl_->cache;
-  data->render_job_count = impl_->render_job_count;
-  data->max_render_jobs = impl_->limits.max_render_jobs;
-  return std::make_shared<VocalRenderSnapshot>(std::move(data));
+  return make_render_snapshot(*impl_, std::shared_ptr<const VocalEditState>(candidate_),
+                              draft_token_);
 }
 
 double VocalEditDraft::source_sample_to_destination_sample(VocalNoteId note_id,
@@ -883,10 +850,14 @@ StateChangeResult VocalEditDraft::commit(VocalRevision expected_revision,
     new_history.erase(new_history.begin());
     --new_history_index;
   }
-  while (new_history.size() > 1 &&
-         retained_history_bytes(new_history, new_history_index) > impl_->limits.max_history_bytes) {
-    new_history.erase(new_history.begin());
-    --new_history_index;
+  if (new_history.size() > 1) {
+    uint64_t retained = retained_history_bytes(new_history, new_history_index);
+    while (new_history.size() > 1 && retained > impl_->limits.max_history_bytes) {
+      // The live state is the last entry, so the erased front entry is always counted.
+      retained -= state_storage_bytes(*new_history.front());
+      new_history.erase(new_history.begin());
+      --new_history_index;
+    }
   }
   const VocalRevision next_revision = impl_->revision + 1;
   StateChangeResult result{{impl_->epoch, next_revision, 0, 0}, std::move(dirty)};

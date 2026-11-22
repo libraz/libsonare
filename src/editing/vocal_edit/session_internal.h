@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <set>
 #include <string>
 #include <vector>
@@ -21,6 +22,13 @@ inline constexpr double kMaxFormantShiftSemitones = 8.669592293653093;   // 12*l
 inline constexpr double kFrameWindowToleranceSamples = 1.0e-9;
 // Allowance, in frames, subtracted before a fractional frame position is rounded up.
 inline constexpr double kFrameCeilToleranceFrames = 1.0e-12;
+
+// Highest MIDI note number a pitch target or measurement may carry.
+inline constexpr double kMaxMidiNote = 127.0;
+// Largest MIDI-pitch gap treated as continuous when merging notes.
+inline constexpr double kMidiContinuityTolerance = 1.0e-5;
+// Identifier of the built-in pitch analysis algorithm.
+inline constexpr char kPyinAlgorithmId[] = "libsonare.pyin";
 
 [[noreturn]] inline void invalid(const std::string& field, const std::string& message) {
   throw VocalEditException(VocalReason::kInvalidInput, message, field);
@@ -43,6 +51,19 @@ inline double frame_raw_position(const AnalysisGrid& grid, int64_t sample) {
 /// First frame at or after @p sample, with a tiny allowance for rounding in the position.
 inline double frame_ceil(const AnalysisGrid& grid, int64_t sample) {
   return std::ceil(frame_raw_position(grid, sample) - kFrameCeilToleranceFrames);
+}
+
+/// True when analysis frame @p frame is voiced with a positive finite F0.
+inline bool usable_frame(const VocalAnalysisData& analysis, size_t frame) {
+  return analysis.voiced[frame] != 0 && analysis.f0_hz[frame] > 0.0f &&
+         std::isfinite(analysis.f0_hz[frame]);
+}
+
+/// IEEE-754 bit pattern of @p value, for comparisons that must distinguish -0.0 from +0.0.
+inline uint32_t float_bits(float value) {
+  uint32_t bits = 0;
+  std::memcpy(&bits, &value, sizeof(bits));
+  return bits;
 }
 
 int64_t checked_end(int64_t start, int64_t length, const std::string& field);

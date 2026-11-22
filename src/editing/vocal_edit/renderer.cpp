@@ -4,10 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <memory>
-#include <mutex>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -30,6 +27,7 @@ namespace sonare::editing::vocal_edit {
 
 using detail::invalid;
 using detail::invalid_state;
+using detail::usable_frame;
 
 namespace {
 
@@ -86,6 +84,15 @@ bool effective_identity(const VocalNote& note, const PitchPlan& plan) {
   return renders_in_place(note) && plan.pitch_identity && note.edit.gain_db == 0.0 &&
          note.edit.amplitude_envelope.empty() && note.edit.formant.mode == FormantMode::kPreserve &&
          note.edit.formant.shift_semitones == 0.0;
+}
+
+/// Zeroes the pitch delta of every point so the plan renders the measured pitch unchanged.
+void make_pitch_identity(PitchPlan& plan) {
+  for (auto& point : plan.points) {
+    point.delta_semitones = 0.0f;
+    point.effective_midi = point.measured_midi;
+  }
+  plan.pitch_identity = true;
 }
 
 /// Crossfades @p segment over @p output. A segment sitting on the source it was cut from is
@@ -173,8 +180,7 @@ struct NoteArtifactResult {
 double minimum_voiced_f0(const VocalAnalysisData& analysis) {
   double lowest = std::numeric_limits<double>::infinity();
   for (std::size_t frame = 0; frame < analysis.f0_hz.size(); ++frame) {
-    if (analysis.voiced[frame] != 0 && std::isfinite(analysis.f0_hz[frame]) &&
-        analysis.f0_hz[frame] > 0.0f) {
+    if (usable_frame(analysis, frame)) {
       lowest = std::min(lowest, static_cast<double>(analysis.f0_hz[frame]));
     }
   }
@@ -216,13 +222,7 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
   const auto& analysis = *snapshot.analysis;
 
   const bool identity = effective_identity(note, plan);
-  if (identity) {
-    for (auto& point : plan.points) {
-      point.delta_semitones = 0.0f;
-      point.effective_midi = point.measured_midi;
-    }
-    plan.pitch_identity = true;
-  }
+  if (identity) make_pitch_identity(plan);
 
   RenderArtifact artifact;
   artifact.note_id = note.id;
@@ -344,7 +344,7 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
   }
   apply_gain_and_envelope(rendered, note.edit);
   artifact.samples = std::make_shared<const std::vector<float>>(std::move(rendered));
-  return {std::make_shared<const RenderArtifact>(std::move(artifact)), plan};
+  return {std::make_shared<const RenderArtifact>(std::move(artifact)), std::move(plan)};
 }
 
 void add_range(std::vector<SampleRange>& ranges, SampleRange range) {
@@ -541,13 +541,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
         const auto& key_plan = impl_->compiled_plans[index];
         const bool plan_identity = key_plan.pitch_identity;
         PitchPlan lookup_plan = key_plan;
-        if (plan_identity) {
-          lookup_plan.pitch_identity = true;
-          for (auto& point : lookup_plan.points) {
-            point.delta_semitones = 0.0f;
-            point.effective_midi = point.measured_midi;
-          }
-        }
+        if (plan_identity) make_pitch_identity(lookup_plan);
         const Sha256Digest key = render_artifact_key(data, note, lookup_plan, incoming, outgoing);
         if (auto cached = impl_->cache->find(key)) {
           impl_->artifacts[index] = std::move(cached);
@@ -598,9 +592,6 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
       const int sample_rate = source.sample_rate();
       for (const std::size_t i : impl_->needed) {
         const auto& note = state.notes[i];
-        if (effective_identity(note, impl_->plans[i])) {
-          continue;
-        }
         // An in-place segment crossfades against the source through overlay() alone; fading the
         // source here as well would weight it twice across the seam.
         if (renders_in_place(note)) continue;

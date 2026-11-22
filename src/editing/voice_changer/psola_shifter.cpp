@@ -295,12 +295,12 @@ double PsolaShifter::output_period(double input_period, const SampleTarget& targ
   return std::clamp(sr_ / f_out, kMinOutputPeriod, 4.0 * latency_);
 }
 
-bool PsolaShifter::start_voiced(Voice& v, const SampleTarget& target, std::int64_t t) noexcept {
+void PsolaShifter::start_voiced(Voice& v, const SampleTarget& target, std::int64_t t) noexcept {
   const double alpha = target.alpha;
   const double now = static_cast<double>(t);
   const bool stale =
       mark_count_ == 0 || mark_at(0).pos < now - 2.0 * latency_ - 2.0 * mark_at(0).period;
-  if (stale && !start_chain(alpha, t)) return false;
+  if (stale && !start_chain(alpha, t)) return;
   // The first grain is the earliest one still sounding now, centred exactly on its mark, so at
   // ratio 1 the output reproduces the input from the first voiced sample on.
   const double aim = now - latency_ - mark_at(0).period / alpha;
@@ -311,14 +311,13 @@ bool PsolaShifter::start_voiced(Voice& v, const SampleTarget& target, std::int64
     if (m.pos <= aim) break;
     chosen = &m;
   }
-  if (chosen == nullptr) return false;
+  if (chosen == nullptr) return;
   v.voiced_running = true;
   v.joining = true;
   v.has_previous = false;
   v.voiced_count = 0;
   v.voiced_next = chosen->pos + latency_;
   v.last_period_out = output_period(chosen->period, target);
-  return true;
 }
 
 double PsolaShifter::input_period(double aim) const noexcept {
@@ -435,24 +434,21 @@ void PsolaShifter::process_voice_sample(Voice& v, const SampleTarget& target, st
   }
   if (v.voiced_running) schedule_voiced(v, target, t);
 
-  float voiced = 0.0f;
-  for (int i = 0; i < v.voiced_count;) {
-    if (g > 0.0f) voiced += grain_sample(v.voiced[i], t);
-    if (now + 1.0 >= v.voiced[i].out_centre + v.voiced[i].half_right) {
-      v.voiced[i] = v.voiced[--v.voiced_count];
-    } else {
-      ++i;
+  // Sums the audible grains of one kind, swap-removing each grain that ends by the next sample.
+  const auto sum_and_retire = [&](Grain* grains, int& count, bool audible) {
+    float sum = 0.0f;
+    for (int i = 0; i < count;) {
+      if (audible) sum += grain_sample(grains[i], t);
+      if (now + 1.0 >= grains[i].out_centre + grains[i].half_right) {
+        grains[i] = grains[--count];
+      } else {
+        ++i;
+      }
     }
-  }
-  float unvoiced = 0.0f;
-  for (int i = 0; i < v.unvoiced_count;) {
-    if (g < 1.0f) unvoiced += grain_sample(v.unvoiced[i], t);
-    if (now + 1.0 >= v.unvoiced[i].out_centre + v.unvoiced[i].half_right) {
-      v.unvoiced[i] = v.unvoiced[--v.unvoiced_count];
-    } else {
-      ++i;
-    }
-  }
+    return sum;
+  };
+  const float voiced = sum_and_retire(v.voiced, v.voiced_count, g > 0.0f);
+  const float unvoiced = sum_and_retire(v.unvoiced, v.unvoiced_count, g < 1.0f);
   *out = g * voiced + (1.0f - g) * unvoiced;
 }
 

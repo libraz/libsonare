@@ -76,21 +76,22 @@ void PitchTargetController::apply_note(const NoteEvent& ev) noexcept {
   for (int i = 0; i < held_count_; ++i) {
     if (held_[i] == ev.note) idx = i;
   }
+  const auto erase_held = [this](int at) {
+    for (int i = at; i + 1 < held_count_; ++i) held_[i] = held_[i + 1];
+    --held_count_;
+  };
   if (ev.kind == NoteEvent::Kind::On) {
     if (idx >= 0) {
-      for (int i = idx; i + 1 < held_count_; ++i) held_[i] = held_[i + 1];
-      --held_count_;
+      erase_held(idx);
     } else if (held_count_ == kMaxHeldNotes) {
-      for (int i = 0; i + 1 < held_count_; ++i) held_[i] = held_[i + 1];
-      --held_count_;
+      erase_held(0);
     }
     held_[held_count_++] = ev.note;
     hold_note_ = -1;
     return;
   }
   if (idx < 0) return;
-  for (int i = idx; i + 1 < held_count_; ++i) held_[i] = held_[i + 1];
-  --held_count_;
+  erase_held(idx);
   if (held_count_ == 0) hold_note_ = ev.note;
 }
 

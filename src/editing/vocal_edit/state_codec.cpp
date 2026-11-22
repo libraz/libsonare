@@ -1,6 +1,7 @@
 // SONARE_WASM_EXCEPTION_UNWIND: release decoded state vectors when strict decoding throws.
 #include "editing/vocal_edit/state_codec.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -8,6 +9,7 @@
 #include <utility>
 
 #include "editing/vocal_edit/analysis.h"
+#include "editing/vocal_edit/session_internal.h"
 #include "util/exception.h"
 
 namespace sonare::editing::vocal_edit {
@@ -24,7 +26,7 @@ constexpr uint64_t kMaxPitchPoints = 4u * 1024u * 1024u;
 constexpr uint64_t kMaxEnvelopeSamples = 4u * 1024u * 1024u;
 constexpr uint64_t kMaxTransitions = 1u * 1024u * 1024u;
 
-constexpr std::string_view kSupportedAlgorithm = "libsonare.pyin";
+constexpr std::string_view kSupportedAlgorithm = detail::kPyinAlgorithmId;
 constexpr std::string_view kHostAlgorithm = "host";
 
 [[noreturn]] void invalid(const char* field, const char* message) {
@@ -280,7 +282,7 @@ class Writer {
         static_cast<uint64_t>(result) > kMaxEncodedBytes) {
       invalid("state", "encoded state exceeds the resource limit");
     }
-    bytes_.reserve(result);
+    if (result > bytes_.capacity()) bytes_.reserve(std::max(result, bytes_.capacity() * 2));
   }
 
   std::vector<uint8_t> bytes_;

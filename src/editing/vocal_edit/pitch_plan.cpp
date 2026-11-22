@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <limits>
 #include <string>
 
@@ -15,8 +14,11 @@
 
 namespace sonare::editing::vocal_edit {
 
+using detail::float_bits;
 using detail::frame_sample_position;
 using detail::invalid;
+using detail::kMaxMidiNote;
+using detail::usable_frame;
 using sonare::constants::kCentsPerSemitone;
 
 void validate_pitch_parameters(const VocalPitchEdit& pitch, SampleRange source_range) {
@@ -37,7 +39,7 @@ void validate_pitch_parameters(const VocalPitchEdit& pitch, SampleRange source_r
   }
   if (pitch.target.mode == PitchTargetMode::kCenter) {
     if (!finite(pitch.target.center_midi) || pitch.target.center_midi < 0.0 ||
-        pitch.target.center_midi > 127.0) {
+        pitch.target.center_midi > kMaxMidiNote) {
       invalid("pitch.target.center_midi", "must be finite and in [0, 127]");
     }
     if (!pitch.target.points.empty())
@@ -48,7 +50,7 @@ void validate_pitch_parameters(const VocalPitchEdit& pitch, SampleRange source_r
     double previous = -std::numeric_limits<double>::infinity();
     for (const auto& point : pitch.target.points) {
       if (!finite(point.source_sample) || !finite(point.target_midi) || point.target_midi < 0.0 ||
-          point.target_midi > 127.0) {
+          point.target_midi > kMaxMidiNote) {
         invalid("pitch.target.points", "curve points must be finite and MIDI must be in [0, 127]");
       }
       if (!(point.source_sample > previous))
@@ -135,9 +137,7 @@ CompiledPitchPlan compile_pitch_plan_at_rate(const VocalAnalysisData& analysis,
   voiced.reserve(frame_count);
   for (uint32_t frame = note.analysis_frame_start; frame < note.analysis_frame_end; ++frame) {
     const size_t index = static_cast<size_t>(frame);
-    const bool is_voiced = analysis.voiced[index] != 0 && analysis.f0_hz[index] > 0.0f &&
-                           std::isfinite(analysis.f0_hz[index]);
-    voiced.push_back(is_voiced);
+    voiced.push_back(usable_frame(analysis, index));
   }
 
   note_model::NoteObject decomposition_note;
@@ -238,9 +238,7 @@ CompiledPitchPlan compile_pitch_plan_at_rate(const VocalAnalysisData& analysis,
     point.delta_semitones = static_cast<float>(delta);
     // Report the narrowed float the renderer consumes, not the pre-narrowing double.
     point.effective_midi = measured + static_cast<double>(point.delta_semitones);
-    uint32_t delta_bits = 0;
-    std::memcpy(&delta_bits, &point.delta_semitones, sizeof(delta_bits));
-    if (delta_bits != 0u) plan.pitch_identity = false;
+    if (float_bits(point.delta_semitones) != 0u) plan.pitch_identity = false;
     plan.points.push_back(point);
   }
   return plan;
@@ -399,9 +397,7 @@ std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& anal
   for (auto& plan : plans) {
     plan.pitch_identity = true;
     for (const auto& point : plan.points) {
-      uint32_t bits = 0;
-      std::memcpy(&bits, &point.delta_semitones, sizeof(bits));
-      if (bits != 0u) {
+      if (float_bits(point.delta_semitones) != 0u) {
         plan.pitch_identity = false;
         break;
       }

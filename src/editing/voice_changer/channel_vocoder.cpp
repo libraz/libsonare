@@ -201,10 +201,12 @@ void ChannelVocoder::render_carrier(const VoiceTargets& notes, const float* exte
   std::fill(carrier, carrier + n, 0.0f);
   const float max_hz = kMaxDesignFrequencyRatio * static_cast<float>(sr_);
   const int voices = std::min(notes.count, kMaxVoices);
+  const auto audible = [](const VoiceTarget& v) {
+    return v.active && std::isfinite(v.target_hz) && v.target_hz > 0.0f;
+  };
   int active = 0;
   for (int i = 0; i < voices; ++i) {
-    const VoiceTarget& v = notes.voices[i];
-    if (v.active && std::isfinite(v.target_hz) && v.target_hz > 0.0f) ++active;
+    if (audible(notes.voices[i])) ++active;
   }
   if (active == 0) return;
 
@@ -216,7 +218,7 @@ void ChannelVocoder::render_carrier(const VoiceTargets& notes, const float* exte
 
   for (int i = 0; i < voices; ++i) {
     const VoiceTarget& v = notes.voices[i];
-    if (!(v.active && std::isfinite(v.target_hz) && v.target_hz > 0.0f)) continue;
+    if (!audible(v)) continue;
     const float base_hz = std::min(v.target_hz, max_hz);
     for (int o = 0; o < oscillators; ++o) {
       const double inc = static_cast<double>(base_hz) * (ensemble ? ratios[o] : 1.0f) / sr_;

@@ -2,7 +2,6 @@
 #include <cmath>
 #include <limits>
 #include <map>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -23,8 +22,7 @@ void validate_pitch_edit(const VocalNoteEdit& edit, const SampleRange source_ran
                          int64_t output_length) {
   const auto finite = [](double value) { return std::isfinite(value); };
   validate_pitch_parameters(edit.pitch, source_range);
-  if (!finite(edit.destination_start_sample) || edit.destination_start_sample < 0 ||
-      edit.destination_length_samples <= 0) {
+  if (edit.destination_start_sample < 0 || edit.destination_length_samples <= 0) {
     invalid("destination", "destination range is malformed");
   }
   const int64_t destination_end =
@@ -59,13 +57,11 @@ void validate_pitch_edit(const VocalNoteEdit& edit, const SampleRange source_ran
 
 void validate_state(const VocalEditState& state, const VocalAnalysisData& analysis,
                     int64_t source_length, int64_t output_length) {
-  std::set<VocalNoteId> ids;
   std::map<VocalNoteId, size_t> note_indices;
   for (size_t i = 0; i < state.notes.size(); ++i) {
     const auto& note = state.notes[i];
     validate_note(note, analysis, source_length, output_length);
-    if (!ids.insert(note.id).second) invalid("notes.id", "note IDs must be unique");
-    note_indices.emplace(note.id, i);
+    if (!note_indices.emplace(note.id, i).second) invalid("notes.id", "note IDs must be unique");
     if (i != 0) {
       if (state.notes[i - 1].source_range.end > note.source_range.start) {
         invalid("notes.source_range", "source note ranges must not overlap");
@@ -119,10 +115,7 @@ void validate_state(const VocalEditState& state, const VocalAnalysisData& analys
         continue;
       }
       saw_frame = true;
-      if (analysis.voiced[frame] == 0 || !(analysis.f0_hz[frame] > 0.0f) ||
-          !std::isfinite(analysis.f0_hz[frame])) {
-        return false;
-      }
+      if (!usable_frame(analysis, frame)) return false;
     }
     return saw_frame;
   };
@@ -240,9 +233,9 @@ void validate_note(const VocalNote& note, const VocalAnalysisData& analysis, int
   if (note.has_pitch != has_voiced_frame) {
     invalid("note.has_pitch", "must agree with the authoritative analysis mask");
   }
-  if (!std::isfinite(note.centre_midi) || note.centre_midi < 0.0 || note.centre_midi > 127.0 ||
-      !std::isfinite(note.median_hz) || note.median_hz < 0.0 || !std::isfinite(note.f0_stability) ||
-      note.f0_stability < 0.0 || note.f0_stability > 1.0) {
+  if (!std::isfinite(note.centre_midi) || note.centre_midi < 0.0 ||
+      note.centre_midi > kMaxMidiNote || !std::isfinite(note.median_hz) || note.median_hz < 0.0 ||
+      !std::isfinite(note.f0_stability) || note.f0_stability < 0.0 || note.f0_stability > 1.0) {
     invalid("note.measurement", "pitch measurements are malformed");
   }
   if (note.has_pitch) {
