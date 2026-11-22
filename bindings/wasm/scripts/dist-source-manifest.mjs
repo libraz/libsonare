@@ -16,12 +16,17 @@
  * past what the build actually refreshed is the false pass this exists to
  * prevent. The writer and the verifier are this one module, so the two sides
  * cannot drift apart.
+ *
+ * A native module's manifest also records the Emscripten release that built it,
+ * and `--check-toolchain` refuses a dist whose record differs from the pin the
+ * package is built with, so a pack cannot ship a module from another compiler.
  */
 
 import { createHash } from 'node:crypto';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { activationHint, installedVersion, pinnedVersion } from './emscripten-toolchain.mjs';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
 const DIST_DIR = resolve(fileURLToPath(new URL('../dist/', import.meta.url)));
@@ -55,6 +60,7 @@ export const MODULES = [
     sources: NATIVE_SOURCES,
     rebuild: 'yarn build:wasm',
     staleOptOut: true,
+    toolchain: 'emscripten',
   },
   {
     name: 'sonare-analysis',
@@ -63,6 +69,7 @@ export const MODULES = [
     sources: NATIVE_SOURCES,
     rebuild: 'yarn build:wasm',
     staleOptOut: true,
+    toolchain: 'emscripten',
   },
   {
     name: 'bundle',
@@ -138,11 +145,17 @@ export function manifestPath(moduleName, distDir = DIST_DIR) {
 
 /**
  * Writes a manifest for each named module, from the artifacts currently in
- * `dist/`. A build calls this for the module it just produced and no other.
+ * `dist/`. A build calls this for the module it just produced and no other,
+ * so the `emcc` on PATH is the one that built a native module.
  */
 export async function writeManifests(
   names,
-  { distDir = DIST_DIR, repoRoot = REPO_ROOT, modules = MODULES } = {},
+  {
+    distDir = DIST_DIR,
+    repoRoot = REPO_ROOT,
+    modules = MODULES,
+    emscriptenVersion = () => installedVersion(),
+  } = {},
 ) {
   const written = [];
   for (const module of modules.filter((candidate) => names.includes(candidate.name))) {
@@ -163,6 +176,13 @@ export async function writeManifests(
       artifacts,
       sources: await collectSources(module.sources, repoRoot),
     };
+    if (module.toolchain === 'emscripten') {
+      const version = emscriptenVersion();
+      if (version === null) {
+        throw new Error(`cannot record the Emscripten release of ${module.name}: no emcc runs from PATH`);
+      }
+      manifest.toolchain = { emscripten: version };
+    }
     await writeFile(manifestPath(module.name, distDir), `${JSON.stringify(manifest, null, 2)}\n`);
     written.push(module.name);
   }
@@ -259,6 +279,34 @@ export async function verifyAll({
   return { problems, provenance, artifacts };
 }
 
+/**
+ * Refuses every built native module whose manifest records an Emscripten
+ * release other than @p pinned, including one that records none.
+ */
+export async function verifyToolchain({
+  distDir = DIST_DIR,
+  modules = MODULES,
+  pinned = pinnedVersion(),
+} = {}) {
+  const problems = [];
+  for (const module of modules.filter((candidate) => candidate.toolchain === 'emscripten')) {
+    if ((await fileState(join(distDir, module.primary))) === null) continue;
+    let recorded;
+    try {
+      recorded = JSON.parse(await readFile(manifestPath(module.name, distDir), 'utf8')).toolchain
+        ?.emscripten;
+    } catch {
+      recorded = undefined;
+    }
+    if (recorded === pinned) continue;
+    const built = recorded === undefined ? 'records no Emscripten release' : `was built with Emscripten ${recorded}`;
+    problems.push(
+      `dist/${module.primary} ${built}, but the package is built with ${pinned}.\n${activationHint(pinned)} Then run \`${module.rebuild}\` in bindings/wasm.`,
+    );
+  }
+  return problems;
+}
+
 /** Current digest of each named artifact, for a before/after comparison. */
 export async function readArtifacts(names) {
   const current = {};
@@ -285,6 +333,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       process.exit(1);
     }
     console.log(`Wrote source manifests for ${written.join(', ')}.`);
+  } else if (process.argv.includes('--check-toolchain')) {
+    const problems = await verifyToolchain();
+    if (problems.length > 0) {
+      console.error(problems.join('\n\n'));
+      process.exit(1);
+    }
   } else {
     const { problems, provenance } = await verifyAll();
     for (const line of provenance) console.log(line);

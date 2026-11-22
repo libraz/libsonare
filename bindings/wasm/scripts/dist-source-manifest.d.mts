@@ -13,6 +13,7 @@ export interface DistModule {
   sources: SourceSpec;
   rebuild: string;
   staleOptOut?: boolean;
+  toolchain?: 'emscripten';
 }
 
 export interface ManifestLocation {
@@ -26,10 +27,18 @@ export const ALLOW_STALE_ENV: 'SONARE_ALLOW_STALE_DIST';
 
 export function collectSources(spec: SourceSpec, repoRoot?: string): Promise<Record<string, string>>;
 export function manifestPath(moduleName: string, distDir?: string): string;
-export function writeManifests(names: string[], location?: ManifestLocation): Promise<string[]>;
+export function writeManifests(
+  names: string[],
+  location?: ManifestLocation & { emscriptenVersion?: () => string | null },
+): Promise<string[]>;
 export function verifyAll(options?: ManifestLocation & { allowStale?: boolean }): Promise<{
   problems: string[];
   provenance: string[];
   artifacts: Record<string, string>;
 }>;
+export function verifyToolchain(options?: {
+  distDir?: string;
+  modules?: DistModule[];
+  pinned?: string;
+}): Promise<string[]>;
 export function readArtifacts(names: string[]): Promise<Record<string, string | null>>;
