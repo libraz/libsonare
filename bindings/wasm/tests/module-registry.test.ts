@@ -131,3 +131,19 @@ describe('every entry taking the lifecycle from the index entry', () => {
     expect(ids.size).toBe(1);
   });
 });
+
+describe('the worker entries reached from the bundles', () => {
+  /** The worker scripts a bundle names by URL, which a browser bundler emits as chunks. */
+  function workerUrls(entry: string): string[] {
+    const text = readFileSync(new URL(`${entry}.js`, DIST), 'utf8');
+    return [...text.matchAll(/new URL\(\s*"\.\/(worker|vocal_edit_worker)\.js"/g)].map((m) => m[1]);
+  }
+
+  it('are named only by the index entry, whose worker clients start them', () => {
+    expect(workerUrls('index').sort()).toEqual(['vocal_edit_worker', 'worker']);
+  });
+
+  it.each(ENTRIES.filter((entry) => entry !== 'index'))('are not named by %s', (entry) => {
+    expect(workerUrls(entry)).toEqual([]);
+  });
+});
