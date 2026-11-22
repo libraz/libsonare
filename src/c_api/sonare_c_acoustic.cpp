@@ -114,15 +114,36 @@ void init_room_fields(Config* config) {
   config->length_m = kDefaultRoomDims.length;
   config->width_m = kDefaultRoomDims.width;
   config->height_m = kDefaultRoomDims.height;
-  config->source = {kDefaultPlacement.source.x, kDefaultPlacement.source.y,
-                    kDefaultPlacement.source.z};
-  config->listener = {kDefaultPlacement.listener.x, kDefaultPlacement.listener.y,
-                      kDefaultPlacement.listener.z};
+  // Not given: resolved at use to the default placement scaled to the room.
+  constexpr float kNotGiven = std::numeric_limits<float>::quiet_NaN();
+  config->source = {kNotGiven, kNotGiven, kNotGiven};
+  config->listener = {kNotGiven, kNotGiven, kNotGiven};
   config->absorption = kDefaultWallAbsorption;
   config->material_preset = SONARE_MATERIAL_PRESET_NONE;
   const AirAbsorption air{};
   config->air_temperature_c = air.temperature_c;
   config->air_humidity_percent = air.humidity_percent;
+}
+
+// A position left all-NaN takes @p fallback; any other non-finite component is refused by name.
+sonare::acoustic::Vec3 resolve_position(const SonareRoomPlacement& p,
+                                        const sonare::acoustic::Vec3& fallback,
+                                        const std::string& subject) {
+  if (std::isnan(p.x) && std::isnan(p.y) && std::isnan(p.z)) return fallback;
+  namespace check = sonare::util::check;
+  check::finite_float(p.x, (subject + ".x").c_str());
+  check::finite_float(p.y, (subject + ".y").c_str());
+  check::finite_float(p.z, (subject + ".z").c_str());
+  return {p.x, p.y, p.z};
+}
+
+// The source and listener a room config asks for, with unset positions scaled to its room.
+template <typename Config>
+sonare::acoustic::SourceListener resolve_placement(const Config& config) {
+  const sonare::acoustic::SourceListener fallback =
+      sonare::acoustic::scaled_default_placement(config.length_m, config.width_m, config.height_m);
+  return {resolve_position(config.source, fallback.source, "config.source"),
+          resolve_position(config.listener, fallback.listener, "config.listener")};
 }
 
 template <size_t N>
@@ -239,12 +260,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   check::finite_float(config->length_m, "config.length_m");
   check::finite_float(config->width_m, "config.width_m");
   check::finite_float(config->height_m, "config.height_m");
-  check::finite_float(config->source.x, "config.source.x");
-  check::finite_float(config->source.y, "config.source.y");
-  check::finite_float(config->source.z, "config.source.z");
-  check::finite_float(config->listener.x, "config.listener.x");
-  check::finite_float(config->listener.y, "config.listener.y");
-  check::finite_float(config->listener.z, "config.listener.z");
+  const sonare::acoustic::SourceListener placement = resolve_placement(*config);
   check::integer_within(config->ism_order, sonare::effects::common::kRirIsmOrderDomain,
                         "config.ism_order");
   check::in_range(config->max_sec, 0.0, sonare::acoustic::kMaxRirSeconds, "config.max_sec");
@@ -263,8 +279,6 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
       make_room(config->length_m, config->width_m, config->height_m, config->absorption,
                 config->band_absorption, config->band_absorption_count, config->band_scattering,
                 config->band_scattering_count, config->material_preset);
-  const SourceListener placement{{config->source.x, config->source.y, config->source.z},
-                                 {config->listener.x, config->listener.y, config->listener.z}};
   rc.ism_order = config->ism_order;
   rc.seed = config->seed;
   rc.max_seconds = config->max_sec;
@@ -398,8 +412,7 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
       make_room(config.length_m, config.width_m, config.height_m, config.absorption,
                 config.band_absorption, config.band_absorption_count, config.band_scattering,
                 config.band_scattering_count, config.material_preset);
-  cfg.placement = {{config.source.x, config.source.y, config.source.z},
-                   {config.listener.x, config.listener.y, config.listener.z}};
+  cfg.placement = resolve_placement(config);
   cfg.source_tail_suppression = config.source_tail_suppression;
   cfg.wet = config.wet;
   cfg.ism_order = config.ism_order;

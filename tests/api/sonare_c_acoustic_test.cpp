@@ -195,12 +195,11 @@ TEST_CASE("sonare acoustic C API config init sets struct_size and the library de
   CHECK(rir.length_m == 7.0f);
   CHECK(rir.width_m == 5.0f);
   CHECK(rir.height_m == 3.0f);
-  CHECK(rir.source.x == 1.0f);
-  CHECK(rir.source.y == 1.0f);
-  CHECK(rir.source.z == 1.2f);
-  CHECK(rir.listener.x == 5.0f);
-  CHECK(rir.listener.y == 4.0f);
-  CHECK(rir.listener.z == 1.7f);
+  for (const SonareRoomPlacement& p : {rir.source, rir.listener}) {
+    CHECK(std::isnan(p.x));
+    CHECK(std::isnan(p.y));
+    CHECK(std::isnan(p.z));
+  }
   CHECK(rir.absorption == 0.2f);
   CHECK(rir.max_sec == 0.0f);
   CHECK(rir.mixing_time_ms == 0.0f);
@@ -221,7 +220,11 @@ TEST_CASE("sonare acoustic C API config init sets struct_size and the library de
   sonare_room_morph_config_init(&morph);
   CHECK(morph.struct_size == sizeof(SonareRoomMorphConfig));
   CHECK(morph.length_m == 7.0f);
-  CHECK(morph.listener.y == 4.0f);
+  for (const SonareRoomPlacement& p : {morph.source, morph.listener}) {
+    CHECK(std::isnan(p.x));
+    CHECK(std::isnan(p.y));
+    CHECK(std::isnan(p.z));
+  }
   CHECK(morph.absorption == 0.2f);
   CHECK(morph.source_tail_suppression == 0.5f);
   CHECK(morph.wet == 0.5f);
@@ -242,6 +245,122 @@ TEST_CASE("sonare acoustic C API config init sets struct_size and the library de
   REQUIRE(sonare_synthesize_rir(&rir, 48000, &result) == SONARE_OK);
   CHECK(result.length > 0);
   sonare_free_rir_synth_result(&result);
+}
+
+namespace {
+
+std::vector<float> synthesize_rir_samples(const SonareRirSynthConfig& cfg) {
+  SonareRirSynthResult result{};
+  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_OK);
+  std::vector<float> rir(result.rir, result.rir + result.length);
+  sonare_free_rir_synth_result(&result);
+  return rir;
+}
+
+std::vector<float> room_morph_samples(const SonareRoomMorphConfig& cfg) {
+  std::vector<float> input(2000, 0.0f);
+  input[0] = 1.0f;
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &cfg, &out, &out_length) ==
+          SONARE_OK);
+  std::vector<float> samples(out, out + out_length);
+  sonare_free_floats(out);
+  return samples;
+}
+
+// The default placement scaled per axis from the default 7 x 5 x 3 m room, as the library does.
+std::pair<SonareRoomPlacement, SonareRoomPlacement> scaled_default(float l, float w, float h) {
+  const float sx = l / 7.0f;
+  const float sy = w / 5.0f;
+  const float sz = h / 3.0f;
+  return {{1.0f * sx, 1.0f * sy, 1.2f * sz}, {5.0f * sx, 4.0f * sy, 1.7f * sz}};
+}
+
+}  // namespace
+
+TEST_CASE("sonare acoustic C API resolves an unset placement to the default scaled to the room",
+          "[c_api][acoustic]") {
+  SonareRirSynthConfig unset;
+  sonare_rir_synth_config_init(&unset);
+  unset.max_sec = 0.1f;
+
+  SECTION("the default room keeps the default placement bit for bit") {
+    SonareRirSynthConfig given = unset;
+    given.source = {1.0f, 1.0f, 1.2f};
+    given.listener = {5.0f, 4.0f, 1.7f};
+    const std::vector<float> resolved = synthesize_rir_samples(unset);
+    REQUIRE(!resolved.empty());
+    CHECK(resolved == synthesize_rir_samples(given));
+  }
+
+  SECTION("a room smaller than the default placement is accepted with the placement inside") {
+    unset.length_m = 4.0f;
+    unset.width_m = 3.0f;
+    unset.height_m = 2.6f;
+    const auto [source, listener] = scaled_default(4.0f, 3.0f, 2.6f);
+    for (const SonareRoomPlacement& p : {source, listener}) {
+      CHECK(p.x > 0.0f);
+      CHECK(p.x < 4.0f);
+      CHECK(p.y > 0.0f);
+      CHECK(p.y < 3.0f);
+      CHECK(p.z > 0.0f);
+      CHECK(p.z < 2.6f);
+    }
+    SonareRirSynthConfig given = unset;
+    given.source = source;
+    given.listener = listener;
+    const std::vector<float> resolved = synthesize_rir_samples(unset);
+    REQUIRE(!resolved.empty());
+    CHECK(resolved == synthesize_rir_samples(given));
+
+    SonareRoomMorphConfig morph;
+    sonare_room_morph_config_init(&morph);
+    morph.length_m = 4.0f;
+    morph.width_m = 3.0f;
+    morph.height_m = 2.6f;
+    morph.max_sec = 0.1f;
+    SonareRoomMorphConfig morph_given = morph;
+    morph_given.source = source;
+    morph_given.listener = listener;
+    const std::vector<float> morphed = room_morph_samples(morph);
+    REQUIRE(!morphed.empty());
+    CHECK(morphed == room_morph_samples(morph_given));
+  }
+
+  SECTION("an explicit position is read as given") {
+    SonareRirSynthConfig given = unset;
+    given.source = {2.0f, 2.0f, 1.5f};
+    CHECK(synthesize_rir_samples(given) != synthesize_rir_samples(unset));
+    SonareRirSynthConfig listener_only = unset;
+    listener_only.listener = {5.0f, 4.0f, 1.7f};
+    CHECK(synthesize_rir_samples(listener_only) == synthesize_rir_samples(unset));
+  }
+}
+
+TEST_CASE("sonare acoustic C API refuses a partly NaN placement by component",
+          "[c_api][acoustic]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const std::string predicate = " must be finite and in [-3.4028235e38, 3.4028235e38]";
+
+  SonareRirSynthConfig rir;
+  sonare_rir_synth_config_init(&rir);
+  rir.source = {2.0f, nan, 1.0f};
+  SonareRirSynthResult result{};
+  REQUIRE(sonare_synthesize_rir(&rir, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "config.source.y" + predicate);
+  CHECK(result.rir == nullptr);
+
+  SonareRoomMorphConfig morph;
+  sonare_room_morph_config_init(&morph);
+  morph.listener = {nan, nan, 1.0f};
+  std::vector<float> input(64, 0.0f);
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &morph, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "config.listener.x" + predicate);
+  CHECK(out == nullptr);
 }
 
 TEST_CASE("sonare acoustic C API refuses a room config below its struct_size",

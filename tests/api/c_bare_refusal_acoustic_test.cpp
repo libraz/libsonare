@@ -49,7 +49,7 @@ TEST_CASE("synthesize_rir names the refused rate and config member", "[c_api][ac
   REQUIRE(last_message() == "config.length_m must be finite and in [-3.4028235e38, 3.4028235e38]");
 
   config = rir_config();
-  config.listener.y = kNaN;
+  config.listener = {5.0f, kNaN, 1.7f};
   REQUIRE(sonare_synthesize_rir(&config, 48000, &out) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() ==
           "config.listener.y must be finite and in [-3.4028235e38, 3.4028235e38]");

@@ -79,11 +79,14 @@ typedef struct {
   /// sizeof(SonareRirSynthConfig), set by sonare_rir_synth_config_init. A smaller value is
   /// refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
-  float length_m;                ///< Room extent along x in metres.
-  float width_m;                 ///< Room extent along y in metres.
-  float height_m;                ///< Room extent along z in metres.
-  SonareRoomPlacement source;    ///< Source position; must lie inside the room.
-  SonareRoomPlacement listener;  ///< Listener position; must lie inside the room.
+  float length_m;  ///< Room extent along x in metres.
+  float width_m;   ///< Room extent along y in metres.
+  float height_m;  ///< Room extent along z in metres.
+  /// Source position; must lie inside the room. All three components NaN means not given: the
+  /// default placement scaled to the room. A position only partly NaN is refused.
+  SonareRoomPlacement source;
+  /// Listener position, with the same rule as @c source.
+  SonareRoomPlacement listener;
   /// Uniform wall absorption coefficient, clamped to [0, 0.999].
   float absorption;
   /// Hard RIR length cap in seconds; 0 = natural length.
@@ -191,12 +194,15 @@ typedef struct {
   /// sizeof(SonareRoomMorphConfig), set by sonare_room_morph_config_init. A smaller value is
   /// refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
-  float length_m;                ///< Target room extent along x in metres.
-  float width_m;                 ///< Target room extent along y in metres.
-  float height_m;                ///< Target room extent along z in metres.
-  SonareRoomPlacement source;    ///< Source position; must lie inside the target room.
-  SonareRoomPlacement listener;  ///< Listener position; must lie inside the target room.
-  float absorption;              ///< Target uniform wall absorption coefficient.
+  float length_m;  ///< Target room extent along x in metres.
+  float width_m;   ///< Target room extent along y in metres.
+  float height_m;  ///< Target room extent along z in metres.
+  /// Source position; must lie inside the target room. All three components NaN means not
+  /// given: the default placement scaled to the target room. A position only partly NaN is refused.
+  SonareRoomPlacement source;
+  /// Listener position, with the same rule as @c source.
+  SonareRoomPlacement listener;
+  float absorption;  ///< Target uniform wall absorption coefficient.
   /// Gentle reduction of the source's own reverb, in [0, 1].
   float source_tail_suppression;
   float wet;  ///< Target-room mix, in [0, 1].
@@ -283,10 +289,10 @@ static_assert(offsetof(SonareRoomMorphConfig, receiver_spacing_m) ==
 #endif
 
 /// @brief Fill @p config with struct_size and the library default of every field: a
-///   7 x 5 x 3 m room, source (1, 1, 1.2), listener (5, 4, 1.7), absorption 0.2, no
-///   length cap (max_sec 0), automatic mixing time (mixing_time_ms 0), crossfade
-///   5 ms, ism_order 3, EYRING, seed 1, no band arrays, MATERIAL_PRESET_NONE, air
-///   absorption ON at 20 degC / 50 %. No-op on NULL.
+///   7 x 5 x 3 m room, source and listener all-NaN (the default placement scaled to the
+///   room, resolved at use), absorption 0.2, no length cap (max_sec 0), automatic mixing time
+///   (mixing_time_ms 0), crossfade 5 ms, ism_order 3, EYRING, seed 1, no band arrays,
+///   MATERIAL_PRESET_NONE, air absorption ON at 20 degC / 50 %. No-op on NULL.
 void sonare_rir_synth_config_init(SonareRirSynthConfig* config);
 
 /// @brief Fill @p config with struct_size and the library default of every field: the
@@ -350,10 +356,9 @@ const char* sonare_acoustic_mode_name(int mode);
 /// @details Initializes @p out with sonare_rir_synth_config_init, then sets the three dimensions
 /// and borrows the estimate's per-band
 ///   absorption as @c band_absorption (so @p estimate must outlive any use of @p out).
-///   Source and listener are the library's default positions (source (1, 1, 1.2), listener
-///   (5, 4, 1.7) in the default 7 x 5 x 3 room) scaled per axis by the estimated dimension over
-///   the default one, so they lie inside any estimated room and the default room maps to the
-///   default placement exactly. The scalar @c absorption is the mean of the finite bands;
+///   Source and listener are written explicitly as the default placement scaled to the
+///   estimated room, the same positions an all-NaN placement resolves to at use, so they lie
+///   inside any estimated room. The scalar @c absorption is the mean of the finite bands;
 ///   with no finite band it stays at the default. Absorption bands that are missing or
 ///   contain a non-finite value (the fit did not converge) are not borrowed, so the scalar
 ///   applies. A caller may overwrite any field before synthesizing. Refuses
