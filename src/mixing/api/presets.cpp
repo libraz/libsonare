@@ -40,7 +40,7 @@ Scene make_vocal_reverb_send() {
 Scene make_drum_bus_subgroup() {
   Scene scene;
   scene.buses.push_back({"master", "master"});
-  scene.buses.push_back({"drum-bus", "subgroup"});
+  scene.buses.push_back({"drum-bus", "submix"});
 
   for (const char* id : {"kick", "snare", "overheads"}) {
     Strip strip;

@@ -143,8 +143,8 @@ TEST_CASE("the same processor in a different slot is not a duplicate", "[mixing]
 TEST_CASE("duplicate buses, vca groups and sends are dropped", "[mixing][assistant]") {
   SceneDelta structure;
   structure.domain = DeltaDomain::Structure;
-  structure.buses.push_back(sonare::mixing::api::Bus{"drum-bus", "subgroup"});
-  structure.buses.push_back(sonare::mixing::api::Bus{"drum-bus", "subgroup"});
+  structure.buses.push_back(sonare::mixing::api::Bus{"drum-bus", "submix"});
+  structure.buses.push_back(sonare::mixing::api::Bus{"drum-bus", "submix"});
   structure.vca_groups.push_back({"drums", 0.0f, {"kick"}});
   structure.vca_groups.push_back({"drums", 0.0f, {"snare"}});
   structure.reason = "drum subgroup";

@@ -1,6 +1,10 @@
 /// @file mixing_automation_scene_test.cpp
 /// @brief Mixing automation and scene JSON tests.
 
+#include <algorithm>
+#include <array>
+#include <string>
+
 #include "mixing_test_helpers.h"
 
 TEST_CASE("AutomationLane enforces bounded monotonic SPSC events", "[mixing]") {
@@ -389,4 +393,17 @@ TEST_CASE("Mixing scene presets contain expected routing intent", "[mixing]") {
   REQUIRE(commentary.strips[2].id == "music-bed");
   REQUIRE(commentary.strips[2].inserts[0].processor_name == "dynamics.sidechainRouter");
   REQUIRE(commentary.vca_groups[0].id == "voices");
+}
+
+TEST_CASE("Mixing scene presets declare only bus roles the mixer accepts", "[mixing]") {
+  // The closed role set sonare_mixer_add_bus documents.
+  const std::array<std::string, 3> declared = {"master", "aux", "submix"};
+  for (const auto& name : sonare::mixing::api::scene_preset_names()) {
+    const auto scene =
+        sonare::mixing::api::scene_preset(sonare::mixing::api::scene_preset_from_string(name));
+    for (const auto& bus : scene.buses) {
+      CAPTURE(name, bus.id, bus.role);
+      REQUIRE(std::find(declared.begin(), declared.end(), bus.role) != declared.end());
+    }
+  }
 }

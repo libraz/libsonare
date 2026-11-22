@@ -41,7 +41,7 @@ constexpr const char* kMasterBusRole = "master";
 // A subgroup sums parts that travel together. The other role this stage uses,
 // the aux that receives sends, is declared with the effect buses because it is
 // reachable only when they are.
-constexpr const char* kSubgroupBusRole = "subgroup";
+constexpr const char* kSubmixBusRole = "submix";
 // Appended to a subgroup's bus id to name the VCA group riding it.
 constexpr const char* kVcaIdSuffix = "Vca";
 // First numeric suffix tried when a generated id is already taken. Counting
@@ -590,7 +590,7 @@ std::vector<SceneDelta> decide_structure(const std::vector<TrackProfile>& profil
   for (const Subgroup& group : subgroups) {
     SceneDelta bus_delta;
     bus_delta.domain = DeltaDomain::Structure;
-    bus_delta.buses.push_back(api::Bus(group.bus_id, kSubgroupBusRole));
+    bus_delta.buses.push_back(api::Bus(group.bus_id, kSubmixBusRole));
     for (const std::string& member : group.members) {
       bus_delta.connections.push_back({member, group.bus_id});
     }

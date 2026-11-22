@@ -59,7 +59,7 @@ constexpr int kBlockSize = 512;
 // The bus role the mixer resolves the summing destination by. Its id can be
 // renamed around a track of the same name, so nothing here matches on the id.
 constexpr const char* kMasterRole = "master";
-constexpr const char* kSubgroupRole = "subgroup";
+constexpr const char* kSubmixRole = "submix";
 
 // An even spread across the analysis bands, which is what band_occupancy looks
 // like for any track with real spectral content: it sums to 1.
@@ -121,7 +121,7 @@ bool has_bus(const Scene& scene, const std::string& id) {
 std::vector<std::string> subgroup_bus_ids(const Scene& scene) {
   std::vector<std::string> ids;
   for (const auto& bus : scene.buses) {
-    if (bus.role == kSubgroupRole) ids.push_back(bus.id);
+    if (bus.role == kSubmixRole) ids.push_back(bus.id);
   }
   return ids;
 }
