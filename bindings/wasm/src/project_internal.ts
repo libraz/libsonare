@@ -1022,16 +1022,18 @@ export function projectAutomationPointFromNative(native: {
 export const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
-export function projectAutomationPointValue(
+export function automationPointValue(
   point: ProjectAutomationPoint,
   index: number,
 ): NativeAutomationPoint {
   assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${index}]`);
-  const curveToNext = resolveEnumOrdinal(
-    isAbsent(point.curveToNext) ? 'linear' : point.curveToNext,
-    AUTOMATION_CURVE_VALUES,
-    'curveToNext',
-  );
+  const curveToNext = isAbsent(point.curveToNext)
+    ? AUTOMATION_CURVE_VALUES.linear
+    : resolveEnumOrdinal(
+        point.curveToNext,
+        AUTOMATION_CURVE_VALUES,
+        `points[${index}].curveToNext`,
+      );
   return { ...point, curveToNext };
 }
 
@@ -1049,7 +1051,7 @@ export function projectAutomationLaneValue(
     ...(targetKind === undefined
       ? {}
       : { targetKind: projectAutomationTargetKindValue(targetKind) }),
-    points: points.map((point, index) => projectAutomationPointValue(point, index)),
+    points: points.map((point, index) => automationPointValue(point, index)),
   };
 }
 

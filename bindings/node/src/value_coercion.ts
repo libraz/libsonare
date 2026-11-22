@@ -1,6 +1,6 @@
 import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
-import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
+import { tokenName } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { SampleBank } from './sample_bank.js';
@@ -93,16 +93,14 @@ export function projectAutomationPointFromNative(native: {
 export const AUTOMATION_POINT_KEYS = ['ppq', 'value', 'curveToNext'];
 
 /** Resolve a breakpoint's curve token; a key outside the point's fields is refused by name. */
-export function projectAutomationPointValue(
+export function automationPointValue(
   point: ProjectAutomationPoint,
   index: number,
 ): NativeAutomationPoint {
   assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${index}]`);
-  const curveToNext = tokenOrdinal(
-    point.curveToNext ?? 'linear',
-    AUTOMATION_CURVE_VALUES,
-    'curveToNext',
-  );
+  const curveToNext = isAbsent(point.curveToNext)
+    ? AUTOMATION_CURVE_VALUES.linear
+    : automationCurveValue(point.curveToNext, `points[${index}].curveToNext`);
   return { ...point, curveToNext };
 }
 
@@ -122,7 +120,7 @@ export function projectAutomationLaneValue(
   }
   return {
     ...desc,
-    points: desc.points.map((point, index) => projectAutomationPointValue(point, index)),
+    points: desc.points.map((point, index) => automationPointValue(point, index)),
   };
 }
 

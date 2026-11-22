@@ -18,7 +18,6 @@ import {
   nativeClipPageProviderOf,
 } from './internal/clip_page_native.js';
 import {
-  assertDeclaredKeys,
   codedError,
   entryClass,
   invalidState,
@@ -56,7 +55,7 @@ import type {
 } from './project.js';
 import type { ProjectTimeline } from './project_class.js';
 import {
-  AUTOMATION_POINT_KEYS,
+  automationPointValue,
   normalizePartRig,
   normalizeSynthInstrument,
   optionalId,
@@ -483,22 +482,6 @@ function markerFromNative(marker: {
   };
 }
 
-function curveFromNative(ordinal: number): NonNullable<EngineAutomationPoint['curveToNext']> {
-  const entry = Object.entries(AUTOMATION_CURVE_VALUES).find(([, value]) => value === ordinal);
-  if (entry === undefined) {
-    throw refuse(`unknown automation curve ordinal ${ordinal}`);
-  }
-  return entry[0] as NonNullable<EngineAutomationPoint['curveToNext']>;
-}
-
-function nativeAutomationPoint(point: EngineAutomationPoint, i: number) {
-  assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${i}]`);
-  const { curveToNext, ...rest } = point;
-  return curveToNext === undefined
-    ? rest
-    : { ...rest, curveToNext: automationCurveCode(curveToNext, `points[${i}].curveToNext`) };
-}
-
 function parameterInfoFromNative(info: {
   id: number;
   name: string;
@@ -509,7 +492,10 @@ function parameterInfoFromNative(info: {
   rtSafe: boolean;
   defaultCurve: number;
 }): Required<EngineParameterInfo> {
-  return { ...info, defaultCurve: curveFromNative(info.defaultCurve) };
+  return {
+    ...info,
+    defaultCurve: tokenName(AUTOMATION_CURVE_VALUES, info.defaultCurve, 'automation curve'),
+  };
 }
 
 function telemetryFromNative(record: {
@@ -1824,7 +1810,7 @@ export class RealtimeEngine {
     this.native.setAutomationLane(
       paramId,
       Array.isArray(points)
-        ? points.map((point, i) => nativeAutomationPoint(point, i) as never)
+        ? points.map((point, i) => automationPointValue(point, i) as never)
         : points,
     );
   }
