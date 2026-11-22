@@ -41,7 +41,7 @@ class RealtimeEngineWasm {
   // Mirror the C-ABI guard (sonare_engine_prepare): reject a non-positive
   // sample_rate / max_block_size instead of silently falling back to a default,
   // which would leave the engine's sample-rate state internally inconsistent.
-  static void validatePrepare(double sample_rate, int max_block_size);
+  static void validatePrepare(double sample_rate);
 
   RealtimeEngineWasm(double sample_rate, const emscripten::val& max_block_size,
                      const emscripten::val& command_capacity,

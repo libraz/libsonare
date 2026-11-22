@@ -7,8 +7,8 @@
 #include <string>
 
 #include "c_api/engine_config_domains.h"
+#include "core/audio.h"
 #include "realtime_engine_wasm.h"
-#include "streaming/realtime_limits.h"
 #include "util/refusal_predicates.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -16,14 +16,11 @@
 #include "wasm/bindings/common/project_timeline_wasm.h"
 #endif
 
-void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size) {
+void RealtimeEngineWasm::validatePrepare(double sample_rate) {
   if (!sonare::is_supported_sample_rate(sample_rate)) {
     throw WasmRangeError("sampleRate " +
                          sonare::util::refusal::integer_range_predicate(
                              sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate));
-  }
-  if (!sonare::is_valid_realtime_block_size(max_block_size)) {
-    throw WasmRangeError("maxBlockSize must be within 1..1048576");
   }
 }
 
@@ -91,7 +88,7 @@ void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size_v
   const int max_channels = optionalDomainValue<int>(max_channels_val, "maxChannels",
                                                     sonare_c_detail::kEngineMaxChannelsDomain)
                                .value_or(RealtimeEngine::kDefaultMaxChannels);
-  validatePrepare(sample_rate, max_block_size);
+  validatePrepare(sample_rate);
   // The C ABI takes both as size_t, so only this surface can express a negative
   // one. Refuse it here rather than letting capacity() read it as the sentinel,
   // which would answer a caller error with the default queue.
