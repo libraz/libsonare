@@ -544,12 +544,13 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
       if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq)) return env.Undefined();
       const Napi::Value numerator = obj.Get("numerator");
       const Napi::Value denominator = obj.Get("denominator");
-      if (!RequireNumberValue(env, numerator, "numerator")) return env.Undefined();
-      seg.numerator = sonare_node::node_domain_number<int>(
-          numerator, "numerator", sonare_c_detail::kTimeSignatureNumeratorDomain);
-      if (!RequireNumberValue(env, denominator, "denominator")) return env.Undefined();
-      seg.denominator = sonare_node::node_domain_number<int>(
-          denominator, "denominator", sonare_c_detail::kTimeSignatureDenominatorDomain);
+      if (!RequiredDomainValue(env, numerator, "numerator",
+                               sonare_c_detail::kTimeSignatureNumeratorDomain, &seg.numerator) ||
+          !RequiredDomainValue(env, denominator, "denominator",
+                               sonare_c_detail::kTimeSignatureDenominatorDomain,
+                               &seg.denominator)) {
+        return env.Undefined();
+      }
       segments.push_back(seg);
     }
   } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {

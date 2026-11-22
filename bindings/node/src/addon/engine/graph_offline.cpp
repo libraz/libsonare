@@ -104,9 +104,11 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
     const Napi::Value ports = obj.Get("numPorts");
     if (!ports.IsUndefined() && !ports.IsNull()) {
       const std::string ports_subject = "spec.nodes[" + std::to_string(i) + "].numPorts";
-      if (!sonare_node::RequireNumberValue(env, ports, ports_subject)) return env.Undefined();
-      node.num_ports = sonare_node::node_domain_number<int>(
-          ports, ports_subject.c_str(), sonare_c_detail::kEngineGraphNodePortsDomain);
+      if (!sonare_node::RequiredDomainValue(env, ports, ports_subject.c_str(),
+                                            sonare_c_detail::kEngineGraphNodePortsDomain,
+                                            &node.num_ports)) {
+        return env.Undefined();
+      }
     }
     // A wrong-typed optional field left one pending JS exception; stop here so
     // no further N-API throw lands on top of it (that would be a fatal abort).

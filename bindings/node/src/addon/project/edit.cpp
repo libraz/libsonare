@@ -194,9 +194,11 @@ bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
                             std::vector<SonareAutomationPoint>* points,
                             SonareAutomationLaneDesc* desc) {
   const Napi::Value target_param_id = obj.Get("targetParamId");
-  if (!RequireNumberValue(env, target_param_id, "targetParamId")) return false;
-  desc->target_param_id = sonare_node::node_domain_number<uint32_t>(
-      target_param_id, "targetParamId", sonare_c_detail::kAutomationTargetParamIdDomain);
+  if (!RequiredDomainValue(env, target_param_id, "targetParamId",
+                           sonare_c_detail::kAutomationTargetParamIdDomain,
+                           &desc->target_param_id)) {
+    return false;
+  }
   if (!ParseAutomationPoints(env, obj.Get("points"), points)) {
     return false;
   }
@@ -209,9 +211,9 @@ bool FillWarpMapDesc(Napi::Env env, const Napi::Object& obj,
                      std::vector<SonareProjectWarpAnchor>* anchors,
                      SonareProjectWarpMapDesc* desc) {
   const Napi::Value warp_map_id = obj.Get("id");
-  if (!RequireNumberValue(env, warp_map_id, "id")) return false;
-  desc->id = sonare_node::node_domain_number<uint32_t>(warp_map_id, "id",
-                                                       sonare_c_detail::kWarpMapIdDomain);
+  if (!RequiredDomainValue(env, warp_map_id, "id", sonare_c_detail::kWarpMapIdDomain, &desc->id)) {
+    return false;
+  }
   desc->name = nullptr;
   Napi::Value value = obj.Get("anchors");
   if (!value.IsArray()) {
