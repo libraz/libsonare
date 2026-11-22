@@ -508,7 +508,7 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
         after = project.to_json_bytes()
         assert after != before
         assert b'"warpRefId":123' in after
-        assert b'"warpMode":1' in after
+        assert b'"warpMode":"repitch"' in after
         restored = Project.from_json(after)
         try:
             assert restored.to_json_bytes() == after
@@ -516,14 +516,14 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
             restored.close()
 
         project.undo()
-        assert b'"warpMode":0' in project.to_json_bytes()
+        assert b'"warpMode":"off"' in project.to_json_bytes()
         project.undo()
         assert b'"warpRefId":0' in project.to_json_bytes()
         project.undo()
         assert project.to_json_bytes() == before
 
         project.set_clip_warp_mode(clip_id, "tempoSync")
-        assert b'"warpMode":2' in project.to_json_bytes()
+        assert b'"warpMode":"tempoSync"' in project.to_json_bytes()
     finally:
         project.close()
 

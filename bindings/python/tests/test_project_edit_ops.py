@@ -295,14 +295,14 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     typed_before_edit = p.to_json()
     typed_doc = json.loads(typed_before_edit)
     assert typed_doc["version"] == 7
-    assert typed_doc["tracks"][0]["automationLanes"][0]["targetKind"] == 1
+    assert typed_doc["tracks"][0]["automationLanes"][0]["targetKind"] == "trackFaderDb"
 
     # An absent kind keeps the lane's existing typed classification while
     # replacing points.
     p.edit_automation_lane(track, typed_target, [AutomationPoint(0.0, 0.5, "hold")])
     edited_doc = json.loads(p.to_json())
     assert edited_doc["version"] == 7
-    assert edited_doc["tracks"][0]["automationLanes"][0]["targetKind"] == 1
+    assert edited_doc["tracks"][0]["automationLanes"][0]["targetKind"] == "trackFaderDb"
 
     restored = Project.from_json(p.to_json())
     assert restored.to_json() == p.to_json()

@@ -1312,7 +1312,7 @@ def test_project_validate_strict_writes_canonical_artifact_before_exit(tmp_path)
             {
                 "id": 1,
                 "name": "audio",
-                "kind": 0,
+                "kind": "audio",
                 "channelStripRef": "",
                 "outputTarget": "",
                 "midiDestinationId": 0,
@@ -1328,12 +1328,12 @@ def test_project_validate_strict_writes_canonical_artifact_before_exit(tmp_path)
                 "lengthPpq": 1,
                 "sourceOffsetPpq": 0,
                 "gain": 1,
-                "fadeIn": {"lengthPpq": 0, "curve": 0},
-                "fadeOut": {"lengthPpq": 0, "curve": 0},
-                "loopMode": 0,
+                "fadeIn": {"lengthPpq": 0, "curve": "linear"},
+                "fadeOut": {"lengthPpq": 0, "curve": "linear"},
+                "loopMode": "off",
                 "loopLengthPpq": 0,
                 "warpRefId": 0,
-                "warpMode": 0,
+                "warpMode": "off",
             }
         ],
     }

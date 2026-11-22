@@ -96,7 +96,7 @@ def _read_fixture() -> tuple[str, bytes]:
         raise HarnessFailure("fixture must contain exactly one track")
     track = tracks[0]
     if (
-        track.get("kind") != 1
+        track.get("kind") != "midi"
         or track.get("midiDestinationId") != 0
         or track.get("id") != 1
     ):
@@ -108,7 +108,7 @@ def _read_fixture() -> tuple[str, bytes]:
     if (
         not isinstance(sources, list)
         or len(sources) != 1
-        or sources[0].get("kind") != 1
+        or sources[0].get("kind") != "midi"
     ):
         raise HarnessFailure("fixture must contain one MIDI source")
 

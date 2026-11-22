@@ -132,7 +132,7 @@ def test_a_track_kind_is_a_token_on_add_and_on_change() -> None:
     try:
         track = project.add_track("midi", "keys")
         project.set_track_kind(track, "aux")
-        assert '"kind":2' in project.to_json()
+        assert '"kind":"aux"' in project.to_json()
         before = project.to_json()
         with pytest.raises(
             TypeError, match="^Project.add_track: kind must be one of audio, midi, aux$"

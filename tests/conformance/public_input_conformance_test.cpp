@@ -191,3 +191,30 @@ TEST_CASE("public input corpus keeps the bus role set closed across the C ABI",
   }
 }
 #endif
+
+#ifdef SONARE_WITH_ARRANGEMENT
+TEST_CASE("public input corpus keeps project document enums as tokens across the C ABI",
+          "[conformance][c_api][project]") {
+  const auto corpus = load_public_input_corpus();
+  const auto& section = corpus["project_document_enum_tokens"];
+  for (const auto& test_case : section["cases"].as_array()) {
+    DYNAMIC_SECTION(test_case["id"].as_string()) {
+      const std::string json = sonare::util::json::dump(test_case["document"]);
+      SonareProject* project = nullptr;
+      char* diagnostics = nullptr;
+      const SonareError result =
+          sonare_project_deserialize(json.c_str(), json.size(), &project, &diagnostics);
+      const std::string diagnostic_text = diagnostics != nullptr ? diagnostics : "";
+      sonare_free_string(diagnostics);
+      if (test_case.contains("accepted")) {
+        REQUIRE(result == SONARE_OK);
+        sonare_project_destroy(project);
+      } else {
+        CHECK(result == SONARE_ERROR_INVALID_FORMAT);
+        CHECK(project == nullptr);
+        CHECK(diagnostic_text == "invalid_format: " + test_case["message"].as_string());
+      }
+    }
+  }
+}
+#endif

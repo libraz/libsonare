@@ -26,7 +26,7 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 
 SAMPLE_RATE = 22050
 # The warp mode an aligned clip must end up in; any other mode ignores the anchors.
-WARP_MODE_TIME_STRETCH = 3
+WARP_MODE_TIME_STRETCH = "timeStretch"
 
 EXIT_INVALID_PARAMETER = 3
 EXIT_INVALID_STATE = 9
@@ -174,7 +174,7 @@ def test_only_the_takes_clips_are_bound_and_they_are_bound_in_time_stretch(
     assert clips[2]["warpMode"] == WARP_MODE_TIME_STRETCH
     # The reference is not a take: nothing about its clip may move.
     assert clips[1]["warpRefId"] == 0
-    assert clips[1]["warpMode"] == 0
+    assert clips[1]["warpMode"] == "off"
 
 
 def test_text_mode_reports_one_line_per_take_between_the_two_summaries(
@@ -389,7 +389,9 @@ def test_a_reference_that_is_not_an_audio_source_is_refused_under_its_id(
     finally:
         project.close()
     midi_ids = [
-        source["id"] for source in json.loads(path.read_bytes())["sources"] if source["kind"]
+        source["id"]
+        for source in json.loads(path.read_bytes())["sources"]
+        if source["kind"] == "midi"
     ]
     assert midi_ids, "the fixture grew no MIDI source, so the refusal is unreachable"
 

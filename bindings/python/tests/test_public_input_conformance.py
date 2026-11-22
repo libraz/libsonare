@@ -491,3 +491,19 @@ def test_mixer_bus_role_follows_the_corpus(case: dict[str, Any]) -> None:
     mixer.add_bus(*args)
     buses = {bus["id"]: bus for bus in json.loads(mixer.to_json())["buses"]}
     assert buses["corpus"]["role"] == case["stored"]
+
+
+_PROJECT_ENUMS = _CORPUS["project_document_enum_tokens"]
+
+
+@pytest.mark.parametrize("case", _PROJECT_ENUMS["cases"], ids=lambda case: case["id"])
+def test_project_document_enums_follow_the_corpus(case: dict[str, Any]) -> None:
+    text = json.dumps(case["document"])
+    if case.get("accepted"):
+        libsonare.Project.from_json(text).close()
+        return
+    with pytest.raises(SonareError) as refused:
+        libsonare.Project.from_json(text)
+    assert refused.value.code_name == _PROJECT_ENUMS["code_name"]
+    assert not isinstance(refused.value, SonareValueError)
+    assert case["message"] in str(refused.value)

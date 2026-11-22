@@ -525,12 +525,12 @@ TEST_CASE("compile returns no timeline handle and the diagnostics when compile f
           "[timeline-apply][c_api]") {
   // A clip pointing at a source id the project does not hold is a compile error.
   const std::string json =
-      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":"audio",)"
       R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
       R"("automationLanes":[]}],"clips":[{"id":1,"trackId":1,"sourceId":99,)"
       R"("startPpq":0,"lengthPpq":1,"sourceOffsetPpq":0,"gain":1,)"
-      R"("fadeIn":{"lengthPpq":0,"curve":0},"fadeOut":{"lengthPpq":0,"curve":0},)"
-      R"("loopMode":0,"loopLengthPpq":0,"warpRefId":0}]})";
+      R"("fadeIn":{"lengthPpq":0,"curve":"linear"},"fadeOut":{"lengthPpq":0,"curve":"linear"},)"
+      R"("loopMode":"off","loopLengthPpq":0,"warpRefId":0}]})";
   SonareProject* project = nullptr;
   char* warnings = nullptr;
   REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &project, &warnings) == SONARE_OK);

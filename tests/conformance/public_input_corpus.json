@@ -424,6 +424,18 @@
       { "id": "empty_role", "role": "" }
     ]
   },
+  "project_document_enum_tokens": {
+    "fn": "Project.from_json",
+    "error": {"c": "InvalidFormat", "node": "SonareError", "wasm": "SonareError", "python": "SonareError"},
+    "code_name": "InvalidFormat",
+    "cases": [
+      { "id": "track_kind_token", "document": {"version": 7, "sampleRate": 48000, "tracks": [{"id": 1, "name": "keys", "kind": "midi"}]}, "accepted": true },
+      { "id": "track_kind_ordinal", "document": {"version": 7, "sampleRate": 48000, "tracks": [{"id": 1, "name": "keys", "kind": 1}]}, "message": "tracks[0].kind must be one of audio, midi, aux" },
+      { "id": "track_kind_case_differs", "document": {"version": 7, "sampleRate": 48000, "tracks": [{"id": 1, "name": "keys", "kind": "Midi"}]}, "message": "tracks[0].kind must be one of audio, midi, aux" },
+      { "id": "overlap_policy_token", "document": {"version": 7, "sampleRate": 48000, "overlapPolicy": "allow"}, "accepted": true },
+      { "id": "overlap_policy_ordinal", "document": {"version": 7, "sampleRate": 48000, "overlapPolicy": 1}, "message": "overlapPolicy must be one of disallow, allow" }
+    ]
+  },
   "insert_unknown_key": {
     "entries": ["mastering_insert_timing", "mastering_apply_processor", "mastering_apply_processor_stereo"],
     "sample_rate": 48000,
@@ -456,7 +468,7 @@
       { "id": "fmin_hz_wrong_type", "key": "fmin_hz", "value": "30", "refused": "type", "predicate": "must be a number" },
       { "id": "gamma_constant_q", "key": "gamma", "value": 0, "only": ["vqt"], "accepted": true },
       { "id": "gamma_negative", "key": "gamma", "value": -1, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0" },
-      { "id": "gamma_nan_is_not_given", "key": "gamma", "value": {"$number": "nan"}, "only": ["vqt"], "accepted": true },
+      { "id": "gamma_nan", "key": "gamma", "value": {"$number": "nan"}, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0" },
       { "id": "gamma_inf", "key": "gamma", "value": {"$number": "inf"}, "only": ["vqt"], "refused": "range", "predicate": "must be finite and at least 0" },
       { "id": "gamma_wrong_type", "key": "gamma", "value": "1", "only": ["vqt"], "refused": "type", "predicate": "must be a number" },
       { "id": "fmin_hz_over_nyquist", "options": {"fmin_hz": 20000}, "refused": "range", "message": "fmin_hz * 2^((n_bins - 1) / bins_per_octave) must be less than sample_rate / 2" },
