@@ -771,6 +771,18 @@ CROSS_OPTION_ROWS: tuple[tuple[list[str], str], ...] = (
         ["transcribe", "{input}", "--f0-min-hz", "100", "--f0-max-hz", "50", "-o", "{output}"],
         "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz 100, --f0-max-hz 50)",
     ),
+    (
+        ["synthesize-rir", "--source-x", "1", "-o", "{output}"],
+        "--source-x, --source-y and --source-z must be given together",
+    ),
+    (
+        ["synthesize-rir", "--listener-y", "2", "--listener-z", "1", "-o", "{output}"],
+        "--listener-x, --listener-y and --listener-z must be given together",
+    ),
+    (
+        ["room-morph", "{input}", "--source-z", "1", "-o", "{output}"],
+        "--source-x, --source-y and --source-z must be given together",
+    ),
 )
 
 

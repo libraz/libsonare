@@ -255,14 +255,6 @@ _ROWS: tuple[tuple[str, str, str, str, int | None], ...] = (
     ("vqt", "--hop-length", "_features_transforms:vqt", "hop_length", None),
 )
 
-# Axes of the tuple-valued ``source`` / ``listener`` defaults, one flag per axis.
-_AXES = tuple(
-    (command, f"--{role}-{axis}", f"_acoustic:{facade}", role, index)
-    for command, facade in (("synthesize-rir", "synthesize_rir"), ("room-morph", "room_morph"))
-    for role in ("source", "listener")
-    for index, axis in enumerate("xyz")
-)
-
 # Options that state a default in ``--help`` while the facade parameter is ``None``, either
 # because ``None`` is how the library is told to choose, or because the stated value is not
 # a single number. The value noted is what the library then uses.
@@ -340,6 +332,12 @@ _NOT_A_SIGNATURE_DEFAULT: dict[tuple[str, str], str] = {
     ("dynamic-range", "--hop-sec"): "None selects the core hop, 1 s",
     ("dynamic-range", "--low-percentile"): "None selects the core low percentile, 0.1",
     ("dynamic-range", "--high-percentile"): "None selects the core high percentile, 0.95",
+    **{
+        (command, f"--{role}-{axis}"): "None takes the default placement scaled to the room"
+        for command in ("synthesize-rir", "room-morph")
+        for role in ("source", "listener")
+        for axis in "xyz"
+    },
 }
 
 
@@ -375,7 +373,7 @@ def _same(stated: str, default: object) -> bool:
 
 @pytest.mark.parametrize(
     ("command", "flag", "facade", "parameter", "index"),
-    _ROWS + _AXES,
+    _ROWS,
     ids=lambda value: str(value),
 )
 def test_help_states_the_facade_default(
@@ -393,7 +391,7 @@ def test_help_states_the_facade_default(
 
 
 def test_every_stated_default_is_checked_or_excused() -> None:
-    covered = {(command, flag) for command, flag, *_ in _ROWS + _AXES}
+    covered = {(command, flag) for command, flag, *_ in _ROWS}
     seen: set[tuple[str, str]] = set()
     for command, parser in _command_parsers().items():
         for action in parser._actions:

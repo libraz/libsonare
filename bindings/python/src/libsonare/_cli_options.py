@@ -923,6 +923,8 @@ _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentPa
     "voice-preset-validate": _refusal_validator("_cli_effects", "_voice_preset_validate_refusal"),
     "polyphonic-render": _refusal_validator("_cli_note_edit", "_polyphonic_edit_refusal"),
     "transcribe": _refusal_validator("_cli_project", "_transcribe_refusal"),
+    "synthesize-rir": _refusal_validator("_cli_acoustic", "_placement_refusal"),
+    "room-morph": _refusal_validator("_cli_acoustic", "_placement_refusal"),
     **{
         name: _validate_utility_arguments
         for name in (

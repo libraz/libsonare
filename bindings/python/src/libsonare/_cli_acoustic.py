@@ -9,7 +9,6 @@ impulse responses back out.
 from __future__ import annotations
 
 import argparse
-import inspect
 import sys
 from typing import Any, cast
 
@@ -64,25 +63,26 @@ def _float_list(values: Any) -> list[float] | None:
 
 
 def _placement(args: argparse.Namespace) -> dict[str, Any]:
-    """The source and listener positions, each passed only when one of its axes was spelled.
+    """The source and listener positions, each passed only when its three axes were given.
 
-    An axis left out keeps the library's coordinate: the missing ones are read from
-    the library's own default position, never restated here.
+    One left out entirely takes the library's default placement scaled to the room;
+    one only partly given was refused before the command ran.
     """
-    from ._acoustic import synthesize_rir
-
-    defaults = inspect.signature(synthesize_rir).parameters
     placement: dict[str, tuple[float, float, float]] = {}
     for keyword in ("source", "listener"):
-        axes = [getattr(args, f"{keyword}_{axis}") for axis in "xyz"]
-        if all(value is None for value in axes):
-            continue
-        base = defaults[keyword].default
-        placement[keyword] = cast(
-            tuple[float, float, float],
-            tuple(base[i] if value is None else value for i, value in enumerate(axes)),
-        )
+        axes = tuple(getattr(args, f"{keyword}_{axis}") for axis in "xyz")
+        if all(value is not None for value in axes):
+            placement[keyword] = cast(tuple[float, float, float], axes)
     return placement
+
+
+def _placement_refusal(args: argparse.Namespace) -> str | None:
+    """Refuses a position given on some of its axes and not all: no axis has a default alone."""
+    for keyword in ("source", "listener"):
+        given = [getattr(args, f"{keyword}_{axis}") is not None for axis in "xyz"]
+        if any(given) and not all(given):
+            return f"--{keyword}-x, --{keyword}-y and --{keyword}-z must be given together"
+    return None
 
 
 def cmd_acoustic(args: argparse.Namespace) -> int:
@@ -345,37 +345,37 @@ def register_acoustic_parsers(
             "--source-x",
             type=_finite_float,
             default=None,
-            help="Source x position (m) (default: 1.0)",
+            help="Source x position (m) (default: scaled to the room)",
         )
         p.add_argument(
             "--source-y",
             type=_finite_float,
             default=None,
-            help="Source y position (m) (default: 1.0)",
+            help="Source y position (m) (default: scaled to the room)",
         )
         p.add_argument(
             "--source-z",
             type=_finite_float,
             default=None,
-            help="Source z position (m) (default: 1.2)",
+            help="Source z position (m) (default: scaled to the room)",
         )
         p.add_argument(
             "--listener-x",
             type=_finite_float,
             default=None,
-            help="Listener x position (m) (default: 5.0)",
+            help="Listener x position (m) (default: scaled to the room)",
         )
         p.add_argument(
             "--listener-y",
             type=_finite_float,
             default=None,
-            help="Listener y position (m) (default: 4.0)",
+            help="Listener y position (m) (default: scaled to the room)",
         )
         p.add_argument(
             "--listener-z",
             type=_finite_float,
             default=None,
-            help="Listener z position (m) (default: 1.7)",
+            help="Listener z position (m) (default: scaled to the room)",
         )
         p.add_argument(
             "--ism-order",

@@ -700,6 +700,33 @@ def test_chords_json_reports_c_bass_not_root(monkeypatch, capsys) -> None:
     assert chord["bass"] == PitchClass.C.value == 0
 
 
+@pytest.mark.parametrize(
+    ("argv", "role"),
+    [
+        (["synthesize-rir", "--source-x", "1"], "source"),
+        (["synthesize-rir", "--listener-y", "2", "--listener-z", "1"], "listener"),
+        (["room-morph", "/nonexistent/sonare-tests/unreadable.wav", "--source-z", "1"], "source"),
+    ],
+)
+def test_a_partly_given_position_is_refused_before_reading(argv: list[str], role: str) -> None:
+    result = _run_cli([*argv, "--output", "/nonexistent/sonare-tests/out.wav"])
+    assert result.returncode == 2, result.stderr
+    assert f"--{role}-x, --{role}-y and --{role}-z must be given together" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert "unreadable" not in result.stderr
+
+
+def test_an_omitted_position_is_the_default_placement_scaled_to_the_room(tmp_path) -> None:
+    room = ["--length", "14", "--width", "10", "--height", "6", "--ism-order", "0"]
+    room += ["--max-sec", "0.03", "--sample-rate", "22050"]
+    omitted, given = tmp_path / "omitted.wav", tmp_path / "given.wav"
+    assert _run_cli(["synthesize-rir", *room, "--output", str(omitted)]).returncode == 0
+    scaled = ["--source-x", "2", "--source-y", "2", "--source-z", "2.4"]
+    scaled += ["--listener-x", "10", "--listener-y", "8", "--listener-z", "3.4"]
+    assert _run_cli(["synthesize-rir", *room, *scaled, "--output", str(given)]).returncode == 0
+    assert omitted.read_bytes() == given.read_bytes()
+
+
 def test_synthesize_rir_invalid_geometry_maps_invalid_parameter(monkeypatch) -> None:
     """Invalid room geometry returns EXIT_INVALID_PARAMETER, not a bare 1."""
     import libsonare
@@ -742,7 +769,10 @@ def test_synthesize_rir_invalid_geometry_exit_code_end_to_end() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = os.path.join(tmpdir, "rir.wav")
         # A source far outside a 7x5x3 m room forces an invalid-geometry result.
-        result = _run_cli(["synthesize-rir", "--output", out_path, "--source-x", "999"])
+        result = _run_cli(
+            ["synthesize-rir", "--output", out_path]
+            + ["--source-x", "999", "--source-y", "1", "--source-z", "1.2"]
+        )
         assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
         assert "acoustic.source_outside_room" in result.stderr
 
