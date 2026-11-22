@@ -289,7 +289,7 @@ typedef enum SONARE_ENUM_BASE {
 
 /// @brief Persistent target classification for an automation lane.
 ///
-/// Opaque is the legacy host-defined target. Track fader and track pan are
+/// Opaque is a host-defined target id. Track fader and track pan are
 /// typed mixer targets. @ref SONARE_AUTOMATION_TARGET_UNCHANGED is accepted only by
 /// @ref sonare_project_edit_automation_lane, where it keeps the lane's current kind.
 typedef enum SONARE_ENUM_BASE {
