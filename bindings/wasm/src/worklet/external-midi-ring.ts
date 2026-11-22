@@ -53,7 +53,7 @@ export interface ExternalMidiRingReadResult {
 }
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function externalMidiRingBufferByteLength(options: { capacity: number }): number {
+export function externalMidiRingBufferByteLength(options: Required<RingCapacityOptions>): number {
   return withEntry('externalMidiRingBufferByteLength', () => {
     const clampedCapacity = resolveRingCapacity(options, undefined);
     return (

@@ -10,13 +10,9 @@ import {
   refuse,
   refuseType,
 } from './internal/entry.js';
-import {
-  type ModuleFlavour,
-  type ModuleInitOptions,
-  type ModuleSlot,
-  moduleSlot,
-} from './internal/module_registry.js';
+import { type ModuleFlavour, type ModuleSlot, moduleSlot } from './internal/module_registry.js';
 import { NATIVE_ENTRIES } from './internal/native_entries.js';
+import type { InitOptions, ModuleFactoryOptions } from './public_types.js';
 import type { SonareModule } from './sonare.js';
 
 /** The holder this bundle's module reads go to; the analysis entry binds its own flavour. */
@@ -337,10 +333,8 @@ export function assertSameInitOptions(first: object | undefined, next: object | 
  */
 export function initModule(
   flavour: ModuleFlavour,
-  options: ModuleInitOptions | undefined,
-  defaultFactory: () => Promise<
-    (options?: Pick<ModuleInitOptions, 'locateFile' | 'wasmBinary'>) => Promise<unknown>
-  >,
+  options: InitOptions | undefined,
+  defaultFactory: () => Promise<(options?: ModuleFactoryOptions) => Promise<unknown>>,
 ): Promise<void> {
   const slot = moduleSlot(flavour);
   if (slot.module || slot.pending) {

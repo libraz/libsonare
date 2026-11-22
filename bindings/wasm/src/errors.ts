@@ -31,6 +31,12 @@ const ERROR_CODE_NAMES = new Map<number, ErrorCodeName>(
   (Object.keys(ErrorCode) as ErrorCodeName[]).map((name) => [ErrorCode[name], name]),
 );
 
+/** Options of the {@link SonareError} constructor. */
+export interface SonareErrorOptions {
+  /** Underlying cause, passed through to `Error`. */
+  cause?: unknown;
+}
+
 /**
  * Error thrown by libsonare on a native (C++) failure. Carries a numeric
  * {@link ErrorCode} `code` plus its canonical `codeName`, so callers can branch
@@ -55,7 +61,7 @@ export class SonareError extends Error {
    * @param message Human-readable description.
    * @param options `cause` is passed through to `Error`.
    */
-  constructor(code: ErrorCode, message: string, options?: { cause?: unknown }) {
+  constructor(code: ErrorCode, message: string, options?: SonareErrorOptions) {
     super(message);
     if (options !== undefined && 'cause' in options) {
       Object.defineProperty(this, 'cause', {

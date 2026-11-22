@@ -50,7 +50,9 @@ export interface ClipPageRequestRingReadResult {
 }
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function clipPageRequestRingBufferByteLength(options: { capacity: number }): number {
+export function clipPageRequestRingBufferByteLength(
+  options: Required<RingCapacityOptions>,
+): number {
   return withEntry('clipPageRequestRingBufferByteLength', () => {
     const clampedCapacity = resolveRingCapacity(options, undefined);
     return (

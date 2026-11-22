@@ -15,6 +15,7 @@ import {
   type VocalWorkerResponseMessage,
 } from './internal/vocal_edit_worker_protocol.js';
 import { attachVocalErrorDetail, isVocalErrorDetail } from './internal/vocal_error_detail.js';
+import { expectedRevisionOption } from './internal/vocal_revision.js';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
@@ -27,6 +28,7 @@ import type {
   VocalRenderAsyncRequest,
   VocalRenderResult,
   VocalRestoreRequest,
+  VocalRevisionOptions,
   VocalStateToken,
 } from './public_types_vocal_edit.js';
 import { requestObject } from './validation.js';
@@ -90,11 +92,8 @@ export interface VocalEditWorkerCreated {
   capabilities: VocalCapabilities;
 }
 
-type RevisionArgument = string | { expectedRevision?: string };
-
-function resolveRevision(argument: RevisionArgument | undefined, fallback: string): string {
-  const value = typeof argument === 'string' ? argument : argument?.expectedRevision;
-  return value ?? fallback;
+function resolveRevision(options: VocalRevisionOptions, fallback: string): string {
+  return expectedRevisionOption(options) ?? fallback;
 }
 
 interface DraftState {
@@ -746,7 +745,7 @@ export class VocalEditWorkerDraft {
   }
 
   /** Commits the draft and releases it. `expectedRevision` defaults to the session's revision. */
-  async commit(options: RevisionArgument = {}): Promise<VocalEditResult> {
+  async commit(options: VocalRevisionOptions = {}): Promise<VocalEditResult> {
     this.requireOpen();
     const result = await this.core.mutate<VocalEditResult>(this.sessionState, {
       kind: 'commit',
@@ -959,7 +958,7 @@ export class VocalEditWorkerSession {
    * Opens a draft for batching edits. `expectedRevision` defaults to the revision the
    * client last saw; a mismatch is refused with a `revisionConflict` detail.
    */
-  async beginEdit(options: RevisionArgument = {}): Promise<VocalEditWorkerDraft> {
+  async beginEdit(options: VocalRevisionOptions = {}): Promise<VocalEditWorkerDraft> {
     this.requireAlive();
     if (this.state.draft?.open) {
       throw invalidState('A vocal edit draft is already open');
@@ -974,7 +973,7 @@ export class VocalEditWorkerSession {
   }
 
   /** Reverts the last commit. `expectedRevision` defaults to the current revision. */
-  async undo(options: RevisionArgument = {}): Promise<VocalEditResult> {
+  async undo(options: VocalRevisionOptions = {}): Promise<VocalEditResult> {
     this.requireAlive();
     return this.core.mutate(this.state, {
       kind: 'undo',
@@ -983,7 +982,7 @@ export class VocalEditWorkerSession {
   }
 
   /** Re-applies the last undone commit. `expectedRevision` defaults to the current revision. */
-  async redo(options: RevisionArgument = {}): Promise<VocalEditResult> {
+  async redo(options: VocalRevisionOptions = {}): Promise<VocalEditResult> {
     this.requireAlive();
     return this.core.mutate(this.state, {
       kind: 'redo',

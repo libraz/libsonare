@@ -15,11 +15,11 @@ import {
   loadedModule,
   notInitializedError,
 } from './module_state.js';
-import type { Capabilities, ModuleFactory } from './public_types.js';
+import type { Capabilities, InitOptions } from './public_types.js';
 
 bindModuleFlavour('analysis');
 
-export type { ErrorCodeName } from './errors.js';
+export type { ErrorCodeName, SonareErrorOptions } from './errors.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export * from './feature_core.js';
 // Several modules here also hold functions the analysis-only embind source set
@@ -126,11 +126,7 @@ export {
  * Initialize the analysis-only WASM module: one per realm, shared by every
  * import of this build's analysis entry. Options apply on the first call.
  */
-export async function init(options?: {
-  locateFile?: (path: string, prefix: string) => string;
-  wasmBinary?: ArrayBuffer | Uint8Array;
-  moduleFactory?: ModuleFactory;
-}): Promise<void> {
+export async function init(options?: InitOptions): Promise<void> {
   return withEntry('init', () =>
     initModule('analysis', options, async () => {
       // A worklet realm has no fetch, so the bundled loader could only fail later and obscurely.

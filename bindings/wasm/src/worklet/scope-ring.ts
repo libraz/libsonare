@@ -7,6 +7,7 @@ import {
   makeOverwriteSlotStates,
   overwriteRingByteLength,
   overwriteRingFirstReadable,
+  type RingCapacityOptions,
   releaseOverwriteRead,
   requireNoUnpublishedRecords,
   requirePositiveCapacity,
@@ -123,7 +124,7 @@ function resolveScopeRingOptions(
 
 /** Byte length of a scope ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function scopeRingBufferByteLength(
-  options: ScopeRingOptions & { capacity: number },
+  options: ScopeRingOptions & Required<RingCapacityOptions>,
 ): number {
   return withEntry('scopeRingBufferByteLength', () => {
     const { capacity, bands, maxPoints } = resolveScopeRingOptions(options, undefined);

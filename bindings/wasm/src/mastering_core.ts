@@ -469,8 +469,8 @@ export function masteringInsertParamNames<N extends MasteringInsertName>(
  * including construction-time-only keys with no realtime automation target.
  * Entries come in two runs: first the processor's realtime automation
  * targets in id order (the keys accepted by
- * {@link RealtimeEngine.setTrackStripInsertParamByName}, `id` non-null); then,
- * sorted by name, every other construction key with `id` null and `rtSafe`
+ * {@link RealtimeEngine.setTrackStripInsertParamByName}, `id` present); then,
+ * sorted by name, every other construction key with no `id` and `rtSafe`
  * false. The name set matches {@link masteringInsertParamNames} plus any
  * automation target construction does not read. Returns an empty array for an
  * unknown name.

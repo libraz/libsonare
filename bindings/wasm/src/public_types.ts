@@ -509,12 +509,24 @@ export type ModuleHandle = {
  * `@libraz/libsonare/module` (the full build) or `@libraz/libsonare/module/analysis`
  * (the analysis-only build), which builds the module from `wasmBinary` without a fetch.
  */
-export type ModuleFactory = (options?: {
+export type ModuleFactory = (options?: ModuleFactoryOptions) => Promise<ModuleHandle>;
+
+/** Options a {@link ModuleFactory} accepts when it builds the module. */
+export interface ModuleFactoryOptions {
   /** Maps a module file name to the URL it is loaded from. Omitted: beside the glue script. */
   locateFile?: (path: string, prefix: string) => string;
   /** Compiled `.wasm` bytes, used instead of a fetch. A worklet realm has no fetch, so it must pass them. */
   wasmBinary?: ArrayBuffer | Uint8Array;
-}) => Promise<ModuleHandle>;
+}
+
+/** Options of `init()`, the same on every entry. */
+export interface InitOptions extends ModuleFactoryOptions {
+  /**
+   * Module factory from `@libraz/libsonare/module` or `@libraz/libsonare/module/analysis`,
+   * used instead of the bundled loader.
+   */
+  moduleFactory?: ModuleFactory;
+}
 
 /** Synchronous progress callback for offline operations. Its return value is ignored. */
 export type ProgressCallback = (progress: number, stage: string) => void;

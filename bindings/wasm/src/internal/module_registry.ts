@@ -12,7 +12,6 @@
  * expect.
  */
 
-import type { ModuleFactory } from '../public_types.js';
 import type { SonareModule } from '../sonare.js';
 
 /**
@@ -26,13 +25,6 @@ const BUILD_ID: string = typeof __SONARE_BUILD_ID__ === 'string' ? __SONARE_BUIL
 
 /** Which WASM binary a holder carries: the full module or the analysis-only one. */
 export type ModuleFlavour = 'full' | 'analysis';
-
-/** What `init()` accepts, the same on every entry. */
-export interface ModuleInitOptions {
-  locateFile?: (path: string, prefix: string) => string;
-  wasmBinary?: ArrayBuffer | Uint8Array;
-  moduleFactory?: ModuleFactory;
-}
 
 /** One realm's module state for one build and flavour. */
 export interface ModuleSlot {

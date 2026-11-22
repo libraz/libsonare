@@ -12,6 +12,7 @@ import {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { withRespelled } from './internal/respell.js';
 import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
+import { expectedRevisionOption } from './internal/vocal_revision.js';
 import { getSonareModule } from './module_state.js';
 import type {
   VocalAnalysis,
@@ -32,6 +33,7 @@ import type {
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
+  VocalRevisionOptions,
   VocalSessionLimits,
   VocalStateToken,
 } from './public_types_vocal_edit.js';
@@ -249,11 +251,8 @@ function requireCount(value: unknown, field: string): number {
   return count;
 }
 
-type RevisionArgument = string | { expectedRevision?: string };
-
-function resolveRevision(argument: RevisionArgument | undefined, fallback: string): string {
-  const value = typeof argument === 'string' ? argument : argument?.expectedRevision;
-  return requireToken(value, 'expectedRevision', fallback);
+function resolveRevision(options: VocalRevisionOptions, fallback: string): string {
+  return requireToken(expectedRevisionOption(options), 'expectedRevision', fallback);
 }
 
 function resolveRange(
@@ -711,7 +710,7 @@ export class VocalEditSession {
   }
 
   /** Opens a draft for batching edits. `expectedRevision` defaults to the current revision; a mismatch is refused with a `revisionConflict` detail. */
-  beginEdit(options: RevisionArgument = {}): VocalEditDraft {
+  beginEdit(options: VocalRevisionOptions = {}): VocalEditDraft {
     const draft = new VocalEditDraftHandle(
       module().vocalEditSessionBeginEdit(this.native(), resolveRevision(options, this.revision)),
       this,
@@ -722,7 +721,7 @@ export class VocalEditSession {
   }
 
   /** Reverts the last commit. `expectedRevision` defaults to the current revision. */
-  undo(options: RevisionArgument = {}): VocalEditResult {
+  undo(options: VocalRevisionOptions = {}): VocalEditResult {
     return copyEditResult(
       module().vocalEditSessionApplyHistory(
         this.native(),
@@ -733,7 +732,7 @@ export class VocalEditSession {
   }
 
   /** Re-applies the last undone commit. `expectedRevision` defaults to the current revision. */
-  redo(options: RevisionArgument = {}): VocalEditResult {
+  redo(options: VocalRevisionOptions = {}): VocalEditResult {
     return copyEditResult(
       module().vocalEditSessionApplyHistory(
         this.native(),
@@ -851,7 +850,7 @@ export class VocalEditDraft {
   }
 
   /** Commits the draft and releases it. `expectedRevision` defaults to the revision the draft was begun from. */
-  commit(options: RevisionArgument = {}): VocalEditResult {
+  commit(options: VocalRevisionOptions = {}): VocalEditResult {
     const result = copyEditResult(
       module().vocalEditDraftCommit(this.native(), resolveRevision(options, this.owner.revision)),
     );

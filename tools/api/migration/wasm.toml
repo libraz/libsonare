@@ -35517,3 +35517,99 @@ changed = "the threshold is read on a new scale, the mean accent between the bea
 domain = "analysis"
 rule = "library-owned-defaults"
 test = "tests/api/sonare_c_core_test.cpp::sonare_meter_options_init mirrors the core defaults"
+
+[[entry]]
+kind = "option"
+old = "VocalEditSession.beginEdit(options)"
+changed = "pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses a bare revision string"
+
+[[entry]]
+kind = "option"
+old = "VocalEditSession.undo(options)"
+changed = "pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses a bare revision string"
+
+[[entry]]
+kind = "option"
+old = "VocalEditSession.redo(options)"
+changed = "pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses a bare revision string"
+
+[[entry]]
+kind = "option"
+old = "VocalEditDraft.commit(options)"
+changed = "pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses a bare revision string"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerSession.beginEdit(options)"
+changed = "pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::rejects a bare revision string"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerSession.undo(options)"
+changed = "pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::rejects a bare revision string"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerSession.redo(options)"
+changed = "pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::rejects a bare revision string"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerNativeSession.beginEdit(expectedRevision)"
+to = "VocalEditWorkerNativeSession.beginEdit(options)"
+changed = "receives { expectedRevision } instead of the revision string, the shape the session methods take"
+domain = "project"
+rule = "vocal-edit-model"
+entry = "./vocal-edit-worker"
+test = "bindings/wasm/tests/vocal_edit_worker.test.ts::hands the native session and draft each revision"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerNativeSession.undo(expectedRevision)"
+to = "VocalEditWorkerNativeSession.undo(options)"
+changed = "receives { expectedRevision } instead of the revision string, the shape the session methods take"
+domain = "project"
+rule = "vocal-edit-model"
+entry = "./vocal-edit-worker"
+test = "bindings/wasm/tests/vocal_edit_worker.test.ts::hands the native session and draft each revision"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerNativeSession.redo(expectedRevision)"
+to = "VocalEditWorkerNativeSession.redo(options)"
+changed = "receives { expectedRevision } instead of the revision string, the shape the session methods take"
+domain = "project"
+rule = "vocal-edit-model"
+entry = "./vocal-edit-worker"
+test = "bindings/wasm/tests/vocal_edit_worker.test.ts::hands the native session and draft each revision"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerNativeDraft.commit(expectedRevision)"
+to = "VocalEditWorkerNativeDraft.commit(options)"
+changed = "receives { expectedRevision } instead of the revision string, the shape the session methods take"
+domain = "project"
+rule = "vocal-edit-model"
+entry = "./vocal-edit-worker"
+test = "bindings/wasm/tests/vocal_edit_worker.test.ts::hands the native session and draft each revision"

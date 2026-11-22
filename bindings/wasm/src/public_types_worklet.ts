@@ -250,6 +250,14 @@ export interface SonareRealtimeVoiceChangerNodeStatus {
   config: RealtimeVoiceChangerConfig;
 }
 
+/** Answers one status request, in the order the requests arrived. */
+export interface SonareRealtimeVoiceChangerStatusReplyMessage {
+  /** Always `'status'`. */
+  type: 'status';
+  /** The processor's status when the request was answered. */
+  status: SonareRealtimeVoiceChangerNodeStatus;
+}
+
 /** Options handed to the stream-analyzer worklet processor. */
 export interface SonareStreamAnalyzerWorkletProcessorOptions {
   /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */

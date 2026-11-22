@@ -193,7 +193,7 @@ export interface SharedSpectrumRingWriter {
 export const SONARE_FLOOR_DB = -120;
 
 /** Byte length of a meter ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function meterRingBufferByteLength(options: { capacity: number }): number {
+export function meterRingBufferByteLength(options: Required<RingCapacityOptions>): number {
   return withEntry('meterRingBufferByteLength', () => {
     const capacity = resolveRingCapacity(options, undefined);
     return overwriteRingByteLength(
@@ -352,7 +352,7 @@ function resolveSpectrumRingOptions(
 
 /** Byte length of a spectrum ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function spectrumRingBufferByteLength(
-  options: SpectrumRingOptions & { capacity: number },
+  options: SpectrumRingOptions & Required<RingCapacityOptions>,
 ): number {
   return withEntry('spectrumRingBufferByteLength', () => {
     const { capacity, bands } = resolveSpectrumRingOptions(options, undefined);

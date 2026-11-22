@@ -844,3 +844,22 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     expect(settled).toBe(true);
   });
 });
+
+describe('vocal edit Worker revision options', () => {
+  it('rejects a bare revision string by naming the options shape', async () => {
+    const client = new VocalEditWorkerClient({ worker: new FakeWorker() });
+    const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+    try {
+      for (const call of [
+        () => session.beginEdit('0' as never),
+        () => session.undo('0' as never),
+        () => session.redo('0' as never),
+      ]) {
+        await expect(call()).rejects.toThrow(TypeError);
+        await expect(call()).rejects.toThrow('options must be a { expectedRevision } object');
+      }
+    } finally {
+      client.destroy();
+    }
+  });
+});

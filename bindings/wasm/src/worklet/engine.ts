@@ -53,12 +53,18 @@ import {
 import { OwnerEpoch } from '../owner_epoch.js';
 import type { SurroundPan } from '../public_types.js';
 import type {
+  CaptureArmState,
   CaptureOptions,
   EngineLoop,
+  EngineMarkerInput,
   ExternalMidiEvent,
+  InsertBypassState,
+  InsertParamValue,
   MidiFxConfig,
   SidechainSource,
+  TrackSoloMuteState,
 } from '../public_types_engine.js';
+import type { MidiBank } from '../public_types_midi_messages.js';
 import type {
   EngineSyncErrorMessage,
   SonareRealtimeEngineNodeCapabilities,
@@ -579,7 +585,7 @@ export class SonareEngine {
    * the program output here, which the facade renders with the cue kept separate; offline renders,
    * bounces and freezes never include it.
    */
-  setTrackSoloMute(target: string | number, state: { solo: boolean; mute: boolean }): void {
+  setTrackSoloMute(target: string | number, state: TrackSoloMuteState): void {
     parameter.setTrackSoloMute(this.parameterContext, target, state);
   }
 
@@ -803,36 +809,24 @@ export class SonareEngine {
   setStripInsertBypassed(
     target: string | number,
     insertIndex: number,
-    state: { bypassed: boolean; resetOnBypass?: boolean },
+    state: InsertBypassState,
   ): void {
     strips.setStripInsertBypassed(this.stripContext, target, insertIndex, state);
   }
 
   /** Bus counterpart of {@link setStripInsertBypassed}. */
-  setBusInsertBypassed(
-    busId: number,
-    insertIndex: number,
-    state: { bypassed: boolean; resetOnBypass?: boolean },
-  ): void {
+  setBusInsertBypassed(busId: number, insertIndex: number, state: InsertBypassState): void {
     this.ensureBus(busId);
     strips.setBusInsertBypassed(this.stripContext, busId, insertIndex, state);
   }
 
   /** Sets one insert parameter of a strip by its JSON-key name. */
-  setStripInsertParam(
-    target: string | number,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): void {
+  setStripInsertParam(target: string | number, insertIndex: number, param: InsertParamValue): void {
     strips.setStripInsertParam(this.stripContext, target, insertIndex, param);
   }
 
   /** Bus counterpart of {@link setStripInsertParam}. */
-  setBusInsertParam(
-    busId: number,
-    insertIndex: number,
-    param: { name: string; value: number },
-  ): void {
+  setBusInsertParam(busId: number, insertIndex: number, param: InsertParamValue): void {
     this.ensureBus(busId);
     strips.setBusInsertParam(this.stripContext, busId, insertIndex, param);
   }
@@ -1344,7 +1338,7 @@ export class SonareEngine {
     group: number,
     channel: number,
     program: number,
-    bank?: { msb: number; lsb: number },
+    bank?: MidiBank,
     renderFrame?: number,
     options?: SonareEngineMidiTimingOptions,
   ): void {
@@ -1627,7 +1621,7 @@ export class SonareEngine {
     group: number,
     channel: number,
     program: number,
-    bank?: { msb: number; lsb: number },
+    bank?: MidiBank,
     offsetInBlockSamples?: number,
     options?: SonareEngineMidiTimingOptions,
   ): void {
@@ -1698,7 +1692,7 @@ export class SonareEngine {
   }
 
   /** Arms or disarms the engine-global capture path; per-track capture is not implemented. */
-  armCapture(state: { armed: boolean }): void {
+  armCapture(state: CaptureArmState): void {
     capture.armCapture(this.captureContext, state);
   }
 
@@ -1744,7 +1738,7 @@ export class SonareEngine {
    * assigned fresh ids; entries carrying an `id` keep it. Returns the stored
    * markers in the order given.
    */
-  setMarkers(entries: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>): EngineMarker[] {
+  setMarkers(entries: ReadonlyArray<EngineMarkerInput>): EngineMarker[] {
     return markerOps.setMarkers(this.markerContext, entries);
   }
 

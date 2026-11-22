@@ -10,6 +10,7 @@ import { assertHandleLive } from './internal/handle_guard.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
+  AutoGainOptions,
   EqBandInput,
   EqMatchOptions,
   EqSpectrumSnapshot,
@@ -479,7 +480,7 @@ export class StreamingEqualizer {
    *
    * @throws TypeError when `options` is not an object or `enabled` is not a boolean
    */
-  setAutoGain(options: { enabled: boolean }): void {
+  setAutoGain(options: AutoGainOptions): void {
     if (typeof options !== 'object' || options === null) {
       throw refuseType('options must be an object');
     }

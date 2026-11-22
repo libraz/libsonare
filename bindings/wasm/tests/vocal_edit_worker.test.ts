@@ -918,3 +918,69 @@ describe('vocal edit Worker mutation semantics', () => {
     }
   });
 });
+
+describe('vocal edit Worker native calls', () => {
+  it('hands the native session and draft each revision as a { expectedRevision } object', async () => {
+    const fake = fakeFactory();
+    const seen: Array<[string, unknown]> = [];
+    const factory = fake.dependencies.factory as NonNullable<
+      VocalEditWorkerDependencies['factory']
+    >;
+    const create = (request: VocalCreateRequest): VocalEditWorkerNativeSession => {
+      const session = factory.create(request);
+      const draft = session.beginEdit();
+      const recordedDraft: VocalEditWorkerNativeDraft = {
+        ...draft,
+        commit: (options) => {
+          seen.push(['commit', options]);
+          return draft.commit(options);
+        },
+      };
+      return {
+        ...session,
+        beginEdit: (options) => {
+          seen.push(['beginEdit', options]);
+          return recordedDraft;
+        },
+        undo: (options) => {
+          seen.push(['undo', options]);
+          return session.undo(options);
+        },
+        redo: (options) => {
+          seen.push(['redo', options]);
+          return session.redo(options);
+        },
+      };
+    };
+    const endpoint = new Endpoint();
+    installVocalEditWorkerEndpoint(endpoint, {
+      ...fake.dependencies,
+      factory: { ...factory, create },
+    });
+    endpoint.dispatch(createMessage(1, '1'));
+    await settle();
+    endpoint.take(1);
+    const mutations = [
+      { kind: 'beginEdit', expectedRevision: '0' },
+      { kind: 'commit', expectedRevision: '0' },
+      { kind: 'undo' },
+      { kind: 'redo', expectedRevision: '0' },
+    ] as const;
+    mutations.forEach((mutation, index) => {
+      endpoint.dispatch({
+        type: 'sonare:vocal-mutate',
+        id: index + 2,
+        sessionId: 's',
+        clientIntentSequence: String(index + 2),
+        mutation,
+      } as VocalWorkerRequestMessage);
+    });
+    await settle();
+    expect(seen).toEqual([
+      ['beginEdit', { expectedRevision: '0' }],
+      ['commit', { expectedRevision: '0' }],
+      ['undo', { expectedRevision: undefined }],
+      ['redo', { expectedRevision: '0' }],
+    ]);
+  });
+});

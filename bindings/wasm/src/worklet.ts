@@ -29,8 +29,20 @@ export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.
-export type { ModuleFactory, StreamingMasteringChainConfig } from './public_types.js';
-export type { CaptureOptions } from './public_types_engine.js';
+export type {
+  InitOptions,
+  ModuleFactory,
+  ModuleFactoryOptions,
+  StreamingMasteringChainConfig,
+} from './public_types.js';
+export type {
+  CaptureArmState,
+  CaptureOptions,
+  EngineMarkerInput,
+  InsertBypassState,
+  InsertParamValue,
+  TrackSoloMuteState,
+} from './public_types_engine.js';
 export type { MixerProcessResult, StripMeteringOptions } from './public_types_mixing.js';
 export type {
   EqBandInput,
@@ -54,6 +66,7 @@ export type {
   SonareRealtimeEngineWorkletProcessorOptions,
   SonareRealtimeVoiceChangerNodeOptions,
   SonareRealtimeVoiceChangerNodeStatus,
+  SonareRealtimeVoiceChangerStatusReplyMessage,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorConstructorOptions,

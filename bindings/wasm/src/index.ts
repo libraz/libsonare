@@ -22,7 +22,7 @@ import { ErrorCode } from './errors.js';
 import { codedError, withEntry } from './internal/entry.js';
 import './lifetime.js';
 import { initModule, loadedModule, notInitializedError } from './module_state.js';
-import type { Capabilities, CapabilityCatalog, ModuleFactory, SystemInfo } from './public_types.js';
+import type { Capabilities, CapabilityCatalog, InitOptions, SystemInfo } from './public_types.js';
 
 export { alignTakeToReference } from './align_take.js';
 export type {
@@ -252,7 +252,7 @@ export type {
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
-export type { ErrorCodeName } from './errors.js';
+export type { ErrorCodeName, SonareErrorOptions } from './errors.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export type {
   AmplitudeToDbRequest,
@@ -786,6 +786,7 @@ export type {
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
   AssignNoteTargetsResult,
+  AutoGainOptions,
   AutomationCurve,
   AutoTuneKey,
   AutoTuneOptions,
@@ -843,6 +844,7 @@ export type {
   GrooveType,
   HpssResult,
   HumDetection,
+  InitOptions,
   Key,
   KeyCandidate,
   KeyDetection,
@@ -934,6 +936,7 @@ export type {
   MixSourceClass,
   MixTrackAlignment,
   ModuleFactory,
+  ModuleFactoryOptions,
   ModuleHandle,
   MultibandCompressorBand,
   NoiseDetection,
@@ -1139,6 +1142,7 @@ export {
   synthesizeRir,
 } from './quick_analysis.js';
 export type {
+  CaptureArmState,
   CaptureOptions,
   CapturePunch,
   ClipPageProviderOptions,
@@ -1160,6 +1164,7 @@ export type {
   EngineGraphSpec,
   EngineLoop,
   EngineMarker,
+  EngineMarkerInput,
   EngineMeterTelemetry,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
@@ -1179,10 +1184,13 @@ export type {
   EngineTrackSend,
   EngineTransportState,
   ExternalMidiEvent,
+  InsertBypassState,
+  InsertParamValue,
   MarkerKind,
   RealtimeEngineConfig,
   RenderOfflineRequest,
   SidechainSource,
+  TrackSoloMuteState,
 } from './realtime_engine.js';
 export {
   ClipPageProvider,
@@ -1296,11 +1304,7 @@ export { OfflineWorkerClient } from './worker_client.js';
  * @param options - Optional module configuration
  * @returns Promise that resolves when initialization is complete
  */
-export async function init(options?: {
-  locateFile?: (path: string, prefix: string) => string;
-  wasmBinary?: ArrayBuffer | Uint8Array;
-  moduleFactory?: ModuleFactory;
-}): Promise<void> {
+export async function init(options?: InitOptions): Promise<void> {
   return withEntry('init', () =>
     initModule('full', options, async () => {
       // A worklet realm has no fetch, so the bundled loader could only fail later and obscurely.

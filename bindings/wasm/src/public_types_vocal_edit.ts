@@ -403,6 +403,12 @@ export type VocalEditOperation =
   | VocalRemoveTransitionOperation
   | VocalResetOperation;
 
+/** Options of `beginEdit`, `undo`, `redo` and `commit`. */
+export interface VocalRevisionOptions {
+  /** Revision the call is expected to act on; a mismatch is refused. Omitted: the current revision. */
+  expectedRevision?: string;
+}
+
 /** Input of `draft.apply`. */
 export interface VocalApplyRequest {
   /**

@@ -183,7 +183,9 @@ function validateEngineTelemetryPublicationWrapped(
 }
 
 /** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
-export function engineTelemetryRingBufferByteLength(options: { capacity: number }): number {
+export function engineTelemetryRingBufferByteLength(
+  options: Required<RingCapacityOptions>,
+): number {
   return withEntry('engineTelemetryRingBufferByteLength', () => {
     const clampedCapacity = resolveRingCapacity(options, undefined);
     return (

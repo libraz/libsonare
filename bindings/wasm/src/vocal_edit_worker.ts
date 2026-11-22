@@ -18,15 +18,16 @@ import './lifetime.js';
 import { init } from './index.js';
 import type {
   VocalAnalysis,
+  VocalApplyRequest,
   VocalCapabilities,
   VocalCreateRequest,
-  VocalEditOperation,
   VocalEditResult,
   VocalHistory,
   VocalNotesResult,
   VocalPitchEvaluation,
   VocalRenderResult,
   VocalRestoreRequest,
+  VocalRevisionOptions,
   VocalStateToken,
 } from './public_types_vocal_edit.js';
 import {
@@ -54,12 +55,9 @@ export interface VocalEditWorkerNativeDraft {
   /** Notes of the draft. */
   notes(): VocalNotesResult;
   /** Applies operations; `expectedGeneration` must match the draft's current generation. */
-  apply(request: {
-    expectedGeneration: string;
-    operations: readonly VocalEditOperation[];
-  }): VocalEditResult;
+  apply(request: Required<VocalApplyRequest>): VocalEditResult;
   /** Commits the draft; `expectedRevision` must match the session's current revision. */
-  commit(expectedRevision: string): VocalEditResult;
+  commit(options: Required<VocalRevisionOptions>): VocalEditResult;
   /** Discards the draft. */
   cancel(): void;
   /** Pitch curves of a note after the draft's edits. */
@@ -85,11 +83,11 @@ export interface VocalEditWorkerNativeSession {
   /** Capabilities of the session. */
   capabilities(): VocalCapabilities;
   /** Opens a draft; `expectedRevision`, when given, must match the current revision. */
-  beginEdit(expectedRevision?: string): VocalEditWorkerNativeDraft;
+  beginEdit(options?: VocalRevisionOptions): VocalEditWorkerNativeDraft;
   /** Undoes the last edit; `expectedRevision`, when given, must match the current revision. */
-  undo(expectedRevision?: string): VocalEditResult;
+  undo(options?: VocalRevisionOptions): VocalEditResult;
   /** Redoes the last undone edit; `expectedRevision`, when given, must match the current revision. */
-  redo(expectedRevision?: string): VocalEditResult;
+  redo(options?: VocalRevisionOptions): VocalEditResult;
   /** Length of the output in samples. */
   readonly outputLengthSamples: number;
   /** Undo/redo history. */
@@ -368,14 +366,14 @@ async function execute(
           if (session.draft) {
             throw invalidState('A vocal edit draft is already open');
           }
-          session.draft = session.value.beginEdit(mutation.expectedRevision);
+          session.draft = session.value.beginEdit({ expectedRevision: mutation.expectedRevision });
           result = session.draft.token;
           break;
         case 'apply':
           result = draftRequired(session).apply(mutation.request);
           break;
         case 'commit':
-          result = draftRequired(session).commit(mutation.expectedRevision);
+          result = draftRequired(session).commit({ expectedRevision: mutation.expectedRevision });
           session.draft?.destroy();
           session.draft = undefined;
           break;
@@ -389,13 +387,13 @@ async function execute(
           if (session.draft) {
             throw invalidState('Cancel or commit the vocal draft before undo');
           }
-          result = session.value.undo(mutation.expectedRevision);
+          result = session.value.undo({ expectedRevision: mutation.expectedRevision });
           break;
         case 'redo':
           if (session.draft) {
             throw invalidState('Cancel or commit the vocal draft before redo');
           }
-          result = session.value.redo(mutation.expectedRevision);
+          result = session.value.redo({ expectedRevision: mutation.expectedRevision });
           break;
         case 'notes':
           result = readTarget(session, mutation.draft).notes();

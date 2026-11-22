@@ -2,6 +2,7 @@ import { ErrorCode } from './errors.js';
 import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { ProjectMidiCcBinding } from './project_types.js';
+import type { MidiBank } from './public_types_midi_messages.js';
 import {
   assertFiniteScalar,
   assertNibble,
@@ -79,7 +80,7 @@ export interface WebMidiEngine {
     group: number,
     channel: number,
     program: number,
-    bank?: { msb: number; lsb: number },
+    bank?: MidiBank,
     offsetInBlockSamples?: number,
     options?: WebMidiEngineInputOptions,
   ): void;
@@ -666,9 +667,13 @@ function eventContextTime(
  *
  * @example
  * ```ts
+ * import type { SonareEngine } from '@libraz/libsonare/worklet';
+ * declare const input: MIDIInput;
+ * declare const live: SonareEngine;
  * input.onmidimessage = (event) => {
+ *   if (!event.data) return;
  *   const contextTimeSec = webMidiEventContextTime(context, event.timeStamp);
- *   engine.pushMidiInputNoteOn(0, 0, event.data[1], event.data[2], undefined, { contextTimeSec });
+ *   live.pushMidiInputNoteOn(0, 0, event.data[1], event.data[2], undefined, { contextTimeSec });
  * };
  * ```
  */

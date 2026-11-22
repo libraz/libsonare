@@ -1,5 +1,7 @@
+import type { MidiBank } from '../public_types_midi_messages.js';
 import { assertBoundedInteger, requestObject } from '../validation.js';
-import { refuse } from './entry.js';
+import { refuse, refuseType } from './entry.js';
+import { isNonArrayObject } from './value_guards.js';
 
 /** An integer in `[0, max]`: a non-number is a `TypeError`, anything else outside a `RangeError`. */
 function programArg(value: unknown, argName: string, max: number): number {
@@ -42,10 +44,13 @@ export function packMidi2ProgramRequest(
   group: number,
   channel: number,
   program: number,
-  bank: { msb: number; lsb: number } | null | undefined,
+  bank: MidiBank | undefined,
 ): Uint32Array {
-  const bankValid = bank !== undefined && bank !== null;
+  const bankValid = bank !== undefined;
   if (bankValid) {
+    if (!isNonArrayObject(bank)) {
+      throw refuseType('bank must be a { msb, lsb } object');
+    }
     requestObject(requestName, bank, 'bank', true);
   }
   return Uint32Array.from(

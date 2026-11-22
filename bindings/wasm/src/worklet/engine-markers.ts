@@ -1,4 +1,4 @@
-import type { EngineMarker, RealtimeEngine } from '../index.js';
+import type { EngineMarker, EngineMarkerInput, RealtimeEngine } from '../index.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import { commitCommand, commitStore, type EngineCommitContext } from './engine-commit.js';
 import { resolveMarkerSet } from './engine-offline.js';
@@ -42,7 +42,7 @@ export function addMarker(ctx: EngineMarkerContext, ppq: number, name = ''): num
  */
 export function setMarkers(
   ctx: EngineMarkerContext,
-  markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>,
+  markers: ReadonlyArray<EngineMarkerInput>,
 ): EngineMarker[] {
   const { resolved, nextMarkerId } = resolveMarkerSet(markers, ctx.getNextMarkerId());
   commitMarkers(ctx, new Map(resolved.map((marker) => [marker.id, marker])));

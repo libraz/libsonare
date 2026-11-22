@@ -600,3 +600,32 @@ describe('WASM vocal edit facade', () => {
     }
   });
 });
+
+describe('vocal edit revision options', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('refuses a bare revision string or an undeclared key by naming the options shape', () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    try {
+      const draft = session.beginEdit();
+      for (const call of [
+        () => session.beginEdit('0' as never),
+        () => session.undo('0' as never),
+        () => session.redo('0' as never),
+        () => draft.commit('0' as never),
+        () => session.undo(null as never),
+      ]) {
+        expect(call).toThrow(TypeError);
+        expect(call).toThrow('options must be a { expectedRevision } object');
+      }
+      expect(() => draft.commit({ revision: '0' } as never)).toThrow(
+        /unknown key options\.revision/,
+      );
+      expect(() => draft.commit({ expectedRevision: '0' })).not.toThrow();
+    } finally {
+      session.destroy();
+    }
+  });
+});

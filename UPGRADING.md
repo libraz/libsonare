@@ -12292,11 +12292,22 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `ProjectVocalEditApplyRequest.sve1` | `ProjectVocalEditApplyRequest.vocalState` |
+| `VocalEditDraft.commit(options)` | pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape |
+| `VocalEditSession.beginEdit(options)` | pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape |
+| `VocalEditSession.redo(options)` | pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape |
+| `VocalEditSession.undo(options)` | pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape |
+| `VocalEditWorkerNativeDraft.commit(expectedRevision)` (`./vocal-edit-worker`) | `VocalEditWorkerNativeDraft.commit(options)`: receives { expectedRevision } instead of the revision string, the shape the session methods take |
 | `VocalEditWorkerNativeDraft.exportState` (`./vocal-edit-worker`) | removed: Call exportState() on the session after the draft is committed; a draft no longer exports state. |
+| `VocalEditWorkerNativeSession.beginEdit(expectedRevision)` (`./vocal-edit-worker`) | `VocalEditWorkerNativeSession.beginEdit(options)`: receives { expectedRevision } instead of the revision string, the shape the session methods take |
+| `VocalEditWorkerNativeSession.redo(expectedRevision)` (`./vocal-edit-worker`) | `VocalEditWorkerNativeSession.redo(options)`: receives { expectedRevision } instead of the revision string, the shape the session methods take |
+| `VocalEditWorkerNativeSession.undo(expectedRevision)` (`./vocal-edit-worker`) | `VocalEditWorkerNativeSession.undo(options)`: receives { expectedRevision } instead of the revision string, the shape the session methods take |
 | `VocalEditWorkerSession.apply` | `VocalEditWorkerDraft.apply` |
+| `VocalEditWorkerSession.beginEdit(options)` | pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape |
 | `VocalEditWorkerSession.beginEdit` | resolves to a VocalEditWorkerDraft instead of a state token |
 | `VocalEditWorkerSession.cancel` | `VocalEditWorkerDraft.cancel` |
 | `VocalEditWorkerSession.commit` | `VocalEditWorkerDraft.commit` |
+| `VocalEditWorkerSession.redo(options)` | pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape |
+| `VocalEditWorkerSession.undo(options)` | pass { expectedRevision } instead of a bare revision string; a string is a TypeError naming the options shape |
 
 #### Other individual changes
 
