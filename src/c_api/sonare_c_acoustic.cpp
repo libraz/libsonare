@@ -274,11 +274,11 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   const sonare::acoustic::SourceListener placement = resolve_placement(*config).placement;
   check::integer_within(config->ism_order, sonare::effects::common::kRirIsmOrderDomain,
                         "config.ism_order");
-  check::in_range(config->max_sec, 0.0, sonare::acoustic::kMaxRirSeconds, "config.max_sec");
-  check::in_range(config->mixing_time_ms, 0.0, sonare::acoustic::kMaxRirMixingTimeMs,
-                  "config.mixing_time_ms");
-  check::in_range(config->crossfade_ms, 0.0, sonare::acoustic::kMaxRirCrossfadeMs,
-                  "config.crossfade_ms");
+  check::within(config->max_sec, sonare::effects::common::kRirMaxSecondsDomain, "config.max_sec");
+  check::within(config->mixing_time_ms, sonare::effects::common::kRirMixingTimeMsDomain,
+                "config.mixing_time_ms");
+  check::within(config->crossfade_ms, sonare::effects::common::kRirCrossfadeMsDomain,
+                "config.crossfade_ms");
   check_wall_material(*config);
   sonare::acoustic::RirSynthConfig rc;
   rc.late_model = config->prefer_eyring != 0 ? sonare::acoustic::ReverbModel::Eyring
@@ -348,7 +348,7 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
                   sonare::kRoomReferenceAbsorptionMax, "config.reference_absorption");
   check::greater_than(config->min_decay_db, 0.0, "config.min_decay_db");
   check::at_least(config->noise_floor_margin_db, 0.0, "config.noise_floor_margin_db");
-  check::integer_within(config->n_octave_bands, sonare_c_detail::kRoomEstimateOctaveBandsDomain,
+  check::integer_within(config->n_octave_bands, sonare::kRoomEstimateOctaveBandsDomain,
                         "config.n_octave_bands");
   SONARE_C_REQUIRE_NONNULL(out);
 

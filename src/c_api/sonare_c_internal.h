@@ -75,9 +75,6 @@ constexpr size_t kMaxBufferSize = sonare::kMaxAudioBufferSize;
 /// @brief What a row or column count of a caller's matrix accepts.
 inline constexpr sonare::util::check::NumericDomain kMatrixDimensionDomain =
     sonare::util::check::integer_domain_of<int>(0);
-/// @brief What the octave-band count of a room estimate accepts.
-inline constexpr sonare::util::check::NumericDomain kRoomEstimateOctaveBandsDomain =
-    sonare::util::check::integer_domain_of<int>(1);
 /// @brief What the channel count of an interleaved buffer accepts.
 inline constexpr sonare::util::check::NumericDomain kInterleavedChannelsDomain =
     sonare::util::check::integer_domain_of<int>(1);

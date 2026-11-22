@@ -439,12 +439,34 @@ SonareError probe_estimate_room(const std::string& param, double value) {
   return err;
 }
 
+/// Sets the room field @p param names on either room config; the air fields switch air
+/// absorption on, since only then are they checked.
+template <typename RoomConfig>
+void set_room_field(RoomConfig& config, const std::string& param, double value) {
+  const auto f = static_cast<float>(value);
+  if (is_param(param, "config.ism_order")) config.ism_order = as_int(value);
+  if (is_param(param, "config.length_m")) config.length_m = f;
+  if (is_param(param, "config.width_m")) config.width_m = f;
+  if (is_param(param, "config.height_m")) config.height_m = f;
+  if (is_param(param, "config.max_sec")) config.max_sec = f;
+  if (is_param(param, "config.mixing_time_ms")) config.mixing_time_ms = f;
+  if (is_param(param, "config.crossfade_ms")) config.crossfade_ms = f;
+  if (is_param(param, "config.air_temperature_c")) {
+    config.air_absorption_enabled = 1;
+    config.air_temperature_c = f;
+  }
+  if (is_param(param, "config.air_humidity_percent")) {
+    config.air_absorption_enabled = 1;
+    config.air_humidity_percent = f;
+  }
+}
+
 SonareError probe_synthesize_rir(const std::string& param, double value) {
   SonareRirSynthConfig config;
   sonare_rir_synth_config_init(&config);
   int sample_rate = 48000;
   if (is_param(param, "sample_rate")) sample_rate = as_int(value);
-  if (is_param(param, "config.ism_order")) config.ism_order = as_int(value);
+  set_room_field(config, param, value);
   SonareRirSynthResult out{};
   const SonareError err = sonare_synthesize_rir(&config, sample_rate, &out);
   if (err == SONARE_OK) sonare_free_rir_synth_result(&out);
@@ -454,7 +476,10 @@ SonareError probe_synthesize_rir(const std::string& param, double value) {
 SonareRoomMorphConfig morph_config(const std::string& param, double value) {
   SonareRoomMorphConfig config;
   sonare_room_morph_config_init(&config);
-  if (is_param(param, "config.ism_order")) config.ism_order = as_int(value);
+  set_room_field(config, param, value);
+  if (is_param(param, "config.receiver_spacing_m")) {
+    config.receiver_spacing_m = static_cast<float>(value);
+  }
   return config;
 }
 
@@ -965,6 +990,11 @@ double mastering_inside_value(const NumericDomainRow& row) {
     if (param == "n_iter") return 1.0;
   }
   if (entry == "pcen" || entry == "tonnetz") return 4.0;
+  // A room that holds the default placement, and a receiver pair that fits inside it.
+  if (param == "config.length_m" || param == "config.width_m" || param == "config.height_m") {
+    return 6.0;
+  }
+  if (param == "config.receiver_spacing_m") return 0.2;
   if (entry == "stream_analyzer_create" && param == "config.n_fft") return 2048.0;
   if (entry == "mastering_repair_noise_band_bins") return param == "n_fft" ? 2048.0 : kAnalysisRate;
   if (param == "config.n_fft" && starts_with(entry, "mastering_repair_")) return 2048.0;
