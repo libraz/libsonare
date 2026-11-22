@@ -32,6 +32,19 @@ constexpr float kMaxFlangerDepthMs = 100.0f;
 constexpr float kMinDelayBufferMs = 100.0f;  // 100 ms
 constexpr unsigned int kPreFilterModeCount = 3;
 
+// Re-derives each pole and keeps the running sample, so a moved corner or mode
+// does not put a step through the delay.
+void retune_keeping_state(std::array<PreFilter, 2>& filters, PreFilterMode mode, float corner_hz,
+                          double sample_rate) noexcept {
+  for (auto& pre_filter : filters) {
+    const float carried = pre_filter.state();
+    pre_filter.prepare(mode, corner_hz, sample_rate);
+    if (pre_filter.active()) {
+      pre_filter.set_state(carried);
+    }
+  }
+}
+
 // Field domains shared by validate_config and live automation.
 constexpr FieldRange kRateHz{0.0f, kNoUpperBound};
 constexpr FieldRange kDepthMs{0.0f, kMaxFlangerDepthMs};
@@ -197,15 +210,8 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 5: {
       config_.pre_filter_hz = value;
-      // Re-derives the pole from the new corner and keeps the running sample, so
-      // a moved corner does not put a step into the loop.
-      for (auto& pre_filter : pre_filters_) {
-        const float carried = pre_filter.state();
-        pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
-        if (pre_filter.active()) {
-          pre_filter.set_state(carried);
-        }
-      }
+      retune_keeping_state(pre_filters_, config_.pre_filter_mode, config_.pre_filter_hz,
+                           sample_rate_);
       return true;
     }
     case 6:
@@ -224,13 +230,8 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
         return false;
       }
       config_.pre_filter_mode = static_cast<PreFilterMode>(static_cast<int>(value));
-      for (auto& pre_filter : pre_filters_) {
-        const float carried = pre_filter.state();
-        pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
-        if (pre_filter.active()) {
-          pre_filter.set_state(carried);
-        }
-      }
+      retune_keeping_state(pre_filters_, config_.pre_filter_mode, config_.pre_filter_hz,
+                           sample_rate_);
       return true;
     }
     case 9: {

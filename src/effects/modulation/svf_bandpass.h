@@ -33,7 +33,8 @@ class SvfBandpass {
   /// @brief Ring of the section at @p cutoff_hz and @p q, read from its equivalent biquad.
   static rt::TailBudget ring(float cutoff_hz, float q, double sample_rate) noexcept {
     const double rate = sample_rate > 0.0 ? sample_rate : sonare::constants::kDefaultDawSampleRate;
-    const double fc = std::clamp(static_cast<double>(cutoff_hz), 10.0, kMaxCutoffRatio * rate);
+    const double fc = std::clamp(static_cast<double>(cutoff_hz), static_cast<double>(kMinCutoffHz),
+                                 kMaxCutoffRatio * rate);
     const double g = std::tan(::sonare::constants::kPiD * fc / rate);
     const double k = 1.0 / std::max(0.5, static_cast<double>(q));
     const double d = 1.0 + g * (g + k);
@@ -85,7 +86,7 @@ class SvfBandpass {
 
   /// Coefficients for a centre frequency (Hz) and resonance Q, clamped as process() clamps them.
   Coefficients coefficients(float cutoff_hz, float q) const noexcept {
-    const float fc = std::clamp(cutoff_hz, 10.0f, max_cutoff_hz(sample_rate_));
+    const float fc = std::clamp(cutoff_hz, kMinCutoffHz, max_cutoff_hz(sample_rate_));
     const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
                              static_cast<float>(sample_rate_));
     Coefficients c;
@@ -117,6 +118,9 @@ class SvfBandpass {
   }
 
  private:
+  /// Lowest cutoff the filter realizes, in hertz.
+  static constexpr float kMinCutoffHz = 10.0f;
+
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   Coefficients coeffs_;
   float ic1_ = 0.0f;

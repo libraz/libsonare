@@ -62,8 +62,7 @@ void VelvetReverb::Ring::write(float in) {
 
 float VelvetReverb::Ring::read_at(int offset) const {
   // index points at the next write; the most recent write is index-1.
-  int o = offset % size;
-  int pos = (index - 1 - o) % size;
+  int pos = (index - 1 - offset) % size;
   if (pos < 0) pos += size;
   return buf[static_cast<size_t>(pos)];
 }
@@ -129,8 +128,7 @@ void VelvetReverb::prepare(double sample_rate, int max_block_size) {
   // sparse impulse is moved into a uniformly partitioned FFT convolver. Its
   // one-partition staging delay is exactly compensated by shifting this late
   // IR left by one partition, so the complete processor remains zero-latency.
-  ring_l_.prepare(kEarlyPartitionSamples);
-  ring_r_.prepare(kEarlyPartitionSamples);
+  ring_.prepare(kEarlyPartitionSamples);
   build_table(taps_l_, 0u, grid_ls, n_seg, num_pulses, decay_rate, sr);
   build_table(taps_r_, static_cast<std::uint32_t>(num_pulses), grid_ls, n_seg, num_pulses,
               decay_rate, sr);
@@ -183,16 +181,15 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
     const float in_r = right[i];
     const float input = stereo ? 0.5f * (in_l + in_r) : in_l;
 
-    ring_l_.write(input);
-    ring_r_.write(input);
+    ring_.write(input);
 
     float wet_l = late_output_l_[static_cast<size_t>(late_fill_count_)];
     for (const Tap& t : early_taps_l_) {
-      wet_l += t.gain * ring_l_.read_at(t.offset);
+      wet_l += t.gain * ring_.read_at(t.offset);
     }
     float wet_r = late_output_r_[static_cast<size_t>(late_fill_count_)];
     for (const Tap& t : early_taps_r_) {
-      wet_r += t.gain * ring_r_.read_at(t.offset);
+      wet_r += t.gain * ring_.read_at(t.offset);
     }
 
     late_input_[static_cast<size_t>(late_fill_count_)] = input;
@@ -282,8 +279,7 @@ std::vector<rt::ParamDescriptor> VelvetReverb::parameter_descriptors() const {
 }
 
 void VelvetReverb::reset() {
-  ring_l_.reset();
-  ring_r_.reset();
+  ring_.reset();
   late_l_.reset();
   late_r_.reset();
   std::fill(late_input_.begin(), late_input_.end(), 0.0f);

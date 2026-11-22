@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <string>
 
 #include "effects/common/field_domain.h"
 #include "rt/param_smoother.h"
@@ -11,7 +10,6 @@
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
-#include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/parameter_checks.h"
 
@@ -23,8 +21,6 @@ namespace {
 
 constexpr float kMaxDepthMs = 20.0f;
 
-/// The fraction of the remaining gap a first-order glide closes per sample.
-/// A non-positive time constant is no glide at all: the rotor arrives at once.
 /// One validated field: its automation id and the closed interval a value must lie in.
 struct FieldDomain {
   const char* name;
@@ -99,7 +95,8 @@ float Rotary::drum_target_hz() const noexcept {
 void Rotary::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   prepared_ = true;
-  lp_coeff_ = static_cast<float>(rt::one_pole_pole_matched_d(kCrossoverHz, sample_rate_));
+  lp_coeff_ =
+      static_cast<float>(rt::one_pole_pole_matched_d(rotary_geometry::kCrossoverHz, sample_rate_));
   accel_coeff_ = rt::one_pole_alpha_from_seconds_d(config_.accel_tau_s, sample_rate_);
   decel_coeff_ = rt::one_pole_alpha_from_seconds_d(config_.decel_tau_s, sample_rate_);
   const int max_delay =

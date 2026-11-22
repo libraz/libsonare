@@ -185,7 +185,6 @@ class StreamingPhaseVocoder {
   /// exists: a profile with more segments than this one holds allocates once.
   TimeStretchMap active_map_{1.0f};
   bool map_bound_ = false;
-  bool finalized_ = false;
 
   std::unique_ptr<FFT> fft_;
   std::vector<float> analysis_window_;

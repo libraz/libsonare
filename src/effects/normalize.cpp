@@ -37,7 +37,7 @@ namespace {
 float audio_peak_db(const Audio& audio) {
   if (audio.empty()) return -std::numeric_limits<float>::infinity();
   const float peak = peak_abs(audio.data(), audio.size());
-  if (peak < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
   return linear_to_db(peak);
 }
 
@@ -45,7 +45,7 @@ float audio_peak_db(const Audio& audio) {
 float audio_rms_db(const Audio& audio) {
   if (audio.empty()) return -std::numeric_limits<float>::infinity();
   const float r = rms(audio.data(), audio.size());
-  if (r < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  if (r < kEpsilon) return -std::numeric_limits<float>::infinity();
   return linear_to_db(r);
 }
 
@@ -57,7 +57,7 @@ float audio_rms_db(const Audio& audio) {
 float pair_peak_db(const Audio& left, const Audio& right) {
   const float peak =
       std::max(peak_abs(left.data(), left.size()), peak_abs(right.data(), right.size()));
-  if (peak < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
   return linear_to_db(peak);
 }
 
@@ -69,7 +69,7 @@ float pair_rms_db(const Audio& left, const Audio& right) {
   const double l = rms(left.data(), left.size());
   const double r = rms(right.data(), right.size());
   const float joint = static_cast<float>(std::sqrt((l * l + r * r) / 2.0));
-  if (joint < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  if (joint < kEpsilon) return -std::numeric_limits<float>::infinity();
   return linear_to_db(joint);
 }
 
@@ -213,13 +213,7 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
   if (n_samples >= static_cast<size_t>(frame_length)) {
     size_t pos = n_samples - frame_length;
     while (true) {
-      float rms = 0.0f;
-      for (int i = 0; i < frame_length; ++i) {
-        rms += data[pos + i] * data[pos + i];
-      }
-      rms = std::sqrt(rms / static_cast<float>(frame_length));
-
-      if (rms > threshold_linear) {
+      if (frame_rms(pos) > threshold_linear) {
         end = pos + frame_length;
         break;
       }

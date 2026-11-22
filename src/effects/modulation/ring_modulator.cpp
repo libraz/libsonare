@@ -3,12 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <string>
 
 #include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
-#include "util/exception.h"
 
 namespace sonare::effects::modulation {
 
@@ -37,10 +35,6 @@ constexpr FieldDomain kFields[] = {
     {"phase_deg", &RingModulatorConfig::phase_deg, 3, 0.0f, kMaxPhaseDeg},
     {"stereo_spread", &RingModulatorConfig::stereo_spread, 4, 0.0f, 1.0f},
 };
-
-bool in_domain(const FieldDomain& field, float value) noexcept {
-  return std::isfinite(value) && value >= field.lo && value <= field.hi;
-}
 
 const FieldDomain* find_field(unsigned int param_id) noexcept {
   for (const FieldDomain& field : kFields) {
@@ -101,7 +95,7 @@ void RingModulator::reset() { phase_ = 0.0; }
 
 bool RingModulator::set_parameter_impl(unsigned int param_id, float value) {
   const FieldDomain* field = find_field(param_id);
-  if (field != nullptr && !in_domain(*field, value)) return false;
+  if (field != nullptr && !common::in_domain(value, field->lo, field->hi)) return false;
   switch (param_id) {
     case 0:
       config_.carrier_hz = value;

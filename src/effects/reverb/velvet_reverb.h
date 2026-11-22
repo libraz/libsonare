@@ -94,8 +94,7 @@ class VelvetReverb : public rt::ProcessorBase {
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   bool prepared_ = false;
-  Ring ring_l_;
-  Ring ring_r_;
+  Ring ring_;
   std::vector<Tap> taps_l_;
   std::vector<Tap> taps_r_;
   std::vector<Tap> early_taps_l_;

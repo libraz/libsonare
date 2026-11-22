@@ -158,6 +158,9 @@ class DattorroReverb : public rt::ProcessorBase {
   /// Applies the current character's line lengths and output taps.
   void update_character_geometry() noexcept;
 
+  /// Returns the pre-delay, diffusers and tank lines to silence.
+  void clear_lines() noexcept;
+
   /// Returns the tank to rest once a non-finite value has reached it, once per
   /// block (see util/non_finite_state.h).
   void discard_non_finite() noexcept;

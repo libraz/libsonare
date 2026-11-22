@@ -139,7 +139,7 @@ void DattorroReverb::ModAllpass::ensure_capacity(size_t max_depth) {
   if (capacity >= required) return;
 
   std::vector<float> grown(required, 0.0f);
-  const size_t samples_to_keep = std::min(capacity - 1, required - 1);
+  const size_t samples_to_keep = capacity - 1;
   for (size_t delay = 1; delay <= samples_to_keep; ++delay) {
     const size_t old_pos = (index + capacity - delay) % capacity;
     const size_t new_pos = (required - delay) % required;
@@ -483,14 +483,7 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
   discard_non_finite();
 }
 
-void DattorroReverb::discard_non_finite() noexcept {
-  // The four cells are one cross-coupled tank; a rested damping cell in the
-  // half whose tail is poisoned is not half a tank.
-  if (!discard_group_if_non_finite(damp_l_, damp_r_, tail_l_, tail_r_)) return;
-  note_non_finite_discard();
-  // The lines and allpasses upstream are the loop that feeds these cells --
-  // including the input diffusers, which recirculate their own output -- so the
-  // poison cycles back instead of flowing out. O(line), recovery only.
+void DattorroReverb::clear_lines() noexcept {
   std::fill(pre_delay_buf_.begin(), pre_delay_buf_.end(), 0.0f);
   pre_delay_index_ = 0;
   for (auto& ap : in_ap_) ap.reset();
@@ -502,6 +495,17 @@ void DattorroReverb::discard_non_finite() noexcept {
   delay_r2_.reset();
   decay_ap_l_.reset();
   decay_ap_r_.reset();
+}
+
+void DattorroReverb::discard_non_finite() noexcept {
+  // The four cells are one cross-coupled tank; a rested damping cell in the
+  // half whose tail is poisoned is not half a tank.
+  if (!discard_group_if_non_finite(damp_l_, damp_r_, tail_l_, tail_r_)) return;
+  note_non_finite_discard();
+  // The lines and allpasses upstream are the loop that feeds these cells --
+  // including the input diffusers, which recirculate their own output -- so the
+  // poison cycles back instead of flowing out. O(line), recovery only.
+  clear_lines();
   reset_gate();
 }
 
@@ -532,9 +536,10 @@ int DattorroReverb::tail_samples() const noexcept {
   // The tank: its first line is heard through the output taps even when decay closes the loop;
   // otherwise each figure-8 pass (both halves' allpasses 672 + 908 + 1800 + 2656 plus the four
   // lines at their character's ratios) crosses four decay multiplies, carried to the floor.
-  const double tank_loop = (672.0 + 908.0 + 1800.0 + 2656.0 + 4453.0 * ratio[0] +
-                            3720.0 * ratio[1] + 4217.0 * ratio[2] + 3163.0 * ratio[3]) *
-                           rate;
+  const double tank_loop =
+      (kModAllpassLeftRefLength + kModAllpassRightRefLength + 1800.0 + 2656.0 + 4453.0 * ratio[0] +
+       3720.0 * ratio[1] + 4217.0 * ratio[2] + 3163.0 * ratio[3]) *
+      rate;
   rt::TailBudget tank;
   tank.delay(std::max(4453.0 * ratio[0], 4217.0 * ratio[2]) * rate);
   if (decay > 0.0) {
@@ -636,17 +641,7 @@ std::vector<rt::ParamDescriptor> DattorroReverb::parameter_descriptors() const {
 }
 
 void DattorroReverb::reset() {
-  std::fill(pre_delay_buf_.begin(), pre_delay_buf_.end(), 0.0f);
-  pre_delay_index_ = 0;
-  for (auto& ap : in_ap_) ap.reset();
-  mod_ap_l_.reset();
-  mod_ap_r_.reset();
-  delay_l1_.reset();
-  delay_l2_.reset();
-  delay_r1_.reset();
-  delay_r2_.reset();
-  decay_ap_l_.reset();
-  decay_ap_r_.reset();
+  clear_lines();
   damp_l_ = 0.0f;
   damp_r_ = 0.0f;
   tail_l_ = 0.0f;

@@ -92,7 +92,7 @@ std::vector<std::pair<int, int>> align_remix_intervals(
   std::vector<int> zeros;
   bool snap = false;
   if (align_zeros) {
-    zeros = zero_crossings_for_remix(y, n, constants::kEpsilon);
+    zeros = zero_crossings_for_remix(y, n, kEpsilon);
     // zero_crossings_for_remix always reports index 0 (pad=true), so a signal
     // with no real sign change yields exactly {0} and, once the end sentinel is
     // appended, the snap set {0, n}. Snapping to that drags every boundary onto

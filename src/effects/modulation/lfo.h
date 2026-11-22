@@ -55,7 +55,7 @@ class Lfo {
   double phase() const noexcept { return phase_; }
 
   float process() noexcept {
-    const float value = static_cast<float>(std::sin(phase_ * ::sonare::constants::kTwoPiD));
+    const float value = lfo_shape_value(LfoShape::kSine, phase_);
     phase_ += static_cast<double>(rate_hz_) / sample_rate_;
     phase_ -= std::floor(phase_);
     return value;

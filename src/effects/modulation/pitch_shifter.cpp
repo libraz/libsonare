@@ -2,18 +2,18 @@
 
 #include <algorithm>
 #include <cmath>
-#include <string>
 
 #include "effects/common/control_ranges.h"
 #include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
-#include "util/exception.h"
 
 namespace sonare::effects::modulation {
 
+using constants::kCentsPerSemitone;
 using constants::kDefaultDawSampleRate;
+using constants::kSemitonesPerOctave;
 
 using common::kMaxFeedback;
 
@@ -30,7 +30,6 @@ constexpr float kMaxWindowMs = 1000.0f;
 constexpr float kMaxPreDelayMs = 1000.0f;
 constexpr float kMaxCents = 100.0f;
 constexpr float kMaxSemitones = 24.0f;
-constexpr float kCentsPerSemitone = 100.0f;
 // The four Lagrange3 weights have maximum absolute sum 1.25 at a half-sample.
 constexpr float kLagrange3Peak = 1.25f;
 // The corner stays below this fraction of the rate so a ratio just above 1
@@ -71,7 +70,15 @@ std::array<float, 2> balance_gains(float pan) noexcept {
 constexpr double kMixGlideSeconds = 0.005;
 
 float semitone_ratio(float semitones, float cents) noexcept {
-  return std::exp2((semitones + cents / kCentsPerSemitone) / 12.0f);
+  return std::exp2((semitones + cents / kCentsPerSemitone) / kSemitonesPerOctave);
+}
+
+/// Voice gains: the two-ramp law balances the voices (via @p balanced), otherwise voice one stays
+/// whole.
+template <typename Balanced>
+common::MixGains voice_levels(const PitchShifterConfig& config, Balanced&& balanced) {
+  return config.mix_law == common::MixLaw::kTwoRamps ? balanced()
+                                                     : common::MixGains{1.0f, config.level2};
 }
 
 /// True for exactly 0 or 1, the two values a switch accepts.
@@ -101,10 +108,6 @@ constexpr FieldDomain kFields[] = {
     {"pre_delay_ms", &PitchShifterConfig::pre_delay_ms, 13, 0.0f, kMaxPreDelayMs},
     {"pre_delay2_ms", &PitchShifterConfig::pre_delay2_ms, 14, 0.0f, kMaxPreDelayMs},
 };
-
-bool in_domain(const FieldDomain& field, float value) noexcept {
-  return std::isfinite(value) && value >= field.lo && value <= field.hi;
-}
 
 const FieldDomain* find_field(unsigned int param_id) noexcept {
   for (const FieldDomain& field : kFields) {
@@ -192,9 +195,8 @@ float PitchShifter::sounding_max_ratio() const noexcept {
   const float ratio = semitone_ratio(config_.semitones, config_.cents);
   const float ratio2 = semitone_ratio(config_.semitones2, config_.cents2);
   // The two-ramp law balances voices; otherwise voice one stays at unity.
-  const common::MixGains voices = config_.mix_law == common::MixLaw::kTwoRamps
-                                      ? law_gains(config_.level2)
-                                      : common::MixGains{1.0f, config_.level2};
+  const common::MixGains voices =
+      voice_levels(config_, [this] { return law_gains(config_.level2); });
   return std::max(voices.dry > 0.0f ? ratio : 1.0f, voices.wet > 0.0f ? ratio2 : 1.0f);
 }
 
@@ -213,9 +215,8 @@ float PitchShifter::voice_interpolation_peak(float ratio, float delay) const noe
 
 int PitchShifter::tail_samples() const noexcept {
   const common::MixGains mix = law_gains(config_.dry_wet);
-  const common::MixGains voices = config_.mix_law == common::MixLaw::kTwoRamps
-                                      ? law_gains(config_.level2)
-                                      : common::MixGains{1.0f, config_.level2};
+  const common::MixGains voices =
+      voice_levels(config_, [this] { return law_gains(config_.level2); });
   const float ratio = semitone_ratio(config_.semitones, config_.cents);
   const float ratio2 = semitone_ratio(config_.semitones2, config_.cents2);
   const float peak1 = (ratio == 1.0f ? 1.0f : ::sonare::constants::kSqrt2) *
@@ -344,9 +345,8 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   const float pre2 = pre_delay_samples_[1];
   // Under the two-ramp law level2 balances the voices as dry_wet balances the
   // mix; otherwise the first voice stays whole and level2 is the second's gain.
-  const common::MixGains voices = config_.mix_law == common::MixLaw::kTwoRamps
-                                      ? law_gains(config_.level2)
-                                      : common::MixGains{1.0f, config_.level2};
+  const common::MixGains voices =
+      voice_levels(config_, [this] { return law_gains(config_.level2); });
   const float level1 = voices.dry;
   const float level2 = voices.wet;
   const bool second = level2 > 0.0f;
@@ -458,7 +458,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
 bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
   // Every numeric field is refused outside its domain; NaN fails the interval test.
   const FieldDomain* field = find_field(param_id);
-  if (field != nullptr && !in_domain(*field, value)) return false;
+  if (field != nullptr && !common::in_domain(value, field->lo, field->hi)) return false;
   switch (param_id) {
     case 0:
       config_.semitones = value;

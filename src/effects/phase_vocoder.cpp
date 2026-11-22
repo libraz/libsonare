@@ -188,7 +188,6 @@ void StreamingPhaseVocoder::reset() {
   ola_base_sample_ = 0;
   emitted_output_samples_ = 0;
   map_bound_ = false;
-  finalized_ = false;
   analysis_frames_.clear();
   synth_.reset();
   ola_output_.clear();
@@ -441,22 +440,12 @@ void StreamingPhaseVocoder::compact_buffers() {
 }
 
 Audio StreamingPhaseVocoder::drain_available(bool final) {
-  size_t stable_user_samples = 0;
-  if (final) {
-    stable_user_samples =
-        active_map_.output_sample_count(input_base_sample_ + input_.size(), config_.hop_length);
-  } else {
-    const size_t stable_full_samples =
-        static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
-    const size_t center = static_cast<size_t>(config_.n_fft / 2);
-    stable_user_samples = stable_full_samples > center ? stable_full_samples - center : 0;
-  }
-
-  if (stable_user_samples <= emitted_output_samples_) {
+  const size_t available = undelivered_samples(final);
+  if (available == 0) {
     return Audio::from_vector({}, config_.sample_rate);
   }
 
-  std::vector<float> chunk(stable_user_samples - emitted_output_samples_);
+  std::vector<float> chunk(available);
   const size_t written = drain_into(final, chunk.data(), chunk.size());
   if (written == 0) {
     return Audio::from_vector({}, config_.sample_rate);

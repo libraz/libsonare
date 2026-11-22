@@ -172,8 +172,6 @@ class Rotary : public rt::ProcessorBase {
   /// Microphone azimuths, in radians, from the current stereo spread.
   void place_mics() noexcept;
 
-  static constexpr float kCrossoverHz = rotary_geometry::kCrossoverHz;
-
   RotaryConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
