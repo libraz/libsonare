@@ -249,7 +249,7 @@ class GettersRule(unittest.TestCase):
         self.assertFalse(check.judge(rule("getters"), [*self.CLEAN, factory]).failed)
 
     def test_asynchronous_count_stays_a_method(self) -> None:
-        remote = member("wasm", "SonareEngine", "lateMidiInputCount", ts_kind="method")
+        remote = member("wasm", "SonareEngine", "lateMidiEventCount", ts_kind="method")
         remote["sigs"][0]["returns"] = "Promise<number>"
         verdict = check.judge(rule("getters"), [*self.CLEAN, remote])
         self.assertFalse(verdict.failed)

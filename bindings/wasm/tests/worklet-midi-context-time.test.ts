@@ -1,13 +1,15 @@
 /**
- * Live MIDI input placed on the AudioContext clock: the processor maps `contextTimeSec`
- * through the last quantum head's render frame and context frame, so a timed event
- * renders exactly as the same event pushed with its block offset in the block it lands
- * in. A time already rendered plays at the next block's start and is counted, and the
- * SonareEngine facade refuses an offset given together with a context time.
+ * MIDI placed on the AudioContext clock: the processor maps `contextTimeSec` through the
+ * last quantum head's render frame and context frame, for live input and track-addressed
+ * pushes alike, so a timed event renders exactly as the same event pushed with its block
+ * offset in the block it lands in. A time already rendered plays at the next block's start
+ * and is counted once for both families, and the SonareEngine facade refuses an offset or
+ * render frame given together with a context time.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
+import { unknownKeyError } from './_helpers';
 import {
   SonareEngine,
   SonareRealtimeEngineWorkletProcessor,
@@ -73,13 +75,24 @@ function liveProcessor(contextStartFrame: number) {
     processor.receiveReadRequest({
       type: 'engineReadRequest',
       requestId: replies.length,
-      op: 'lateMidiInputCount',
+      op: 'lateMidiEventCount',
       destinationId: 0,
       channel: 0,
     });
     return (replies.at(-1) as { value: number }).value;
   };
-  return { processor, engine, audio, render, noteAt, noteAtOffset, lateCount };
+  const trackNoteAt = (contextTimeSec: number) =>
+    processor.receiveSync({
+      type: 'syncMidiNoteOn',
+      destinationId: 0,
+      group: 0,
+      channel: 0,
+      note: 60,
+      velocity: 100,
+      renderFrame: -1,
+      contextTimeSec,
+    });
+  return { processor, engine, audio, render, noteAt, noteAtOffset, trackNoteAt, lateCount };
 }
 
 const firstSound = (audio: readonly number[]) => audio.findIndex((sample) => sample !== 0);
@@ -153,6 +166,41 @@ describe('live MIDI input at an AudioContext time', () => {
     } finally {
       timed.processor.destroy();
       reference.processor.destroy();
+    }
+  });
+
+  it('lands a timed track push on the frame the timed live input push lands on', () => {
+    const contextStart = 1000;
+    const track = liveProcessor(contextStart);
+    const input = liveProcessor(contextStart);
+    try {
+      track.render(1);
+      input.render(1);
+      const due = (contextStart + 3 * BLOCK + 37) / SAMPLE_RATE;
+      track.trackNoteAt(due);
+      input.noteAt(due);
+      track.render(5);
+      input.render(5);
+
+      expect(firstSound(input.audio)).toBeGreaterThanOrEqual(3 * BLOCK + 37);
+      expect(track.audio).toEqual(input.audio);
+      expect(track.lateCount()).toBe(0);
+    } finally {
+      track.processor.destroy();
+      input.processor.destroy();
+    }
+  });
+
+  it('counts a late track push and a late live input push on one counter', () => {
+    const timed = liveProcessor(0);
+    try {
+      timed.render(2);
+      timed.trackNoteAt(0);
+      timed.noteAt(BLOCK / SAMPLE_RATE);
+      timed.render(1);
+      expect(timed.lateCount()).toBe(2);
+    } finally {
+      timed.processor.destroy();
     }
   });
 
@@ -282,7 +330,7 @@ describe('SonareEngine live MIDI input timing options', () => {
       expect(posted[4]).not.toHaveProperty('contextTimeSec');
       expect(posted[2]).not.toHaveProperty('contextTimeSec');
       expect(mirrored.mock.calls).toEqual([[0, 1, 7, 90, 0]]);
-      expect(await engine.lateMidiInputCount()).toBe(0);
+      expect(await engine.lateMidiEventCount()).toBe(0);
     } finally {
       engine.destroy();
       live.destroy();
@@ -311,6 +359,110 @@ describe('SonareEngine live MIDI input timing options', () => {
       expect(() =>
         engine.pushMidiInputPolyPressure(0, 0, 60, 1, undefined, { when: 1 } as never),
       ).toThrow(TypeError);
+      expect(posted).toEqual([]);
+    } finally {
+      engine.destroy();
+      live.destroy();
+    }
+  });
+});
+
+describe('SonareEngine track MIDI timing options', () => {
+  setupWorklet();
+
+  it('sends a context time instead of a render frame and pushes the offline mirror now', async () => {
+    const { engine, live, posted } = await bridgedEngine();
+    const offline = (engine as unknown as { offlineEngine: { pushMidiCc: () => void } })
+      .offlineEngine;
+    const mirrored = vi.spyOn(offline, 'pushMidiCc');
+    try {
+      const sysex = new Uint8Array([0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7]);
+      posted.length = 0;
+      engine.pushMidiNoteOn(0, 0, 0, 60, 100, undefined, { contextTimeSec: 0.5 });
+      engine.pushMidiNoteOff(0, 0, 0, 60, 0, undefined, { contextTimeSec: 0.5 });
+      engine.pushMidiCc(0, 0, 1, 7, 90, undefined, { contextTimeSec: 0.25 });
+      engine.pushMidiPitchBend(0, 0, 0, 8192, undefined, { contextTimeSec: 0.25 });
+      engine.pushMidiChannelPressure(0, 0, 0, 30, undefined, { contextTimeSec: 0.25 });
+      engine.pushMidiPolyPressure(0, 0, 0, 60, 30, undefined, { contextTimeSec: 0.25 });
+      engine.pushMidiUmp(0, [0x20903c64], undefined, { contextTimeSec: 0.125 });
+      engine.pushMidiProgram(0, 0, 0, 5, undefined, undefined, { contextTimeSec: 0.125 });
+      engine.pushMidiSysex(0, sysex, undefined, { contextTimeSec: 0.125 });
+      // null is absent, for the bag and for the field.
+      engine.pushMidiCc(0, 0, 1, 7, 91, 64, null as never);
+      engine.pushMidiCc(0, 0, 1, 7, 92, 65, { contextTimeSec: null as never });
+      const timed = (type: string, contextTimeSec: number) =>
+        expect.objectContaining({ type, renderFrame: -1, contextTimeSec });
+      expect(posted).toEqual([
+        timed('syncMidiNoteOn', 0.5),
+        timed('syncMidiNoteOff', 0.5),
+        timed('syncMidiCc', 0.25),
+        timed('syncMidiPitchBend', 0.25),
+        timed('syncMidiChannelPressure', 0.25),
+        timed('syncMidiPolyPressure', 0.25),
+        timed('syncMidiUmp', 0.125),
+        timed('syncMidiUmp', 0.125),
+        timed('syncMidiSysex', 0.125),
+        expect.objectContaining({ type: 'syncMidiCc', renderFrame: 64 }),
+        expect.objectContaining({ type: 'syncMidiCc', renderFrame: 65 }),
+      ]);
+      expect(posted[9]).not.toHaveProperty('contextTimeSec');
+      expect(posted[10]).not.toHaveProperty('contextTimeSec');
+      expect(mirrored.mock.calls).toEqual([
+        [0, 0, 1, 7, 90, undefined],
+        [0, 0, 1, 7, 91, 64],
+        [0, 0, 1, 7, 92, 65],
+      ]);
+      expect(await engine.lateMidiEventCount()).toBe(0);
+    } finally {
+      engine.destroy();
+      live.destroy();
+    }
+  });
+
+  it('refuses a render frame beside a context time, and a context time out of domain', async () => {
+    const { engine, live, posted } = await bridgedEngine();
+    try {
+      posted.length = 0;
+      expect(() => engine.pushMidiNoteOn(0, 0, 0, 60, 100, 0, { contextTimeSec: 1 })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.pushMidiSysex(0, new Uint8Array([0xf0, 0xf7]), 3, { contextTimeSec: 1 }),
+      ).toThrow(/renderFrame and contextTimeSec must not both be given/);
+      expect(() => engine.pushMidiProgram(0, 0, 0, 5, undefined, 3, { contextTimeSec: 1 })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.pushMidiNoteOff(0, 0, 0, 60, 0, undefined, { contextTimeSec: -0.1 }),
+      ).toThrow(RangeError);
+      expect(() =>
+        engine.pushMidiPitchBend(0, 0, 0, 8192, undefined, { contextTimeSec: Number.NaN }),
+      ).toThrow(RangeError);
+      expect(() =>
+        engine.pushMidiCc(0, 0, 0, 7, 1, undefined, { contextTimeSec: '1' as never }),
+      ).toThrow(TypeError);
+      const bogus = { when: 1 } as never;
+      const sysex = new Uint8Array([0xf0, 0xf7]);
+      const undeclared: Array<[string, () => void]> = [
+        ['pushMidiNoteOn', () => engine.pushMidiNoteOn(0, 0, 0, 60, 1, undefined, bogus)],
+        ['pushMidiNoteOff', () => engine.pushMidiNoteOff(0, 0, 0, 60, 0, undefined, bogus)],
+        ['pushMidiCc', () => engine.pushMidiCc(0, 0, 0, 7, 1, undefined, bogus)],
+        ['pushMidiPitchBend', () => engine.pushMidiPitchBend(0, 0, 0, 8192, undefined, bogus)],
+        [
+          'pushMidiChannelPressure',
+          () => engine.pushMidiChannelPressure(0, 0, 0, 1, undefined, bogus),
+        ],
+        [
+          'pushMidiPolyPressure',
+          () => engine.pushMidiPolyPressure(0, 0, 0, 60, 1, undefined, bogus),
+        ],
+        ['pushMidiUmp', () => engine.pushMidiUmp(0, [0x20903c64], undefined, bogus)],
+        ['pushMidiProgram', () => engine.pushMidiProgram(0, 0, 0, 5, undefined, undefined, bogus)],
+        ['pushMidiSysex', () => engine.pushMidiSysex(0, sysex, undefined, bogus)],
+      ];
+      for (const [name, call] of undeclared) {
+        expect(call).toThrow(unknownKeyError(`SonareEngine.${name}: unknown key when`));
+      }
       expect(posted).toEqual([]);
     } finally {
       engine.destroy();

@@ -80,7 +80,7 @@ import * as markerOps from './engine-markers.js';
 import {
   type MidiInputPushName,
   resolveMidiInputTiming,
-  type SonareEngineMidiInputOptions,
+  type SonareEngineMidiTimingOptions,
 } from './engine-midi-input.js';
 import type { EngineMixerContext, InsertParamOverrideMap } from './engine-mixer-facade.js';
 import * as mixer from './engine-mixer-facade.js';
@@ -1164,7 +1164,7 @@ export class SonareEngine {
   }
 
   /**
-   * Queues a live MIDI note-on to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * Queues a live MIDI note-on to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    * `group` and `channel` are 0 to 15; `note` and `velocity` are 0 to 127.
    */
   pushMidiNoteOn(
@@ -1174,12 +1174,22 @@ export class SonareEngine {
     note: number,
     velocity: number,
     renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
-    strips.pushMidiNoteOn(this.stripContext, trackId, group, channel, note, velocity, renderFrame);
+    strips.pushMidiNoteOn(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      note,
+      velocity,
+      renderFrame,
+      options,
+    );
   }
 
   /**
-   * Queues a live MIDI note-off to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * Queues a live MIDI note-off to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    * `group` and `channel` are 0 to 15; `note` is 0 to 127; `velocity` is 0 to 127 (omitted: 0).
    */
   pushMidiNoteOff(
@@ -1189,12 +1199,22 @@ export class SonareEngine {
     note: number,
     velocity = 0,
     renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
-    strips.pushMidiNoteOff(this.stripContext, trackId, group, channel, note, velocity, renderFrame);
+    strips.pushMidiNoteOff(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      note,
+      velocity,
+      renderFrame,
+      options,
+    );
   }
 
   /**
-   * Queues a live MIDI control change to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * Queues a live MIDI control change to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    * `group` and `channel` are 0 to 15; `controller` and `value` are 0 to 127.
    */
   pushMidiCc(
@@ -1204,12 +1224,22 @@ export class SonareEngine {
     controller: number,
     value: number,
     renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
-    strips.pushMidiCc(this.stripContext, trackId, group, channel, controller, value, renderFrame);
+    strips.pushMidiCc(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      controller,
+      value,
+      renderFrame,
+      options,
+    );
   }
 
   /**
-   * Queues a live MIDI pitch bend to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * Queues a live MIDI pitch bend to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    * `bend14` is unsigned 14-bit with centre 8192 (0 to 16383).
    */
   pushMidiPitchBend(
@@ -1218,12 +1248,21 @@ export class SonareEngine {
     channel: number,
     bend14: number,
     renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
-    strips.pushMidiPitchBend(this.stripContext, trackId, group, channel, bend14, renderFrame);
+    strips.pushMidiPitchBend(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      bend14,
+      renderFrame,
+      options,
+    );
   }
 
   /**
-   * Queues a live MIDI channel pressure to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * Queues a live MIDI channel pressure to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    * `pressure` is 0 to 127.
    */
   pushMidiChannelPressure(
@@ -1232,6 +1271,7 @@ export class SonareEngine {
     channel: number,
     pressure: number,
     renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     strips.pushMidiChannelPressure(
       this.stripContext,
@@ -1240,11 +1280,12 @@ export class SonareEngine {
       channel,
       pressure,
       renderFrame,
+      options,
     );
   }
 
   /**
-   * Queues a live MIDI polyphonic key pressure to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * Queues a live MIDI polyphonic key pressure to the track's MIDI destination. `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    * `note` and `pressure` are 0 to 127.
    */
   pushMidiPolyPressure(
@@ -1254,6 +1295,7 @@ export class SonareEngine {
     note: number,
     pressure: number,
     renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     strips.pushMidiPolyPressure(
       this.stripContext,
@@ -1263,21 +1305,28 @@ export class SonareEngine {
       note,
       pressure,
       renderFrame,
+      options,
     );
   }
 
   /**
    * Queues a live raw UMP message to the track's MIDI destination. `words` is 1 to 4 words, most
    * significant first, with a length matching the message type of `words[0]`. SysEx7 and data messages
-   * (MT 0x3 / 0x5) are refused; use {@link pushMidiSysex}. `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * (MT 0x3 / 0x5) are refused; use {@link pushMidiSysex}. `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    */
-  pushMidiUmp(trackId: string | number, words: UmpWords, renderFrame?: number): void {
-    strips.pushMidiUmp(this.stripContext, trackId, words, renderFrame);
+  pushMidiUmp(
+    trackId: string | number,
+    words: UmpWords,
+    renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
+  ): void {
+    strips.pushMidiUmp(this.stripContext, trackId, words, renderFrame, options);
   }
 
   /**
    * Queues a live MIDI 2.0 Program Change, with an optional bank, to a track's
-   * MIDI destination; arguments follow {@link RealtimeEngine.pushMidiProgram}. Which receivers select programs: the SoundFont player
+   * MIDI destination; arguments follow {@link RealtimeEngine.pushMidiProgram}, and `options.contextTimeSec`
+   * places it on the AudioContext clock instead of `renderFrame`. Which receivers select programs: the SoundFont player
    * (`setSf2Instrument`) selects bank and program under its own RX PROGRAM
    * CHANGE / RX BANK SELECT gates; a NativeSynth bound with
    * `useGmPrograms: true` (`setSynthInstrument`) resolves each channel's voice
@@ -1294,16 +1343,31 @@ export class SonareEngine {
     program: number,
     bank?: { msb: number; lsb: number },
     renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
-    strips.pushMidiProgram(this.stripContext, trackId, group, channel, program, bank, renderFrame);
+    strips.pushMidiProgram(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      program,
+      bank,
+      renderFrame,
+      options,
+    );
   }
 
   /**
    * Queues a live MIDI SysEx frame to the track's MIDI destination. `data` is the full message including
-   * the leading 0xF0 and trailing 0xF7 (1 to 512 bytes). `renderFrame` is the absolute render frame to fire at; omitted: immediate.
+   * the leading 0xF0 and trailing 0xF7 (1 to 512 bytes). `renderFrame` is the absolute render frame to fire at, or `options.contextTimeSec` the AudioContext time (not both); omitted: immediate.
    */
-  pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame?: number): void {
-    strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame);
+  pushMidiSysex(
+    trackId: string | number,
+    data: Uint8Array,
+    renderFrame?: number,
+    options?: SonareEngineMidiTimingOptions,
+  ): void {
+    strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame, options);
   }
 
   /** Maps a MIDI controller to an engine parameter, on both engines. */
@@ -1345,7 +1409,7 @@ export class SonareEngine {
     data0: number,
     data1: number,
     offsetInBlockSamples: number | undefined,
-    options: SonareEngineMidiInputOptions | undefined,
+    options: SonareEngineMidiTimingOptions | undefined,
   ): void {
     const timing = resolveMidiInputTiming(
       `SonareEngine.pushMidiInput${type.slice('syncMidiInput'.length)}` as MidiInputPushName,
@@ -1374,7 +1438,7 @@ export class SonareEngine {
     note: number,
     velocity: number,
     offsetInBlockSamples?: number,
-    options?: SonareEngineMidiInputOptions,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     this.mirrorMidiInput(
       (offset) => this.offlineEngine.pushMidiInputNoteOn(group, channel, note, velocity, offset),
@@ -1405,7 +1469,7 @@ export class SonareEngine {
     note: number,
     velocity = 0,
     offsetInBlockSamples?: number,
-    options?: SonareEngineMidiInputOptions,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     this.mirrorMidiInput(
       (offset) => this.offlineEngine.pushMidiInputNoteOff(group, channel, note, velocity, offset),
@@ -1436,7 +1500,7 @@ export class SonareEngine {
     controller: number,
     value: number,
     offsetInBlockSamples?: number,
-    options?: SonareEngineMidiInputOptions,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     this.mirrorMidiInput(
       (offset) => this.offlineEngine.pushMidiInputCc(group, channel, controller, value, offset),
@@ -1466,7 +1530,7 @@ export class SonareEngine {
     channel: number,
     bend14: number,
     offsetInBlockSamples?: number,
-    options?: SonareEngineMidiInputOptions,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     this.mirrorMidiInput(
       (offset) => this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, offset),
@@ -1496,7 +1560,7 @@ export class SonareEngine {
     channel: number,
     pressure: number,
     offsetInBlockSamples?: number,
-    options?: SonareEngineMidiInputOptions,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     this.mirrorMidiInput(
       (offset) => this.offlineEngine.pushMidiInputChannelPressure(group, channel, pressure, offset),
@@ -1527,7 +1591,7 @@ export class SonareEngine {
     note: number,
     pressure: number,
     offsetInBlockSamples?: number,
-    options?: SonareEngineMidiInputOptions,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     this.mirrorMidiInput(
       (offset) =>
@@ -1556,7 +1620,7 @@ export class SonareEngine {
   pushMidiInputUmp(
     words: UmpWords,
     offsetInBlockSamples?: number,
-    options?: SonareEngineMidiInputOptions,
+    options?: SonareEngineMidiTimingOptions,
   ): void {
     const timing = resolveMidiInputTiming(
       'SonareEngine.pushMidiInputUmp',
@@ -1569,14 +1633,15 @@ export class SonareEngine {
   }
 
   /**
-   * Reads from the worklet's live engine how many timed live MIDI input events arrived after
-   * the render frame their `contextTimeSec` named had been rendered, so they played at the
-   * start of the next block instead. Cumulative since the engine was created.
+   * Reads from the worklet's live engine how many timed MIDI events, live input and
+   * track-addressed alike, arrived after the render frame their `contextTimeSec` named had been
+   * rendered, so they played at the start of the next block instead. Cumulative since the
+   * engine was created.
    *
    * @throws SonareError (as a rejection) with `InvalidState` once the engine is destroyed.
    */
-  async lateMidiInputCount(): Promise<number> {
-    return this.realtimeNode.requestLateMidiInputCount();
+  async lateMidiEventCount(): Promise<number> {
+    return this.realtimeNode.requestLateMidiEventCount();
   }
 
   /** Queues a MIDI panic (all-notes-off) releasing every sounding note on both engines. `renderFrame` is the absolute render frame to fire at; omitted: immediate. */

@@ -589,6 +589,8 @@ export interface SonareEngineSyncMidiNoteMessage {
   note: number;
   velocity: number;
   renderFrame: number;
+  /** AudioContext time the event is due at; when present the processor maps it and `renderFrame` is -1. */
+  contextTimeSec?: number;
 }
 
 export interface SonareEngineSyncMidiCcMessage {
@@ -599,6 +601,8 @@ export interface SonareEngineSyncMidiCcMessage {
   controller: number;
   value: number;
   renderFrame: number;
+  /** AudioContext time the event is due at; when present the processor maps it and `renderFrame` is -1. */
+  contextTimeSec?: number;
 }
 
 export interface SonareEngineSyncMidiUmpMessage {
@@ -606,6 +610,8 @@ export interface SonareEngineSyncMidiUmpMessage {
   destinationId: number;
   words: UmpWords;
   renderFrame: number;
+  /** AudioContext time the event is due at; when present the processor maps it and `renderFrame` is -1. */
+  contextTimeSec?: number;
 }
 
 /**
@@ -622,6 +628,8 @@ export interface SonareEngineSyncMidiExpressionMessage {
   data0: number;
   data1: number;
   renderFrame: number;
+  /** AudioContext time the event is due at; when present the processor maps it and `renderFrame` is -1. */
+  contextTimeSec?: number;
 }
 
 export interface SonareEngineSyncMidiSysexMessage {
@@ -629,6 +637,8 @@ export interface SonareEngineSyncMidiSysexMessage {
   destinationId: number;
   data: Uint8Array;
   renderFrame: number;
+  /** AudioContext time the event is due at; when present the processor maps it and `renderFrame` is -1. */
+  contextTimeSec?: number;
 }
 
 export interface SonareEngineSyncMidiPanicMessage {
@@ -829,13 +839,13 @@ export interface SonareEngineInsertGainReductionRequestMessage {
 /**
  * Reads a value the worklet's live engine holds: a channel's articulation or the
  * legato fallback count of one destination's instrument, or the processor's late
- * live-MIDI count.
+ * timed-MIDI count.
  */
 export interface SonareEngineReadRequestMessage {
   type: 'engineReadRequest';
   requestId: number;
-  op: 'articulation' | 'legatoFallbackCount' | 'lateMidiInputCount';
-  /** The destination the articulation ops read; unused by `'lateMidiInputCount'`. */
+  op: 'articulation' | 'legatoFallbackCount' | 'lateMidiEventCount';
+  /** The destination the articulation ops read; unused by `'lateMidiEventCount'`. */
   destinationId: number;
   /** The channel `op: 'articulation'` reads; unused by the other ops. */
   channel: number;

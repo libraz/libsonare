@@ -1168,17 +1168,17 @@ export class SonareRealtimeEngineNode {
   }
 
   /**
-   * Reads how many timed live MIDI input events reached the worklet after the render frame
+   * Reads how many timed MIDI events, live input and track-addressed, reached the worklet after the render frame
    * their context time named had been rendered. Cumulative since the processor was created.
    *
    * @throws SonareError (as a rejection) with `InvalidState` once the node is destroyed.
    */
-  requestLateMidiInputCount(): Promise<number> {
-    return this.sendReadRequest('lateMidiInputCount', 0, 0).then((value) => {
+  requestLateMidiEventCount(): Promise<number> {
+    return this.sendReadRequest('lateMidiEventCount', 0, 0).then((value) => {
       if (typeof value !== 'number') {
         throw codedError(
           ErrorCode.InvalidFormat,
-          'Late MIDI input count response is missing its value.',
+          'Late MIDI event count response is missing its value.',
         );
       }
       return value;

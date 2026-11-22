@@ -80,10 +80,10 @@ export interface WebMidiEngine {
    * Present on an engine whose pushes take `options.contextTimeSec` (the AudioWorklet
    * `SonareEngine`); {@link BindWebMidiOptions.context} requires it.
    */
-  lateMidiInputCount?(): Promise<number>;
+  lateMidiEventCount?(): Promise<number>;
 }
 
-/** Trailing options of a {@link WebMidiEngine} push; only an engine with `lateMidiInputCount` reads them. */
+/** Trailing options of a {@link WebMidiEngine} push; only an engine with `lateMidiEventCount` reads them. */
 export interface WebMidiEngineInputOptions {
   /** AudioContext time in seconds the event is due at; exclusive with `offsetInBlockSamples`. */
   contextTimeSec?: number;
@@ -258,7 +258,7 @@ export function isWebMidiAvailable(): boolean {
  * @throws RangeError when `options.group` is outside 0 to 15.
  * @throws RangeError when `options.inputIds` is an empty array.
  * @throws TypeError when `options.context` is given with `timestampToOffsetInBlockSamples`, lacks
- *   `getOutputTimestamp`, or is given for an engine without `lateMidiInputCount`; when
+ *   `getOutputTimestamp`, or is given for an engine without `lateMidiEventCount`; when
  *   `options.scheduleAheadSec` is given without `context` or is not a number.
  * @throws RangeError when `options.scheduleAheadSec` is negative or not finite.
  *
@@ -268,7 +268,7 @@ export function isWebMidiAvailable(): boolean {
  * const engine = await SonareEngine.create(context, { numChannels: 2 });
  * const midi = await bindWebMidi(engine, { context });
  * // ...
- * console.log('late events', await engine.lateMidiInputCount());
+ * console.log('late events', await engine.lateMidiEventCount());
  * midi.destroy();
  * ```
  */
@@ -457,7 +457,7 @@ function resolveEventTiming(engine: WebMidiEngine, options: BindWebMidiOptions):
   if (typeof context?.getOutputTimestamp !== 'function') {
     throw refuseType('context must be an AudioContext with getOutputTimestamp');
   }
-  if (typeof engine.lateMidiInputCount !== 'function') {
+  if (typeof engine.lateMidiEventCount !== 'function') {
     throw refuseType(
       'context needs an engine whose live MIDI input pushes take contextTimeSec (the AudioWorklet SonareEngine)',
     );

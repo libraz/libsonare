@@ -1,4 +1,4 @@
-import type { EngineClip, SynthPatch, UmpWords } from '../index.js';
+import type { EngineClip, SynthPatch } from '../index.js';
 import { ClipPageProvider, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { refuse, refuseType } from '../internal/entry.js';
@@ -230,8 +230,8 @@ export class SonareRealtimeEngineWorkletProcessor {
   /** The embind object behind `engine`: scratch reads and the code-carrying sync messages. */
   private native: ReturnType<typeof engineNativeHandle>;
   private closed = false;
-  /** Timed live MIDI input events whose render frame had already been rendered on arrival. */
-  private lateMidiInputCount = 0;
+  /** Timed MIDI events, live input and track-addressed, whose render frame had already been rendered on arrival. */
+  private lateMidiEventCount = 0;
   /** Render frame and AudioContext frame of the last quantum's head; maps a context time to a render frame. */
   private headRenderFrame: number | undefined;
   private headContextFrame = 0;
@@ -988,7 +988,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.note,
           message.velocity,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiNoteOff':
@@ -998,7 +998,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.note,
           message.velocity,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiCc':
@@ -1008,7 +1008,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.controller,
           message.value,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiPitchBend':
@@ -1017,7 +1017,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.group,
           message.channel,
           message.data0,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiChannelPressure':
@@ -1026,7 +1026,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.group,
           message.channel,
           message.data0,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiPolyPressure':
@@ -1036,21 +1036,21 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.data0,
           message.data1,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiUmp':
         this.engine.pushMidiUmp(
           message.destinationId,
           message.words,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiSysex':
         this.engine.pushMidiSysex(
           message.destinationId,
           message.data,
-          wireRenderFrame(message.renderFrame),
+          this.trackRenderFrame(message),
         );
         break;
       case 'syncMidiPanic':
@@ -1078,14 +1078,20 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncMidiInputChannelPressure':
       case 'syncMidiInputPolyPressure':
         if (message.contextTimeSec !== undefined) {
-          this.pushMidiInputAtContextTime(midi1InputWords(message), message.contextTimeSec);
+          this.native.pushMidiInputUmpAtRenderFrame(
+            midi1InputWords(message),
+            this.contextTimeRenderFrame(message.contextTimeSec),
+          );
         } else {
           pushMidiInputEvent(this.engine, message);
         }
         break;
       case 'syncMidiInputUmp':
         if (message.contextTimeSec !== undefined) {
-          this.pushMidiInputAtContextTime(message.words, message.contextTimeSec);
+          this.native.pushMidiInputUmpAtRenderFrame(
+            message.words,
+            this.contextTimeRenderFrame(message.contextTimeSec),
+          );
         } else {
           this.engine.pushMidiInputUmp(message.words, message.offsetInBlockSamples);
         }
@@ -1174,22 +1180,32 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   /**
-   * Queues a live MIDI input event at the render frame rendered at `contextTimeSec`, through the
-   * last quantum head's render-frame ↔ context-frame pair. A frame already rendered is late: it
-   * plays at the next block's start and is counted.
+   * The render frame rendered at `contextTimeSec`, through the last quantum head's render-frame ↔
+   * context-frame pair, for live input and track-addressed events alike. A frame already rendered
+   * is late: the event plays at the next block's start and is counted.
    */
-  private pushMidiInputAtContextTime(words: UmpWords, contextTimeSec: number): void {
+  private contextTimeRenderFrame(contextTimeSec: number): number {
     const nextRenderFrame = this.native.renderFrame();
     // Before the first quantum the two clocks are read as they stand.
     const headRender = this.headRenderFrame ?? nextRenderFrame;
     const headContext =
       this.headRenderFrame === undefined ? scopeCurrentFrame() : this.headContextFrame;
-    let target = headRender + Math.round(contextTimeSec * this.sampleRate) - headContext;
+    const target = headRender + Math.round(contextTimeSec * this.sampleRate) - headContext;
     if (target < nextRenderFrame) {
-      this.lateMidiInputCount++;
-      target = nextRenderFrame;
+      this.lateMidiEventCount++;
+      return nextRenderFrame;
     }
-    this.native.pushMidiInputUmpAtRenderFrame(words, target);
+    return target;
+  }
+
+  /** The render frame a track-addressed push names: its context time when given, else its wire frame. */
+  private trackRenderFrame(message: {
+    renderFrame: number;
+    contextTimeSec?: number;
+  }): number | undefined {
+    return message.contextTimeSec !== undefined
+      ? this.contextTimeRenderFrame(message.contextTimeSec)
+      : wireRenderFrame(message.renderFrame);
   }
 
   /** @internal */
@@ -1198,8 +1214,8 @@ export class SonareRealtimeEngineWorkletProcessor {
       try {
         this.settleCommands();
         const value =
-          message.op === 'lateMidiInputCount'
-            ? this.lateMidiInputCount
+          message.op === 'lateMidiEventCount'
+            ? this.lateMidiEventCount
             : message.op === 'articulation'
               ? this.engine.articulation(message.destinationId, message.channel)
               : this.engine.legatoFallbackCount(message.destinationId);

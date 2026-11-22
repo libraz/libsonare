@@ -378,7 +378,7 @@ import type {
 import type { TranscribeRequest } from './transcribe.js';
 import type { WebMidiEventContextTimeOptions } from './web_midi.js';
 import type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.js';
-import type { SonareEngineMidiInputOptions } from './worklet/engine-midi-input.js';
+import type { SonareEngineMidiTimingOptions } from './worklet/engine-midi-input.js';
 import type { SonareEngineSetParamOptions } from './worklet/engine-parameter-facade.js';
 
 /** Declared keys of `T`, without the index-signature widening. */
@@ -2310,7 +2310,9 @@ const CapturePunchKeys = keysOf<CapturePunch>()([
 const EngineProcessRequestKeys = keysOf<EngineProcessOptions>()(['withMonitor']);
 const ArmCaptureRequestKeys = keysOf<{ armed: boolean }>()(['armed']);
 const ScheduleParamRequestKeys = keysOf<EngineAutomationPoint>()(['ppq', 'value', 'curveToNext']);
-const SonareEngineMidiInputRequestKeys = keysOf<SonareEngineMidiInputOptions>()(['contextTimeSec']);
+const SonareEngineMidiTimingRequestKeys = keysOf<SonareEngineMidiTimingOptions>()([
+  'contextTimeSec',
+]);
 const SonareEngineSetParamRequestKeys = keysOf<SonareEngineSetParamOptions>()([
   'smoothed',
   'renderFrame',
@@ -2776,13 +2778,22 @@ export const REQUEST_SHAPES = {
   processPrepared: { keys: EngineProcessRequestKeys },
   scheduleParam: { keys: ScheduleParamRequestKeys },
   'SonareEngine.renderOffline': { keys: SonareEngineRenderOfflineRequestKeys },
-  'SonareEngine.pushMidiInputChannelPressure': { keys: SonareEngineMidiInputRequestKeys },
-  'SonareEngine.pushMidiInputCc': { keys: SonareEngineMidiInputRequestKeys },
-  'SonareEngine.pushMidiInputNoteOff': { keys: SonareEngineMidiInputRequestKeys },
-  'SonareEngine.pushMidiInputNoteOn': { keys: SonareEngineMidiInputRequestKeys },
-  'SonareEngine.pushMidiInputPitchBend': { keys: SonareEngineMidiInputRequestKeys },
-  'SonareEngine.pushMidiInputPolyPressure': { keys: SonareEngineMidiInputRequestKeys },
-  'SonareEngine.pushMidiInputUmp': { keys: SonareEngineMidiInputRequestKeys },
+  'SonareEngine.pushMidiChannelPressure': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiCc': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiNoteOff': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiNoteOn': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiPitchBend': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiPolyPressure': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiProgram': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiSysex': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiUmp': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputChannelPressure': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputCc': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputNoteOff': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputNoteOn': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputPitchBend': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputPolyPressure': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputUmp': { keys: SonareEngineMidiTimingRequestKeys },
   'SonareEngine.setParam': { keys: SonareEngineSetParamRequestKeys },
   bounceOffline: { keys: BounceOfflineRequestKeys },
   freezeOffline: { keys: FreezeOfflineRequestKeys },

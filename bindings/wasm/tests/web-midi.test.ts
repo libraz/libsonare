@@ -199,7 +199,7 @@ class TimedEngine extends RawUmpEngine {
     super.pushMidiInputUmp(words, offset);
   }
 
-  lateMidiInputCount() {
+  lateMidiEventCount() {
     return Promise.resolve(0);
   }
 }

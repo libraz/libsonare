@@ -277,7 +277,7 @@ export function isEngineReadRequestMessage(
     typeof value.requestId === 'number' &&
     (value.op === 'articulation' ||
       value.op === 'legatoFallbackCount' ||
-      value.op === 'lateMidiInputCount') &&
+      value.op === 'lateMidiEventCount') &&
     typeof value.destinationId === 'number' &&
     typeof value.channel === 'number'
   );

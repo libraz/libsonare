@@ -20,6 +20,11 @@ import type { MidiFxConfig } from '../public_types_engine.js';
 import type { RequestFn } from '../request_keys.js';
 import { requestObject, resolveRenderFrame } from '../validation.js';
 import { commitSync } from './engine-commit.js';
+import {
+  type MidiTrackTiming,
+  resolveMidiTrackTiming,
+  type SonareEngineMidiTimingOptions,
+} from './engine-midi-input.js';
 import type { InsertParamOverrideMap } from './engine-mixer-facade.js';
 import {
   emptyStripJson,
@@ -487,7 +492,9 @@ export function pushMidiNoteOn(
   note: number,
   velocity: number,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiNoteOn', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
   ctx.postSync({
@@ -497,7 +504,7 @@ export function pushMidiNoteOn(
     channel,
     note,
     velocity,
-    renderFrame: resolveRenderFrame(renderFrame),
+    ...timing,
   });
 }
 
@@ -509,7 +516,9 @@ export function pushMidiNoteOff(
   note: number,
   velocity: number,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiNoteOff', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
   ctx.postSync({
@@ -519,7 +528,7 @@ export function pushMidiNoteOff(
     channel,
     note,
     velocity,
-    renderFrame: resolveRenderFrame(renderFrame),
+    ...timing,
   });
 }
 
@@ -531,7 +540,9 @@ export function pushMidiCc(
   controller: number,
   value: number,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiCc', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
   ctx.postSync({
@@ -541,7 +552,7 @@ export function pushMidiCc(
     channel,
     controller,
     value,
-    renderFrame: resolveRenderFrame(renderFrame),
+    ...timing,
   });
 }
 
@@ -552,7 +563,9 @@ export function pushMidiPitchBend(
   channel: number,
   bend14: number,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiPitchBend', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
   ctx.postSync({
@@ -562,7 +575,7 @@ export function pushMidiPitchBend(
     channel,
     data0: bend14,
     data1: 0,
-    renderFrame: resolveRenderFrame(renderFrame),
+    ...timing,
   });
 }
 
@@ -573,7 +586,13 @@ export function pushMidiChannelPressure(
   channel: number,
   pressure: number,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming(
+    'SonareEngine.pushMidiChannelPressure',
+    renderFrame,
+    options,
+  );
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
   ctx.postSync({
@@ -583,7 +602,7 @@ export function pushMidiChannelPressure(
     channel,
     data0: pressure,
     data1: 0,
-    renderFrame: resolveRenderFrame(renderFrame),
+    ...timing,
   });
 }
 
@@ -595,7 +614,9 @@ export function pushMidiPolyPressure(
   note: number,
   pressure: number,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiPolyPressure', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiPolyPressure(
     destinationId,
@@ -612,7 +633,7 @@ export function pushMidiPolyPressure(
     channel,
     data0: note,
     data1: pressure,
-    renderFrame: resolveRenderFrame(renderFrame),
+    ...timing,
   });
 }
 
@@ -621,8 +642,9 @@ export function pushMidiUmp(
   trackId: string | number,
   umpWords: UmpWords,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
-  const destinationId = ctx.resolveTargetId(trackId);
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiUmp', renderFrame, options);
   // A copy, so a caller reusing its buffer cannot change what was posted; the
   // offline engine refuses anything that is not a word array before the post.
   const words =
@@ -631,13 +653,20 @@ export function pushMidiUmp(
       : Array.isArray(umpWords)
         ? umpWords.slice()
         : umpWords;
+  postMidiUmp(ctx, trackId, words, renderFrame, timing);
+}
+
+/** Queues validated UMP words on the offline mirror and posts them with their resolved timing. */
+function postMidiUmp(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  words: UmpWords,
+  renderFrame: number | undefined,
+  timing: MidiTrackTiming,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiUmp(destinationId, words, renderFrame);
-  ctx.postSync({
-    type: 'syncMidiUmp',
-    destinationId,
-    words,
-    renderFrame: resolveRenderFrame(renderFrame),
-  });
+  ctx.postSync({ type: 'syncMidiUmp', destinationId, words, ...timing });
 }
 
 export function pushMidiProgram(
@@ -648,7 +677,9 @@ export function pushMidiProgram(
   program: number,
   bank: { msb: number; lsb: number } | undefined,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiProgram', renderFrame, options);
   if (bank !== undefined && bank !== null) {
     requestObject('pushMidiProgram', bank, 'bank', true);
   }
@@ -660,7 +691,7 @@ export function pushMidiProgram(
     bank?.msb ?? 0,
     bank?.lsb ?? 0,
   );
-  pushMidiUmp(ctx, trackId, Uint32Array.from(words), renderFrame);
+  postMidiUmp(ctx, trackId, Uint32Array.from(words), renderFrame, timing);
 }
 
 export function setBuiltinInstrument(
@@ -804,14 +835,16 @@ export function pushMidiSysex(
   trackId: string | number,
   data: Uint8Array,
   renderFrame: number | undefined,
+  options: SonareEngineMidiTimingOptions | undefined,
 ): void {
+  const timing = resolveMidiTrackTiming('SonareEngine.pushMidiSysex', renderFrame, options);
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiSysex(destinationId, data, renderFrame);
   ctx.postSync({
     type: 'syncMidiSysex',
     destinationId,
     data,
-    renderFrame: resolveRenderFrame(renderFrame),
+    ...timing,
   });
 }
 
