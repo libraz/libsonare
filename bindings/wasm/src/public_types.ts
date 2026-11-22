@@ -329,6 +329,11 @@ export interface MasteringProcessorCatalogEntry {
    * scene insert, `offline` for whole-file-only processors.
    */
   readonly kind: 'realtime' | 'offline' | 'pair';
+  /**
+   * Every way the id runs, realtime first: `'realtime'` when it builds as a scene
+   * insert, `'offline'` when it runs over a whole file (every `match.*` pair id).
+   */
+  readonly forms: readonly ('realtime' | 'offline')[];
   /** True exactly for ids that always succeed as a realtime scene insert. */
   readonly realtimeInsertable: boolean;
   /** True for processors with no mono implementation (stereo-only). */
@@ -359,8 +364,14 @@ export interface MasteringProcessorCatalogEntry {
    * The processor's construction parameters: for an insert the list
    * {@link masteringInsertParamInfo} returns, for a `repair.*` stage the bounds its own
    * configuration validation enforces (no `id`, never `rtSafe`). Empty for any other offline entry.
+   * Describes every listed form unless the entry carries {@link offlineParams}.
    */
   readonly params: readonly MasteringInsertParamInfo[];
+  /**
+   * The offline form's parameters, present only when they differ from {@link params}: a repair
+   * stage whose whole-file builder takes settings its streaming insert refuses.
+   */
+  readonly offlineParams?: readonly MasteringInsertParamInfo[];
   /**
    * The insert's conditional key groups in declaration order, named by each
    * parameter's `slot`. Empty for entries that are not realtime-insertable.
@@ -406,6 +417,8 @@ export interface CapabilityCatalogChainStage {
   readonly prefix: string;
   /** Catalog processor id; absent when every key of the stage is chain-only. */
   readonly processor?: string;
+  /** The processor form the stage builds; absent exactly where `processor` is. */
+  readonly form?: 'offline';
   /** Boolean key that switches the stage on, such as `'repair.declick.enabled'`. */
   readonly enabledKey: string;
 }
@@ -419,6 +432,8 @@ export interface CapabilityCatalogChainList {
   readonly key: string;
   /** Catalog processor id whose parameters each item carries; absent for a list of numbers. */
   readonly processor?: string;
+  /** The processor form each item builds; absent exactly where `processor` is. */
+  readonly form?: 'offline';
   /** Fewest items the chain accepts. */
   readonly minItems: number;
   /** Most items the chain accepts. */

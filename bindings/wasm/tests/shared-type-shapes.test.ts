@@ -115,6 +115,7 @@ const catalogSlot = {
 const catalogProcessor = {
   id: 'saturation.softClipper',
   kind: 'realtime',
+  forms: ['realtime'],
   realtimeInsertable: true,
   stereoOnly: false,
   latencySamples: 0,
@@ -124,6 +125,7 @@ const catalogProcessor = {
   category: 'saturation',
   causal: true,
   params: [catalogParameter],
+  offlineParams: undefined,
   slots: [catalogSlot],
 } satisfies MasteringProcessorCatalogEntry;
 
@@ -146,12 +148,14 @@ const catalogMasteringPreset = {
 const catalogChainStage = {
   prefix: 'dynamics.compressor',
   processor: 'dynamics.compressor',
+  form: 'offline',
   enabledKey: 'dynamics.compressor.enabled',
 } satisfies CapabilityCatalogChainStage;
 
 const catalogChainList = {
   key: 'dynamics.multibandComp.bands',
   processor: 'dynamics.compressor',
+  form: 'offline',
   minItems: 2,
   maxItems: 64,
 } satisfies CapabilityCatalogChainList;

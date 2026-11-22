@@ -177,6 +177,7 @@ describe('insert param validation (WASM)', () => {
     const declared: Record<keyof MasteringProcessorCatalogEntry, true> = {
       id: true,
       kind: true,
+      forms: true,
       realtimeInsertable: true,
       stereoOnly: true,
       latencySamples: true,
@@ -187,9 +188,11 @@ describe('insert param validation (WASM)', () => {
       causal: true,
       params: true,
       slots: true,
+      offlineParams: true,
     };
-    // `realtimeCost` is absent for a processor that is not an insert.
-    const optional = new Set(['realtimeCost']);
+    // `realtimeCost` is absent for a processor that is not an insert, and
+    // `offlineParams` unless the offline form declares its own set.
+    const optional = new Set(['realtimeCost', 'offlineParams']);
     for (const entry of catalog) {
       const keys = Object.keys(entry);
       expect(keys.filter((key) => !(key in declared))).toEqual([]);
