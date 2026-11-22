@@ -176,11 +176,11 @@ describe('WASM estimateMeter', () => {
   describe('input validation', () => {
     it('rejects an empty beat series', () => {
       // No beats is nothing to search, so answering it with the fixed
-      // low-confidence 4/4 would read as a detection result. Matched on an
-      // unanchored substring because the surrounding decoration differs
-      // between surfaces, and on `beatTimes` specifically so this cannot pass
-      // on the separate "candidateNumerators must not be empty" guard.
-      expect(() => estimateMeter({ beats: [] })).toThrow(/beatTimes must not be empty/);
+      // low-confidence 4/4 would read as a detection result. The core names its
+      // own list, which the facade spells back as the caller's `beats`.
+      expect(() => estimateMeter({ beats: [] })).toThrow(
+        new RangeError('estimateMeter: beats[].timeSec must not be empty'),
+      );
     });
 
     it('refuses a non-array beats with the same text on every surface', () => {
@@ -230,7 +230,22 @@ describe('WASM estimateMeter', () => {
       const series = beatSeries(4, 8);
       const beats = series.beats.map((beat) => ({ ...beat }));
       beats[3].timeSec = beats[2].timeSec - 0.1;
-      expect(() => estimateMeter({ beats })).toThrow();
+      expect(() => estimateMeter({ beats })).toThrow(
+        new RangeError('estimateMeter: beats[].timeSec must be non-decreasing'),
+      );
+    });
+
+    it('refuses a negative timeSec and a non-finite strength under the beats spelling', () => {
+      const negative = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
+      negative[0].timeSec = -1;
+      expect(() => estimateMeter({ beats: negative })).toThrow(
+        new RangeError('estimateMeter: beats[].timeSec must hold only finite values of at least 0'),
+      );
+      const unmeasured = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
+      unmeasured[2].strength = Number.NaN;
+      expect(() => estimateMeter({ beats: unmeasured })).toThrow(
+        new RangeError('estimateMeter: beats[].strength must hold only finite values'),
+      );
     });
   });
 });
