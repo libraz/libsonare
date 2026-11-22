@@ -13,6 +13,14 @@ import type { SonareModule } from '../src/sonare.js';
 
 let mod: SonareModule;
 
+/** The raw embind Project methods this file drives; the module declaration does not export the class. */
+interface RawProject {
+  addMidiClip(startPpq: number, lengthPpq: number): { trackId: number };
+  addAutomationLane(trackId: number, lane: unknown): unknown;
+  editAutomationLane(trackId: number, laneIndex: number, lane: unknown): unknown;
+  delete(): void;
+}
+
 beforeAll(async () => {
   await init();
   mod = getSonareModule();
@@ -57,7 +65,7 @@ describe('raw scalar arguments refuse non-finite values by name', () => {
   });
 
   it('project addMidiClip: startPpq; editAutomationLane: targetParamId', () => {
-    const project = new (mod as unknown as { Project: new () => any }).Project();
+    const project = new (mod as unknown as { Project: new () => RawProject }).Project();
     try {
       expect(refusal(() => project.addMidiClip(Number.NaN, 4)).message).toContain('startPpq');
       const { trackId } = project.addMidiClip(0, 4);
