@@ -32,7 +32,7 @@ using sonare::constants::kSoundSpeedMps;
 
 namespace {
 
-constexpr float kMsPerSecond = 1000.0f;
+using sonare::constants::kMsPerSecond;
 constexpr int kLatePartition = kLateTailPartition;
 static_assert((kLatePartition & (kLatePartition - 1)) == 0, "head history is masked");
 constexpr int kImageSourceOrder = 2;

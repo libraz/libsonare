@@ -32,7 +32,7 @@ constexpr float kStroboMinHz = 4.0f;
 constexpr float kStroboMaxHz = 16.0f;
 constexpr double kStroboEdgeMs = 2.0;
 
-constexpr double kMsPerSecond = 1000.0;
+using sonare::constants::kMsPerSecondD;
 constexpr int kRadioFilterOrder = 4;
 
 }  // namespace
@@ -44,7 +44,7 @@ float CharacterStage::corner_hz(float hz) const noexcept {
 void CharacterStage::prepare(double sr) {
   sr_ = sr;
   const double max_ms = kChorusCenterMs + kChorusDepthMs + kChorusHeadroomMs;
-  delay_.assign(static_cast<std::size_t>(std::ceil(max_ms * sr / kMsPerSecond)) + 4, 0.0f);
+  delay_.assign(static_cast<std::size_t>(std::ceil(max_ms * sr / kMsPerSecondD)) + 4, 0.0f);
   apply_config();
   clear_state();
 }
@@ -103,8 +103,8 @@ void CharacterStage::apply_config() noexcept {
     }
     case CharacterType::BbdChorus: {
       lfo_step_ = kChorusRateHz / sr_;
-      center_delay_samples_ = static_cast<float>(kChorusCenterMs * sr_ / kMsPerSecond);
-      depth_delay_samples_ = static_cast<float>(kChorusDepthMs * sr_ / kMsPerSecond);
+      center_delay_samples_ = static_cast<float>(kChorusCenterMs * sr_ / kMsPerSecondD);
+      depth_delay_samples_ = static_cast<float>(kChorusDepthMs * sr_ / kMsPerSecondD);
       chorus_mix_ = 0.5f * amount;
       wet_lp_.set(rt::rbj_lowpass(w0(kChorusLowpassHz), rt::butterworth_stage_q(2, 0)));
       break;
@@ -112,7 +112,7 @@ void CharacterStage::apply_config() noexcept {
     case CharacterType::Strobo: {
       const float rate = kStroboMinHz + (kStroboMaxHz - kStroboMinHz) * 0.5f * (tone + 1.0f);
       gate_step_ = static_cast<double>(rate) / sr_;
-      gate_slew_ = static_cast<float>(kMsPerSecond / (kStroboEdgeMs * sr_));
+      gate_slew_ = static_cast<float>(kMsPerSecondD / (kStroboEdgeMs * sr_));
       gate_depth_ = amount;
       break;
     }

@@ -19,7 +19,7 @@ using constants::kTwoPiD;
 constexpr double kBandLowHz = 80.0;
 constexpr double kBandHighHz = 10000.0;
 constexpr double kSibilanceCornerHz = 6000.0;
-constexpr double kMsPerSecond = 1000.0;
+using sonare::constants::kMsPerSecondD;
 // Glasberg & Moore ERB-rate scale: E(f) = kErbScale * log10(1 + kErbSlope * f).
 constexpr double kErbScale = 21.4;
 constexpr double kErbSlope = 0.00437;
@@ -72,7 +72,7 @@ float pulse_sample(float t, float dt) noexcept {
 }
 
 float one_pole_coeff(float ms, double sr) {
-  return static_cast<float>(1.0 - std::exp(-kMsPerSecond / (static_cast<double>(ms) * sr)));
+  return static_cast<float>(1.0 - std::exp(-kMsPerSecondD / (static_cast<double>(ms) * sr)));
 }
 
 }  // namespace

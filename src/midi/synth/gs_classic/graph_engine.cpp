@@ -15,7 +15,7 @@ using sonare::constants::kTwoPiD;
 
 namespace {
 
-constexpr double kMsPerSecond = 1000.0;
+using sonare::constants::kMsPerSecondD;
 /// Control curves are stored as float, so a delay the archive puts on a whole sample can
 /// arrive a float rounding under it; within this relative distance it is that sample.
 constexpr double kFloatStorageTolerance = 0x1p-22;
@@ -242,7 +242,7 @@ void render_delay(const GsClassicRenderContext& ctx, const GsClassicNode& node, 
   for (std::size_t i = a; i < b; ++i) {
     double time_ms = ctx.value(node, 0, i);
     if (modulated) time_ms = time_ms + ctx.value(node, 1, i) * ctx.value(node, 2, i);
-    double d = time_ms * kGsClassicSampleRateHz / kMsPerSecond;
+    double d = time_ms * kGsClassicSampleRateHz / kMsPerSecondD;
     if (!(d >= shortest)) d = shortest;
     if (d > longest) d = longest;
     if (std::fabs(d - std::round(d)) <= d * kFloatStorageTolerance) d = std::round(d);

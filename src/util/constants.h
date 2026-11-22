@@ -102,6 +102,9 @@ inline constexpr double kDefaultDawSampleRate = 48000.0;
 inline constexpr double kDefaultBpm = 120.0;
 /// Seconds in a minute, for turning a tempo in beats per minute into a period.
 inline constexpr double kSecondsPerMinute = 60.0;
+/// Milliseconds in a second, for converting a time given in milliseconds.
+inline constexpr float kMsPerSecond = 1000.0f;
+inline constexpr double kMsPerSecondD = 1000.0;
 
 }  // namespace constants
 }  // namespace sonare

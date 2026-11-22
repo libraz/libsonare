@@ -4,19 +4,20 @@
 #include <cstdint>
 
 #include "midi/synth/gs_classic/graph_engine.h"
+#include "util/constants.h"
 #include "util/db.h"
 
 namespace sonare::midi::synth::gs_classic {
 
 namespace {
 
-constexpr double kMsPerSecond = 1000.0;
+using sonare::constants::kMsPerSecondD;
 constexpr double kDbPerAmplitudeDecade = 20.0;
 constexpr double kDbPerPowerDecade = 10.0;
 
 /// A one-pole coefficient reaching 1 - 1/e of a step in `ms`.
 double pole_of(double ms) noexcept {
-  return std::exp(-kMsPerSecond / (ms * kGsClassicSampleRateHz));
+  return std::exp(-kMsPerSecondD / (ms * kGsClassicSampleRateHz));
 }
 
 double sign_of(double x) noexcept { return x > 0.0 ? 1.0 : (x < 0.0 ? -1.0 : x); }

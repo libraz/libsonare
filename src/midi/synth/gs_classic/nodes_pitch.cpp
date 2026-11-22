@@ -13,7 +13,7 @@ using sonare::constants::kPiD;
 
 namespace {
 
-constexpr double kMsPerSecond = 1000.0;
+using sonare::constants::kMsPerSecondD;
 /// The two read pointers sit half a window apart.
 constexpr double kPointerOffsets[2] = {0.0, 0.5};
 
@@ -63,7 +63,7 @@ void gs_classic_render_pitch(const GsClassicRenderContext& ctx, const GsClassicN
   double* y = ctx.output(node);
   for (std::size_t i = a; i < b; ++i) {
     const double ratio = ctx.value(node, 0, i);
-    const double window = ctx.value(node, 1, i) * kGsClassicSampleRateHz / kMsPerSecond;
+    const double window = ctx.value(node, 1, i) * kGsClassicSampleRateHz / kMsPerSecondD;
     const double excursion = (1.0 - ratio) * window;
     const double nearest = reach + std::max(-excursion, 0.0);
     const int64_t n = ctx.block_start() + static_cast<int64_t>(i);
@@ -73,8 +73,8 @@ void gs_classic_render_pitch(const GsClassicRenderContext& ctx, const GsClassicN
       const double swept = py_mod(phase + offset, 1.0);
       // The sweep is stated in milliseconds and read back in samples, as a delay line reads it.
       const double pointer_ms =
-          (nearest + excursion * swept) * kMsPerSecond / kGsClassicSampleRateHz;
-      double d = pointer_ms * kGsClassicSampleRateHz / kMsPerSecond;
+          (nearest + excursion * swept) * kMsPerSecondD / kGsClassicSampleRateHz;
+      double d = pointer_ms * kGsClassicSampleRateHz / kMsPerSecondD;
       if (d > longest) d = longest;
       const double whole = std::floor(d);
       const double f = d - whole;

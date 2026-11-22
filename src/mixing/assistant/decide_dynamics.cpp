@@ -131,7 +131,7 @@ constexpr float kReleaseSustainScale = 1.0f;
 
 // attack_density is onset peaks per second and every time in this file is in
 // milliseconds, so the two need a bridge to be compared at all.
-constexpr float kMsPerSecond = 1000.0f;
+using sonare::constants::kMsPerSecond;
 // Largest share of the measured inter-onset interval a suggested release may
 // occupy. The reciprocal of attack_density is the real gap between the events
 // the compressor has to recover between, and a release longer than that gap is
