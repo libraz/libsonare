@@ -3,6 +3,7 @@
  * resolution, side-effect flags and the exported binaries.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +22,18 @@ const jsSubpaths = Object.entries(pkg.exports).filter(
 );
 
 describe('package.json shape', () => {
+  it('packs the licence text and the notice', () => {
+    // A dry run still runs prepack, which is where both files are copied in.
+    const listing = execFileSync('yarn', ['pack', '--dry-run', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter((line) => line.startsWith('{'))
+      .map((line) => (JSON.parse(line) as { location?: string }).location);
+    expect(listing).toEqual(expect.arrayContaining(['LICENSE', 'NOTICE']));
+  });
+
   it('gives every JS subpath types, import and default', () => {
     expect(jsSubpaths.map(([key]) => key)).toEqual([
       '.',

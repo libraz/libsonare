@@ -117,9 +117,10 @@ jobs:
           if npm view "$spec" version >/dev/null 2>&1; then
             echo "$spec is already on npm; skipping publish"
           else
-            # prepublishOnly would clean and rebuild the module the steps above
-            # just built and tested, so it is skipped and its licence copy done here.
-            cp ../../LICENSE ../../NOTICE .
+            # --ignore-scripts skips prepublishOnly, which would clean and rebuild the
+            # module the steps above just built and tested, so the licence copy a
+            # local pack gets from prepack is run on its own.
+            yarn run prepack
             npm publish --access public --provenance --ignore-scripts
           fi
 
