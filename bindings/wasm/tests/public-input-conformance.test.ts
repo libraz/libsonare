@@ -793,3 +793,35 @@ describe('an inverted band is refused once, in the core text, under the request 
     });
   }
 });
+
+type MixerBusRoleSection = {
+  fn: string;
+  message: string;
+  error: Record<string, string>;
+  cases: { id: string; role: string | null; stored?: string }[];
+};
+
+describe('the mixer bus role answers the shared corpus', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const section = (corpus as unknown as { mixer_bus_role: MixerBusRoleSection }).mixer_bus_role;
+  it.each(section.cases)('$id', ({ role, stored }) => {
+    const mixer = new Mixer({ sampleRate: 48_000 });
+    try {
+      const call = () => mixer.addBus('corpus', (role ?? undefined) as never);
+      if (stored !== undefined) {
+        call();
+        const buses = (JSON.parse(mixer.toJson()) as { buses: { id: string; role: string }[] })
+          .buses;
+        expect(buses.find((bus) => bus.id === 'corpus')?.role).toBe(stored);
+        return;
+      }
+      expect(section.error[SURFACE]).toBe('RangeError');
+      expect(call).toThrow(new RangeError(`${camelKey(section.fn)}: ${section.message}`));
+    } finally {
+      mixer[Symbol.dispose]();
+    }
+  });
+});
