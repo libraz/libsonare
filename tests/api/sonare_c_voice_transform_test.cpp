@@ -583,17 +583,24 @@ TEST_CASE("engine, f0_min_hz and vocoder bands are fixed at creation", "[capi][v
   Config c = base;
   c.voice_engine = SONARE_PITCH_ENGINE_GRAIN;
   CHECK(sonare_realtime_voice_changer_set_config(h.get(), &c) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(std::string(sonare_last_error_message()), ContainsSubstring("prepare"));
+  CHECK_THAT(
+      std::string(sonare_last_error_message()),
+      ContainsSubstring("voice_engine is fixed at construction; it cannot change on a live chain"));
 
   c = base;
   c.voice_engine_f0_min_hz = base.voice_engine_f0_min_hz + 10.0f;
   CHECK(sonare_realtime_voice_changer_set_config(h.get(), &c) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(std::string(sonare_last_error_message()), ContainsSubstring("prepare"));
+  CHECK_THAT(
+      std::string(sonare_last_error_message()),
+      ContainsSubstring(
+          "voice_engine_f0_min_hz is fixed at construction; it cannot change on a live chain"));
 
   c = base;
   c.vocoder_bands = base.vocoder_bands + 4;
   CHECK(sonare_realtime_voice_changer_set_config(h.get(), &c) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(std::string(sonare_last_error_message()), ContainsSubstring("prepare"));
+  CHECK_THAT(std::string(sonare_last_error_message()),
+             ContainsSubstring(
+                 "vocoder_bands is fixed at construction; it cannot change on a live chain"));
 
   CHECK(same_bytes(read_config(h), before));
 
