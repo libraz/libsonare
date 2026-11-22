@@ -59,8 +59,9 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
  * import { masteringChainConfigFromJson, masterAudio } from '@libraz/libsonare-native';
  *
  * declare const saved: string; // e.g. read from a project file
+ * // The document is the whole chain, so it runs without a preset.
  * const overrides = masteringChainConfigFromJson(saved);
- * const mastered = masterAudio({ samples, sampleRate, preset: 'pop', overrides });
+ * const mastered = masterAudio({ samples, sampleRate, overrides });
  * ```
  */
 export function masteringChainConfigFromJson(document: string): MasteringChainConfig {

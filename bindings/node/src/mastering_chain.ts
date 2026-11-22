@@ -137,6 +137,9 @@ export interface MasterAudioRequest {
   /**
    * Chain config applied over the preset, or run alone when `preset` is absent. An
    * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   * A stage that carries any key takes the `enabled` it states, and is turned on when
+   * it states none; so a full config, such as {@link masteringChainConfigFromJson}
+   * returns, turns off every preset stage it marks `enabled: false`.
    */
   overrides?: MasteringChainConfig;
   /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
@@ -161,6 +164,9 @@ export interface MasterAudioStereoRequest {
   /**
    * Chain config applied over the preset, or run alone when `preset` is absent. An
    * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   * A stage that carries any key takes the `enabled` it states, and is turned on when
+   * it states none; so a full config, such as {@link masteringChainConfigFromJson}
+   * returns, turns off every preset stage it marks `enabled: false`.
    */
   overrides?: MasteringChainConfig;
   /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
@@ -268,6 +274,9 @@ export interface MasterAudioAsyncRequest {
   /**
    * Chain config applied over the preset, or run alone when `preset` is absent. An
    * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   * A stage that carries any key takes the `enabled` it states, and is turned on when
+   * it states none; so a full config, such as {@link masteringChainConfigFromJson}
+   * returns, turns off every preset stage it marks `enabled: false`.
    */
   overrides?: MasteringChainConfig;
 }
@@ -288,6 +297,9 @@ export interface MasterAudioStereoAsyncRequest {
   /**
    * Chain config applied over the preset, or run alone when `preset` is absent. An
    * explicit `{}` without a preset runs an empty chain and returns the input unchanged.
+   * A stage that carries any key takes the `enabled` it states, and is turned on when
+   * it states none; so a full config, such as {@link masteringChainConfigFromJson}
+   * returns, turns off every preset stage it marks `enabled: false`.
    */
   overrides?: MasteringChainConfig;
 }
