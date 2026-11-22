@@ -686,6 +686,12 @@ const char* prepare_arguments_error(double sample_rate, int max_block_size,
 ///        as the C ABI config struct's field ("retune_mix").
 enum class ConfigFieldSpelling { Member, PresetDocument, FlatPod, CStruct };
 
+/// @brief The path config field @p member (e.g. "voiceEngine.f0MinHz") takes in @p spelling.
+/// @details A flat POD key joins section and field in camel case, and an enum named after its
+///          section is the section alone ("voiceEngine", "reverbVariation").
+std::string realtime_voice_changer_field_path(std::string_view member,
+                                              ConfigFieldSpelling spelling);
+
 /// @brief Checks that @p config's formant warp is within reach.
 /// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones / 12) and the
 ///          warp is defined over [kFormantFactorMin, kFormantFactorMax]. On failure @p error names

@@ -12,12 +12,14 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "editing/voice_changer/realtime.h"
 #include "effects/formant_warp.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_field_tables.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -210,13 +212,18 @@ TEST_CASE("voice.changer publishes real bounds and says what is construction-onl
   const json::Array params = catalog_params();
   REQUIRE(params.size() == 71);
 
-  const std::vector<std::string> construction_only = {
-      "retuneGrainSizeSamples", "formantMode",        "reverbSeed",   "limiterEnableIspLimiter",
-      "voiceEngineEngine",      "voiceEngineF0MinHz", "vocoderBands", "vocoderCarrierSource"};
+  const std::vector<std::string> construction_only = {"retuneGrainSizeSamples",
+                                                      "formantMode",
+                                                      "reverbSeed",
+                                                      "limiterEnableIspLimiter",
+                                                      "voiceEngine",
+                                                      "voiceEngineF0MinHz",
+                                                      "vocoderBands",
+                                                      "vocoderCarrierSource"};
   const std::vector<std::string> enums = {
-      "formantMode",          "voiceEngineEngine",        "pitchCorrectionMode",
-      "pitchCorrectionScale", "vocoderCarrierSource",     "vocoderCarrierWave",
-      "characterType",        "reverbVariationVariation", "reverbVariationDivision",
+      "formantMode",          "voiceEngine",          "pitchCorrectionMode",
+      "pitchCorrectionScale", "vocoderCarrierSource", "vocoderCarrierWave",
+      "characterType",        "reverbVariation",      "reverbVariationDivision",
       "midiRelease"};
   VoiceChangerInsert probe;
   size_t automatable = 0;
@@ -827,7 +834,7 @@ TEST_CASE("voice.changer takes its formant mode at construction only", "[voice_c
     CHECK(param.find("rtSafe")->as_bool() == false);
   }
   CHECK(found);
-  const auto built = make_insert("voice.changer", R"({"formantMode":1,"voiceEngineEngine":0})");
+  const auto built = make_insert("voice.changer", R"({"formantMode":1,"voiceEngine":0})");
   REQUIRE(built != nullptr);
   built->prepare(kRate, kBlock);
   CHECK(built->latency_samples() == warped.latency_samples());
@@ -885,4 +892,66 @@ TEST_CASE("voice.changer insert gain reduction ignores the make-up ramp",
       }
     }
   }
+}
+
+namespace {
+
+using sonare::editing::voice_changer::ConfigFieldSpelling;
+
+// Moves @p field outside every accepted value; false for a field no value can make invalid.
+bool poison(float& field) {
+  field = std::numeric_limits<float>::quiet_NaN();
+  return true;
+}
+bool poison(int& field) {
+  field = std::numeric_limits<int>::min();
+  return true;
+}
+bool poison(bool&) { return false; }
+template <typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+bool poison(Enum& field) {
+  field = static_cast<Enum>(99);
+  return true;
+}
+
+// The flat POD key the validator names when only the field @p poison_field reaches is invalid.
+std::string pod_key_of(void (*poison_field)(RealtimeVoiceChangerConfig&, bool*)) {
+  RealtimeVoiceChangerConfig config;
+  bool poisoned = false;
+  poison_field(config, &poisoned);
+  if (!poisoned) return {};
+  std::string error;
+  if (sonare::editing::voice_changer::validate_realtime_voice_changer_config(
+          config, nullptr, &error, ConfigFieldSpelling::FlatPod)) {
+    return {};
+  }
+  return error.substr(0, error.find(' '));
+}
+
+}  // namespace
+
+TEST_CASE("every voice.changer insert key is the flat POD key of the same field",
+          "[voice_changer][insert][catalog]") {
+  std::string error;
+  REQUIRE(sonare::editing::voice_changer::validate_realtime_voice_changer_config(
+      RealtimeVoiceChangerConfig{}, nullptr, &error, ConfigFieldSpelling::FlatPod));
+  size_t compared = 0;
+#define SONARE_CHECK_POD_KEY(key, member, meta)                                            \
+  {                                                                                        \
+    const std::string pod =                                                                \
+        pod_key_of([](RealtimeVoiceChangerConfig& c, bool* p) { *p = poison(c.member); }); \
+    if (!pod.empty()) {                                                                    \
+      ++compared;                                                                          \
+      /* The one exception: the steps array is three scalars on the insert. */             \
+      const std::string steps = "harmonySteps[";                                           \
+      const std::string expected =                                                         \
+          pod.compare(0, steps.size(), steps) == 0                                         \
+              ? "harmonyStep" + std::to_string(pod[steps.size()] - '0' + 1)                \
+              : pod;                                                                       \
+      CHECK(std::string(key) == expected);                                                 \
+    }                                                                                      \
+  }
+  SONARE_FIELDS_VOICE_CHANGER(SONARE_CHECK_POD_KEY)
+#undef SONARE_CHECK_POD_KEY
+  CHECK(compared >= 60);
 }

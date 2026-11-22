@@ -48,8 +48,10 @@ namespace {
 
 namespace schema = sonare::util::json::schema;
 
-// The member path of a config field as the reader the config came from spells it.
-std::string field_path(std::string_view member, ConfigFieldSpelling spelling) {
+}  // namespace
+
+std::string realtime_voice_changer_field_path(std::string_view member,
+                                              ConfigFieldSpelling spelling) {
   switch (spelling) {
     case ConfigFieldSpelling::Member:
       return std::string(member);
@@ -82,6 +84,12 @@ std::string field_path(std::string_view member, ConfigFieldSpelling spelling) {
     upper = false;
   }
   return out;
+}
+
+namespace {
+
+std::string field_path(std::string_view member, ConfigFieldSpelling spelling) {
+  return realtime_voice_changer_field_path(member, spelling);
 }
 
 }  // namespace

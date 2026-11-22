@@ -74,7 +74,7 @@ constexpr int kMaxChannels = 2;
   X("characterType", character.type)                             \
   X("characterAmount", character.amount)                         \
   X("characterTone", character.tone)                             \
-  X("reverbVariationVariation", reverb_variation.variation)      \
+  X("reverbVariation", reverb_variation.variation)               \
   X("reverbVariationDelayMs", reverb_variation.delay_ms)         \
   X("reverbVariationFeedback", reverb_variation.feedback)        \
   X("reverbVariationTempoBpm", reverb_variation.tempo_bpm)       \

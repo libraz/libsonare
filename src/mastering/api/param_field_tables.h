@@ -1483,7 +1483,7 @@ inline double field_as_double(Enum value) {
   X("limiterReleaseMs", limiter.release_ms, display_range(kMsLog, 1, 500))                     \
   X("limiterEnableIspLimiter", limiter.enable_isp_limiter, kNone)                              \
   X("limiterIspCeilingDbtp", limiter.isp_ceiling_dbtp, display_range(kDbtp, -12, 0))           \
-  X("voiceEngineEngine", voice_engine.engine, kNone)                                           \
+  X("voiceEngine", voice_engine.engine, kNone)                                                 \
   X("voiceEngineF0MinHz", voice_engine.f0_min_hz, display_range(kHzLog, 50, 200))              \
   X("pitchCorrectionMode", pitch_correction.mode, kNone)                                       \
   X("pitchCorrectionAmount", pitch_correction.amount, display_range(kNone, 0, 1))              \
@@ -1511,7 +1511,7 @@ inline double field_as_double(Enum value) {
   X("characterType", character.type, kNone)                                                    \
   X("characterAmount", character.amount, display_range(kNone, 0, 1))                           \
   X("characterTone", character.tone, display_range(kNone, -1, 1))                              \
-  X("reverbVariationVariation", reverb_variation.variation, kNone)                             \
+  X("reverbVariation", reverb_variation.variation, kNone)                                      \
   X("reverbVariationDelayMs", reverb_variation.delay_ms, display_range(kMsLog, 1, 3000))       \
   X("reverbVariationFeedback", reverb_variation.feedback, display_range(kNone, 0, 0.95))       \
   X("reverbVariationTempoBpm", reverb_variation.tempo_bpm, display_range(kBpm, 30, 300))       \
