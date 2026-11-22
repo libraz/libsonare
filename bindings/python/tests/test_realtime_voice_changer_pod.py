@@ -237,9 +237,9 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
         assert warped.latency_samples == relative.latency_samples + 1024
         assert warped.config.formant_mode == "absolute"
         warped.set_config(dataclasses.replace(absolute, formant_factor=1.2))
-        with pytest.raises(ValueError, match="formant mode"):
+        with pytest.raises(ValueError, match="formant_mode is fixed at construction"):
             warped.set_config(base)
-        with pytest.raises(ValueError, match="formant mode"):
+        with pytest.raises(ValueError, match="formant_mode is fixed at construction"):
             relative.set_config(absolute)
 
 

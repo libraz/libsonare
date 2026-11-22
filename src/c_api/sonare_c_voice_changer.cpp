@@ -563,7 +563,7 @@ SonareError sonare_realtime_voice_changer_set_config(
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  handle->changer.set_config(normalized);
+  handle->changer.set_config(normalized, editing::voice_changer::ConfigFieldSpelling::CStruct);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
