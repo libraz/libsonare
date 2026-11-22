@@ -77,6 +77,7 @@ try {
 - Loading the `.wasm` file with `locateFile` → [JavaScript API](https://libsonare.libraz.net/docs/js-api)
 - Realtime voice changer preset schemas → [Realtime voice changer](https://libsonare.libraz.net/docs/realtime-voice-changer)
 - Bounded-memory OPFS clip streaming, the cue bus and mastering preview in the worklet → [Realtime and streaming](https://libsonare.libraz.net/docs/realtime-streaming)
+- `@libraz/libsonare/migration.json` — every rename, removal and reshape of this package's public names, the machine-readable form of [UPGRADING.md](https://github.com/libraz/libsonare/blob/main/UPGRADING.md)
 
 ## Documentation
 

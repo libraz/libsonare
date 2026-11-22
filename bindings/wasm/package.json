@@ -39,6 +39,7 @@
     "./schemas/mixer-scene.schema.json": "./dist/schemas/mixer-scene.schema.json",
     "./schemas/playback-renderer-config.schema.json": "./dist/schemas/playback-renderer-config.schema.json",
     "./hrtf/default.shrf": "./dist/hrtf/default.shrf",
+    "./migration.json": "./dist/migration.json",
     "./package.json": "./package.json"
   },
   "typesVersions": {
@@ -79,7 +80,7 @@
     "bench:wasm:isp": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -S ../.. -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_mastering_isp_bench && cp build-wasm-bench/bin/sonare_mastering_isp_bench.js /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs && cp build-wasm-bench/bin/sonare_mastering_isp_bench.wasm /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs",
     "bench:wasm:playback": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -S ../.. -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DBUILD_MIXING=ON -DBUILD_ACOUSTIC_SIM=ON -DBUILD_PLAYBACK=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_playback_binaural_bench && cp build-wasm-bench/bin/sonare_playback_binaural_bench.js /tmp/libsonare-wasm-bench/sonare_playback_binaural_bench.cjs && cp build-wasm-bench/bin/sonare_playback_binaural_bench.wasm /tmp/libsonare-wasm-bench/sonare_playback_binaural_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_playback_binaural_bench.cjs",
     "bench:wasm:phase-vocoder": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -S ../.. -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_phase_vocoder_streaming_bench && cp build-wasm-bench/bin/sonare_phase_vocoder_streaming_bench.js /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.cjs && cp build-wasm-bench/bin/sonare_phase_vocoder_streaming_bench.wasm /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.cjs",
-    "build:js": "node scripts/write-analysis-module-types.mjs && tsup && yarn build:types && node scripts/copy-schemas.mjs && node scripts/copy-hrtf.mjs && node scripts/copy-module-types.mjs && node scripts/dist-source-manifest.mjs --write bundle",
+    "build:js": "node scripts/write-analysis-module-types.mjs && tsup && yarn build:types && node scripts/copy-schemas.mjs && node scripts/write-migration-ledger.mjs && node scripts/copy-hrtf.mjs && node scripts/copy-module-types.mjs && node scripts/dist-source-manifest.mjs --write bundle",
     "build:types": "node scripts/prune-dist-declarations.mjs && tsc -p tsconfig.json --emitDeclarationOnly",
     "clean": "rm -rf dist build-wasm build-wasm-analysis LICENSE",
     "lint": "biome check src/ tests/",
@@ -135,6 +136,7 @@
     "@types/node": "^22.20.5",
     "ajv": "^8.20.0",
     "esbuild": "^0.28.2",
+    "smol-toml": "^1.9.1",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3",
     "vite": "^8.3.5",
