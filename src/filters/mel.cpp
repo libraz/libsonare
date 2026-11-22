@@ -47,21 +47,20 @@ constexpr size_t kMaxMelCacheSize = 8;
 
 }  // namespace
 
-std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk) {
-  util::check::integer_within<int>(n_mels, kMelFrequencyCountDomain, "n_mels");
+std::vector<float> mel_frequency_points(int n_points, float fmin, float fmax, bool htk) {
+  util::check::integer_within<int>(n_points, kMelFrequencyCountDomain, "n_points");
   SONARE_CHECK_MSG(fmax > fmin, ErrorCode::InvalidParameter,
-                   "mel_frequencies: fmax must be greater than fmin");
+                   "mel_frequency_points: fmax must be greater than fmin");
 
   /// Convert frequency range to Mel scale
   float mel_min = htk ? hz_to_mel_htk(fmin) : hz_to_mel(fmin);
   float mel_max = htk ? hz_to_mel_htk(fmax) : hz_to_mel(fmax);
 
-  /// Create n_mels+2 points equally spaced in Mel scale
-  int n_points = n_mels + 2;
+  /// Create n_points points equally spaced in Mel scale; a single point is the start.
   std::vector<float> freqs(n_points);
 
   for (int i = 0; i < n_points; ++i) {
-    float mel = mel_min + (mel_max - mel_min) * i / (n_points - 1);
+    float mel = n_points == 1 ? mel_min : mel_min + (mel_max - mel_min) * i / (n_points - 1);
     freqs[i] = htk ? mel_to_hz_htk(mel) : mel_to_hz(mel);
   }
 
@@ -92,8 +91,8 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
                    "mel filterbank: fmax (0 or above the Nyquist reads as the Nyquist) must be "
                    "greater than fmin");
 
-  /// Get Mel frequency points
-  std::vector<float> mel_freqs = mel_frequencies(config.n_mels, fmin, fmax, config.htk);
+  /// Get the band edges: n_mels centres plus the two outer edges
+  std::vector<float> mel_freqs = mel_frequency_points(config.n_mels + 2, fmin, fmax, config.htk);
 
   /// Convert frequencies to FFT bin indices (can be fractional)
   std::vector<float> bin_freqs(mel_freqs.size());

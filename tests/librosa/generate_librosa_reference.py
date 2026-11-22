@@ -80,6 +80,51 @@ def generate_mel_filterbank_reference():
                         }
                     )
 
+    # Unnormalized and band-limited rows, with the first two rows' lowest 64 bins, which hold
+    # their whole support.
+    for n_mels in [64, 128]:
+        for htk in [False, True]:
+            mel = librosa.filters.mel(
+                sr=22050, n_fft=2048, n_mels=n_mels, fmax=8000.0, htk=htk, norm=None
+            )
+            refs.append(
+                {
+                    "sr": 22050,
+                    "n_fft": 2048,
+                    "n_mels": n_mels,
+                    "htk": htk,
+                    "fmax": 8000.0,
+                    "norm": None,
+                    "shape": list(mel.shape),
+                    "sum": float(mel.sum()),
+                    "max": float(mel.max()),
+                    "row_sums": mel.sum(axis=1).tolist(),
+                    "first_rows": mel[:2, :64].tolist(),
+                }
+            )
+
+    return refs
+
+
+def generate_mel_frequencies_reference():
+    """Mel-spaced frequency points, endpoints included."""
+    refs = []
+    for n_mels in [1, 2, 40, 128]:
+        for fmin in [0.0, 30.0]:
+            for fmax in [8000.0, 11025.0]:
+                for htk in [False, True]:
+                    freqs = librosa.mel_frequencies(
+                        n_mels=n_mels, fmin=fmin, fmax=fmax, htk=htk
+                    )
+                    refs.append(
+                        {
+                            "n_mels": n_mels,
+                            "fmin": fmin,
+                            "fmax": fmax,
+                            "htk": htk,
+                            "values": freqs.tolist(),
+                        }
+                    )
     return refs
 
 
@@ -2137,6 +2182,7 @@ def main():
     references = {
         "convert": generate_convert_reference(),
         "mel_filterbank": generate_mel_filterbank_reference(),
+        "mel_frequencies": generate_mel_frequencies_reference(),
         "mfcc": generate_mfcc_reference(),
         "tempo": generate_tempo_reference(),
         "onset_strength": generate_onset_strength_reference(),

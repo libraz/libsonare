@@ -24,7 +24,7 @@ enum class MelNorm {
 /// product cannot wrap before this ceiling sees it.
 inline constexpr int kMaxMelBands = 4096;
 
-/// @brief What the band count of mel_frequencies accepts.
+/// @brief What the point count of mel_frequency_points accepts.
 inline constexpr util::check::NumericDomain kMelFrequencyCountDomain =
     util::check::integer_domain_of<int>(1);
 /// @brief What MelFilterConfig::n_mels accepts.
@@ -40,13 +40,14 @@ struct MelFilterConfig {
   MelNorm norm = MelNorm::Slaney;  ///< Normalization type
 };
 
-/// @brief Computes Mel frequency points.
-/// @param n_mels Number of Mel bands
+/// @brief Computes frequency points equally spaced on the Mel scale.
+/// @param n_points Number of points, endpoints included; one point is fmin alone
 /// @param fmin Minimum frequency in Hz
 /// @param fmax Maximum frequency in Hz
 /// @param htk Use HTK formula if true
-/// @return Vector of n_mels+2 frequency points in Hz
-std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk = false);
+/// @return Vector of n_points frequency points in Hz, from fmin to fmax
+/// @throws SonareException(InvalidParameter) for n_points below 1 or fmax not above fmin
+std::vector<float> mel_frequency_points(int n_points, float fmin, float fmax, bool htk = false);
 
 /// @brief Creates Mel filterbank matrix.
 /// @param sr Sample rate in Hz

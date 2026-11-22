@@ -15,21 +15,21 @@ using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
-TEST_CASE("mel_frequencies basic", "[mel]") {
-  int n_mels = 40;
+TEST_CASE("mel_frequency_points basic", "[mel]") {
+  int n_points = 42;
   float fmin = 0.0f;
   float fmax = 8000.0f;
 
-  std::vector<float> freqs = mel_frequencies(n_mels, fmin, fmax, false);
+  std::vector<float> freqs = mel_frequency_points(n_points, fmin, fmax, false);
 
-  // Should have n_mels + 2 points
-  REQUIRE(freqs.size() == static_cast<size_t>(n_mels + 2));
+  // Exactly n_points points, endpoints included
+  REQUIRE(freqs.size() == static_cast<size_t>(n_points));
 
   // First should be fmin
   REQUIRE_THAT(freqs[0], WithinAbs(fmin, 1.0f));
 
   // Last should be fmax
-  REQUIRE_THAT(freqs[n_mels + 1], WithinAbs(fmax, 1.0f));
+  REQUIRE_THAT(freqs[n_points - 1], WithinAbs(fmax, 1.0f));
 
   // Should be monotonically increasing
   for (size_t i = 1; i < freqs.size(); ++i) {
@@ -37,13 +37,28 @@ TEST_CASE("mel_frequencies basic", "[mel]") {
   }
 }
 
-TEST_CASE("mel_frequencies HTK vs Slaney", "[mel]") {
-  int n_mels = 40;
+TEST_CASE("mel_frequency_points with one or two points", "[mel]") {
+  for (const bool htk : {false, true}) {
+    INFO("htk " << htk);
+    // One point is the start alone, as an equally spaced run of one is.
+    const std::vector<float> one = mel_frequency_points(1, 300.0f, 8000.0f, htk);
+    REQUIRE(one.size() == 1);
+    CHECK(std::isfinite(one[0]));
+    CHECK_THAT(one[0], WithinRel(300.0f, 1e-4f));
+    const std::vector<float> two = mel_frequency_points(2, 300.0f, 8000.0f, htk);
+    REQUIRE(two.size() == 2);
+    CHECK_THAT(two[0], WithinRel(300.0f, 1e-4f));
+    CHECK_THAT(two[1], WithinRel(8000.0f, 1e-4f));
+  }
+}
+
+TEST_CASE("mel_frequency_points HTK vs Slaney", "[mel]") {
+  int n_points = 42;
   float fmin = 0.0f;
   float fmax = 8000.0f;
 
-  std::vector<float> slaney = mel_frequencies(n_mels, fmin, fmax, false);
-  std::vector<float> htk = mel_frequencies(n_mels, fmin, fmax, true);
+  std::vector<float> slaney = mel_frequency_points(n_points, fmin, fmax, false);
+  std::vector<float> htk = mel_frequency_points(n_points, fmin, fmax, true);
 
   // Both should have same size
   REQUIRE(slaney.size() == htk.size());
@@ -359,8 +374,8 @@ TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]"
 }
 
 TEST_CASE("mel filters refuse n_mels by its name", "[mel]") {
-  CHECK_THROWS_WITH(mel_frequencies(0, 0.0f, 8000.0f, false),
-                    "n_mels must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(mel_frequency_points(0, 0.0f, 8000.0f, false),
+                    "n_points must be an integer in [1, 2147483647]");
   MelFilterConfig config;
   config.n_mels = 0;
   CHECK_THROWS_WITH(create_mel_filterbank(22050, 2048, config),
