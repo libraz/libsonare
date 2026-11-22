@@ -107,6 +107,7 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
                                 0.0f);
 
   for (int m = 0; m < config.n_mels; ++m) {
+    float* row = filterbank.data() + static_cast<size_t>(m) * static_cast<size_t>(n_bins);
     float left = bin_freqs[m];
     float center = bin_freqs[m + 1];
     float right = bin_freqs[m + 2];
@@ -118,12 +119,12 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
       if (bin >= left && bin <= center) {
         /// Rising edge
         if (center > left) {
-          filterbank[m * n_bins + k] = (bin - left) / (center - left);
+          row[k] = (bin - left) / (center - left);
         }
       } else if (bin > center && bin <= right) {
         /// Falling edge
         if (right > center) {
-          filterbank[m * n_bins + k] = (right - bin) / (right - center);
+          row[k] = (right - bin) / (right - center);
         }
       }
     }
@@ -132,7 +133,7 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
     if (config.norm == MelNorm::Slaney) {
       float enorm = 2.0f / (mel_freqs[m + 2] - mel_freqs[m]);
       for (int k = 0; k < n_bins; ++k) {
-        filterbank[m * n_bins + k] *= enorm;
+        row[k] *= enorm;
       }
     }
   }
