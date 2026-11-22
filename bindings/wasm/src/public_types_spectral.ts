@@ -723,9 +723,10 @@ export interface StftResult {
 }
 
 /**
- * Mel spectrogram result, with the parameters of the forward transform, so the
- * result alone is enough to invert it: `melToStft` and `melToAudio` take it as
- * `{ result }`.
+ * Mel spectrogram, with the parameters of the forward transform, so the result
+ * alone says how to invert it: pass `power` to `melToStft` or `melToAudio` with
+ * the same `sampleRate`, `nFft`, `fminHz`, `fmaxHz` and `htk` (and, for
+ * `melToAudio`, `hopLength`).
  */
 export interface MelSpectrogramResult {
   /** Sample rate in Hz of the analysed audio. */
@@ -747,9 +748,10 @@ export interface MelSpectrogramResult {
 }
 
 /**
- * MFCC result, with the Mel parameters the coefficients were derived with and
- * the lifter, so the result alone is enough to invert it: `mfccToMel` and
- * `mfccToAudio` take it as `{ result }`.
+ * MFCCs, with the Mel parameters they were derived with and the lifter, so the
+ * result alone says how to invert it: pass `coefficients` to `mfccToMel` or
+ * `mfccToAudio` with the same `nMels`, `lifter` and Mel parameters (and, for
+ * `mfccToAudio`, `hopLength`).
  */
 export interface MfccResult {
   /** Sample rate in Hz of the analysed audio. */
