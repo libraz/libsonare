@@ -556,7 +556,8 @@ TEST_CASE("C engine queues a master loudness reset", "[c_api][engine][loudness_r
   REQUIRE(sonare_engine_reset_master_loudness_meter(engine, -1) == SONARE_OK);
   REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, kBlock) == SONARE_OK);
   const SonareMeterTelemetryRecord after = latest_master();
-  REQUIRE(after.integrated_lufs <= -100.0f);
+  // One block after the reset holds no gated block, so integrated loudness is not measured.
+  REQUIRE(std::isnan(after.integrated_lufs));
   REQUIRE(after.momentary_lufs > -60.0f);
   sonare_engine_destroy(engine);
 }

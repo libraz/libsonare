@@ -437,7 +437,7 @@ TEST_CASE("sonare_mastering_repair_detect_noise_floor", "[c_api][mastering]") {
   const auto quiet = white_noise(kLength, 0.001f, 1234);
   const auto loud = white_noise(kLength, 0.1f, 1234);
 
-  SECTION("follows the noise level and fills every band") {
+  SECTION("follows the noise level and fills every band a bin reaches") {
     SonareNoiseDetection from_quiet{};
     SonareNoiseDetection from_loud{};
     REQUIRE(sonare_mastering_repair_detect_noise_floor(quiet.data(), quiet.size(), kSr, nullptr,
@@ -445,7 +445,15 @@ TEST_CASE("sonare_mastering_repair_detect_noise_floor", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_repair_detect_noise_floor(loud.data(), loud.size(), kSr, nullptr,
                                                        &from_loud) == SONARE_OK);
     REQUIRE(from_loud.floor_dbfs > from_quiet.floor_dbfs);
-    for (float level : from_loud.band_floor_dbfs) REQUIRE(std::isfinite(level));
+    // A NULL config is the library default geometry.
+    SonareDenoiseClassicalConfig defaults;
+    sonare_denoise_classical_config_init(&defaults);
+    int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    REQUIRE(sonare_mastering_repair_noise_band_bins(defaults.n_fft, kSr, bins) == SONARE_OK);
+    for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) {
+      const float level = from_loud.band_floor_dbfs[k];
+      REQUIRE((bins[k] == bins[k + 1] ? std::isnan(level) : std::isfinite(level)));
+    }
   }
 
   SECTION("pads a buffer shorter than n_fft") {
@@ -490,7 +498,7 @@ TEST_CASE("sonare_mastering_repair_noise_band_bins", "[c_api][mastering]") {
     for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) REQUIRE(bins[k] <= bins[k + 1]);
   }
 
-  SECTION("an empty band is why a level reads at the sentinel, not a quiet region") {
+  SECTION("an empty band is why a level reads NaN, not a quiet region") {
     int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
     REQUIRE(sonare_mastering_repair_noise_band_bins(config.n_fft, kSr, bins) == SONARE_OK);
     SonareNoiseDetection detection{};
@@ -502,21 +510,17 @@ TEST_CASE("sonare_mastering_repair_noise_band_bins", "[c_api][mastering]") {
     // while its upper ones hold many bins.
     int empty_bands = 0;
     int occupied_bands = 0;
-    float sentinel = 0.0f;
     for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) {
       if (bins[k] == bins[k + 1]) {
-        if (empty_bands == 0) sentinel = detection.band_floor_dbfs[k];
-        REQUIRE(detection.band_floor_dbfs[k] == sentinel);
+        REQUIRE(std::isnan(detection.band_floor_dbfs[k]));
         ++empty_bands;
       } else {
+        REQUIRE(std::isfinite(detection.band_floor_dbfs[k]));
         ++occupied_bands;
       }
     }
     REQUIRE(empty_bands > 0);
     REQUIRE(occupied_bands > 0);
-    for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) {
-      if (bins[k] != bins[k + 1]) REQUIRE(detection.band_floor_dbfs[k] > sentinel);
-    }
   }
 
   SECTION("follows both halves of the geometry it was given") {

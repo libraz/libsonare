@@ -343,17 +343,27 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
                 noisy.data(), noisy.data(), noisy.size(), sr, nullptr, &out) == SONARE_OK);
 
     // A mirror carrying only band_floor_dbfs[0] passes any check written against
-    // the first entry alone, so the whole array has to say something.
-    bool all_finite = true;
-    bool any_differs_from_first = false;
+    // the first entry alone, so the whole array has to say something. A band no
+    // bin reaches is NaN; every other band is a finite level.
+    SonareDenoiseClassicalConfig defaults;
+    sonare_denoise_classical_config_init(&defaults);
+    int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    REQUIRE(sonare_mastering_repair_noise_band_bins(defaults.n_fft, sr, bins) == SONARE_OK);
+    int measured = 0;
+    float first_measured = 0.0f;
+    bool any_differs = false;
     for (int b = 0; b < SONARE_REPAIR_NOISE_BAND_COUNT; ++b) {
       const float band = out.report.detected.band_floor_dbfs[b];
-      if (!std::isfinite(band)) all_finite = false;
-      if (band != out.report.detected.band_floor_dbfs[0]) any_differs_from_first = true;
-      REQUIRE(band >= sonare::constants::kFloorDb);
+      if (bins[b] == bins[b + 1]) {
+        REQUIRE(std::isnan(band));
+        continue;
+      }
+      REQUIRE(std::isfinite(band));
+      if (measured++ == 0) first_measured = band;
+      if (band != first_measured) any_differs = true;
     }
-    REQUIRE(all_finite);
-    REQUIRE(any_differs_from_first);
+    REQUIRE(measured > 1);
+    REQUIRE(any_differs);
 
     sonare_free_denoise_stereo_result(&out);
   }
@@ -1257,7 +1267,6 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
       if (out.left_report.detected.harmonic_dbfs[k] != out.left_report.detected.harmonic_dbfs[0]) {
         any_differs_from_first = true;
       }
-      REQUIRE(out.left_report.detected.harmonic_dbfs[k] >= -120.0f);
     }
     REQUIRE(all_finite);
     REQUIRE(any_differs_from_first);
@@ -1269,7 +1278,7 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     sonare_free_dehum_stereo_result(&out);
   }
 
-  SECTION("a harmonic past Nyquist reads the floor rather than an unset value") {
+  SECTION("a harmonic past Nyquist reads as not measured rather than an unset value") {
     const int low_sr = 8000;
     auto l = generate_sine(220.0f, low_sr, 0.5f);
     auto r = generate_sine(330.0f, low_sr, 0.5f);
@@ -1279,7 +1288,7 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     SonareDehumStereoResult out{};
     REQUIRE(sonare_mastering_repair_dehum_stereo(l.data(), r.data(), l.size(), low_sr, &high,
                                                  &out) == SONARE_OK);
-    REQUIRE(out.left_report.detected.harmonic_dbfs[1] == -120.0f);
+    REQUIRE(std::isnan(out.left_report.detected.harmonic_dbfs[1]));
     sonare_free_dehum_stereo_result(&out);
   }
 
@@ -2644,7 +2653,7 @@ TEST_CASE("sonare_mastering_repair_analyze and sonare_mastering_repair_apply",
     REQUIRE(sonare_mastering_repair_analyze(channels, 2, length, sr, nullptr, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_mastering_repair_analyze(channels, 2, length, sr, R"({"preferStreamingSafe":1})",
-                                            &json) == SONARE_ERROR_INVALID_FORMAT);
+                                            &json) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(json == nullptr);
   }
 

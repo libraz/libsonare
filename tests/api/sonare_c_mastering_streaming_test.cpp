@@ -96,7 +96,8 @@ TEST_CASE("sonare_streaming_loudness_gain matches the offline chain's applied ga
   SonareStreamingLoudnessGain quiet{1.0f, 1.0f, 1.0f};
   REQUIRE(sonare_streaming_loudness_gain(silence.data(), silence.size(), kRate, config, &quiet) ==
           SONARE_OK);
-  CHECK(quiet.loudness_static_gain_db == 0.0f);
+  // Silence has no loudness to derive a gain from, so the gain is not measured.
+  CHECK(std::isnan(quiet.loudness_static_gain_db));
   CHECK_FALSE(std::isfinite(quiet.integrated_lufs));
 }
 

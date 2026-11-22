@@ -679,17 +679,17 @@ TEST_CASE("sonare_engine_set_parameter steps when smoothed is 0 and ramps when i
   REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
   REQUIRE(audio[0] < 0.01f);
 
-  // The first smoothed set on a target is its baseline; the next one ramps from it and has
-  // not reached its target after one block.
+  // A smoothed set ramps from the value the step left: it starts there and has risen, without
+  // reaching its target, one block later.
   audio.fill(1.0f);
   REQUIRE(sonare_engine_set_parameter(engine, 7, 0.0f, -1, 1) == SONARE_OK);
   REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
-  REQUIRE(audio[0] == Catch::Approx(1.0f));
+  const float first_block = audio[0];
+  REQUIRE(first_block < 0.01f);
   audio.fill(1.0f);
-  REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1, 1) == SONARE_OK);
   REQUIRE(sonare_engine_process(engine, channels, nullptr, 1, 64) == SONARE_OK);
-  REQUIRE(audio[0] > 0.5f);
-  REQUIRE(audio[63] > 0.01f);
+  REQUIRE(audio[63] > first_block);
+  REQUIRE(audio[63] < 0.5f);
 
   sonare_engine_destroy(engine);
 #endif

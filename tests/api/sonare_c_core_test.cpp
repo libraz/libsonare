@@ -2172,7 +2172,7 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     REQUIRE(json == nullptr);
     // The core's own guard is what answered, so its specific message reaches
     // this surface instead of the generic pointer complaint.
-    REQUIRE(std::string(sonare_last_error_message()).find("beatTimes") != std::string::npos);
+    REQUIRE(std::string(sonare_last_error_message()).find("beat_times") != std::string::npos);
 
     // One beat is not empty: the line is drawn at nothing to score, not at
     // "short", so the shortest non-empty series still gets an answer.
@@ -2283,7 +2283,9 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
     REQUIRE(err == SONARE_OK);
     REQUIRE(result.peak_db <= 1.0f);
     REQUIRE(result.rms_db <= result.peak_db);
-    REQUIRE(result.dynamic_range_db >= 0.0f);
+    // The gaps between clicks are exact zeros, so the low percentile is -inf and the
+    // range between the two percentiles is not measured.
+    REQUIRE(std::isnan(result.dynamic_range_db));
     REQUIRE(result.loudness_range_lu >= 0.0f);
     REQUIRE((result.is_compressed == 0 || result.is_compressed == 1));
     REQUIRE(result.loudness_count > 0);

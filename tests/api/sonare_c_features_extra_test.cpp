@@ -716,8 +716,11 @@ TEST_CASE("sonare_split_silence_common report separates the three ways one inter
   }
 
   SECTION("takes that each go quiet, but never together") {
-    std::vector<float> early(tenth * 10, 0.0f);
-    std::vector<float> late(tenth * 10, 0.0f);
+    // The quiet halves sit on a floor rather than exact zeros: a zero frame has no
+    // finite depth, so its ceiling would not be measured.
+    constexpr float kQuietFloor = 1e-6f;
+    std::vector<float> early(tenth * 10, kQuietFloor);
+    std::vector<float> late(tenth * 10, kQuietFloor);
     const auto tone = sonare::test::generate_sine_samples(440.0f, kSampleRate, tenth * 5, 1.0f);
     // Each take is silent for half its length and the halves do not overlap, so
     // the union covers everything while each take has silence of its own.
