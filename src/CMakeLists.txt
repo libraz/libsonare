@@ -1799,6 +1799,8 @@ if(BUILD_WASM)
     "$<$<CONFIG:Release>:-Oz>")
   target_link_options(sonare PRIVATE
     -msimd128
+    # Hold the glue to the module's floor: fixed-width SIMD ships from Safari 16.4.
+    -sMIN_SAFARI_VERSION=160400
     # Optimize the linked module for size. The DSP objects are already compiled
     # at -O3 by the Release flags; this only changes the level binaryen runs the
     # whole module at, and measured against -O3 it is both smaller and no slower
