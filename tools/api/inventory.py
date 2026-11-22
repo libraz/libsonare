@@ -1220,7 +1220,11 @@ def extract_c(root: Path) -> tuple[list[dict], dict[str, int]]:
             ],
         )
         out.append(rec)
-        param_docs = _c_param_docs(_c_doc_text(lines_by_file[f.file], line - 1)) if line and f.file in lines_by_file else {}
+        param_docs = (
+            _c_param_docs(_c_doc_text(lines_by_file[f.file], line - 1))
+            if line and f.file in lines_by_file
+            else {}
+        )
         for p in f.params:
             if not p.raw_name:
                 continue
