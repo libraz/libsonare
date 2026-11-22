@@ -267,12 +267,7 @@ class ProcessorBase {
   bool set_parameter(unsigned int param_id, float value) {
     if (!std::isfinite(value)) return false;
     if (!set_parameter_impl(param_id, value)) return false;
-    const auto it = std::lower_bound(
-        constructed_parameter_values_.begin(), constructed_parameter_values_.end(), param_id,
-        [](const auto& entry, unsigned int id) { return entry.id < id; });
-    if (it != constructed_parameter_values_.end() && it->id == param_id) {
-      it->last_applied = value;
-    }
+    if (ParameterValue* entry = find_parameter_value(param_id)) entry->last_applied = value;
     return true;
   }
 
@@ -337,11 +332,9 @@ class ProcessorBase {
 
   /// Lookup is allocation-free and reads only immutable construction metadata.
   bool constructed_parameter_value(unsigned int id, float* out) const noexcept {
-    const auto it = std::lower_bound(
-        constructed_parameter_values_.begin(), constructed_parameter_values_.end(), id,
-        [](const auto& entry, unsigned int value) { return entry.id < value; });
-    if (it == constructed_parameter_values_.end() || it->id != id) return false;
-    *out = it->constructed;
+    const ParameterValue* entry = find_parameter_value(id);
+    if (entry == nullptr) return false;
+    *out = entry->constructed;
     return true;
   }
 
@@ -350,11 +343,9 @@ class ProcessorBase {
   /// logical request value, which can differ from a processor's clamped value.
   bool last_applied_parameter_value(unsigned int id, float* out) const noexcept {
     if (out == nullptr) return false;
-    const auto it = std::lower_bound(
-        constructed_parameter_values_.begin(), constructed_parameter_values_.end(), id,
-        [](const auto& entry, unsigned int value) { return entry.id < value; });
-    if (it == constructed_parameter_values_.end() || it->id != id) return false;
-    *out = it->last_applied;
+    const ParameterValue* entry = find_parameter_value(id);
+    if (entry == nullptr) return false;
+    *out = entry->last_applied;
     return true;
   }
 
@@ -410,6 +401,16 @@ class ProcessorBase {
     float last_applied;
   };
   std::vector<ParameterValue> constructed_parameter_values_;
+
+  ParameterValue* find_parameter_value(unsigned int id) noexcept {
+    const auto it = std::lower_bound(
+        constructed_parameter_values_.begin(), constructed_parameter_values_.end(), id,
+        [](const auto& entry, unsigned int value) { return entry.id < value; });
+    return it != constructed_parameter_values_.end() && it->id == id ? &*it : nullptr;
+  }
+  const ParameterValue* find_parameter_value(unsigned int id) const noexcept {
+    return const_cast<ProcessorBase*>(this)->find_parameter_value(id);
+  }
   OverflowCounter non_finite_discards_;
 };
 

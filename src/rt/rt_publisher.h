@@ -93,15 +93,8 @@ class RtPublisher {
   /// quiescent (never concurrently). A concurrent call races the ring's tail and
   /// the slot swap — a debug-only flag below catches that violation.
   void acquire() noexcept {
-#ifndef NDEBUG
-    const bool reentered = in_acquire_.exchange(true, std::memory_order_acq_rel);
-    assert(!reentered &&
-           "RtPublisher::acquire() is single-consumer; a concurrent acquire() was detected");
-#endif
+    const AcquireGuard guard(*this);
     commit_adoption(begin_adoption());
-#ifndef NDEBUG
-    in_acquire_.store(false, std::memory_order_release);
-#endif
   }
 
   /// Adopt the newest snapshot accepted by the CONTROL thread while the AUDIO
@@ -131,11 +124,7 @@ class RtPublisher {
   /// Same single-consumer contract as acquire() above.
   template <class F>
   void acquire(F&& on_adopt) noexcept {
-#ifndef NDEBUG
-    const bool reentered = in_acquire_.exchange(true, std::memory_order_acq_rel);
-    assert(!reentered &&
-           "RtPublisher::acquire() is single-consumer; a concurrent acquire() was detected");
-#endif
+    const AcquireGuard guard(*this);
     std::shared_ptr<const T> previous = std::move(audio_current_);
     const Adoption adoption = begin_adoption();
     if (adoption.vacated != nullptr) {
@@ -146,9 +135,6 @@ class RtPublisher {
       audio_current_ = std::move(previous);
     }
     commit_adoption(adoption);
-#ifndef NDEBUG
-    in_acquire_.store(false, std::memory_order_release);
-#endif
   }
 
   /// Raw pointer to the snapshot currently held by the audio thread, or nullptr
@@ -311,6 +297,29 @@ class RtPublisher {
   // Debug-only single-consumer guard for acquire() (see its contract above).
   std::atomic<bool> in_acquire_{false};
 #endif
+
+  // Marks acquire() in progress in debug builds; a no-op in release builds.
+  class AcquireGuard {
+   public:
+    explicit AcquireGuard(RtPublisher& owner) noexcept
+#ifndef NDEBUG
+        : owner_(owner) {
+      const bool reentered = owner_.in_acquire_.exchange(true, std::memory_order_acq_rel);
+      assert(!reentered &&
+             "RtPublisher::acquire() is single-consumer; a concurrent acquire() was detected");
+    }
+    ~AcquireGuard() { owner_.in_acquire_.store(false, std::memory_order_release); }
+    AcquireGuard(const AcquireGuard&) = delete;
+    AcquireGuard& operator=(const AcquireGuard&) = delete;
+
+   private:
+    RtPublisher& owner_;
+#else
+    {
+      (void)owner;
+    }
+#endif
+  };
 };
 
 /// Multi-reader, lock-free snapshot holder for immutable state that is read

@@ -64,14 +64,10 @@ class SeqlockCell {
   /// @brief Spins until it reads a consistent snapshot. Tolerates a bounded
   ///        spin; do not call on the audio thread.
   T load() const noexcept {
-    for (;;) {
-      const uint32_t g1 = guard_.load(std::memory_order_acquire);
-      if (g1 & 1u) continue;  // writer mid-update
-      const T copy = load_words();
-      std::atomic_thread_fence(std::memory_order_acquire);
-      const uint32_t g2 = guard_.load(std::memory_order_acquire);
-      if (g1 == g2) return copy;
+    T value{};
+    while (!try_copy(&value)) {
     }
+    return value;
   }
 
   /// @brief Non-spinning reader handle: owns the stale-value cache the audio
