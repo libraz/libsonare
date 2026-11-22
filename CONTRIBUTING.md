@@ -121,6 +121,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - Run `make surface-check` and get rc=0 before sending a change that touches a public name, token, default or flag; CI runs it too.
 - Bump the owning ABI counter when a shipped struct, signature, constant or enumerator changes, measured against the last release tag: `python3 tools/abi/check_abi_bumps.py --tag <last release tag>`.
 - Ship a breaking change only in a major release, with its ledger row and the regenerated `UPGRADING.md`.
+- After changing a capability-catalog field, run the `[catalog]` C++ cases, `make capability-catalog` and `python3 tests/conformance/check_result_schema_surfaces.py`.
 
 ### The command-line front-ends
 
@@ -238,6 +239,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 - Absence, not a sentinel, is the only spelling that means the same thing on every surface; the C ABI keeps `0` or NaN as its own spelling and each facade maps to absence.
 - `make surface-check` checks names, units, tokens, entry shape and the ledgers against the migration baseline; `make check-abi-bumps` needs release tags, so it runs in `make ci-local` and not on a shallow CI checkout.
 - ABI counters are separate from the release version: a release never bumps one, and a struct absent from every release tag may still grow.
+- A catalog field is emitted once, by the writer, and listed again in three literal path lists, the JSON Schema, the shared type shapes and each surface's types. The lists stay literal because the surface check reads them as text; the `[catalog]` cases hold each list to the writer.
 
 ### The command-line front-ends
 

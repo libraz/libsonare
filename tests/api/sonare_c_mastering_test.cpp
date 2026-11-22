@@ -1196,7 +1196,7 @@ TEST_CASE("sonare_mastering_chain_config_from_json refuses a document as Invalid
 }
 
 TEST_CASE("the capability catalog schema list matches what the writer emits",
-          "[c_api][mastering]") {
+          "[c_api][mastering][catalog]") {
   const std::string json = sonare_test::c_string(sonare_capability_catalog_json);
   const auto actual = sonare::test::schema_paths_of(json);
   const auto& expected_paths = sonare_c_mastering_detail::capability_catalog_schema_paths();
