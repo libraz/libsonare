@@ -281,10 +281,13 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
       voiceEngine: 'grain',
       formantMode: 'absolute',
       retunePitchSemitones: -9,
+      retuneMix: 1,
     };
+    // A dry retune moves no pitch, so the same factor and shift need no warp outside the range.
+    expect(() => make({ ...unreachable, retuneMix: 0 }).destroy()).not.toThrow();
     expect(() => make(unreachable)).toThrow(
       new RangeError(
-        'RealtimeVoiceChanger: formantFactor must be finite and in [0.55, 0.981] in absolute formant mode at retunePitchSemitones -9 (the warp reaches [0.3271, 0.981] there)',
+        'RealtimeVoiceChanger: formantFactor must be finite and in [0.55, 0.981] when formantMode is absolute at retunePitchSemitones -9 and retuneMix 1 (the warp it needs must lie in [0.55, 1.65])',
       ),
     );
   });

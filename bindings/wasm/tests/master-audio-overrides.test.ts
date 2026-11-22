@@ -118,8 +118,9 @@ describe('WASM canonical mastering-chain config', () => {
   });
 
   it('reports output true-peak, LRA, and per-stage gain reductions', () => {
+    // Four seconds: the loudness range needs at least one 3 s short-term window past the gate.
     const input = Float32Array.from(
-      { length: 8192 },
+      { length: 4 * sampleRate },
       (_, i) => 0.3 * Math.sin((2 * Math.PI * 220 * i) / sampleRate),
     );
     const result = masterAudio({
