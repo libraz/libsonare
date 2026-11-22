@@ -530,9 +530,13 @@ export interface EstimateMeterRequest {
   /** Weight on the subdivision accent pattern. Default 0.15. */
   subdivisionWeight?: number;
   /**
-   * Subdivision score at which a 6 candidate is reported as compound (x/8).
-   * Only consulted when there is a subdivision to measure, so it has no effect
-   * on {@link estimateMeter}, which scores per-beat accents alone. Default 0.85.
+   * Mean accent between the beats, as a fraction of the mean accent on them, at
+   * and above which a six (or a three) is read as compound. Only a midpoint
+   * holding an attack contributes: an event counts where it rises at least the
+   * refiner's evidence margin above the local level, so a subdivision masked by
+   * a sustained bed does not count. Only consulted when there is a subdivision
+   * to measure, so it has no effect on {@link estimateMeter}, which scores
+   * per-beat accents alone. Default 0.5.
    */
   compoundSubdivisionThreshold?: number;
 }

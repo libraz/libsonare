@@ -862,7 +862,11 @@ export interface EstimateMeterRequest {
   /** Weight of the subdivision term (default: 0.15). */
   subdivisionWeight?: number;
   /**
-   * Score ratio above which a compound meter is preferred (default: 0.85).
+   * Mean accent between the beats, as a fraction of the mean accent on them, at
+   * and above which a six (or a three) is read as compound (default: 0.5). Only
+   * a midpoint holding an attack contributes: an event counts where it rises at
+   * least the refiner's evidence margin above the local level, so a subdivision
+   * masked by a sustained bed does not count.
    *
    * @remarks
    * Only consulted when there is a subdivision to measure, so it has no effect
