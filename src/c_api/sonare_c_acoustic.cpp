@@ -127,6 +127,7 @@ void init_room_fields(Config* config) {
   config->air_humidity_percent = air.humidity_percent;
 }
 
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
 // A position left all-NaN is not given; any other non-finite component is refused by name.
 std::array<std::optional<float>, 3> requested_position(const SonareRoomPlacement& p,
                                                        const std::string& subject) {
@@ -153,6 +154,7 @@ sonare::acoustic::ResolvedRoomPlacement resolve_placement(const Config& config) 
   return sonare::acoustic::resolve_room_placement(
       sonare::RoomDimensions{config.length_m, config.width_m, config.height_m}, request);
 }
+#endif
 
 template <size_t N>
 const char* enum_name(const std::array<const char*, N>& names, int value) {
