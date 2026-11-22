@@ -29,6 +29,25 @@ describe('SonareError', () => {
     expect(ErrorCode.Unknown).toBe(99);
   });
 
+  it('names every C failure code as the shared corpus does', () => {
+    const corpus = JSON.parse(
+      readFileSync(
+        new URL('../../../tests/conformance/c_error_codes.json', import.meta.url).pathname,
+        'utf8',
+      ),
+    ) as { codes: Array<{ code: number; codeName: string }> };
+    expect(corpus.codes.length).toBeGreaterThan(0);
+    for (const { code, codeName } of corpus.codes) {
+      expect(ErrorCode[codeName as keyof typeof ErrorCode], codeName).toBe(code);
+      expect(new SonareError(code as ErrorCode, 'x').codeName, String(code)).toBe(codeName);
+    }
+    // Every failure code the binding publishes is one the corpus lists.
+    const published = Object.values(ErrorCode).filter((code) => code !== ErrorCode.Ok);
+    expect(published.sort((a, b) => a - b)).toEqual(
+      corpus.codes.map(({ code }) => code).sort((a, b) => a - b),
+    );
+  });
+
   it('carries name, numeric code, and codeName on a library failure', () => {
     let caught: unknown;
     try {

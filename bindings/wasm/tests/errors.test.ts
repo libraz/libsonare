@@ -320,9 +320,14 @@ describe('the WASM exception decoder covers every core ErrorCode', () => {
     const sorted = (table: Map<string, number>): [string, number][] =>
       [...table].sort(([a], [b]) => a.localeCompare(b));
     const expected = sorted(cTable);
-    // + Unknown, + AbiMismatch: a binding-side code the core never throws.
-    expect(expected.length).toBe(coreErrorCodeEnumerators().length + 2);
-    expect(cTable.get('AbiMismatch')).toBe(10);
+    // The core carries every C code, AbiMismatch and Unknown included, under the same number.
+    expect(expected.length).toBe(coreErrorCodeEnumerators().length);
+    const corpus = JSON.parse(repoFile('tests/conformance/c_error_codes.json')) as {
+      codes: Array<{ code: number; codeName: string }>;
+    };
+    expect(sorted(new Map(corpus.codes.map(({ code, codeName }) => [codeName, code])))).toEqual(
+      expected.filter(([name]) => name !== 'Ok'),
+    );
     expect(sorted(tsErrorCodeEnum('bindings/wasm/src/errors.ts'))).toEqual(expected);
     expect(sorted(tsErrorCodeEnum('bindings/node/src/errors.ts'))).toEqual(expected);
     expect(sorted(pyTable)).toEqual(expected);
