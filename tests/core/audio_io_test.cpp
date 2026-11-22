@@ -699,6 +699,65 @@ TEST_CASE("load_buffer_wav pcm16", "[audio_io]") {
   }
 }
 
+namespace {
+
+/// @brief A mono PCM WAV at @p bits per sample carrying @p data verbatim.
+std::vector<uint8_t> pcm_wav_with_data(uint16_t bits, const std::vector<uint8_t>& data) {
+  std::vector<uint8_t> out;
+  const auto u16 = [&out](uint16_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFFu));
+    out.push_back(static_cast<uint8_t>(v >> 8));
+  };
+  const auto u32 = [&u16](uint32_t v) {
+    u16(static_cast<uint16_t>(v & 0xFFFFu));
+    u16(static_cast<uint16_t>(v >> 16));
+  };
+  const auto tag = [&out](const char* t) { out.insert(out.end(), t, t + 4); };
+  const uint16_t block = bits / 8;
+  tag("RIFF");
+  u32(36u + static_cast<uint32_t>(data.size()));
+  tag("WAVE");
+  tag("fmt ");
+  u32(16u);
+  u16(1u);  // WAVE_FORMAT_PCM
+  u16(1u);
+  u32(8000u);
+  u32(8000u * block);
+  u16(block);
+  u16(bits);
+  tag("data");
+  u32(static_cast<uint32_t>(data.size()));
+  out.insert(out.end(), data.begin(), data.end());
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("load_buffer_wav reads 8-bit PCM about code 128 and 16-bit PCM as code / 32768",
+          "[audio_io]") {
+  SECTION("8-bit: 0, 128 and 255") {
+    const std::vector<uint8_t> wav = pcm_wav_with_data(8, {0, 128, 255});
+    auto [loaded, sr] = load_buffer_wav(wav.data(), wav.size());
+    REQUIRE(sr == 8000);
+    REQUIRE(loaded.size() == 3);
+    CHECK(loaded[0] == -1.0f);
+    CHECK(loaded[1] == 0.0f);
+    CHECK(loaded[2] == 127.0f / 128.0f);
+  }
+  SECTION("16-bit: -32768, -1, 0, 1 and 32767") {
+    const std::vector<uint8_t> wav =
+        pcm_wav_with_data(16, {0x00, 0x80, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x00, 0xFF, 0x7F});
+    auto [loaded, sr] = load_buffer_wav(wav.data(), wav.size());
+    REQUIRE(sr == 8000);
+    REQUIRE(loaded.size() == 5);
+    CHECK(loaded[0] == -1.0f);
+    CHECK(loaded[1] == -1.0f / 32768.0f);
+    CHECK(loaded[2] == 0.0f);
+    CHECK(loaded[3] == 1.0f / 32768.0f);
+    CHECK(loaded[4] == 32767.0f / 32768.0f);
+  }
+}
+
 TEST_CASE("load_buffer_wav rejects invalid channel count", "[audio_io]") {
   constexpr int sr = 22050;
   constexpr int samples = 128;
