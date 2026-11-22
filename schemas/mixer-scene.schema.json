@@ -98,6 +98,10 @@
         "lfe": { "type": "number", "default": 0 }
       }
     },
+    "eqBandType": {
+      "description": "Every band shape the shared band codec reads, in the order its refusal lists them.",
+      "enum": ["peak", "lowShelf", "highShelf", "lowPass", "highPass", "bandPass", "notch", "tiltShelf", "flatTilt", "allPass"]
+    },
     "eqBand": {
       "description": "One equalizer band, in the shape sonare_eq_set_band's JSON accepts. Only enabled is required to have any effect at all; every other field falls back to the values shown when the writer omits it.",
       "type": "object",
@@ -105,7 +109,9 @@
       "patternProperties": { "^(\\$|x-)": {} },
       "properties": {
         "type": {
-          "enum": ["peak", "lowShelf", "highShelf", "lowPass", "highPass", "bandPass", "notch", "tiltShelf", "flatTilt", "allPass"],
+          "description": "Band shape. A strip or bus EQ refuses tiltShelf and flatTilt, which only the standalone equalizer designs.",
+          "$ref": "#/$defs/eqBandType",
+          "not": { "enum": ["tiltShelf", "flatTilt"] },
           "default": "peak"
         },
         "frequencyHz": { "type": "number", "default": 1000 },
@@ -296,8 +302,8 @@
           "minLength": 1
         },
         "role": {
-          "description": "What the bus is for. 'master' marks the output bus and carries the project output layout; 'aux' is an effect return and 'group' a subgroup. The parser does not restrict this string, so a role it does not recognise is stored rather than refused - which means a misspelt 'master' produces a scene with no output bus instead of an error.",
-          "type": "string",
+          "description": "What the bus is for. 'master' marks the output bus and carries the project output layout, 'aux' is an effect return and 'submix' a subgroup. The parser refuses any other token.",
+          "enum": ["master", "aux", "submix"],
           "default": "aux"
         },
         "layout": {

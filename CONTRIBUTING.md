@@ -125,6 +125,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - Bump the owning ABI counter when a shipped struct, signature, constant or enumerator changes, measured against the last release tag: `python3 tools/abi/check_abi_bumps.py --tag <last release tag>`.
 - Ship a breaking change only in a major release, with its ledger row and the regenerated `UPGRADING.md`.
 - After changing a capability-catalog field, run the `[catalog]` C++ cases, `make capability-catalog` and `python3 tests/conformance/check_result_schema_surfaces.py`.
+- Give every closed token field in `schemas/mixer-scene.schema.json` the loader's exact set as an `enum` (a shared set narrowed at one position with `not: { enum: [...] }`), then run `make scene-token-cases`; the generated corpus cases load each member and refuse a non-member on every surface.
 
 ### The command-line front-ends
 

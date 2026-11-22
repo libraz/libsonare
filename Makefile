@@ -1,7 +1,7 @@
 .PHONY: all build fixtures release install test-install analysis-link-check analysis-link-check-wasm-options test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
-       capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
+       capability-catalog capability-catalog-check scene-token-cases processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check surface-check upgrade-notes upgrade-notes-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
@@ -489,6 +489,11 @@ build-shared:
 ifeq ($(UNAME_S),Darwin)
 	-install_name_tool -id @loader_path/libsonare.dylib $(PYTHON_SHARED_LIB)
 endif
+
+# Mixer-scene token cases of the core validation corpus, generated from the
+# schema's closed token positions; conformance-checks fails while they drift.
+scene-token-cases:
+	python3 tools/conformance/gen_scene_token_cases.py
 
 # Regenerate the checked-in runtime processor and preset catalog from the C
 # ABI. The check variant leaves the worktree untouched and fails on drift.
@@ -991,6 +996,7 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_c_abi_bare_refusals.py
 	$(CHECK) node tests/conformance/native_entries.cjs --check
 	$(CHECK) node tests/conformance/shared_type_shapes.cjs --check
+	$(CHECK) python3 tools/conformance/gen_scene_token_cases.py --check
 	$(CHECK) python3 tests/conformance/check_goniometer_capacity_mirrors.py
 	$(CHECK) python3 -m unittest tests/conformance/test_goniometer_capacity_mirrors.py
 	$(CHECK) python3 tests/conformance/check_chord_quality_tables.py

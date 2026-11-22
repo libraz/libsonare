@@ -41,12 +41,12 @@ _JSON_TYPES: dict[str, tuple[type, ...]] = {
 
 
 def _resolve(node: Any) -> Any:
-    """Follow a local `$ref`, which is how the strip/bus/insert defs are shared."""
+    """Follow a local `$ref`, keeping the keywords beside it (a position's `not`)."""
     while isinstance(node, dict) and "$ref" in node:
         target: Any = SCHEMA
         for part in node["$ref"][2:].split("/"):
             target = target[part]
-        node = target
+        node = {**target, **{key: value for key, value in node.items() if key != "$ref"}}
     return node
 
 
@@ -65,6 +65,8 @@ def _check(value: Any, node: Any, where: str, findings: list[str]) -> None:
         findings.append(f"{where}: {value!r} is not the required {node['const']!r}")
     if "enum" in node and value not in node["enum"]:
         findings.append(f"{where}: {value!r} is outside {node['enum']}")
+    if value in node.get("not", {}).get("enum", []):
+        findings.append(f"{where}: {value!r} is excluded at this position")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in node and value < node["minimum"]:
             findings.append(f"{where}: {value} is under the minimum {node['minimum']}")
@@ -245,3 +247,31 @@ def test_the_schema_and_the_loader_agree_on_the_true_peak_oversample_set(factor:
         assert any("is outside [4, 8]" in finding for finding in findings), findings
         with raises_coded(ErrorCode.INVALID_FORMAT):
             libsonare.Mixer.from_json(json.dumps(scene), sample_rate=48000)
+
+
+_TOKEN_CORPUS = json.loads(
+    (ROOT / "tests/conformance/core_validation_refusals.json").read_text(encoding="utf-8")
+)["mix_scene_document"]
+_GENERATED_REFUSALS = [case for case in _TOKEN_CORPUS["refused"] if case["id"].startswith("token:")]
+
+
+def test_the_corpus_carries_generated_token_cases() -> None:
+    assert _GENERATED_REFUSALS, "tools/conformance/gen_scene_token_cases.py wrote nothing"
+
+
+@pytest.mark.parametrize("case", _GENERATED_REFUSALS, ids=lambda case: case["id"])
+def test_a_token_refusal_lists_exactly_the_schema_set(case: dict) -> None:
+    """The loader's refusal ENDS with the schema's list, not merely contains it.
+
+    Every surface matches the corpus message as a substring, which a schema
+    enum missing the loader's last member would still satisfy; the end anchor
+    here is what makes the two sets equal rather than one a prefix of the other.
+    """
+    assert any("is outside" in f or "excluded" in f for f in _findings(case["scene"])), case["id"]
+    with pytest.raises(libsonare.SonareError) as excinfo:
+        libsonare.Mixer.from_json(json.dumps(case["scene"]), sample_rate=48000)
+    assert excinfo.value.code == ErrorCode.INVALID_FORMAT
+    if "must not be" in case["message"]:
+        assert case["message"] in str(excinfo.value)
+    else:
+        assert str(excinfo.value).endswith(case["message"]), excinfo.value
