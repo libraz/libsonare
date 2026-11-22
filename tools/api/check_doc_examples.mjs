@@ -53,6 +53,7 @@ const OPENING_FENCE = /^\s*```(ts|typescript)\s*$/;
 // Module-level lines an example may carry: its own imports, and `declare` lines naming its inputs.
 const HOISTED = /^\s*(import|declare)\s/;
 const PKG_IMPORT = /^\s*import\s+(type\s+)?\{([^}]*)\}\s+from\s+'([^']+)';?\s*$/;
+const PKG_DEFAULT_IMPORT = /^\s*import\s+([A-Za-z_$][\w$]*)\s+from\s+'([^']+)';?\s*$/;
 
 function sourceFiles(dir) {
   const out = [];
@@ -167,7 +168,8 @@ function check(surface) {
   const scope = [];
   const seen = new Set();
   for (const [spec, d] of dists) {
-    const names = [...exportsOf.get(spec)].filter((n) => !seen.has(n));
+    // A default export has no name to import by; an example binds it with a default import.
+    const names = [...exportsOf.get(spec)].filter((n) => n !== 'default' && !seen.has(n));
     for (const n of names) seen.add(n);
     if (names.length)
       scope.push(
@@ -181,6 +183,16 @@ function check(surface) {
   examples(dir, problems).forEach((ex, i) => {
     const kept = [];
     const body = ex.code.split('\n').map((l, j) => {
+      const d = PKG_DEFAULT_IMPORT.exec(l);
+      if (d && (d[2] === name || d[2].startsWith(`${name}/`))) {
+        const target = dists.find(([spec]) => spec === d[2]);
+        if (!target || !exportsOf.get(d[2]).has('default')) {
+          problems.push(`${ex.file}:${ex.line + j}: ${d[2]} has no default export`);
+        } else {
+          kept.push(`import ${d[1]} from ${JSON.stringify(target[1].replace(/\.ts$/, '.js'))};`);
+        }
+        return '';
+      }
       const m = PKG_IMPORT.exec(l);
       if (!m || !(m[3] === name || m[3].startsWith(`${name}/`))) return l;
       const exported = exportsOf.get(m[3]);
