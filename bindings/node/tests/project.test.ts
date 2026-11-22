@@ -412,7 +412,9 @@ describe('Project native binding', () => {
       expect.objectContaining({ code: ErrorCode.InvalidFormat }),
     );
     const project = new Project();
-    expect(() => project.setSampleRate(44100.5)).toThrow(/whole number of hertz/);
+    expect(() => project.setSampleRate(44100.5)).toThrow(
+      /sampleRate must be an integer in \[8000, 384000\]/,
+    );
     expect(() => project.setSampleRate(44100.5)).toThrow(RangeError);
   });
 

@@ -87,6 +87,7 @@ export const READER_FAMILIES: Readonly<
     DoubleProperty: 'refuse',
     AutoFiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
+    FloatVectorProperty: 'refuse',
     FloatDataProperty: 'refuse',
     ChoiceProperty: 'refuse',
     GsEfxRealizationProperty: 'refuse',
@@ -104,7 +105,6 @@ export const READER_FAMILIES: Readonly<
     WordProperty: 'refuse',
     // Out of scope, each for its own reason.
     FloatArrayProperty: 'out-of-scope',
-    NodeFloatArrayOption: 'out-of-scope',
     RequiredDoubleProperty: 'out-of-scope',
     RequiredFloatProperty: 'out-of-scope',
     RequiredInt64Property: 'out-of-scope',
@@ -426,7 +426,7 @@ export const TYPE_GATE_HELPERS: Readonly<Record<'node' | 'wasm', readonly string
     'Int32Value',
     'SynthEnumValue',
   ],
-  wasm: ['typedPropertyValue', 'numberFromVal', 'enumFromVal'],
+  wasm: ['typedPropertyValue', 'numberFromVal', 'enumFromVal', 'stringFromVal'],
 };
 
 const DIRECT_TYPE_TEST =

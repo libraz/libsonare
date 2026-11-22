@@ -291,7 +291,7 @@ describe('geometric room acoustics', () => {
         expect(
           () => synthesizeRir({ ...base, [key]: bad as unknown as number[] }),
           `${key} ${String(bad)}`,
-        ).toThrow(new TypeError(`synthesizeRir: ${key} must be a Float32Array or a number array`));
+        ).toThrow(new TypeError(`synthesizeRir: ${key} must be a Float32Array or number[]`));
       }
     }
     // Absent and null both read as "no per-band values", and an array is still read.

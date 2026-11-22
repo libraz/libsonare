@@ -147,10 +147,6 @@ const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
     'Per-strip scalar-or-array accessor: reads either one value or the index-th element of an array-valued key, a shape the scalar families do not model. Type-checks at each call site and is already named in OPTION_READER.',
   ],
   [
-    'sonare_wrap_acoustic.cpp:NodeFloatArrayOption',
-    'Reads a float ARRAY option into a vector; the shared families are scalar-only, so there is nothing to delegate to.',
-  ],
-  [
     'sonare_wrap_synth_patch.h:SynthEnumProperty',
     "Resolves a patch enum from either its string spelling or its ordinal, which no scalar reader expresses; it lives in the synth patch feature header shared by that feature's TUs, not in one TU.",
   ],

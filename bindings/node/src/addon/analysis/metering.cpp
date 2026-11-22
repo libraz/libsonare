@@ -413,17 +413,13 @@ namespace {
 bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_mask,
                     float* reference_midi, float* midi) {
   Napi::Env env = info.Env();
-  if (!RequireNumberValue(env, info[0], "root") || !RequireNumberValue(env, info[1], "modeMask") ||
-      !RequireNumberValue(env, info[2], "midi")) {
-    return false;
-  }
   if (!RequiredDomainArg(env, info, 0, "root", sonare::editing::pitch_editor::kScaleRootDomain,
                          root) ||
       !RequiredDomainArg(env, info, 1, "modeMask",
-                         sonare::editing::pitch_editor::kScaleModeMaskDomain, mode_mask)) {
+                         sonare::editing::pitch_editor::kScaleModeMaskDomain, mode_mask) ||
+      !RequiredFloatArg(env, info, 2, "midi", midi)) {
     return false;
   }
-  *midi = node_narrow_float(info.Env(), info[2], "midi");
   // Absent reads as NaN, which selects A4 (69); a given 0 is MIDI note 0.
   if (!OptionalFloatArg(info.Env(), info, 3, "scaleReferenceMidi",
                         std::numeric_limits<float>::quiet_NaN(), reference_midi)) {
@@ -455,7 +451,6 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::ScaleMaskForMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireNumberValue(env, info[0], "root")) return env.Undefined();
   int root = 0;
   if (!RequiredDomainArg(env, info, 0, "root", sonare_c_detail::kScaleMaskRootDomain, &root)) {
     return env.Undefined();
@@ -492,9 +487,6 @@ Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info)
 Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireNumberValue(env, info[0], "root")) return env.Undefined();
-  if (!RequireNumberValue(env, info[1], "modeMask")) return env.Undefined();
-  if (!RequireNumberValue(env, info[2], "pitchClass")) return env.Undefined();
   int root = 0;
   uint16_t mask = 0;
   int pitch_class = 0;
@@ -1006,9 +998,9 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
-  if (!RequireNumberValue(env, info[1], "channels")) return env.Undefined();
   auto typed = info[0].As<Napi::Float32Array>();
-  int channels = node_narrow_int(env, info[1], "channels");
+  int channels{};
+  if (!RequiredIntArg(env, info, 1, "channels", &channels)) return env.Undefined();
   int64_t samples_per_bucket_value{};
   if (!RequiredDomainArg(env, info, 2, "samplesPerBucket",
                          sonare::metering::kSamplesPerBucketDomain, &samples_per_bucket_value)) {
@@ -1037,13 +1029,13 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
-  if (!RequireNumberValue(env, info[1], "channels")) return env.Undefined();
+  int channels{};
+  if (!RequiredIntArg(env, info, 1, "channels", &channels)) return env.Undefined();
   if (!info[2].IsArray()) {
     Napi::TypeError::New(env, "levels must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int channels = node_narrow_int(env, info[1], "channels");
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::RangeError::New(env, "samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();

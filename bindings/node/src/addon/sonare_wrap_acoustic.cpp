@@ -71,31 +71,6 @@ bool ValidateAcousticInput(const Napi::Env& env, const char* name, const float* 
   return true;
 }
 
-// Reads an optional Float32Array/number[] option of finite coefficients (empty if absent); any
-// other value is refused by name with FloatArrayProperty's wording.
-std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* key) {
-  Napi::Value value = opts.Get(key);
-  if (value.IsUndefined() || value.IsNull()) {
-    return {};
-  }
-  if (IsFloat32Array(value)) {
-    auto typed = value.As<Napi::Float32Array>();
-    return std::vector<float>(typed.Data(), typed.Data() + typed.ElementLength());
-  }
-  if (value.IsArray()) {
-    auto arr = value.As<Napi::Array>();
-    std::vector<float> out;
-    const uint32_t arr_count = node_list_length(arr, key);
-    out.reserve(arr_count);
-    for (uint32_t i = 0; i < arr_count; ++i) {
-      out.push_back(node_narrow_float_element(opts.Env(), arr.Get(i), key, i));
-    }
-    return out;
-  }
-  throw Napi::TypeError::New(opts.Env(),
-                             std::string(key) + " must be a Float32Array or a number array");
-}
-
 // Builds a uniform shoebox + placement from a JS options object, honouring the
 // same wall-material precedence as the C ABI: materialPreset (non-zero) >
 // per-band bandAbsorption > scalar absorption.
@@ -116,8 +91,8 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
       NamedSelectorProperty(opts, "materialPreset", sonare::acoustic::kMaterialPresetSelectorNames,
                             0),
       &request.preset);
-  request.absorption_bands = NodeFloatArrayOption(opts, "bandAbsorption");
-  request.scattering_bands = NodeFloatArrayOption(opts, "bandScattering");
+  request.absorption_bands = FloatVectorProperty(opts, "bandAbsorption");
+  request.scattering_bands = FloatVectorProperty(opts, "bandScattering");
   request.absorption = FloatProperty(opts, "absorption", def_absorption);
   return make_uniform_room(dims, request);
 }
@@ -218,12 +193,11 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
-  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
-
   SONARE_NODE_TRY
+  if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
+  int sample_rate{};
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
   if (!ValidateAcousticInput(env, "samples", typed.Data(), typed.ElementLength(), sample_rate))
     return env.Undefined();
@@ -378,16 +352,15 @@ sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(
 
 Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();
-  if (!RequireNumberValue(env, info[1], "sampleRate")) return env.Undefined();
+  int sr{};
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   if (!info[2].IsObject()) {
     Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-
-  SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
   if (!ValidateAcousticInput(env, "samples", typed.Data(), typed.ElementLength(), sr))
     return env.Undefined();
@@ -414,18 +387,17 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "left must be a Float32Array")) return env.Undefined();
   if (!RequireFloat32Array(info, 1, "right must be a Float32Array")) return env.Undefined();
-  if (!RequireNumberValue(env, info[2], "sampleRate")) return env.Undefined();
+  int sr{};
+  if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   if (!info[3].IsObject()) {
     Napi::TypeError::New(env, "options must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-
-  SONARE_NODE_TRY
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[2], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
   if (!ValidateAcousticInput(env, "left", left.Data(), left.ElementLength(), sr))
     return env.Undefined();

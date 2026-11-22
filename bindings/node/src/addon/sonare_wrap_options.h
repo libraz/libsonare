@@ -785,6 +785,36 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
   return values;
 }
 
+/// @brief Coerce a JS value into a std::vector<float>, accepting a Float32Array
+///        or a plain number[]. Throws a JS TypeError otherwise.
+/// @details A plain-array entry is read as a finite float named `@p name [i]`.
+///   The Float32Array path cannot refuse anything: JS folded the entry before
+///   the call, so the finite value the caller wrote is already gone.
+inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const char* name) {
+  if (IsFloat32Array(value)) {
+    auto arr = value.As<Napi::Float32Array>();
+    return std::vector<float>(arr.Data(), arr.Data() + arr.ElementLength());
+  }
+  if (value.IsArray()) {
+    auto arr = value.As<Napi::Array>();
+    const uint32_t arr_count = node_list_length(arr, name);
+    std::vector<float> out(arr_count);
+    for (uint32_t i = 0; i < arr_count; ++i) {
+      out[i] = node_narrow_float_element(value.Env(), arr.Get(i), name, i);
+    }
+    return out;
+  }
+  throw Napi::TypeError::New(value.Env(),
+                             std::string(name) + " must be a Float32Array or number[]");
+}
+
+/// @brief Object-key form of @ref FloatVectorFromValue: undefined/null is an empty vector.
+inline std::vector<float> FloatVectorProperty(const Napi::Object& obj, const char* key) {
+  const Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return {};
+  return FloatVectorFromValue(value, key);
+}
+
 // Third family, for struct fields that have no meaningful default:
 //   * Required*  — the value must be present with the right type. A missing or
 //     wrong-typed value becomes exactly ONE catchable TypeError and the reader

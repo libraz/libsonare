@@ -129,7 +129,7 @@ bool ReadStereoPair(const char* left_name, const char* right_name, const Napi::C
   Napi::Float32Array right;
   if (!RequiredFloat32ArrayValue(env, info[0], "left", &left) ||
       !RequiredFloat32ArrayValue(env, info[1], "right", &right) ||
-      !RequireNumberValue(env, info[2], "sampleRate")) {
+      !RequiredIntArg(env, info, 2, "sampleRate", sample_rate)) {
     return false;
   }
   if (left.ElementLength() != right.ElementLength()) {
@@ -137,7 +137,6 @@ bool ReadStereoPair(const char* left_name, const char* right_name, const Napi::C
         .ThrowAsJavaScriptException();
     return false;
   }
-  *sample_rate = node_narrow_int(env, info[2], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(left_name, left.Data(), left.ElementLength(), *sample_rate);
   sonare::validate_offline_audio_input(right_name, right.Data(), right.ElementLength(),

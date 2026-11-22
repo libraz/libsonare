@@ -491,9 +491,10 @@ Napi::Value StreamingEqualizerWrap::Clear(const Napi::CallbackInfo& info) {
 Napi::Value StreamingEqualizerWrap::SetPhaseMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
-  if (!sonare_node::RequireNumberValue(env, info[0], "mode")) return env.Undefined();
   SONARE_NODE_TRY
-  eq_->set_phase_mode(ParsePhaseModeInt(sonare_node::node_narrow_int(env, info[0], "mode")));
+  int mode{};
+  if (!sonare_node::RequiredIntArg(env, info, 0, "mode", &mode)) return env.Undefined();
+  eq_->set_phase_mode(ParsePhaseModeInt(mode));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -698,15 +699,14 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
 Napi::Value StreamingEqualizerWrap::MagnitudeResponse(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
-  if (!sonare_node::RequireNumberValue(env, info[0], "placement")) return env.Undefined();
-  if (!RequireFloat32Array(info, 1, "frequenciesHz must be a Float32Array")) return env.Undefined();
   SONARE_NODE_TRY
+  int placement{};
+  if (!sonare_node::RequiredIntArg(env, info, 0, "placement", &placement)) return env.Undefined();
+  if (!RequireFloat32Array(info, 1, "frequenciesHz must be a Float32Array")) return env.Undefined();
   Napi::Float32Array frequencies = info[1].As<Napi::Float32Array>();
   const size_t count = frequencies.ElementLength();
   Napi::Float32Array out = Napi::Float32Array::New(env, count);
-  eq_->magnitude_response_db(
-      ParsePlacementInt(sonare_node::node_narrow_int(env, info[0], "placement")),
-      frequencies.Data(), count, out.Data());
+  eq_->magnitude_response_db(ParsePlacementInt(placement), frequencies.Data(), count, out.Data());
   return out;
   SONARE_NODE_CATCH(env)
 }

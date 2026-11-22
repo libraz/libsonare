@@ -20,6 +20,7 @@
 #include "util/constants.h"
 #include "util/error_classification.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare_node {
 
@@ -383,7 +384,9 @@ bool ReadWholeHertzSampleRate(Napi::Env env, const Napi::Value& value, int* out)
   }
   const double sample_rate = value.As<Napi::Number>().DoubleValue();
   if (!sonare::is_supported_sample_rate(sample_rate)) {
-    Napi::RangeError::New(env, "sampleRate must be a whole number of hertz within 8000..384000")
+    Napi::RangeError::New(
+        env, "sampleRate " + sonare::util::refusal::integer_range_predicate(
+                                 sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate))
         .ThrowAsJavaScriptException();
     return false;
   }

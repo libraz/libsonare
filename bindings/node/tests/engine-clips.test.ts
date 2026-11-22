@@ -22,7 +22,7 @@ describe('RealtimeEngine native binding', () => {
     );
     const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: 128 });
     expect(() => engine.prepare({ sampleRate: 48000.25, maxBlockSize: 128 })).toThrow(
-      /whole number of hertz/,
+      /sampleRate must be an integer in \[8000, 384000\]/,
     );
     engine.destroy();
   });

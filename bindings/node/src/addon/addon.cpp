@@ -166,11 +166,6 @@ Napi::Value MidiPerNoteControllerName(const Napi::CallbackInfo& info) {
 Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  for (size_t i = 0; i < 6; ++i) {
-    static const char* const kNames[] = {"ppq",     "group",   "channel",
-                                         "bankMsb", "bankLsb", "program"};
-    if (!sonare_node::RequireNumberValue(env, info[i], kNames[i])) return env.Undefined();
-  }
   // group/channel are uint8_t C-ABI fields, read against the domains the C ABI enforces.
   double ppq = 0.0;
   uint8_t group = 0;

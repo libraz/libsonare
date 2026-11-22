@@ -388,6 +388,46 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
     'platforms',
     () => addon.masteringStreamingPreviewStereo(readerTone, readerTone, 22050, 'x'),
   ],
+  ['addon.estimateRoom', 'sampleRate', () => addon.estimateRoom(readerTone, 'x')],
+  ['addon.framesToTime', 'frames', () => addon.framesToTime('x', 22050, 512)],
+  ['addon.timeToFrames', 'time', () => addon.timeToFrames('x', 22050, 512)],
+  ['addon.roomMorph', 'sampleRate', () => addon.roomMorph(readerTone, 'x', {})],
+  [
+    'addon.roomMorphStereo',
+    'sampleRate',
+    () => addon.roomMorphStereo(readerTone, readerTone, 'x', {}),
+  ],
+  ['addon.waveformPeaks', 'channels', () => addon.waveformPeaks(readerTone, 'x', 256)],
+  ['addon.waveformPeakPyramid', 'channels', () => addon.waveformPeakPyramid(readerTone, 'x', [])],
+  [
+    'addon.masteringAssistantSuggestStereo',
+    'sampleRate',
+    () => addon.masteringAssistantSuggestStereo(readerTone, readerTone, 'x'),
+  ],
+  [
+    'addon.masteringAudioProfileStereo',
+    'sampleRate',
+    () => addon.masteringAudioProfileStereo(readerTone, readerTone, 'x'),
+  ],
+  [
+    'addon.meteringCrestFactorDbStereo',
+    'sampleRate',
+    () => addon.meteringCrestFactorDbStereo(readerTone, readerTone, 'x'),
+  ],
+  [
+    'StreamingEqualizer.setPhaseMode',
+    'mode',
+    () => new addon.StreamingEqualizer({ sampleRate: 22050 }).setPhaseMode('x'),
+  ],
+  [
+    'StreamingEqualizer.magnitudeResponse',
+    'placement',
+    () =>
+      new addon.StreamingEqualizer({ sampleRate: 22050 }).magnitudeResponse(
+        'x',
+        new Float32Array([1000]),
+      ),
+  ],
 ];
 
 /** As {@link NAMED_OPTIONAL_REFUSALS}, for Promise-returning entries, which refuse by rejecting. */

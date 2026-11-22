@@ -101,10 +101,9 @@ Napi::Value SonareWrap::NoteToHz(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (!RequireNumberValue(env, info[0], "frames")) return env.Undefined();
-
   SONARE_NODE_TRY
-  int frames = node_narrow_int(env, info[0], "frames");
+  int frames{};
+  if (!RequiredIntArg(env, info, 0, "frames", &frames)) return env.Undefined();
   int sr{};
   if (!RequiredDomainArg(env, info, 1, "sampleRate", sonare::kFrameTimeSampleRateDomain, &sr)) {
     return env.Undefined();
@@ -122,10 +121,9 @@ Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (!RequireNumberValue(env, info[0], "time")) return env.Undefined();
-
   SONARE_NODE_TRY
-  float time = node_narrow_float(env, info[0], "time");
+  float time{};
+  if (!RequiredFloatArg(env, info, 0, "time", &time)) return env.Undefined();
   int sr{};
   if (!RequiredDomainArg(env, info, 1, "sampleRate", sonare::kFrameTimeSampleRateDomain, &sr)) {
     return env.Undefined();
@@ -142,8 +140,8 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireNumberValue(env, info[0], "frames")) return env.Undefined();
-  int frames = node_narrow_int(env, info[0], "frames");
+  int frames{};
+  if (!RequiredIntArg(env, info, 0, "frames", &frames)) return env.Undefined();
   int hop{};
   if (!RequiredIntArg(env, info, 1, "hopLength", &hop)) return env.Undefined();
   int n_fft{};
@@ -155,8 +153,8 @@ Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SamplesToFrames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!RequireNumberValue(env, info[0], "samples")) return env.Undefined();
-  int samples = node_narrow_int(env, info[0], "samples");
+  int samples{};
+  if (!RequiredIntArg(env, info, 0, "samples", &samples)) return env.Undefined();
   int hop{};
   if (!RequiredIntArg(env, info, 1, "hopLength", &hop)) return env.Undefined();
   int n_fft{};

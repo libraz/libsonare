@@ -57,11 +57,6 @@ bool ReadArrayNumber(Napi::Env env, const Napi::Value& value, const char* field,
 
 bool ReadStringEnum(Napi::Env env, const Napi::Value& value, const char* field,
                     const char* const* names, size_t count, uint32_t* out) {
-  if (!value.IsString()) {
-    Napi::TypeError::New(env, std::string(field) + " must be a string")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
   const std::string name = node_narrow_string(env, value, field);
   for (size_t i = 0; i < count; ++i) {
     if (name == names[i]) {
@@ -696,17 +691,7 @@ struct StateGuard {
 };
 
 bool ReadSampleRate(Napi::Env env, const Napi::Value& value, int* out) {
-  int64_t rate = 0;
-  if (!RequiredSafeIntegerValue(env, value, "sampleRate", &rate, 0) ||
-      rate < sonare::kMinAudioSampleRate || rate > sonare::kMaxAudioSampleRate) {
-    if (!env.IsExceptionPending()) {
-      Napi::RangeError::New(env, "sampleRate must be an integer in [8000, 384000]")
-          .ThrowAsJavaScriptException();
-    }
-    return false;
-  }
-  *out = static_cast<int>(rate);
-  return true;
+  return ReadWholeHertzSampleRate(env, value, out);
 }
 
 bool ReadSessionLimits(Napi::Env env, const Napi::Object& object, uint64_t* max_history_bytes,

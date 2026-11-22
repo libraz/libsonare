@@ -1830,19 +1830,19 @@ const KEY_AND_ELEMENT_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'tempogramRatio factors',
-    site: 'sonare_wrap_utils.h FloatVectorFromValue element',
+    site: 'sonare_wrap_options.h FloatVectorFromValue element',
     control: [2, 4],
     call: (v) => magnitudeSum(native.tempogramRatio(TEMPOGRAM, 32, SAMPLE_RATE, 512, [v])),
   },
   {
     name: 'synthesizeRir bandAbsorption',
-    site: 'sonare_wrap_acoustic.cpp NodeFloatArrayOption element',
+    site: 'sonare_wrap_options.h FloatVectorFromValue element',
     control: [0.1, 0.9],
     call: (v) => magnitudeSum(rir({ bandAbsorption: [v, v, v, v] })),
   },
   {
     name: 'synthesizeRir bandScattering',
-    site: 'sonare_wrap_acoustic.cpp NodeFloatArrayOption element',
+    site: 'sonare_wrap_options.h FloatVectorFromValue element',
     control: [0.1, 0.9],
     call: (v) => magnitudeSum(rir({ bandScattering: [v, v, v, v] })),
   },
@@ -1885,6 +1885,8 @@ const UNCONTROLLED_SITES = [
  */
 const BAILOUT_READER_SITES = new Set([
   'sonare_wrap_features.cpp NoteSegments frameRate',
+  'features/conversion.cpp TimeToFrames time',
+  'analysis/metering.cpp ParseScaleArgs midi',
   'features/advanced.cpp CqtLike fmin',
   'features/signal.cpp TrimSilence topDb',
   'features/signal.cpp SplitSilence topDb',
@@ -1906,7 +1908,10 @@ const BAILOUT_READER_SITES = new Set([
  * reader in `sonare_wrap_options.h`: driven here through an entry point that
  * reads with it, but not part of the per-file call-site population.
  */
-const SHARED_READER_SITES = new Set(['sonare_wrap_options.h XyzProperty component']);
+const SHARED_READER_SITES = new Set([
+  'sonare_wrap_options.h XyzProperty component',
+  'sonare_wrap_options.h FloatVectorFromValue element',
+]);
 
 describe('the tables cover the whole required-read population', () => {
   it('keeps 1e39 the discriminating value it is documented to be', () => {
@@ -1951,9 +1956,9 @@ describe('the tables cover the whole required-read population', () => {
       .filter((source) => source.file !== 'sonare_wrap_options.h')
       .flatMap((source) => source.text.match(/node_narrow_float_element\(/g) ?? []);
     const sites = new Set(
-      KEY_AND_ELEMENT_ARGUMENTS.filter((argument) => argument.site.endsWith(' element')).map(
-        (argument) => argument.site,
-      ),
+      KEY_AND_ELEMENT_ARGUMENTS.filter(
+        (argument) => argument.site.endsWith(' element') && !SHARED_READER_SITES.has(argument.site),
+      ).map((argument) => argument.site),
     );
     expect(sites.size).toBe(calls.length);
   });
