@@ -459,10 +459,24 @@ describe('editing effects', () => {
   });
 
   it('voiceChange absolute mode refuses a factor the warp cannot reach', () => {
-    // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079], printed inward.
-    const request = { pitchSemitones: 4, formantFactor: 2.5, formantMode: 'absolute' as const };
-    expect(() => voiceChange(tone, SR, request)).toThrow(RangeError);
-    expectRefusal(() => voiceChange(tone, SR, request), RangeError, /\[0\.693, 2\.078\]$/);
+    // 2^(4/12) = 1.2599: a warp in [0.55, 1.65] needs a factor of at least 0.693, printed inward,
+    // and the factor itself stays within [0.55, 1.65].
+    const absolute = { formantMode: 'absolute' as const };
+    expect(() =>
+      voiceChange(tone, SR, { ...absolute, pitchSemitones: 4, formantFactor: 0.6 }),
+    ).toThrow(
+      new RangeError(
+        'voiceChange: formantFactor must be finite and in [0.693, 1.65] when formantMode is absolute at pitchSemitones 4 (the warp it needs must lie in [0.55, 1.65])',
+      ),
+    );
+    expect(() =>
+      voiceChange(tone, SR, { ...absolute, pitchSemitones: 4, formantFactor: 2.5 }),
+    ).toThrow(new RangeError('voiceChange: formantFactor must be finite and in [0.55, 1.65]'));
+    expect(() => voiceChange(tone, SR, { ...absolute, pitchSemitones: 20 })).toThrow(
+      new RangeError(
+        'voiceChange: formantMode must be relative at pitchSemitones 20: no formantFactor in [0.55, 1.65] has a warp in [0.55, 1.65] there',
+      ),
+    );
     expect(() =>
       voiceChange(tone, SR, { formantMode: 'sideways' as unknown as 'relative' }),
     ).toThrow(RangeError);
