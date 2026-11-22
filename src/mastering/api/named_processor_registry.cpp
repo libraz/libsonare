@@ -272,6 +272,28 @@ bool catalog_causal(const std::string& id, bool realtime_insertable) {
   return realtime_insertable;
 }
 
+// A parameter list as the set of declarations it makes, without the automation id and realtime
+// safety only an insert form carries.
+std::set<std::string> declared_surface(const std::string& info_json) {
+  namespace json = sonare::util::json;
+  std::set<std::string> surface;
+  const json::Value parsed = json::parse(info_json);
+  for (json::Value entry : parsed.as_array()) {
+    entry.as_object().erase("id");
+    entry.as_object().erase("rtSafe");
+    surface.insert(json::dump(entry));
+  }
+  return surface;
+}
+
+// The offline declaration of dual-form @p id when it is not the one @p params describes, else
+// empty.
+std::string separate_offline_params(const std::string& id, const std::string& params) {
+  std::string offline = offline_param_info_json(id);
+  if (offline == "[]" || declared_surface(offline) == declared_surface(params)) return {};
+  return offline;
+}
+
 std::string build_processor_catalog_json() {
   const std::set<std::string> insert_set = [] {
     const auto names = insert_factory_names();
@@ -284,6 +306,13 @@ std::string build_processor_catalog_json() {
   const std::set<std::string> stereo_set = [] {
     const auto names = stereo_processor_names();
     return std::set<std::string>(names.begin(), names.end());
+  }();
+  // The ids apply_named_processor() and apply_named_pair_processor() run on a whole buffer.
+  const std::set<std::string> offline_set = [&pair_set] {
+    const auto names = processor_names();
+    std::set<std::string> set(names.begin(), names.end());
+    set.insert(pair_set.begin(), pair_set.end());
+    return set;
   }();
 
   // Sorted union of every id the host might surface, so realtime-only ids (e.g.
@@ -302,12 +331,20 @@ std::string build_processor_catalog_json() {
     const bool is_pair = pair_set.count(id) != 0;
     const char* kind = is_pair ? "pair" : (realtime_insertable ? "realtime" : "offline");
     const InsertTiming timing = realtime_insertable ? default_insert_timing(id) : InsertTiming{};
+    const bool runs_offline = offline_set.count(id) != 0;
+    const std::string params = insert_param_info_json(id);
+    const std::string offline_params =
+        realtime_insertable && runs_offline ? separate_offline_params(id, params) : std::string();
     out += "{\"id\":\"";
     out += id;
     out += "\",\"kind\":\"";
     out += kind;
     out += "\",\"realtimeInsertable\":";
     out += realtime_insertable ? "true" : "false";
+    out += ",\"forms\":[";
+    if (realtime_insertable) out += "\"realtime\"";
+    if (runs_offline) out += realtime_insertable ? ",\"offline\"" : "\"offline\"";
+    out += ']';
     out += ",\"stereoOnly\":";
     out += stereo_set.count(id) != 0 ? "true" : "false";
     out += ",\"latencySamples\":";
@@ -330,7 +367,11 @@ std::string build_processor_catalog_json() {
     out += "\",\"causal\":";
     out += catalog_causal(id, realtime_insertable) ? "true" : "false";
     out += ",\"params\":";
-    out += insert_param_info_json(id);
+    out += params;
+    if (!offline_params.empty()) {
+      out += ",\"offlineParams\":";
+      out += offline_params;
+    }
     out += ",\"slots\":";
     out += realtime_insertable ? insert_slot_info_json(id) : "[]";
     out += '}';
@@ -353,6 +394,7 @@ const std::vector<std::string>& processor_catalog_schema_paths() {
       "[].id",
       "[].kind",
       "[].realtimeInsertable",
+      "[].forms",
       "[].stereoOnly",
       "[].latencySamples",
       "[].tailSamples",
@@ -384,6 +426,30 @@ const std::vector<std::string>& processor_catalog_schema_paths() {
       "[].params[].dependsOn[].relation",
       "[].params[].dependsOn[].factor",
       "[].params[].coupledWith",
+      "[].offlineParams",
+      "[].offlineParams[].name",
+      "[].offlineParams[].id",
+      "[].offlineParams[].rtSafe",
+      "[].offlineParams[].type",
+      "[].offlineParams[].min",
+      "[].offlineParams[].max",
+      "[].offlineParams[].minExclusive",
+      "[].offlineParams[].maxExclusive",
+      "[].offlineParams[].maxRelativeTo",
+      "[].offlineParams[].default",
+      "[].offlineParams[].unit",
+      "[].offlineParams[].uiMin",
+      "[].offlineParams[].uiMax",
+      "[].offlineParams[].scale",
+      "[].offlineParams[].choices",
+      "[].offlineParams[].choices[].name",
+      "[].offlineParams[].choices[].value",
+      "[].offlineParams[].slot",
+      "[].offlineParams[].dependsOn",
+      "[].offlineParams[].dependsOn[].key",
+      "[].offlineParams[].dependsOn[].relation",
+      "[].offlineParams[].dependsOn[].factor",
+      "[].offlineParams[].coupledWith",
       "[].slots",
       "[].slots[].name",
       "[].slots[].parent",

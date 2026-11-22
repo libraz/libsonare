@@ -91,13 +91,18 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // the offline registry (processor_names), the realtime insert factory
 // (insert_factory_names), and the pair registry (pair_processor_names) into a
 // single JSON array. Each entry is
-//   {"id":string,"kind":"realtime"|"offline"|"pair",
+//   {"id":string,"kind":"realtime"|"offline"|"pair","forms":["realtime"?,"offline"?],
 //    "realtimeInsertable":bool,"stereoOnly":bool,"latencySamples":int,
 //    "tailSamples":int,"realtimeCost":"low"|"moderate"|"high"|null,
 //    "channelPolicy":string,"category":string,"causal":bool,
-//    "params":array}
-// where kind takes pair > realtime > offline by precedence; realtimeInsertable
-// and stereoOnly are membership in insert_factory_names() and
+//    "params":array,"offlineParams"?:array}
+// where kind takes pair > realtime > offline by precedence; forms lists every way the id runs,
+// "realtime" for an insert_factory_names() member and "offline" for a processor_names() or
+// pair_processor_names() member, in that order; params describes every listed form unless the
+// entry carries offlineParams, which is present exactly when the offline form declares another
+// set (a repair stage whose offline builder takes settings its streaming insert refuses, or
+// the amp sim, whose offline form has no IR channel and reads no preset or capture rate);
+// realtimeInsertable and stereoOnly are membership in insert_factory_names() and
 // stereo_processor_names(); latencySamples and tailSamples come from the insert's
 // default configuration, so for a config-dependent processor they are
 // representative rather than exact (both 0 for offline ids); realtimeCost is a

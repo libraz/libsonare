@@ -1237,7 +1237,8 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   // inherently-stereo processor, so its channelPolicy is "stereoPairOnly".
   REQUIRE(
       json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
-                "\"stereoOnly\":true,\"latencySamples\":0,\"tailSamples\":0,"
+                "\"forms\":[\"realtime\",\"offline\"],\"stereoOnly\":true,\"latencySamples\":0,"
+                "\"tailSamples\":0,"
                 "\"realtimeCost\":\"low\",\"channelPolicy\":\"stereoPairOnly\",\"category\":\"eq\","
                 "\"causal\":true,\"params\":") != std::string::npos);
 
@@ -1245,11 +1246,13 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   // same probe used for latency. Default Haas is 12 ms at 48 kHz; default
   // PhaseAlign has no delay.
   REQUIRE(json.find("{\"id\":\"stereo.haasEnhancer\",\"kind\":\"realtime\","
-                    "\"realtimeInsertable\":true,\"stereoOnly\":true,"
+                    "\"realtimeInsertable\":true,\"forms\":[\"realtime\",\"offline\"],"
+                    "\"stereoOnly\":true,"
                     "\"latencySamples\":0,\"tailSamples\":576,\"realtimeCost\":\"low\",") !=
           std::string::npos);
   REQUIRE(json.find("{\"id\":\"stereo.phaseAlign\",\"kind\":\"realtime\","
-                    "\"realtimeInsertable\":true,\"stereoOnly\":true,"
+                    "\"realtimeInsertable\":true,\"forms\":[\"realtime\",\"offline\"],"
+                    "\"stereoOnly\":true,"
                     "\"latencySamples\":0,\"tailSamples\":0,\"realtimeCost\":\"low\",") !=
           std::string::npos);
 

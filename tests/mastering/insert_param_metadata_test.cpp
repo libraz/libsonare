@@ -20,7 +20,9 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cctype>
 #include <cmath>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -67,10 +69,17 @@ using sonare::mastering::api::insert_param_info_json_measured_per_key;
 using sonare::mastering::api::insert_param_names;
 using sonare::mastering::api::insert_probe_params;
 using sonare::mastering::api::make_insert;
+using sonare::mastering::api::offline_param_info_json;
 using sonare::mastering::api::repair_param_info_json;
 
 json::Array repair_param_info(const std::string& name) {
   const json::Value parsed = json::parse_strict(repair_param_info_json(name));
+  REQUIRE(parsed.is_array());
+  return parsed.as_array();
+}
+
+json::Array offline_param_info(const std::string& name) {
+  const json::Value parsed = json::parse_strict(offline_param_info_json(name));
   REQUIRE(parsed.is_array());
   return parsed.as_array();
 }
@@ -2014,4 +2023,207 @@ TEST_CASE("sharing a probe verdict across indexed keys matches measuring every k
             insert_param_info_json_measured_per_key(name, sample_rate));
     }
   }
+}
+
+namespace {
+
+using sonare::mastering::api::Param;
+
+// The set a form of a catalog entry reads: its offlineParams for the offline form when it has
+// them, otherwise its params.
+const json::Array& declared_set(const json::Value& entry, bool offline) {
+  const json::Value* separate = entry.find("offlineParams");
+  return offline && separate != nullptr ? separate->as_array() : field(entry, "params").as_array();
+}
+
+// One value of @p parameter the declaration admits: its default, else a value between its bounds.
+std::optional<double> admitted_value(const json::Value& parameter) {
+  const json::Value& fallback = field(parameter, "default");
+  if (fallback.is_number()) return fallback.as_number();
+  if (fallback.is_bool()) return fallback.as_bool() ? 1.0 : 0.0;
+  const json::Value& min = field(parameter, "min");
+  const json::Value& max = field(parameter, "max");
+  if (min.is_number() && max.is_number()) return 0.5 * (min.as_number() + max.as_number());
+  return std::nullopt;
+}
+
+// A value outside every choice @p parameter declares.
+double undeclared_choice(const json::Value& parameter) {
+  const std::vector<double> values = choice_values(parameter);
+  return *std::max_element(values.begin(), values.end()) + 1.0;
+}
+
+// Why the named form of @p id refuses @p key at @p value, or nothing when it takes it: the
+// offline form through the stereo entry on a short buffer, so a mid/side choice has its two
+// channels, the realtime form through the insert factory.
+std::optional<std::string> form_refusal(const std::string& id, bool offline, const std::string& key,
+                                        double value) {
+  const std::vector<Param> params = insert_probe_params(id, key, value);
+  try {
+    if (!offline) {
+      if (sonare::mastering::api::make_insert_from_params(id, params) == nullptr) {
+        return std::string("no insert built");
+      }
+      return std::nullopt;
+    }
+    const std::vector<float> buffer(1024, 0.1f);
+    (void)sonare::mastering::api::apply_named_processor_stereo(id, buffer.data(), buffer.data(),
+                                                               buffer.size(), 48000, params);
+    return std::nullopt;
+  } catch (const sonare::SonareException& error) {
+    return std::string(error.what());
+  }
+}
+
+std::set<std::string> registry_forms(const std::string& id) {
+  std::set<std::string> forms;
+  const auto inserts = insert_factory_names();
+  const auto offline = sonare::mastering::api::processor_names();
+  const auto pairs = sonare::mastering::api::pair_processor_names();
+  if (std::find(inserts.begin(), inserts.end(), id) != inserts.end()) forms.insert("realtime");
+  if (std::find(offline.begin(), offline.end(), id) != offline.end() ||
+      std::find(pairs.begin(), pairs.end(), id) != pairs.end()) {
+    forms.insert("offline");
+  }
+  return forms;
+}
+
+// A parameter list as its declarations, leaving out what only an insert form carries.
+std::set<std::string> declaration_surface(const json::Array& params) {
+  std::set<std::string> surface;
+  for (json::Value parameter : params) {
+    parameter.as_object().erase("id");
+    parameter.as_object().erase("rtSafe");
+    surface.insert(json::dump(parameter));
+  }
+  return surface;
+}
+
+}  // namespace
+
+TEST_CASE("a catalog entry's forms are the registries that run it", "[mastering][catalog]") {
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  for (const json::Value& entry : catalog.as_array()) {
+    const std::string id = field(entry, "id").as_string();
+    INFO(id);
+    std::vector<std::string> forms;
+    for (const json::Value& form : field(entry, "forms").as_array()) {
+      forms.push_back(form.as_string());
+    }
+    const std::set<std::string> expected = registry_forms(id);
+    CHECK(std::set<std::string>(forms.begin(), forms.end()) == expected);
+    CHECK(forms.size() == expected.size());
+    CHECK(std::is_sorted(forms.begin(), forms.end(), std::greater<>()));
+    CHECK((field(entry, "realtimeInsertable").as_bool() == (expected.count("realtime") == 1)));
+  }
+}
+
+TEST_CASE("offlineParams appear exactly where the offline form declares another set",
+          "[mastering][catalog]") {
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  std::set<std::string> carrying;
+  for (const json::Value& entry : catalog.as_array()) {
+    const std::string id = field(entry, "id").as_string();
+    INFO(id);
+    const bool dual = registry_forms(id).size() == 2;
+    const json::Array offline = offline_param_info(id);
+    const bool separate = dual && !offline.empty() &&
+                          declaration_surface(offline) != declaration_surface(param_info(id));
+    const json::Value* listed = entry.find("offlineParams");
+    REQUIRE((listed != nullptr) == separate);
+    if (listed == nullptr) continue;
+    carrying.insert(id);
+    CHECK(json::dump(*listed) == json::dump(json::Value(offline)));
+  }
+  CHECK(carrying ==
+        std::set<std::string>{"repair.decrackle", "repair.denoiseClassical", "saturation.ampSim"});
+}
+
+TEST_CASE("each form of a dual-form processor takes the set the catalog declares for it",
+          "[mastering][catalog]") {
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  std::size_t dual_forms = 0;
+  std::size_t checked = 0;
+  std::vector<std::string> defects;
+  for (const json::Value& entry : catalog.as_array()) {
+    const std::string id = field(entry, "id").as_string();
+    if (field(entry, "forms").size() != 2) continue;
+    ++dual_forms;
+    const bool separate = entry.find("offlineParams") != nullptr;
+    // One declaration describes both forms unless the entry carries a second; then each form
+    // answers to its own.
+    for (const bool offline : separate ? std::vector<bool>{false, true} : std::vector<bool>{true}) {
+      const char* form = offline ? "offline" : "realtime";
+      for (const json::Value& parameter : declared_set(entry, offline)) {
+        const std::string key = field(parameter, "name").as_string();
+        const std::string label = id + "." + key + " (" + form + ")";
+        if (field(parameter, "type").as_string() == "enum") {
+          for (const double value : choice_values(parameter)) {
+            ++checked;
+            if (const auto refusal = form_refusal(id, offline, key, value)) {
+              defects.push_back(label + " refuses declared choice " + std::to_string(value) + ": " +
+                                *refusal);
+            }
+          }
+          if (!form_refusal(id, offline, key, undeclared_choice(parameter))) {
+            defects.push_back(label + " takes an undeclared choice");
+          }
+          continue;
+        }
+        const std::optional<double> value = admitted_value(parameter);
+        if (!value) continue;
+        ++checked;
+        if (const auto refusal = form_refusal(id, offline, key, *value)) {
+          defects.push_back(label + " refuses " + std::to_string(*value) + ": " + *refusal);
+        }
+      }
+    }
+  }
+  CHECK(dual_forms > 50);
+  CHECK(checked > 1000);
+  INFO(defects.size() << " defects, first: " << (defects.empty() ? "" : defects.front()));
+  CHECK(defects.empty());
+}
+
+TEST_CASE("a chain stage takes the choices of the form it names", "[mastering][catalog]") {
+  using sonare::mastering::api::mastering_enum_value;
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  const json::Value chain = json::parse_strict(sonare::mastering::api::chain_catalog_json());
+  std::size_t checked = 0;
+  for (const char* section : {"stages", "lists"}) {
+    for (const json::Value& stage : field(chain, section).as_array()) {
+      const json::Value& processor = field(stage, "processor");
+      const json::Value& form = field(stage, "form");
+      // The form mirrors the processor: named exactly when there is one.
+      REQUIRE(form.is_null() == processor.is_null());
+      if (processor.is_null()) continue;
+      REQUIRE(form.as_string() == "offline");
+      const json::Value* entry = nullptr;
+      for (const json::Value& candidate : catalog.as_array()) {
+        if (field(candidate, "id").as_string() == processor.as_string()) entry = &candidate;
+      }
+      REQUIRE(entry != nullptr);
+      const std::string prefix = std::string(section) == "stages"
+                                     ? field(stage, "prefix").as_string() + "."
+                                     : field(stage, "key").as_string() + ".0.";
+      for (const json::Value& parameter : declared_set(*entry, true)) {
+        if (field(parameter, "type").as_string() != "enum") continue;
+        const std::string name = field(parameter, "name").as_string();
+        // The chain document spells the multiband crossover's own leaves under `crossover.`.
+        const bool crossover_leaf = processor.as_string() == "multiband.compressor" &&
+                                    std::string(section) == "stages" &&
+                                    (name == "slope" || name == "mode");
+        const std::string key = prefix + (crossover_leaf ? "crossover." : "") + name;
+        const std::vector<std::string> names = choice_names(parameter);
+        const std::vector<double> values = choice_values(parameter);
+        for (std::size_t index = 0; index < names.size(); ++index) {
+          INFO(key << " = " << names[index]);
+          CHECK(mastering_enum_value("", key, names[index]) ==
+                std::optional<double>(values[index]));
+          ++checked;
+        }
+      }
+    }
+  }
+  CHECK(checked >= 4);
 }

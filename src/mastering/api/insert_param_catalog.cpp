@@ -57,10 +57,11 @@ std::vector<std::string> insert_param_names(const std::string& name) {
 
 namespace {
 
-// Reads and validates the configuration of repair stage @p name from @p params; false when
-// @p name is no repair stage. A repair stage is not an insert, so the catalog measures this
-// builder where it would otherwise measure an insert's construction.
-bool read_repair_config(const std::string& name, const ParamMap& params) {
+// Reads and validates the configuration the offline form of @p name reads from @p params; false
+// when that form has no reader of its own. A repair stage is not an insert, and the offline amp
+// sim has no IR channel, so the catalog measures these builders where it would otherwise measure
+// an insert's construction.
+bool read_offline_config(const std::string& name, const ParamMap& params) {
   if (name == "repair.declick") {
     (void)detail::declick_config(params);
   } else if (name == "repair.declip") {
@@ -75,6 +76,9 @@ bool read_repair_config(const std::string& name, const ParamMap& params) {
     (void)detail::dereverb_classical_config(params);
   } else if (name == "repair.trimSilence") {
     (void)detail::trim_silence_config(params);
+  } else if (name == "saturation.ampSim") {
+    saturation::AmpSim amp(detail::amp_sim_config(params));
+    detail::apply_amp_cab_ir(params, amp);
   } else {
     return false;
   }
@@ -84,18 +88,16 @@ bool read_repair_config(const std::string& name, const ParamMap& params) {
 // True when @p name is a repair stage, whose ids all sit under `repair.`.
 bool is_repair_stage(const std::string& name) { return name.rfind("repair.", 0) == 0; }
 
-// Set while the offline descriptor of a repair stage is measured. A stage with an insert form
-// is otherwise measured as that insert, which refuses the offline-only settings.
-thread_local bool measuring_offline_repair = false;
+// Set while the offline descriptor of a processor is measured. One with an insert form is
+// otherwise measured as that insert, which reads a different set.
+thread_local bool measuring_offline_form = false;
 
-class OfflineRepairMeasurement {
+class OfflineFormMeasurement {
  public:
-  OfflineRepairMeasurement() : previous_(measuring_offline_repair) {
-    measuring_offline_repair = true;
-  }
-  ~OfflineRepairMeasurement() { measuring_offline_repair = previous_; }
-  OfflineRepairMeasurement(const OfflineRepairMeasurement&) = delete;
-  OfflineRepairMeasurement& operator=(const OfflineRepairMeasurement&) = delete;
+  OfflineFormMeasurement() : previous_(measuring_offline_form) { measuring_offline_form = true; }
+  ~OfflineFormMeasurement() { measuring_offline_form = previous_; }
+  OfflineFormMeasurement(const OfflineFormMeasurement&) = delete;
+  OfflineFormMeasurement& operator=(const OfflineFormMeasurement&) = delete;
 
  private:
   bool previous_;
@@ -203,15 +205,15 @@ bool read_chain_only_config(const ParamMap& params) {
 // construction throws.
 bool constructs(const std::string& name, const ParamMap& params) {
   if (name == kChainOnlyProbe) return read_chain_only_config(params);
-  if (measuring_offline_repair) return read_repair_config(name, params);
-  return build_insert(name, params) != nullptr || read_repair_config(name, params);
+  if (measuring_offline_form) return read_offline_config(name, params);
+  return build_insert(name, params) != nullptr || read_offline_config(name, params);
 }
 
 // What an insert's empty build declares, memoized because every probe of the
 // catalog's measurement asks for it.
 const ParamMap& empty_build(const std::string& name) {
   static thread_local std::unordered_map<std::string, ParamMap> memo;
-  const std::string key = measuring_offline_repair ? name + "#offline" : name;
+  const std::string key = measuring_offline_form ? name + "#offline" : name;
   const auto cached = memo.find(key);
   if (cached != memo.end()) return cached->second;
   ParamMap params;
@@ -424,9 +426,9 @@ bool insert_accepts_at_rate(const std::string& name, const std::string& key, dou
     try {
       const ParamMap probe = probe_map(name, key, value);
       if (name == kChainOnlyProbe) return read_chain_only_config(probe);
-      if (measuring_offline_repair) return read_repair_config(name, probe);
+      if (measuring_offline_form) return read_offline_config(name, probe);
       auto processor = build_insert(name, probe, nullptr, sample_rate);
-      if (processor == nullptr) return read_repair_config(name, probe);
+      if (processor == nullptr) return read_offline_config(name, probe);
       processor->prepare(sample_rate, kInsertProbeBlockSize);
       return true;
     } catch (...) {
@@ -1042,17 +1044,21 @@ std::string build_insert_param_info_json(const std::string& name, double sample_
 
 }  // namespace
 
-std::string repair_param_info_json(const std::string& name) {
+std::string offline_param_info_json(const std::string& name) {
   static thread_local std::unordered_map<std::string, std::string> memo;
   const auto cached = memo.find(name);
   if (cached != memo.end()) return cached->second;
-  const OfflineRepairMeasurement offline;
+  const OfflineFormMeasurement offline;
   ParamMap params;
-  if (!read_repair_config(name, params)) return "[]";
+  if (!read_offline_config(name, params)) return "[]";
   std::string out = "[";
   append_construction_entries(out, name, params, 0.0);
   out += ']';
   return memo.emplace(name, std::move(out)).first->second;
+}
+
+std::string repair_param_info_json(const std::string& name) {
+  return is_repair_stage(name) ? offline_param_info_json(name) : "[]";
 }
 
 namespace {
@@ -1094,7 +1100,7 @@ const std::vector<detail::EnumChoice>* enum_choices_of(const std::string& proces
   *leaf = key;
   if (processor.empty() && !chain_key_processor(key, &id, leaf)) return nullptr;
   // A chain runs its repair stages offline, so their keys follow the offline declaration.
-  std::optional<OfflineRepairMeasurement> offline;
+  std::optional<OfflineFormMeasurement> offline;
   if (processor.empty() && is_repair_stage(id)) offline.emplace();
   const auto& declared_choices = empty_build(id).probed_choices();
   const auto declared = declared_choices.find(*leaf);
@@ -1165,18 +1171,21 @@ std::string chain_catalog_json() {
     } else {
       append_json_string(out, stage.processor);
     }
+    // A chain reads a stage's keys through its processor's offline declaration.
+    out += stage.processor == nullptr ? ",\"form\":null" : ",\"form\":\"offline\"";
     out += ",\"enabledKey\":";
     append_json_string(out, chain_enabled_key(stage));
     out += '}';
   }
   out += "],\"lists\":[{\"key\":";
   append_json_string(out, kChainCutoffList);
-  out += ",\"processor\":null,\"minItems\":" + std::to_string(kMinMultibandBands - 1u) +
-         ",\"maxItems\":" + std::to_string(kMaxMultibandBands - 1u) + "},{\"key\":";
+  out +=
+      ",\"processor\":null,\"form\":null,\"minItems\":" + std::to_string(kMinMultibandBands - 1u) +
+      ",\"maxItems\":" + std::to_string(kMaxMultibandBands - 1u) + "},{\"key\":";
   append_json_string(out, kChainBandList);
   out += ",\"processor\":";
   append_json_string(out, kChainBandProcessor);
-  out += ",\"minItems\":" + std::to_string(kMinMultibandBands) +
+  out += ",\"form\":\"offline\",\"minItems\":" + std::to_string(kMinMultibandBands) +
          ",\"maxItems\":" + std::to_string(kMaxMultibandBands) + "}],\"params\":";
   out += chain_only_param_info_json();
   out += '}';

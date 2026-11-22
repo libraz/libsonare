@@ -133,6 +133,14 @@ std::string insert_param_info_json(const std::string& name);
 /// @return A JSON array string; `[]` when @p name is not a repair stage.
 std::string repair_param_info_json(const std::string& name);
 
+/// @brief Parameter descriptors of @p name's offline form where that form reads a configuration
+///        of its own, in the shape of insert_param_info_json().
+/// @details Covers every repair stage and each processor whose offline form reads a different
+///          set from its insert (the amp sim, which has no IR channel offline). Bounds are
+///          measured through that form's own configuration validation.
+/// @return A JSON array string; `[]` when @p name's offline form reads what its insert reads.
+std::string offline_param_info_json(const std::string& name);
+
 /// @brief insert_param_info_json() with the Nyquist-following ceilings
 ///        (`maxRelativeTo` `"nyquist"`) resolved for @p sample_rate.
 /// @details Such a key's `max` and `maxExclusive` are re-measured by building
@@ -183,9 +191,12 @@ std::optional<std::string> mastering_enum_names(const std::string& processor,
 
 /// @brief The capability catalog's `chain` section: how each flat mastering chain key is described.
 /// @return A JSON object string with three arrays:
-///   - `stages`: each chain stage in execution order, `{prefix, processor, enabledKey}`; the keys
-///     `<prefix>.<leaf>` are `processor`'s parameters, or chain-only when it is null.
-///   - `lists`: the multiband stage's indexed lists, `{key, processor, minItems, maxItems}`; an
+///   - `stages`: each chain stage in execution order, `{prefix, processor, form, enabledKey}`; the
+///     keys `<prefix>.<leaf>` are `processor`'s parameters in its `form` ("offline": the catalog's
+///     `offlineParams` when the entry has them, else its `params`), or chain-only when both are
+///     null.
+///   - `lists`: the multiband stage's indexed lists, `{key, processor, form, minItems, maxItems}`;
+///   an
 ///     element `<key>.<i>` is the chain param `key` when `processor` is null, otherwise
 ///     `<key>.<i>.<field>` is the processor's `field`.
 ///   - `params`: the keys no processor describes, in the shape of insert_param_info_json(), with
