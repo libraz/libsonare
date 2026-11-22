@@ -124,7 +124,6 @@ __pycache__/
 *.py[oc]
 *.egg-info
 .venv/
-uv.lock
 
 # Voice-match harness artifacts (downloaded soundfonts, rendered outputs)
 tools/voicematch/assets/
