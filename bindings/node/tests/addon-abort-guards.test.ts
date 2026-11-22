@@ -613,9 +613,7 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     expect(bailoutReaderCalls().length).toBeGreaterThan(80);
     expect(positionalArgEntryPoints().length).toBeGreaterThan(80);
     expect(positionalArgEntryPoints()).toContain('setHeadOrientation');
-    expect(bailoutReaderCalls().some((site) => site.name === 'RequiredFloatValue')).toBe(
-      true,
-    );
+    expect(bailoutReaderCalls().some((site) => site.name === 'RequiredFloatValue')).toBe(true);
     // This one reports its whole population, not just its violations, so the
     // floor is what proves a clean sweep swept something. What remains is the
     // non-integer half: every integer read moved onto the shared narrowing

@@ -28,13 +28,17 @@ function declaredHandles(root: string): Map<string, Handle> {
   const checker = program.getTypeChecker();
   const handles = new Map<string, Handle>();
   for (const file of program.getSourceFiles()) {
-    if (!file.fileName.startsWith(`${root}/src/`)) continue;
+    if (!file.fileName.startsWith(`${root}/src/`)) {
+      continue;
+    }
     for (const statement of file.statements) {
       if (!ts.isInterfaceDeclaration(statement) || !/^Wasm\w+$/.test(statement.name.text)) {
         continue;
       }
       const symbol = checker.getSymbolAtLocation(statement.name);
-      if (!symbol) continue;
+      if (!symbol) {
+        continue;
+      }
       const handle: Handle = { methods: [], properties: [] };
       for (const member of checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol))) {
         const type = checker.getNonNullableType(checker.getTypeOfSymbol(member));
@@ -42,7 +46,9 @@ function declaredHandles(root: string): Map<string, Handle> {
           member.name,
         );
       }
-      if (handle.methods.includes('delete')) handles.set(statement.name.text.slice(4), handle);
+      if (handle.methods.includes('delete')) {
+        handles.set(statement.name.text.slice(4), handle);
+      }
     }
   }
   return handles;
@@ -57,7 +63,9 @@ const isEmbindClass = (value: unknown): value is EmbindClass =>
 function descriptor(prototype: object | null, key: string): PropertyDescriptor | undefined {
   for (let at = prototype; at; at = Object.getPrototypeOf(at)) {
     const found = Object.getOwnPropertyDescriptor(at, key);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -83,7 +91,9 @@ describe('embind class handles', async () => {
 
   it.each([...handles.keys()].sort())('%s: every declared member is registered', (name) => {
     const prototype = classes.get(name)?.prototype;
-    if (!prototype) throw new Error(`${name} is not registered`);
+    if (!prototype) {
+      throw new Error(`${name} is not registered`);
+    }
     const { methods, properties } = handles.get(name) ?? { methods: [], properties: [] };
     expect(
       methods.filter((method) => typeof descriptor(prototype, method)?.value !== 'function'),

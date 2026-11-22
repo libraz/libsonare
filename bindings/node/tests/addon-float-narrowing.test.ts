@@ -2146,8 +2146,9 @@ describe('a streaming option key is refused past the float range rather than sat
     try {
       eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 6, q: 1, enabled: true, ...band });
       const tone = new Float32Array(512);
-      for (let i = 0; i < tone.length; i++)
+      for (let i = 0; i < tone.length; i++) {
         tone[i] = 0.25 * Math.sin((2 * Math.PI * 1000 * i) / SAMPLE_RATE);
+      }
       const { left } = eq.processStereo(tone, tone.slice());
       return JSON.stringify(Array.from(left as Float32Array));
     } finally {

@@ -31,11 +31,15 @@ async function declarationClosure(entry: string): Promise<Map<string, string>> {
   const pending = [entry];
   while (pending.length > 0) {
     const file = pending.pop() as string;
-    if (reached.has(file)) continue;
+    if (reached.has(file)) {
+      continue;
+    }
     const text = await readFile(join(DIST, file), 'utf8');
     reached.set(file, text);
     for (const [, specifier] of text.matchAll(SPECIFIER)) {
-      if (!specifier.startsWith('.')) continue;
+      if (!specifier.startsWith('.')) {
+        continue;
+      }
       const target = join(file, '..', specifier).split(sep).join('/');
       pending.push(target.replace(/\.js$/, '.d.ts'));
     }
@@ -52,9 +56,14 @@ describe('a const the main entry declares', () => {
     const excusing = new Set<string>();
     for (const [file, text] of closure) {
       for (const [, name] of text.matchAll(/^export declare const (\w+)/gm)) {
-        if (runtime.has(name)) continue;
-        if (file in NOT_PUBLIC_VALUES) excusing.add(file);
-        else unexported.push(`${file}: ${name}`);
+        if (runtime.has(name)) {
+          continue;
+        }
+        if (file in NOT_PUBLIC_VALUES) {
+          excusing.add(file);
+        } else {
+          unexported.push(`${file}: ${name}`);
+        }
       }
     }
     expect(unexported).toEqual([]);

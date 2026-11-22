@@ -73,11 +73,15 @@ async function declarationClosure(entry: string): Promise<Map<string, string>> {
   const pending = [entry];
   while (pending.length > 0) {
     const file = pending.pop() as string;
-    if (reached.has(file)) continue;
+    if (reached.has(file)) {
+      continue;
+    }
     const text = await readFile(join(DIST, file), 'utf8');
     reached.set(file, text);
     for (const [, specifier] of text.matchAll(SPECIFIER)) {
-      if (!specifier.startsWith('.')) continue;
+      if (!specifier.startsWith('.')) {
+        continue;
+      }
       const target = join(file, '..', specifier).split(sep).join('/');
       pending.push(target.replace(/\.js$/, '.d.ts'));
     }
@@ -115,9 +119,14 @@ describe('a const an entry declares', () => {
       expect(closure.size).toBeGreaterThan(1);
       for (const [file, text] of closure) {
         for (const [, name] of text.matchAll(/^export declare const (\w+)/gm)) {
-          if (runtime.has(name)) continue;
-          if (file in NOT_PUBLIC_VALUES) excusing.add(file);
-          else unexported.add(`${file}: ${name}`);
+          if (runtime.has(name)) {
+            continue;
+          }
+          if (file in NOT_PUBLIC_VALUES) {
+            excusing.add(file);
+          } else {
+            unexported.add(`${file}: ${name}`);
+          }
         }
       }
     }
@@ -147,7 +156,9 @@ function valueExports(declaration: string): string[] {
   const checker = program.getTypeChecker();
   const source = program.getSourceFile(file);
   const moduleSymbol = source && checker.getSymbolAtLocation(source);
-  if (!moduleSymbol) throw new Error(`${declaration} did not resolve`);
+  if (!moduleSymbol) {
+    throw new Error(`${declaration} did not resolve`);
+  }
   const candidates = checker
     .getExportsOfModule(moduleSymbol)
     .filter((symbol) => {

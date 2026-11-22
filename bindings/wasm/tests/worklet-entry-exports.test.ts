@@ -143,7 +143,9 @@ describe('the audio-thread classes constructed from the worklet entry', () => {
   const BLOCK = 128;
   const tone = (length = BLOCK): Float32Array => {
     const samples = new Float32Array(length);
-    for (let i = 0; i < length; i += 1) samples[i] = Math.sin((2 * Math.PI * 440 * i) / SR) * 0.25;
+    for (let i = 0; i < length; i += 1) {
+      samples[i] = Math.sin((2 * Math.PI * 440 * i) / SR) * 0.25;
+    }
     return samples;
   };
 

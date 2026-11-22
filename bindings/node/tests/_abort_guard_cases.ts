@@ -2635,8 +2635,7 @@ export const CASES: AbortGuardCase[] = [
     rejectsArgument: [
       {
         argument: 'targetMidi',
-        call: () =>
-          addon.assignNoteTargets([], SR, [{ startSec: 0, endSec: 1, targetMidi: 'x' }]),
+        call: () => addon.assignNoteTargets([], SR, [{ startSec: 0, endSec: 1, targetMidi: 'x' }]),
         message: /targetMidi/,
       },
       {
@@ -2688,7 +2687,11 @@ export const CASES: AbortGuardCase[] = [
     name,
     missingRequired: [],
     rejectsArgument: [
-      { argument: 'scaleReferenceMidi', call: () => fn(0, 0xfff, 60.5, 'x'), message: /scaleReferenceMidi/ },
+      {
+        argument: 'scaleReferenceMidi',
+        call: () => fn(0, 0xfff, 60.5, 'x'),
+        message: /scaleReferenceMidi/,
+      },
       {
         argument: 'scaleReferenceMidi NaN',
         call: () => fn(0, 0xfff, 60.5, Number.NaN),
@@ -2701,7 +2704,11 @@ export const CASES: AbortGuardCase[] = [
     name: 'addon.trim',
     missingRequired: [],
     rejectsArgument: [
-      { argument: 'thresholdDb', call: () => addon.trim(samples(), SR, 'x'), message: /thresholdDb/ },
+      {
+        argument: 'thresholdDb',
+        call: () => addon.trim(samples(), SR, 'x'),
+        message: /thresholdDb/,
+      },
       {
         argument: 'thresholdDb NaN',
         call: () => addon.trim(samples(), SR, Number.NaN),

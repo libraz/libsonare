@@ -44,19 +44,25 @@ const checker = program.getTypeChecker();
 
 function exportedType(name: string): ts.Type {
   const file = program.getSourceFile(TYPES);
-  if (!file) throw new Error(`no source file ${TYPES}`);
+  if (!file) {
+    throw new Error(`no source file ${TYPES}`);
+  }
   const moduleSymbol = checker.getSymbolAtLocation(file);
   const symbol = moduleSymbol
     ? checker.getExportsOfModule(moduleSymbol).find((s) => s.name === name)
     : undefined;
-  if (!symbol) throw new Error(`${name} not found`);
+  if (!symbol) {
+    throw new Error(`${name} not found`);
+  }
   return checker.getDeclaredTypeOfSymbol(symbol);
 }
 
 /** The non-nullable type of member @p key of @p type, array elements unwrapped. */
 function memberType(type: ts.Type, key: string): ts.Type {
   const member = type.getProperty(key);
-  if (!member) throw new Error(`no member ${key} on ${checker.typeToString(type)}`);
+  if (!member) {
+    throw new Error(`no member ${key} on ${checker.typeToString(type)}`);
+  }
   const resolved = checker.getNonNullableType(checker.getTypeOfSymbol(member));
   return checker.isArrayType(resolved)
     ? checker.getTypeArguments(resolved as ts.TypeReference)[0]
@@ -130,7 +136,9 @@ function catalogMismatches(path: readonly string[]): string[] {
 
 const processorParams = (id: string): string[] => {
   const processor = catalog.processors.find((p) => p.id === id);
-  if (!processor) throw new Error(`no catalog processor ${id}`);
+  if (!processor) {
+    throw new Error(`no catalog processor ${id}`);
+  }
   return processor.params.map((p) => p.name);
 };
 const chainParamsUnder = (prefix: string): string[] =>
@@ -158,7 +166,9 @@ describe('the chain config type', () => {
         .map((entry) => `${prefix}.${entry}`)
         .filter((entry) => {
           const key = entry.slice(0, entry.indexOf(':'));
-          if (!(key in WIDER_THAN_PROCESSOR)) return true;
+          if (!(key in WIDER_THAN_PROCESSOR)) {
+            return true;
+          }
           widerUsed.add(key);
           return false;
         });
@@ -172,7 +182,9 @@ describe('the chain config type', () => {
     expect(nested(path.join('.'))).toBe(true);
     const bands = catalog.chain.lists.find((l) => l.key === `${path.join('.')}.bands`);
     const bandProcessor = bands?.processor;
-    if (!bandProcessor) throw new Error('the band list names no processor');
+    if (!bandProcessor) {
+      throw new Error('the band list names no processor');
+    }
     expect(keysAt(path)).toEqual(['bands', 'crossover', 'enabled']);
     expect(keysAt([...path, 'crossover'])).toEqual(
       chainParamsUnder(`${path.join('.')}.crossover`).sort(),

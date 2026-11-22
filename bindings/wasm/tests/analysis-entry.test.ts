@@ -151,7 +151,9 @@ describe('the analysis module declaration', () => {
     const factory = moduleSymbol
       ? checker.getExportsOfModule(moduleSymbol).find((s) => s.name === 'default')
       : undefined;
-    if (!factory) throw new Error(`${DECLARATION} has no default export`);
+    if (!factory) {
+      throw new Error(`${DECLARATION} has no default export`);
+    }
     const [signature] = checker.getTypeOfSymbol(factory).getCallSignatures();
     const promised = checker.getAwaitedType(signature.getReturnType());
     if (!promised || promised.flags & ts.TypeFlags.Any) {
