@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 import re
@@ -13,6 +14,7 @@ import pytest
 import libsonare
 from libsonare import (
     EngineMarker,
+    EngineMarkerInput,
     MidiCcBinding,
     Project,
     ProjectMidiCcBindingKind,
@@ -292,8 +294,8 @@ _MARKER_ID_CASES = json.loads(
 )["cases"]
 
 
-def _marker_entry(raw: dict[str, Any]) -> EngineMarker:
-    return EngineMarker(raw["ppq"], id=raw.get("id"))
+def _marker_entry(raw: dict[str, Any]) -> EngineMarkerInput:
+    return EngineMarkerInput(raw["ppq"], id=raw.get("id"))
 
 
 @pytest.mark.parametrize("case", _MARKER_ID_CASES, ids=lambda case: case["name"])
@@ -313,14 +315,26 @@ def test_marker_id_allocation_follows_the_corpus(case: dict[str, Any]) -> None:
 
 def test_a_marker_takes_ppq_first_and_every_other_field_by_keyword() -> None:
     with pytest.raises(TypeError):
-        EngineMarker(1, 0.0)  # type: ignore[call-arg, arg-type]
-    assert EngineMarker(480.0).id is None
+        EngineMarkerInput(1, 0.0)  # type: ignore[call-arg, arg-type]
+    assert EngineMarkerInput(480.0).id is None
+
+
+def test_a_stored_marker_carries_its_id_and_an_input_may_omit_it() -> None:
+    with pytest.raises(TypeError):
+        EngineMarker(480.0)  # type: ignore[call-arg]
+    assert {f.name for f in dataclasses.fields(EngineMarker)} == {
+        f.name for f in dataclasses.fields(EngineMarkerInput)
+    }
 
 
 def test_markers_read_back_from_the_engine_set_again_keep_their_ids() -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         stored = engine.set_markers(
-            [EngineMarker(0.0, id=7, name="intro"), EngineMarker(480.0), EngineMarker(960.0, id=3)]
+            [
+                EngineMarkerInput(0.0, id=7, name="intro"),
+                EngineMarkerInput(480.0),
+                EngineMarker(960.0, id=3),
+            ]
         )
         assert [marker.id for marker in stored] == [7, 1, 3]
         assert engine.set_markers(engine.markers()) == engine.markers()

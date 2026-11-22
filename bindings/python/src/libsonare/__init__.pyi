@@ -1076,6 +1076,9 @@ from .types import (
     EngineMarker as EngineMarker,
 )
 from .types import (
+    EngineMarkerInput as EngineMarkerInput,
+)
+from .types import (
     EngineMetronomeConfig as EngineMetronomeConfig,
 )
 from .types import (

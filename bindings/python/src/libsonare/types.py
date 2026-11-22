@@ -329,6 +329,9 @@ from ._types_engine import (
     EngineMarker as EngineMarker,
 )
 from ._types_engine import (
+    EngineMarkerInput as EngineMarkerInput,
+)
+from ._types_engine import (
     EngineMetronomeConfig as EngineMetronomeConfig,
 )
 from ._types_engine import (

@@ -21,6 +21,7 @@ from ._runtime import (
     EngineGraphNode,
     EngineGraphParameterBinding,
     EngineMarker,
+    EngineMarkerInput,
     EngineMetronomeConfig,
     EngineTelemetry,
     MeterTelemetryRecord,
@@ -167,13 +168,13 @@ def _assign_marker_ids(markers: Sequence[object], next_id: int) -> tuple[list[ob
     """Give every id-less marker the lowest id at or above ``next_id`` no entry carries.
 
     Explicit ids are kept; validating them is the setter's, and an entry that is
-    not an :class:`EngineMarker` passes through for :func:`_marker_to_c` to refuse.
+    not a marker passes through for :func:`_marker_to_c` to refuse.
     Returns the entries in the order given and the counter for the next call
     (above every id the list now holds).
     """
 
     def explicit(marker: object) -> int | None:
-        if not isinstance(marker, EngineMarker):
+        if not isinstance(marker, EngineMarker | EngineMarkerInput):
             return None
         value = marker.id
         return value if isinstance(value, int) and not isinstance(value, bool) else None
@@ -183,7 +184,7 @@ def _assign_marker_ids(markers: Sequence[object], next_id: int) -> tuple[list[ob
     highest = next_id - 1
     out: list[object] = []
     for marker in markers:
-        if not isinstance(marker, EngineMarker) or marker.id is not None:
+        if not isinstance(marker, EngineMarkerInput) or marker.id is not None:
             value = explicit(marker)
             if value is not None:
                 highest = max(highest, value)
@@ -199,7 +200,9 @@ def _assign_marker_ids(markers: Sequence[object], next_id: int) -> tuple[list[ob
 
 
 def _marker_to_c(value: object) -> SonareEngineMarker:
-    marker = _require_instance(value, EngineMarker, "marker")
+    if not isinstance(value, EngineMarker | EngineMarkerInput):
+        raise _refuse_type("marker must be an EngineMarker or an EngineMarkerInput")
+    marker = value
     try:
         # set_markers has allocated every id-less entry, so a None does not reach here.
         marker_id = operator.index(cast(int, marker.id))

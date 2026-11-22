@@ -122,6 +122,7 @@ _SCALAR_ARGS: dict[str, Any] = {
     "frame_length": 2048,
     "hop_length": 512,
     "target_size": 4,
+    "current_midi": 69.0,
     "target_midi": 69.0,
     "length_m": 5.0,
     "width_m": 4.0,

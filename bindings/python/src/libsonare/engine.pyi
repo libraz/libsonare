@@ -37,6 +37,7 @@ from .types import (
     EngineFreezeResult,
     EngineGraphSpec,
     EngineMarker,
+    EngineMarkerInput,
     EngineMetronomeConfig,
     EngineMidiClipSchedule,
     EngineProcessWithMonitorResult,
@@ -161,11 +162,14 @@ class RealtimeEngine:
     def automation_lane_count(self) -> int:
         """Number of automation lanes currently installed."""
         ...
-    def set_markers(self, markers: Sequence[EngineMarker]) -> list[EngineMarker]:
+    def set_markers(
+        self, markers: Sequence[EngineMarker | EngineMarkerInput]
+    ) -> list[EngineMarker]:
         """Replace the whole marker set and return the stored markers in the order given.
 
-        A marker whose ``id`` is ``None`` is allocated the lowest id above every id
-        this engine has stored or assigned that the list does not carry.
+        An :class:`EngineMarkerInput` whose ``id`` is ``None`` is allocated the lowest
+        id above every id this engine has stored or assigned that the list does not
+        carry.
         """
         ...
     def markers(self) -> list[EngineMarker]: ...

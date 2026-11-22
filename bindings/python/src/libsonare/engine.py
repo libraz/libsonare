@@ -99,6 +99,7 @@ from .types import (
     AutomationPoint,
     EngineClip,
     EngineMarker,
+    EngineMarkerInput,
     EngineMetronomeConfig,
     EngineMidiClipSchedule,
     EngineTrackMonitorMode,
@@ -616,18 +617,21 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return int(out.value)
 
     @_entry("RealtimeEngine.set_markers")
-    def set_markers(self, markers: Sequence[EngineMarker]) -> list[EngineMarker]:
+    def set_markers(
+        self, markers: Sequence[EngineMarker | EngineMarkerInput]
+    ) -> list[EngineMarker]:
         """Replace the whole marker set and return the stored markers in the order given.
 
-        A marker whose ``id`` is ``None`` is given the lowest id above every id this
-        engine has stored or assigned that the list does not carry, so an id is not
+        An :class:`EngineMarkerInput` whose ``id`` is ``None`` is given the lowest id
+        above every id this engine has stored or assigned that the list does not
+        carry, so an id is not
         reused after its marker is removed. An explicit id is kept; it must be
         positive and unique within the list. A refused list changes neither the
         stored markers nor the ids later allocations start from.
         """
         floor = self._next_marker_id
         for stored in self.markers():
-            floor = max(floor, (stored.id or 0) + 1)
+            floor = max(floor, stored.id + 1)
         assigned, next_id = _assign_marker_ids(list(markers), floor)
         raw = [_marker_to_c(marker) for marker in assigned]
         raw_markers = (_ffi_core.SonareEngineMarker * len(raw))(*raw)

@@ -13004,7 +13004,7 @@ rule = "num-channels"
 [[entry]]
 kind = "type"
 old = "EngineMarker"
-changed = "ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...))"
+changed = "ppq is the only positional field; id, name, kind, key_fifths and key_minor are keyword-only (EngineMarker(ppq, id=..., name=...)); a marker without an id is an EngineMarkerInput"
 domain = "engine"
 rule = "individual"
 test = "bindings/python/tests/test_public_input_conformance.py::test_a_marker_takes_ppq_first_and_every_other_field_by_keyword"
@@ -13012,10 +13012,10 @@ test = "bindings/python/tests/test_public_input_conformance.py::test_a_marker_ta
 [[entry]]
 kind = "field"
 old = "EngineMarker.id"
-changed = "optional, default None: set_markers allocates the lowest id above every id the engine has stored or assigned that the list does not carry; a marker read back always carries its id"
+changed = "required on EngineMarker, the stored record; pass an EngineMarkerInput with id omitted to have set_markers allocate the lowest id above every id the engine has stored or assigned that the list does not carry"
 domain = "engine"
 rule = "individual"
-test = "bindings/python/tests/test_public_input_conformance.py::test_marker_id_allocation_follows_the_corpus"
+test = "bindings/python/tests/test_public_input_conformance.py::test_a_stored_marker_carries_its_id_and_an_input_may_omit_it"
 
 [[entry]]
 kind = "method"

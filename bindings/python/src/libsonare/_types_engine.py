@@ -302,19 +302,42 @@ class SidechainCheck:
 
 @dataclass(frozen=True, slots=True)
 class EngineMarker:
-    """Timeline marker used by the realtime engine transport.
+    """Timeline marker stored on the realtime engine transport, as read back.
 
     ``kind`` is a :data:`MarkerKind` token; ``key_fifths`` (-7..7, sharps
     positive) and ``key_minor`` apply only to the ``"keySignature"`` kind.
-    Every field after ``ppq`` is keyword-only.
+    Every field after ``ppq`` is keyword-only. A marker to store whose id the
+    engine should allocate is an :class:`EngineMarkerInput`.
+    """
+
+    ppq: float
+    """Marker position in PPQ."""
+    _: KW_ONLY
+    id: int
+    """Marker id, unique within the engine."""
+    name: str | None = None
+    """Marker text, at most 63 UTF-8 bytes; ``None`` for an unnamed marker."""
+    kind: MarkerKind = "marker"
+    """Marker kind (:data:`MarkerKind`)."""
+    key_fifths: int = 0
+    """Key signature in sharps (positive) or flats (negative), -7..7."""
+    key_minor: bool = False
+    """Whether the key is minor."""
+
+
+@dataclass(frozen=True, slots=True)
+class EngineMarkerInput:
+    """A marker handed to :meth:`~libsonare.RealtimeEngine.set_markers`.
+
+    Same fields as :class:`EngineMarker`, except that ``id`` may be omitted to
+    have one allocated that no stored or listed marker carries.
     """
 
     ppq: float
     """Marker position in PPQ."""
     _: KW_ONLY
     id: int | None = None
-    """Marker id; ``None`` asks :meth:`~libsonare.RealtimeEngine.set_markers` to allocate one.
-    A marker read back from the engine always carries its id."""
+    """Marker id, positive and unique within the list; ``None`` allocates one."""
     name: str | None = None
     """Marker text, at most 63 UTF-8 bytes; ``None`` for an unnamed marker."""
     kind: MarkerKind = "marker"

@@ -25,6 +25,7 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 _REQUIRED_ARGS: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
     "resample": ((22050,), {}),
     "mastering_apply_processor": (("limiter",), {}),
+    "pitch_correct_to_midi": ((60.0, 62.0), {}),
     "pitch_shift": ((2.0,), {}),
     "time_stretch": ((1.5,), {}),
 }
