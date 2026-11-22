@@ -453,6 +453,8 @@ TEST_CASE("engine MIDI entries refuse an out-of-domain value by name", "[c_api][
   CHECK(last_error() == "inserts_json must not be NULL when mode is chain");
   CHECK(sonare_engine_set_part_rig(engine, 7, 0, 0, "[]") == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == "inserts_json must be NULL unless mode is chain");
+  CHECK(sonare_engine_set_part_rig(engine, 7, 0, 2, "[]") == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(last_error() == "the document must hold 1 to 8 inserts for a chain rig");
 
   // Drain buffer shorter than one lowered record.
   constexpr size_t kLowered =

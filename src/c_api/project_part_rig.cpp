@@ -72,14 +72,7 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
     if (parsed != SONARE_OK) return parsed;
   }
   // The part was admitted above, so what is left to refuse is the content of inserts_json.
-  if (!midi::validate_part_rig(part, rig)) {
-    set_last_error(SONARE_ERROR_INVALID_FORMAT,
-                   sonare::util::json::schema::refusal(
-                       "the document", "must hold 1 to " + std::to_string(midi::kMaxPartRigStages) +
-                                           " inserts for a chain rig")
-                       .c_str());
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
+  if (!midi::validate_part_rig(part, rig)) return sonare_c_detail::refuse_part_rig_stage_count();
 #if defined(SONARE_WITH_MASTERING)
   if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_FORMAT;
 #else

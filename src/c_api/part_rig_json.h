@@ -65,6 +65,18 @@ inline SonareError parse_part_rig_inserts(const char* inserts_json,
   return SONARE_OK;
 }
 
+/// The refusal of a rig validate_part_rig rejects once its part has been admitted:
+/// what is left is the stage count of the inserts document.
+inline SonareError refuse_part_rig_stage_count() {
+  set_last_error(
+      SONARE_ERROR_INVALID_FORMAT,
+      sonare::util::json::schema::refusal(
+          "the document", "must hold 1 to " + std::to_string(sonare::midi::kMaxPartRigStages) +
+                              " inserts for a chain rig")
+          .c_str());
+  return SONARE_ERROR_INVALID_FORMAT;
+}
+
 #if defined(SONARE_WITH_MASTERING)
 /// Every stage must build, accept its params, and stay within the latency bound
 /// at the reference rate.

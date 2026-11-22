@@ -642,7 +642,7 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
     if (parsed != SONARE_OK) return parsed;
   }
   // The part was admitted above, so what is left to refuse is the content of inserts_json.
-  if (!sonare::midi::validate_part_rig(part, rig)) return SONARE_ERROR_INVALID_FORMAT;
+  if (!sonare::midi::validate_part_rig(part, rig)) return refuse_part_rig_stage_count();
 #if defined(SONARE_WITH_MASTERING)
   if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_FORMAT;
 #else
