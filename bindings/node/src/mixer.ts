@@ -9,7 +9,7 @@ import type {
   MeterTap,
   MixerProcessResult,
   MixMeterSnapshot,
-  MixSceneDocument,
+  MixSceneDocumentInput,
   PanLaw,
   PanMode,
   SendTiming,
@@ -53,7 +53,7 @@ const MIX_BUS_ROLES: readonly MixBusRole[] = ['master', 'aux', 'submix'];
 /** Construction options of a {@link Mixer}. */
 export interface MixerConfig {
   /** Scene to build the mixer from; omitted gives an empty mixer. */
-  scene?: MixSceneDocument;
+  scene?: MixSceneDocumentInput;
   /** Sample rate in Hz, integer in `[8000, 384000]`. Required; there is no default rate. */
   sampleRate: number;
   /** Maximum block size per {@link Mixer.processStereo} call, in samples. Default `512`; `0` is refused. */

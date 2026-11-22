@@ -461,8 +461,8 @@ export interface MixSceneDocument {
 }
 
 /**
- * A mixer scene document as given to `Mixer.fromJson` and the engine; omitted fields take the
- * scene parser's defaults. A {@link MixSceneDocument} is accepted as is.
+ * A mixer scene document as given to the `Mixer` constructor, `Mixer.fromJson` and the engine;
+ * omitted fields take the scene parser's defaults. A {@link MixSceneDocument} is accepted as is.
  */
 export interface MixSceneDocumentInput {
   /** Scene document schema version. */

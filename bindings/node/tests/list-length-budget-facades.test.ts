@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import type { MixSceneStripInput } from '../src/index.js';
 import * as api from '../src/index.js';
 import { Mixer, Project, RealtimeEngine } from '../src/index.js';
 import {
@@ -85,7 +86,7 @@ describe('facades refuse an oversized caller list before walking it', () => {
   it('Mixer scene document', () => {
     const { list, reads } = hugeList();
     expect(
-      () => new Mixer({ sampleRate: 48000, scene: { strips: list, buses: [] } as never }),
+      () => new Mixer({ sampleRate: 48000, scene: { strips: list as MixSceneStripInput[] } }),
     ).toThrow('scene exceeds the input length budget');
     expect(reads()).toBe(0);
   });
