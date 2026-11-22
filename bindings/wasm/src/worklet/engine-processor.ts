@@ -8,6 +8,8 @@ import {
   type EngineClipPageRequestMessage,
   type ResolvedMetronomeConfig,
   resolveMetronomeConfig,
+  type SonareEngineArticulationRequestMessage,
+  type SonareEngineArticulationResponseMessage,
   type SonareEngineCaptureRequestMessage,
   type SonareEngineCaptureResponseMessageInternal,
   type SonareEngineInsertGainReductionRequestMessage,
@@ -853,6 +855,9 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncSynthInstrument':
         this.engine.setSynthInstrument(message.destinationId, message.patch as SynthPatch);
         break;
+      case 'syncArticulation':
+        this.engine.setArticulation(message.destinationId, message.channel, message.articulation);
+        break;
       case 'syncLoadSoundFont':
         this.engine.loadSoundFont(message.data);
         break;
@@ -1089,6 +1094,33 @@ export class SonareRealtimeEngineWorkletProcessor {
           error: errorText(error),
           failure: failurePayload(error),
         } satisfies SonareEngineTransportResponseMessage);
+      }
+    });
+  }
+
+  /** @internal */
+  receiveArticulationRequest(message: SonareEngineArticulationRequestMessage): void {
+    this.receiveOrdered(message, () => {
+      try {
+        this.settleCommands();
+        const value =
+          message.op === 'articulation'
+            ? this.engine.articulation(message.destinationId, message.channel)
+            : this.engine.legatoFallbackCount(message.destinationId);
+        this.transport?.postMessage?.({
+          type: 'articulationResponse',
+          requestId: message.requestId,
+          ok: true,
+          value,
+        } satisfies SonareEngineArticulationResponseMessage);
+      } catch (error) {
+        this.transport?.postMessage?.({
+          type: 'articulationResponse',
+          requestId: message.requestId,
+          ok: false,
+          error: errorText(error),
+          failure: failurePayload(error),
+        } satisfies SonareEngineArticulationResponseMessage);
       }
     });
   }

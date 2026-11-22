@@ -1,5 +1,5 @@
 import { ErrorCode } from '../errors.js';
-import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
+import type { Articulation, EngineCaptureStatus, EngineTransportState } from '../index.js';
 import {
   activeEntry,
   codedError,
@@ -15,6 +15,7 @@ import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.
 import type {
   EngineClipPageRequestMessage,
   EngineSyncErrorMessage,
+  SonareEngineArticulationRequestMessage,
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
   SonareEngineSyncMessage,
@@ -34,6 +35,7 @@ import {
   assertKnownProcessorOptions,
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
+  isEngineArticulationResponseMessage,
   isEngineCaptureResponseForOperation,
   isEngineCaptureResponseMessage,
   isEngineInsertGainReductionResponseMessage,
@@ -181,6 +183,7 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
   'emitScope',
   'sendCaptureRequest',
   'sendTransportRequest',
+  'sendArticulationRequest',
 ])
 export class SonareRealtimeEngineNode {
   /** The underlying AudioWorkletNode; connect it into the audio graph. */
@@ -230,6 +233,14 @@ export class SonareRealtimeEngineNode {
     number,
     {
       resolve: (response: SonareEngineTransportResponseMessage) => void;
+      reject: (reason?: unknown) => void;
+    }
+  >();
+  private articulationRequestId = 1;
+  private readonly articulationRequests = new Map<
+    number,
+    {
+      resolve: (value: Articulation | number | undefined) => void;
       reject: (reason?: unknown) => void;
     }
   >();
@@ -321,6 +332,16 @@ export class SonareRealtimeEngineNode {
             pending.resolve(event.data);
           } else {
             pending.reject(workletFailure(event.data, 'Transport request failed'));
+          }
+        }
+      } else if (isEngineArticulationResponseMessage(event.data)) {
+        const pending = this.articulationRequests.get(event.data.requestId);
+        if (pending) {
+          this.articulationRequests.delete(event.data.requestId);
+          if (event.data.ok) {
+            pending.resolve(event.data.value);
+          } else {
+            pending.reject(workletFailure(event.data, 'Articulation request failed'));
           }
         }
       } else if (isEngineInsertGainReductionResponseMessage(event.data)) {
@@ -1009,6 +1030,10 @@ export class SonareRealtimeEngineNode {
       pending.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     this.insertGainReductionRequests.clear();
+    for (const pending of this.articulationRequests.values()) {
+      pending.reject(releasedHandleError('SonareRealtimeEngineNode'));
+    }
+    this.articulationRequests.clear();
     this.telemetryListeners.clear();
     this.meterListeners.clear();
     this.scopeListeners.clear();
@@ -1101,6 +1126,71 @@ export class SonareRealtimeEngineNode {
       this.postOrdered({ type: 'insertGainReductionRequest', requestId, targetId });
     } catch (error) {
       this.insertGainReductionRequests.delete(requestId);
+      rejectRequest(error);
+    }
+    return promise;
+  }
+
+  /**
+   * Reads one channel's articulation from the instrument the worklet's live engine has bound to
+   * `destinationId`. Binding an instrument replaces the articulation with that instrument's own,
+   * so this answers what the engine holds rather than what was last sent.
+   *
+   * @throws SonareError (as a rejection) on the same terms as `RealtimeEngine.articulation`, and
+   *   `InvalidState` once the node is destroyed.
+   */
+  requestArticulation(destinationId: number, channel: number): Promise<Articulation> {
+    return this.sendArticulationRequest('articulation', destinationId, channel).then((value) => {
+      if (typeof value !== 'string') {
+        throw codedError(ErrorCode.InvalidFormat, 'Articulation response is missing its value.');
+      }
+      return value;
+    });
+  }
+
+  /**
+   * Reads the legato fallback count of the instrument the worklet's live engine has bound to
+   * `destinationId`. The count belongs to the instrument, so binding another one starts it from zero.
+   *
+   * @throws SonareError (as a rejection) on the same terms as `RealtimeEngine.legatoFallbackCount`,
+   *   and `InvalidState` once the node is destroyed.
+   */
+  requestLegatoFallbackCount(destinationId: number): Promise<number> {
+    return this.sendArticulationRequest('legatoFallbackCount', destinationId, 0).then((value) => {
+      if (typeof value !== 'number') {
+        throw codedError(
+          ErrorCode.InvalidFormat,
+          'Legato fallback count response is missing its value.',
+        );
+      }
+      return value;
+    });
+  }
+
+  private sendArticulationRequest(
+    op: SonareEngineArticulationRequestMessage['op'],
+    destinationId: number,
+    channel: number,
+  ): Promise<Articulation | number | undefined> {
+    if (this.epoch.closed) {
+      return Promise.reject(releasedHandleError('SonareRealtimeEngineNode'));
+    }
+    const requestId = this.articulationRequestId++;
+    let rejectRequest!: (reason?: unknown) => void;
+    const promise = new Promise<Articulation | number | undefined>((resolve, reject) => {
+      rejectRequest = reject;
+      this.articulationRequests.set(requestId, { resolve, reject });
+    });
+    try {
+      this.postOrdered({
+        type: 'articulationRequest',
+        requestId,
+        op,
+        destinationId,
+        channel,
+      } satisfies SonareEngineArticulationRequestMessage);
+    } catch (error) {
+      this.articulationRequests.delete(requestId);
       rejectRequest(error);
     }
     return promise;

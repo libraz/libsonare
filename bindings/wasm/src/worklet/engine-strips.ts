@@ -1,6 +1,7 @@
 import { panLawCode, panModeCode } from '../codes.js';
 import { ErrorCode } from '../errors.js';
 import type {
+  Articulation,
   BuiltinSynthConfig,
   EqBandInput,
   PanLaw,
@@ -700,6 +701,22 @@ export function setSynthInstrument(
         destinationId,
         patch: { ...patch },
       });
+    },
+  );
+}
+
+export function setArticulation(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  channel: number,
+  articulation: Articulation,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
+  commitSync(
+    ctx,
+    (offline) => offline.setArticulation(destinationId, channel, articulation),
+    () => {
+      ctx.postSync({ type: 'syncArticulation', destinationId, channel, articulation });
     },
   );
 }

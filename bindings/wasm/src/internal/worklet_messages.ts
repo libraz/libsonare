@@ -14,6 +14,7 @@ import type {
   ProjectMidiCcBinding,
   UmpWords,
 } from '../index.js';
+import type { Articulation } from '../instrument_types.js';
 import type { AutomationCurve, SurroundPan } from '../public_types.js';
 import type { ExternalMidiEvent, MidiFxConfig } from '../public_types_engine.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
@@ -155,6 +156,7 @@ export interface TypedWorkletTransport {
       | SonareEngineCaptureResponseMessageInternal
       | SonareEngineTransportResponseMessage
       | SonareEngineInsertGainReductionResponseMessage
+      | SonareEngineArticulationResponseMessage
       | SonareEngineSyncErrorWireMessage,
     transfer?: Transferable[],
   ) => void;
@@ -542,6 +544,13 @@ export interface SonareEngineSyncSynthInstrumentMessage {
   patch: Record<string, unknown>;
 }
 
+export interface SonareEngineSyncArticulationMessage {
+  type: 'syncArticulation';
+  destinationId: number;
+  channel: number;
+  articulation: Articulation;
+}
+
 export interface SonareEngineSyncSf2InstrumentMessage {
   type: 'syncSf2Instrument';
   destinationId: number;
@@ -708,6 +717,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncTrackStripChannelDelaySamplesMessage
   | SonareEngineSyncBuiltinInstrumentMessage
   | SonareEngineSyncSynthInstrumentMessage
+  | SonareEngineSyncArticulationMessage
   | SonareEngineSyncSf2InstrumentMessage
   | SonareEngineSyncLoadSoundFontMessage
   | SonareEngineSyncMidiFxMessage
@@ -804,6 +814,30 @@ export interface SonareEngineInsertGainReductionRequestMessage {
   type: 'insertGainReductionRequest';
   requestId: number;
   targetId: number;
+}
+
+/**
+ * Reads what the worklet's live engine holds for one destination's instrument:
+ * a channel's articulation, or the legato fallback count.
+ */
+export interface SonareEngineArticulationRequestMessage {
+  type: 'articulationRequest';
+  requestId: number;
+  op: 'articulation' | 'legatoFallbackCount';
+  destinationId: number;
+  /** The channel `op: 'articulation'` reads; unused by `'legatoFallbackCount'`. */
+  channel: number;
+}
+
+/** Reply to {@link SonareEngineArticulationRequestMessage}; `value` is present when `ok`. */
+export interface SonareEngineArticulationResponseMessage {
+  type: 'articulationResponse';
+  requestId: number;
+  ok: boolean;
+  value?: Articulation | number;
+  error?: string;
+  /** The failure's class, message and any SonareError code, when `ok` is false. */
+  failure?: SonareFailurePayload;
 }
 
 /** Reply to {@link SonareEngineInsertGainReductionRequestMessage}; `values` is present when `ok`. */

@@ -8,6 +8,7 @@ import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
 import {
   assertKnownProcessorOptions,
+  isEngineArticulationRequestMessage,
   isEngineCaptureRequestMessage,
   isEngineCommandRecord,
   isEngineInsertGainReductionRequestMessage,
@@ -103,6 +104,8 @@ export function registerSonareRealtimeEngineWorkletProcessor(
           bridge.receiveTransportRequest(data);
         } else if (isEngineInsertGainReductionRequestMessage(data)) {
           bridge.receiveInsertGainReductionRequest(data);
+        } else if (isEngineArticulationRequestMessage(data)) {
+          bridge.receiveArticulationRequest(data);
         } else if (
           isRecord(data) &&
           typeof data.type === 'string' &&

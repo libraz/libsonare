@@ -5,6 +5,7 @@ import {
   type OpfsClipStreamOptions,
 } from '../clip_page_streamer.js';
 import type {
+  Articulation,
   BuiltinSynthConfig,
   EngineAutomationPoint,
   EngineBounceOptions,
@@ -1048,6 +1049,37 @@ export class SonareEngine {
   /** Binds a NativeSynth patch; see {@link setBuiltinInstrument} for swap timing. */
   setSynthInstrument(trackId: string | number, patch: SynthPatch = {}): void {
     strips.setSynthInstrument(this.stripContext, trackId, patch);
+  }
+
+  /**
+   * Sets how one MIDI channel (0–15) of the instrument bound to a track's MIDI destination treats
+   * a note-on while another note on that channel is held, on both engines; see
+   * `RealtimeEngine.setArticulation` for the three modes and the refusals, which are the same here.
+   * The setting belongs to the bound instrument: binding another one (for example with
+   * {@link setSynthInstrument}) replaces it with that instrument's own, `'poly'` for a new one.
+   */
+  setArticulation(trackId: string | number, channel: number, articulation: Articulation): void {
+    strips.setArticulation(this.stripContext, trackId, channel, articulation);
+  }
+
+  /**
+   * Reads one channel's articulation from the worklet's live engine — what the bound instrument
+   * holds, which an instrument bound after {@link setArticulation} has replaced.
+   */
+  async articulation(trackId: string | number, channel: number): Promise<Articulation> {
+    return this.realtimeNode.requestArticulation(
+      this.stripContext.resolveTargetId(trackId),
+      channel,
+    );
+  }
+
+  /**
+   * Reads from the worklet's live engine how many legato continuations the bound instrument
+   * refused, so each note started a voice of its own; see `RealtimeEngine.legatoFallbackCount`.
+   * The count belongs to the instrument, so binding another one starts it from zero.
+   */
+  async legatoFallbackCount(trackId: string | number): Promise<number> {
+    return this.realtimeNode.requestLegatoFallbackCount(this.stripContext.resolveTargetId(trackId));
   }
 
   /**

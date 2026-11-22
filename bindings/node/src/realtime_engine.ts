@@ -2375,6 +2375,10 @@ export class RealtimeEngine {
    * destination with no instrument bound throws a `RangeError`; one whose
    * instrument has no articulation of its own throws `NotSupported`, and the
    * two are deliberately different answers.
+   *
+   * The setting belongs to the bound instrument: binding another one to the
+   * destination replaces it with that instrument's own (`'poly'` for a new one)
+   * and starts {@link legatoFallbackCount} from zero.
    */
   setArticulation(destinationId: number, channel: number, articulation: Articulation): void {
     this.native.setArticulation(destinationId, channel, requireName(articulation, 'articulation'));

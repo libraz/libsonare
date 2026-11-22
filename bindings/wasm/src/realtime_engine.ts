@@ -1092,6 +1092,10 @@ export class RealtimeEngine {
    * articulation outside the enum are refused rather than clamped, and so is a
    * destination with no instrument or one whose instrument has no articulation
    * of its own. An ordinal is a `TypeError`.
+   *
+   * The setting belongs to the bound instrument: binding another one to the
+   * destination replaces it with that instrument's own (`'poly'` for a new one)
+   * and starts {@link legatoFallbackCount} from zero.
    */
   setArticulation(destinationId: number, channel: number, articulation: Articulation): void {
     noOrdinal('articulation', articulation);

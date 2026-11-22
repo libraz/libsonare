@@ -3051,6 +3051,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         ],
       },
       syncSf2Instrument: { type: 'syncSf2Instrument', destinationId: 4, config: { gain: 0.5 } },
+      syncArticulation: {
+        type: 'syncArticulation',
+        destinationId: 4,
+        channel: 0,
+        articulation: 'monoLegato',
+      },
       syncSynthInstrument: {
         type: 'syncSynthInstrument',
         destinationId: 4,
@@ -3239,10 +3245,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         // Ordering the engine imposes on the fixture: a MIDI input source has to
         // be selected before an input event is accepted, and both clearing it and
         // closing the bridge have to come after everything depending on them.
+        // An articulation needs the NativeSynth syncSynthInstrument binds.
         // 'destroy' last in particular, since receiveSync returns early once
         // closed and nothing after it would reach applySync.
         const first: Array<SonareEngineSyncMessage['type']> = ['syncMidiInputSource'];
         const last: Array<SonareEngineSyncMessage['type']> = [
+          'syncArticulation',
           'syncClearMidiInputSource',
           'destroy',
         ];
