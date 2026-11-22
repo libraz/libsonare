@@ -29,7 +29,6 @@
 #include "rt/param_smoother.h"
 #include "rt/partitioned_convolver.h"
 #include "rt/processor_base.h"
-#include "rt/processor_chain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/sliding_max.h"
 #include "support/audio_fixtures.h"
@@ -58,15 +57,6 @@ class NoLatencyProcessor : public ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
-};
-
-class FixedLatencyProcessor : public NoLatencyProcessor {
- public:
-  explicit FixedLatencyProcessor(int latency) : latency_(latency) {}
-  int latency_samples() const noexcept override { return latency_; }
-
- private:
-  int latency_ = 0;
 };
 
 }  // namespace
@@ -210,17 +200,6 @@ TEST_CASE("ScopedNoDenormals is constructible as a block-scope guard", "[masteri
   SUCCEED();
 }
 
-TEST_CASE("Processor chain sums reported latency", "[mastering]") {
-  FixedLatencyProcessor first(32);
-  FixedLatencyProcessor second(7);
-  NoLatencyProcessor zero;
-
-  REQUIRE(total_latency_samples({&first, &second, &zero}) == 39);
-  REQUIRE(total_latency_samples_q8({&first, &second, &zero}) == (39 << 8));
-  REQUIRE_THROWS(total_latency_samples({&first, nullptr}));
-  REQUIRE_THROWS(total_latency_samples_q8({&first, nullptr}));
-}
-
 TEST_CASE("Adaa1 falls back to direct nonlinearity for repeated samples", "[mastering]") {
   Adaa1<TanhNonlinearity> adaa;
 
@@ -302,13 +281,30 @@ TEST_CASE("LookaheadBuffer drops expired peak values", "[mastering]") {
   REQUIRE_THAT(buffer.peak(), WithinAbs(0.5f, 0.0001f));
 }
 
+namespace {
+
+std::vector<float> oversample_up(const Oversampler& oversampler, const std::vector<float>& input) {
+  std::vector<float> output(input.size() * static_cast<size_t>(oversampler.factor()));
+  oversampler.upsample_to(input.data(), input.size(), output.data(), output.size());
+  return output;
+}
+
+std::vector<float> oversample_down(const Oversampler& oversampler,
+                                   const std::vector<float>& input) {
+  std::vector<float> output(input.size() / static_cast<size_t>(oversampler.factor()));
+  oversampler.downsample_to(input.data(), input.size(), output.data(), output.size());
+  return output;
+}
+
+}  // namespace
+
 TEST_CASE("Oversampler filters every phase while interpolating intermediate samples",
           "[mastering]") {
   Oversampler oversampler(4);
   std::vector<float> input(64, 0.0f);
   input[32] = 1.0f;
 
-  const auto upsampled = oversampler.upsample(input);
+  const auto upsampled = oversample_up(oversampler, input);
 
   REQUIRE(upsampled.size() == input.size() * 4);
   REQUIRE(std::abs(upsampled[32 * 4]) > 0.9f);
@@ -332,7 +328,7 @@ TEST_CASE("Oversampler round trip preserves a mid-band sine", "[mastering]") {
                                                   static_cast<double>(i) / kSampleRate));
   }
 
-  const auto round_trip = oversampler.downsample(oversampler.upsample(input));
+  const auto round_trip = oversample_down(oversampler, oversample_up(oversampler, input));
   float max_error = 0.0f;
   for (size_t i = kEdge; i < input.size() - kEdge; ++i) {
     max_error = std::max(max_error, std::abs(round_trip[i] - input[i]));
@@ -358,7 +354,7 @@ TEST_CASE("Oversampler round trip is flat to 0.45 fs at every factor", "[masteri
     input[i] = 0.5f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * frequency *
                                                   static_cast<double>(i)));
   }
-  const auto round_trip = oversampler.downsample(oversampler.upsample(input));
+  const auto round_trip = oversample_down(oversampler, oversample_up(oversampler, input));
   const float gain_db = 20.0f * std::log10(rms(round_trip, kEdge) / rms(input, kEdge));
   CAPTURE(gain_db);
   REQUIRE(std::abs(gain_db) <= 0.1f);
@@ -371,8 +367,8 @@ TEST_CASE("Oversampler downsample uses FIR decimation", "[mastering]") {
     low_rate[i] = 0.4f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 250.0 *
                                                      static_cast<double>(i) / 48000.0));
   }
-  const auto upsampled = oversampler.upsample(low_rate);
-  const auto round_trip = oversampler.downsample(upsampled);
+  const auto upsampled = oversample_up(oversampler, low_rate);
+  const auto round_trip = oversample_down(oversampler, upsampled);
 
   REQUIRE(round_trip.size() == low_rate.size());
   REQUIRE(rms(round_trip, 32) > rms(low_rate, 32) * 0.75f);
@@ -381,7 +377,7 @@ TEST_CASE("Oversampler downsample uses FIR decimation", "[mastering]") {
   for (size_t i = 0; i < high_rate_noise.size(); ++i) {
     high_rate_noise[i] = (i % 2 == 0) ? 1.0f : -1.0f;
   }
-  const auto rejected = oversampler.downsample(high_rate_noise);
+  const auto rejected = oversample_down(oversampler, high_rate_noise);
 
   REQUIRE(rms(rejected, 16) < 0.05f);
 }

@@ -30,10 +30,6 @@ class Oversampler {
   int factor() const { return factor_; }
   int latency_samples() const noexcept { return fir_.taps_per_phase / 2; }
 
-  std::vector<float> upsample(const float* input, size_t size) const;
-  std::vector<float> upsample(const std::vector<float>& input) const;
-  std::vector<float> downsample(const float* input, size_t size) const;
-  std::vector<float> downsample(const std::vector<float>& input) const;
   /// @brief Allocation-free upsample into a caller-provided buffer.
   /// @details @p output must hold at least @c size*factor() samples. Lets the
   ///          audio thread reuse preallocated scratch instead of allocating a

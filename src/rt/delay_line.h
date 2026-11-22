@@ -19,7 +19,6 @@ class DelayLine {
   /// line intentionally reserves nothing, so the RT pass-through path carries
   /// no per-lane scratch allocation.
   size_t capacity() const noexcept { return buffer_.capacity(); }
-  size_t reserved_samples() const noexcept { return buffer_.capacity(); }
 
  private:
   std::vector<float> buffer_{};

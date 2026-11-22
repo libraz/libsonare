@@ -32,19 +32,6 @@ void Oversampler::set_factor(int factor) {
   fir_ = build_polyphase(decimation_taps_, factor_);
 }
 
-std::vector<float> Oversampler::upsample(const float* input, size_t size) const {
-  if (size == 0) return {};
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
-
-  std::vector<float> output(size * static_cast<size_t>(factor_));
-  upsample_to(input, size, output.data(), output.size());
-  return output;
-}
-
-std::vector<float> Oversampler::upsample(const std::vector<float>& input) const {
-  return upsample(input.data(), input.size());
-}
-
 void Oversampler::upsample_to(const float* input, size_t size, float* output,
                               size_t output_size) const {
   if (size == 0) return;
@@ -58,17 +45,6 @@ void Oversampler::upsample_to(const float* input, size_t size, float* output,
           interpolate_polyphase_sample(input, size, i, phase, fir_);
     }
   }
-}
-
-std::vector<float> Oversampler::downsample(const float* input, size_t size) const {
-  if (size == 0) return {};
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(size % static_cast<size_t>(factor_) == 0, ErrorCode::InvalidParameter);
-
-  const size_t out_size = size / static_cast<size_t>(factor_);
-  std::vector<float> output(out_size);
-  downsample_to(input, size, output.data(), output.size());
-  return output;
 }
 
 void Oversampler::downsample_to(const float* input, size_t size, float* output,
@@ -187,10 +163,6 @@ void Oversampler::downsample_to_streaming(const float* input, size_t size, float
   std::copy(state->down_scratch.begin() + static_cast<std::ptrdiff_t>(size),
             state->down_scratch.begin() + static_cast<std::ptrdiff_t>(history_size + size),
             state->down_history.begin());
-}
-
-std::vector<float> Oversampler::downsample(const std::vector<float>& input) const {
-  return downsample(input.data(), input.size());
 }
 
 }  // namespace sonare::rt

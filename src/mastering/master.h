@@ -89,6 +89,5 @@
 #include "rt/param_smoother.h"
 #include "rt/partitioned_convolver.h"
 #include "rt/processor_base.h"
-#include "rt/processor_chain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/true_peak_filter.h"
