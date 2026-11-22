@@ -278,7 +278,7 @@ class StereoMonoCompatBand:
     correlation: float
     """Inter-channel correlation in ``[-1, 1]``."""
     side_rms: float
-    """RMS level of the side signal."""
+    """RMS of the band's share of side signal 0.5 * (L - R), as a linear full-scale amplitude."""
 
 
 @dataclass(frozen=True, slots=True)
