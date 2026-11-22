@@ -14,9 +14,9 @@ export interface ProjectVocalEditApplyRequest {
   expectedSourceSampleCount: number;
   /** Canonical source digest as exactly 64 hexadecimal characters. */
   expectedSourceSha256: string;
-  /** Clip length the edit was made against, in PPQ ticks. */
+  /** Clip length the edit was made against, in quarter notes, in (0, 1e12]. */
   expectedClipLengthPpq: number;
-  /** Source offset the edit was made against, in PPQ ticks. */
+  /** Source offset the edit was made against, in quarter notes, in [0, 1e12]. */
   expectedSourceOffsetPpq: number;
   /** Full-source mono render, starting at sample 0 of the source. */
   renderedMono: Float32Array;

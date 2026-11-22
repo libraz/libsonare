@@ -914,22 +914,30 @@ export class Project {
    * `lengthPpq` is outside it. Export and validation close a note still
    * sounding at the clip end with a note-off there, so a note running the full
    * length of the clip is a matched pair.
+   *
+   * @param startPpq Clip start in quarter notes, in [0, 1e12].
+   * @param lengthPpq Clip length in quarter notes, in (0, 1e12].
    */
   addMidiClip(startPpq: number, lengthPpq: number): ProjectMidiClipResult {
     return this.native.addMidiClip(startPpq, lengthPpq);
   }
 
-  /** Split a clip at `splitPpq` (absolute PPQ); returns the new (right-hand) clip id. */
+  /** Split a clip at `splitPpq` (absolute PPQ, in [0, 1e12]); returns the new (right-hand) clip id. */
   splitClip(clipId: number, splitPpq: number): number {
     return this.native.splitClip(clipId, splitPpq);
   }
 
-  /** Trim a clip's start / length (PPQ). */
+  /**
+   * Trim a clip's start / length (PPQ).
+   *
+   * @param newStartPpq New clip start in quarter notes, in [0, 1e12].
+   * @param newLengthPpq New clip length in quarter notes, in (0, 1e12].
+   */
   trimClip(clipId: number, newStartPpq: number, newLengthPpq: number): void {
     this.native.trimClip(clipId, newStartPpq, newLengthPpq);
   }
 
-  /** Move a clip to `newStartPpq`; with `options.trackId` it also moves to that track. */
+  /** Move a clip to `newStartPpq` (in [0, 1e12]); with `options.trackId` it also moves to that track. */
   moveClip(clipId: number, newStartPpq: number, options?: ProjectClipMoveOptions): void {
     const fnName = 'moveClip';
     const record = options === undefined ? {} : requestObject(fnName, options, 'options', true);
@@ -1151,7 +1159,7 @@ export class Project {
   }
 
   /**
-   * Duplicate a clip at `newStartPpq` (same track), copying any MIDI content,
+   * Duplicate a clip at `newStartPpq` (in [0, 1e12]; same track), copying any MIDI content,
    * via an undoable edit; returns the new clip id.
    */
   duplicateClip(clipId: number, newStartPpq: number): number {
@@ -1427,7 +1435,7 @@ export class Project {
   }
 
   /**
-   * Snap a PPQ coordinate to the project grid. `division` is `0` for bars,
+   * Snap a PPQ coordinate, in [0, 1e12], to the project grid. `division` is `0` for bars,
    * `1` for beats, or the number of subdivisions per beat. `strength` is in
    * `[0, 1]` (0 = no snap, 1 = exact grid line).
    */
