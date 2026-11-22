@@ -5,14 +5,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  ErrorCode,
-  isSonareError,
-  PART_RIG_ALL_PARTS,
-  PART_RIG_MODES,
-  Project,
-  RealtimeEngine,
-} from '../src/index.js';
+import { PART_RIG_ALL_PARTS, PART_RIG_MODES, Project, RealtimeEngine } from '../src/index.js';
+import { expectRefusal } from './_helpers';
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The `codeName` of the SonareError a call throws, or a marker when it does not. */
 const codeNameOf = (call: () => unknown): string => {
@@ -98,44 +94,41 @@ describe('part rig on a project', () => {
     using project = new Project();
     const set = (request: object) => () =>
       project.setPartRig({ destinationId: 4, part: 0, mode: 'none', ...request } as never);
+    const refused = (request: object, kind: ErrorConstructor, text: string) => {
+      expectRefusal(
+        set(request),
+        kind,
+        new RegExp(`^Project\\.setPartRig: ${escapeRegExp(text)}$`),
+      );
+    };
     expect(() => set({ mode: 'loud' })()).toThrow(/mode/);
     expect(() => set({ part: 'x' })()).toThrow(/part/);
     expect(() => set({ destinationId: 'x' })()).toThrow(/destinationId/);
-    expect(() => set({ mode: 'chain', inserts: 'nope' })()).toThrow(/inserts/);
-    expect(() => set({ mode: 'chain', inserts: [{ params: {} }] })()).toThrow(/processor/);
-    expect(() =>
-      set({
-        mode: 'chain',
-        inserts: [{ processor: 'saturation.overdrive', params: null }],
-      })(),
-    ).toThrow(/params/);
-    expect(() =>
-      set({
-        mode: 'chain',
-        inserts: [{ processor: 'saturation.overdrive', params: 1 }],
-      })(),
-    ).toThrow(/params/);
-    expect(() =>
-      set({
-        mode: 'chain',
-        inserts: [{ processor: 'saturation.overdrive', params: '{' }],
-      })(),
-    ).toThrow(TypeError);
+    refused({ mode: 'chain', inserts: 'nope' }, TypeError, 'inserts must be an array');
+    refused(
+      { mode: 'chain', inserts: [{ params: {} }] },
+      TypeError,
+      'inserts[0].processor must be given',
+    );
+    for (const params of [null, 1, '{']) {
+      refused(
+        { mode: 'chain', inserts: [{ processor: 'saturation.overdrive', params }] },
+        TypeError,
+        'inserts[0].params must be an object',
+      );
+    }
     expect(set({ part: 16 })).toThrow(RangeError);
-    // Content defects of the rig document are the loader's InvalidFormat, a coded SonareError.
-    const invalidFormat = (request: object) => {
-      let caught: unknown;
-      try {
-        set(request)();
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).not.toBeInstanceOf(RangeError);
-      expect(isSonareError(caught)).toBe(true);
-      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-    };
-    invalidFormat({ mode: 'chain', inserts: [] });
-    invalidFormat({ mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] });
+    // Content defects of the rig inserts are argument refusals, rooted at `inserts`.
+    refused(
+      { mode: 'chain', inserts: [] },
+      RangeError,
+      'inserts must hold 1 to 8 entries for a chain rig',
+    );
+    refused(
+      { mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] },
+      RangeError,
+      'inserts[0].processor must name a processor that can be built',
+    );
     expect(set({ mode: 'none', inserts: chain })).toThrow(RangeError);
     expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
   });

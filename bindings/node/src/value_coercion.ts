@@ -2,7 +2,6 @@ import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
-import { isNonArrayObject } from './internal/value_guards.js';
 import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
@@ -207,25 +206,7 @@ export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string
     throw refuseType('inserts must be an array');
   }
   requireListBudget(inserts, 'inserts');
-  return stringifyWithinBudget(
-    inserts.map((insert, index) => {
-      if (typeof insert !== 'object' || insert === null) {
-        throw refuseType(`inserts[${index}] must be an object`);
-      }
-      if (typeof insert.processor !== 'string') {
-        throw refuseType(`inserts[${index}].processor must be a string`);
-      }
-      const { params } = insert;
-      if (params === undefined) {
-        return { processor: insert.processor, params: {} };
-      }
-      if (!isNonArrayObject(params)) {
-        throw refuseType(`inserts[${index}].params must be an object`);
-      }
-      return { processor: insert.processor, params };
-    }),
-    'inserts',
-  );
+  return stringifyWithinBudget(inserts, 'inserts');
 }
 
 /** A part-rig call resolved to the native argument list; `mode` is unset for a key. */

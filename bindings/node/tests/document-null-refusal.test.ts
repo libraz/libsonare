@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorCode, PlaybackRenderer, Project } from '../src/index.js';
+import { expectRefusal } from './_helpers';
 
-// A document's content is refused by the core as InvalidFormat; the facade only
+// A MIDI-FX config's wrong-typed field is a plain TypeError from the core; the facade only
 // serializes it, so a value of the wrong kind must arrive and be refused there.
+// Other document content (the playback renderer config below) is still InvalidFormat.
 const WRONG_KINDS: [string, unknown][] = [
   ['a string', '12'],
   ['a boolean', true],
@@ -11,18 +13,15 @@ const WRONG_KINDS: [string, unknown][] = [
 ];
 
 describe('document values of the wrong kind', () => {
-  it.each(WRONG_KINDS)('refuses %s on a MIDI-FX number field as InvalidFormat', (_kind, value) => {
+  it.each(WRONG_KINDS)('refuses %s on a MIDI-FX number field as a TypeError', (_kind, value) => {
     const project = new Project();
     try {
       const { clipId } = project.addMidiClip(0, 4);
       for (const key of ['transposeSemitones', 'velocityScale', 'seed', 'quantizePpq']) {
-        expect(() =>
-          project.previewMidiFxCount({ clipId, config: { [key]: value } as never }),
-        ).toThrow(
-          expect.objectContaining({
-            code: ErrorCode.InvalidFormat,
-            message: expect.stringContaining(`${key} must be a number`),
-          }),
+        expectRefusal(
+          () => project.previewMidiFxCount({ clipId, config: { [key]: value } as never }),
+          TypeError,
+          new RegExp(`^Project\\.previewMidiFxCount: config\\.${key} must be a number$`),
         );
       }
     } finally {

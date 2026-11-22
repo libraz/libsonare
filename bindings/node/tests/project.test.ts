@@ -33,7 +33,16 @@ import {
   projectAbiVersion,
 } from '../src/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
-import { unknownKeyError } from './_helpers.js';
+import { expectRefusal, unknownKeyError } from './_helpers.js';
+
+/** Asserts the empty-chord refusal a MIDI-FX config gets at `entry`. */
+const expectEmptyChord = (run: () => unknown, entry: string): void => {
+  expectRefusal(
+    run,
+    RangeError,
+    new RegExp(`^Project\\.${entry}: config\\.chordIntervals must hold 1 to 8 intervals$`),
+  );
+};
 
 /** A byte view for subsequence search and ASCII reads on an exported file. */
 function bytes(data: Uint8Array): Buffer {
@@ -829,24 +838,23 @@ describe('Project native binding', () => {
     ).toThrow(TypeError);
 
     // Errors travel the same path with and without the flag.
-    const emptyChord = (entry: string) =>
-      expect.objectContaining({
-        code: ErrorCode.InvalidFormat,
-        message: `Project.${entry}: chordIntervals must hold 1 to 8 intervals`,
-      });
-    expect(() => bare.bakeMidiFx({ clipId: bareClip, config: { chordIntervals: [] } })).toThrow(
-      emptyChord('bakeMidiFx'),
+    expectEmptyChord(
+      () => bare.bakeMidiFx({ clipId: bareClip, config: { chordIntervals: [] } }),
+      'bakeMidiFx',
     );
-    expect(() =>
-      request.bakeMidiFx({
-        clipId: requestClip,
-        config: { chordIntervals: [] },
-        withSourceIndex: true,
-      }),
-    ).toThrow(emptyChord('bakeMidiFx'));
-    expect(() =>
-      request.previewMidiFxCount({ clipId: requestClip, config: { chordIntervals: [] } }),
-    ).toThrow(emptyChord('previewMidiFxCount'));
+    expectEmptyChord(
+      () =>
+        request.bakeMidiFx({
+          clipId: requestClip,
+          config: { chordIntervals: [] },
+          withSourceIndex: true,
+        }),
+      'bakeMidiFx',
+    );
+    expectEmptyChord(
+      () => request.previewMidiFxCount({ clipId: requestClip, config: { chordIntervals: [] } }),
+      'previewMidiFxCount',
+    );
 
     request.destroy();
     bare.destroy();
@@ -1805,24 +1813,25 @@ describe('MIDI message module functions', () => {
     ).toBe(2);
     const bad = (config: unknown) =>
       project.previewMidiFxCount({ clipId, config: config as never });
-    expect(() => bad('{}')).toThrow(TypeError);
-    expect(() => bad(null)).toThrow(TypeError);
-    expect(() => bad({ transposeSemitones: '12' })).toThrow(/transposeSemitones/);
-    for (const config of [
-      { transposeSemitones: '12' },
-      { chordIntervals: [0, 'x'] },
-      { velocityScale: Number.NaN },
-      { transpose_semitones: 1 },
-      { nope: 1 },
-    ]) {
-      expect(() => bad(config)).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+    const entry = 'Project\\.previewMidiFxCount: ';
+    expectRefusal(() => bad('{}'), TypeError, new RegExp(`^${entry}config must be an object$`));
+    expectRefusal(() => bad(null), TypeError, new RegExp(`^${entry}config must be an object$`));
+    const typeRefusals: [unknown, string][] = [
+      [{ transposeSemitones: '12' }, 'config\\.transposeSemitones must be a number'],
+      [{ chordIntervals: [0, 'x'] }, 'config\\.chordIntervals\\[1\\] must be a number'],
+      [{ velocityScale: Number.NaN }, 'config\\.velocityScale must be a number'],
+      [
+        { transpose_semitones: 1 },
+        'unknown key config\\.transpose_semitones \\(renamed to config\\.transposeSemitones\\)',
+      ],
+      [{ nope: 1 }, 'unknown key config\\.nope'],
+    ];
+    for (const [config, text] of typeRefusals) {
+      expectRefusal(() => bad(config), TypeError, new RegExp(`^${entry}${text}$`));
     }
-    expect(() => bad({ transpose_semitones: 1 })).toThrow(/write transposeSemitones/);
-    expect(() => project.previewMidiFxCount({ clipId, config: { chordIntervals: [] } })).toThrow(
-      expect.objectContaining({
-        code: ErrorCode.InvalidFormat,
-        message: 'Project.previewMidiFxCount: chordIntervals must hold 1 to 8 intervals',
-      }),
+    expectEmptyChord(
+      () => project.previewMidiFxCount({ clipId, config: { chordIntervals: [] } }),
+      'previewMidiFxCount',
     );
     project.destroy();
   });
