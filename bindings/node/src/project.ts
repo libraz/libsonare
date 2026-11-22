@@ -678,7 +678,7 @@ export class Project {
    * Replace the project's mixer scene from scene JSON (see {@link Mixer.fromJson}).
    *
    * @throws SonareError `InvalidFormat` naming the first key the scene reader does not
-   *   recognise (e.g. `unknown scene key 'strips[2].faderDB'`; `$`- and `x-`-prefixed keys are
+   *   recognise (e.g. `unknown key strips[2].faderDB`; `$`- and `x-`-prefixed keys are
    *   exempt); the project's scene is left unchanged.
    */
   setMixerSceneJson(sceneJson: string): void {
