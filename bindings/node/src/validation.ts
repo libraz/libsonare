@@ -410,6 +410,16 @@ export function assertExactInteger(
   }
 }
 
+/** The largest timeline position the engine and project accept, in quarter notes. */
+const MAX_PUBLIC_PPQ = 1e12;
+
+/** Refuses an event ppq that is not finite and inside the public timeline. */
+export function assertEventPpq(ppq: number): void {
+  if (!(Number.isFinite(ppq) && ppq >= 0 && ppq <= MAX_PUBLIC_PPQ)) {
+    throw refuse(`ppq must be finite and in [0, 1e12]`);
+  }
+}
+
 export function midi1Event(
   ppq: number,
   group: number,
@@ -418,7 +428,7 @@ export function midi1Event(
   data1: number,
   data2 = 0,
 ): ProjectMidiEvent {
-  assertNonNegativeScalar(ppq, 'ppq');
+  assertEventPpq(ppq);
   const g = assertNibble(group, 'group');
   const ch = assertNibble(channel, 'channel');
   const d1 = assertU7(data1, 'data1');

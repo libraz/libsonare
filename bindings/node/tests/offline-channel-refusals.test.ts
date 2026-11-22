@@ -119,7 +119,7 @@ const CASES: Case[] = [
     prepared: 64,
     label: 'freeze startPpq',
     run: freeze({ startPpq: -1 }),
-    refusal: 'startPpq must be finite and at least 0',
+    refusal: 'startPpq must be finite and in [0, 1e12]',
   },
   {
     prepared: 64,

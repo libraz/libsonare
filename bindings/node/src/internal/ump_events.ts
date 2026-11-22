@@ -1,6 +1,5 @@
 import type { ProjectMidiEvent } from '../types.js';
-import { assertBoundedInteger, assertNibble } from '../validation.js';
-import { refuse } from './entry.js';
+import { assertBoundedInteger, assertEventPpq, assertNibble } from '../validation.js';
 
 const MIDI2_U16_MAX = 0xffff;
 const MIDI2_U32_MAX = 0xffffffff;
@@ -17,9 +16,7 @@ export function midi2Event(
   byte3: number,
   word1: number,
 ): ProjectMidiEvent {
-  if (!Number.isFinite(ppq) || ppq < 0) {
-    throw refuse(`ppq must be finite and at least 0`);
-  }
+  assertEventPpq(ppq);
   const g = assertNibble(group, 'group');
   const ch = assertNibble(channel, 'channel');
   const word0 =
