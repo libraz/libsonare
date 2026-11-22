@@ -196,15 +196,15 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   ids.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {
     val marker = markers[i];
-    const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
-    sonare::util::check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq,
-                                  ("markers[" + std::to_string(i) + "].ppq").c_str());
     const std::string id_key = "markers[" + std::to_string(i) + "].id";
     const uint32_t id = domainNumberFromVal<uint32_t>(objectProperty(marker, "id"), id_key.c_str(),
                                                       sonare_c_detail::kEngineMarkerIdDomain);
     if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
-      throw WasmRangeError("marker ids must be unique");
+      sonare::util::check::refuse(id_key.c_str(), "must be unique across markers");
     }
+    const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
+    sonare::util::check::in_range(ppq, 0.0, sonare::transport::kMaxPublicPpq,
+                                  ("markers[" + std::to_string(i) + "].ppq").c_str());
     ids.push_back(id);
     staged_strings.push_back(stringProperty(marker, "name", ""));
     prepared.push_back({ppq, id, wasmCString(staged_strings.back(), "name"),

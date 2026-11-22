@@ -1363,7 +1363,7 @@ describe('v1.2 feature additions (WASM)', () => {
             ]),
           RangeError,
         ).message,
-      ).toBe('RealtimeEngine.setMarkers: marker ids must be unique');
+      ).toBe('RealtimeEngine.setMarkers: markers[1].id must be unique across markers');
       expect(engine.markers()).toHaveLength(2);
       expect(engine.marker(11).name).toBe('intro');
       engine.destroy();

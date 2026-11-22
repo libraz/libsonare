@@ -175,4 +175,17 @@ describe('setMarkers refuses a marker id outside the uint32 ids from 1', () => {
       );
     });
   });
+
+  it('refuses a repeated id before reading that marker position', () => {
+    withEngine((engine) => {
+      expect(() =>
+        engine.setMarkers([
+          { id: 7, ppq: 0 },
+          { id: 7, ppq: -1 },
+        ]),
+      ).toThrow(
+        new RangeError('RealtimeEngine.setMarkers: markers[1].id must be unique across markers'),
+      );
+    });
+  });
 });
