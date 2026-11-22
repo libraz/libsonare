@@ -7,7 +7,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import * as api from '../src/index.js';
 import { Mixer, Project, RealtimeEngine } from '../src/index.js';
+import {
+  ENGINE_ROWS,
+  FACADE_ROWS,
+  MIXER_ROWS,
+  PROJECT_ROWS,
+  type Row,
+} from './_list_budget_rows.js';
 
 const OVER_BUDGET = 64 * 1024 * 1024 + 1;
 
@@ -39,8 +47,6 @@ function hugeList(): HugeList {
   return { list: list as never, reads: () => reads };
 }
 
-type Row<H> = readonly [name: string, subject: string, call: (handle: H, list: never) => void];
-
 function expectRefused<H>(make: () => H, destroy: (handle: H) => void, row: Row<H>): void {
   const [, subject, call] = row;
   const { list, reads } = hugeList();
@@ -53,79 +59,6 @@ function expectRefused<H>(make: () => H, destroy: (handle: H) => void, row: Row<
     destroy(handle);
   }
 }
-
-const ENGINE_ROWS: ReadonlyArray<Row<RealtimeEngine>> = [
-  ['setMarkers', 'markers', (e, l) => e.setMarkers(l)],
-  ['setAutomationLane', 'points', (e, l) => e.setAutomationLane(1, l)],
-  ['setClips', 'clips', (e, l) => e.setClips(l)],
-  ['setTrackLanes', 'lanes', (e, l) => e.setTrackLanes(l)],
-  ['setTrackLanes sends', 'lanes[0].sends', (e, l) => e.setTrackLanes([{ trackId: 1, sends: l }])],
-  ['setTrackSends', 'sends', (e, l) => e.setTrackSends(1, l)],
-  ['setTrackBuses', 'buses', (e, l) => e.setTrackBuses(l)],
-  ['setTrackBuses sends', 'buses[0].sends', (e, l) => e.setTrackBuses([{ busId: 1, sends: l }])],
-  ['setStrip sends', 'strip.sends', (e, l) => e.setStrip(1, { sends: l } as never)],
-  ['setStrip inserts', 'strip', (e, l) => e.setStrip(1, { inserts: l } as never)],
-  ['setBusStrip', 'bus', (e, l) => e.setBusStrip(1, { inserts: l } as never)],
-  ['setStripEqBand', 'band', (e, l) => e.setStripEqBand(1, 0, { gains: l } as never)],
-  ['setGraph nodes', 'nodes', (e, l) => e.setGraph({ nodes: l, connections: [] } as never)],
-  ['setGraph connections', 'connections', (e, l) => e.setGraph({ connections: l } as never)],
-  [
-    'setGraph parameterBindings',
-    'parameterBindings',
-    (e, l) => e.setGraph({ parameterBindings: l } as never),
-  ],
-  ['renderOffline', 'channels', (e, l) => e.renderOffline({ channels: l } as never)],
-  ['setTempoSegments', 'segments', (e, l) => e.setTempoSegments(l)],
-  ['setTimeSignatureSegments', 'segments', (e, l) => e.setTimeSignatureSegments(l)],
-  ['setSynthInstrument', 'modRoutings', (e, l) => e.setSynthInstrument(0, { modRoutings: l })],
-  [
-    'setPartRig',
-    'inserts',
-    (e, l) => e.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: l }),
-  ],
-  ['setMidiFx', 'config', (e, l) => e.setMidiFx(0, { chordIntervals: l })],
-  ['setMidiClips', 'clips', (e, l) => e.setMidiClips(l)],
-  ['pushMidiUmp', 'words', (e, l) => e.pushMidiUmp(0, l)],
-  ['pushMidiInputUmp', 'words', (e, l) => e.pushMidiInputUmp(l)],
-];
-
-const PROJECT_ROWS: ReadonlyArray<Row<Project>> = [
-  ['setClipTakes', 'takes', (p, l) => p.setClipTakes(1, l)],
-  ['setClipCompSegments', 'segments', (p, l) => p.setClipCompSegments(1, l)],
-  ['setMidiEvents', 'events', (p, l) => p.setMidiEvents(1, l)],
-  ['annotateKeys', 'keys', (p, l) => p.annotateKeys(l)],
-  ['annotateChords', 'chords', (p, l) => p.annotateChords(l)],
-  [
-    'setPartRig',
-    'inserts',
-    (p, l) => p.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: l }),
-  ],
-  ['setTempoSegments', 'segments', (p, l) => p.setTempoSegments(l)],
-  ['setTimeSignatures', 'segments', (p, l) => p.setTimeSignatures(l)],
-  ['setWarpMap', 'anchors', (p, l) => p.setWarpMap({ id: 1, anchors: l })],
-  [
-    'addClip channels',
-    'channels',
-    (p, l) => p.addClip({ trackId: 1, channels: l, sampleRate: 48000 } as never),
-  ],
-  ['importExternalStems', 'stems', (p, l) => p.importExternalStems({ stems: l } as never)],
-  [
-    'bounce builtinInstruments',
-    'builtinInstruments',
-    (p, l) => void p.bounce({ builtinInstruments: l }),
-  ],
-  ['bounce instruments', 'instruments', (p, l) => void p.bounce({ instruments: l })],
-  [
-    'addAutomationLane',
-    'points',
-    (p, l) => p.addAutomationLane(1, { targetParamId: 1, points: l } as never),
-  ],
-];
-
-const MIXER_ROWS: ReadonlyArray<Row<Mixer>> = [
-  ['addVcaGroup', 'members', (m, l) => m.addVcaGroup('v', 0, l)],
-  ['setVcaGroupMembers', 'members', (m, l) => m.setVcaGroupMembers('v', l)],
-];
 
 describe('facades refuse an oversized caller list before walking it', () => {
   const makeEngine = () => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
@@ -169,4 +102,38 @@ describe('facades refuse an oversized caller list before walking it', () => {
       engine.destroy();
     }
   });
+});
+
+/** A real array whose length is past the budget and whose first entry throws and counts when read. */
+function sparseHugeList(): HugeList {
+  let reads = 0;
+  const list: unknown[] = [];
+  list.length = OVER_BUDGET;
+  Object.defineProperty(list, 0, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      reads += 1;
+      throw new Error('entry read');
+    },
+  });
+  return { list: list as never, reads: () => reads };
+}
+
+describe('callables outside the handle tables refuse an oversized sparse list before walking it', () => {
+  it.each(FACADE_ROWS.map((row) => [row.callable, row.message, row] as const))(
+    '%s: %s',
+    async (_callable, message, row) => {
+      const { list, reads } = sparseHugeList();
+      let caught: unknown;
+      try {
+        await row.run(api, list);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(RangeError);
+      expect((caught as RangeError).message).toBe(message);
+      expect(reads()).toBe(0);
+    },
+  );
 });
