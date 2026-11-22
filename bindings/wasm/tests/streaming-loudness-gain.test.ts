@@ -89,13 +89,25 @@ describe('streamingLoudnessGain (WASM)', () => {
       maxBlockSize: 512,
       loudnessStaticGainDb: 0,
     });
+    const lifted = new StreamingMasteringChain({
+      ...STAGED,
+      sampleRate: SR,
+      numChannels: 1,
+      maxBlockSize: 512,
+      loudnessStaticGainDb: 6,
+    });
     try {
-      expect(Array.from(fromSilence.processMono(block))).toEqual(
-        Array.from(unity.processMono(block)),
+      const reference = Array.from(unity.processMono(block.slice()));
+      expect(Array.from(fromSilence.processMono(block.slice()))).toEqual(reference);
+      // The gain is read: 6 dB moves the same block.
+      const moved = Array.from(lifted.processMono(block.slice()));
+      expect(Math.max(...moved.map((value, i) => Math.abs(value - reference[i])))).toBeGreaterThan(
+        0.01,
       );
     } finally {
       fromSilence.destroy();
       unity.destroy();
+      lifted.destroy();
     }
   });
 
