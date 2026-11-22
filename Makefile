@@ -25,6 +25,7 @@ GOLDEN_BUILD_DIR := build-golden
 ACCURACY_REPORT_JSON ?= $(CURDIR)/build-optional-fixtures/accuracy-report.json
 INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
 RYE ?= rye
+PY_RUN := $(RYE) run --pyproject bindings/python/pyproject.toml
 # librosa build test-librosa-live checks against; defaults to upstream main.
 # Point it at a local checkout to test unreleased changes offline.
 LIBROSA_SOURCE ?= git+https://github.com/librosa/librosa.git@main
@@ -42,12 +43,15 @@ UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 PYTHON_PKG_DIR := bindings/python/src/libsonare
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-SHARED_LIB := $(BUILD_DIR)/lib/libsonare.dylib
-PYTHON_SHARED_LIB := $(PYTHON_PKG_DIR)/libsonare.dylib
+SHARED_LIB_EXT := dylib
+else
+SHARED_LIB_EXT := so
+endif
+SHARED_LIB := $(BUILD_DIR)/lib/libsonare.$(SHARED_LIB_EXT)
+PYTHON_SHARED_LIB := $(PYTHON_PKG_DIR)/libsonare.$(SHARED_LIB_EXT)
+ifeq ($(UNAME_S),Darwin)
 HARDENING_ASAN_OPTIONS := strict_string_checks=1
 else
-SHARED_LIB := $(BUILD_DIR)/lib/libsonare.so
-PYTHON_SHARED_LIB := $(PYTHON_PKG_DIR)/libsonare.so
 HARDENING_ASAN_OPTIONS := detect_leaks=1:strict_string_checks=1
 endif
 
@@ -129,7 +133,7 @@ test: test-cxx
 # clone in about half a minute. Invoked directly, this reports a missing rye as
 # the error it is; `test` is the target that treats it as a skip.
 test-voicematch:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch tools/audition tools/playback -q
+	$(PY_RUN) python -m pytest tools/voicematch tools/audition tools/playback -q
 
 # The listening page in a browser against a real serve.py over synthetic sets,
 # with the scratch root moved to a temp directory so no listener's log is read
@@ -222,8 +226,8 @@ format:
 	cd bindings/node && yarn lint:fix
 	cd tools/audition/web && yarn lint:fix
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
-	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format
-	git ls-files -z -- '*.py' '*.pyi' '*pyproject.toml' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix
+	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff format
+	git ls-files -z -- '*.py' '*.pyi' '*pyproject.toml' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check --fix
 	$(MAKE) lint
 
 # `test:types` type-checks the Node binding's tests against src (biome does not
@@ -400,7 +404,7 @@ lint:
 	cd tools/audition/web && yarn lint
 	cd tools/audition/web && yarn typecheck
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check .
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check .
 # The Python half of the type check that `yarn test:types` above already does for
 # Node. CI has run it all along and nothing local did, so a stub that stopped
 # describing its module -- invisible to ruff, to every test, and to the runtime
@@ -458,7 +462,7 @@ lint:
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror
 	$(MAKE) lint
-	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format --check
+	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff format --check
 
 # Binding targets
 build-shared:
@@ -486,11 +490,7 @@ capability-catalog-check: build-shared
 # and outside the tree: `build-tuning/` is the shared fit baseline, written only
 # by `make baseline`, so a lander's registry run never relinks what others fit.
 BANK_BUILD_DIR ?= $(patsubst %/,%,$(or $(TMPDIR),/tmp))/libsonare-bank-build
-ifeq ($(UNAME_S),Darwin)
-BANK_SHARED_LIB := $(abspath $(BANK_BUILD_DIR))/lib/libsonare.dylib
-else
-BANK_SHARED_LIB := $(abspath $(BANK_BUILD_DIR))/lib/libsonare.so
-endif
+BANK_SHARED_LIB := $(abspath $(BANK_BUILD_DIR))/lib/libsonare.$(SHARED_LIB_EXT)
 
 FIELD_COVERAGE := $(CURDIR)/tools/voicematch/field-coverage.json
 
@@ -502,11 +502,7 @@ build-bank-shared:
 # each use rebuilds only what HEAD changed; the working tree never reaches it.
 HEAD_MIRROR ?= $(patsubst %/,%,$(or $(TMPDIR),/tmp))/libsonare-head-src
 HEAD_BUILD_DIR ?= $(patsubst %/,%,$(or $(TMPDIR),/tmp))/libsonare-head-build
-ifeq ($(UNAME_S),Darwin)
-HEAD_SHARED_LIB := $(abspath $(HEAD_BUILD_DIR))/lib/libsonare.dylib
-else
-HEAD_SHARED_LIB := $(abspath $(HEAD_BUILD_DIR))/lib/libsonare.so
-endif
+HEAD_SHARED_LIB := $(abspath $(HEAD_BUILD_DIR))/lib/libsonare.$(SHARED_LIB_EXT)
 
 build-head-shared:
 	sh tools/head_mirror.sh $(HEAD_MIRROR)
@@ -516,17 +512,17 @@ build-head-shared:
 # The shared fit baseline every fit reads: the HEAD build published into
 # build-tuning/lib, with the hash it was built from recorded beside it.
 baseline: build-head-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/baseline_record.py \
+	$(PY_RUN) python tools/voicematch/baseline_record.py \
 		$(HEAD_BUILD_DIR) $(HEAD_MIRROR) build-tuning
 
 # NOTE is what the bump is recorded as; a run without one records "unrecorded",
 # which the version can never recover.
 bank-versions: build-bank-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/generate_bank_versions.py \
+	$(PY_RUN) python tools/generate_bank_versions.py \
 		--library $(BANK_SHARED_LIB) --note "$(NOTE)"
 
 bank-versions-check: build-bank-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/generate_bank_versions.py \
+	$(PY_RUN) python tools/generate_bank_versions.py \
 		--library $(BANK_SHARED_LIB) --check
 
 # Render the per-binding processor-name declarations from the tracked catalog,
@@ -547,13 +543,13 @@ build-wasm-binding:
 test-python: build-shared
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
 # The refusal-subject plugin fails the run when a refusal names no parameter of its entry.
-	PYTHONPATH=tests/conformance $(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v -p refusal_subject_plugin
+	PYTHONPATH=tests/conformance $(PY_RUN) python -m pytest bindings/python/tests/ -v -p refusal_subject_plugin
 
 # Tests marked @pytest.mark.slow are excluded by the default addopts
 # (-m "not slow"); the explicit -m here overrides that and runs just them.
 test-python-slow: build-shared
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
-	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v -m slow
+	$(PY_RUN) python -m pytest bindings/python/tests/ -v -m slow
 
 test-node: build-node
 	cd bindings/node && yarn test
@@ -1107,7 +1103,7 @@ test-gm-cross-surface:
 		fi; \
 	done
 	SONARE_LIB_PATH=$(PYTHON_SHARED_LIB) PYTHONPATH=$(CURDIR)/bindings/python/src \
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tests/conformance/check_gm_project_surfaces.py
+	$(PY_RUN) python tests/conformance/check_gm_project_surfaces.py
 
 # Opt-in mixing-assistant scene acceptance across the C, Python, Node, and WASM
 # public surfaces: one synthetic multi-track fixture in, one scene JSON out of
@@ -1134,18 +1130,18 @@ test-mix-assistant-cross-surface:
 		fi; \
 	done
 	SONARE_LIB_PATH=$(PYTHON_SHARED_LIB) PYTHONPATH=$(CURDIR)/bindings/python/src \
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tests/conformance/check_mix_assistant_surfaces.py
+	$(PY_RUN) python tests/conformance/check_mix_assistant_surfaces.py
 
 # Regenerate the authoritative C-ABI struct layout snapshot. Compiles a tiny
 # probe (needs a C++ compiler, not a full build) that reports sizeof/alignof/
 # offsetof straight from the headers. The JSON is tracked; the Python guard
 # (tests/test_abi_layout.py) and the WASM abi-layout vitest compare against it.
 abi-layout:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/abi/gen_abi_layout.py
+	$(PY_RUN) python tools/abi/gen_abi_layout.py
 
 # Fail if the committed snapshot is stale (regenerate + git-diff style check).
 abi-layout-check:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/abi/gen_abi_layout.py --check
+	$(PY_RUN) python tools/abi/gen_abi_layout.py --check
 
 # The named numeric domains the C entries check against, printed from
 # src/c_api/numeric_domain_rows.h by a header-only dump (no library link).
@@ -1192,17 +1188,17 @@ check-abi-bumps:
 # decide where to start, which a target that failed on "there is work to do"
 # could not be used for.
 voice-status:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py
+	@$(PY_RUN) python tools/voicematch/status.py
 
 # The same, every voice rather than only those past the oracle step.
 voice-status-all:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py --all
+	@$(PY_RUN) python tools/voicematch/status.py --all
 
 # The readiness of the four instruments a capture exists for, in the detail the
 # bank view does not carry: which profile columns back which dimension, which
 # phrase takes have an archived reference.
 voice-readiness:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/profile.py \
+	@$(PY_RUN) python tools/voicematch/profile.py \
 		status --all
 
 # What a gate does NOT say. Its bounds come from whatever the voice measured on
@@ -1214,12 +1210,12 @@ voice-readiness:
 # that failed on "a gate is loose" could not be read to decide which to
 # re-record. Deliberately outside `ci-local` and outside CI.
 voicematch-substitution:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+	@$(PY_RUN) python \
 		tools/voicematch/substitution.py
 
 # The same over every grid two or more captures share, not only the largest.
 voicematch-substitution-all:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+	@$(PY_RUN) python \
 		tools/voicematch/substitution.py --all-grids
 
 # Whether a repeated note comes back as the same waveform, one program per
@@ -1227,7 +1223,7 @@ voicematch-substitution-all:
 # when it is not. Exits 0 whatever it finds, and stays out of CI: a voice that
 # repeats itself is a voicing finding rather than a build failure.
 voicematch-determinism:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+	@$(PY_RUN) python \
 		tools/voicematch/determinism_check.py
 
 # Re-measures every committed reference from its cached corpus and diffs the
@@ -1241,7 +1237,7 @@ voicematch-determinism:
 # every measurement goes to a scratch `--profile` path. Exits 0 whatever it
 # finds, on the same terms as `voicematch-substitution`, and stays out of CI.
 voicematch-reextract-check:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+	@$(PY_RUN) python \
 		tools/voicematch/reextract_check.py
 
 # Whether a voice still sounds at the end of a held note, and for as long as
@@ -1256,7 +1252,7 @@ voicematch-reextract-check:
 # the model, writes nothing, exits 0 whatever it finds, and stays out of CI on
 # the same terms as `voicematch-substitution`.
 voicematch-sustain-check:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+	@$(PY_RUN) python \
 		tools/voicematch/sustain_check.py
 
 # Whether the loss charges for a change a listener would name. Perturbs a
@@ -1272,7 +1268,7 @@ voicematch-sustain-check:
 # renders nothing, builds nothing, exits 0 whatever it finds, and stays out of
 # CI on the same terms as `voicematch-substitution`.
 voicematch-loss-sensitivity:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+	@$(PY_RUN) python \
 		tools/voicematch/loss_sensitivity.py
 
 # What happened to every cell the loss aggregates, over the rendered probes in
@@ -1285,7 +1281,7 @@ voicematch-loss-sensitivity:
 # CI for the reason `voicematch-loss-sensitivity` does: a gate built on this
 # would be a gate on how short the probes happen to be.
 voicematch-loss-cells:
-	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+	@$(PY_RUN) python \
 		tools/voicematch/loss_cells.py
 
 # Rebuild the corpus of every capture whose untracked overlay names a SoundFont.
@@ -1307,7 +1303,7 @@ voicematch-sf2-corpus:
 	fi; \
 	for id in $$ids; do \
 		echo "== $$id"; \
-		$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		$(PY_RUN) python \
 			tools/voicematch/import_sf2.py "tools/voicematch/capture/$$id.json" || true; \
 	done
 
@@ -1315,18 +1311,18 @@ voicematch-sf2-corpus:
 # each patch is reported by the library rather than parsed out of it; built from
 # the HEAD mirror, since the committed view describes HEAD and not a working tree.
 voice-status-refresh: build-head-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py \
+	$(PY_RUN) python tools/voicematch/status.py \
 		--write --lib $(HEAD_SHARED_LIB)
 
 voice-status-check: build-head-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py \
+	$(PY_RUN) python tools/voicematch/status.py \
 		--check --lib $(HEAD_SHARED_LIB)
 
 # A fit spec outlives the mechanism it was written for. Nothing asks whether its
 # knobs still exist until a run resolves the corpus and then dies on the first
 # dead name, so this asks first, against the same catalogue the fit validates on.
 spec-check: build-bank-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/check_specs.py \
+	$(PY_RUN) python tools/voicematch/check_specs.py \
 		--lib $(BANK_SHARED_LIB)
 
 # The other half of the same question: `spec-check` asks whether a knob exists,
@@ -1334,7 +1330,7 @@ spec-check: build-bank-shared
 # minutes rather than seconds and stays out of `ci-local`; the answer needs no
 # reference, which is why it covers every spec instead of the few with an oracle.
 spec-liveness: build-bank-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/liveness.py \
+	$(PY_RUN) python tools/voicematch/liveness.py \
 		--lib $(BANK_SHARED_LIB)
 
 # The same probe pointed at the whole bank instead of the 17 specs: per patch,
@@ -1344,7 +1340,7 @@ spec-liveness: build-bank-shared
 # Informational rather than a gate -- a patch is free not to use a field its
 # engine offers, so it always exits 0.
 spec-liveness-census: build-bank-shared
-	$(RYE) run --pyproject bindings/python/pyproject.toml python -u tools/voicematch/liveness.py \
+	$(PY_RUN) python -u tools/voicematch/liveness.py \
 		--census --drums --lib $(BANK_SHARED_LIB) --out $(FIELD_COVERAGE)
 
 # The census is committed, so a plain clone can read it without the hour. What
@@ -1352,7 +1348,7 @@ spec-liveness-census: build-bank-shared
 # a family rebalanced moves that, and a census taken against an older one
 # describes a bank nobody runs. This compares the two and needs no library.
 spec-liveness-census-check:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/liveness.py \
+	$(PY_RUN) python tools/voicematch/liveness.py \
 		--census-check $(FIELD_COVERAGE)
 
 # Re-cut the committed Bach excerpts a musical take plays. Needs the sibling
@@ -1361,10 +1357,10 @@ spec-liveness-census-check:
 # `ci-local`: no CI checkout has the corpus, so a check there would fail on an
 # absent sibling rather than on a stale excerpt.
 excerpts:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/extract_excerpt.py
+	$(PY_RUN) python tools/voicematch/extract_excerpt.py
 
 excerpts-check:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/extract_excerpt.py --check
+	$(PY_RUN) python tools/voicematch/extract_excerpt.py --check
 
 # Hold every calibrated GM fallback voice to the bounds recorded beside its
 # reference profile. One target rather than one per instrument: a gate exists
@@ -1384,11 +1380,7 @@ excerpts-check:
 # make. Its own build dir, so it neither retargets the Debug `build/` that ctest
 # reads nor disturbs the shared `build-python-shared/`.
 VOICE_BUILD_DIR ?= build-autofit
-ifeq ($(UNAME_S),Darwin)
-VOICE_SHARED_LIB := $(CURDIR)/$(VOICE_BUILD_DIR)/lib/libsonare.dylib
-else
-VOICE_SHARED_LIB := $(CURDIR)/$(VOICE_BUILD_DIR)/lib/libsonare.so
-endif
+VOICE_SHARED_LIB := $(CURDIR)/$(VOICE_BUILD_DIR)/lib/libsonare.$(SHARED_LIB_EXT)
 voice-gate:
 	$(CMAKE) -S . -B $(VOICE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON
 	$(CMAKE) --build $(VOICE_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
@@ -1397,7 +1389,7 @@ voice-gate:
 		test -e "$$gate" || continue; \
 		attempted=$$((attempted + 1)); \
 		id=$$(basename "$$gate" _gate.json); \
-		timbre=$$($(RYE) run --pyproject bindings/python/pyproject.toml python -c \
+		timbre=$$($(PY_RUN) python -c \
 			"import json,sys; print(json.load(open(sys.argv[1]))['timbre'])" "$$gate" 2>/dev/null); \
 		if test -z "$$timbre"; then \
 			echo "=== $$id: its timbre could not be read"; \
@@ -1405,7 +1397,7 @@ voice-gate:
 		fi; \
 		echo "=== $$id (timbre $$timbre)"; \
 		SONARE_LIB_PATH=$(VOICE_SHARED_LIB) \
-		$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/profile.py \
+		$(PY_RUN) python tools/voicematch/profile.py \
 			compare --config tools/voicematch/capture/$$id.json \
 			--timbre "$$timbre" --gate "$$gate" > "$$log" 2>&1; \
 		status=$$?; cat "$$log"; \
