@@ -165,11 +165,7 @@ SonareError sonare_mel_filterbank(int sample_rate, int n_fft, int n_mels,
         const bool read_as_nyquist = resolved.fmax_hz == 0.0f || resolved.fmax_hz > nyquist;
         if ((read_as_nyquist ? nyquist : resolved.fmax_hz) <= resolved.fmin_hz) {
           check::refuse_relation({"options.fmax_hz", "options.fmin_hz"},
-                                 read_as_nyquist
-                                     ? "{0} must be greater than {1}, where 0 or a value above the "
-                                       "Nyquist reads as the Nyquist, " +
-                                           sonare::util::refusal::bound_text(nyquist) + " Hz"
-                                     : std::string("{0} must be greater than {1}"));
+                                 "{0} must be greater than {1}");
         }
       });
       err != SONARE_OK) {

@@ -1758,8 +1758,8 @@ TEST_CASE("sonare_mel_filterbank and sonare_mel_frequencies refuse by name", "[c
   REQUIRE(sonare_mel_filterbank(22050, 2048, 40, &options, &out, &out_length, &n_mels, &n_bins) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) ==
-        "options.fmax_hz must be greater than options.fmin_hz, where 0 or a value above the "
-        "Nyquist reads as the Nyquist, 11025 Hz");
+        "options.fmax_hz must be greater than options.fmin_hz");
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"options.fmax_hz", "options.fmin_hz"});
   REQUIRE(sonare_mel_filterbank(22050, 2048, 0, nullptr, &out, &out_length, &n_mels, &n_bins) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(mel_refusal_subjects() == std::vector<std::string>{"n_mels"});
@@ -1776,4 +1776,36 @@ TEST_CASE("sonare_mel_filterbank and sonare_mel_frequencies refuse by name", "[c
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(mel_refusal_subjects() == std::vector<std::string>{"n_mels"});
   CHECK(out == nullptr);
+}
+
+TEST_CASE("the mel family refuses an empty band range by naming both bounds", "[c_api]") {
+  const std::vector<float> samples(4096, 0.0f);
+  SonareMelSpectrogramOptions spectrogram_options;
+  sonare_mel_spectrogram_options_init(&spectrogram_options);
+  spectrogram_options.fmin_hz = 12000.0f;
+  SonareMelResult spectrogram{};
+  REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), 22050, 1024, 512, 40,
+                                 &spectrogram_options,
+                                 &spectrogram) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "options.fmax_hz must be greater than options.fmin_hz");
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"options.fmax_hz", "options.fmin_hz"});
+
+  const int n_mels = 16;
+  const int n_frames = 4;
+  const std::vector<float> mel(static_cast<size_t>(n_mels * n_frames), 1.0f);
+  SonareInverseResult stft{};
+  REQUIRE(sonare_mel_to_stft(mel.data(), mel.size(), n_mels, n_frames, 22050, 1024, 12000.0f, 0.0f,
+                             nullptr, &stft) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "fmax_hz must be greater than fmin_hz");
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"fmax_hz", "fmin_hz"});
+
+  float* audio = nullptr;
+  size_t audio_length = 0;
+  REQUIRE(sonare_mel_to_audio(mel.data(), mel.size(), n_mels, n_frames, 22050, 1024, 256, 12000.0f,
+                              0.0f, 1, nullptr, &audio,
+                              &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "fmax_hz must be greater than fmin_hz");
+  CHECK(mel_refusal_subjects() == std::vector<std::string>{"fmax_hz", "fmin_hz"});
+  CHECK(audio == nullptr);
 }

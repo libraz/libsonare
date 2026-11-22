@@ -10,8 +10,11 @@
 namespace {
 
 // The core's names for the inverse transforms' inputs, as the C entries spell them.
-const std::array<CName, 3> kInverseNames{
-    {{"sr", "sample_rate"}, {"M", "mel"}, {"mfcc", "coefficients"}}};
+const std::array<CName, 5> kInverseNames{{{"sr", "sample_rate"},
+                                          {"M", "mel"},
+                                          {"mfcc", "coefficients"},
+                                          {"fmin", "fmin_hz"},
+                                          {"fmax", "fmax_hz"}}};
 
 // The CQT-family core names, as the CQT and VQT inverse entries spell them.
 const std::array<CName, 2> kCqtInverseNames{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}};

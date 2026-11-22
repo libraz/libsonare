@@ -240,7 +240,7 @@ def mel_spectrogram(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return MelSpectrogramResult(
             sample_rate=out.sample_rate,
@@ -307,7 +307,7 @@ def mfcc(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return MfccResult(
             coefficients=_from_c_float_matrix(out.coefficients, out.n_mfcc, out.n_frames),

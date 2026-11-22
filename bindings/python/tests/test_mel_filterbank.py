@@ -152,3 +152,32 @@ def test_mel_frequencies_refuses_non_finite_bounds(name: str, bad: float) -> Non
     kwargs = {"fmin": 0.0, "fmax": 8000.0, name: bad}
     with pytest.raises(SonareValueError, match=rf"^mel_frequencies: {name} must be finite"):
         libsonare.mel_frequencies(8, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("call", "message"),
+    [
+        (
+            lambda: libsonare.mel_spectrogram(np.zeros(4096, np.float32), 22050, fmin_hz=12000.0),
+            "mel_spectrogram: fmax_hz must be greater than fmin_hz",
+        ),
+        (
+            lambda: libsonare.mfcc(np.zeros(4096, np.float32), 22050, fmin=12000.0),
+            "mfcc: fmax must be greater than fmin",
+        ),
+        (
+            lambda: libsonare.mel_to_stft(np.ones((16, 4), np.float32), sr=22050, fmin=12000.0),
+            "mel_to_stft: fmax must be greater than fmin",
+        ),
+        (
+            lambda: libsonare.mel_to_audio(
+                np.ones((16, 4), np.float32), sr=22050, fmin=12000.0, n_iter=1
+            ),
+            "mel_to_audio: fmax must be greater than fmin",
+        ),
+    ],
+)
+def test_mel_family_names_both_bounds_of_an_empty_band_range(call, message: str) -> None:
+    with pytest.raises(SonareValueError) as caught:
+        call()
+    assert str(caught.value) == message
