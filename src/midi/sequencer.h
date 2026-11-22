@@ -288,7 +288,8 @@ class MidiSequencer {
     uint8_t note = 0;
     uint32_t destination_id = 0;
     uint32_t source_track_id = 0;
-    uint32_t clip_id = 0;
+    /// With from_clip, the origin key: the clip id for a clip event, 0 otherwise.
+    uint32_t origin_id = 0;
     bool from_clip = false;
   };
   struct RetainedChannelState {
@@ -325,7 +326,7 @@ class MidiSequencer {
   struct PendingFxEvent {
     uint32_t destination_id = 0;
     MidiEvent event;
-    uint32_t clip_id = 0;
+    uint32_t origin_id = 0;
     bool from_clip = false;
     // The frame the MIDI-FX chain shaped this event at, in the chain's own domain.
     int64_t fx_frame = 0;
@@ -357,13 +358,13 @@ class MidiSequencer {
 
   // Records a sounding note; returns false on capacity overflow (bumps counter).
   bool track_note_on(uint8_t group, uint8_t channel, uint8_t note, uint32_t destination_id,
-                     uint32_t source_track_id, bool from_clip, uint32_t clip_id) noexcept;
+                     uint32_t source_track_id, bool from_clip, uint32_t origin_id) noexcept;
   // Removes a sounding note if present. Keyed by destination_id too, so a
   // note-off on one destination never releases an identically-pitched note
   // sounding on a different destination/instrument. A fallback match never
   // crosses source tracks.
   void track_note_off(uint8_t group, uint8_t channel, uint8_t note, uint32_t destination_id,
-                      uint32_t source_track_id, bool from_clip, uint32_t clip_id) noexcept;
+                      uint32_t source_track_id, bool from_clip, uint32_t origin_id) noexcept;
   // Retains a channel triple for later controller-reset emission. `inserted`
   // identifies a new slot so a rejected note-on can roll that slot back when
   // the active-note table is full. Returns false only when a new slot cannot
@@ -398,17 +399,17 @@ class MidiSequencer {
   // Runs one device-framed event through the destination's MIDI-FX chain; output
   // later than the event waits in pending_fx.
   void process_event(uint32_t destination_id, const MidiEvent& event, bool from_clip,
-                     uint32_t clip_id) noexcept;
+                     uint32_t origin_id) noexcept;
   // Visits every clip event and clip/iteration end on the clip timeline in
   // [from, last], in clip order, with its timeline frame.
   template <typename Visitor>
   void visit_scheduled(const std::vector<MidiClipSchedule>& clips, int64_t from, int64_t last,
                        Visitor&& visitor) const noexcept;
   void dispatch_transformed(uint32_t destination_id, const MidiEvent& event, bool from_clip,
-                            uint32_t clip_id) noexcept;
+                            uint32_t origin_id) noexcept;
   // False when the pending list is full and the event was not kept.
   bool enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
-                       uint32_t clip_id, int64_t fx_frame) noexcept;
+                       uint32_t origin_id, int64_t fx_frame) noexcept;
   // Retire one pending FX event in place. Slots keep their positions until
   // compact_pending(), so a drain never shifts the queue per event and same-frame
   // controller gestures retain their stream order.
@@ -420,7 +421,7 @@ class MidiSequencer {
   void clear_pending_note_events_for_channel(uint32_t destination_id, uint8_t group,
                                              uint8_t channel) noexcept;
   void clear_note_tracking_for_event(uint32_t destination_id, const MidiEvent& event,
-                                     bool from_clip = false, uint32_t clip_id = 0) noexcept;
+                                     bool from_clip = false, uint32_t origin_id = 0) noexcept;
   void clear_pending_note_tracking_for_event(const PendingFxEvent& pending) noexcept;
   void retire_channel_mode_reset(uint32_t destination_id, uint8_t group, uint8_t channel) noexcept;
   void clear_pending_for_destination(uint32_t destination_id) noexcept;

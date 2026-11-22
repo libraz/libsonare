@@ -184,26 +184,26 @@ void MidiSequencer::set_midi_clips(std::vector<MidiClipSchedule> clips) {
 
 bool MidiSequencer::track_note_on(uint8_t group, uint8_t channel, uint8_t note,
                                   uint32_t destination_id, uint32_t source_track_id, bool from_clip,
-                                  uint32_t clip_id) noexcept {
+                                  uint32_t origin_id) noexcept {
   if (active_count_ >= kMaxActiveNotes) {
     active_note_overflow_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
   active_[active_count_] =
-      ActiveNote{group, channel, note, destination_id, source_track_id, clip_id, from_clip};
+      ActiveNote{group, channel, note, destination_id, source_track_id, origin_id, from_clip};
   ++active_count_;
   return true;
 }
 
 void MidiSequencer::track_note_off(uint8_t group, uint8_t channel, uint8_t note,
                                    uint32_t destination_id, uint32_t source_track_id,
-                                   bool from_clip, uint32_t clip_id) noexcept {
+                                   bool from_clip, uint32_t origin_id) noexcept {
   size_t fallback = kMaxActiveNotes;
   for (size_t i = 0; i < active_count_; ++i) {
     if (active_[i].group == group && active_[i].channel == channel && active_[i].note == note &&
         active_[i].destination_id == destination_id) {
       if (active_[i].source_track_id == source_track_id && active_[i].from_clip == from_clip &&
-          active_[i].clip_id == clip_id) {
+          active_[i].origin_id == origin_id) {
         // Swap-remove (order of sounding notes is not significant).
         active_[i] = active_[active_count_ - 1];
         --active_count_;
@@ -443,14 +443,14 @@ void MidiSequencer::clear_active_notes_for_channel(uint32_t destination_id, uint
 }
 
 void MidiSequencer::clear_note_tracking_for_event(uint32_t destination_id, const MidiEvent& event,
-                                                  bool from_clip, uint32_t clip_id) noexcept {
+                                                  bool from_clip, uint32_t origin_id) noexcept {
   if (!is_channel_voice(event.ump) || (!event.ump.is_note_on() && !event.ump.is_note_off())) {
     return;
   }
   DestinationFx* fx = find_midi_fx(destination_id);
   if (fx != nullptr) {
     fx->chain.clear_note_tracking(event.ump.group, event.ump.channel(), event.ump.note_number(),
-                                  event.source_track_id, from_clip, clip_id);
+                                  event.source_track_id, from_clip, origin_id);
   }
 }
 
@@ -459,7 +459,7 @@ void MidiSequencer::clear_pending_note_tracking_for_event(const PendingFxEvent& 
   if (fx != nullptr) {
     MidiEvent shaped = pending.event;
     shaped.render_frame = pending.fx_frame;
-    fx->chain.clear_pending_note_tracking(shaped, pending.from_clip, pending.clip_id);
+    fx->chain.clear_pending_note_tracking(shaped, pending.from_clip, pending.origin_id);
   }
 }
 
@@ -497,7 +497,7 @@ void MidiSequencer::retire_channel_mode_reset(uint32_t destination_id, uint8_t g
 }
 
 void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEvent& event,
-                                         bool from_clip, uint32_t clip_id) noexcept {
+                                         bool from_clip, uint32_t origin_id) noexcept {
   const bool channel_voice = is_channel_voice(event.ump);
   const bool semantic_note_off = channel_voice && event.ump.is_note_off();
   bool inserted_channel_state = false;
@@ -509,14 +509,14 @@ void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEven
   }
   if (event.ump.is_note_on()) {
     if (!track_note_on(event.ump.group, event.ump.channel(), event.ump.note_number(),
-                       destination_id, event.source_track_id, from_clip, clip_id)) {
+                       destination_id, event.source_track_id, from_clip, origin_id)) {
       release_retained_channel_state(destination_id, event.ump.group, event.ump.channel(),
                                      inserted_channel_state);
       return;
     }
   } else if (event.ump.is_note_off()) {
     track_note_off(event.ump.group, event.ump.channel(), event.ump.note_number(), destination_id,
-                   event.source_track_id, from_clip, clip_id);
+                   event.source_track_id, from_clip, origin_id);
   }
   if (is_channel_mode_reset(event.ump)) {
     retire_channel_mode_reset(destination_id, event.ump.group, event.ump.channel());
@@ -525,14 +525,14 @@ void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEven
 }
 
 bool MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
-                                    uint32_t clip_id, int64_t fx_frame) noexcept {
+                                    uint32_t origin_id, int64_t fx_frame) noexcept {
   if (runtime_storage_ == nullptr || pending_fx_live_ >= kMaxPendingFxEvents) {
     midi_fx_pending_overflow_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
   if (pending_fx_count_ >= kMaxPendingFxEvents) compact_pending();
   runtime_storage_->pending_fx[pending_fx_count_++] =
-      PendingFxEvent{destination_id, event, clip_id, from_clip, fx_frame};
+      PendingFxEvent{destination_id, event, origin_id, from_clip, fx_frame};
   ++pending_fx_live_;
   return true;
 }
@@ -593,7 +593,7 @@ void MidiSequencer::clear_pending_for_destination(uint32_t destination_id) noexc
 
 void MidiSequencer::clear_pending_for_clip(uint32_t clip_id) noexcept {
   cancel_pending_if([clip_id](const PendingFxEvent& pending) noexcept {
-    return pending.from_clip && pending.clip_id == clip_id;
+    return pending.from_clip && pending.origin_id == clip_id;
   });
 }
 
@@ -601,13 +601,13 @@ void MidiSequencer::release_notes_for_clip(uint32_t clip_id, DeviceFrame render_
                                            bool clear_pending) noexcept {
   size_t i = 0;
   while (i < active_count_) {
-    if (!active_[i].from_clip || active_[i].clip_id != clip_id) {
+    if (!active_[i].from_clip || active_[i].origin_id != clip_id) {
       ++i;
       continue;
     }
     const ActiveNote note = active_[i];
     const MidiEvent off = note_off_for(note, render_frame.value);
-    clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.clip_id);
+    clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.origin_id);
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
@@ -632,35 +632,35 @@ void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSch
   };
   size_t i = 0;
   while (i < active_count_) {
-    if (!active_[i].from_clip || present(active_[i].clip_id, active_[i].destination_id,
+    if (!active_[i].from_clip || present(active_[i].origin_id, active_[i].destination_id,
                                          active_[i].source_track_id, clock.timeline.value)) {
       ++i;
       continue;
     }
     const ActiveNote note = active_[i];
     const MidiEvent off = note_off_for(note, clock.device.value);
-    clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.clip_id);
+    clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.origin_id);
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
   }
   cancel_pending_if([&](const PendingFxEvent& pending) noexcept {
     return pending.from_clip &&
-           !present(pending.clip_id, pending.destination_id, pending.event.source_track_id,
+           !present(pending.origin_id, pending.destination_id, pending.event.source_track_id,
                     device_to_timeline(DeviceFrame{pending.event.render_frame}, clock).value);
   });
 }
 
 void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& event, bool from_clip,
-                                  uint32_t clip_id) noexcept {
+                                  uint32_t origin_id) noexcept {
   // SysEx bypasses MIDI FX: its borrowed views are valid for this dispatch only.
   if (is_sysex_event(event)) {
-    dispatch_transformed(destination_id, event, from_clip, clip_id);
+    dispatch_transformed(destination_id, event, from_clip, origin_id);
     return;
   }
   DestinationFx* fx = find_midi_fx(destination_id);
   if (fx == nullptr) {
-    dispatch_transformed(destination_id, event, from_clip, clip_id);
+    dispatch_transformed(destination_id, event, from_clip, origin_id);
     return;
   }
   // The quantize grid is musical: its line 0 is timeline zero, which is ppq 0 in the
@@ -669,7 +669,7 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
   input.render_frame = to_fx_frame(event.render_frame, clock_);
   const int64_t grid_origin =
       clock_.tempo_map != nullptr ? 0 : timeline_to_device(TimelineFrame{0}, clock_).value;
-  fx->chain.process_chunk(&input, 1, fx->next_input_ordinal++, &fx->buffer, from_clip, clip_id,
+  fx->chain.process_chunk(&input, 1, fx->next_input_ordinal++, &fx->buffer, from_clip, origin_id,
                           grid_origin);
   for (size_t i = 0; i < fx->buffer.size; ++i) {
     const int64_t fx_frame = fx->buffer.events[i].render_frame;
@@ -680,7 +680,7 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
     // Generated future events rejoin the chronological merge through pending_fx, so an
     // arpeggiator step cannot leapfrog an earlier event from another clip.
     if (transformed.render_frame > event.render_frame) {
-      if (enqueue_pending(destination_id, transformed, from_clip, clip_id, fx_frame)) continue;
+      if (enqueue_pending(destination_id, transformed, from_clip, origin_id, fx_frame)) continue;
       // With the pending list full, a note-off releases its note now rather than never,
       // and a still-pending note-on it would have ended is withdrawn so it cannot hang.
       if (!transformed.ump.is_note_off()) continue;
@@ -692,10 +692,10 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
       });
       MidiEvent release = transformed;
       release.render_frame = event.render_frame;
-      dispatch_transformed(destination_id, release, from_clip, clip_id);
+      dispatch_transformed(destination_id, release, from_clip, origin_id);
       continue;
     }
-    dispatch_transformed(destination_id, transformed, from_clip, clip_id);
+    dispatch_transformed(destination_id, transformed, from_clip, origin_id);
   }
 }
 
@@ -794,7 +794,7 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
       cancel_pending(i++);
       MidiEvent event = pending.event;
       event.render_frame = std::max(event.render_frame, now);
-      dispatch_transformed(pending.destination_id, event, pending.from_clip, pending.clip_id);
+      dispatch_transformed(pending.destination_id, event, pending.from_clip, pending.origin_id);
     }
   };
 
@@ -820,7 +820,7 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
           cancel_pending(i++);
           MidiEvent event = pending.event;
           event.render_frame = now;
-          dispatch_transformed(pending.destination_id, event, pending.from_clip, pending.clip_id);
+          dispatch_transformed(pending.destination_id, event, pending.from_clip, pending.origin_id);
         }
       }
     }

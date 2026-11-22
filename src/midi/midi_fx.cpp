@@ -213,17 +213,17 @@ void MidiFxChain::clear_clip_note_tracking() noexcept {
 
 void MidiFxChain::clear_note_tracking(uint8_t group, uint8_t channel, uint8_t note,
                                       uint32_t source_track_id, bool from_clip,
-                                      uint32_t clip_id) noexcept {
+                                      uint32_t origin_id) noexcept {
   active_note_timing_count_ = erase_if_prefix(
       active_note_timings_, active_note_timing_count_, [&](const ActiveNoteTiming& timing) {
         return timing.group == group && timing.channel == channel && timing.note == note &&
                timing.source_track_id == source_track_id && timing.from_clip == from_clip &&
-               timing.clip_id == clip_id;
+               timing.origin_id == origin_id;
       });
 }
 
 size_t MidiFxChain::find_earliest_note_timing(const MidiEvent& event, bool from_clip,
-                                              uint32_t clip_id,
+                                              uint32_t origin_id,
                                               const int64_t* shaped_on_frame) const noexcept {
   size_t match = active_note_timing_count_;
   uint64_t earliest = UINT64_MAX;
@@ -232,7 +232,7 @@ size_t MidiFxChain::find_earliest_note_timing(const MidiEvent& event, bool from_
     const ActiveNoteTiming& timing = active_note_timings_[i];
     if (timing.group == group && timing.channel == event.ump.channel() &&
         timing.note == event.ump.note_number() && timing.source_track_id == event.source_track_id &&
-        timing.from_clip == from_clip && timing.clip_id == clip_id &&
+        timing.from_clip == from_clip && timing.origin_id == origin_id &&
         (shaped_on_frame == nullptr || timing.shaped_on_frame == *shaped_on_frame) &&
         timing.order < earliest) {
       match = i;
@@ -243,11 +243,11 @@ size_t MidiFxChain::find_earliest_note_timing(const MidiEvent& event, bool from_
 }
 
 void MidiFxChain::clear_pending_note_tracking(const MidiEvent& event, bool from_clip,
-                                              uint32_t clip_id) noexcept {
+                                              uint32_t origin_id) noexcept {
   if (!is_channel_voice(event.ump) || !event.ump.is_note_on()) return;
 
   const int64_t shaped_on_frame = event.render_frame;
-  const size_t match = find_earliest_note_timing(event, from_clip, clip_id, &shaped_on_frame);
+  const size_t match = find_earliest_note_timing(event, from_clip, origin_id, &shaped_on_frame);
   if (match == active_note_timing_count_) return;
   active_note_timings_[match] = active_note_timings_[active_note_timing_count_ - 1];
   --active_note_timing_count_;
@@ -255,7 +255,7 @@ void MidiFxChain::clear_pending_note_tracking(const MidiEvent& event, bool from_
 
 void MidiFxChain::push_note_timing(const MidiEvent& event, int64_t frame_shift,
                                    int64_t shaped_on_frame, bool from_clip,
-                                   uint32_t clip_id) noexcept {
+                                   uint32_t origin_id) noexcept {
   if (active_note_timing_count_ >= active_note_timings_.size()) {
     overflow_count_.bump();
     return;
@@ -266,16 +266,16 @@ void MidiFxChain::push_note_timing(const MidiEvent& event, int64_t frame_shift,
   timing.note = event.ump.note_number();
   timing.source_track_id = event.source_track_id;
   timing.from_clip = from_clip;
-  timing.clip_id = clip_id;
+  timing.origin_id = origin_id;
   timing.frame_shift = frame_shift;
   timing.shaped_on_frame = shaped_on_frame;
   timing.order = next_note_timing_order_++;
 }
 
-bool MidiFxChain::pop_note_timing(const MidiEvent& event, bool from_clip, uint32_t clip_id,
+bool MidiFxChain::pop_note_timing(const MidiEvent& event, bool from_clip, uint32_t origin_id,
                                   ActiveNoteTiming* out) noexcept {
   if (out == nullptr) return false;
-  const size_t match = find_earliest_note_timing(event, from_clip, clip_id, nullptr);
+  const size_t match = find_earliest_note_timing(event, from_clip, origin_id, nullptr);
   if (match == active_note_timing_count_) return false;
   *out = active_note_timings_[match];
   active_note_timings_[match] = active_note_timings_[active_note_timing_count_ - 1];
@@ -288,7 +288,7 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
 }
 
 void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_ordinal_base,
-                                MidiFxBuffer* out, bool from_clip, uint32_t clip_id,
+                                MidiFxBuffer* out, bool from_clip, uint32_t origin_id,
                                 int64_t grid_origin_frame) noexcept {
   if (in == nullptr || out == nullptr) return;
   out->clear();
@@ -372,7 +372,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
       const int64_t original_frame = shaped.render_frame;
       ActiveNoteTiming paired_timing{};
       const bool paired_note_off = shaped.ump.is_note_off() && active_note_timing_count_ > 0 &&
-                                   pop_note_timing(shaped, from_clip, clip_id, &paired_timing);
+                                   pop_note_timing(shaped, from_clip, origin_id, &paired_timing);
       // ---- 5. Quantize (render frame) ----
       if (paired_note_off) {
         // A note's gate is a duration, not a second grid event. Apply the exact
@@ -454,7 +454,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
                               (humanize_.enabled && humanize_.timing_frames > 0);
       if (shaped.ump.is_note_on() && moves_time) {
         push_note_timing(shaped, numeric::saturating_sub(shaped.render_frame, original_frame),
-                         shaped.render_frame, from_clip, clip_id);
+                         shaped.render_frame, from_clip, origin_id);
       }
       push_or_overflow(shaped, out);
     };

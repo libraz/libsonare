@@ -180,13 +180,13 @@ class MidiFxChain {
   /// so a replacement on another source lane or clip cannot inherit its shift.
   /// The optional clip provenance is false/0 for direct or offline callers.
   void clear_note_tracking(uint8_t group, uint8_t channel, uint8_t note, uint32_t source_track_id,
-                           bool from_clip = false, uint32_t clip_id = 0) noexcept;
+                           bool from_clip = false, uint32_t origin_id = 0) noexcept;
   /// AUDIO thread: forget one queued note-on's timing row. The row is selected
   /// by its shaped frame and full note owner, with the earliest timing order
   /// winning when multiple queued note-ons share that frame. Note-offs are
   /// ignored because their timing row was already consumed while shaping them.
   void clear_pending_note_tracking(const MidiEvent& event, bool from_clip = false,
-                                   uint32_t clip_id = 0) noexcept;
+                                   uint32_t origin_id = 0) noexcept;
 
   void set_transpose(const TransposeConfig& c) noexcept { transpose_ = c; }
   void set_quantize(const QuantizeConfig& c) noexcept { quantize_ = c; }
@@ -210,13 +210,15 @@ class MidiFxChain {
   /// RT-safe chunk variant whose first input keeps its ordinal from a larger
   /// logical batch. Control-thread callers use this to drain large clips through
   /// fixed-capacity buffers without changing deterministic humanize seeds. When
-  /// the chunk belongs to a scheduled clip, `from_clip`/`clip_id` are carried
-  /// into note timing state so same-track clips remain independent.
+  /// the chunk belongs to a scheduled clip, `from_clip`/`origin_id` are carried
+  /// into note timing state so events of different origins on one track remain
+  /// independent: the pair is the origin key, and `origin_id` is the clip id for
+  /// clip events and 0 otherwise.
   /// `grid_origin_frame` is the render frame at which the quantize grid's line 0
   /// lies (timeline zero, for device-framed input). Direct and offline callers
   /// may use the defaults.
   void process_chunk(const MidiEvent* in, size_t count, size_t input_ordinal_base,
-                     MidiFxBuffer* out, bool from_clip = false, uint32_t clip_id = 0,
+                     MidiFxBuffer* out, bool from_clip = false, uint32_t origin_id = 0,
                      int64_t grid_origin_frame = 0) noexcept;
 
   /// Telemetry: number of output events dropped because the buffer was full.
@@ -229,7 +231,7 @@ class MidiFxChain {
     uint8_t note = 0;
     uint32_t source_track_id = 0;
     bool from_clip = false;
-    uint32_t clip_id = 0;
+    uint32_t origin_id = 0;
     int64_t frame_shift = 0;
     int64_t shaped_on_frame = 0;
     uint64_t order = 0;
@@ -241,12 +243,12 @@ class MidiFxChain {
   void push_or_overflow(const MidiEvent& ev, MidiFxBuffer* out) noexcept;
   void clear_note_timings() noexcept;
   void push_note_timing(const MidiEvent& event, int64_t frame_shift, int64_t shaped_on_frame,
-                        bool from_clip, uint32_t clip_id) noexcept;
+                        bool from_clip, uint32_t origin_id) noexcept;
   /// Index of the oldest tracked note matching @p event, or the tracked count when none
   /// does. A non-null @p shaped_on_frame also requires that shaped note-on frame.
-  size_t find_earliest_note_timing(const MidiEvent& event, bool from_clip, uint32_t clip_id,
+  size_t find_earliest_note_timing(const MidiEvent& event, bool from_clip, uint32_t origin_id,
                                    const int64_t* shaped_on_frame) const noexcept;
-  bool pop_note_timing(const MidiEvent& event, bool from_clip, uint32_t clip_id,
+  bool pop_note_timing(const MidiEvent& event, bool from_clip, uint32_t origin_id,
                        ActiveNoteTiming* out) noexcept;
 
   TransposeConfig transpose_{};
