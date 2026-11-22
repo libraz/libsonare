@@ -33,6 +33,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10
         with:
+          version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
       - name: Install clang-format
         # The binding's lint group pins it: the apt package follows the runner
@@ -161,6 +162,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10
         with:
+          version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
       - name: Run Python tool tests
         # `tools/` sits outside ctest and outside the drift gates, and this
@@ -210,6 +212,7 @@ jobs:
           python-version: '3.13'
       - uses: astral-sh/setup-uv@v10
         with:
+          version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
       - name: Install Linux dependencies
         run: |
@@ -297,6 +300,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10
         with:
+          version: "0.13.9"
           cache-dependency-glob: bindings/python/uv.lock
       - name: Build, audit, and test wheel
         # The manylinux image has no system Eigen package; the top-level CMake

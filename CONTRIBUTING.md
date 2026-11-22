@@ -39,7 +39,7 @@ make test-cxx         # the C++ suite on its own
 
 Eigen and Catch2 are resolved with `find_package` first and fetched only if the host has neither. `make test` also runs the calibration harness, which needs [uv](https://docs.astral.sh/uv/).
 
-**A binding** — additionally Node 22.12 or newer and uv for Python. The repo pins Node 26 and Yarn through `mise`; without it, enable Corepack, which Node 25 and later no longer bundle (`npm install -g corepack`):
+**A binding** — additionally Node 22.12 or newer and uv for Python (CI pins uv 0.13.9, the version the locks are written with). The repo pins Node 26 and Yarn through `mise`; without it, enable Corepack, which Node 25 and later no longer bundle (`npm install -g corepack`):
 
 ```bash
 cd bindings/node   && yarn install --immutable && yarn build && yarn test
