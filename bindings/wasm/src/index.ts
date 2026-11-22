@@ -1048,6 +1048,8 @@ export {
   MASTERING_INSERT_NAMES,
   MIX_SCENE_PRESETS,
   PitchClass,
+  SECTION_TYPES,
+  SOLO_PROCESSORS,
 } from './public_types.js';
 export type {
   Gm2DrumNameRequest,
