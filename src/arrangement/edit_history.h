@@ -104,9 +104,6 @@ class EditHistory {
   /// Dynamically recomputed conservative retained bytes across both stacks.
   size_t retained_history_bytes() const noexcept;
 
-  /// Alias kept concise for diagnostics and tests.
-  size_t history_bytes() const noexcept { return retained_history_bytes(); }
-
   /// Sets the maximum retained undo depth. A value of 0 is treated as 1 (at
   /// least the most recent edit is always kept). If the current undo stack is
   /// deeper than the new bound, the oldest entries are evicted immediately so
