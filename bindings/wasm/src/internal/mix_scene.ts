@@ -1,7 +1,5 @@
 import type {
   MixSceneBusInput,
-  MixSceneDocument,
-  MixSceneDocumentInput,
   MixSceneSendInput,
   MixSceneStripInput,
   SendTiming,
@@ -9,8 +7,9 @@ import type {
 import { refuse, refuseType } from './entry.js';
 import { isNonArrayObject } from './value_guards.js';
 
-// The native scene document reads and writes the public tokens; these helpers refuse a wrong type or an unknown token
-// with TypeError / RangeError before the document reaches native, which would refuse it as an invalid format.
+// The per-strip and per-bus setters take these settings as call arguments, so a wrong type or an unknown token is
+// refused here as TypeError / RangeError. A whole scene document is left to the native reader, which refuses its
+// content as InvalidFormat.
 
 /** Pan-mode tokens, indexed by the native ordinal. */
 const PAN_MODES: readonly string[] = ['balance', 'stereoPan', 'dualPan'];
@@ -112,32 +111,4 @@ export function mixSceneStripToNative(strip: MixSceneStripInput, path = 'strip')
 /** The native scene document for a public bus, as the engine's per-bus setters read it. */
 export function mixSceneBusToNative(bus: MixSceneBusInput, path = 'bus'): Loose {
   return busToNative(bus, path);
-}
-
-/** The native scene document for a public one, with every token checked. */
-export function mixSceneToNative(document: MixSceneDocument | MixSceneDocumentInput): Loose {
-  const out: Loose = { ...objectAt(document, 'scene') };
-  const strips = listOf(out.strips, 'scene.strips');
-  if (strips !== undefined) {
-    out.strips = strips.map((strip, i) => stripToNative(strip, `scene.strips[${i}]`));
-  }
-  const buses = listOf(out.buses, 'scene.buses');
-  if (buses !== undefined) {
-    out.buses = buses.map((bus, i) => busToNative(bus, `scene.buses[${i}]`));
-  }
-  return out;
-}
-
-/** A public scene JSON string with every token checked; text that does not parse is left for native to refuse. */
-export function mixSceneJsonToNative(json: string): string {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return json;
-  }
-  if (!isNonArrayObject(parsed)) {
-    return json;
-  }
-  return JSON.stringify(mixSceneToNative(parsed as MixSceneDocumentInput));
 }

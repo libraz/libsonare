@@ -17,7 +17,6 @@ import {
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
-import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import {
@@ -1344,7 +1343,7 @@ export class Project {
    *   exempt); the project's scene is left unchanged.
    */
   setMixerSceneJson(sceneJson: string): void {
-    this.native.setMixerSceneJson(mixSceneJsonToNative(sceneJson));
+    this.native.setMixerSceneJson(sceneJson);
   }
 
   /**

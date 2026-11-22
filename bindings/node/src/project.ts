@@ -7,7 +7,6 @@ import {
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
-import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
 import { setTimelineHandle } from './internal/project_handles.js';
 import {
@@ -683,7 +682,7 @@ export class Project {
    *   exempt); the project's scene is left unchanged.
    */
   setMixerSceneJson(sceneJson: string): void {
-    this.native.setMixerSceneJson(mixSceneJsonToNative(sceneJson));
+    this.native.setMixerSceneJson(sceneJson);
   }
 
   /**

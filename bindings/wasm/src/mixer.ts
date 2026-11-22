@@ -7,7 +7,7 @@ import {
 } from './codes.js';
 import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
-import { assertStripMetering, mixSceneJsonToNative } from './internal/mix_scene.js';
+import { assertStripMetering } from './internal/mix_scene.js';
 import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -283,7 +283,6 @@ export class Mixer {
       }
       sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
     }
-    sceneJson = mixSceneJsonToNative(sceneJson);
     const module = getSonareModule();
     this.mixerHandle = module.createMixerFromSceneJson(
       sceneJson,
