@@ -47,7 +47,7 @@ cd bindings/wasm   && yarn install --immutable && yarn build && yarn test
 make test-python
 ```
 
-**The WASM module** — additionally emsdk 6.0.10:
+**The WASM module** — additionally emsdk 7.0.1:
 
 ```bash
 source /path/to/emsdk/emsdk_env.sh
