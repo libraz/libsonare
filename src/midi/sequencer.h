@@ -240,8 +240,20 @@ class MidiSequencer {
   /// the routing path for queueable scalar MIDI commands (e.g. an immediate CC)
   /// that synthesize a UMP outside the compiled clip set. A quantizing MIDI-FX
   /// chain snaps it on the timeline grid of the last dispatch_due clock.
+  /// @p origin_id is the live input stream the event arrived from (nonzero), or 0
+  /// for a host command; release_live_origin releases what one stream holds.
   /// RT-safe, no alloc.
-  void inject_event(uint32_t destination_id, DeviceFrame render_frame, const Ump& ump) noexcept;
+  void inject_event(uint32_t destination_id, DeviceFrame render_frame, const Ump& ump,
+                    uint32_t origin_id = 0) noexcept;
+
+  /// AUDIO thread: release what live input stream @p origin_id (nonzero) holds on
+  /// @p destination_id, for a stream whose own note-offs and pedal releases will
+  /// never arrive: note-off for its sounding notes, its pending MIDI-FX output
+  /// dropped, and every damper, sostenuto, soft pedal or pitch bend whose held
+  /// value it wrote last returned to rest. What clips, host commands and other
+  /// streams hold keeps its state. RT-safe, no alloc.
+  void release_live_origin(uint32_t destination_id, uint32_t origin_id,
+                           DeviceFrame render_frame) noexcept;
 
   /// AUDIO thread: replace the tempo map live injections convert through until the
   /// next dispatch_due, for a host that adopts a new map between dispatches.
@@ -288,9 +300,19 @@ class MidiSequencer {
     uint8_t note = 0;
     uint32_t destination_id = 0;
     uint32_t source_track_id = 0;
-    /// With from_clip, the origin key: the clip id for a clip event, 0 otherwise.
+    /// With from_clip, the origin key: the clip id for a clip event; for a live
+    /// event the input stream it arrived from, or 0 for a host command.
     uint32_t origin_id = 0;
     bool from_clip = false;
+  };
+  /// Controls a channel holds until they are written back to rest: damper,
+  /// sostenuto and soft pedal at 64 or above, pitch bend off centre.
+  enum HeldControlIndex : uint8_t { kHeldDamper, kHeldSostenuto, kHeldSoft, kHeldBend };
+  static constexpr size_t kHeldControlCount = 4;
+  struct HeldControl {
+    uint32_t origin_id = 0;
+    bool from_clip = false;
+    bool held = false;
   };
   struct RetainedChannelState {
     uint32_t destination_id = 0;
@@ -300,6 +322,8 @@ class MidiSequencer {
     /// Which playback touched the channel since its last reset.
     bool from_clip = false;
     bool from_live = false;
+    /// Per held control, the origin key of the write that holds it away from rest.
+    std::array<HeldControl, kHeldControlCount> held{};
   };
   struct DestinationFx {
     uint32_t destination_id = 0;
@@ -374,6 +398,9 @@ class MidiSequencer {
   void release_retained_channel_state(uint32_t destination_id, uint8_t group, uint8_t channel,
                                       bool inserted) noexcept;
   void clear_retained_channel_states(bool single_destination, uint32_t destination_id) noexcept;
+  // Records which origin a pedal or bend write leaves holding its control.
+  void note_held_control(uint32_t destination_id, const Ump& ump, bool from_clip,
+                         uint32_t origin_id) noexcept;
   // Drops pending MIDI-FX output that clip playback produced; live output keeps its frame.
   void drop_clip_pending() noexcept;
   void dispatch(uint32_t destination_id, const MidiEvent& event) noexcept;

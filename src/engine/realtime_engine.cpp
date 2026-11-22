@@ -151,9 +151,19 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   host::MidiInputSource* midi_input_source = midi_input_source_.load(std::memory_order_acquire);
   const uint64_t source_generation = midi_input_source_generation_.load(std::memory_order_relaxed);
   if (source_generation != adopted_midi_input_source_generation_) {
-    // A new input stream never completes a controller gesture the old one began.
+    // A new input stream never completes a controller gesture the old one began,
+    // nor sends the old one's note-offs and pedal releases.
     adopted_midi_input_source_generation_ = source_generation;
     if (const midi::CcMap* cc_map = midi_cc_maps_.current()) cc_map->reset_live_decode();
+    if (live_midi_input_origin_ != 0) {
+      midi_sequencer_.release_live_origin(live_midi_input_destination_id_, live_midi_input_origin_,
+                                          midi::DeviceFrame{state.render_frame});
+    }
+    live_midi_input_origin_ = 0;
+    if (midi_input_source != nullptr) {
+      live_midi_input_origin_ = next_midi_input_origin_;
+      if (++next_midi_input_origin_ == 0) next_midi_input_origin_ = 1;
+    }
   }
   live_midi_input_destination_id_ = midi_input_destination_id_.load(std::memory_order_relaxed);
   live_midi_input_count_ = midi_input_source != nullptr

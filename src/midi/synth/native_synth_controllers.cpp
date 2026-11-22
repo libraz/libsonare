@@ -39,7 +39,7 @@ void NativeSynth::sustain_channel(uint8_t channel, Control32 value) noexcept {
   ChannelState& st = channels_[ch];
   const bool was_down = st.sustain;
   st.sustain_level = value;
-  st.sustain = value.u7() >= 64;
+  st.sustain = value.u7() >= cc::kSwitchOnValue;
   if (st.sustain) {
     // Half-pedal: a partially raised damper still rests on the strings, so held
     // (key-up) notes ring on at an intermediate rate; a full lift (127) leaves

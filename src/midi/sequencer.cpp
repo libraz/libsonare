@@ -521,7 +521,53 @@ void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEven
   if (is_channel_mode_reset(event.ump)) {
     retire_channel_mode_reset(destination_id, event.ump.group, event.ump.channel());
   }
+  if (channel_voice && !semantic_note_off) {
+    note_held_control(destination_id, event.ump, from_clip, origin_id);
+  }
   dispatch(destination_id, event);
+}
+
+void MidiSequencer::note_held_control(uint32_t destination_id, const Ump& ump, bool from_clip,
+                                      uint32_t origin_id) noexcept {
+  ChannelVoiceEvent decoded;
+  if (!decode_channel_voice(ump, &decoded)) return;
+  size_t index = kHeldControlCount;  // Reset All Controllers: every held control back at rest.
+  bool held = false;
+  if (decoded.kind == ChannelVoiceKind::ControlChange) {
+    switch (decoded.note) {
+      case cc::kDamperPedal:
+        index = kHeldDamper;
+        break;
+      case cc::kSostenuto:
+        index = kHeldSostenuto;
+        break;
+      case cc::kSoftPedal:
+        index = kHeldSoft;
+        break;
+      case cc::kResetAllControllers:
+        break;
+      default:
+        return;
+    }
+    held = decoded.value.u7() >= cc::kSwitchOnValue;
+  } else if (decoded.kind == ChannelVoiceKind::PitchBend) {
+    index = kHeldBend;
+    held = decoded.bend.u14() != kBend14Center;
+  } else {
+    return;
+  }
+  for (RetainedChannelState& state : retained_channels_) {
+    if (!state.active || state.destination_id != destination_id || state.group != ump.group ||
+        state.channel != decoded.channel) {
+      continue;
+    }
+    if (index == kHeldControlCount) {
+      state.held = {};
+    } else {
+      state.held[index] = held ? HeldControl{origin_id, from_clip, true} : HeldControl{};
+    }
+    return;
+  }
 }
 
 bool MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
@@ -1089,14 +1135,58 @@ void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
   clear_retained_channel_states(/*single_destination=*/true, destination_id);
 }
 
-void MidiSequencer::inject_event(uint32_t destination_id, DeviceFrame render_frame,
-                                 const Ump& ump) noexcept {
+void MidiSequencer::inject_event(uint32_t destination_id, DeviceFrame render_frame, const Ump& ump,
+                                 uint32_t origin_id) noexcept {
   // Mirror the clip path's active-note bookkeeping so a live note-on/off keeps
   // the hang-note table consistent, then dispatch at the requested render frame.
   MidiEvent event;
   event.render_frame = render_frame.value;
   event.ump = ump;
-  process_event(destination_id, event, /*from_clip=*/false, 0);
+  process_event(destination_id, event, /*from_clip=*/false, origin_id);
+}
+
+void MidiSequencer::release_live_origin(uint32_t destination_id, uint32_t origin_id,
+                                        DeviceFrame render_frame) noexcept {
+  assert(origin_id != 0);
+  const auto held_by_origin = [origin_id](bool from_clip, uint32_t id) noexcept {
+    return !from_clip && id == origin_id;
+  };
+  size_t i = 0;
+  while (i < active_count_) {
+    const ActiveNote& candidate = active_[i];
+    if (candidate.destination_id != destination_id ||
+        !held_by_origin(candidate.from_clip, candidate.origin_id)) {
+      ++i;
+      continue;
+    }
+    const ActiveNote note = candidate;
+    const MidiEvent off = note_off_for(note, render_frame.value);
+    clear_note_tracking_for_event(destination_id, off, note.from_clip, note.origin_id);
+    active_[i] = active_[active_count_ - 1];
+    --active_count_;
+    dispatch(destination_id, off);
+  }
+  cancel_pending_if([&](const PendingFxEvent& pending) noexcept {
+    return pending.destination_id == destination_id &&
+           held_by_origin(pending.from_clip, pending.origin_id);
+  });
+  constexpr std::array<uint8_t, kHeldControlCount - 1> kHeldControllers = {
+      cc::kDamperPedal, cc::kSostenuto, cc::kSoftPedal};
+  for (RetainedChannelState& state : retained_channels_) {
+    if (!state.active || state.destination_id != destination_id) continue;
+    for (size_t index = 0; index < kHeldControlCount; ++index) {
+      HeldControl& control = state.held[index];
+      if (!control.held || !held_by_origin(control.from_clip, control.origin_id)) continue;
+      control = HeldControl{};
+      MidiEvent rest;
+      rest.render_frame = render_frame.value;
+      rest.ump =
+          index == kHeldBend
+              ? make_midi1_pitch_bend(state.group, state.channel, kBend14Center)
+              : make_midi1_control_change(state.group, state.channel, kHeldControllers[index], 0);
+      dispatch(destination_id, rest);
+    }
+  }
 }
 
 void MidiSequencer::inject_event(uint32_t destination_id, DeviceFrame render_frame, const Ump& ump,

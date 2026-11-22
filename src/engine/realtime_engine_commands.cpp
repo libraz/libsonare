@@ -438,7 +438,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // happened to call. Every live entry point resolves through the one
       // kind-aware decoder now; a non-CC word resolves to nothing and falls
       // straight through to the sequencer as before.
-      deliver_live_ump(command.target_id, command.sample_time, ump);
+      deliver_live_ump(command.target_id, command.sample_time, ump, /*origin_id=*/0);
 #endif
       break;
     }
@@ -464,7 +464,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
           slot.released.store(generation, std::memory_order_release);
           ump.word_count = midi::ump_word_count_for_word0(ump.words[0]);
           ump.group = midi::ump_group_from_word0(ump.words[0]);
-          deliver_live_ump(command.target_id, command.sample_time, ump);
+          deliver_live_ump(command.target_id, command.sample_time, ump, /*origin_id=*/0);
         }
       }
 #endif

@@ -4048,3 +4048,131 @@ TEST_CASE("a source-aware instrument's fade reaches the lane its voice played on
   require_faded(render_left(engine, 2 * kSwapFadeFrames), before.back(), 0.0f);
 }
 #endif
+
+namespace {
+
+void push_live_cc(RealtimeEngine& engine, uint32_t destination_id, uint8_t controller,
+                  uint8_t value) {
+  sonare::rt::Command c{};
+  c.type = sonare::rt::CommandType::kMidiCcImmediate;
+  c.target_id = destination_id;
+  c.sample_time = 0;
+  c.arg.i = static_cast<int64_t>(uint64_t{value} | (uint64_t{controller} << 8));
+  REQUIRE(engine.push_command(c));
+}
+
+// Sounds a key while it is down, or after its note-off while the damper holds it.
+class DamperInstrument final : public MidiInstrument {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  void on_event(uint32_t, const MidiEvent& event) noexcept override {
+    const uint32_t w = event.ump.words[0];
+    const uint8_t status = static_cast<uint8_t>((w >> 16) & 0xF0u);
+    const uint8_t data1 = static_cast<uint8_t>((w >> 8) & 0x7Fu);
+    const uint8_t data2 = static_cast<uint8_t>(w & 0x7Fu);
+    if (event.ump.is_note_on()) {
+      down[data1] = true;
+    } else if (event.ump.is_note_off()) {
+      down[data1] = false;
+      sustained[data1] = damper;
+    } else if (status == 0xB0u && data1 == 64) {
+      damper = data2 >= 64;
+      if (!damper) sustained.fill(false);
+    }
+  }
+  int sounding() const {
+    int count = 0;
+    for (size_t k = 0; k < down.size(); ++k) count += (down[k] || sustained[k]) ? 1 : 0;
+    return count;
+  }
+  std::array<bool, 128> down{};
+  std::array<bool, 128> sustained{};
+  bool damper = false;
+};
+
+enum class SourceChange { kReplace, kClear, kRetarget };
+
+}  // namespace
+
+TEST_CASE("RealtimeEngine releases what a MIDI input source held when the source changes",
+          "[engine][midi]") {
+  constexpr uint32_t kRetargeted = 7;
+  for (SourceChange change :
+       {SourceChange::kReplace, SourceChange::kClear, SourceChange::kRetarget}) {
+    INFO("change " << static_cast<int>(change));
+    RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    CountingInstrument instrument;
+    CountingInstrument retargeted;
+    REQUIRE(engine.set_midi_instrument(0, &instrument));
+    REQUIRE(engine.set_midi_instrument(kRetargeted, &retargeted));
+    engine.set_midi_clips(held_note_clip());
+    push_play(engine);
+    sonare::host::FixedMidiInputSource<8> source_a;
+    sonare::host::FixedMidiInputSource<8> source_b;
+    engine.set_midi_input_source(&source_a, 0);
+    REQUIRE(source_a.push_event(sonare::midi::make_midi1_note_on(0, 0, 60, 100), 0));
+    push_live_note(engine, 0, true, 62, 0);
+    std::vector<float> left(64, 0.0f);
+    std::vector<float> right(64, 0.0f);
+    float* io[] = {left.data(), right.data()};
+    engine.process(io, 2, 64);
+    REQUIRE(engine.midi_sequencer().active_note_count() == 3);
+    REQUIRE(instrument.note_off_count_ == 0);
+
+    switch (change) {
+      case SourceChange::kReplace:
+        engine.set_midi_input_source(&source_b, 0);
+        break;
+      case SourceChange::kClear:
+        engine.set_midi_input_source(nullptr, 0);
+        break;
+      case SourceChange::kRetarget:
+        engine.set_midi_input_source(&source_a, kRetargeted);
+        break;
+    }
+    engine.process(io, 2, 64);
+
+    // The input note is released; the clip note and the host command's note keep sounding.
+    CHECK(engine.midi_sequencer().active_note_count() == 2);
+    CHECK(instrument.note_off_count_ == 1);
+    CHECK(retargeted.note_off_count_ == 0);
+  }
+}
+
+TEST_CASE("RealtimeEngine lifts the damper a replaced MIDI input source held, not a later one",
+          "[engine][midi]") {
+  for (bool command_rewrites_damper : {false, true}) {
+    INFO("command rewrites damper " << command_rewrites_damper);
+    RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    DamperInstrument instrument;
+    REQUIRE(engine.set_midi_instrument(0, &instrument));
+    sonare::host::FixedMidiInputSource<8> source_a;
+    sonare::host::FixedMidiInputSource<8> source_b;
+    engine.set_midi_input_source(&source_a, 0);
+    REQUIRE(source_a.push_event(sonare::midi::make_midi1_control_change(0, 0, 64, 127), 0));
+    REQUIRE(source_a.push_event(sonare::midi::make_midi1_note_on(0, 0, 60, 100), 1));
+    REQUIRE(source_a.push_event(sonare::midi::make_midi1_note_off(0, 0, 60, 0), 2));
+    std::vector<float> left(64, 0.0f);
+    std::vector<float> right(64, 0.0f);
+    float* io[] = {left.data(), right.data()};
+    engine.process(io, 2, 64);
+    if (command_rewrites_damper) {
+      push_live_cc(engine, 0, 64, 127);
+      engine.process(io, 2, 64);
+    }
+    REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+    REQUIRE(instrument.sounding() == 1);
+
+    engine.set_midi_input_source(&source_b, 0);
+    engine.process(io, 2, 64);
+
+    // A key sustained only by the source's pedal stops with it; a pedal the host
+    // command wrote last stays down and keeps the key sounding.
+    CHECK(instrument.damper == command_rewrites_damper);
+    CHECK(instrument.sounding() == (command_rewrites_damper ? 1 : 0));
+  }
+}

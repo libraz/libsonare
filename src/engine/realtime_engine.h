@@ -591,6 +591,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// active tempo map, so a length keeps its musical value at every tempo and rate.
   bool set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
+  /// Replacing, clearing or retargeting the source releases what the previous
+  /// stream holds on its destination (its notes, and each pedal or bend it wrote
+  /// last), since that stream's own releases will never arrive.
   void set_midi_input_source(host::MidiInputSource* source, uint32_t destination_id = 0) noexcept {
     midi_input_destination_id_.store(destination_id, std::memory_order_relaxed);
     // Bumped before the source is published, so the audio thread that adopts the
@@ -1382,9 +1385,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   void observe_live_cc_for_automation(const midi::Ump& ump) noexcept;
   // AUDIO thread: the single live UMP delivery. Utility, Flex Data and UMP
   // Stream messages are counted against the destination and dropped; anything
-  // else runs the live CC decode and is injected into the sequencer.
-  void deliver_live_ump(uint32_t destination_id, int64_t render_frame,
-                        const midi::Ump& ump) noexcept;
+  // else runs the live CC decode and is injected into the sequencer under
+  // @p origin_id (the input stream, or 0 for a host command).
+  void deliver_live_ump(uint32_t destination_id, int64_t render_frame, const midi::Ump& ump,
+                        uint32_t origin_id) noexcept;
   // AUDIO thread: returns the slot a kMidiUmpSlotImmediate command references to
   // the control thread when the command is dropped rather than applied.
   void release_midi_ump_slot(const rt::Command& command) noexcept;
@@ -1638,6 +1642,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   uint64_t adopted_midi_input_source_generation_ = 0;
   std::atomic<uint32_t> midi_input_destination_id_{0};
   uint32_t live_midi_input_destination_id_ = 0;
+  // AUDIO thread: the sequencer origin of the adopted input stream (0 while none is
+  // adopted), and the next one to hand out. Every change releases the previous
+  // stream, so at most one origin holds anything and a wrapped id aliases nothing.
+  uint32_t live_midi_input_origin_ = 0;
+  uint32_t next_midi_input_origin_ = 1;
   mutable rt::RtPublisher<midi::CcMap> midi_cc_maps_{};
   static constexpr size_t kMaxLiveMidiInputEvents = 256;
   std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};

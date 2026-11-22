@@ -292,7 +292,7 @@ uint32_t RealtimeEngine::midi_ump_discarded_count(uint32_t destination_id) const
 }
 
 void RealtimeEngine::deliver_live_ump(uint32_t destination_id, int64_t render_frame,
-                                      const midi::Ump& ump) noexcept {
+                                      const midi::Ump& ump, uint32_t origin_id) noexcept {
   if (is_endpoint_ump_type(ump.message_type())) {
     ump_discarded_total_.fetch_add(1, std::memory_order_relaxed);
     const uint64_t key = discard_counter_key(destination_id);
@@ -307,7 +307,7 @@ void RealtimeEngine::deliver_live_ump(uint32_t destination_id, int64_t render_fr
     return;
   }
   observe_live_cc_for_automation(ump);
-  midi_sequencer_.inject_event(destination_id, midi::DeviceFrame{render_frame}, ump);
+  midi_sequencer_.inject_event(destination_id, midi::DeviceFrame{render_frame}, ump, origin_id);
 }
 
 void RealtimeEngine::release_midi_ump_slot(const rt::Command& command) noexcept {
@@ -476,7 +476,8 @@ int RealtimeEngine::dispatch_midi_span(int64_t render_frame, int64_t block_rende
     }
     ++live_midi_input_cursor_;
     if (event.render_frame < block_render_frame) continue;
-    deliver_live_ump(live_midi_input_destination_id_, event.render_frame, event.ump);
+    deliver_live_ump(live_midi_input_destination_id_, event.render_frame, event.ump,
+                     live_midi_input_origin_);
   }
   // Asked last, so MIDI-FX output the live input just produced splits the span too.
   return midi_sequencer_.frames_until_next_event(clock, span);

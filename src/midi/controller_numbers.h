@@ -23,6 +23,8 @@ inline constexpr uint8_t kDamperPedal = 64;
 inline constexpr uint8_t kPortamentoOnOff = 65;
 inline constexpr uint8_t kSostenuto = 66;
 inline constexpr uint8_t kSoftPedal = 67;
+/// A switch controller (64-69) reads on at this 7-bit value or above.
+inline constexpr uint8_t kSwitchOnValue = 64;
 /// Sound Controllers 2-9 (GS TONE MODIFY 1-8); 74 is Sound Controller 5 (brightness).
 inline constexpr uint8_t kSoundController2 = 71;
 inline constexpr uint8_t kSoundController3 = 72;
