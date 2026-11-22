@@ -174,6 +174,7 @@ SHARED_READERS = (
     "_to_c_size_t",
     "_to_c_float",
     "_domain_float",
+    "_float_data",
 )
 
 # The readers that ARE the shared family rather than a file-local copy of one:
