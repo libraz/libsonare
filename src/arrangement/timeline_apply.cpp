@@ -266,11 +266,12 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
                                "the engine refuses the track-lane vector");
       }
     }
-    if (!bind_playback_lane_targets(engine, playback_lane_tracks, &playback_lanes) ||
-        !bind_playback_lane_targets(engine, playback_lane_tracks, &result.installed_automation)) {
+    if (!bind_playback_lane_targets(engine, playback_lane_tracks, &playback_lanes)) {
       return apply_cleared(engine, ErrorCode::InvalidState,
                            "the engine holds no fader/pan id for a track lane");
     }
+    // Both lists started as the same resolved lanes, so the bound result is shared.
+    result.installed_automation = playback_lanes;
 #endif
 
     // (4) Publish the remaining domains. All are direct-setter / publisher installs, not

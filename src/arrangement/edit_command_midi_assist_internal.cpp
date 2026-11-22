@@ -8,6 +8,7 @@
 
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_command_internal.h"
+#include "arrangement/vocal_edit_sidecar.h"
 
 namespace sonare::arrangement {
 
@@ -46,6 +47,16 @@ void prune_sysex_payloads(MidiContentStore* store, std::vector<uint32_t> candida
   for (uint32_t handle : candidates) store->sysex_payloads.erase(handle);
 }
 
+void erase_clip_content(Project* project, MidiContentStore* store, ClipId clip_id,
+                        std::vector<uint32_t>* released) {
+  vocal_sidecar::remove_clip_sidecars(project, clip_id);
+  const auto events = store->events.find(clip_id);
+  if (events != store->events.end()) {
+    collect_sysex_handles(events->second, released);
+    store->events.erase(events);
+  }
+}
+
 std::map<uint32_t, std::vector<uint8_t>> payloads_for_events(const MidiContentStore& store,
                                                              const MidiClipEventList& events) {
   std::map<uint32_t, std::vector<uint8_t>> payloads;
@@ -64,6 +75,22 @@ std::map<uint32_t, std::vector<uint8_t>> payloads_for_events(const MidiContentSt
 // ===========================================================================
 // MIDI content commands
 // ===========================================================================
+
+namespace {
+
+// Builds the command that restores a clip's current event list and payloads verbatim.
+EditCommandPtr restore_events_command(ClipId clip_id, const MidiContentStore& store) {
+  MidiClipEventList prior;
+  const auto it = store.events.find(clip_id);
+  if (it != store.events.end()) {
+    prior = it->second;
+  }
+  auto payloads = detail::payloads_for_events(store, prior);
+  return std::make_unique<ReplaceMidiClipEvents>(clip_id, std::move(prior), std::move(payloads),
+                                                 it == store.events.end());
+}
+
+}  // namespace
 
 bool ReplaceMidiClipEvents::apply(Project& project, MidiContentStore& store) {
   if (!project.has_clip(clip_id_)) {
@@ -101,14 +128,7 @@ EditCommandPtr ReplaceMidiClipEvents::invert_before_apply(const Project& /*live*
 }
 
 EditCommandPtr ReplaceMidiClipEvents::inverse_from(const MidiContentStore& store) const {
-  MidiClipEventList prior;
-  const auto it = store.events.find(clip_id_);
-  if (it != store.events.end()) {
-    prior = it->second;
-  }
-  auto payloads = detail::payloads_for_events(store, prior);
-  return std::make_unique<ReplaceMidiClipEvents>(clip_id_, std::move(prior), std::move(payloads),
-                                                 it == store.events.end());
+  return restore_events_command(clip_id_, store);
 }
 
 bool PatchMidiClip::apply(Project& project, MidiContentStore& store) {
@@ -134,14 +154,7 @@ EditCommandPtr PatchMidiClip::invert(const Project& /*before*/,
                                      const MidiContentStore& store_before) const {
   // The exact inverse restores the full prior event list, which is robust even
   // when add/remove sets overlap or duplicate events exist.
-  MidiClipEventList prior;
-  const auto it = store_before.events.find(patch_.clip_id);
-  if (it != store_before.events.end()) {
-    prior = it->second;
-  }
-  auto payloads = detail::payloads_for_events(store_before, prior);
-  return std::make_unique<ReplaceMidiClipEvents>(
-      patch_.clip_id, std::move(prior), std::move(payloads), it == store_before.events.end());
+  return restore_events_command(patch_.clip_id, store_before);
 }
 
 // ===========================================================================

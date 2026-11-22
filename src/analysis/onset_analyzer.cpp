@@ -148,7 +148,7 @@ void OnsetAnalyzer::backtrack_onsets() {
   const std::vector<int> backtracked = onset_backtrack(frames, onset_strength_);
 
   const int max_travel = std::max(0, config_.backtrack_range);
-  for (size_t i = 0; i < onsets_.size() && i < backtracked.size(); ++i) {
+  for (size_t i = 0; i < onsets_.size(); ++i) {
     // backtrack_range bounds how far an onset may travel; it is a limit on the
     // search, not a stopping rule of its own.
     const int limited = std::max(backtracked[i], frames[i] - max_travel);

@@ -20,6 +20,9 @@ using constants::kEpsilon;
 
 namespace {
 
+/// @brief Timbre with every descriptor zero, for the no-frames and empty-window cases.
+constexpr Timbre kZeroTimbre = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
 /// @brief Reference spectral centroid (Hz) mapped to maximum brightness (1.0).
 /// @details Centroids at or above this frequency are perceived as maximally bright;
 ///          ~8 kHz approximates the upper edge of musically relevant brightness.
@@ -90,7 +93,7 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   n_frames_ = spec.n_frames();
 
   if (n_frames_ == 0) {
-    timbre_ = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    timbre_ = kZeroTimbre;
     return;
   }
 
@@ -133,8 +136,7 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
         append(spectral_centroid_,
                sonare::spectral_centroid(tile, n_bins, tile_frames, sr_, n_fft));
         append(spectral_flatness_, sonare::spectral_flatness(tile, n_bins, tile_frames));
-        append(spectral_rolloff_,
-               sonare::spectral_rolloff(tile, n_bins, tile_frames, sr_, n_fft, 0.85f));
+        append(spectral_rolloff_, sonare::spectral_rolloff(tile, n_bins, tile_frames, sr_, n_fft));
         append(relative_flux_, sonare::spectral_flux(tile, n_bins, tile_frames, flux_lag));
 
         // The per-frame low-frequency energy ratio, so warmth comes from actual
@@ -220,7 +222,7 @@ void TimbreAnalyzer::analyze() {
 
 void TimbreAnalyzer::compute_overall_timbre() {
   if (n_frames_ == 0) {
-    timbre_ = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    timbre_ = kZeroTimbre;
     return;
   }
 
@@ -228,7 +230,7 @@ void TimbreAnalyzer::compute_overall_timbre() {
 }
 
 Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) const {
-  Timbre t = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  Timbre t = kZeroTimbre;
 
   if (start_frame >= end_frame) {
     return t;

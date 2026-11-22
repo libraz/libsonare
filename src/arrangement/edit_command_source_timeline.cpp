@@ -2,7 +2,6 @@
 /// @brief Source, timeline, and automation edit-command apply/invert definitions.
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -20,6 +19,14 @@ bool automation_lane_kind_conflicts(const Track& track, const automation::Automa
                      [&candidate, replaced](const automation::AutomationLane& lane) {
                        return &lane != replaced && lane.target_kind() == candidate.target_kind();
                      });
+}
+
+// Finds the automation lane of `track` targeting `target_param_id`, or end().
+template <typename TrackT>
+auto find_lane(TrackT& track, uint32_t target_param_id) {
+  return std::find_if(
+      track.automation_lanes.begin(), track.automation_lanes.end(),
+      [target_param_id](const auto& lane) { return lane.target_param_id() == target_param_id; });
 }
 
 }  // namespace
@@ -149,25 +156,22 @@ bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
     return allocated_id_ != 0;
   }
   const uint32_t target = id_ != 0 ? id_ : allocated_id_;
+  ProjectMarker fields;
+  fields.id = target;
+  fields.ppq = ppq_;
+  fields.name = name_;
+  fields.kind = kind_;
+  fields.key_fifths = key_fifths_;
+  fields.key_minor = key_minor_;
   for (ProjectMarker& m : project.markers_mutable()) {
     if (m.id == target) {
-      m.ppq = ppq_;
-      m.name = name_;
-      m.kind = kind_;
-      m.key_fifths = key_fifths_;
-      m.key_minor = key_minor_;
+      m = std::move(fields);
       return true;
     }
   }
   // Marker does not exist (e.g. redo after the original add was undone): restore
   // it with its fixed id.
-  ProjectMarker m;
-  m.id = target;
-  m.ppq = ppq_;
-  m.name = name_;
-  m.kind = kind_;
-  m.key_fifths = key_fifths_;
-  m.key_minor = key_minor_;
+  ProjectMarker m = std::move(fields);
   std::vector<ProjectMarker>& markers = project.markers_mutable();
   const size_t at = std::min(restore_index_, markers.size());
   markers.insert(markers.begin() + static_cast<std::ptrdiff_t>(at), std::move(m));
@@ -260,10 +264,7 @@ bool AddAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
   }
   const uint32_t target = lane_.target_param_id();
   if (target == 0 || !automation::valid_automation_target_kind(lane_.target_kind())) return false;
-  const auto existing =
-      std::find_if(t->automation_lanes.begin(), t->automation_lanes.end(),
-                   [target](const auto& lane) { return lane.target_param_id() == target; });
-  if (existing != t->automation_lanes.end()) return false;
+  if (find_lane(*t, target) != t->automation_lanes.end()) return false;
   if (automation_lane_kind_conflicts(*t, lane_)) return false;
   t->automation_lanes.push_back(lane_);
   return true;
@@ -279,9 +280,7 @@ bool RemoveAutomationLane::apply(Project& project, MidiContentStore& /*store*/) 
   if (t == nullptr || target_param_id_ == 0) {
     return false;
   }
-  const auto found =
-      std::find_if(t->automation_lanes.begin(), t->automation_lanes.end(),
-                   [this](const auto& lane) { return lane.target_param_id() == target_param_id_; });
+  const auto found = find_lane(*t, target_param_id_);
   if (found == t->automation_lanes.end()) return false;
   t->automation_lanes.erase(found);
   return true;
@@ -293,9 +292,7 @@ EditCommandPtr RemoveAutomationLane::invert(const Project& before,
   if (t == nullptr) {
     return nullptr;
   }
-  const auto found =
-      std::find_if(t->automation_lanes.begin(), t->automation_lanes.end(),
-                   [this](const auto& lane) { return lane.target_param_id() == target_param_id_; });
+  const auto found = find_lane(*t, target_param_id_);
   if (found == t->automation_lanes.end()) return nullptr;
   // Re-insert the removed lane at its original index.
   return std::make_unique<InsertAutomationLane>(
@@ -308,9 +305,7 @@ bool EditAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
       !automation::valid_automation_target_kind(lane_.target_kind())) {
     return false;
   }
-  const auto found =
-      std::find_if(t->automation_lanes.begin(), t->automation_lanes.end(),
-                   [this](const auto& item) { return item.target_param_id() == target_param_id_; });
+  const auto found = find_lane(*t, target_param_id_);
   if (found == t->automation_lanes.end()) return false;
   if (automation_lane_kind_conflicts(*t, lane_, &*found)) return false;
   *found = lane_;
@@ -323,9 +318,7 @@ EditCommandPtr EditAutomationLane::invert(const Project& before,
   if (t == nullptr) {
     return nullptr;
   }
-  const auto found =
-      std::find_if(t->automation_lanes.begin(), t->automation_lanes.end(),
-                   [this](const auto& item) { return item.target_param_id() == target_param_id_; });
+  const auto found = find_lane(*t, target_param_id_);
   if (found == t->automation_lanes.end()) return nullptr;
   return std::make_unique<EditAutomationLane>(track_id_, target_param_id_, *found);
 }

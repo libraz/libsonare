@@ -208,8 +208,6 @@ void RhythmAnalyzer::detect_groove_type() {
     features_.groove_type = "swing";
   } else if (swing_ratio > rhythm_constants::kShuffleThreshold) {
     features_.groove_type = "shuffle";
-  } else {
-    features_.groove_type = "straight";
   }
 }
 
@@ -293,6 +291,30 @@ void RhythmAnalyzer::compute_syncopation() {
   features_.syncopation = std::clamp(mean_excess / expected, 0.0f, 1.0f);
 }
 
+namespace {
+
+/// Arithmetic mean of a non-empty vector, accumulated in float.
+float mean_of(const std::vector<float>& values) {
+  float mean = 0.0f;
+  for (float v : values) {
+    mean += v;
+  }
+  return mean / static_cast<float>(values.size());
+}
+
+/// Population standard deviation of a non-empty vector about `mean`, accumulated in float.
+float std_dev_of(const std::vector<float>& values, float mean) {
+  float variance = 0.0f;
+  for (float v : values) {
+    float diff = v - mean;
+    variance += diff * diff;
+  }
+  variance /= static_cast<float>(values.size());
+  return std::sqrt(variance);
+}
+
+}  // namespace
+
 RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
   RhythmRegularity out;
   if (intervals.empty()) {
@@ -300,22 +322,11 @@ RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
   }
 
   // Compute mean and standard deviation of beat intervals
-  float mean_interval = 0.0f;
-  for (float interval : intervals) {
-    mean_interval += interval;
-  }
-  mean_interval /= static_cast<float>(intervals.size());
+  const float mean_interval = mean_of(intervals);
   if (!has_evidence(mean_interval)) {
     return out;
   }
-
-  float variance = 0.0f;
-  for (float interval : intervals) {
-    float diff = interval - mean_interval;
-    variance += diff * diff;
-  }
-  variance /= static_cast<float>(intervals.size());
-  float std_dev = std::sqrt(variance);
+  const float std_dev = std_dev_of(intervals, mean_interval);
 
   // Coefficient of variation (lower = more regular), mapped to a regularity score in [0, 1].
   const float cv = std_dev / mean_interval;
@@ -331,19 +342,8 @@ RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
   }
 
   if (local_tempos.size() >= 2) {
-    float tempo_mean = 0.0f;
-    for (float t : local_tempos) {
-      tempo_mean += t;
-    }
-    tempo_mean /= static_cast<float>(local_tempos.size());
-
-    float tempo_var = 0.0f;
-    for (float t : local_tempos) {
-      float diff = t - tempo_mean;
-      tempo_var += diff * diff;
-    }
-    tempo_var /= static_cast<float>(local_tempos.size());
-    float tempo_std = std::sqrt(tempo_var);
+    const float tempo_mean = mean_of(local_tempos);
+    const float tempo_std = std_dev_of(local_tempos, tempo_mean);
 
     float tempo_cv = (tempo_mean > 0.0f) ? tempo_std / tempo_mean : 1.0f;
     out.tempo_stability = std::max(0.0f, 1.0f - tempo_cv * 5.0f);

@@ -65,13 +65,8 @@ EditCommandPtr AddClip::invert(const Project& /*before*/,
 bool RemoveClip::apply(Project& project, MidiContentStore& store) {
   const bool ok = project.remove_clip(id_).second;
   if (ok) {
-    vocal_sidecar::remove_clip_sidecars(&project, id_);
     std::vector<uint32_t> released;
-    const auto events = store.events.find(id_);
-    if (events != store.events.end()) {
-      detail::collect_sysex_handles(events->second, &released);
-      store.events.erase(events);
-    }
+    detail::erase_clip_content(&project, &store, id_, &released);
     detail::prune_sysex_payloads(&store, std::move(released));
   }
   return ok;
@@ -378,18 +373,9 @@ bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
   // produce a project that the compiler later rejects, so fail cleanly here
   // WITHOUT mutating state. Same-track moves (new_track_id_ == 0) are
   // unaffected. Mirrors edit_compiler.cpp::clip_matches_track_kind.
-  if (new_track_id_ != 0) {
-    const Track* dest = project.find_track(new_track_id_);
-    const ClipSource* src = project.find_source(current->source_id);
-    if (dest == nullptr || src == nullptr) {
-      return false;
-    }
-    const SourceKind src_kind = source_kind(*src);
-    const bool compatible = (dest->kind == Track::Kind::kAudio && src_kind == SourceKind::kAudio) ||
-                            (dest->kind == Track::Kind::kMidi && src_kind == SourceKind::kMidi);
-    if (!compatible) {
-      return false;
-    }
+  if (new_track_id_ != 0 &&
+      !detail::source_matches_track_kind(project, new_track_id_, current->source_id)) {
+    return false;
   }
   const TrackId target_track = new_track_id_ != 0 ? new_track_id_ : current->track_id;
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&

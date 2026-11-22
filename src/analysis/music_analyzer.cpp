@@ -450,7 +450,7 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   // Refine key using chord progression analysis
   result.key = refine_key_with_chords(chroma_candidates, result.chords);
   // Whichever key the chords settle on, it reports its chroma posterior like detect_key does.
-  result.key.confidence = key_posterior(key_analyzer().all_candidates(), result.key);
+  result.key.confidence = key_posterior(chroma_candidates, result.key);
   result.chord_roman_numerals.reserve(result.chords.size());
   for (const Chord& chord : result.chords) {
     result.chord_roman_numerals.push_back(

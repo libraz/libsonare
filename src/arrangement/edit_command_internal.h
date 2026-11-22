@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <unordered_set>
 #include <utility>
 
@@ -36,16 +37,30 @@ void collect_sysex_handles(const MidiClipEventList& events, std::vector<uint32_t
 /// the edit dropped from it.
 void prune_sysex_payloads(MidiContentStore* store, std::vector<uint32_t> candidates,
                           const MidiClipEventList* changed = nullptr);
+/// Drops a removed clip's vocal sidecars and event list, appending the SysEx
+/// handles the list carried to `released` for a later prune.
+void erase_clip_content(Project* project, MidiContentStore* store, ClipId clip_id,
+                        std::vector<uint32_t>* released);
 std::map<uint32_t, std::vector<uint8_t>> payloads_for_events(const MidiContentStore& store,
                                                              const MidiClipEventList& events);
+
+/// An absent physical offset is valid; a present one must be finite and non-negative.
+inline bool physical_offset_valid(const std::optional<double>& seconds) {
+  return !seconds.has_value() || (std::isfinite(*seconds) && *seconds >= 0.0);
+}
+
+/// A take needs a non-zero id and finite, non-negative PPQ and physical offsets.
+inline bool take_offsets_valid(const ClipTake& take) {
+  return take.id != 0 && std::isfinite(take.source_offset_ppq) && take.source_offset_ppq >= 0.0 &&
+         physical_offset_valid(take.source_offset_seconds);
+}
 
 inline bool clip_can_be_inserted(const Project& project, const EditClip& clip,
                                  ClipId ignore_clip_id = 0) {
   if (clip.id == 0 || project.has_clip(clip.id)) return false;
   if (!project.has_track(clip.track_id) || !project.has_source(clip.source_id)) return false;
   if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0 ||
-      (clip.source_offset_seconds.has_value() &&
-       !(std::isfinite(*clip.source_offset_seconds) && *clip.source_offset_seconds >= 0.0))) {
+      !physical_offset_valid(clip.source_offset_seconds)) {
     return false;
   }
   // Under LOOP, 0 is valid and means "loop the entire clip"; reject negatives/NaN.
@@ -58,11 +73,7 @@ inline bool clip_can_be_inserted(const Project& project, const EditClip& clip,
     }
   }
   for (const ClipTake& take : clip.takes) {
-    if (take.id == 0 || !std::isfinite(take.source_offset_ppq) || take.source_offset_ppq < 0.0 ||
-        (take.source_offset_seconds.has_value() &&
-         !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0))) {
-      return false;
-    }
+    if (!take_offsets_valid(take)) return false;
   }
   if (!valid_clip_render_parts(clip)) return false;
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
@@ -108,11 +119,7 @@ inline bool valid_clip_take_structure(const Project& project, const EditClip& cl
   std::unordered_set<TakeId> ids;
   ids.reserve(takes.size());
   for (const ClipTake& take : takes) {
-    if (take.id == 0 || !std::isfinite(take.source_offset_ppq) || take.source_offset_ppq < 0.0 ||
-        (take.source_offset_seconds.has_value() &&
-         !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0))) {
-      return false;
-    }
+    if (!take_offsets_valid(take)) return false;
     if (!ids.insert(take.id).second) {
       return false;
     }
@@ -176,9 +183,7 @@ inline bool materialize_audio_source_offsets(const Project& project, EditClip* c
   const double sample_rate = project.sample_rate();
   const auto materialize = [&](double offset_ppq, std::optional<double>* physical) {
     if (physical == nullptr) return false;
-    if (physical->has_value()) {
-      return std::isfinite(**physical) && **physical >= 0.0;
-    }
+    if (physical->has_value()) return physical_offset_valid(*physical);
     if (!(std::isfinite(offset_ppq) && offset_ppq >= 0.0) || !std::isfinite(clip->start_ppq) ||
         !std::isfinite(clip->start_ppq + offset_ppq)) {
       return false;
