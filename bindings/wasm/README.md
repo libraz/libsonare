@@ -74,6 +74,7 @@ try {
 ## Advanced
 
 - Offline Worker for long audio (`OfflineWorkerClient`) → [Web Worker usage](https://libsonare.libraz.net/docs/wasm-advanced)
+- Bundling: a bundler emits the two worker scripts as files of their own, and nothing loads them until an `OfflineWorkerClient` or `VocalEditWorkerClient` is constructed; an AudioWorklet module imports `@libraz/libsonare/worklet` rather than the root entry
 - Loading the `.wasm` file with `locateFile` → [JavaScript API](https://libsonare.libraz.net/docs/js-api)
 - Realtime voice changer preset schemas → [Realtime voice changer](https://libsonare.libraz.net/docs/realtime-voice-changer)
 - Audio-thread classes, bounded-memory OPFS clip streaming, the cue bus and mastering preview from `@libraz/libsonare/worklet`; an object built from one entry is not an `instanceof` the other entry's class, so pass plain data between realms → [Realtime and streaming](https://libsonare.libraz.net/docs/realtime-streaming)
