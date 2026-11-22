@@ -211,13 +211,3 @@ TEST_CASE("CaptureSink publishes captured samples before captured_frames", "[eng
   REQUIRE(sink.captured_frames() == static_cast<int64_t>(kFrames));
   REQUIRE_FALSE(stale_prefix.load(std::memory_order_relaxed));
 }
-
-TEST_CASE("Capture boundaries include punch in and out offsets", "[engine][capture]") {
-  sonare::engine::CaptureBoundaryList boundaries;
-  sonare::engine::collect_capture_boundaries(1000, 256, 1050, 1200, &boundaries);
-
-  REQUIRE(boundaries.size == 2);
-  REQUIRE(boundaries.offsets[0] == 50);
-  REQUIRE(boundaries.offsets[1] == 200);
-  REQUIRE_FALSE(boundaries.overflowed);
-}

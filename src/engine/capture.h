@@ -3,7 +3,6 @@
 /// @file capture.h
 /// @brief Realtime-safe punch in/out capture sink.
 
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -108,19 +107,5 @@ class CaptureSink {
   // cross-thread (control thread, via RealtimeEngine::capture_overflow_count()).
   rt::OverflowCounter overflow_count_{};
 };
-
-struct CaptureBoundaryList {
-  static constexpr size_t kCapacity = 4;
-  std::array<int, kCapacity> offsets{};
-  size_t size = 0;
-  bool overflowed = false;
-
-  void clear() noexcept;
-  bool add(int offset) noexcept;
-  void sort_unique() noexcept;
-};
-
-void collect_capture_boundaries(int64_t block_start_sample, int num_frames, int64_t punch_start,
-                                int64_t punch_end, CaptureBoundaryList* out) noexcept;
 
 }  // namespace sonare::engine

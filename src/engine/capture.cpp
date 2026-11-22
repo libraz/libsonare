@@ -60,43 +60,4 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
   }
 }
 
-void CaptureBoundaryList::clear() noexcept {
-  size = 0;
-  overflowed = false;
-}
-
-bool CaptureBoundaryList::add(int offset) noexcept {
-  if (size >= offsets.size()) {
-    overflowed = true;
-    return false;
-  }
-  offsets[size++] = offset;
-  return true;
-}
-
-void CaptureBoundaryList::sort_unique() noexcept {
-  std::sort(offsets.begin(), offsets.begin() + static_cast<std::ptrdiff_t>(size));
-  size_t out = 0;
-  for (size_t i = 0; i < size; ++i) {
-    if (out == 0 || offsets[i] != offsets[out - 1]) offsets[out++] = offsets[i];
-  }
-  size = out;
-}
-
-void collect_capture_boundaries(int64_t block_start_sample, int num_frames, int64_t punch_start,
-                                int64_t punch_end, CaptureBoundaryList* out) noexcept {
-  if (!out) return;
-  out->clear();
-  if (num_frames <= 0) return;
-  const int64_t block_end =
-      numeric::saturating_add(block_start_sample, static_cast<int64_t>(num_frames));
-  if (punch_start > block_start_sample && punch_start <= block_end) {
-    out->add(static_cast<int>(punch_start - block_start_sample));
-  }
-  if (punch_end > block_start_sample && punch_end <= block_end) {
-    out->add(static_cast<int>(punch_end - block_start_sample));
-  }
-  out->sort_unique();
-}
-
 }  // namespace sonare::engine
