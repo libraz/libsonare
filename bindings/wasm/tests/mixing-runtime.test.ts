@@ -6,7 +6,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, Mixer, meteringTruePeakDbtp, mixingScenePreset, mixStereo } from '../dist/index.js';
-import { assertStripIndex, expectRefusalOf, sine, unknownKeyError } from './_helpers';
+import { assertStripIndex, expectRefusalOf, present, sine, unknownKeyError } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -826,8 +826,9 @@ describe('Mixer runtime controls (WASM)', () => {
 
       mixer.flushMeters();
       const after = mixer.meterSnapshot();
-      expect(Math.abs(after.truePeakDbtpL - offlineDb)).toBeLessThan(1e-3);
-      expect(after.truePeakDbtpL).toBeGreaterThanOrEqual(after.peakDbL);
+      const truePeak = present(after.truePeakDbtpL, 'truePeakDbtpL');
+      expect(Math.abs(truePeak - offlineDb)).toBeLessThan(1e-3);
+      expect(truePeak).toBeGreaterThanOrEqual(present(after.peakDbL, 'peakDbL'));
     } finally {
       mixer.destroy();
     }

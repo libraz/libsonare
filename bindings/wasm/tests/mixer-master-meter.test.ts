@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, Mixer, type MixMeterSnapshot, type SonareError } from '../dist/index.js';
-import { expectRefusalOf } from './_helpers';
+import { expectRefusalOf, present } from './_helpers';
 
 interface Reading {
   peakDbL: number;
@@ -48,13 +48,13 @@ function expectReading(actual: MixMeterSnapshot, expected: Reading): void {
   };
   for (const [field, value] of Object.entries(dB)) {
     expect(
-      Math.abs(value - expected[field as keyof Reading]),
+      Math.abs(present(value, field) - expected[field as keyof Reading]),
       `${field}: ${value} vs ${expected[field as keyof Reading]}`,
     ).toBeLessThanOrEqual(fixture.toleranceDb);
   }
-  expect(Math.abs(actual.correlation - expected.correlation)).toBeLessThanOrEqual(
-    fixture.toleranceCorrelation,
-  );
+  expect(
+    Math.abs(present(actual.correlation, 'correlation') - expected.correlation),
+  ).toBeLessThanOrEqual(fixture.toleranceCorrelation);
 }
 
 describe('Mixer master meter', () => {
@@ -148,7 +148,7 @@ describe('Mixer master meter', () => {
     // Switched off: the readings are absent, not a floor value.
     expect('momentaryLufs' in unmeasured).toBe(false);
     expect('maxTruePeakDbtp' in unmeasured).toBe(false);
-    expect(unmeasured.peakDbL).toBeCloseTo(measured.peakDbL, 3);
+    expect(unmeasured.peakDbL).toBeCloseTo(present(measured.peakDbL, 'peakDbL'), 3);
   });
 
   it('refuses a non-boolean measureLufs or measureTruePeak by name', () => {

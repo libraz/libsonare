@@ -390,7 +390,7 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   {
     callable: 'Mixer.constructor',
     message: `Mixer: ${overBudget('scene')}`,
-    run: (api, l) => new api.Mixer({ sampleRate: 48000, scene: { strips: l, buses: [] } }),
+    run: (api, l) => new api.Mixer({ sampleRate: 48000, scene: { strips: l, buses: [] } as never }),
   },
   {
     callable: 'Project.rehydrateVocalEdits',

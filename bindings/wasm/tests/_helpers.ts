@@ -122,3 +122,9 @@ export function unknownKeyError(head: string, also?: string) {
 export function textMatcher(message: string | RegExp): unknown {
   return typeof message === 'string' ? message : expect.stringMatching(message);
 }
+
+/** Returns `value`, failing the test when it is absent; for a level the call must have measured. */
+export function present<T>(value: T | undefined, what = 'value'): T {
+  expect(value, `${what} should be present`).toBeDefined();
+  return value as T;
+}

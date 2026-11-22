@@ -31,7 +31,7 @@ import {
 } from '../../dist/index.js';
 import { init as initSource } from '../../src/index';
 import { getSonareModule } from '../../src/module_state';
-import { unknownKeyError } from '../_helpers';
+import { present, unknownKeyError } from '../_helpers';
 
 const sampleRate = 22050;
 // Any exported function by name, for tables that sweep many entry points.
@@ -336,7 +336,10 @@ describe('mastering metering surface', () => {
       );
       expect(result.integratedLufs).toBeCloseTo(native.integratedLufs, 5);
       expect(Number.isFinite(result.loudnessRangeLu)).toBe(true);
-      expect(result.loudnessRangeLu).toBeCloseTo(native.loudnessRangeLu, 5);
+      expect(result.loudnessRangeLu).toBeCloseTo(
+        present(native.loudnessRangeLu, 'loudnessRangeLu'),
+        5,
+      );
     });
 
     it('returns the series under momentaryLufs / shortTermLufs', () => {

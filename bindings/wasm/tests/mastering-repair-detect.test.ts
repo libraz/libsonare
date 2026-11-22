@@ -27,6 +27,7 @@ import {
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
 } from '../src/index';
+import { present } from './_helpers';
 
 const SR = 48000;
 const TRIM_SR = 22050;
@@ -267,7 +268,7 @@ describe('repair detection (WASM)', () => {
         withNoise(new Float32Array(SPECTRAL_FRAMES), 0.4, 1),
         TRIM_SR,
       );
-      expect(loud.floorDbfs).toBeGreaterThan(quiet.floorDbfs + 20);
+      expect(loud.floorDbfs).toBeGreaterThan(present(quiet.floorDbfs) + 20);
     });
 
     it('pads a buffer shorter than nFft, as the reverb detector does', () => {

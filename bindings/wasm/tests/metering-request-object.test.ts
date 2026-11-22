@@ -17,6 +17,7 @@ import {
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index';
+import { present } from './_helpers';
 
 const sampleRate = 22050;
 const samples = new Float32Array(8192);
@@ -47,7 +48,7 @@ describe('metering request object compatibility (WASM)', () => {
       6,
     );
     expect(meteringCrestFactorDb({ samples, sampleRate })).toBeCloseTo(
-      meteringCrestFactorDb(samples, sampleRate),
+      present(meteringCrestFactorDb(samples, sampleRate), 'crest'),
       6,
     );
     expect(meteringDcOffset({ samples, sampleRate })).toBeCloseTo(
@@ -81,7 +82,7 @@ describe('metering request object compatibility (WASM)', () => {
 
   it('runs the stereo meter and scope calls from a request', () => {
     expect(meteringStereoCorrelation({ left: samples, right, sampleRate })).toBeCloseTo(
-      meteringStereoCorrelation({ left: samples, right, sampleRate }),
+      present(meteringStereoCorrelation({ left: samples, right, sampleRate }), 'correlation'),
       6,
     );
     expect(Number.isFinite(meteringStereoWidth({ left: samples, right, sampleRate }))).toBe(true);
@@ -99,7 +100,7 @@ describe('metering request object compatibility (WASM)', () => {
     const phaseScope = meteringPhaseScope({ left: samples, right, sampleRate, maxPoints });
     expect(phaseScope.radius.length).toBeLessThanOrEqual(maxPoints);
     const full = meteringPhaseScope({ left: samples, right, sampleRate });
-    expect(phaseScope.correlation).toBeCloseTo(full.correlation, 6);
+    expect(phaseScope.correlation).toBeCloseTo(present(full.correlation, 'correlation'), 6);
     // Omitting maxPoints stays full resolution (one point per input sample); 0 is refused.
     expect(meteringVectorscope({ left: samples, right, sampleRate }).mid.length).toBe(
       samples.length,

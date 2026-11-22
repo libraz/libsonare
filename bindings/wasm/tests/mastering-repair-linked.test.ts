@@ -30,6 +30,7 @@ import {
   masteringRepairDereverbClassicalLinked,
   masteringRepairDereverbClassicalStereo,
 } from '../src/index';
+import { present } from './_helpers';
 
 const SR = 22050;
 // Half a second: 43 hops at the default 256-sample hop, enough frames for the
@@ -121,10 +122,9 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
     // summed mean square of the whole set. A "call the stereo path twice"
     // implementation cannot produce this, and a pair cannot distinguish the two
     // constants, which is why the case needs a third channel.
-    expect(three.reports[0].detected.floorDbfs - one.reports[0].detected.floorDbfs).toBeCloseTo(
-      10 * Math.log10(3),
-      3,
-    );
+    expect(
+      present(three.reports[0].detected.floorDbfs) - present(one.reports[0].detected.floorDbfs),
+    ).toBeCloseTo(10 * Math.log10(3), 3);
 
     // The shape of the set-level detection, and the fields that are fractions
     // and therefore do NOT move with the count.

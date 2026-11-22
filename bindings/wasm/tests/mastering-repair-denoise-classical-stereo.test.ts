@@ -12,6 +12,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, masteringRepairDenoiseClassicalStereo } from '../src/index';
+import { present } from './_helpers';
 
 const SR = 22050;
 // Half a second: 43 hops at the default 256-sample hop, enough frames for the
@@ -108,10 +109,9 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     // two, but the dB conversion is float32, which is what the tolerance below
     // is for. This is why a stereo floor is comparable only against another
     // stereo floor.
-    expect(pair.reports[0].detected.floorDbfs - single.reports[0].detected.floorDbfs).toBeCloseTo(
-      10 * Math.log10(2),
-      4,
-    );
+    expect(
+      present(pair.reports[0].detected.floorDbfs) - present(single.reports[0].detected.floorDbfs),
+    ).toBeCloseTo(10 * Math.log10(2), 4);
   });
 
   it('floors on reductionDb outside spectralSubtraction, and never inside it', () => {

@@ -9,6 +9,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, splitSilenceCommon, splitSilenceCommonWithReport } from '../dist/index.js';
+import { present } from './_helpers';
 
 describe('splitSilenceCommonWithReport', () => {
   const sampleRate = 22050;
@@ -93,7 +94,7 @@ describe('splitSilenceCommonWithReport', () => {
     // The figure is actionable, not merely different: a threshold below it cuts.
     const tight = splitSilenceCommonWithReport({
       signals: [take, other],
-      topDb: loose.report.silenceCeilingDb - 5,
+      topDb: present(loose.report.silenceCeilingDb, 'silence ceiling') - 5,
       frameLength,
       hopLength,
     });

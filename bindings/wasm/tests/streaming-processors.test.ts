@@ -113,7 +113,7 @@ describe('Sonare WASM Module', () => {
       // loudness; a chain built without one applies none, exactly as a 0 dB gain does.
       const config = {
         sampleRate: 44100,
-        numChannels: 1,
+        numChannels: 1 as const,
         maxBlockSize: 256,
         loudness: { targetLufs: -18, ceilingDbtp: -1, truePeakOversample: 4 },
       };
@@ -132,8 +132,8 @@ describe('Sonare WASM Module', () => {
         // Control: a real gain moves the same input, so the equality above is not vacuous.
         const gained = new StreamingMasteringChain({ ...config, loudnessStaticGainDb: -12 });
         const probe = new Float32Array(256).fill(0.25);
-        let a = probe;
-        let c = probe;
+        let a: Float32Array = probe;
+        let c: Float32Array = probe;
         for (let b = 0; b < 16; b++) {
           a = ungained.processMono(probe);
           c = gained.processMono(probe);

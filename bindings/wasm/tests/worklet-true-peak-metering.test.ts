@@ -17,6 +17,7 @@ import {
   SonareWorkletProcessor,
   type WorkletMeterSnapshot,
 } from '../dist/worklet.js';
+import { present } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 128;
@@ -116,12 +117,12 @@ function runMixerWorklet(
 
 function dbFields(meter: WorkletMeterSnapshot): number[] {
   return [
-    meter.peakDbL,
-    meter.peakDbR,
-    meter.rmsDbL,
-    meter.rmsDbR,
-    meter.truePeakDbtpL,
-    meter.truePeakDbtpR,
+    present(meter.peakDbL, 'peakDbL'),
+    present(meter.peakDbR, 'peakDbR'),
+    present(meter.rmsDbL, 'rmsDbL'),
+    present(meter.rmsDbR, 'rmsDbR'),
+    present(meter.truePeakDbtpL, 'truePeakDbtpL'),
+    present(meter.truePeakDbtpR, 'truePeakDbtpR'),
   ];
 }
 
@@ -138,8 +139,8 @@ describe('mixer worklet true-peak metering', () => {
     // The construction puts the inter-sample peak 3.01 dB above the sample peak.
     // A sample-peak implementation reports the two as the same number, so this
     // margin cannot be met by relabelling one as the other.
-    expect(meter.truePeakDbtpL).toBeGreaterThan(meter.peakDbL + 1.5);
-    expect(meter.truePeakDbtpR).toBeGreaterThan(meter.peakDbR + 1.5);
+    expect(meter.truePeakDbtpL).toBeGreaterThan(present(meter.peakDbL, 'peakDbL') + 1.5);
+    expect(meter.truePeakDbtpR).toBeGreaterThan(present(meter.peakDbR, 'peakDbR') + 1.5);
   });
 
   it('agrees with the offline true-peak measurement of the same audio', () => {
