@@ -20,6 +20,7 @@ import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
@@ -96,12 +97,10 @@ import {
   normalizeSynthInstrument,
   panLawValue,
   panModeValue,
+  partRigInsertsJson,
 } from './value_coercion.js';
 
 export * from './clip_page_provider.js';
-
-const isAbsent = (value: unknown): value is undefined | null =>
-  value === undefined || value === null;
 
 function isObjectValue(value: unknown): value is object {
   return (
@@ -429,7 +428,7 @@ function trackOnly(ref: StripRef): number {
 }
 
 function eqBandJsonOf(band: EqBandInput): string {
-  if (typeof band !== 'object' || band === null || Array.isArray(band)) {
+  if (!isNonArrayObject(band)) {
     throw refuseType(`band must be an object`);
   }
   return JSON.stringify(band);
@@ -621,33 +620,6 @@ function bounceToNative(options: EngineBounceOptions): Record<string, unknown> {
 }
 
 const CAPTURE_SOURCES = ['output', 'input'] as const;
-
-function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
-  if (isAbsent(inserts)) {
-    return undefined;
-  }
-  if (!Array.isArray(inserts)) {
-    throw refuseType('inserts must be an array');
-  }
-  return JSON.stringify(
-    inserts.map((insert, index) => {
-      if (typeof insert !== 'object' || insert === null) {
-        throw refuseType(`inserts[${index}] must be an object`);
-      }
-      if (typeof insert.processor !== 'string') {
-        throw refuseType(`inserts[${index}].processor must be a string`);
-      }
-      const { params } = insert;
-      if (params === undefined) {
-        return { processor: insert.processor, params: {} };
-      }
-      if (typeof params !== 'object' || params === null || Array.isArray(params)) {
-        throw refuseType(`inserts[${index}].params must be an object`);
-      }
-      return { processor: insert.processor, params };
-    }),
-  );
-}
 
 /** A config object that must not repeat the destination id the call already names. */
 function withoutDestinationId<T extends object>(config: T): T {

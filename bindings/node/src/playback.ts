@@ -1,4 +1,5 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   PlaybackDiagnostics,
@@ -21,7 +22,7 @@ type NativePlaybackRenderer = InstanceType<typeof addon.PlaybackRenderer>;
 type NativePlaybackLoudnessMeter = InstanceType<typeof addon.PlaybackLoudnessMeter>;
 
 function configJsonText(config: PlaybackRendererConfig): string {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a configuration object`);
   }
   return JSON.stringify(config);

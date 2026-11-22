@@ -5,6 +5,7 @@ import {
   refuseType,
   refuseUnknownKey,
 } from './internal/entry.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
@@ -25,6 +26,7 @@ import {
   WARP_MODE,
 } from './internal/project_tokens.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   ExternalSeparatedStemImportRequest,
@@ -138,9 +140,6 @@ class AdoptedProject {
 /** Proves a {@link ProjectTimeline} is built by this module. */
 const TIMELINE_TOKEN = Symbol('ProjectTimeline');
 
-const isAbsent = (value: unknown): value is undefined | null =>
-  value === undefined || value === null;
-
 function requireNumber(value: unknown, argName: string): number {
   if (typeof value !== 'number') {
     throw refuseType(`${argName} must be a number`);
@@ -220,7 +219,7 @@ function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   }
   return takes.map((entry: unknown, index) => {
     const where = `takes[${index}]`;
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    if (!isNonArrayObject(entry)) {
       throw refuseType(`${where} must be an object`);
     }
     refuseUnknownFields(entry, where, TAKE_KEYS);
@@ -247,7 +246,7 @@ function compSegmentsToNative(segments: unknown): Array<Record<string, unknown>>
     throw refuseType(`segments must be an array`);
   }
   return segments.map((entry: unknown, index) => {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    if (!isNonArrayObject(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
     }
     refuseUnknownFields(entry, `segments[${index}]`, COMP_SEGMENT_KEYS);
@@ -315,7 +314,7 @@ const INSTRUMENT_BINDING_KEYS = ['destinationId', 'instrument'];
  * instead of beside it.
  */
 function instrumentBinding(pair: unknown, label: string): Record<string, unknown> {
-  if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
+  if (!isNonArrayObject(pair)) {
     throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
   }
   const record = pair as Record<string, unknown>;
@@ -611,9 +610,7 @@ export class Project {
   }
 
   private assertAlive(): void {
-    if (this.disposed) {
-      throw invalidState('Project has been destroyed');
-    }
+    assertHandleLive(this.disposed, 'Project');
   }
 
   private disposed = false;
@@ -947,7 +944,7 @@ export class Project {
 
   /** Add or replace a first-class warp map referenced by clip warp ids. */
   setWarpMap(map: import('./types.js').ProjectWarpMapDesc): void {
-    if (typeof map !== 'object' || map === null || Array.isArray(map)) {
+    if (!isNonArrayObject(map)) {
       throw refuseType('map must be an object');
     }
     const { name, ...rest } = map;

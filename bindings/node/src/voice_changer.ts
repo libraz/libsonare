@@ -6,6 +6,8 @@ import {
   refuseUnknownKey,
   withEntry,
 } from './internal/entry.js';
+import { deinterleave, interleavePlanar } from './internal/planar.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   RealtimeVoiceChangerConfig,
@@ -54,13 +56,9 @@ function checkedPresetId(id: unknown, argName = 'preset'): VoicePresetId {
   return PRESET_IDS[presetOrdinal(id, argName)] as VoicePresetId;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /** True for the flat config object (as opposed to a nested preset document). */
 function isFlatConfig(config: unknown): config is Record<string, unknown> {
-  return isRecord(config) && 'retunePitchSemitones' in config;
+  return isNonArrayObject(config) && 'retunePitchSemitones' in config;
 }
 
 let flatReference: RealtimeVoiceChangerConfig | undefined;
@@ -136,7 +134,7 @@ function nativeVoiceConfig(
   if (isFlatConfig(config)) {
     return nativePodConfig(config);
   }
-  if (!isRecord(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a preset id or an object`);
   }
   return config;
@@ -171,29 +169,6 @@ function assertPlanes(channels: unknown, carrier?: unknown): Float32Array[] {
   return channels as Float32Array[];
 }
 
-function interleavePlanes(planes: readonly Float32Array[]): Float32Array {
-  const frames = planes[0]?.length ?? 0;
-  const out = new Float32Array(frames * planes.length);
-  planes.forEach((plane, ch) => {
-    for (let i = 0; i < frames; i++) {
-      out[i * planes.length + ch] = plane[i] as number;
-    }
-  });
-  return out;
-}
-
-function deinterleavePlanes(data: Float32Array, numChannels: number): Float32Array[] {
-  const frames = data.length / numChannels;
-  const planes = Array.from({ length: numChannels }, () => new Float32Array(frames));
-  for (let ch = 0; ch < numChannels; ch++) {
-    const plane = planes[ch] as Float32Array;
-    for (let i = 0; i < frames; i++) {
-      plane[i] = data[i * numChannels + ch] as number;
-    }
-  }
-  return planes;
-}
-
 const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numChannels', 'config'];
 
 /** Realtime voice-changer chain: pitch, formant, EQ, dynamics, harmony, vocoder, character and space stages over mono or stereo blocks. Call {@link RealtimeVoiceChanger.destroy} when done. */
@@ -210,7 +185,7 @@ export class RealtimeVoiceChanger {
    *   `numChannels` or an unknown preset id or token.
    */
   constructor(options: RealtimeVoiceChangerOptions) {
-    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    if (!isNonArrayObject(options)) {
       throw refuseType(`options must be an object with a sampleRate`);
     }
     for (const key of Object.keys(options)) {
@@ -496,12 +471,12 @@ export function realtimeVoiceChangerRender(
       nativeVoiceConfig(req.config ?? 'neutralMonitor'),
     );
     const out = addon.realtimeVoiceChangerRender(
-      interleavePlanes(planes),
+      interleavePlanar(planes).data,
       req.sampleRate,
       typeof native === 'string' ? native : JSON.stringify(native),
       planes.length,
     );
-    return deinterleavePlanes(out, planes.length);
+    return deinterleave(out, planes.length);
   });
 }
 
@@ -590,7 +565,7 @@ export type StreamingRetuneAppliedConfig = Required<
 // The grain is checked here because nothing below refuses a fraction or an out-of-range value;
 // native refuses wrong-typed controls.
 function assertRetuneConfig(config: StreamingRetuneConfig): StreamingRetuneConfig {
-  if (!isRecord(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be an object`);
   }
   assertKnownRequestKeys('StreamingRetune', config as Record<string, unknown>);

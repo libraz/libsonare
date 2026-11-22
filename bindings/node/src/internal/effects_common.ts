@@ -5,6 +5,7 @@
 import type { VoicedFlags } from '../types.js';
 import { assertInt64, resolveSampleBound } from '../validation.js';
 import { mergeRespelled, type Respelled, refuse, refuseType } from './entry.js';
+import { isNonArrayObject } from './value_guards.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so validate and normalize here rather than at the
@@ -25,8 +26,9 @@ export function toVoicedInt32(voiced: VoicedFlags): Int32Array {
     );
   }
   const out = new Int32Array(voiced.length);
+  const isArray = Array.isArray(voiced);
   for (let index = 0; index < voiced.length; index += 1) {
-    if (Array.isArray(voiced)) {
+    if (isArray) {
       const value = voiced[index];
       if (typeof value !== 'number' && typeof value !== 'boolean') {
         throw refuseType(`voiced array entries must be numbers or booleans`);
@@ -35,10 +37,6 @@ export function toVoicedInt32(voiced: VoicedFlags): Int32Array {
     out[index] = voiced[index] ? 1 : 0;
   }
   return out;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** The time fields a note or event entry may spell in samples or in seconds. */
@@ -99,7 +97,7 @@ export function resolveEntryTimes<T extends TimedEntry>(
       resolved.offsetSample = offsetBound.value;
       respellings.push(onset.respelled, offsetBound.respelled);
     }
-    if (isPlainObject(entry.edit)) {
+    if (isNonArrayObject(entry.edit)) {
       const { timeOffsetSec, ...edit } = entry.edit;
       const offset = resolveSampleBound(
         edit.timeOffsetSamples,
@@ -113,8 +111,7 @@ export function resolveEntryTimes<T extends TimedEntry>(
         assertInt64(offset.value, `${at}.edit.timeOffsetSamples`);
       }
       respellings.push(offset.respelled);
-      resolved.edit = { ...entry.edit, timeOffsetSamples: offset.value };
-      delete (resolved.edit as { timeOffsetSec?: number }).timeOffsetSec;
+      resolved.edit = { ...edit, timeOffsetSamples: offset.value };
     }
     return resolved as T;
   });

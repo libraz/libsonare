@@ -6,6 +6,7 @@ import {
   refuseType,
   refuseUnknownKey,
 } from './internal/entry.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
@@ -80,7 +81,7 @@ export interface StreamingEqualizerConfig {
 }
 
 function assertConfigObject(config: unknown): asserts config is object {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be an object`);
   }
 }
@@ -563,7 +564,7 @@ function assertStreamReferenceHz(referenceHz: unknown): asserts referenceHz is n
 
 /** Validates the public config and spells it the way the addon reads it. */
 function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType('config must be an object with a sampleRate');
   }
   for (const key of Object.keys(config)) {
@@ -889,7 +890,7 @@ const EQ_BAND_KEYS: Readonly<Record<keyof EqBandInput, true>> = {
 
 /** Refuse a band that is not an object or carries a key no band reads. */
 function assertEqBand(band: unknown): asserts band is EqBandInput {
-  if (typeof band !== 'object' || band === null || Array.isArray(band)) {
+  if (!isNonArrayObject(band)) {
     throw refuseType('band must be an object');
   }
   for (const key of Object.keys(band)) {

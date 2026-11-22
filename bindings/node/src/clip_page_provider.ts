@@ -1,6 +1,7 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { bindNativeClipPageProvider } from './internal/clip_page_native.js';
-import { entryClass, invalidState } from './internal/entry.js';
+import { entryClass } from './internal/entry.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import { addon } from './native.js';
 import type { ClipPageProviderOptions, FileClipPageProviderOptions } from './types.js';
 import { requestObject } from './validation.js';
@@ -88,7 +89,7 @@ export class FileClipPageProvider extends ClipPageProvider {
   /** Read one page from the file and supply it; `false` when the page lies outside the file. */
   supplyPage(pageIndex: number): boolean {
     if (this.fd === null) {
-      throw invalidState('FileClipPageProvider has been destroyed');
+      throw releasedHandleError('FileClipPageProvider');
     }
     if (pageIndex < 0) {
       return false;

@@ -1,4 +1,5 @@
 import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import type { VocalReason, VocalStateToken } from './types_vocal_edit.js';
 import type {
   ProjectVocalEditApplyRequest,
@@ -39,7 +40,7 @@ interface NativeProjectVocal {
 }
 
 function objectValue(value: unknown, field: string): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isNonArrayObject(value)) {
     throw refuseType(`${field} must be an object`);
   }
   return value as Record<string, unknown>;

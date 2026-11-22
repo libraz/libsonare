@@ -89,7 +89,8 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
-import { entryClass, invalidState, refuseType } from './internal/entry.js';
+import { entryClass, refuseType } from './internal/entry.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import type { MasterAudioRequest } from './mastering_chain.js';
 import { masterAudio as masterAudioFn } from './mastering_chain.js';
 import type {
@@ -259,9 +260,7 @@ export class Audio {
   }
 
   private requireAlive(): void {
-    if (this.disposed) {
-      throw invalidState('Audio has been destroyed');
-    }
+    assertHandleLive(this.disposed, 'Audio');
   }
 
   /**

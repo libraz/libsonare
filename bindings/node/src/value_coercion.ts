@@ -1,6 +1,7 @@
 import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
@@ -197,7 +198,7 @@ export function normalizeSynthInstrument(patch: SynthPatch): SynthPatch {
  * Serialize a part-rig request's inserts to the C ABI JSON form, refusing a
  * wrong shape by field name. Returns `undefined` when there are none.
  */
-function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
+export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
   if (inserts === undefined || inserts === null) {
     return undefined;
   }
@@ -216,7 +217,7 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
       if (params === undefined) {
         return { processor: insert.processor, params: {} };
       }
-      if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+      if (!isNonArrayObject(params)) {
         throw refuseType(`inserts[${index}].params must be an object`);
       }
       return { processor: insert.processor, params };

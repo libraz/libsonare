@@ -8,6 +8,7 @@ import {
   midi2U32,
   programArg,
 } from './internal/ump_events.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { RequestFn } from './request_keys.js';
 import type {
@@ -50,9 +51,6 @@ import type {
 } from './types_project.js';
 import { assertBoundedInteger, midi1Event, requestObject } from './validation.js';
 import { projectAutomationPointFromNative } from './value_coercion.js';
-
-const isAbsent = (value: unknown): value is undefined | null =>
-  value === undefined || value === null;
 
 function requireNumber(value: unknown, argName: string): number {
   if (typeof value !== 'number') {

@@ -1,5 +1,6 @@
 import { type Respelled, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
+import { isPlainRecord } from './internal/value_guards.js';
 import { NESTED_REQUEST_KEYS, REQUEST_KEYS, type RequestFn } from './request_keys.js';
 import type { ProjectMidiEvent } from './types.js';
 
@@ -704,15 +705,6 @@ function ownKey(keys: object, key: string): boolean {
   return Object.hasOwn(keys, key);
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    !ArrayBuffer.isView(value)
-  );
-}
-
 /**
  * Refuse the first key of `value` outside `fnName`'s declared request fields,
  * and the first key of a nested options object outside its declared fields. A
@@ -739,7 +731,7 @@ export function assertKnownRequestKeys(
       ? options.map((item, i) => [`${field}[${i}]`, item])
       : [[field, options]];
     for (const [path, item] of items) {
-      if (!isPlainObject(item)) {
+      if (!isPlainRecord(item)) {
         continue;
       }
       for (const key of Object.keys(item)) {
@@ -764,7 +756,7 @@ function bagKeys(keys: object): string[] {
  * as the request form: an unknown key is refused (`TypeError`), naming it.
  */
 export function optionsBag<O>(requestName: RequestFn, options: O): O {
-  if (isPlainObject(options)) {
+  if (isPlainRecord(options)) {
     const keys: object = REQUEST_KEYS[requestName];
     for (const key of Object.keys(options)) {
       if (!ownKey(keys, key)) {
@@ -791,7 +783,7 @@ export function requestObject<T, N extends RequestFn>(
   argName = 'samples',
   requestOnly = false,
 ): T {
-  if (!isPlainObject(value)) {
+  if (!isPlainRecord(value)) {
     if (requestOnly) {
       throw refuseType(`request must be an object`);
     }

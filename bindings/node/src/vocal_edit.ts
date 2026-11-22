@@ -9,6 +9,7 @@ import {
   refuseType,
   withEntry,
 } from './internal/entry.js';
+import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type {
@@ -370,9 +371,7 @@ export class VocalEditSession implements Disposable {
   }
 
   private requireAlive(): void {
-    if (this.disposed) {
-      throw invalidState('VocalEditSession has been destroyed');
-    }
+    assertHandleLive(this.disposed, 'VocalEditSession');
   }
 }
 
@@ -476,7 +475,7 @@ export class VocalEditDraft implements Disposable {
       throw invalidState(`VocalEditDraft ${this.endedAs}`);
     }
     if (disposedSessions.has(this.owner)) {
-      throw invalidState('VocalEditDraft has been destroyed');
+      throw releasedHandleError('VocalEditDraft');
     }
   }
 }
@@ -592,9 +591,7 @@ export class VocalRenderSnapshot implements Disposable {
   }
 
   private requireAlive(): void {
-    if (this.disposed) {
-      throw invalidState('VocalRenderSnapshot has been destroyed');
-    }
+    assertHandleLive(this.disposed, 'VocalRenderSnapshot');
   }
 
   private resolveRange(request: VocalRenderJobRequest): {
