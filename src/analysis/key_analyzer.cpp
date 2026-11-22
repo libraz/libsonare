@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "analysis/chord_analyzer.h"
+#include "analysis/chord_templates.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "util/exception.h"
@@ -348,39 +349,13 @@ double median_run_duration(const std::vector<ConfidenceRun>& runs) {
                                        : run_durations[middle];
 }
 
-/// @brief Reduce an extended/seventh chord quality to its underlying triad base.
-///
-/// Diatonic scoring only models the three triad qualities (Major/Minor/Diminished),
-/// so a Imaj7 or V7 would otherwise score as non-diatonic and deflate the key
-/// estimate on seventh-heavy jazz/pop material. Map each extended quality onto the
-/// triad it is built on; qualities without a clear triad base (Sus*, Unknown,
-/// Augmented) are passed through unchanged so they remain non-diatonic.
-ChordQuality reduce_to_triad(ChordQuality quality) {
-  switch (quality) {
-    case ChordQuality::Dominant7:
-    case ChordQuality::Major7:
-    case ChordQuality::Add9:
-    case ChordQuality::Major9:
-    case ChordQuality::Dominant9:
-      return ChordQuality::Major;
-    case ChordQuality::Minor7:
-    case ChordQuality::MinorAdd9:
-      return ChordQuality::Minor;
-    case ChordQuality::Dim7:
-    case ChordQuality::HalfDim7:
-      return ChordQuality::Diminished;
-    default:
-      return quality;
-  }
-}
-
 /// @brief Check if a chord is diatonic in a given major key.
 /// @param chord_root Chord root pitch class
 /// @param chord_quality Chord quality
 /// @param key_root Key root pitch class
 /// @return true if chord is diatonic
 bool is_diatonic_major(PitchClass chord_root, ChordQuality chord_quality, PitchClass key_root) {
-  chord_quality = reduce_to_triad(chord_quality);
+  chord_quality = chord_quality_triad_base(chord_quality);
   int interval = semitones_above(static_cast<int>(chord_root), static_cast<int>(key_root));
 
   // Diatonic chords in major key:
@@ -450,7 +425,7 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
       continue;
     }
     if (!std::isfinite(chord.confidence)) return false;
-    const ChordQuality quality = reduce_to_triad(chord.quality);
+    const ChordQuality quality = chord_quality_triad_base(chord.quality);
     const double confidence_mass = duration * chord.confidence;
     total_duration += duration;
     total_confidence_mass += confidence_mass;
@@ -604,7 +579,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
     if (chord.quality == ChordQuality::Unknown || !std::isfinite(duration) || duration <= 0.0f) {
       continue;
     }
-    const ChordQuality triad = reduce_to_triad(chord.quality);
+    const ChordQuality triad = chord_quality_triad_base(chord.quality);
     if (harmonic_run_count > 0 && terminal_runs[harmonic_run_count - 1].root == chord.root &&
         terminal_runs[harmonic_run_count - 1].quality == triad) {
       terminal_runs[harmonic_run_count - 1].duration += duration;
@@ -664,7 +639,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
 
     for (const auto& chord : chords) {
       float duration = std::max(0.0f, chord.duration());
-      ChordQuality triad = reduce_to_triad(chord.quality);
+      ChordQuality triad = chord_quality_triad_base(chord.quality);
       if (is_diatonic_major(chord.root, chord.quality, key_root)) {
         major_score += duration;
 
@@ -689,14 +664,14 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
     // Add bonus if first and last chords are the tonic
     float bookend_bonus = 0.0f;
     if (first_last_same && chords.front().root == key_root &&
-        reduce_to_triad(chords.front().quality) == ChordQuality::Major) {
+        chord_quality_triad_base(chords.front().quality) == ChordQuality::Major) {
       bookend_bonus = total_duration * 0.3f;
     }
 
     // Add bonus if first chord is the tonic (common in pop)
     float first_chord_bonus = 0.0f;
     if (!chords.empty() && chords.front().root == key_root &&
-        reduce_to_triad(chords.front().quality) == ChordQuality::Major) {
+        chord_quality_triad_base(chords.front().quality) == ChordQuality::Major) {
       first_chord_bonus = total_duration * 0.15f;
     }
 
@@ -723,7 +698,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
     for (const auto& chord : chords) {
       float duration = std::max(0.0f, chord.duration());
       int interval = semitones_above(static_cast<int>(chord.root), static_cast<int>(minor_root));
-      ChordQuality triad = reduce_to_triad(chord.quality);
+      ChordQuality triad = chord_quality_triad_base(chord.quality);
 
       bool is_diatonic_minor = false;
       switch (interval) {
@@ -774,13 +749,13 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
 
     float minor_bookend_bonus = 0.0f;
     if (first_last_same && chords.front().root == minor_root &&
-        reduce_to_triad(chords.front().quality) == ChordQuality::Minor) {
+        chord_quality_triad_base(chords.front().quality) == ChordQuality::Minor) {
       minor_bookend_bonus = total_duration * 0.3f;
     }
 
     float minor_first_chord_bonus = 0.0f;
     if (!chords.empty() && chords.front().root == minor_root &&
-        reduce_to_triad(chords.front().quality) == ChordQuality::Minor) {
+        chord_quality_triad_base(chords.front().quality) == ChordQuality::Minor) {
       minor_first_chord_bonus = total_duration * 0.15f;
     }
 
@@ -801,7 +776,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
   }
 
   if (best_score <= 0.0f) {
-    const ChordQuality triad = reduce_to_triad(chords.front().quality);
+    const ChordQuality triad = chord_quality_triad_base(chords.front().quality);
     const Mode fallback_mode = triad == ChordQuality::Minor ? Mode::Minor : Mode::Major;
     return Key{chords.front().root, fallback_mode, 0.0f};
   }
@@ -831,7 +806,7 @@ bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_
       continue;
     }
     if (!std::isfinite(chord.confidence)) return false;
-    const ChordQuality quality = reduce_to_triad(chord.quality);
+    const ChordQuality quality = chord_quality_triad_base(chord.quality);
     const double confidence_mass = duration * chord.confidence;
     if (!runs.empty() && runs.back().root == chord.root && runs.back().quality == quality) {
       runs.back().duration += duration;

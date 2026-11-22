@@ -1288,3 +1288,32 @@ TEST_CASE("refine_key_with_chords recognizes repeated major authentic cadences",
     }
   }
 }
+
+TEST_CASE("estimate_key_from_chords reads extended qualities through their triad",
+          "[key_analyzer][synthetic_matrix]") {
+  for (int root_idx = 0; root_idx < 12; ++root_idx) {
+    auto tonic = static_cast<PitchClass>(root_idx);
+
+    CAPTURE(root_idx);
+
+    std::vector<Chord> major_cadence = {
+        chord(tonic, ChordQuality::Major6, 0.0f, 1.0f),
+        chord(transpose(tonic, 5), ChordQuality::Major6, 1.0f, 2.0f),
+        chord(transpose(tonic, 7), ChordQuality::Dominant7b9, 2.0f, 3.0f),
+        chord(tonic, ChordQuality::Major6, 3.0f, 4.0f),
+    };
+    Key major_key = estimate_key_from_chords(major_cadence);
+    REQUIRE(major_key.root == tonic);
+    REQUIRE(major_key.mode == Mode::Major);
+
+    std::vector<Chord> minor_cadence = {
+        chord(tonic, ChordQuality::Minor6, 0.0f, 1.0f),
+        chord(transpose(tonic, 5), ChordQuality::Minor6, 1.0f, 2.0f),
+        chord(transpose(tonic, 7), ChordQuality::Dominant7b9, 2.0f, 3.0f),
+        chord(tonic, ChordQuality::MinorMajor7, 3.0f, 4.0f),
+    };
+    Key minor_key = estimate_key_from_chords(minor_cadence);
+    REQUIRE(minor_key.root == tonic);
+    REQUIRE(minor_key.mode == Mode::Minor);
+  }
+}
