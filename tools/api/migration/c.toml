@@ -862,7 +862,7 @@ rule = "unit-in-name"
 [[entry]]
 kind = "function"
 old = "sonare_project_fade_curve_from_name"
-changed = "accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER"
+changed = "accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER and the message 'name must be one of linear, equalPower, exponential, logarithmic'"
 domain = "project"
 rule = "token-case"
 test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI resolves canonical clip fade curve names"
@@ -918,7 +918,7 @@ test = "tests/api/sonare_c_assist_test.cpp::sonare_assist_module_ids names both 
 [[entry]]
 kind = "function"
 old = "sonare_project_deserialize"
-changed = "reads only the current document version and refuses a snake_case built-in assist module id naming the lowerCamel one"
+changed = "reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one"
 domain = "project"
 rule = "token-case"
 test = "tests/serialize/project_serializer_roundtrip_test.cpp::a built-in assist module id in its earlier spelling is refused naming the current one"

@@ -2239,7 +2239,7 @@ TEST_CASE("C-ABI clip edits name the parameter they refuse as \"<param> <predica
     CHECK(message() == "loop_mode must be one of 0, 1");
     uint32_t curve = 5;
     CHECK(sonare_project_fade_curve_from_name("sine", &curve) == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(message() == "name must name a declared value");
+    CHECK(message() == "name must be one of linear, equalPower, exponential, logarithmic");
     CHECK(curve == 0);
     SonareProjectClipFade good{};
     SonareProjectClipFade bad{};

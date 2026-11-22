@@ -894,8 +894,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `sonare_project_deserialize` | reads only the current document version and refuses a snake_case built-in assist module id naming the lowerCamel one |
-| `sonare_project_fade_curve_from_name` | accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER |
+| `sonare_project_deserialize` | reads only the current document version (7), so a 1.x document (version 5 or earlier) is refused as unsupported_schema_version and cannot be loaded; clip warpMode, loopMode and fade curves, overlapPolicy, track, source and marker kinds, chord quality, key mode and automation targetKind and curveToNext are written and read as tokens, and an ordinal or an undeclared token is refused with SONARE_ERROR_INVALID_FORMAT and '<path> must be one of <tokens>'; a snake_case built-in assist module id is refused naming the lowerCamel one |
+| `sonare_project_fade_curve_from_name` | accepts exactly linear, equalPower, exponential and logarithmic; case and separator variants and the exp / log abbreviations are refused with SONARE_ERROR_INVALID_PARAMETER and the message 'name must be one of linear, equalPower, exponential, logarithmic' |
 
 #### C extends an operation through an Options struct
 

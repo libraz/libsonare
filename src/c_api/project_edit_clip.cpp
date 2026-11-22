@@ -6,6 +6,7 @@
 #include "arrangement/vocal_edit_sidecar.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
+#include "serialize/serialized_enum_bounds.h"
 #include "util/constants.h"
 #include "util/parameter_checks.h"
 
@@ -17,19 +18,15 @@ SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_
   SONARE_C_REQUIRE_NONNULL(name);
   SONARE_C_REQUIRE_NONNULL(out_curve);
   SONARE_C_TRY
-  const std::string token(name);
-  if (token == "linear") {
-    *out_curve = SONARE_FADE_CURVE_LINEAR;
-  } else if (token == "equalPower") {
-    *out_curve = SONARE_FADE_CURVE_EQUAL_POWER;
-  } else if (token == "exponential") {
-    *out_curve = SONARE_FADE_CURVE_EXPONENTIAL;
-  } else if (token == "logarithmic") {
-    *out_curve = SONARE_FADE_CURVE_LOGARITHMIC;
-  } else {
-    return run_validation(
-        [] { util::check::refuse("name", util::refusal::kDeclaredValuePredicate); });
+  sonare::arrangement::FadeCurve curve{};
+  if (!sonare::serialize::serialized_enum_from_name(name, &curve)) {
+    return run_validation([] {
+      util::check::refuse(
+          "name", "must be one of " +
+                      sonare::serialize::serialized_enum_choices<sonare::arrangement::FadeCurve>());
+    });
   }
+  *out_curve = static_cast<uint32_t>(curve);
   return SONARE_OK;
   SONARE_C_CATCH
 }
