@@ -113,10 +113,11 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_float,
-        ctypes.POINTER(ctypes.c_int),
-        ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
     ]
 
     lib.sonare_reassigned_spectrogram.restype = ctypes.c_int32

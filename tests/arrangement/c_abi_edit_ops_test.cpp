@@ -17,6 +17,7 @@
 #include "c_api/project_internal.h"
 #include "feature/cqt.h"
 #include "mir/key_context.h"
+#include "support/project_bounce.h"
 #include "transport/tempo_map.h"
 
 namespace {
@@ -1243,8 +1244,8 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   float* bounced = nullptr;
   size_t bounced_len = 0;
   int bounce_channels = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len, &bounce_channels) ==
-          SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(project, &options, &bounced, &bounced_len,
+                                          &bounce_channels) == SONARE_OK);
   REQUIRE(bounced_len == 960);
   sonare_free_floats(bounced);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);

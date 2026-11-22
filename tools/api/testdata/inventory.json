@@ -4,7 +4,7 @@
   "python_only": []
  },
  "counts": {
-  "c": 12,
+  "c": 13,
   "cli-native": 2,
   "cli-python": 2,
   "node": 24,
@@ -12,7 +12,7 @@
   "wasm": 19
  },
  "domain_paths": {
-  "declaring-file": 22,
+  "declaring-file": 23,
   "inherited": 45
  },
  "errors": [],
@@ -157,6 +157,80 @@
        "optional": false,
        "rest": false,
        "type": "SonareSession**"
+      }
+     ],
+     "returns": "SonareError"
+    }
+   ],
+   "surface": "c"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "name": "sonare_tempogram",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "samples",
+       "optional": false,
+       "rest": false,
+       "type": "float*"
+      },
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "length",
+       "optional": false,
+       "rest": false,
+       "type": "size_t"
+      },
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "sample_rate",
+       "optional": false,
+       "rest": false,
+       "type": "int"
+      },
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "out",
+       "optional": false,
+       "rest": false,
+       "type": "float**"
+      },
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "out_length",
+       "optional": false,
+       "rest": false,
+       "type": "size_t*"
+      },
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "out_n_frames",
+       "optional": false,
+       "rest": false,
+       "type": "int*"
       }
      ],
      "returns": "SonareError"

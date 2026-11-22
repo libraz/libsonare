@@ -359,7 +359,7 @@ struct BounceJob {
   SonareProject* project;
   const SonareProjectBounceOptions* options;
   float* interleaved = nullptr;
-  size_t len = 0;
+  size_t frames = 0;
   int num_channels = 0;
   SonareError error = SONARE_OK;
   std::string detail;
@@ -376,8 +376,9 @@ struct BounceJob {
 };
 
 // A project bounce result: the interleaved render and the width it was mixed at.
-Napi::Object BounceResultObject(Napi::Env env, const float* interleaved, size_t len,
+Napi::Object BounceResultObject(Napi::Env env, const float* interleaved, size_t frames,
                                 int num_channels) {
+  const size_t len = frames * static_cast<size_t>(num_channels);
   Napi::Float32Array data = Napi::Float32Array::New(env, len);
   if (len > 0 && interleaved != nullptr) {
     std::memcpy(data.Data(), interleaved, len * sizeof(float));
@@ -390,7 +391,7 @@ Napi::Object BounceResultObject(Napi::Env env, const float* interleaved, size_t 
 
 void RunBounceJob(void* arg) {
   auto* job = static_cast<BounceJob*>(arg);
-  job->error = sonare_project_bounce(job->project, job->options, &job->interleaved, &job->len,
+  job->error = sonare_project_bounce(job->project, job->options, &job->interleaved, &job->frames,
                                      &job->num_channels);
   // The detail slot is thread-local, so it is read here and not on the JS thread.
   if (job->error != SONARE_OK) {
@@ -612,11 +613,12 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
 
   if (callback_bindings.empty()) {
     float* interleaved = nullptr;
-    size_t len = 0;
+    size_t frames = 0;
     int num_channels = 0;
-    ThrowIfError(env, sonare_project_bounce(project_, &options, &interleaved, &len, &num_channels));
+    ThrowIfError(env,
+                 sonare_project_bounce(project_, &options, &interleaved, &frames, &num_channels));
     if (env.IsExceptionPending()) return env.Undefined();
-    Napi::Object out = BounceResultObject(env, interleaved, len, num_channels);
+    Napi::Object out = BounceResultObject(env, interleaved, frames, num_channels);
     if (interleaved != nullptr) sonare_free_floats(interleaved);
     return out;
   }
@@ -646,7 +648,7 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (env.IsExceptionPending()) return env.Undefined();
-  return BounceResultObject(env, job.interleaved, job.len, job.num_channels);
+  return BounceResultObject(env, job.interleaved, job.frames, job.num_channels);
   SONARE_NODE_CATCH(env)
 }
 

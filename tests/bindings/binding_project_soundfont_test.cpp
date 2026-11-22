@@ -6,6 +6,7 @@
 
 #include "binding_project_parity_test_helpers.h"
 #include "midi/ump.h"
+#include "support/project_bounce.h"
 #include "support/sf2_builder.h"
 #include "util/resource_limits.h"
 
@@ -22,8 +23,8 @@ SonareError bounce_with_sf2_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.sf2_instruments = bindings;
   with_instruments.sf2_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 // In-memory SF2 fixture: a looped sine preset at (0, 0), a second melodic

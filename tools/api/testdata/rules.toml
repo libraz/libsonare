@@ -161,6 +161,11 @@ title = "Title of c-count-types"
 summary = "Summary of c-count-types."
 
 [[rule]]
+slug = "c-matrix-shape"
+title = "Title of c-matrix-shape"
+summary = "Summary of c-matrix-shape."
+
+[[rule]]
 slug = "c-error-path"
 title = "Title of c-error-path"
 summary = "Summary of c-error-path."

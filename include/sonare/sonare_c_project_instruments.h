@@ -501,10 +501,10 @@ static_assert(sizeof(SonareProjectBounceOptions) ==
 /// @param options Render options, started from @ref sonare_project_bounce_options_init. May be
 ///        NULL for those defaults (project sample rate, the scene master's layout width, block
 ///        128).
-/// @param out_interleaved Receives a heap float array (free with
-///        @ref sonare_free_floats) of length @p out_len = total_frames * channels.
-/// @param out_len Receives the interleaved sample count.
-/// @param out_num_channels Receives the width the render was mixed at: the requested
+/// @param out Receives a heap float array (free with @ref sonare_free_floats) of
+///        @p out_frames * @p out_channels interleaved samples.
+/// @param out_frames Receives the sample frames rendered (samples per channel).
+/// @param out_channels Receives the width the render was mixed at: the requested
 ///        num_channels, or the resolved default when it was
 ///        @ref SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER. Written 0 first, so it is
 ///        defined on every return.
@@ -520,7 +520,7 @@ static_assert(sizeof(SonareProjectBounceOptions) ==
 ///         rendered (its derived length overflows, or the compiled arrangement
 ///         does not fit the engine or the scene's mixer).
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
-                                  float** out_interleaved, size_t* out_len, int* out_num_channels);
+                                  float** out, size_t* out_frames, int* out_channels);
 
 #ifdef __cplusplus
 }

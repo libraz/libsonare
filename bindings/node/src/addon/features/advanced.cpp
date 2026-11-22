@@ -507,15 +507,16 @@ Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
   float quantile{};
   if (!OptionalFloatArg(env, info, 6, "quantile", 0.02f, &quantile)) return env.Undefined();
   float* out = nullptr;
-  int out_rows = 0;
-  int out_cols = 0;
-  SonareError err = sonare_spectral_contrast(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length,
-                                             n_bands, fmin, quantile, &out, &out_rows, &out_cols);
+  size_t count = 0;
+  int out_n_subbands = 0;
+  int out_n_frames = 0;
+  SonareError err =
+      sonare_spectral_contrast(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length, n_bands,
+                               fmin, quantile, &out, &count, &out_n_subbands, &out_n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  const size_t count = static_cast<size_t>(out_rows) * static_cast<size_t>(out_cols);
   Napi::Object result = Napi::Object::New(env);
-  result.Set("rows", Napi::Number::New(env, out_rows));
-  result.Set("cols", Napi::Number::New(env, out_cols));
+  result.Set("rows", Napi::Number::New(env, out_n_subbands));
+  result.Set("cols", Napi::Number::New(env, out_n_frames));
   result.Set("data", FloatResult(env, out, count));
   return result;
   SONARE_NODE_CATCH(env)
@@ -539,15 +540,15 @@ Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float* out = nullptr;
-  int out_rows = 0;
-  int out_cols = 0;
+  size_t count = 0;
+  int out_n_coefficients = 0;
+  int out_n_frames = 0;
   SonareError err = sonare_poly_features(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length,
-                                         order, &out, &out_rows, &out_cols);
+                                         order, &out, &count, &out_n_coefficients, &out_n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  const size_t count = static_cast<size_t>(out_rows) * static_cast<size_t>(out_cols);
   Napi::Object result = Napi::Object::New(env);
-  result.Set("rows", Napi::Number::New(env, out_rows));
-  result.Set("cols", Napi::Number::New(env, out_cols));
+  result.Set("rows", Napi::Number::New(env, out_n_coefficients));
+  result.Set("cols", Napi::Number::New(env, out_n_frames));
   result.Set("data", FloatResult(env, out, count));
   return result;
   SONARE_NODE_CATCH(env)

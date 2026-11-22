@@ -328,14 +328,16 @@ TEST_CASE("sonare_piptrack returns equally shaped pitch and magnitude matrices",
           "[c_api][features]") {
   constexpr int sr = 22050;
   auto samples = generate_sine(440.0f, sr, 1.0f);
+  size_t length = 0;
   int n_bins = 0;
   int n_frames = 0;
   float* pitches = nullptr;
   float* magnitudes = nullptr;
   REQUIRE(sonare_piptrack(samples.data(), samples.size(), sr, 1024, 256, 100.0f, 1000.0f, 0.1f,
-                          &n_bins, &n_frames, &pitches, &magnitudes) == SONARE_OK);
+                          &pitches, &magnitudes, &length, &n_bins, &n_frames) == SONARE_OK);
   REQUIRE(n_bins == 513);
   REQUIRE(n_frames > 0);
+  REQUIRE(length == static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
   REQUIRE(pitches != nullptr);
   REQUIRE(magnitudes != nullptr);
   sonare_free_floats(pitches);

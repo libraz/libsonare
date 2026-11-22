@@ -2118,7 +2118,7 @@ class NameVote(unittest.TestCase):
 class FrozenDomains(CheckerCase):
     def test_baseline_counts(self):
         _, lines = self.run_check()
-        self.assertIn("domain vote: 15 names, 0 by tie-break", lines)
+        self.assertIn("domain vote: 16 names, 0 by tie-break", lines)
         self.assertIn("unassigned: 0", lines)
 
     def test_file_wins_over_the_per_surface_domain(self):
@@ -2168,7 +2168,7 @@ class FrozenDomains(CheckerCase):
         out = self.dir / "domains.json"
         _, lines = self.run_check("--regenerate-domains", domains_file=out)
         self.assertEqual(out.read_text(encoding="utf-8"), (TD / "domains.json").read_text())
-        self.assertIn("Regenerated domains.json: 15 names", lines)
+        self.assertIn("Regenerated domains.json: 16 names", lines)
 
 
 class SkipCheck(CheckerCase):
@@ -2493,6 +2493,59 @@ REFUSALS = (
         [
             "c function sonare_player_create: returns SonarePlayer*, not SonareError",
             "c function sonare_player_create: last parameter is not the out-pointer to the handle",
+        ],
+    ),
+    (
+        "c-matrix-shape",
+        [
+            _fn(
+                "c",
+                "sonare_grid",
+                "SonareError",
+                _c_param("out", "float**"),
+                _c_param("out_rows", "int*"),
+                _c_param("out_n_frames", "size_t*"),
+            ),
+            _fn(
+                "c",
+                "sonare_vector",
+                "SonareError",
+                _c_param("out", "float**"),
+                _c_param("out_count", "size_t*"),
+            ),
+            _fn(
+                "c",
+                "sonare_shaped",
+                "SonareError",
+                _c_param("out", "float**"),
+                _c_param("out_length", "size_t*"),
+                _c_param("out_n_bins", "int*"),
+                _c_param("out_n_frames", "int*"),
+            ),
+            _fn(
+                "c",
+                "sonare_render",
+                "SonareError",
+                _c_param("out", "float**"),
+                _c_param("out_frames", "size_t*"),
+                _c_param("out_channels", "int*"),
+            ),
+            _fn(
+                "c",
+                "sonare_wide",
+                "SonareError",
+                _c_param("out", "float**"),
+                _c_param("out_frames", "size_t*"),
+                _c_param("out_channels", "size_t*"),
+            ),
+        ],
+        [
+            "c function sonare_grid: dimension out_n_frames is size_t, not int",
+            "c function sonare_grid: dimension out_rows does not name what it counts",
+            "c function sonare_grid: no size_t* out_length beside the matrix",
+            "c function sonare_wide: dimension out_channels is size_t, not int",
+            "c function sonare_wide: dimension out_frames is size_t, not int",
+            "c function sonare_wide: no size_t* out_length beside the matrix",
         ],
     ),
     (

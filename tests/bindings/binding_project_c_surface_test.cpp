@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include "binding_project_parity_test_helpers.h"
+#include "support/project_bounce.h"
 
 namespace {
 
@@ -742,8 +743,8 @@ TEST_CASE("deserialized audio sources can be rebound before bouncing through the
   float* output = nullptr;
   size_t output_len = 0;
   int bounce_channels1 = 0;
-  REQUIRE(sonare_project_bounce(restored, &options, &output, &output_len, &bounce_channels1) ==
-          SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(restored, &options, &output, &output_len,
+                                          &bounce_channels1) == SONARE_OK);
   REQUIRE(output != nullptr);
   REQUIRE(output_len == kFrames);
   CHECK(output[0] == Catch::Approx(0.25f));
@@ -765,16 +766,16 @@ TEST_CASE("bounce is bit-exact across two renders through the C surface", "[proj
   float* first = nullptr;
   size_t first_len = 0;
   int bounce_channels2 = 0;
-  REQUIRE(sonare_project_bounce(built.project, &options, &first, &first_len, &bounce_channels2) ==
-          SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(built.project, &options, &first, &first_len,
+                                          &bounce_channels2) == SONARE_OK);
   REQUIRE(first != nullptr);
   REQUIRE(first_len == static_cast<size_t>(options.total_frames) * 2);
 
   float* second = nullptr;
   size_t second_len = 0;
   int bounce_channels3 = 0;
-  REQUIRE(sonare_project_bounce(built.project, &options, &second, &second_len, &bounce_channels3) ==
-          SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(built.project, &options, &second, &second_len,
+                                          &bounce_channels3) == SONARE_OK);
   REQUIRE(second_len == first_len);
 
   REQUIRE(std::memcmp(first, second, first_len * sizeof(float)) == 0);

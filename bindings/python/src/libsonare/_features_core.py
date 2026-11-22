@@ -818,9 +818,9 @@ def spectral_contrast(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out_rows = ctypes.c_int()
-    out_cols = ctypes.c_int()
-    with _out_float_array(lib) as (out, _out_length):
+    out_n_subbands = ctypes.c_int()
+    out_n_frames = ctypes.c_int()
+    with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_spectral_contrast(
             c_array,
             _to_c_size_t(length, "length"),
@@ -831,13 +831,14 @@ def spectral_contrast(
             _to_c_float(fmin, "fmin"),
             _to_c_float(quantile, "quantile"),
             ctypes.byref(out),
-            ctypes.byref(out_rows),
-            ctypes.byref(out_cols),
+            ctypes.byref(out_length),
+            ctypes.byref(out_n_subbands),
+            ctypes.byref(out_n_frames),
         )
         _check(rc)
-        rows = int(out_rows.value)
-        cols = int(out_cols.value)
-        return _from_c_float_array(out, rows * cols).reshape(rows, cols)
+        rows = int(out_n_subbands.value)
+        cols = int(out_n_frames.value)
+        return _from_c_float_array(out, int(out_length.value)).reshape(rows, cols)
 
 
 @_entry("poly_features")
@@ -864,9 +865,9 @@ def poly_features(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out_rows = ctypes.c_int()
-    out_cols = ctypes.c_int()
-    with _out_float_array(lib) as (out, _out_length):
+    out_n_coefficients = ctypes.c_int()
+    out_n_frames = ctypes.c_int()
+    with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_poly_features(
             c_array,
             _to_c_size_t(length, "length"),
@@ -875,13 +876,14 @@ def poly_features(
             _to_c_size_t(hop_length, "hop_length"),
             _to_c_int(order, "order"),
             ctypes.byref(out),
-            ctypes.byref(out_rows),
-            ctypes.byref(out_cols),
+            ctypes.byref(out_length),
+            ctypes.byref(out_n_coefficients),
+            ctypes.byref(out_n_frames),
         )
         _check(rc)
-        rows = int(out_rows.value)
-        cols = int(out_cols.value)
-        return _from_c_float_array(out, rows * cols).reshape(rows, cols)
+        rows = int(out_n_coefficients.value)
+        cols = int(out_n_frames.value)
+        return _from_c_float_array(out, int(out_length.value)).reshape(rows, cols)
 
 
 @_entry("zero_crossings")

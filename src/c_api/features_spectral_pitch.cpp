@@ -250,16 +250,18 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
 
 SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
                                      int n_fft, size_t hop_length, int n_bands, float fmin_hz,
-                                     float quantile, float** out, int* out_rows, int* out_cols) {
+                                     float quantile, float** out, size_t* out_length,
+                                     int* out_n_subbands, int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_rows, out_cols);
+  SONARE_C_ZERO_OUTS(out, out_length, out_n_subbands, out_n_frames);
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_rows);
-  SONARE_C_REQUIRE_NONNULL(out_cols);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_subbands);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
@@ -270,29 +272,28 @@ SonareError sonare_spectral_contrast(const float* samples, size_t length, int sa
             with_c_names(std::array<CName, 2>{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}}, [&] {
               return spectral_contrast(spec, audio.sample_rate(), n_bands, fmin_hz, quantile);
             });
-        int rows = n_bands + 1;
-        int cols = spec.n_frames();
-        *out_rows = rows;
-        *out_cols = cols;
-        std::unique_ptr<float[]> tmp(new float[result.size()]);
-        std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
-        *out = release_array(tmp);
+        if (const SonareError err = copy_vector(result, out, out_length); err != SONARE_OK) {
+          return err;
+        }
+        *out_n_subbands = n_bands + 1;
+        *out_n_frames = spec.n_frames();
         return SONARE_OK;
       });
 }
 
 SonareError sonare_poly_features(const float* samples, size_t length, int sample_rate, int n_fft,
-                                 size_t hop_length, int order, float** out, int* out_rows,
-                                 int* out_cols) {
+                                 size_t hop_length, int order, float** out, size_t* out_length,
+                                 int* out_n_coefficients, int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_rows, out_cols);
+  SONARE_C_ZERO_OUTS(out, out_length, out_n_coefficients, out_n_frames);
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_rows);
-  SONARE_C_REQUIRE_NONNULL(out_cols);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_coefficients);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
         StftConfig config;
@@ -300,13 +301,11 @@ SonareError sonare_poly_features(const float* samples, size_t length, int sample
         config.hop_length = core_length(hop_length);
         Spectrogram spec = Spectrogram::compute(audio, config);
         std::vector<float> result = poly_features(spec, audio.sample_rate(), order);
-        int rows = order + 1;
-        int cols = spec.n_frames();
-        *out_rows = rows;
-        *out_cols = cols;
-        std::unique_ptr<float[]> tmp(new float[result.size()]);
-        std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
-        *out = release_array(tmp);
+        if (const SonareError err = copy_vector(result, out, out_length); err != SONARE_OK) {
+          return err;
+        }
+        *out_n_coefficients = order + 1;
+        *out_n_frames = spec.n_frames();
         return SONARE_OK;
       });
 }
@@ -468,18 +467,19 @@ SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz,
 
 SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,
                             size_t hop_length, float fmin_hz, float fmax_hz, float threshold,
-                            int* out_n_bins, int* out_n_frames, float** out_pitches,
-                            float** out_magnitudes) {
+                            float** out_pitches, float** out_magnitudes, size_t* out_length,
+                            int* out_n_bins, int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out_n_bins, out_n_frames, out_pitches, out_magnitudes);
+  SONARE_C_ZERO_OUTS(out_pitches, out_magnitudes, out_length, out_n_bins, out_n_frames);
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_REQUIRE_NONNULL(out_n_bins);
-  SONARE_C_REQUIRE_NONNULL(out_n_frames);
   SONARE_C_REQUIRE_NONNULL(out_pitches);
   SONARE_C_REQUIRE_NONNULL(out_magnitudes);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_REQUIRE_NONNULL(out_n_bins);
+  SONARE_C_REQUIRE_NONNULL(out_n_frames);
 
   return run_prevalidated_offline(
       samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -495,6 +495,7 @@ SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate
           std::memcpy(pitches.get(), result.pitches.data(), total * sizeof(float));
           std::memcpy(magnitudes.get(), result.magnitudes.data(), total * sizeof(float));
         }
+        *out_length = total;
         *out_n_bins = result.n_bins;
         *out_n_frames = result.n_frames;
         *out_pitches = release_array(pitches);

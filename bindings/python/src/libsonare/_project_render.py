@@ -237,12 +237,12 @@ class _ProjectRenderMixin:
                 options.sf2_instrument_count = _to_c_size_t(len(sf2_bindings), "count")
 
         width = ctypes.c_int()
-        with _out_float_array(lib) as (out, out_len):
+        with _out_float_array(lib) as (out, out_frames):
             rc = lib.sonare_project_bounce(
                 self._require_handle(),
                 ctypes.byref(options),
                 ctypes.byref(out),
-                ctypes.byref(out_len),
+                ctypes.byref(out_frames),
                 ctypes.byref(width),
             )
             # `keepalive` pins the ctypes trampolines until the bounce returns.
@@ -250,7 +250,7 @@ class _ProjectRenderMixin:
             _check(rc, flattened="options")
             if errors:
                 raise errors[0]
-            interleaved = _from_c_float_array(out, int(out_len.value))
+            interleaved = _from_c_float_array(out, int(out_frames.value) * width.value)
         return _reshape_bounce(interleaved, width.value)
 
     @_entry("Project.load_sound_font")

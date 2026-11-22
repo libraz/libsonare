@@ -34,6 +34,7 @@
 #include "midi/midi_clip_envelope.h"
 #include "midi/midi_event.h"
 #include "rt/command.h"
+#include "support/project_bounce.h"
 
 #if defined(SONARE_WITH_MIXING)
 
@@ -50,8 +51,8 @@ SonareError bounce_with_builtin_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.builtin_instruments = bindings;
   with_instruments.builtin_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 using sonare::engine::RealtimeEngine;

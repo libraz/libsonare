@@ -521,10 +521,10 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   opts.sf2_instruments = players.empty() ? nullptr : players.data();
   opts.sf2_instrument_count = players.size();
   float* interleaved = nullptr;
-  size_t len = 0;
+  size_t frames = 0;
   int num_channels = 0;
   const SonareError err =
-      sonare_project_bounce(project_keepalive.get(), &opts, &interleaved, &len, &num_channels);
+      sonare_project_bounce(project_keepalive.get(), &opts, &interleaved, &frames, &num_channels);
   // A JS throw from here would skip every destructor in this frame, so a
   // throwing callback is returned as data and the TypeScript facade rethrows it.
   // The native failure is reported ahead of a callback's, as in the Python binding.
@@ -538,7 +538,7 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
     result.set("instrumentFailure", failure.error);
     return result;
   }
-  std::vector<float> samples(interleaved, interleaved + len);
+  std::vector<float> samples(interleaved, interleaved + frames * static_cast<size_t>(num_channels));
   sonare_free_floats(interleaved);
   return bounceResultToVal(samples, num_channels);
 }

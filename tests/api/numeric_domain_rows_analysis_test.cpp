@@ -541,11 +541,12 @@ SonareError probe_spectral_contrast(const std::string& param, double value) {
   int n_bands = 6;
   if (is_param(param, "n_bands")) n_bands = static_cast<int>(value);
   float* out = nullptr;
+  size_t length = 0;
   int rows = 0;
   int cols = 0;
   return finish_floats(
       sonare_spectral_contrast(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, n_bands,
-                               200.0f, 0.02f, &out, &rows, &cols),
+                               200.0f, 0.02f, &out, &length, &rows, &cols),
       out);
 }
 
@@ -554,10 +555,11 @@ SonareError probe_poly_features(const std::string& param, double value) {
   int order = 1;
   if (is_param(param, "order")) order = static_cast<int>(value);
   float* out = nullptr;
+  size_t length = 0;
   int rows = 0;
   int cols = 0;
   return finish_floats(sonare_poly_features(pcm(), pcm_length(), kAnalysisRate, f.n_fft,
-                                            f.hop_length, order, &out, &rows, &cols),
+                                            f.hop_length, order, &out, &length, &rows, &cols),
                        out);
 }
 
@@ -580,13 +582,14 @@ SonareError probe_estimate_tuning(const std::string& param, double value) {
 
 SonareError probe_piptrack(const std::string& param, double value) {
   const Frame f = frame_of(param, value);
+  size_t length = 0;
   int n_bins = 0;
   int n_frames = 0;
   float* pitches = nullptr;
   float* magnitudes = nullptr;
   const SonareError err =
       sonare_piptrack(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, 150.0f, 4000.0f,
-                      0.1f, &n_bins, &n_frames, &pitches, &magnitudes);
+                      0.1f, &pitches, &magnitudes, &length, &n_bins, &n_frames);
   if (err == SONARE_OK) {
     sonare_free_floats(pitches);
     sonare_free_floats(magnitudes);

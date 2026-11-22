@@ -800,14 +800,14 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
     config.hop_length = 256;
     config.n_iter = 30;
     float* out = nullptr;
-    size_t count = 0;
+    int count = 0;
     size_t length = 0;
     float* w = nullptr;
     size_t w_length = 0;
     float* h = nullptr;
     size_t h_length = 0;
-    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
-                                   &length, &w, &w_length, &h, &h_length) == SONARE_OK);
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &length,
+                                   &count, &w, &w_length, &h, &h_length) == SONARE_OK);
     REQUIRE(count == 2);
     REQUIRE(length == samples.size());
     REQUIRE(w_length == static_cast<size_t>(config.n_fft / 2 + 1) * count);
@@ -831,10 +831,10 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
 
   SECTION("NULL config selects the defaults and W/H are optional") {
     float* out = nullptr;
-    size_t count = 0;
+    int count = 0;
     size_t length = 0;
-    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, nullptr, &out, &count,
-                                   &length, nullptr, nullptr, nullptr, nullptr) == SONARE_OK);
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, nullptr, &out, &length,
+                                   &count, nullptr, nullptr, nullptr, nullptr) == SONARE_OK);
     REQUIRE(count == 4);
     REQUIRE(length == samples.size());
     sonare_free_floats(out);
@@ -849,15 +849,15 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
     config.n_iter = 4;
 
     float* w_only_out = nullptr;
-    size_t w_only_count = 0;
+    int w_only_count = 0;
     size_t w_only_length = 0;
     float* w_only = nullptr;
     size_t w_only_factor_length = 0;
     REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &w_only_out,
-                                   &w_only_count, &w_only_length, &w_only, &w_only_factor_length,
+                                   &w_only_length, &w_only_count, &w_only, &w_only_factor_length,
                                    nullptr, nullptr) == SONARE_OK);
     REQUIRE(w_only_out != nullptr);
-    REQUIRE(w_only_count == static_cast<size_t>(config.n_components));
+    REQUIRE(w_only_count == config.n_components);
     REQUIRE(w_only_length == samples.size());
     REQUIRE(w_only != nullptr);
     REQUIRE(w_only_factor_length ==
@@ -866,15 +866,15 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
     sonare_free_floats(w_only);
 
     float* h_only_out = nullptr;
-    size_t h_only_count = 0;
+    int h_only_count = 0;
     size_t h_only_length = 0;
     float* h_only = nullptr;
     size_t h_only_factor_length = 0;
     REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &h_only_out,
-                                   &h_only_count, &h_only_length, nullptr, nullptr, &h_only,
+                                   &h_only_length, &h_only_count, nullptr, nullptr, &h_only,
                                    &h_only_factor_length) == SONARE_OK);
     REQUIRE(h_only_out != nullptr);
-    REQUIRE(h_only_count == static_cast<size_t>(config.n_components));
+    REQUIRE(h_only_count == config.n_components);
     REQUIRE(h_only_length == samples.size());
     REQUIRE(h_only != nullptr);
     REQUIRE(h_only_factor_length > 0);
@@ -886,10 +886,10 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
   SECTION("rejects an uninitialised config, a zero in a nonzero field and a low mask power") {
     SonareDecomposeStemsConfig config{};
     float* out = non_null_sentinel_float_ptr();
-    size_t count = 99;
+    int count = 99;
     size_t length = 99;
-    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
-                                   &length, nullptr, nullptr, nullptr,
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &length,
+                                   &count, nullptr, nullptr, nullptr,
                                    nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
     REQUIRE(count == 0);
@@ -906,26 +906,26 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
              [](SonareDecomposeStemsConfig& c) { c.n_iter = 0; }}) {
       sonare_decompose_stems_config_init(&config);
       zero(config);
-      REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
-                                     &length, nullptr, nullptr, nullptr,
+      REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &length,
+                                     &count, nullptr, nullptr, nullptr,
                                      nullptr) == SONARE_ERROR_INVALID_PARAMETER);
       CHECK(std::string(sonare_last_error_message()).find("config.") == 0);
     }
 
     sonare_decompose_stems_config_init(&config);
     config.mask_power = 0.5f;
-    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
-                                   &length, nullptr, nullptr, nullptr,
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &length,
+                                   &count, nullptr, nullptr, nullptr,
                                    nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("rejects a half-supplied W or H out-parameter pair") {
     float* out = nullptr;
-    size_t count = 0;
+    int count = 0;
     size_t length = 0;
     float* w = nullptr;
-    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, nullptr, &out, &count,
-                                   &length, &w, nullptr, nullptr,
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, nullptr, &out, &length,
+                                   &count, &w, nullptr, nullptr,
                                    nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
@@ -944,7 +944,7 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
     config.hop_length = 256;
     config.n_iter = 30;
     float* out = nullptr;
-    size_t component_count = 0;
+    int component_count = 0;
     const size_t channel_count = 2;
     size_t component_length = 0;
     float* w = nullptr;
@@ -952,7 +952,7 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
     float* h = nullptr;
     size_t h_length = 0;
     REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, &config, &out,
-                                          &component_count, &component_length, &w, &w_length, &h,
+                                          &component_length, &component_count, &w, &w_length, &h,
                                           &h_length) == SONARE_OK);
     REQUIRE(component_count == 2);
     REQUIRE(component_length == left.size());
@@ -970,7 +970,7 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
       for (size_t i = static_cast<size_t>(config.n_fft);
            i + static_cast<size_t>(config.n_fft) < component_length; ++i) {
         double sum = 0.0;
-        for (size_t comp = 0; comp < component_count; ++comp) {
+        for (size_t comp = 0; comp < static_cast<size_t>(component_count); ++comp) {
           sum += out[comp * per_component + c * component_length + i];
         }
         err += (sum - source[i]) * (sum - source[i]);
@@ -993,26 +993,26 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
     config.n_iter = 20;
 
     float* mono_out = nullptr;
-    size_t mono_count = 0;
+    int mono_count = 0;
     size_t mono_length = 0;
     float* mono_w = nullptr;
     size_t mono_w_length = 0;
     float* mono_h = nullptr;
     size_t mono_h_length = 0;
-    REQUIRE(sonare_decompose_stems(left.data(), left.size(), sr, &config, &mono_out, &mono_count,
-                                   &mono_length, &mono_w, &mono_w_length, &mono_h,
+    REQUIRE(sonare_decompose_stems(left.data(), left.size(), sr, &config, &mono_out, &mono_length,
+                                   &mono_count, &mono_w, &mono_w_length, &mono_h,
                                    &mono_h_length) == SONARE_OK);
 
     const float* one_channel[1] = {left.data()};
     float* linked_out = nullptr;
-    size_t linked_component_count = 0;
+    int linked_component_count = 0;
     size_t linked_component_length = 0;
     float* linked_w = nullptr;
     size_t linked_w_length = 0;
     float* linked_h = nullptr;
     size_t linked_h_length = 0;
     REQUIRE(sonare_decompose_stems_linked(one_channel, 1, left.size(), sr, &config, &linked_out,
-                                          &linked_component_count, &linked_component_length,
+                                          &linked_component_length, &linked_component_count,
                                           &linked_w, &linked_w_length, &linked_h,
                                           &linked_h_length) == SONARE_OK);
 
@@ -1034,10 +1034,10 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
 
   SECTION("NULL config selects the defaults and W/H are optional") {
     float* out = nullptr;
-    size_t component_count = 0;
+    int component_count = 0;
     size_t component_length = 0;
     REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, nullptr, &out,
-                                          &component_count, &component_length, nullptr, nullptr,
+                                          &component_length, &component_count, nullptr, nullptr,
                                           nullptr, nullptr) == SONARE_OK);
     REQUIRE(component_count == 4);
     REQUIRE(component_length == left.size());
@@ -1047,10 +1047,10 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
   SECTION("rejects an uninitialised config, a zero in a nonzero field and a low mask power") {
     SonareDecomposeStemsConfig config{};
     float* out = non_null_sentinel_float_ptr();
-    size_t component_count = 99;
+    int component_count = 99;
     size_t component_length = 99;
     REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, &config, &out,
-                                          &component_count, &component_length, nullptr, nullptr,
+                                          &component_length, &component_count, nullptr, nullptr,
                                           nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
     REQUIRE(component_count == 0);
@@ -1061,17 +1061,17 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
     sonare_decompose_stems_config_init(&config);
     config.mask_power = 0.5f;
     REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, &config, &out,
-                                          &component_count, &component_length, nullptr, nullptr,
+                                          &component_length, &component_count, nullptr, nullptr,
                                           nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("rejects a half-supplied W or H out-parameter pair") {
     float* out = nullptr;
-    size_t component_count = 0;
+    int component_count = 0;
     size_t component_length = 0;
     float* w = nullptr;
     REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, nullptr, &out,
-                                          &component_count, &component_length, &w, nullptr, nullptr,
+                                          &component_length, &component_count, &w, nullptr, nullptr,
                                           nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -1079,27 +1079,27 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
       "rejects a null channel set, zero channels, a null channel buffer and an "
       "over-limit channel count") {
     float* out = non_null_sentinel_float_ptr();
-    size_t component_count = 99;
+    int component_count = 99;
     size_t component_length = 99;
     REQUIRE(sonare_decompose_stems_linked(nullptr, 2, left.size(), sr, nullptr, &out,
-                                          &component_count, &component_length, nullptr, nullptr,
+                                          &component_length, &component_count, nullptr, nullptr,
                                           nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
     REQUIRE(component_count == 0);
     REQUIRE(component_length == 0);
 
     REQUIRE(sonare_decompose_stems_linked(channels, 0, left.size(), sr, nullptr, &out,
-                                          &component_count, &component_length, nullptr, nullptr,
+                                          &component_length, &component_count, nullptr, nullptr,
                                           nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
     const float* with_null[2] = {left.data(), nullptr};
     REQUIRE(sonare_decompose_stems_linked(with_null, 2, left.size(), sr, nullptr, &out,
-                                          &component_count, &component_length, nullptr, nullptr,
+                                          &component_length, &component_count, nullptr, nullptr,
                                           nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
     std::vector<const float*> too_many(65, left.data());
     REQUIRE(sonare_decompose_stems_linked(too_many.data(), too_many.size(), left.size(), sr,
-                                          nullptr, &out, &component_count, &component_length,
+                                          nullptr, &out, &component_length, &component_count,
                                           nullptr, nullptr, nullptr,
                                           nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
@@ -1112,7 +1112,7 @@ TEST_CASE("linked stems rejects an overflowing channel count before allocation",
   float* out = non_null_sentinel_float_ptr();
   float* w = non_null_sentinel_float_ptr();
   float* h = non_null_sentinel_float_ptr();
-  size_t component_count = 99;
+  int component_count = 99;
   size_t component_length = 99;
   size_t w_length = 99;
   size_t h_length = 99;
@@ -1120,7 +1120,7 @@ TEST_CASE("linked stems rejects an overflowing channel count before allocation",
 
   CHECK_NOTHROW(error = sonare_decompose_stems_linked(
                     channels, std::numeric_limits<size_t>::max(), 1, 48000, nullptr, &out,
-                    &component_count, &component_length, &w, &w_length, &h, &h_length));
+                    &component_length, &component_count, &w, &w_length, &h, &h_length));
   CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out == nullptr);
   CHECK(w == nullptr);

@@ -646,6 +646,11 @@ SonareError err = sonare_mixer_strip_count(mixer, &n);
 '''
 
 [[rule]]
+slug = "c-matrix-shape"
+title = "A C matrix result reports its buffer length and named dimensions"
+summary = "An entry returning a feature matrix writes the buffer length to a `size_t* out_length` and each dimension to an `int*` named for what it counts (`out_n_bins`, `out_n_frames`), never `out_rows` / `out_cols`; an entry returning audio writes its sample frames to a `size_t* out_frames` and its one other dimension to an `int*` (`out_channels`, `out_n_components`)."
+
+[[rule]]
 slug = "c-error-path"
 title = "Every C failure sets the error message"
 summary = "Every function that returns a non-OK code sets `sonare_last_error_message()`, and warnings use `sonare_last_diagnostic_*` only. Conversions and lookups report failure as `SonareError` with an out parameter instead of `NaN`, `0` or `-1` in the value."

@@ -193,12 +193,15 @@ TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
     float* out = nullptr;
     int rows = 0;
     int cols = 0;
+    size_t length = 0;
     REQUIRE(sonare_spectral_contrast(samples.data(), samples.size(), kSampleRate, 2048, 512,
-                                     n_bands, 200.0f, 0.02f, &out, &rows, &cols) == SONARE_OK);
+                                     n_bands, 200.0f, 0.02f, &out, &length, &rows,
+                                     &cols) == SONARE_OK);
     REQUIRE(out != nullptr);
     REQUIRE(rows == n_bands + 1);
     REQUIRE(cols > 0);
     const size_t total = static_cast<size_t>(rows) * static_cast<size_t>(cols);
+    REQUIRE(length == total);
     for (size_t i = 0; i < total; ++i) {
       REQUIRE(std::isfinite(out[i]));
     }
@@ -209,11 +212,12 @@ TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
     float* out = non_null_floats();
     int rows = 7;
     int cols = 7;
+    size_t length = 7;
     REQUIRE(sonare_spectral_contrast(samples.data(), samples.size(), kSampleRate, 2048, 512, 6,
-                                     200.0f, 0.02f, nullptr, &rows,
+                                     200.0f, 0.02f, nullptr, &length, &rows,
                                      &cols) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_spectral_contrast(samples.data(), samples.size(), kSampleRate, 2048, 512, 6,
-                                     200.0f, 0.02f, &out, nullptr,
+                                     200.0f, 0.02f, &out, nullptr, &rows,
                                      &cols) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -221,10 +225,13 @@ TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
     float* out = non_null_floats();
     int rows = 7;
     int cols = 7;
+    size_t length = 7;
     // Null samples is an invalid parameter; outputs must be cleared.
     REQUIRE(sonare_spectral_contrast(nullptr, samples.size(), kSampleRate, 2048, 512, 6, 200.0f,
-                                     0.02f, &out, &rows, &cols) == SONARE_ERROR_INVALID_PARAMETER);
+                                     0.02f, &out, &length, &rows,
+                                     &cols) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
+    REQUIRE(length == 0);
     REQUIRE(rows == 0);
     REQUIRE(cols == 0);
 
@@ -232,10 +239,12 @@ TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
     out = non_null_floats();
     rows = 7;
     cols = 7;
+    length = 7;
     REQUIRE(sonare_spectral_contrast(samples.data(), samples.size(), kSampleRate, 2048, 512, 0,
-                                     200.0f, 0.02f, &out, &rows,
+                                     200.0f, 0.02f, &out, &length, &rows,
                                      &cols) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
+    REQUIRE(length == 0);
     REQUIRE(rows == 0);
     REQUIRE(cols == 0);
   }
@@ -250,12 +259,14 @@ TEST_CASE("sonare_poly_features", "[c_api][features]") {
     float* out = nullptr;
     int rows = 0;
     int cols = 0;
+    size_t length = 0;
     REQUIRE(sonare_poly_features(samples.data(), samples.size(), kSampleRate, 2048, 512, order,
-                                 &out, &rows, &cols) == SONARE_OK);
+                                 &out, &length, &rows, &cols) == SONARE_OK);
     REQUIRE(out != nullptr);
     REQUIRE(rows == order + 1);
     REQUIRE(cols > 0);
     const size_t total = static_cast<size_t>(rows) * static_cast<size_t>(cols);
+    REQUIRE(length == total);
     for (size_t i = 0; i < total; ++i) {
       REQUIRE(std::isfinite(out[i]));
     }
@@ -266,19 +277,22 @@ TEST_CASE("sonare_poly_features", "[c_api][features]") {
     float* out = non_null_floats();
     int rows = 7;
     int cols = 7;
+    size_t length = 7;
     REQUIRE(sonare_poly_features(samples.data(), samples.size(), kSampleRate, 2048, 512, 1, nullptr,
-                                 &rows, &cols) == SONARE_ERROR_INVALID_PARAMETER);
+                                 &length, &rows, &cols) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_poly_features(samples.data(), samples.size(), kSampleRate, 2048, 512, 1, &out,
-                                 &rows, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+                                 &length, &rows, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("invalid params clear outputs") {
     float* out = non_null_floats();
     int rows = 7;
     int cols = 7;
-    REQUIRE(sonare_poly_features(nullptr, samples.size(), kSampleRate, 2048, 512, 1, &out, &rows,
-                                 &cols) == SONARE_ERROR_INVALID_PARAMETER);
+    size_t length = 7;
+    REQUIRE(sonare_poly_features(nullptr, samples.size(), kSampleRate, 2048, 512, 1, &out, &length,
+                                 &rows, &cols) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
+    REQUIRE(length == 0);
     REQUIRE(rows == 0);
     REQUIRE(cols == 0);
   }

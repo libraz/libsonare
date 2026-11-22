@@ -19,6 +19,7 @@
 #include "core/channel_layout.h"
 #include "mixing/api/scene.h"
 #include "mixing/downmix.h"
+#include "support/project_bounce.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -35,8 +36,8 @@ SonareError bounce_with_builtin_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.builtin_instruments = bindings;
   with_instruments.builtin_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 constexpr double kSampleRate = 48000.0;

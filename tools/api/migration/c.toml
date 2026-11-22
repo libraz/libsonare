@@ -4564,7 +4564,7 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_bounce"
-changed = "hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused"
+changed = "hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused; out_interleaved is out; out_len, which counted interleaved samples (frames * channels), is size_t* out_frames, which counts sample frames per channel, so a caller sizing the buffer multiplies it by out_channels; out_num_channels is out_channels"
 domain = "project"
 rule = "options-struct"
 test = "tests/bindings/binding_project_bounce_test.cpp::project bounce hosts several instrument kinds and refuses a destination bound twice"
@@ -4871,7 +4871,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "function"
 old = "sonare_decompose_stems_linked"
-changed = "out_num_channels is gone; the output carries num_channels channels per component, the count the caller passed"
+changed = "out_num_channels is gone; the output carries num_channels channels per component, the count the caller passed; size_t* out_frames (sample frames per component and channel) then int* out_n_components replace size_t* out_component_count, size_t* out_component_length"
 domain = "effects"
 rule = "one-entry-per-operation"
 test = "tests/api/sonare_c_effects_extra_test.cpp::decompose_stems_linked"
@@ -4980,3 +4980,35 @@ old = "SonareRoomMorphStereoResult"
 removed = "sonare_room_morph_stereo returns out_left, out_right and out_length"
 domain = "effects"
 rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "sonare_spectral_contrast"
+changed = "takes size_t* out_length after out, then int* out_n_subbands (n_bands + 1) and int* out_n_frames in place of int* out_rows, int* out_cols"
+domain = "analysis"
+rule = "c-matrix-shape"
+test = "tests/api/sonare_c_features_extra_test.cpp::sonare_spectral_contrast"
+
+[[entry]]
+kind = "function"
+old = "sonare_poly_features"
+changed = "takes size_t* out_length after out, then int* out_n_coefficients (order + 1) and int* out_n_frames in place of int* out_rows, int* out_cols"
+domain = "analysis"
+rule = "c-matrix-shape"
+test = "tests/api/sonare_c_features_extra_test.cpp::sonare_poly_features"
+
+[[entry]]
+kind = "function"
+old = "sonare_piptrack"
+changed = "takes out_pitches and out_magnitudes first, then size_t* out_length (shared by both buffers), int* out_n_bins and int* out_n_frames"
+domain = "analysis"
+rule = "c-matrix-shape"
+test = "tests/api/sonare_c_mixing_features_test.cpp::sonare_piptrack returns equally shaped pitch and magnitude matrices"
+
+[[entry]]
+kind = "function"
+old = "sonare_decompose_stems"
+changed = "size_t* out_frames (sample frames per component) then int* out_n_components replace size_t* out_component_count, size_t* out_component_length"
+domain = "effects"
+rule = "c-matrix-shape"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_decompose_stems"

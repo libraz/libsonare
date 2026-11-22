@@ -695,12 +695,10 @@ void sonare_decompose_stems_config_init(SonareDecomposeStemsConfig* config) {
 
 SonareError sonare_decompose_stems(const float* samples, size_t length, int sample_rate,
                                    const SonareDecomposeStemsConfig* config, float** out,
-                                   size_t* out_component_count, size_t* out_component_length,
-                                   float** out_w, size_t* out_w_length, float** out_h,
-                                   size_t* out_h_length) {
+                                   size_t* out_frames, int* out_n_components, float** out_w,
+                                   size_t* out_w_length, float** out_h, size_t* out_h_length) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_component_count, out_component_length, out_w, out_w_length, out_h,
-                     out_h_length);
+  SONARE_C_ZERO_OUTS(out, out_frames, out_n_components, out_w, out_w_length, out_h, out_h_length);
   if (const SonareError err = validate_audio_params("samples", samples, length, sample_rate);
       err != SONARE_OK) {
     return err;
@@ -714,8 +712,8 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
     }
   }
   SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_component_count);
-  SONARE_C_REQUIRE_NONNULL(out_component_length);
+  SONARE_C_REQUIRE_NONNULL(out_frames);
+  SONARE_C_REQUIRE_NONNULL(out_n_components);
   // An optional pointer given without its length has nowhere to write the length.
   if (const SonareError err = check_factor_output_pairs(out_w, out_w_length, out_h, out_h_length);
       err != SONARE_OK) {
@@ -743,8 +741,8 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
             copy_decompose_factors(result, out_w, out_w_length, out_h, out_h_length);
         if (factors_err != SONARE_OK) return factors_err;
         *out = flat.release();
-        *out_component_count = result.components.size();
-        *out_component_length = component_length;
+        *out_frames = component_length;
+        *out_n_components = static_cast<int>(result.components.size());
         return SONARE_OK;
       });
 }
@@ -752,12 +750,11 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 SonareError sonare_decompose_stems_linked(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate,
                                           const SonareDecomposeStemsConfig* config, float** out,
-                                          size_t* out_component_count, size_t* out_component_length,
-                                          float** out_w, size_t* out_w_length, float** out_h,
+                                          size_t* out_frames, int* out_n_components, float** out_w,
+                                          size_t* out_w_length, float** out_h,
                                           size_t* out_h_length) {
   SONARE_C_API_ENTRY;
-  SONARE_C_ZERO_OUTS(out, out_component_count, out_component_length, out_w, out_w_length, out_h,
-                     out_h_length);
+  SONARE_C_ZERO_OUTS(out, out_frames, out_n_components, out_w, out_w_length, out_h, out_h_length);
   if (const SonareError err = run_validation([&] {
         sonare::util::check::non_null(channels, "channels");
         sonare::util::check::integer_within(
@@ -777,8 +774,8 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
   DecomposeStemsConfig core_config;
   if (config != nullptr) fill_decompose_stems_config(*config, &core_config);
   SONARE_C_REQUIRE_NONNULL(out);
-  SONARE_C_REQUIRE_NONNULL(out_component_count);
-  SONARE_C_REQUIRE_NONNULL(out_component_length);
+  SONARE_C_REQUIRE_NONNULL(out_frames);
+  SONARE_C_REQUIRE_NONNULL(out_n_components);
   // Same output-pair guard as sonare_decompose_stems.
   if (const SonareError err = check_factor_output_pairs(out_w, out_w_length, out_h, out_h_length);
       err != SONARE_OK) {
@@ -824,8 +821,8 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t n
       copy_decompose_factors(result, out_w, out_w_length, out_h, out_h_length);
   if (factors_err != SONARE_OK) return factors_err;
   *out = flat.release();
-  *out_component_count = result.components.size();
-  *out_component_length = component_length;
+  *out_frames = component_length;
+  *out_n_components = static_cast<int>(result.components.size());
   return SONARE_OK;
   SONARE_C_CATCH
 }

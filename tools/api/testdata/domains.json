@@ -13,5 +13,6 @@
 "session_create": {"domain": "analysis", "surfaces": ["c"]},
 "session_destroy": {"domain": "analysis", "surfaces": ["c"]},
 "stft": {"domain": "analysis", "surfaces": ["python"]},
+"tempogram": {"domain": "analysis", "surfaces": ["c"]},
 "window_type": {"domain": "analysis", "surfaces": ["c"]}
 }

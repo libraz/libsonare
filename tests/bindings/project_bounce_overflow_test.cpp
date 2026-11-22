@@ -9,6 +9,7 @@
 #include <limits>
 
 #include "core/audio.h"
+#include "support/project_bounce.h"
 
 namespace {
 
@@ -23,8 +24,8 @@ SonareError bounce_with_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.instruments = bindings;
   with_instruments.instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 SonareError bounce_with_builtin_instruments(SonareProject* project,
@@ -37,8 +38,8 @@ SonareError bounce_with_builtin_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.builtin_instruments = bindings;
   with_instruments.builtin_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 struct CallbackState {
@@ -195,7 +196,7 @@ TEST_CASE("project bounce derives the length from the named constant and refuses
     float* bad_out = nullptr;
     size_t bad_len = 0;
     int bad_channels = 0;
-    REQUIRE(sonare_project_bounce(project, &bad, &bad_out, &bad_len, &bad_channels) ==
+    REQUIRE(sonare_test::bounce_interleaved(project, &bad, &bad_out, &bad_len, &bad_channels) ==
             SONARE_ERROR_INVALID_PARAMETER);
     CHECK(bad_out == nullptr);
   }
@@ -205,7 +206,8 @@ TEST_CASE("project bounce derives the length from the named constant and refuses
   const SonareProjectBounceOptions options =
       bounce_options(SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT);
   int bounce_channels5 = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels5) == SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels5) ==
+          SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == 0);
   sonare_free_floats(out);

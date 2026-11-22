@@ -12,6 +12,7 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/synth_patch_common.h"
+#include "support/project_bounce.h"
 #endif
 
 namespace {
@@ -27,8 +28,8 @@ SonareError bounce_with_sf2_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.sf2_instruments = bindings;
   with_instruments.sf2_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 // Binds a patch-only NativeSynth (no GM programs, no sample bank) on a destination.

@@ -69,21 +69,21 @@ TEST_CASE("decompose_stems refuses an unpaired factor output by name", "[c_api][
   SonareDecomposeStemsConfig config;
   sonare_decompose_stems_config_init(&config);
   float* out = nullptr;
-  size_t count = 0;
+  int count = 0;
   size_t component_length = 0;
   float* w = nullptr;
   float* h = nullptr;
   size_t h_length = 0;
-  CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out, &count,
-                               &component_length, &w, nullptr, nullptr,
+  CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out,
+                               &component_length, &count, &w, nullptr, nullptr,
                                nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_w and out_w_length must be given together");
-  CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out, &count,
-                               &component_length, nullptr, nullptr, &h,
+  CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out,
+                               &component_length, &count, nullptr, nullptr, &h,
                                nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_h and out_h_length must be given together");
-  CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out, &count,
-                               &component_length, nullptr, nullptr, nullptr,
+  CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out,
+                               &component_length, &count, nullptr, nullptr, nullptr,
                                &h_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "out_h and out_h_length must be given together");
 }
@@ -92,18 +92,18 @@ TEST_CASE("decompose_stems_linked refuses channels and num_channels by name", "[
   const auto samples = tone(8192);
   const float* channels[1] = {samples.data()};
   float* out = nullptr;
-  size_t count = 0;
+  int count = 0;
   size_t component_length = 0;
-  CHECK(sonare_decompose_stems_linked(nullptr, 1, samples.size(), kRate, nullptr, &out, &count,
-                                      &component_length, nullptr, nullptr, nullptr,
+  CHECK(sonare_decompose_stems_linked(nullptr, 1, samples.size(), kRate, nullptr, &out,
+                                      &component_length, &count, nullptr, nullptr, nullptr,
                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "channels must not be NULL");
-  CHECK(sonare_decompose_stems_linked(channels, 0, samples.size(), kRate, nullptr, &out, &count,
-                                      &component_length, nullptr, nullptr, nullptr,
+  CHECK(sonare_decompose_stems_linked(channels, 0, samples.size(), kRate, nullptr, &out,
+                                      &component_length, &count, nullptr, nullptr, nullptr,
                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "num_channels must be an integer in [1, 64]");
-  CHECK(sonare_decompose_stems_linked(channels, 65, samples.size(), kRate, nullptr, &out, &count,
-                                      &component_length, nullptr, nullptr, nullptr,
+  CHECK(sonare_decompose_stems_linked(channels, 65, samples.size(), kRate, nullptr, &out,
+                                      &component_length, &count, nullptr, nullptr, nullptr,
                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "num_channels must be an integer in [1, 64]");
 }

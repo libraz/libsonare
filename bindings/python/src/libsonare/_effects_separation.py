@@ -253,7 +253,7 @@ def decompose_stems(
     config = _stems_config(n_components, n_fft, hop_length, n_iter, beta, init, mask_power)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    component_count = ctypes.c_size_t()
+    component_count = ctypes.c_int()
     with (
         _out_float_array(lib) as (out, component_length),
         _out_float_array(lib) as (out_w, out_w_length),
@@ -266,8 +266,8 @@ def decompose_stems(
                 _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(config),
                 ctypes.byref(out),
-                ctypes.byref(component_count),
                 ctypes.byref(component_length),
+                ctypes.byref(component_count),
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),
@@ -352,7 +352,7 @@ def decompose_stems_linked(
     planes = _linked_channel_planes(channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     channel_count = len(arrays)
-    component_count = ctypes.c_size_t()
+    component_count = ctypes.c_int()
     with (
         _out_float_array(lib) as (out, component_length),
         _out_float_array(lib) as (out_w, out_w_length),
@@ -366,8 +366,8 @@ def decompose_stems_linked(
                 _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(config),
                 ctypes.byref(out),
-                ctypes.byref(component_count),
                 ctypes.byref(component_length),
+                ctypes.byref(component_count),
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),

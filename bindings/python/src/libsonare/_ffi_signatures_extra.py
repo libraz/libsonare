@@ -37,7 +37,7 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
 
     # --- Features - spectral contrast / poly / zero-crossings / tuning ---
 
-    # sonare_spectral_contrast (matrix2d: out_rows/out_cols are int*)
+    # sonare_spectral_contrast (feature matrix: out_length plus out_n_subbands/out_n_frames)
     lib.sonare_spectral_contrast.restype = ctypes.c_int32
     lib.sonare_spectral_contrast.argtypes = [
         ctypes.POINTER(ctypes.c_float),
@@ -49,11 +49,12 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.c_int),
     ]
 
-    # sonare_poly_features (matrix2d: out_rows/out_cols are int*)
+    # sonare_poly_features (feature matrix: out_length plus out_n_coefficients/out_n_frames)
     lib.sonare_poly_features.restype = ctypes.c_int32
     lib.sonare_poly_features.argtypes = [
         ctypes.POINTER(ctypes.c_float),
@@ -63,6 +64,7 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_int,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.c_int),
     ]
@@ -146,7 +148,7 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareDecomposeStemsConfig),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
@@ -163,7 +165,7 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareDecomposeStemsConfig),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
-        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),

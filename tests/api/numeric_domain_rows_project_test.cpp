@@ -18,6 +18,7 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 #include "mixing/api/scene.h"
+#include "support/project_bounce.h"
 #endif
 
 namespace {
@@ -735,7 +736,7 @@ SonareError probe_bounce(const std::string& param, double value) {
   return bounce_options_with(
       param, value,
       [](SonareProject* p, const SonareProjectBounceOptions* o, float** out, size_t* len, int* ch) {
-        return sonare_project_bounce(p, o, out, len, ch);
+        return sonare_test::bounce_interleaved(p, o, out, len, ch);
       });
 }
 

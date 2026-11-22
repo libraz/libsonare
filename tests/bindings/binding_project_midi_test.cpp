@@ -5,6 +5,7 @@
 #include "c_api/project_internal.h"
 #include "midi/midi_clip.h"
 #include "midi/ump.h"
+#include "support/project_bounce.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -1766,8 +1767,8 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   float* bounced = nullptr;
   size_t bounced_len = 0;
   int bounce_channels = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len, &bounce_channels) ==
-          SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(project, &options, &bounced, &bounced_len,
+                                          &bounce_channels) == SONARE_OK);
   REQUIRE(bounced != nullptr);
   sonare_free_floats(bounced);
 

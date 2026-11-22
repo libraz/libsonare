@@ -210,19 +210,20 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   const SonareDecomposeStemsConfig config =
       ReadDecomposeStemsConfig(info.Length() >= 3 ? info[2] : env.Undefined(), &init);
   float* out = nullptr;
-  size_t component_count = 0;
   size_t component_length = 0;
+  int n_components = 0;
   float* out_w = nullptr;
   size_t out_w_length = 0;
   float* out_h = nullptr;
   size_t out_h_length = 0;
   SonareError err =
-      sonare_decompose_stems(arr.Data(), arr.ElementLength(), sr, &config, &out, &component_count,
-                             &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
+      sonare_decompose_stems(arr.Data(), arr.ElementLength(), sr, &config, &out, &component_length,
+                             &n_components, &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
+  const size_t component_count = static_cast<size_t>(n_components);
   Napi::Array components = Napi::Array::New(env, component_count);
   for (size_t c = 0; c < component_count; ++c) {
     auto component = Napi::Float32Array::New(env, component_length);
@@ -255,21 +256,22 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
   const SonareDecomposeStemsConfig config =
       ReadDecomposeStemsConfig(info.Length() >= 3 ? info[2] : env.Undefined(), &init);
   float* out = nullptr;
-  size_t component_count = 0;
   const size_t channel_count = inputs.ptrs.size();
   size_t component_length = 0;
+  int n_components = 0;
   float* out_w = nullptr;
   size_t out_w_length = 0;
   float* out_h = nullptr;
   size_t out_h_length = 0;
   SonareError err = sonare_decompose_stems_linked(
-      inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &out, &component_count,
-      &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
+      inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &out, &component_length,
+      &n_components, &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   // Layout: component c, channel ch starts at (c * channel_count + ch) * component_length.
+  const size_t component_count = static_cast<size_t>(n_components);
   Napi::Array components = Napi::Array::New(env, component_count);
   for (size_t c = 0; c < component_count; ++c) {
     Napi::Array component_channels = Napi::Array::New(env, channel_count);

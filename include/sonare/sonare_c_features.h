@@ -712,22 +712,25 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
 ///   itself, and is neither level-invariant nor confined to the band. Keep
 ///   @p fmin_hz at or above one bin width for row 0 to mean anything.
 /// @param out Receives the freshly allocated [(n_bands + 1) * n_frames] matrix.
-/// @param out_rows Receives the number of rows (n_bands + 1).
-/// @param out_cols Receives the number of columns (n_frames).
+/// @param out_length Receives the value count, (n_bands + 1) * n_frames.
+/// @param out_n_subbands Receives the row count, @p n_bands + 1: every band, band 0 included.
+/// @param out_n_frames Receives the column count, the number of analysis frames.
 SonareError sonare_spectral_contrast(const float* samples, size_t length, int sample_rate,
                                      int n_fft, size_t hop_length, int n_bands, float fmin_hz,
-                                     float quantile, float** out, int* out_rows, int* out_cols);
+                                     float quantile, float** out, size_t* out_length,
+                                     int* out_n_subbands, int* out_n_frames);
 
 /// @brief Polynomial coefficients fit to each frame's spectrum.
 /// @details Mirrors librosa.feature.poly_features. Output is a row-major matrix
 ///   [(@p order + 1) x n_frames] with coefficients ordered high-to-low. Free
 ///   @p out with sonare_free_floats.
 /// @param out Receives the freshly allocated [(order + 1) * n_frames] matrix.
-/// @param out_rows Receives the number of rows (order + 1).
-/// @param out_cols Receives the number of columns (n_frames).
+/// @param out_length Receives the value count, (order + 1) * n_frames.
+/// @param out_n_coefficients Receives the row count, @p order + 1.
+/// @param out_n_frames Receives the column count, the number of analysis frames.
 SonareError sonare_poly_features(const float* samples, size_t length, int sample_rate, int n_fft,
-                                 size_t hop_length, int order, float** out, int* out_rows,
-                                 int* out_cols);
+                                 size_t hop_length, int order, float** out, size_t* out_length,
+                                 int* out_n_coefficients, int* out_n_frames);
 
 /// @brief Raw zero-crossing indices of a signal (librosa.zero_crossings).
 /// @details Unlike sonare_zero_crossing_rate (a per-frame rate), this returns the
@@ -798,12 +801,15 @@ SonareError sonare_tuning_to_reference_hz(float tuning_cents, float a4_hz, float
 SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz, float* out_tuning_cents);
 
 /// @brief Detects per-frame spectral pitch peaks (librosa.piptrack).
-/// @details @p pitches and @p magnitudes are row-major [n_bins x n_frames]
+/// @details @p out_pitches and @p out_magnitudes are row-major [n_bins x n_frames]
 ///          matrices and must each be released with @ref sonare_free_floats.
+/// @param out_length Receives the value count of each of the two matrices, n_bins * n_frames.
+/// @param out_n_bins Receives the row count, the FFT bin count n_fft / 2 + 1.
+/// @param out_n_frames Receives the column count, the number of analysis frames.
 SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,
                             size_t hop_length, float fmin_hz, float fmax_hz, float threshold,
-                            int* out_n_bins, int* out_n_frames, float** out_pitches,
-                            float** out_magnitudes);
+                            float** out_pitches, float** out_magnitudes, size_t* out_length,
+                            int* out_n_bins, int* out_n_frames);
 
 /// @brief Owned result of @ref sonare_reassigned_spectrogram.
 /// @details All three arrays are row-major [n_bins x n_frames] and are released

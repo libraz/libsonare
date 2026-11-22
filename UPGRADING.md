@@ -338,6 +338,14 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_zero_crossing_rate(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_zero_crossing_rate(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 
+#### A C matrix result reports its buffer length and named dimensions
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_piptrack` | takes out_pitches and out_magnitudes first, then size_t* out_length (shared by both buffers), int* out_n_bins and int* out_n_frames |
+| `sonare_poly_features` | takes size_t* out_length after out, then int* out_n_coefficients (order + 1) and int* out_n_frames in place of int* out_rows, int* out_cols |
+| `sonare_spectral_contrast` | takes size_t* out_length after out, then int* out_n_subbands (n_bands + 1) and int* out_n_frames in place of int* out_rows, int* out_cols |
+
 #### Every C failure sets the error message
 
 | 1.x | 2.0.0 |
@@ -528,6 +536,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_realtime_voice_changer_non_finite_discard_count(out_count)` | the count is a size_t instead of a uint32_t |
 | `sonare_streaming_retune_prepare(sample_rate)` | the sample rate is an int instead of a double |
 
+#### A C matrix result reports its buffer length and named dimensions
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_decompose_stems` | size_t* out_frames (sample frames per component) then int* out_n_components replace size_t* out_component_count, size_t* out_component_length |
+
 #### Every C failure sets the error message
 
 | 1.x | 2.0.0 |
@@ -541,7 +555,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareNormalizeStereoResult` | removed: sonare_normalize_stereo and sonare_normalize_rms_stereo return out_left, out_right and out_length |
 | `SonareRoomMorphStereoResult` | removed: sonare_room_morph_stereo returns out_left, out_right and out_length |
-| `sonare_decompose_stems_linked` | out_num_channels is gone; the output carries num_channels channels per component, the count the caller passed |
+| `sonare_decompose_stems_linked` | out_num_channels is gone; the output carries num_channels channels per component, the count the caller passed; size_t* out_frames (sample frames per component and channel) then int* out_n_components replace size_t* out_component_count, size_t* out_component_length |
 | `sonare_free_room_morph_stereo_result` | removed: free each room_morph_stereo buffer with sonare_free_floats |
 | `sonare_hpss_with_residual` | removed: call sonare_hpss with a non-NULL out_residual; harmonic, percussive, length and sample rate arrive in SonareHpssResult |
 | `sonare_mastering_repair_denoise_classical_linked` | returns SonareDenoiseLinkedResult* out (channels and the SonareDenoiseReport), freed with sonare_free_denoise_linked_result, in place of caller channel buffers and a report |
@@ -942,7 +956,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_auto_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults), candidate_index and apply_time_signatures before out_bpm; pass 0 and 0 for the former behaviour |
 | `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs |
 | `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted |
-| `sonare_project_bounce` | hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused |
+| `sonare_project_bounce` | hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused; out_interleaved is out; out_len, which counted interleaved samples (frames * channels), is size_t* out_frames, which counts sample frames per channel, so a caller sizing the buffer multiplies it by out_channels; out_num_channels is out_channels |
 | `sonare_project_edit_automation_lane_ex` | removed: call sonare_project_edit_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
 | `sonare_project_edit_automation_lane` | takes the descriptor that carries target_kind, which is applied to the lane instead of retaining the existing kind; restate the lane's kind in the descriptor |
 | `sonare_project_set_marker_ex` | removed: call sonare_project_set_marker, which takes the SonareProjectMarker |
@@ -13664,6 +13678,10 @@ C, 2.0.0:
 size_t n = 0;
 SonareError err = sonare_mixer_strip_count(mixer, &n);
 ```
+
+### A C matrix result reports its buffer length and named dimensions
+
+An entry returning a feature matrix writes the buffer length to a `size_t* out_length` and each dimension to an `int*` named for what it counts (`out_n_bins`, `out_n_frames`), never `out_rows` / `out_cols`; an entry returning audio writes its sample frames to a `size_t* out_frames` and its one other dimension to an `int*` (`out_channels`, `out_n_components`).
 
 ### Every C failure sets the error message
 

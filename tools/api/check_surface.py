@@ -104,6 +104,7 @@ RULE_SLUGS = (
     "c-create",
     "c-free",
     "c-count-types",
+    "c-matrix-shape",
     "c-error-path",
     "error-class-by-cause",
     "entry-named-refusals",
@@ -1969,6 +1970,54 @@ def chk_c_count_types(ctx):
     return cands, bad
 
 
+_NUMERIC_ARRAY_OUT = re.compile(
+    r"^(?:float|double|int|int16_t|int32_t|int64_t|uint8_t|uint32_t)\*\*$"
+)
+_INT_OUT = re.compile(r"^(?:int|int32_t|int64_t|uint32_t|size_t)\*$")
+_INT_DIM = re.compile(r"^(?:int|int32_t)\*$")
+
+
+def chk_c_matrix_shape(ctx):
+    """A C entry returning a matrix reports its buffer length as ``size_t`` plus named int dims.
+
+    An entry is a matrix when it returns a numeric ``T**`` and at least one integer out-param
+    that is neither a buffer length nor the sample rate is an ``int`` or there are two of them.
+    Audio is the one other shape: ``size_t* out_frames`` plus a single named ``int`` dimension.
+    """
+    cands, bad = 0, []
+    for r in recs(ctx, ("c",), ("function",)):
+        params = r["sigs"][0]["params"]
+        typed = [(p["name"], p.get("type", "").replace(" ", "")) for p in params]
+        arrays = [n for n, t in typed if _NUMERIC_ARRAY_OUT.match(t)]
+        if not arrays:
+            continue
+        lengths = {"out_length"} | {f"{a}_length" for a in arrays}
+        ints = [(n, t) for n, t in typed if n.startswith("out") and _INT_OUT.match(t)]
+        dims = [(n, t) for n, t in ints if n not in lengths | {"out_len", "out_sample_rate"}]
+        if not (any(_INT_DIM.match(t) for _, t in dims) or len(dims) >= 2):
+            continue
+        cands += 1
+        named = dict(dims)
+        if (
+            named.get("out_frames") == "size_t*"
+            and len(dims) == 2
+            and all(_INT_DIM.match(t) for n, t in dims if n != "out_frames")
+        ):
+            continue
+        have = {n: t for n, t in ints}
+        if have.get("out_length") != "size_t*" and not all(
+            have.get(f"{a}_length") == "size_t*" for a in arrays
+        ):
+            spelled = " (out_len is the length under another name)" if "out_len" in have else ""
+            bad.append((r, f"no size_t* out_length beside the matrix{spelled}"))
+        for n, t in dims:
+            if not _INT_DIM.match(t):
+                bad.append((r, f"dimension {n} is {t.rstrip('*')}, not int"))
+            if n in ("out_rows", "out_cols"):
+                bad.append((r, f"dimension {n} does not name what it counts"))
+    return cands, bad
+
+
 def chk_getters(ctx):
     cands = recs(ctx, BINDINGS, ("function", "method"))
     bad = [
@@ -2625,6 +2674,7 @@ CHECKS: tuple[Check, ...] = (
     Check("c-free", ("c",), chk_c_free),
     Check("c-create", ("c",), chk_c_create),
     Check("c-count-types", ("c",), chk_c_count_types),
+    Check("c-matrix-shape", ("c",), chk_c_matrix_shape),
     Check("c-enum-field-doc", ("c",), chk_c_enum_field_doc),
     Check("getters", BINDINGS, chk_getters),
     Check("typed-results", JS, chk_typed_results),

@@ -1135,27 +1135,25 @@ void sonare_decompose_stems_config_init(SonareDecomposeStemsConfig* config);
 /// @param length Number of samples.
 /// @param sample_rate Sample rate in Hz.
 /// @param config Optional options started from the init function; NULL selects the defaults.
-/// @param out Receives one heap buffer per component, laid out as a single
-///        flat array of @p out_component_count * @p out_component_length
-///        floats (component c starts at c * @p out_component_length). Release
-///        with @ref sonare_free_floats.
-/// @param out_component_count Receives the number of components.
-/// @param out_component_length Receives the per-component sample count (equal
-///        to @p length).
+/// @param out Receives one heap buffer holding every component, a flat array
+///        of @p out_n_components * @p out_frames floats (component c starts at
+///        c * @p out_frames). Release with @ref sonare_free_floats.
+/// @param out_frames Receives the sample frames per component (equal to @p length).
+/// @param out_n_components Receives the number of components.
 /// @param out_w Optional; receives the [n_bins x n_components] component matrix
-///        that produced the masks. NULL skips it. Release with
-///        @ref sonare_free_floats.
+///        that produced the masks, n_bins being config n_fft / 2 + 1. NULL skips
+///        it. Release with @ref sonare_free_floats.
 /// @param out_w_length Optional; receives n_bins * n_components. Required when
 ///        @p out_w is non-NULL.
 /// @param out_h Optional; receives the [n_components x n_frames] activation
-///        matrix. NULL skips it. Release with @ref sonare_free_floats.
+///        matrix, n_frames being the STFT analysis frames of @p length at the
+///        config hop. NULL skips it. Release with @ref sonare_free_floats.
 /// @param out_h_length Optional; receives n_components * n_frames. Required
 ///        when @p out_h is non-NULL.
 SonareError sonare_decompose_stems(const float* samples, size_t length, int sample_rate,
                                    const SonareDecomposeStemsConfig* config, float** out,
-                                   size_t* out_component_count, size_t* out_component_length,
-                                   float** out_w, size_t* out_w_length, float** out_h,
-                                   size_t* out_h_length);
+                                   size_t* out_frames, int* out_n_components, float** out_w,
+                                   size_t* out_w_length, float** out_h, size_t* out_h_length);
 
 /// @brief Multi-channel form of @ref sonare_decompose_stems: one NMF model and
 ///        one soft mask shared across every channel.
@@ -1175,27 +1173,27 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 /// @param sample_rate Sample rate in Hz, shared by every channel.
 /// @param config Optional options started from the init function; NULL selects the defaults.
 /// @param out Receives one heap buffer holding every (component, channel)
-///        signal, laid out as a single flat array of @p out_component_count * @p num_channels
-///        * @p out_component_length floats: component c, channel ch starts at
-///        (c * @p num_channels + ch) * @p out_component_length. Release
-///        with @ref sonare_free_floats.
-/// @param out_component_count Receives the number of components.
-/// @param out_component_length Receives the per-(component, channel) sample
-///        count (equal to @p length).
-/// @param out_w Optional; receives the [n_bins x n_components] component matrix
-///        that produced the masks. NULL skips it. Release with
+///        signal, laid out as a single flat array of @p out_n_components *
+///        @p num_channels * @p out_frames floats: component c, channel ch starts
+///        at (c * @p num_channels + ch) * @p out_frames. Release with
 ///        @ref sonare_free_floats.
+/// @param out_frames Receives the sample frames per (component, channel) (equal to @p length).
+/// @param out_n_components Receives the number of components.
+/// @param out_w Optional; receives the [n_bins x n_components] component matrix
+///        that produced the masks, n_bins being config n_fft / 2 + 1. NULL skips
+///        it. Release with @ref sonare_free_floats.
 /// @param out_w_length Optional; receives n_bins * n_components. Required when
 ///        @p out_w is non-NULL.
 /// @param out_h Optional; receives the [n_components x n_frames] activation
-///        matrix. NULL skips it. Release with @ref sonare_free_floats.
+///        matrix, n_frames being the STFT analysis frames of @p length at the
+///        config hop. NULL skips it. Release with @ref sonare_free_floats.
 /// @param out_h_length Optional; receives n_components * n_frames. Required
 ///        when @p out_h is non-NULL.
 SonareError sonare_decompose_stems_linked(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate,
                                           const SonareDecomposeStemsConfig* config, float** out,
-                                          size_t* out_component_count, size_t* out_component_length,
-                                          float** out_w, size_t* out_w_length, float** out_h,
+                                          size_t* out_frames, int* out_n_components, float** out_w,
+                                          size_t* out_w_length, float** out_h,
                                           size_t* out_h_length);
 
 /// @brief Nearest-neighbour filter for spectrogram denoising

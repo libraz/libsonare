@@ -352,14 +352,14 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   // Left at the init value when the caller did not ask for a rate, which is the project's own.
 
   float* interleaved = nullptr;
-  size_t total = 0;
+  size_t frames = 0;
   int rendered_channels = 0;
   if (use_synth) {
     options.synth_instruments = &synth_binding;
     options.synth_instrument_count = 1;
   }
   SonareError err =
-      sonare_project_bounce(handle.ptr, &options, &interleaved, &total, &rendered_channels);
+      sonare_project_bounce(handle.ptr, &options, &interleaved, &frames, &rendered_channels);
   if (err != SONARE_OK) {
     project_report_error("bounce project", err);
     return project_exit_code(err);
@@ -367,7 +367,7 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   const int channels = rendered_channels;
   // The WAV header sample rate equals the render rate the engine used (see above).
   const int sample_rate = render_sample_rate;
-  const size_t frames = channels > 0 ? total / static_cast<size_t>(channels) : total;
+  const size_t total = frames * static_cast<size_t>(channels);
   std::vector<float> rendered(interleaved, interleaved + total);
   sonare_free_floats(interleaved);
   // The WAV writer requires the count and the layout to agree, so the layout is

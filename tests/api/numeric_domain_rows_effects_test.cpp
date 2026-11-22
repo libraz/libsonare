@@ -108,11 +108,11 @@ SonareError probe_decompose_stems(const std::string& param, double value) {
   config.n_iter = 1;
   set_stems_config(&config, param, value);
   float* out = nullptr;
-  size_t count = 0;
+  int count = 0;
   size_t length = 0;
   const SonareError err =
       sonare_decompose_stems(analysis_samples().data(), analysis_samples().size(), kAnalysisRate,
-                             &config, &out, &count, &length, nullptr, nullptr, nullptr, nullptr);
+                             &config, &out, &length, &count, nullptr, nullptr, nullptr, nullptr);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
@@ -125,11 +125,11 @@ SonareError probe_decompose_stems_linked(const std::string& param, double value)
   const float* channels[2] = {analysis_samples().data(), analysis_samples().data()};
   const size_t num_channels = is_param(param, "num_channels") ? as_size(value) : 1;
   float* out = nullptr;
-  size_t count = 0;
+  int count = 0;
   size_t length = 0;
   const SonareError err = sonare_decompose_stems_linked(
-      channels, num_channels, analysis_samples().size(), kAnalysisRate, &config, &out, &count,
-      &length, nullptr, nullptr, nullptr, nullptr);
+      channels, num_channels, analysis_samples().size(), kAnalysisRate, &config, &out, &length,
+      &count, nullptr, nullptr, nullptr, nullptr);
   if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }

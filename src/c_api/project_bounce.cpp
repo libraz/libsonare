@@ -756,20 +756,20 @@ void sonare_project_bounce_options_init(SonareProjectBounceOptions* options) {
 }
 
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
-                                  float** out_interleaved, size_t* out_len, int* out_num_channels) {
+                                  float** out, size_t* out_frames, int* out_channels) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
-  if (out_interleaved) *out_interleaved = nullptr;
-  if (out_len) *out_len = 0;
-  if (out_num_channels) *out_num_channels = 0;
+  if (out) *out = nullptr;
+  if (out_frames) *out_frames = 0;
+  if (out_channels) *out_channels = 0;
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
   SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(out_interleaved);
-  SONARE_C_REQUIRE_NONNULL(out_len);
-  SONARE_C_REQUIRE_NONNULL(out_num_channels);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_frames);
+  SONARE_C_REQUIRE_NONNULL(out_channels);
   BounceInstruments instruments;
   if (options != nullptr) {
     // The instrument members sit past the original fields, so the size is read first.
@@ -788,16 +788,20 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
     path_dump.emplace(instruments.synths);
   }
 #endif
-  return do_project_bounce(project, options, instruments.hosted, out_interleaved, out_len,
-                           out_num_channels);
+  size_t samples = 0;
+  const SonareError err =
+      do_project_bounce(project, options, instruments.hosted, out, &samples, out_channels);
+  if (err == SONARE_OK && *out_channels > 0) {
+    *out_frames = samples / static_cast<size_t>(*out_channels);
+  }
+  return err;
   SONARE_C_CATCH
 #else
-  if (out_interleaved) *out_interleaved = {};
-  if (out_len) *out_len = {};
-  if (out_num_channels) *out_num_channels = 0;
+  if (out) *out = {};
+  if (out_frames) *out_frames = {};
+  if (out_channels) *out_channels = 0;
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 options, out_interleaved, out_len,
-                                                 out_num_channels);
+                                                 options, out, out_frames, out_channels);
 #endif
 }
 

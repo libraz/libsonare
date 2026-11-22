@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "binding_project_parity_test_helpers.h"
+#include "support/project_bounce.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -23,8 +24,8 @@ SonareError bounce_with_synth_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.synth_instruments = bindings;
   with_instruments.synth_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 SonareError bounce_with_sf2_instruments(SonareProject* project,
@@ -37,8 +38,8 @@ SonareError bounce_with_sf2_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.sf2_instruments = bindings;
   with_instruments.sf2_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 constexpr uint32_t kDestination = 3;

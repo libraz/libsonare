@@ -11,6 +11,7 @@
 #include <string>
 
 #include "bindings/binding_project_parity_test_helpers.h"
+#include "support/project_bounce.h"
 
 namespace {
 
@@ -25,8 +26,8 @@ SonareError bounce_with_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.instruments = bindings;
   with_instruments.instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 #if defined(SONARE_WITH_MIXING)
@@ -152,7 +153,7 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 123;
   int bounce_channels2 = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels2) ==
+  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels2) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
@@ -162,7 +163,7 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   out_len = 123;
   int bounce_channels3 = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels3) ==
+  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels3) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
@@ -170,7 +171,8 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   // Stereo still bounces.
   options.num_channels = 2;
   int bounce_channels4 = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels4) == SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels4) ==
+          SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == 256u);
   sonare_free_floats(out);
@@ -200,7 +202,8 @@ TEST_CASE("project bounce reads only the named constants as the default for widt
 
   int bounce_channels5 = 0;
   // Init options: default block size, the scene's output width, the project's rate.
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels5) == SONARE_OK);
+  REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels5) ==
+          SONARE_OK);
   REQUIRE(out != nullptr);
   CHECK(out_len == 256u);
   sonare_free_floats(out);
@@ -217,7 +220,7 @@ TEST_CASE("project bounce reads only the named constants as the default for widt
     out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
     out_len = 123;
     int bounce_channels6 = 0;
-    CHECK(sonare_project_bounce(project, &negative, &out, &out_len, &bounce_channels6) ==
+    CHECK(sonare_test::bounce_interleaved(project, &negative, &out, &out_len, &bounce_channels6) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
     CHECK(out_len == 0);
@@ -252,7 +255,7 @@ TEST_CASE("project bounce defaults its width to the master's layout and reports 
     float* out = nullptr;
     size_t out_len = 0;
     int bounce_channels = -1;
-    REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels) ==
+    REQUIRE(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels) ==
             SONARE_OK);
     CHECK(bounce_channels == c.width);
     CHECK(out_len == 128u * static_cast<size_t>(c.width));
@@ -261,7 +264,7 @@ TEST_CASE("project bounce defaults its width to the master's layout and reports 
     // A refused call still defines the width, as 0.
     options.block_size = 0;
     bounce_channels = -1;
-    CHECK(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels) ==
+    CHECK(sonare_test::bounce_interleaved(project, &options, &out, &out_len, &bounce_channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(bounce_channels == 0);
     sonare_project_destroy(project);

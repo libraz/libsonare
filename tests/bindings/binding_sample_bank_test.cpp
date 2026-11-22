@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "support/project_bounce.h"
+
 namespace {
 
 // Bounces with one kind of hosted-instrument list set on a copy of the options.
@@ -26,8 +28,8 @@ SonareError bounce_with_synth_instruments(SonareProject* project,
   if (options != nullptr) with_instruments = *options;
   with_instruments.synth_instruments = bindings;
   with_instruments.synth_instrument_count = count;
-  return sonare_project_bounce(project, &with_instruments, out_interleaved, out_len,
-                               out_num_channels);
+  return sonare_test::bounce_interleaved(project, &with_instruments, out_interleaved, out_len,
+                                         out_num_channels);
 }
 
 constexpr double kSourceRate = 44100.0;

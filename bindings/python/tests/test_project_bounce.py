@@ -40,6 +40,16 @@ def test_bounce_is_bit_exact_across_two_renders() -> None:
         project.close()
 
 
+@pytest.mark.parametrize("width", [1, 2])
+def test_bounce_returns_the_requested_frames_at_every_width(width: int) -> None:
+    project, *_ = _build_project()
+    try:
+        out = project.bounce(total_frames=4800, block_size=128, num_channels=width)
+        assert out.shape == (4800, width)
+    finally:
+        project.close()
+
+
 def _build_midi_only_project() -> Project:
     """A MIDI-only arrangement: one MIDI track + clip with a sustained note."""
     project = Project()

@@ -176,14 +176,14 @@ def _render_c(
     options.synth_instrument_count = 1
 
     try:
-        with out_float_array(lib) as (out, out_length):
+        with out_float_array(lib) as (out, out_frames):
             out_channels = ctypes.c_int(0)
             check(
                 lib.sonare_project_bounce(
                     handle,
                     ctypes.byref(options),
                     ctypes.byref(out),
-                    ctypes.byref(out_length),
+                    ctypes.byref(out_frames),
                     ctypes.byref(out_channels),
                 )
             )
@@ -191,7 +191,7 @@ def _render_c(
                 raise HarnessFailure(
                     f"bounce reported {out_channels.value} channels, expected {NUM_CHANNELS}"
                 )
-            samples = from_c_float_array(out, int(out_length.value))
+            samples = from_c_float_array(out, int(out_frames.value) * out_channels.value)
     finally:
         lib.sonare_project_destroy(handle)
     return np.asarray(samples, dtype=np.float32)

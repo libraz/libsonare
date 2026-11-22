@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "numeric_domain_rows_support.h"
+#include "support/project_bounce.h"
 
 namespace {
 
@@ -112,7 +113,8 @@ SonareError probe_project_bounce(const std::string& param, double value) {
   float* out = nullptr;
   size_t out_len = 0;
   int channels = 0;
-  const SonareError err = sonare_project_bounce(project, &options, &out, &out_len, &channels);
+  const SonareError err =
+      sonare_test::bounce_interleaved(project, &options, &out, &out_len, &channels);
   if (err == SONARE_OK) sonare_free_floats(out);
   sonare_project_destroy(project);
   return err;

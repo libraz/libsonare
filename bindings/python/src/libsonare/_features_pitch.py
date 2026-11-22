@@ -196,6 +196,7 @@ def piptrack(
     n_frames = ctypes.c_int()
     pitches = ctypes.POINTER(ctypes.c_float)()
     magnitudes = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
     rc = lib.sonare_piptrack(
         c_array,
         _to_c_size_t(length, "length"),
@@ -205,10 +206,11 @@ def piptrack(
         _to_c_float(fmin, "fmin"),
         _to_c_float(fmax, "fmax"),
         _to_c_float(threshold, "threshold"),
-        ctypes.byref(n_bins),
-        ctypes.byref(n_frames),
         ctypes.byref(pitches),
         ctypes.byref(magnitudes),
+        ctypes.byref(out_length),
+        ctypes.byref(n_bins),
+        ctypes.byref(n_frames),
     )
     _check(rc)
     try:
