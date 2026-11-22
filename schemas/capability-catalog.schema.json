@@ -61,7 +61,10 @@
           "channelPolicy": {
             "enum": ["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
           },
-          "category": { "type": "string", "pattern": "^[a-z]+$" },
+          "category": {
+            "description": "UI group read off the first segment of the processor id; 'other' holds an id under no known segment.",
+            "enum": ["dynamics", "effects", "eq", "final", "maximizer", "multiband", "other", "reference", "repair", "saturation", "spectral", "stereo", "utility", "voice"]
+          },
           "causal": { "type": "boolean" },
           "params": {
             "type": "array",

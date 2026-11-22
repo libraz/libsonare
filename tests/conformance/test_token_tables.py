@@ -190,6 +190,7 @@ const char* bed_room(Room room) {
     "ts/narrow.ts": "export type NarrowRoom = 'livingRoom';\n",
     "py/config.py": 'class RoomConfig(TypedDict):\n    preset: Literal["livingRoom", "homeTheater"]\n',
     "py/alias.py": 'Room: TypeAlias = Literal["livingRoom", "homeTheater"]\n',
+    "schema/room.json": '{"properties": {"room": {"enum": ["livingRoom", "homeTheater"]}}}\n',
 }
 
 _KIND_ROW = check.TokenSet(
@@ -201,6 +202,7 @@ _KIND_ROW = check.TokenSet(
         check.Source("node", "ts/narrow.ts", "ts_union", "NarrowRoom", subset=True),
         check.Source("python", "py/config.py", "py_field", "RoomConfig.preset"),
         check.Source("python", "py/alias.py", "py_literal", "Room"),
+        check.Source("schema", "schema/room.json", "json_enum", "/properties/room"),
     ),
 )
 
@@ -285,6 +287,12 @@ class SourceKindTests(unittest.TestCase):
         problems, _, _ = self.run_with({"py/config.py": (', "homeTheater"', "")})
         self.assertEqual(
             problems, ["room: python RoomConfig.preset (py/config.py): missing token 'homeTheater'"]
+        )
+
+    def test_a_schema_enum_missing_a_token_is_named(self) -> None:
+        problems, _, _ = self.run_with({"schema/room.json": (', "homeTheater"', "")})
+        self.assertEqual(
+            problems, ["room: schema /properties/room (schema/room.json): missing token 'homeTheater'"]
         )
 
     def test_an_annotated_alias_is_read(self) -> None:

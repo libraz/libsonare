@@ -26,6 +26,7 @@ Self-tests: python3 -m unittest tests/conformance/test_token_tables.py
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 import types
@@ -37,7 +38,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # Source kinds: ordinal tables map token -> ordinal; set sources only list tokens.
 # A field kind's symbol is ``Owner.field``: an interface member or a class attribute.
 ORDINAL_KINDS = ("ts_object", "ts_array", "py_tuple", "py_dict")
-SET_KINDS = ("ts_union", "ts_field", "py_literal", "py_field")
+SET_KINDS = ("ts_union", "ts_field", "py_literal", "py_field", "json_enum")
+# A json_enum symbol is a JSON pointer to a schema node carrying an ``enum``.
 
 
 class Source(typing.NamedTuple):
@@ -498,6 +500,28 @@ ROWS: tuple[TokenSet, ...] = (
             _src("wasm", "bindings/wasm/src/public_types_mixing.ts", "ts_union", "AutomationCurve"),
         ),
     ),
+    TokenSet(
+        name="mastering processor category",
+        core=CoreTable(
+            "src/mastering/api/named_processor_registry.cpp", "std::string", writer="catalog_category"
+        ),
+        sources=(
+            _src("node", "bindings/node/src/types_capabilities.ts", "ts_union", "MasteringProcessorCategory"),
+            _src("wasm", "bindings/wasm/src/public_types.ts", "ts_union", "MasteringProcessorCategory"),
+            _src(
+                "python",
+                "bindings/python/src/libsonare/_types_capabilities.py",
+                "py_literal",
+                "MasteringProcessorCategory",
+            ),
+            _src(
+                "schema",
+                "schemas/capability-catalog.schema.json",
+                "json_enum",
+                "/properties/processors/items/properties/category",
+            ),
+        ),
+    ),
 )
 
 
@@ -771,6 +795,11 @@ def read_source(text: str, src: Source) -> dict[str, int] | set[str] | None:
         if not body:
             return None
         return {tok: i for i, (_q, tok) in enumerate(_STR.findall(body))}
+    if src.kind == "json_enum":
+        node: typing.Any = json.loads(text)
+        for part in src.symbol.strip("/").split("/"):
+            node = node.get(part) if isinstance(node, dict) else None
+        return set(node["enum"]) if isinstance(node, dict) and "enum" in node else None
     raise ValueError(f"unknown source kind {src.kind!r}")
 
 
