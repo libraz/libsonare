@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "util/exception.h"
@@ -142,7 +144,13 @@ std::vector<float> lpc(const float* y, std::size_t n, int order) {
     throw SonareException(ErrorCode::InvalidParameter, "lpc: input length must exceed order");
   }
 
-  return lpc_burg(y, n, order).ar;
+  LpcResult model = lpc_burg(y, n, order);
+  if (model.order_reached < order) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "lpc: signal is ill-conditioned for an order-" + std::to_string(order) +
+                              " model; stable up to order " + std::to_string(model.order_reached));
+  }
+  return std::move(model.ar);
 }
 
 std::vector<float> lpc(const std::vector<float>& y, int order) {

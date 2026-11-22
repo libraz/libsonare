@@ -100,6 +100,10 @@ LpcResult lpc_burg(const float* x, size_t n, int order) {
       dot += bwd[k] * fwd[fwd_start + k];
     }
     const double reflection = -2.0 * dot / (den + kTiny);
+    // The recursive energy update drifts once the residual is exhausted; a reflection at or past
+    // 1 there would make the model unstable, so the recursion ends at the last stable order.
+    if (!(std::abs(reflection) < 1.0)) break;
+    result.order_reached = i + 1;
 
     std::swap(ar, ar_prev);
     ar[0] = ar_prev[0];
@@ -147,6 +151,7 @@ void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out,
   result.variance = 0.0f;
   result.ar.assign(static_cast<size_t>(order + 1), 0.0f);
   result.ar[0] = 1.0f;
+  result.order_reached = 0;
   if (fill_trivial_variance(x, n, order, &result)) return;
 
   std::vector<float>& raw = workspace->lags;
@@ -182,6 +187,7 @@ void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out,
     }
     next_a[static_cast<size_t>(i)] = reflection;
     a.swap(next_a);
+    result.order_reached = i;
     error *= 1.0 - reflection * reflection;
     if (error <= 1.0e-20) {
       error = 0.0;
@@ -237,12 +243,12 @@ void interpolate_gap(float* samples, size_t n, size_t start, size_t end) {
   }
 }
 
-bool ar_interpolate_region(float* samples, size_t n, size_t start, size_t end,
-                           const ArInterpolateParams& params) {
+ArFill ar_interpolate_region(float* samples, size_t n, size_t start, size_t end,
+                             const ArInterpolateParams& params) {
   validate_gap_args(samples, n, start, end);
   const size_t gap = end - start;
-  if (gap > params.max_gap) return false;
-  if (gap == 0) return true;
+  if (gap > params.max_gap) return ArFill::kGapTooLong;
+  if (gap == 0) return ArFill::kFilled;
 
   const size_t requested_order = static_cast<size_t>(std::max(params.order, 0));
   // The order-derived term is caller-controlled and would otherwise pull the whole
@@ -254,109 +260,140 @@ bool ar_interpolate_region(float* samples, size_t n, size_t start, size_t end,
   std::vector<float> context(samples + context_start, samples + context_end);
   const size_t local_start = start - context_start;
   const size_t local_end = end - context_start;
-
-  // Step 1 – cubic / linear initialisation of the unknown region. Keep a copy of
-  // the interpolated baseline so the final LPC estimate can be blended against it
-  // (params.blend); the fallback gets weight (1 - blend).
-  std::vector<float> baseline(gap);
-  for (size_t j = local_start; j < local_end; ++j) {
-    context[j] = interpolate_gap_sample(context.data(), context.size(), local_start, local_end, j);
-    baseline[j - local_start] = context[j];
-  }
-  std::copy(context.begin() + static_cast<std::ptrdiff_t>(local_start),
-            context.begin() + static_cast<std::ptrdiff_t>(local_end), samples + start);
-
   const size_t context_size = context.size();
-  const int max_order =
-      std::min(params.order, static_cast<int>(std::max<size_t>(1, context_size / 4)));
-  // Skip LPC refinement when there isn't enough context or model order for it to
-  // outperform the cubic / linear baseline. Short signals (n < 32) or very low
-  // AR orders (< 4) tend to push the interpolated values toward the global mean
-  // and undo the smooth shape produced by the cubic Hermite step.
+
+  // Signed bound of each constrained sample, at least as far out as the sample itself; 0 where
+  // the input sits inside min_magnitude.
+  std::vector<double> bound(gap, 0.0);
+  if (params.min_magnitude > 0.0f) {
+    for (size_t j = 0; j < gap; ++j) {
+      const float v = context[local_start + j];
+      if (std::abs(v) >= params.min_magnitude) bound[j] = v;
+    }
+  }
+  const bool constrained =
+      std::any_of(bound.begin(), bound.end(), [](double b) { return b != 0.0; });
+
+  for (size_t j = local_start; j < local_end; ++j) {
+    context[j] = interpolate_gap_sample(context.data(), context_size, local_start, local_end, j);
+  }
+
+  // Too little context or model order for an AR estimate to beat the baseline.
   constexpr size_t kMinLpcSignalLength = 32;
   constexpr int kMinLpcOrder = 4;
-  if (context_size < kMinLpcSignalLength || max_order < kMinLpcOrder) return true;
+  const int p = std::min(params.order, static_cast<int>(std::max<size_t>(1, context_size / 4)));
+  if (context_size < kMinLpcSignalLength || p < kMinLpcOrder) return ArFill::kNotSolved;
 
-  const int nu = static_cast<int>(gap);
-  const int nrows = static_cast<int>(context_size) - max_order;  // number of filter-output rows
-
+  const size_t order = static_cast<size_t>(p);
+  const size_t last_row = context_size - 1;
+  // Rows t in [order, last_row] carry e_t = sum_k a[k] x[t-k]; only those touching the gap matter.
+  const size_t row_lo = std::max(order, local_start);
+  const size_t row_hi = std::min(last_row, local_end - 1 + order);
+  const double lambda = static_cast<double>(context_size - order) * static_cast<double>(kEpsilon);
   const int iters = std::max(params.iterations, 1);
-  // Blend weight for the LPC estimate vs. the Step-1 interpolation baseline,
-  // clamped to [0, 1]. blend == 1 reproduces the pure-LPC behaviour; blend == 0
-  // leaves the cubic / linear interpolation untouched.
-  const float blend = std::clamp(params.blend, 0.0f, 1.0f);
-  Eigen::MatrixXf au(nrows, nu);
-  Eigen::VectorXf rhs(nrows);
-  Eigen::MatrixXf ata(nu, nu);
-  Eigen::VectorXf at_rhs(nu);
+
+  Eigen::MatrixXd ata(gap, gap);
+  std::vector<double> a(order + 1);
+  std::vector<double> r_a(order + 1);
+  std::vector<double> residual(row_hi - row_lo + 1);
+  std::vector<size_t> free_cols;
+  std::vector<char> pinned(gap);
+  Eigen::MatrixXd system;
+  Eigen::VectorXd at_rhs;
+  Eigen::LDLT<Eigen::MatrixXd> solver;
 
   for (int outer = 0; outer < iters; ++outer) {
-    // Step 2a – AR estimation from the bounded local context.
-    const auto model = lpc_burg(context.data(), context_size, max_order);
-    const int p = max_order;
-
-    // Step 2b – build A_u and A_k vectors for the normal equations.
-    // A is (nrows x context_size) Toeplitz.  Row r (r = 0..nrows-1) acts at sample r+p:
-    //   (A x)[r] = x[r+p] + a[1]*x[r+p-1] + ... + a[p]*x[r]
-    // We only need A_u (nrows x nu) and the product A_k * y_k.
-
-    // A_u: each column j corresponds to the contiguous local gap sample.
-    au.setZero();
-
-    // rhs = -A_k y_k, initialised as -A * samples (all columns),
-    // then we subtract A_u * x_u to isolate A_k * y_k.
-
-    for (int r = 0; r < nrows; ++r) {
-      // Compute (A * samples)[r] = sum_k a[k] * samples[r+p-k] for k=0..p
-      double Ax_r = 0.0;
-      for (int k = 0; k <= p; ++k) {
-        Ax_r += static_cast<double>(model.ar[static_cast<size_t>(k)]) *
-                context[static_cast<size_t>(r + p - k)];
-      }
-      rhs[r] = -static_cast<float>(Ax_r);  // start with -A*samples
-
-      // Now fill A_u columns for this row and adjust rhs to isolate A_k*y_k.
-      for (int j = 0; j < nu; ++j) {
-        const int col = static_cast<int>(local_start) + j;
-        // A[r, col] is the coefficient for position col in row r.
-        // Row r acts at time r+p; A[r, col] = a[r+p - col] if 0 <= r+p-col <= p, else 0.
-        const int lag = (r + p) - col;
-        if (lag >= 0 && lag <= p) {
-          const float a_lag = model.ar[static_cast<size_t>(lag)];
-          au(r, j) = a_lag;
-          // rhs = -A_k*y_k = -(A*x)[r] + A_u*x_u → we need to add back A_u[r,j]*x_u[j]
-          rhs[r] += a_lag * context[static_cast<size_t>(col)];
+    const LpcResult model = lpc_burg(context.data(), context_size, p);
+    for (size_t k = 0; k <= order; ++k) a[k] = static_cast<double>(model.ar[k]);
+    for (size_t d = 0; d <= order; ++d) {
+      double sum = 0.0;
+      for (size_t m = 0; m + d <= order; ++m) sum += a[m] * a[m + d];
+      r_a[d] = sum;
+    }
+    // A_u^T A_u straight from the banded filter: R_a(d) where every row touching both columns
+    // exists, a truncated sum at the context edges.
+    for (size_t i = 0; i < gap; ++i) {
+      const size_t ci = local_start + i;
+      for (size_t j = i; j < gap; ++j) {
+        const size_t cj = local_start + j;
+        const size_t d = j - i;
+        double value = 0.0;
+        if (d <= order) {
+          const size_t t_lo = std::max(order, cj);
+          const size_t t_hi = std::min(last_row, ci + order);
+          if (t_lo == cj && t_hi == ci + order) {
+            value = r_a[d];
+          } else {
+            for (size_t t = t_lo; t <= t_hi; ++t) value += a[t - ci] * a[t - cj];
+          }
         }
+        ata(i, j) = value;
+        ata(j, i) = value;
       }
     }
-    // rhs now holds -A_k * y_k (correctly isolating known-column contributions).
 
-    // Step 2d – solve (A_u^T A_u + lambda I) x_u = A_u^T rhs
-    // Tikhonov regularization lambda guards rank-deficient systems (gap > model rank).
-    const float lambda = static_cast<float>(nrows) * kEpsilon;
-    ata.noalias() = au.transpose() * au;
-    ata.diagonal().array() += lambda;
-    at_rhs.noalias() = au.transpose() * rhs;
+    // Active set: pin each constrained sample whose solution falls inside its bound, re-solve.
+    std::fill(pinned.begin(), pinned.end(), 0);
+    for (;;) {
+      free_cols.clear();
+      for (size_t j = 0; j < gap; ++j) {
+        if (pinned[j] != 0) {
+          context[local_start + j] = static_cast<float>(bound[j]);
+        } else {
+          free_cols.push_back(j);
+          context[local_start + j] = 0.0f;
+        }
+      }
+      const Eigen::Index nu = static_cast<Eigen::Index>(free_cols.size());
+      // Every sample on its bound: the constrained solution is the bound itself.
+      if (nu == 0) break;
 
-    Eigen::LDLT<Eigen::MatrixXf> solver(ata);
-    if (solver.info() != Eigen::Success) break;  // numerical failure: keep current estimate
+      for (size_t t = row_lo; t <= row_hi; ++t) {
+        double e = 0.0;
+        for (size_t k = 0; k <= order; ++k) e += a[k] * static_cast<double>(context[t - k]);
+        residual[t - row_lo] = e;
+      }
+      system.resize(nu, nu);
+      at_rhs.resize(nu);
+      for (Eigen::Index fi = 0; fi < nu; ++fi) {
+        const size_t i = free_cols[static_cast<size_t>(fi)];
+        const size_t c = local_start + i;
+        double rhs = 0.0;
+        const size_t t_lo = std::max(row_lo, c);
+        const size_t t_hi = std::min(row_hi, c + order);
+        for (size_t t = t_lo; t <= t_hi; ++t) rhs -= a[t - c] * residual[t - row_lo];
+        at_rhs[fi] = rhs;
+        for (Eigen::Index fj = 0; fj < nu; ++fj) {
+          system(fi, fj) = ata(static_cast<Eigen::Index>(i),
+                               static_cast<Eigen::Index>(free_cols[static_cast<size_t>(fj)]));
+        }
+        system(fi, fi) += lambda;
+      }
+      solver.compute(system);
+      if (solver.info() != Eigen::Success) return ArFill::kNotSolved;
+      const Eigen::VectorXd x = solver.solve(at_rhs);
+      if (!x.allFinite()) return ArFill::kNotSolved;
 
-    const Eigen::VectorXf x_u = solver.solve(at_rhs);
-    if (!x_u.allFinite()) break;
-
-    // Step 2e – write the LDLT estimate back into the unknown positions, blended
-    // against the Step-1 interpolation baseline by params.blend. No clipping
-    // constraint is applied: see the declaration for why this stays a general gap
-    // filler rather than a strict clipping-consistency reconstructor.
-    for (int j = 0; j < nu; ++j) {
-      const size_t idx = local_start + static_cast<size_t>(j);
-      context[idx] = blend * x_u[j] + (1.0f - blend) * baseline[idx - local_start];
+      bool changed = false;
+      for (Eigen::Index fi = 0; fi < nu; ++fi) {
+        const size_t j = free_cols[static_cast<size_t>(fi)];
+        context[local_start + j] = static_cast<float>(x[fi]);
+        const double b = bound[j];
+        if ((b > 0.0 && x[fi] < b) || (b < 0.0 && x[fi] > b)) {
+          pinned[j] = 1;
+          changed = true;
+        }
+      }
+      if (!constrained || !changed) break;
     }
   }
 
+  for (size_t j = local_start; j < local_end; ++j) {
+    if (!std::isfinite(context[j])) return ArFill::kNotSolved;
+  }
   std::copy(context.begin() + static_cast<std::ptrdiff_t>(local_start),
             context.begin() + static_cast<std::ptrdiff_t>(local_end), samples + start);
-  return true;
+  return ArFill::kFilled;
 }
 
 }  // namespace sonare

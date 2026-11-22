@@ -9,13 +9,10 @@
 namespace sonare::mastering::repair {
 
 /// @brief Longest clipped run reconstructed with the LPC (Janssen) solver.
-/// @details The solver builds dense matrices of (context x gap) and (gap x gap),
-/// so an uncapped run makes both peak memory and compute unbounded in the input
-/// length. Runs longer than this are filled with the cubic / linear interpolation
-/// fallback instead. An AR(p) model only carries information about p samples past
-/// each known edge, so beyond this length the LPC estimate has already decayed
-/// into the regularized baseline. 512 samples is ~10.7 ms at 48 kHz, which covers
-/// hard clipping down to the deepest bass fundamentals.
+/// @details The solver's normal matrix is (gap x gap), so an uncapped run makes both peak
+/// memory and compute unbounded in the input length. Runs longer than this are left clipped
+/// and counted in @c DeclipReport::unreconstructed_runs. 512 samples is ~10.7 ms at 48 kHz,
+/// which covers hard clipping down to the deepest bass fundamentals.
 inline constexpr size_t kDeclipMaxLpcGapSamples = 512;
 
 /// @brief Longest one-sided context window handed to the LPC solver.
@@ -26,13 +23,19 @@ inline constexpr size_t kDeclipMaxLpcGapSamples = 512;
 inline constexpr size_t kDeclipMaxLpcContextRadius = 8 * kDeclipMaxLpcGapSamples;
 
 /// @brief Upper bound on the LPC solver's dense working set, in bytes.
-/// @details Derived from the two caps above: the (context x gap) prediction-error
-/// matrix plus the (gap x gap) normal-equation matrix and its factorization. This
-/// is the whole point of the caps — the bound is a constant, independent of the
+/// @details Derived from the two caps above: the double (gap x gap) normal matrix, its
+/// free-column copy and factorization, plus four context-length vectors (the context, the
+/// residual and the Burg recursion's two). The bound is a constant, independent of the
 /// input length and of the clip pattern.
 inline constexpr size_t kDeclipMaxLpcWorkingSetBytes =
-    sizeof(float) * kDeclipMaxLpcGapSamples *
-    (2 * kDeclipMaxLpcContextRadius + 3 * kDeclipMaxLpcGapSamples);
+    sizeof(double) * (3 * kDeclipMaxLpcGapSamples * kDeclipMaxLpcGapSamples +
+                      4 * (2 * kDeclipMaxLpcContextRadius + kDeclipMaxLpcGapSamples));
+
+/// @brief Highest peak a reconstructed run may reach above the clip threshold, in dB.
+/// @details Past it the run is left clipped and counted rather than written. Noise driven up
+/// to 40x reconstructs at most +18.5 dB; a 200 Hz sine driven 10x lets the solve diverge to
+/// +52.5 dB, the ill-conditioned case this ceiling exists for.
+inline constexpr float kDeclipMaxReconstructionGainDb = 20.0f;
 
 /// @brief Shortest run of bit-identical samples counted as a flat top.
 /// @details Two is reachable by rounding alone. The shallowest clipped run in the
@@ -69,8 +72,6 @@ struct DeclipConfig {
   float clip_threshold = 0.98f;
   int lpc_order = 36;
   int iterations = 2;
-  // Blend weight for the LPC prediction; the interpolation fallback gets (1 - lpc_blend).
-  float lpc_blend = 0.65f;
 };
 
 /// Validates every public DeclipConfig field. The mono, stereo and detection
@@ -88,8 +89,7 @@ struct ClipDetection {
   float sample_fraction = 0.0f;  ///< sample_count / size.
   size_t run_count = 0;
   size_t longest_run_samples = 0;  ///< Compare against kDeclipMaxLpcGapSamples:
-                                   ///  a longer run takes the interpolation
-                                   ///  fallback rather than the LPC solver.
+                                   ///  a longer run is left clipped.
 
   /// @name Flat-top analysis
   /// Runs of bit-identical samples sitting at the channel's flat level. The fields above
@@ -120,11 +120,11 @@ ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate
 struct DeclipReport {
   ClipDetection detected;             ///< This channel's own analysis of the input.
   size_t lpc_reconstructed_runs = 0;  ///< Runs the Janssen solver filled.
-  size_t interpolated_runs = 0;       ///< Runs past the LPC gap cap, filled by
-                                      ///  interpolation instead: for these,
-                                      ///  lpc_order / iterations / lpc_blend had
-                                      ///  no effect.
-  size_t repaired_samples = 0;        ///< Samples overwritten by either fill.
+  size_t unreconstructed_runs = 0;    ///< Runs left as they were: past
+                                      ///  kDeclipMaxLpcGapSamples, without a usable
+                                      ///  solve, or reconstructed past
+                                      ///  kDeclipMaxReconstructionGainDb.
+  size_t repaired_samples = 0;        ///< Samples the reconstructed runs overwrote.
   size_t linked_runs = 0;             ///< Of the repaired runs, those reaching
                                       ///  past this channel's own clipped
                                       ///  samples because the other channel's

@@ -137,23 +137,33 @@ TEST_CASE("mastering integer parameters refuse a fractional value instead of rou
   CHECK(enum_selector.find("whole number") != std::string::npos);
 }
 
-// --- a field the named-processor branch never read -------------------------
+// --- a removed field is refused, not ignored ---------------------------------
 
-TEST_CASE("repair.declip lpcBlend is wired through the named-processor path",
+TEST_CASE("repair.declip refuses the removed lpcBlend on every path",
           "[mastering][repair][declip][param_wiring]") {
-  // The named-processor branch reads `config.lpc_blend = f(params, "lpcBlend",
-  // config.lpc_blend)` — exercise that exact accessor to prove the supplied
-  // value overrides the struct default (0.65f) instead of being dropped.
-  sonare::mastering::repair::DeclipConfig config;
-  REQUIRE(config.lpc_blend == 0.65f);  // factory default the bug got stuck on
+  using sonare::SonareException;
+  const auto refusal = [](auto&& call) -> std::string {
+    try {
+      call();
+    } catch (const SonareException& error) {
+      return error.what();
+    }
+    return {};
+  };
 
-  const std::vector<Param> params{
-      {"clipThresholdDb", -0.9}, {"lpcOrder", 24}, {"iterations", 3}, {"lpcBlend", 0.25}};
-  const auto map = make_map(params);
-  config.lpc_blend = f(map, "lpcBlend", config.lpc_blend);
+  const std::string flat = refusal([] {
+    parse_chain_config_params(std::vector<Param>{{"repair.declip.lpcBlend", 0.65}}.data(), 1);
+  });
+  CAPTURE(flat);
+  CHECK(flat.find("repair.declip.lpcBlend") != std::string::npos);
 
-  REQUIRE(config.lpc_blend == 0.25f);
-  REQUIRE(config.lpc_blend != 0.65f);
+  const std::vector<float> silence(256, 0.0f);
+  const std::string named = refusal([&] {
+    sonare::mastering::api::apply_named_processor("repair.declip", silence.data(), silence.size(),
+                                                  48000, {{"lpcBlend", 0.65}});
+  });
+  CAPTURE(named);
+  CHECK(named.find("lpcBlend") != std::string::npos);
 }
 
 // --- per-band groups populated only down to the crossover -------------------

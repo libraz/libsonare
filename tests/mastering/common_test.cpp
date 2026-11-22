@@ -37,6 +37,7 @@
 
 using Catch::Matchers::WithinAbs;
 using sonare::ar_interpolate_region;
+using sonare::ArFill;
 using sonare::ArInterpolateParams;
 using sonare::interpolate_gap;
 using sonare::lpc_autocorrelation;
@@ -537,6 +538,36 @@ TEST_CASE("LPC Burg returns stable residual for predictable signal", "[mastering
   REQUIRE(std::abs(residual.back()) < 0.0001f);
 }
 
+TEST_CASE("LPC Burg stays stable past the order a pure tone needs", "[mastering]") {
+  // A sinusoid exhausts its prediction error at order two. Past that the recursive energy
+  // update drifted to zero and the reflections grew past one: before the stop, 38 of these
+  // 48 models came back with coefficients past 1e6 or non-finite.
+  for (const double freq : {50.0, 100.0, 220.0, 440.0, 1000.0, 3000.0}) {
+    for (const size_t n : {96u, 173u, 300u, 600u}) {
+      for (const int order : {16, 36}) {
+        CAPTURE(freq, n, order);
+        std::vector<float> tone(n);
+        for (size_t i = 0; i < n; ++i) {
+          tone[i] = static_cast<float>(
+              0.9 * std::sin(sonare::constants::kTwoPiD * freq * static_cast<double>(i) / 48000.0));
+        }
+        const auto model = lpc_burg(tone.data(), n, order);
+        REQUIRE(model.ar.size() == static_cast<size_t>(order) + 1);
+        for (const float coefficient : model.ar) {
+          REQUIRE(std::isfinite(coefficient));
+          REQUIRE(std::abs(coefficient) < 1.0e6f);
+        }
+        REQUIRE(std::isfinite(model.variance));
+        REQUIRE(model.order_reached >= 0);
+        REQUIRE(model.order_reached <= order);
+        for (size_t k = static_cast<size_t>(model.order_reached) + 1; k < model.ar.size(); ++k) {
+          REQUIRE(model.ar[k] == 0.0f);
+        }
+      }
+    }
+  }
+}
+
 namespace {
 
 /// A two-tone bed an AR model of a handful of poles predicts well, which is what
@@ -573,7 +604,8 @@ TEST_CASE("Two-sided AR interpolation beats the interpolation baseline over a ga
   ArInterpolateParams params;
   params.order = 48;
   std::vector<float> solved = clean;
-  REQUIRE(ar_interpolate_region(solved.data(), solved.size(), kGapStart, kGapEnd, params));
+  REQUIRE(ar_interpolate_region(solved.data(), solved.size(), kGapStart, kGapEnd, params) ==
+          ArFill::kFilled);
 
   // Both fills leave everything outside the gap alone.
   for (size_t i = 0; i < kFrames; ++i) {
@@ -602,27 +634,51 @@ TEST_CASE("AR interpolation declines a gap past its cap", "[mastering]") {
   params.order = 48;
   params.max_gap = 32;
   std::vector<float> solved = clean;
-  REQUIRE_FALSE(ar_interpolate_region(solved.data(), solved.size(), 256, 256 + 33, params));
+  REQUIRE(ar_interpolate_region(solved.data(), solved.size(), 256, 256 + 33, params) ==
+          ArFill::kGapTooLong);
   for (size_t i = 0; i < kFrames; ++i) REQUIRE(solved[i] == clean[i]);
-  REQUIRE(ar_interpolate_region(solved.data(), solved.size(), 256, 256 + 32, params));
+  REQUIRE(ar_interpolate_region(solved.data(), solved.size(), 256, 256 + 32, params) ==
+          ArFill::kFilled);
 }
 
-TEST_CASE("AR interpolation with blend 0 leaves the interpolation baseline", "[mastering]") {
-  constexpr size_t kFrames = 1024;
-  constexpr size_t kGapStart = 512;
-  constexpr size_t kGapEnd = kGapStart + 48;
-  const std::vector<float> clean = ar_gap_bed(kFrames);
+TEST_CASE("AR interpolation writes nothing when the context is too short to model", "[mastering]") {
+  std::vector<float> samples = {0.1f,  0.3f,  0.5f,  0.7f,  0.9f,  0.4f,  0.4f,  0.4f, 0.2f, 0.0f,
+                                -0.2f, -0.4f, -0.6f, -0.8f, -0.6f, -0.4f, -0.2f, 0.0f, 0.2f, 0.4f};
+  const std::vector<float> before = samples;
+  ArInterpolateParams params;
+  params.order = 8;
+  REQUIRE(ar_interpolate_region(samples.data(), samples.size(), 5, 8, params) ==
+          ArFill::kNotSolved);
+  REQUIRE(samples == before);
+}
 
-  std::vector<float> baseline = clean;
-  interpolate_gap(baseline.data(), baseline.size(), kGapStart, kGapEnd);
+TEST_CASE("AR interpolation with a magnitude floor never shrinks a clipped sample", "[mastering]") {
+  constexpr size_t kFrames = 2048;
+  constexpr float kThreshold = 0.98f;
+  std::vector<float> clipped(kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    const double phase = sonare::constants::kTwoPiD * 440.0 * static_cast<double>(i) / 48000.0;
+    clipped[i] = std::clamp(static_cast<float>(1.6 * std::sin(phase)), -1.0f, 1.0f);
+  }
+  // The first whole run past the middle.
+  size_t start = kFrames / 2;
+  while (std::abs(clipped[start]) >= kThreshold) ++start;
+  while (std::abs(clipped[start]) < kThreshold) ++start;
+  size_t end = start;
+  while (std::abs(clipped[end]) >= kThreshold) ++end;
+  REQUIRE(end - start > 8);
 
   ArInterpolateParams params;
-  params.order = 48;
-  params.blend = 0.0f;
-  std::vector<float> solved = clean;
-  REQUIRE(ar_interpolate_region(solved.data(), solved.size(), kGapStart, kGapEnd, params));
-
-  for (size_t i = 0; i < kFrames; ++i) REQUIRE(solved[i] == baseline[i]);
+  params.order = 32;
+  params.min_magnitude = kThreshold;
+  std::vector<float> solved = clipped;
+  REQUIRE(ar_interpolate_region(solved.data(), solved.size(), start, end, params) ==
+          ArFill::kFilled);
+  for (size_t i = start; i < end; ++i) {
+    CAPTURE(i, solved[i]);
+    REQUIRE(std::abs(solved[i]) >= std::abs(clipped[i]));
+    REQUIRE((solved[i] > 0.0f) == (clipped[i] > 0.0f));
+  }
 }
 
 TEST_CASE("NoiseTracker initializes and follows stationary noise", "[mastering]") {

@@ -1435,7 +1435,7 @@ TEST_CASE("every repair stage publishes declared, finite-ranged parameters",
       CHECK(field(parameter, "max").is_number());
     }
   }
-  CHECK(numeric >= 40);
+  CHECK(numeric >= 39);
   INFO(defects.size() << " defects, first: " << (defects.empty() ? "" : defects.front()));
   CHECK(defects.empty());
 }

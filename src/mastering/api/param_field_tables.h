@@ -1368,10 +1368,9 @@ inline double field_as_double(Enum value) {
 
 // `clip_threshold` is linear in the config and `clipThresholdDb` on the wire, so it is read and
 // written by hand (see declip_threshold_db_meta); the table holds the other fields.
-#define SONARE_FIELDS_DECLIP(X)       \
-  X("lpcOrder", lpc_order, kCount)    \
-  X("iterations", iterations, kCount) \
-  X("lpcBlend", lpc_blend, kNone)
+#define SONARE_FIELDS_DECLIP(X)    \
+  X("lpcOrder", lpc_order, kCount) \
+  X("iterations", iterations, kCount)
 
 #define SONARE_FIELDS_DECRACKLE(X)                         \
   X("threshold", threshold, display_range(kNone, 0.05, 1)) \

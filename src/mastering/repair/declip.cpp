@@ -8,6 +8,7 @@
 
 #include "core/stereo_pair.h"
 #include "mastering/common/noise_profile.h"
+#include "mastering/repair/declip_internal.h"
 #include "mastering/repair/run_union.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -27,7 +28,7 @@ ArInterpolateParams ar_params(const DeclipConfig& config) {
   ArInterpolateParams params;
   params.order = config.lpc_order;
   params.iterations = config.iterations;
-  params.blend = config.lpc_blend;
+  params.min_magnitude = config.clip_threshold;
   params.max_gap = kDeclipMaxLpcGapSamples;
   params.max_context_radius = kDeclipMaxLpcContextRadius;
   return params;
@@ -56,20 +57,21 @@ std::vector<ClipRun> scan_clipped_runs(const std::vector<float>& samples, float 
   return runs;
 }
 
-/// A clipped run has no length limit of its own — a sustained full-scale passage
-/// is one run — while the Janssen solver's matrices are sized from the gap.
-/// Over-long runs take the interpolation fallback so peak memory and per-run
-/// compute stay bounded by the caps rather than by the input.
-void repair_run(std::vector<float>& samples, const ClipRun& run, const DeclipConfig& config,
+/// Reconstructs one run under the clipping-consistency constraint, or leaves it as it was:
+/// past the gap cap (the solver's matrices are sized from the gap), without a usable solve,
+/// or with a peak past the reconstruction ceiling. Returns whether the run was written.
+bool repair_run(std::vector<float>& samples, const ClipRun& run, const DeclipConfig& config,
                 DeclipReport& report) {
+  const size_t length = run.end - run.start;
+  const std::vector<float> original(samples.begin() + static_cast<std::ptrdiff_t>(run.start),
+                                    samples.begin() + static_cast<std::ptrdiff_t>(run.end));
   if (ar_interpolate_region(samples.data(), samples.size(), run.start, run.end,
-                            ar_params(config))) {
-    ++report.lpc_reconstructed_runs;
-  } else {
-    interpolate_gap(samples.data(), samples.size(), run.start, run.end);
-    ++report.interpolated_runs;
+                            ar_params(config)) != ArFill::kFilled) {
+    ++report.unreconstructed_runs;
+    return false;
   }
-  report.repaired_samples += run.end - run.start;
+  return detail::keep_reconstruction(samples.data() + run.start, original.data(), length,
+                                     config.clip_threshold, report);
 }
 
 /// Finds the maximal runs of bit-identical samples at or above
@@ -153,13 +155,31 @@ DeclipReport repair_channel(std::vector<float>& samples, const std::vector<ClipR
   for (const ClipRun& run : applied) {
     if (!any_at_or_past(samples, run, config.clip_threshold)) continue;
     const bool reaches_past_own = any_below(samples, run, config.clip_threshold);
-    repair_run(samples, run, config, report);
-    if (reaches_past_own) ++report.linked_runs;
+    if (repair_run(samples, run, config, report) && reaches_past_own) ++report.linked_runs;
   }
   return report;
 }
 
 }  // namespace
+
+namespace detail {
+
+bool keep_reconstruction(float* run, const float* original, size_t length, float clip_threshold,
+                         DeclipReport& report) {
+  const float ceiling = clip_threshold * db_to_linear(kDeclipMaxReconstructionGainDb);
+  for (size_t j = 0; j < length; ++j) {
+    if (std::abs(run[j]) > ceiling) {
+      std::copy(original, original + length, run);
+      ++report.unreconstructed_runs;
+      return false;
+    }
+  }
+  ++report.lpc_reconstructed_runs;
+  report.repaired_samples += length;
+  return true;
+}
+
+}  // namespace detail
 
 float clip_threshold_from_db(float threshold_db, const char* subject) {
   check::in_range(threshold_db, kMinPositiveGainDb, 0.0, subject);
@@ -170,7 +190,6 @@ void validate_config(const DeclipConfig& config) {
   check::in_interval(config.clip_threshold, 0.0, false, 1.0, true, "clip_threshold");
   check::integer_within(config.lpc_order, kDeclipLpcOrderDomain, "lpc_order");
   check::integer_within(config.iterations, kDeclipIterationsDomain, "iterations");
-  check::in_range(config.lpc_blend, 0.0, 1.0, "lpc_blend");
 }
 
 ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate,

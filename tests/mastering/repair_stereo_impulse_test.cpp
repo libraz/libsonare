@@ -274,23 +274,7 @@ TEST_CASE("Declip validation rejects the knobs the clamp used to swallow",
   DeclipConfig base;
   base.clip_threshold = threshold_in_file(samples, samples);
 
-  // std::clamp propagates NaN, so before this validation a NaN blend weight
-  // reached the output: the preceding build produced 46 NaN samples on a
-  // 2048-sample clipped sine rather than raising.
-  DeclipConfig nan_blend = base;
-  nan_blend.lpc_blend = std::numeric_limits<float>::quiet_NaN();
-  REQUIRE_THROWS(declip(audio, nan_blend));
-
-  // Out of range used to be clamped: lpc_blend 2.0 produced the same output as
-  // 1.0, and iterations 0 the same output as 1.
-  DeclipConfig over_blend = base;
-  over_blend.lpc_blend = 2.0f;
-  REQUIRE_THROWS(declip(audio, over_blend));
-
-  DeclipConfig negative_blend = base;
-  negative_blend.lpc_blend = -0.1f;
-  REQUIRE_THROWS(declip(audio, negative_blend));
-
+  // Out of range used to be clamped: iterations 0 produced the same output as 1.
   DeclipConfig no_iterations = base;
   no_iterations.iterations = 0;
   REQUIRE_THROWS(declip(audio, no_iterations));
@@ -465,7 +449,7 @@ TEST_CASE("Declip mono output survives the detector extraction unchanged",
   REQUIRE(digest(repaired) == digest(declip(view(left), config)));
   REQUIRE(report.detected.sample_count == kPlantedClippedSamples);
   REQUIRE(report.lpc_reconstructed_runs == kPlantedClippedRuns);
-  REQUIRE(report.interpolated_runs == 0);
+  REQUIRE(report.unreconstructed_runs == 0);
   REQUIRE(report.repaired_samples == kPlantedClippedSamples);
   REQUIRE(report.linked_runs == 0);
 }
@@ -486,8 +470,8 @@ TEST_CASE("Declip mono digests stay stable", "[.][repair][stereo][impulse][golde
   const std::vector<float> clip_right = clip_fixture(0.35);
   DeclipConfig config;
   config.clip_threshold = threshold_in_file(clip_left, clip_right);
-  CHECK(digest(declip(view(clip_left), config)) == 0x6fd0ee17u);
-  CHECK(digest(declip(view(clip_right), config)) == 0xd76bca10u);
+  CHECK(digest(declip(view(clip_left), config)) == 0x6030a21cu);
+  CHECK(digest(declip(view(clip_right), config)) == 0xdb0da766u);
 }
 
 // The fill values, read at a tolerance the optimization level cannot reach: a
@@ -533,10 +517,9 @@ TEST_CASE("Declick rewrites the clicks and nothing else", "[repair][stereo][impu
   CHECK(moved_right == expected);
 }
 
-TEST_CASE("Declip reports the runs that fall past the LPC gap cap", "[repair][stereo][impulse]") {
-  // A plateau longer than the cap is filled by interpolation, and lpc_order,
-  // iterations and lpc_blend do not reach it. Before the report there was no way
-  // for a caller to learn that the branch had been taken.
+TEST_CASE("Declip reports the runs left past the LPC gap cap", "[repair][stereo][impulse]") {
+  // A plateau longer than the cap is left as it was. Without the report a caller
+  // could not tell it from a run the solver reconstructed.
   const size_t frames = kDeclipMaxLpcGapSamples * 3;
   std::vector<float> samples(frames, 0.0f);
   for (size_t i = 0; i < frames; ++i) {
@@ -556,9 +539,9 @@ TEST_CASE("Declip reports the runs that fall past the LPC gap cap", "[repair][st
 
   REQUIRE(report.detected.run_count == 2);
   REQUIRE(report.detected.longest_run_samples == long_run_length);
-  REQUIRE(report.interpolated_runs == 1);
+  REQUIRE(report.unreconstructed_runs == 1);
   REQUIRE(report.lpc_reconstructed_runs == 1);
-  REQUIRE(report.repaired_samples == long_run_length + 16);
+  REQUIRE(report.repaired_samples == 16);
 }
 
 // ---------------------------------------------------------------- stereo link
@@ -741,32 +724,21 @@ TEST_CASE("Linked declip reconstructs one region in both channels at unequal lev
   REQUIRE(linked.left_report.linked_runs == 0);
   REQUIRE(linked.right_report.linked_runs == kPlantedClippedRuns);
 
-  // Ratios again, for the reason given in the declick case: the transfer path's
-  // per-sample gain crosses a zero guard and a clamp, so its own RMSE is only
-  // good to about four significant figures across builds. Measured, the linked
-  // image error is 356x below the transfer's and 205x below the independent one.
+  // Ratios again, for the reason given in the declick case: the transfer path's per-sample gain
+  // crosses a zero guard and a clamp, so its own RMSE is only good to about four significant
+  // figures across builds. On a pure tone the constrained solve is near exact in either
+  // channel, so linking neither gains nor loses image: measured, linked 2.3e-6 and independent
+  // 1.2e-6 against the transfer path's 7.6e-4.
   const double transfer_image =
       image_error(transfer.first, transfer.second, clean_left, clean_right);
   const double split_image = image_error(split.first, split.second, clean_left, clean_right);
   const double linked_image = image_error(linked_left, linked_right, clean_left, clean_right);
   CAPTURE(transfer_image, split_image, linked_image);
   REQUIRE(linked_image * 100.0 < transfer_image);
-  REQUIRE(linked_image * 100.0 < split_image);
-
-  // What the shared selection bought: the two channels now carry the same
-  // reconstruction error. They differ in level by 0.37%, so their errors should
-  // track to within a few times that; repaired independently they stand a factor
-  // of three apart, because the quieter one keeps most of its plateau.
-  REQUIRE(std::abs(rmse(linked_left, clean_left) - rmse(linked_right, clean_right)) <
-          0.02 * rmse(linked_left, clean_left));
-  REQUIRE(rmse(split.first, clean_left) > 3.0 * rmse(split.second, clean_right));
-
-  // And what it cost, asserted in the direction it went rather than left
-  // implicit: the quieter channel is reconstructed over samples it had not
-  // clipped, so its own fidelity falls below what the transfer leaves. The left
-  // channel, which set the extent, improves on the transfer as usual.
-  REQUIRE(rmse(linked_left, clean_left) * 1.3 < rmse(transfer.first, clean_left));
-  REQUIRE(rmse(linked_right, clean_right) > 2.0 * rmse(transfer.second, clean_right));
+  REQUIRE(linked_image < 1.0e-5);
+  REQUIRE(split_image < 1.0e-5);
+  REQUIRE(linked_image < 4.0 * split_image);
+  REQUIRE(split_image < 4.0 * linked_image);
 }
 
 // ------------------------------------------------------- pending clicks as context

@@ -345,11 +345,6 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     mark_field(flags.declip);
     return true;
   }
-  if (key == "repair.declip.lpcBlend") {
-    cfg.repair.declip.config.lpc_blend = vf;
-    mark_field(flags.declip);
-    return true;
-  }
 
   // ---- repair.decrackle ----
   if (key == "repair.decrackle.enabled") {

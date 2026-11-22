@@ -18,6 +18,7 @@
 #include "mastering/common/noise_tracker.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
+#include "mastering/repair/declip_internal.h"
 #include "mastering/repair/decrackle.h"
 #include "mastering/repair/dehum.h"
 #include "mastering/repair/denoise_classical.h"
@@ -27,6 +28,7 @@
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/dsp_primitives.h"
 
 using Catch::Matchers::WithinAbs;
@@ -479,7 +481,7 @@ TEST_CASE("Declip rejects non-finite samples at every offline entrypoint",
           "[mastering][repair][validation]") {
   constexpr int kSampleRate = 48000;
   constexpr float kThreshold = 0.8f;
-  const DeclipConfig config{kThreshold, 8, 1, 0.0f};
+  const DeclipConfig config{kThreshold, 8, 1};
 
   // Preserve null/empty compatibility and the inclusive finite threshold boundary.
   const std::vector<float> finite = {0.2f, kThreshold, -kThreshold, 0.1f};
@@ -520,110 +522,19 @@ TEST_CASE("Declip rejects non-finite samples at every offline entrypoint",
   }
 }
 
-TEST_CASE("Declip reconstructs clipped samples from neighbors", "[mastering][repair]") {
-  const auto result = declip(make_audio({0.2f, 1.0f, 0.4f}), {0.98f});
-
-  REQUIRE_THAT(result[1], WithinAbs(0.3f, 0.001f));
-}
-
-TEST_CASE("Declip reconstructs clipped runs as a continuous segment", "[mastering][repair]") {
-  const auto result = declip(make_audio({0.4f, 1.0f, 1.0f, 0.7f}), {0.98f});
-
-  REQUIRE_THAT(result[1], WithinAbs(0.5f, 0.001f));
-  REQUIRE_THAT(result[2], WithinAbs(0.6f, 0.001f));
-}
-
-TEST_CASE("Declip uses cubic context for smoother clipped run reconstruction",
+TEST_CASE("Declip leaves a run it has too little context to model clipped and counts it",
           "[mastering][repair]") {
-  const auto result = declip(make_audio({0.1f, 0.2f, 1.0f, 1.0f, 0.7f, 0.9f}), {0.98f});
-
-  REQUIRE(result[2] > 0.34f);
-  REQUIRE(result[2] < 0.45f);
-  REQUIRE(result[3] > 0.52f);
-  REQUIRE(result[3] < 0.62f);
-  REQUIRE(result[2] < result[3]);
-}
-
-TEST_CASE("Declip allows reconstructed samples beyond clip threshold", "[mastering][repair]") {
-  const auto result = declip(make_audio({0.0f, 0.49f, 1.0f, 0.49f, 0.0f}), {0.5f});
-
-  REQUIRE(result[2] > 0.5f);
-  REQUIRE_THAT(result[2], WithinAbs(0.55125f, 0.0001f));
-}
-
-TEST_CASE("Declip uses LPC reconstruction when enough context is available",
-          "[mastering][repair]") {
-  std::vector<float> samples(96, 0.0f);
-  samples[0] = 1.0f;
-  for (size_t i = 1; i < samples.size(); ++i) samples[i] = 0.95f * samples[i - 1];
-  samples[20] = 1.0f;
-  samples[21] = 1.0f;
-  samples[22] = 1.0f;
-
-  const auto result = declip(Audio::from_vector(samples, 48000), {0.9f, 12, 2});
-
-  REQUIRE(std::isfinite(result[20]));
-  REQUIRE(std::isfinite(result[21]));
-  REQUIRE(std::isfinite(result[22]));
-  REQUIRE(result[20] > result[21]);
-  REQUIRE(result[21] > result[22]);
-  REQUIRE(result[20] < 0.9f);
-}
-
-TEST_CASE("Declip lpc_blend interpolates between LPC and fallback", "[mastering][repair]") {
-  // Long enough decaying signal with a clipped run so the LPC refinement path
-  // actually runs (n >= 32, order >= 4) and produces an estimate that differs
-  // from the cubic / linear interpolation baseline. The decaying baseline starts
-  // BELOW the 0.9 clip threshold so only the inserted run [20,22] is detected as
-  // clipped (a leading near-1.0 baseline would itself be flagged/reconstructed).
-  std::vector<float> samples(96, 0.0f);
-  samples[0] = 0.8f;
-  for (size_t i = 1; i < samples.size(); ++i) samples[i] = 0.95f * samples[i - 1];
-  samples[20] = 1.0f;
-  samples[21] = 1.0f;
-  samples[22] = 1.0f;
-  const auto audio = Audio::from_vector(samples, 48000);
-
-  const auto pure_lpc = declip(audio, {0.9f, 12, 2, 1.0f});
-  const auto pure_interp = declip(audio, {0.9f, 12, 2, 0.0f});
-
-  for (size_t i = 20; i <= 22; ++i) {
-    REQUIRE(std::isfinite(pure_interp[i]));
-    REQUIRE(std::isfinite(pure_lpc[i]));
+  const std::vector<std::vector<float>> inputs = {
+      {0.2f, 1.0f, 0.4f}, {0.4f, 1.0f, 1.0f, 0.7f}, {0.1f, 0.2f, 1.0f, 1.0f, 0.7f, 0.9f}};
+  for (const std::vector<float>& input : inputs) {
+    CAPTURE(input.size());
+    DeclipReport report;
+    const auto result = declip(make_audio(input), {0.98f}, &report);
+    for (size_t i = 0; i < input.size(); ++i) REQUIRE(result[i] == input[i]);
+    CHECK(report.unreconstructed_runs == 1);
+    CHECK(report.lpc_reconstructed_runs == 0);
+    CHECK(report.repaired_samples == 0);
   }
-
-  // The two extremes must differ at the reconstructed samples: if lpc_blend was
-  // ignored the outputs would be bit-identical (the pre-fix bug).
-  bool extremes_differ = false;
-  for (size_t i = 20; i <= 22; ++i) {
-    if (std::abs(pure_lpc[i] - pure_interp[i]) > 1e-5f) extremes_differ = true;
-  }
-  REQUIRE(extremes_differ);
-
-  // Samples outside the clipped run must be untouched by any blend setting.
-  for (size_t i = 0; i < samples.size(); ++i) {
-    if (i < 20 || i > 22) {
-      REQUIRE(pure_lpc[i] == pure_interp[i]);
-    }
-  }
-}
-
-TEST_CASE("Declip lpc_blend=1.0 reproduces unblended LPC behaviour", "[mastering][repair]") {
-  // Guard that blend == 1.0 is a true no-op relative to the historical full-LPC
-  // overwrite: blend 1.0 writes 1.0 * x_u + 0.0 * baseline == x_u, so it must
-  // match the existing "uses LPC reconstruction" expectations exactly.
-  std::vector<float> samples(96, 0.0f);
-  samples[0] = 1.0f;
-  for (size_t i = 1; i < samples.size(); ++i) samples[i] = 0.95f * samples[i - 1];
-  samples[20] = 1.0f;
-  samples[21] = 1.0f;
-  samples[22] = 1.0f;
-
-  const auto result = declip(Audio::from_vector(samples, 48000), {0.9f, 12, 2, 1.0f});
-
-  REQUIRE(result[20] > result[21]);
-  REQUIRE(result[21] > result[22]);
-  REQUIRE(result[20] < 0.9f);
 }
 
 namespace {
@@ -661,7 +572,7 @@ TEST_CASE("Declip preserves all unclipped samples exactly", "[mastering][repair]
   // bit-identical to the input.
   const auto fx = make_clipped_sine(2048, 700.0f, 0.92f, 48000.0f, 0.5f, 0xFACE);
   const auto clipped_audio = Audio::from_buffer(fx.clipped.data(), fx.clipped.size(), 48000);
-  const auto result = declip(clipped_audio, {0.5f, 24, 2, 1.0f});
+  const auto result = declip(clipped_audio, {0.5f, 24, 2});
 
   REQUIRE(result.size() == fx.clipped.size());
   for (size_t i = 0; i < fx.clipped.size(); ++i) {
@@ -696,8 +607,7 @@ TEST_CASE("Declip bounds a full-scale run instead of scaling with its length",
           "[mastering][repair]") {
   // A sustained full-scale passage is a single clipped run with no length limit of
   // its own, so sizing the solver from the gap asked for ~46 GB for one second of
-  // 48 kHz material. Runs past the cap must take the interpolation fallback: no
-  // solver matrix at all, and a finite, smooth, no-longer-clipped result.
+  // 48 kHz material. A run past the cap builds no solver matrix and is left as it was.
   constexpr int kSampleRate = 48000;
   constexpr size_t kFrames = static_cast<size_t>(kSampleRate) * 3;
   constexpr size_t kRunStart = static_cast<size_t>(kSampleRate);
@@ -713,29 +623,15 @@ TEST_CASE("Declip bounds a full-scale run instead of scaling with its length",
   std::fill(samples.begin() + static_cast<std::ptrdiff_t>(kRunStart),
             samples.begin() + static_cast<std::ptrdiff_t>(kRunStart + kRunLength), 1.0f);
 
-  const auto result =
-      declip(Audio::from_buffer(samples.data(), samples.size(), kSampleRate), DeclipConfig{});
+  DeclipReport report;
+  const auto result = declip(Audio::from_buffer(samples.data(), samples.size(), kSampleRate),
+                             DeclipConfig{}, &report);
 
   REQUIRE(result.size() == kFrames);
-  for (size_t i = 0; i < kFrames; ++i) {
-    REQUIRE(std::isfinite(result[i]));
-  }
-
-  // The run is no longer at full scale, and it joins its neighbours without a
-  // step: an interpolation spanning the run has a per-sample slope on the order of
-  // one over its length.
-  for (size_t i = kRunStart; i < kRunStart + kRunLength; ++i) {
-    REQUIRE(std::abs(result[i]) < 1.0f);
-    REQUIRE(std::abs(result[i] - result[i - 1]) < 0.01f);
-  }
-
-  // Everything outside the run is untouched.
-  for (size_t i = 0; i < kRunStart; ++i) {
-    REQUIRE(result[i] == samples[i]);
-  }
-  for (size_t i = kRunStart + kRunLength; i < kFrames; ++i) {
-    REQUIRE(result[i] == samples[i]);
-  }
+  for (size_t i = 0; i < kFrames; ++i) REQUIRE(result[i] == samples[i]);
+  CHECK(report.unreconstructed_runs == 1);
+  CHECK(report.lpc_reconstructed_runs == 0);
+  CHECK(report.repaired_samples == 0);
 }
 
 TEST_CASE("Declip short-gap repair does not depend on the input length", "[mastering][repair]") {
@@ -746,7 +642,7 @@ TEST_CASE("Declip short-gap repair does not depend on the input length", "[maste
   constexpr size_t kShort = 4096;
   constexpr size_t kLong = 16384;
   constexpr float kThreshold = 0.5f;
-  const DeclipConfig config{kThreshold, 24, 2, 1.0f};
+  const DeclipConfig config{kThreshold, 24, 2};
 
   const auto fx_short = make_clipped_sine(kShort, 700.0f, 0.92f, 48000.0f, kThreshold, 0xC0FFEE);
   const auto fx_long = make_clipped_sine(kLong, 700.0f, 0.92f, 48000.0f, kThreshold, 0xC0FFEE);
@@ -781,10 +677,7 @@ TEST_CASE("Declip short-gap repair does not depend on the input length", "[maste
   REQUIRE(repaired_anything);
 }
 
-TEST_CASE("Declip routes over-cap runs to the interpolation fallback", "[mastering][repair]") {
-  // The fallback has no LPC estimate to blend, so it ignores lpc_blend entirely: a
-  // run one sample past the cap must produce bit-identical output at both blend
-  // extremes, where a solver-reconstructed run does not (see the lpc_blend cases).
+TEST_CASE("Declip leaves a run one past the gap cap clipped", "[mastering][repair]") {
   constexpr int kSampleRate = 48000;
   constexpr size_t kFrames = 4096;
   constexpr size_t kRunStart = 1024;
@@ -798,14 +691,147 @@ TEST_CASE("Declip routes over-cap runs to the interpolation fallback", "[masteri
   }
   std::fill(samples.begin() + static_cast<std::ptrdiff_t>(kRunStart),
             samples.begin() + static_cast<std::ptrdiff_t>(kRunStart + kRunLength), 1.0f);
-  const auto audio = Audio::from_buffer(samples.data(), samples.size(), kSampleRate);
 
-  const auto pure_interp = declip(audio, {0.98f, 36, 2, 0.0f});
-  const auto pure_lpc = declip(audio, {0.98f, 36, 2, 1.0f});
+  DeclipReport report;
+  const auto result =
+      declip(Audio::from_buffer(samples.data(), samples.size(), kSampleRate), {0.98f}, &report);
+  for (size_t i = 0; i < kFrames; ++i) REQUIRE(result[i] == samples[i]);
+  CHECK(report.unreconstructed_runs == 1);
+  CHECK(report.lpc_reconstructed_runs == 0);
+}
 
-  for (size_t i = 0; i < kFrames; ++i) {
-    REQUIRE(pure_lpc[i] == pure_interp[i]);
+namespace {
+
+/// One tenth of a second of @p kind (0 sine at @p freq, 1 a three-tone mix, 2 noise) at
+/// @p amplitude, at 48 kHz.
+std::vector<float> declip_truth(int kind, double freq, float amplitude) {
+  std::mt19937 rng(7);
+  std::normal_distribution<float> gauss(0.0f, 1.0f);
+  std::vector<float> truth(4800);
+  for (size_t i = 0; i < truth.size(); ++i) {
+    const double t = static_cast<double>(i) / 48000.0;
+    double v = 0.0;
+    if (kind == 0) v = std::sin(sonare::constants::kTwoPiD * freq * t);
+    if (kind == 1) {
+      v = 0.6 * std::sin(sonare::constants::kTwoPiD * 110.0 * t) +
+          0.3 * std::sin(sonare::constants::kTwoPiD * 330.0 * t + 1.0) +
+          0.1 * std::sin(sonare::constants::kTwoPiD * 1210.0 * t + 2.0);
+    }
+    if (kind == 2) v = 0.33 * gauss(rng);
+    truth[i] = static_cast<float>(amplitude * v);
   }
+  return truth;
+}
+
+float peak_of(const float* samples, size_t n) {
+  float peak = 0.0f;
+  for (size_t i = 0; i < n; ++i) peak = std::max(peak, std::abs(samples[i]));
+  return peak;
+}
+
+}  // namespace
+
+TEST_CASE("Declip reconstructs hard clipping consistently and below the true peak",
+          "[mastering][repair]") {
+  // Hard clipping at full scale over 1.2-3x drive. No sample of a clipped run comes out smaller
+  // in magnitude than it went in, the reconstruction never passes the unclipped peak by more
+  // than 5% on a tonal signal, and no run in the sweep reaches the reconstruction ceiling.
+  constexpr float kThreshold = 0.98f;
+  struct Signal {
+    int kind;
+    double freq;
+  };
+  const Signal signals[] = {{0, 50.0},   {0, 100.0}, {0, 440.0}, {0, 2000.0},
+                            {0, 5000.0}, {1, 0.0},   {2, 0.0}};
+  for (const Signal& signal : signals) {
+    for (const float amplitude : {1.2f, 1.6f, 2.0f, 3.0f}) {
+      CAPTURE(signal.kind, signal.freq, amplitude);
+      const std::vector<float> truth = declip_truth(signal.kind, signal.freq, amplitude);
+      std::vector<float> clipped(truth.size());
+      for (size_t i = 0; i < truth.size(); ++i) clipped[i] = std::clamp(truth[i], -1.0f, 1.0f);
+
+      DeclipReport report;
+      const auto result = declip(make_audio(clipped), {kThreshold}, &report);
+      CHECK(report.unreconstructed_runs == 0);
+      CHECK(report.lpc_reconstructed_runs > 0);
+      size_t shrunk = 0;
+      for (size_t i = 0; i < clipped.size(); ++i) {
+        REQUIRE(std::isfinite(result[i]));
+        if (std::abs(clipped[i]) >= kThreshold && std::abs(result[i]) < std::abs(clipped[i])) {
+          ++shrunk;
+        }
+      }
+      CHECK(shrunk == 0);
+      const float peak = peak_of(result.data(), result.size());
+      const float true_peak = peak_of(truth.data(), truth.size());
+      CAPTURE(peak, true_peak);
+      if (signal.kind != 2) CHECK(peak <= true_peak * 1.05f);
+      CHECK(peak <= kThreshold * db_to_linear(kDeclipMaxReconstructionGainDb));
+    }
+  }
+}
+
+TEST_CASE("Declip restores a reconstruction past its ceiling and counts it",
+          "[mastering][repair]") {
+  constexpr float kThreshold = 0.5f;
+  const float ceiling = kThreshold * db_to_linear(kDeclipMaxReconstructionGainDb);
+  const std::vector<float> original = {0.5f, 0.6f, 0.5f};
+
+  std::vector<float> over = {1.0f, ceiling * 1.01f, 1.0f};
+  DeclipReport left;
+  CHECK_FALSE(sonare::mastering::repair::detail::keep_reconstruction(
+      over.data(), original.data(), over.size(), kThreshold, left));
+  CHECK(over == original);
+  CHECK(left.unreconstructed_runs == 1);
+  CHECK(left.lpc_reconstructed_runs == 0);
+  CHECK(left.repaired_samples == 0);
+
+  const std::vector<float> at = {1.0f, ceiling, -ceiling};
+  std::vector<float> kept = at;
+  DeclipReport written;
+  CHECK(sonare::mastering::repair::detail::keep_reconstruction(kept.data(), original.data(),
+                                                               kept.size(), kThreshold, written));
+  CHECK(kept == at);
+  CHECK(written.unreconstructed_runs == 0);
+  CHECK(written.lpc_reconstructed_runs == 1);
+  CHECK(written.repaired_samples == 3);
+}
+
+TEST_CASE("Declip leaves a diverging heavy-clip run clipped and counts it", "[mastering][repair]") {
+  // A sine driven 10x into full scale: the solve for one run is ill-conditioned and diverges
+  // (measured +52.5 dB over threshold against a true +20.2 dB). No other signal in the sweep
+  // above reaches kDeclipMaxReconstructionGainDb. The divergence is rounding-sensitive; the case
+  // above pins the guard itself.
+  constexpr float kThreshold = 0.98f;
+  const std::vector<float> truth = declip_truth(0, 200.0, 10.0f);
+  std::vector<float> clipped(truth.size());
+  for (size_t i = 0; i < truth.size(); ++i) clipped[i] = std::clamp(truth[i], -1.0f, 1.0f);
+
+  DeclipReport report;
+  const auto result = declip(make_audio(clipped), {kThreshold}, &report);
+  CAPTURE(report.lpc_reconstructed_runs, report.unreconstructed_runs);
+  CHECK(report.lpc_reconstructed_runs + report.unreconstructed_runs == report.detected.run_count);
+  CHECK(report.unreconstructed_runs >= 1);
+  CHECK(peak_of(result.data(), result.size()) <=
+        kThreshold * db_to_linear(kDeclipMaxReconstructionGainDb));
+
+  // A run left as it was is bit-equal to its input; every clipped run is either that or one the
+  // solver wrote, and only the written ones count toward repaired_samples.
+  size_t left_runs = 0;
+  size_t i = 0;
+  while (i < clipped.size()) {
+    if (std::abs(clipped[i]) < kThreshold) {
+      ++i;
+      continue;
+    }
+    bool unchanged = true;
+    while (i < clipped.size() && std::abs(clipped[i]) >= kThreshold) {
+      unchanged = unchanged && result[i] == clipped[i];
+      ++i;
+    }
+    if (unchanged) ++left_runs;
+  }
+  CHECK(left_runs >= report.unreconstructed_runs);
 }
 
 namespace {
@@ -873,7 +899,7 @@ TEST_CASE("Declip runs at its largest lpc_order and refuses one more", "[masteri
   REQUIRE(repaired.size() == damaged.size());
   for (size_t i = 0; i < repaired.size(); ++i) REQUIRE(std::isfinite(repaired[i]));
   CHECK(report.lpc_reconstructed_runs == 1);
-  CHECK(report.interpolated_runs == 0);
+  CHECK(report.unreconstructed_runs == 0);
   double clipped_error = 0.0;
   double repaired_error = 0.0;
   for (size_t i = 0; i < clean.size(); ++i) {
@@ -915,7 +941,7 @@ TEST_CASE("Declip and Declick repair a three-minute recording with many short de
   }
 
   const Audio input = Audio::from_buffer(damaged.data(), damaged.size(), kSampleRate);
-  const Audio declipped = declip(input, {0.9f, 8, 2, 1.0f});
+  const Audio declipped = declip(input, {0.9f, 8, 2});
   const Audio declicked = declick(input, {0.8f, 2.0f, 1, 8, 8.0f});
 
   REQUIRE(declipped.size() == damaged.size());
@@ -923,7 +949,8 @@ TEST_CASE("Declip and Declick repair a three-minute recording with many short de
   for (const size_t index : defects) {
     REQUIRE(std::isfinite(declipped[index]));
     REQUIRE(std::isfinite(declicked[index]));
-    CHECK(std::abs(declipped[index]) < 0.8f);
+    // A one-sample spike read as clipping is never made smaller than it went in.
+    CHECK(std::abs(declipped[index]) >= 1.0f);
     CHECK(std::abs(declicked[index]) < 0.8f);
   }
 }

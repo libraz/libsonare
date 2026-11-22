@@ -101,7 +101,6 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg) {
             sonare::linear_to_db(cfg.repair.declip.config.clip_threshold));
   add_field(params, "repair.declip.lpcOrder", cfg.repair.declip.config.lpc_order);
   add_field(params, "repair.declip.iterations", cfg.repair.declip.config.iterations);
-  add_field(params, "repair.declip.lpcBlend", cfg.repair.declip.config.lpc_blend);
 
   add_field(params, "repair.decrackle.enabled", cfg.repair.decrackle.enabled);
   add_field(params, "repair.decrackle.threshold", cfg.repair.decrackle.config.threshold);

@@ -319,7 +319,7 @@ json::Object report_of(const repair::DeclipReport& report) {
   json::Object out;
   json::put(out, "detected", detection_to_json(report.detected));
   json::put(out, "lpcReconstructedRuns", count(report.lpc_reconstructed_runs));
-  json::put(out, "interpolatedRuns", count(report.interpolated_runs));
+  json::put(out, "unreconstructedRuns", count(report.unreconstructed_runs));
   json::put(out, "repairedSamples", count(report.repaired_samples));
   json::put(out, "linkedRuns", count(report.linked_runs));
   return out;

@@ -172,9 +172,9 @@ void refine_region_ar(std::vector<float>& output, size_t start, size_t end,
   ArInterpolateParams params;
   params.order = config.lpc_order;
   params.iterations = kDeclickArIterations;
-  params.blend = 1.0f;
   params.max_gap = kDeclickMaxArGapSamples;
   params.max_context_radius = kDeclickMaxArContextRadius;
+  // A region the solver cannot fill keeps its linear fill.
   ar_interpolate_region(output.data(), output.size(), start, end, params);
 }
 

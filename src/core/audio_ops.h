@@ -37,7 +37,8 @@ std::vector<float> autocorrelate(const std::vector<float>& y, int max_size = 0);
 /// @brief Linear prediction coefficients via Burg's method.
 /// @details Returns the AR filter denominator polynomial `[1, a_1, ..., a_order]`
 ///          (length `order + 1`). Matches `librosa.lpc`.
-/// @throw sonare::SonareException if order < 1 or y is too short.
+/// @throw sonare::SonareException if order < 1, y is too short, or the recursion cannot
+///        reach @p order with a stable model (the message names the order it reached).
 std::vector<float> lpc(const float* y, std::size_t n, int order);
 std::vector<float> lpc(const std::vector<float>& y, int order);
 

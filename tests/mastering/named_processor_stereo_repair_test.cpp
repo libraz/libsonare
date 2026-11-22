@@ -140,24 +140,36 @@ TEST_CASE("repair.declip reconstructs the union of both channels' runs",
     right[i] = std::clamp(right[i], -ceiling, ceiling);
   }
 
-  const std::vector<api::Param> params = {{"clipThresholdDb", 20.0 * std::log10(0.89)},
-                                          {"lpcOrder", 16.0},
-                                          {"iterations", 2.0},
-                                          {"lpcBlend", 1.0}};
+  const std::vector<api::Param> params = {
+      {"clipThresholdDb", 20.0 * std::log10(0.89)}, {"lpcOrder", 16.0}, {"iterations", 2.0}};
   const api::StereoResult stereo = run_stereo("repair.declip", left, right, params);
   REQUIRE(stereo.left.size() == kLength);
 
+  // A sample the clipping constraint pins keeps its observed value bit for bit, so an edit set
+  // is a subset of the region rather than the region itself. The union shows as right-channel
+  // edits where the right channel is not clipped at all.
+  const float threshold = 0.89f;
+  const auto clipped_in_either = [&](size_t i) {
+    return std::abs(left[i]) >= threshold || std::abs(right[i]) >= threshold;
+  };
+  const auto widened = [&](const std::vector<size_t>& edits) {
+    return std::count_if(edits.begin(), edits.end(),
+                         [&](size_t i) { return std::abs(right[i]) < threshold; });
+  };
   const std::vector<size_t> left_edits = edited_indices(left, stereo.left);
   const std::vector<size_t> right_edits = edited_indices(right, stereo.right);
   INFO("left edits " << left_edits.size() << " right edits " << right_edits.size());
   REQUIRE_FALSE(left_edits.empty());
-  CHECK(right_edits == left_edits);
+  CHECK(std::all_of(left_edits.begin(), left_edits.end(), clipped_in_either));
+  CHECK(std::all_of(right_edits.begin(), right_edits.end(), clipped_in_either));
+  CHECK(widened(right_edits) > 0);
 
-  // The ablation: the narrower channel keeps its own narrower region set.
+  // The ablation: per channel, the right one is edited only inside its own runs.
   const std::vector<float> mono_right = run_mono("repair.declip", right, params);
   const std::vector<size_t> mono_edits = edited_indices(right, mono_right);
   INFO("per-channel right edits " << mono_edits.size());
-  CHECK(mono_edits != right_edits);
+  REQUIRE_FALSE(mono_edits.empty());
+  CHECK(widened(mono_edits) == 0);
 }
 
 // ------------------------------------------------------- one shared range
