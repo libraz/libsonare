@@ -1588,6 +1588,19 @@ inline bool NonNegativeSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, s
   return node_read_size_t_domain(env, info[index], name, out);
 }
 
+/// @brief Optional sibling of @ref NonNegativeSizeTArg: `undefined`/`null` yields @p fallback,
+///        and a negative is refused rather than read as zero.
+inline bool OptionalSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                             const char* name, size_t fallback, size_t* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return NonNegativeSizeTArg(env, info, index, name, out);
+}
+
 /// @brief Read a required Buffer or Uint8Array argument as its bytes: a missing or other-typed
 ///        argument is a TypeError reading "<label> must be a Buffer or Uint8Array". @p data and
 ///        @p len alias the JS buffer, so they are valid only for the duration of the call.

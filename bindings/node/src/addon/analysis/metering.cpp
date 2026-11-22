@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -576,9 +575,8 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", sonare::constants::kDefaultSampleRate, &sr))
     return env.Undefined();
-  int64_t max_points_arg = 0;
-  if (!OptionalInt64Arg(env, info, 3, "maxPoints", 0, &max_points_arg)) return env.Undefined();
-  size_t max_points = static_cast<size_t>(std::max<int64_t>(0, max_points_arg));
+  size_t max_points = 0;
+  if (!OptionalSizeTArg(env, info, 3, "maxPoints", 0, &max_points)) return env.Undefined();
   SonareVectorscopeResult result{};
   SonareError err = sonare_metering_vectorscope(left.Data(), right.Data(), left.ElementLength(), sr,
                                                 max_points, &result);
@@ -615,9 +613,8 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", sonare::constants::kDefaultSampleRate, &sr))
     return env.Undefined();
-  int64_t max_points_arg = 0;
-  if (!OptionalInt64Arg(env, info, 3, "maxPoints", 0, &max_points_arg)) return env.Undefined();
-  size_t max_points = static_cast<size_t>(std::max<int64_t>(0, max_points_arg));
+  size_t max_points = 0;
+  if (!OptionalSizeTArg(env, info, 3, "maxPoints", 0, &max_points)) return env.Undefined();
   SonarePhaseScopeResult result{};
   SonareError err = sonare_metering_phase_scope(left.Data(), right.Data(), left.ElementLength(), sr,
                                                 max_points, &result);
@@ -688,9 +685,8 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   int sr{};
   if (!OptionalIntArg(env, info, 1, "sampleRate", sonare::constants::kDefaultSampleRate, &sr))
     return env.Undefined();
-  int64_t frame_offset_arg = 0;
-  if (!OptionalInt64Arg(env, info, 2, "frameOffset", 0, &frame_offset_arg)) return env.Undefined();
-  size_t frame_offset = static_cast<size_t>(std::max<int64_t>(0, frame_offset_arg));
+  size_t frame_offset = 0;
+  if (!OptionalSizeTArg(env, info, 2, "frameOffset", 0, &frame_offset)) return env.Undefined();
   int n_fft = 0;
   int smooth = 0;
   int octave = 0;
@@ -962,9 +958,8 @@ Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
     sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
-  int64_t frame_offset_arg = 0;
-  if (!OptionalInt64Arg(env, info, 0, "frameOffset", 0, &frame_offset_arg)) return env.Undefined();
-  size_t frame_offset = static_cast<size_t>(std::max<int64_t>(0, frame_offset_arg));
+  size_t frame_offset = 0;
+  if (!OptionalSizeTArg(env, info, 0, "frameOffset", 0, &frame_offset)) return env.Undefined();
   int n_fft = 0;
   int smooth = 0;
   int octave = 0;

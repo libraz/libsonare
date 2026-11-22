@@ -142,4 +142,21 @@ describe('the addon refuses a number it cannot hold', () => {
     expect(() => remix([0, '1000'])).toThrow(TypeError);
     expect(() => remix([0, 1000.7])).toThrow(RangeError);
   });
+
+  it('refuses a negative frame offset or point budget rather than reading it as zero', () => {
+    const samples = tone();
+    const frame = (offset: number) =>
+      native.meteringSpectrumFrame(samples, SAMPLE_RATE, offset, {});
+    // Positive control: the offset moves the analysed window, so an ignored argument would show.
+    expect(frame(0).db).not.toEqual(frame(2048).db);
+    expect(() => frame(-1)).toThrow(RangeError);
+    const handle = native.Audio.fromBuffer(samples, SAMPLE_RATE);
+    expect(handle.spectrumFrame(0)).toBeDefined();
+    expect(() => handle.spectrumFrame(-1)).toThrow(RangeError);
+    for (const scope of ['meteringVectorscope', 'meteringPhaseScope']) {
+      const run = (maxPoints: number) => native[scope](samples, samples, SAMPLE_RATE, maxPoints);
+      expect(run(16).mid.length).not.toBe(run(64).mid.length);
+      expect(() => run(-1), scope).toThrow(RangeError);
+    }
+  });
 });
