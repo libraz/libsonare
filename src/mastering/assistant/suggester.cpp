@@ -280,4 +280,12 @@ const std::vector<std::string>& assistant_result_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& assistant_result_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"profile.integratedLufs", "-Infinity"},
+      {"profile.truePeakDbtp", "-Infinity"},
+  };
+  return means;
+}
+
 }  // namespace sonare::mastering::assistant

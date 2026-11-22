@@ -23,6 +23,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mixing/api/scene.h"
@@ -271,5 +272,7 @@ std::string mix_assistant_result_to_json(const MixAssistantResult& result);
 ///          with `scene.`, duplicated here rather than assembled at runtime for
 ///          the same reason; a test holds the two copies to each other.
 const std::vector<std::string>& mix_assistant_result_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& mix_assistant_result_null_means();
 
 }  // namespace sonare::mixing::assistant

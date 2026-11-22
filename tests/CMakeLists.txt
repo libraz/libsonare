@@ -257,6 +257,7 @@ add_executable(sonare_tests
   conformance/core_validation_refusals_test.cpp
   conformance/master_meter_conformance_test.cpp
   conformance/public_input_conformance_test.cpp
+  conformance/result_null_means_test.cpp
   conformance/wasm_float_saturation_test.cpp
   librosa/convert_test.cpp
   librosa/mel_test.cpp

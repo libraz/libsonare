@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace sonare::mastering::assistant {
@@ -60,5 +61,7 @@ bool repair_apply_json(const float* const* channels, std::size_t channel_count, 
 /// @brief Every dotted field path @ref repair_analyze_json emits, `recommended` left opaque
 ///        below its `stage` key because the settings depend on the stage.
 const std::vector<std::string>& repair_analysis_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& repair_analysis_null_means();
 
 }  // namespace sonare::mastering::assistant

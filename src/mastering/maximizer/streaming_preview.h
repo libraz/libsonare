@@ -4,6 +4,7 @@
 /// @brief Streaming loudness normalization preview.
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -55,5 +56,7 @@ std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>&
 ///          contributes its element's paths under a `[]` segment and nothing of
 ///          its own.
 const std::vector<std::string>& streaming_preview_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& streaming_preview_null_means();
 
 }  // namespace sonare::mastering::maximizer

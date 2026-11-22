@@ -127,6 +127,14 @@ const std::vector<std::string>& analysis_result_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& analysis_result_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"dynamics.peakDb", "-Infinity"},
+      {"dynamics.rmsDb", "-Infinity"},
+  };
+  return means;
+}
+
 std::string analysis_result_to_json(const AnalysisResult& result) {
   Object root;
   root["bpm"] = Value(result.bpm);

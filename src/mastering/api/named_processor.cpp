@@ -1192,12 +1192,29 @@ const std::vector<std::string>& match_reference_loudness_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& match_reference_loudness_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"referenceLufs", "-Infinity"},
+      {"sourceLufs", "-Infinity"},
+  };
+  return means;
+}
+
 const std::vector<std::string>& match_tonal_balance_schema_paths() {
   static const std::vector<std::string> paths = {
       "bands",         "bands[].deviationDb", "bands[].highHz",
       "bands[].lowHz", "bands[].referenceDb", "bands[].sourceDb",
   };
   return paths;
+}
+
+const std::vector<std::pair<std::string, std::string>>& match_tonal_balance_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"bands[].deviationDb", "-Infinity"},
+      {"bands[].referenceDb", "-Infinity"},
+      {"bands[].sourceDb", "-Infinity"},
+  };
+  return means;
 }
 
 const std::vector<std::string>& match_eq_curve_schema_paths() {
@@ -1220,6 +1237,13 @@ const std::vector<std::string>& stereo_mono_compat_schema_paths() {
       "correlation", "likelyMonoCompatible", "monoPeak", "sideRms", "width",
   };
   return paths;
+}
+
+const std::vector<std::pair<std::string, std::string>>& stereo_mono_compat_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"width", "Infinity"},
+  };
+  return means;
 }
 
 const std::vector<std::string>& stereo_mono_compat_log_bands_schema_paths() {

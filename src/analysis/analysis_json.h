@@ -10,6 +10,7 @@
 /// The WASM native object (analysisResultToVal) mirrors the same field names.
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "analysis/music_analyzer.h"
@@ -28,6 +29,8 @@ std::string analysis_result_to_json(const AnalysisResult& result);
 /// serializer and WASM native object in parity by testing both surfaces against
 /// this list.
 const std::vector<std::string>& analysis_result_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& analysis_result_null_means();
 
 /// @brief Serializes a standalone meter estimate to a camelCase JSON object.
 /// @details Schema (every field always present):

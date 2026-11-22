@@ -786,4 +786,16 @@ const std::vector<std::string>& audio_profile_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& audio_profile_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"defects.hum.harmonicDbfs[]", "-Infinity"}, {"defects.noise.bandFloorDbfs[]", "-Infinity"},
+      {"defects.noise.floorDbfs", "-Infinity"},    {"loudness.integratedLufs", "-Infinity"},
+      {"loudness.truePeakDbtp", "-Infinity"},      {"spectral.airRmsDb", "-Infinity"},
+      {"spectral.highMidRmsDb", "-Infinity"},      {"spectral.highRmsDb", "-Infinity"},
+      {"spectral.lowMidRmsDb", "-Infinity"},       {"spectral.lowRmsDb", "-Infinity"},
+      {"spectral.midRmsDb", "-Infinity"},          {"spectral.subRmsDb", "-Infinity"},
+  };
+  return means;
+}
+
 }  // namespace sonare::mastering::assistant

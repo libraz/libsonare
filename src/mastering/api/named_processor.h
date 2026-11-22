@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/result_types.h"
@@ -201,6 +202,10 @@ const std::vector<std::string>& match_eq_curve_schema_paths();
 const std::vector<std::string>& match_reference_delay_schema_paths();
 const std::vector<std::string>& stereo_mono_compat_schema_paths();
 const std::vector<std::string>& stereo_mono_compat_log_bands_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& match_reference_loudness_null_means();
+const std::vector<std::pair<std::string, std::string>>& match_tonal_balance_null_means();
+const std::vector<std::pair<std::string, std::string>>& stereo_mono_compat_null_means();
 /// @}
 
 }  // namespace sonare::mastering::api

@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/chain.h"
@@ -83,5 +84,7 @@ std::string assistant_result_to_json(const AssistantResult& result);
 ///          so the list stops at `chainConfig.params`. An array contributes its
 ///          element's paths under a `[]` segment and nothing of its own.
 const std::vector<std::string>& assistant_result_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& assistant_result_null_means();
 
 }  // namespace sonare::mastering::assistant

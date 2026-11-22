@@ -92,4 +92,12 @@ const std::vector<std::string>& streaming_preview_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& streaming_preview_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"platforms[].integratedLufs", "-Infinity"},
+      {"platforms[].truePeakDbtp", "-Infinity"},
+  };
+  return means;
+}
+
 }  // namespace sonare::mastering::maximizer

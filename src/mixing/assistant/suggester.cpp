@@ -664,4 +664,13 @@ const std::vector<std::string>& mix_assistant_result_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& mix_assistant_result_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"mix.monoRisks[].width", "Infinity"},
+      {"tracks[].integratedLufs", "-Infinity"},
+      {"tracks[].truePeakDbtp", "-Infinity"},
+  };
+  return means;
+}
+
 }  // namespace sonare::mixing::assistant

@@ -659,4 +659,17 @@ const std::vector<std::string>& repair_analysis_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& repair_analysis_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"channels[].hum.harmonicDbfs[]", "-Infinity"},
+      {"channels[].noise.bandFloorDbfs[]", "-Infinity"},
+      {"channels[].noise.floorDbfs", "-Infinity"},
+      {"defects.hum.harmonicDbfs[]", "-Infinity"},
+      {"defects.noise.bandFloorDbfs[]", "-Infinity"},
+      {"defects.noise.floorDbfs", "-Infinity"},
+      {"integratedLufs", "-Infinity"},
+  };
+  return means;
+}
+
 }  // namespace sonare::mastering::assistant

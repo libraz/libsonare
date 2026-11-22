@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -256,5 +257,7 @@ std::string audio_profile_to_json(const AudioProfile& profile);
 ///          way. An array contributes its element's paths under a `[]` segment
 ///          and nothing of its own.
 const std::vector<std::string>& audio_profile_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& audio_profile_null_means();
 
 }  // namespace sonare::mastering::assistant
