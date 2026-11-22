@@ -5,16 +5,26 @@
 # The specifier becomes a non-literal and process.getBuiltinModule is preferred
 # where it exists. Fails unless the file holds exactly one original or exactly
 # one already-patched occurrence, so an emitter change cannot slip through.
+# The known emitter forms are listed in `_old_forms`.
 
 if(NOT GLUE_FILE OR NOT EXISTS "${GLUE_FILE}")
   message(FATAL_ERROR "patch_wasm_glue: GLUE_FILE is missing or not a file: '${GLUE_FILE}'")
 endif()
 
-set(_old [[const{createRequire}=await import("node:module")]])
+# Emscripten 7 parenthesises the import; 6.x does not.
+set(_old_forms [[const{createRequire}=await(import("node:module"))]]
+               [[const{createRequire}=await import("node:module")]])
 set(_new [[const _m="node:module";const{createRequire}=process.getBuiltinModule?.("module")??await import(/* webpackIgnore: true */ /* @vite-ignore */ _m)]])
 
 file(READ "${GLUE_FILE}" _content)
-string(FIND "${_content}" "${_old}" _old_pos)
+list(GET _old_forms 0 _old)
+foreach(_form IN LISTS _old_forms)
+  string(FIND "${_content}" "${_form}" _old_pos)
+  if(NOT _old_pos EQUAL -1)
+    set(_old "${_form}")
+    break()
+  endif()
+endforeach()
 string(FIND "${_content}" "${_new}" _new_pos)
 
 if(_old_pos EQUAL -1 AND NOT _new_pos EQUAL -1)
