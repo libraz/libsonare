@@ -1060,6 +1060,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareVocalCapabilities.api_version` | `SonareVocalCapabilities.abi_version` |
 
+#### Vocal editing has one model on Python and JavaScript
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareVocalOperation.cut_source_sample` | `SonareVocalOperation.source_sample` |
+| `SonareVocalOperation.merge_policy` | `SonareVocalOperation.policy` |
+
 ## Python
 
 Keyword arguments and attributes are snake_case, records are frozen dataclasses built from keyword arguments, a closed set is a lowerCamel string token, an option left out is `None`, and a quantity names its unit (`_hz`, `_sec`, `_db`). Every public type imports from `libsonare`.
@@ -14262,7 +14269,7 @@ const latency = engine.graphLatencySamples;
 
 ### Vocal editing has one model on Python and JavaScript
 
-Operation and field names agree across surfaces, so `VocalSplitNote(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call.
+Operation and field names agree across surfaces, so `VocalSplitNote(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript and `source_sample` in `SonareVocalOperation`, whose merge policy is `policy`. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call.
 
 WASM, 1.x:
 

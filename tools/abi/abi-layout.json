@@ -12460,7 +12460,7 @@
       },
       {
         "kind": "signed",
-        "name": "cut_source_sample",
+        "name": "source_sample",
         "offset": 184,
         "size": 8
       },
@@ -12478,7 +12478,7 @@
       },
       {
         "kind": "unsigned",
-        "name": "merge_policy",
+        "name": "policy",
         "offset": 208,
         "size": 4
       },

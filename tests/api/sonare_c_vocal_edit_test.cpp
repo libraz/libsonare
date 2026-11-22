@@ -297,7 +297,7 @@ TEST_CASE("vocal C mutations publish only after result allocations succeed",
       op.edit.gain_db = -6;
       if (action == 4) {
         op.kind = SONARE_VOCAL_SPLIT;
-        op.cut_source_sample = 1600;
+        op.source_sample = 1600;
       }
       SonareVocalEditResult result;
       sonare_vocal_edit_result_init(&result);
@@ -631,8 +631,8 @@ TEST_CASE("vocal C operations refuse a mode ordinal outside its enum", "[vocal_c
   merge.kind = SONARE_VOCAL_MERGE;
   merge.note_ids = &id;
   merge.note_id_count = 1;
-  merge.merge_policy = SONARE_VOCAL_MERGE_RESET + 1;
-  expect_refused(merge, "merge_policy");
+  merge.policy = SONARE_VOCAL_MERGE_RESET + 1;
+  expect_refused(merge, "policy");
   draft.reset();
   sonare_free_vocal_notes_result(&notes);
 }

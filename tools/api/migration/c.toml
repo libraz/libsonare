@@ -74,6 +74,20 @@ domain = "project"
 rule = "abi-probes"
 
 [[entry]]
+kind = "field"
+old = "SonareVocalOperation.cut_source_sample"
+new = "SonareVocalOperation.source_sample"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalOperation.merge_policy"
+new = "SonareVocalOperation.policy"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
 kind = "function"
 old = "sonare_has_ffmpeg_support"
 removed = 'call sonare_has_feature("ffmpeg"), which returns 1 when the FFmpeg decode path is compiled in'

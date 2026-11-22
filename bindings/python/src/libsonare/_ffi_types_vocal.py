@@ -161,10 +161,10 @@ class SonareVocalOperation(CStruct):
         ("source_end_sample", ctypes.c_int64),
         ("destination_start_sample", ctypes.c_int64),
         ("destination_length_samples", ctypes.c_int64),
-        ("cut_source_sample", ctypes.c_int64),
+        ("source_sample", ctypes.c_int64),
         ("note_ids", ctypes.POINTER(ctypes.c_uint32)),
         ("note_id_count", ctypes.c_size_t),
-        ("merge_policy", ctypes.c_uint32),
+        ("policy", ctypes.c_uint32),
         ("transition", SonareVocalTransition),
     ]
 

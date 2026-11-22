@@ -42,8 +42,8 @@ typedef enum SONARE_ENUM_BASE {
 typedef enum SONARE_ENUM_BASE {
   SONARE_VOCAL_SET_EDIT = 0,         ///< Replace a note's edit; reads note_id and edit.
   SONARE_VOCAL_SET_SOURCE_SPAN = 1,  ///< Move a note's source span and its destination span.
-  SONARE_VOCAL_SPLIT = 2,            ///< Split a note at cut_source_sample; reads note_id.
-  SONARE_VOCAL_MERGE = 3,            ///< Merge note_ids into one note; reads merge_policy.
+  SONARE_VOCAL_SPLIT = 2,            ///< Split a note at source_sample; reads note_id.
+  SONARE_VOCAL_MERGE = 3,            ///< Merge note_ids into one note; reads policy.
   SONARE_VOCAL_SET_TRANSITION = 4,   ///< Add or replace a pitch transition; reads transition.
   SONARE_VOCAL_REMOVE_TRANSITION =
       5,                  ///< Remove the transition between the two transition note ids.
@@ -206,10 +206,10 @@ typedef struct {
   int64_t source_end_sample;         ///< New source span end for SET_SOURCE_SPAN.
   int64_t destination_start_sample;  ///< New destination start for SET_SOURCE_SPAN.
   int64_t destination_length_samples;  ///< New destination length for SET_SOURCE_SPAN.
-  int64_t cut_source_sample;           ///< Source sample at which SPLIT cuts the note.
+  int64_t source_sample;               ///< Source sample at which SPLIT cuts the note.
   const uint32_t* note_ids;            ///< note_id_count ids for MERGE and RESET.
   size_t note_id_count;                ///< Number of entries in note_ids.
-  uint32_t merge_policy;               ///< A @ref SonareVocalMergePolicy for MERGE.
+  uint32_t policy;                     ///< A @ref SonareVocalMergePolicy for MERGE.
   SonareVocalTransition
       transition;  ///< Transition for SET_TRANSITION; REMOVE_TRANSITION reads its note ids.
 } SonareVocalOperation;

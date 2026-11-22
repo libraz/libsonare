@@ -310,7 +310,7 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
   } else if (kind == "split") {
     result.kind = SONARE_VOCAL_SPLIT;
     result.note_id = nonZeroId(checkedUintFromVal(property(object, "noteId"), "noteId"), "noteId");
-    result.cut_source_sample = requireInt64Property(object, "sourceSample", "operation");
+    result.source_sample = requireInt64Property(object, "sourceSample", "operation");
   } else if (kind == "merge") {
     result.kind = SONARE_VOCAL_MERGE;
     storage->ids = idArray(property(object, "noteIds"), "noteIds");
@@ -318,9 +318,9 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
     result.note_id_count = storage->ids.size();
     const std::string policy = stringPropertyStrict(object, "policy", "preserve");
     if (policy == "preserve")
-      result.merge_policy = SONARE_VOCAL_MERGE_PRESERVE;
+      result.policy = SONARE_VOCAL_MERGE_PRESERVE;
     else if (policy == "reset")
-      result.merge_policy = SONARE_VOCAL_MERGE_RESET;
+      result.policy = SONARE_VOCAL_MERGE_RESET;
     else
       throw WasmRangeError("unsupported merge policy");
   } else if (kind == "setTransition") {

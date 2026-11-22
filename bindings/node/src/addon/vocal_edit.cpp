@@ -323,7 +323,7 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
       item.operation.kind = SONARE_VOCAL_SPLIT;
       if (!ReadNoteId(env, object.Get("noteId"), "operation.noteId", &item.operation.note_id) ||
           !RequiredSafeIntegerValue(env, object.Get("sourceSample"), "operation.sourceSample",
-                                    &item.operation.cut_source_sample, 0)) {
+                                    &item.operation.source_sample, 0)) {
         return false;
       }
     } else if (kind == "merge") {
@@ -346,11 +346,11 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
       item.operation.note_id_count = item.note_ids.size();
       const Napi::Value policy = object.Get("policy");
       if (policy.IsUndefined() || policy.IsNull()) {
-        item.operation.merge_policy = SONARE_VOCAL_MERGE_PRESERVE;
+        item.operation.policy = SONARE_VOCAL_MERGE_PRESERVE;
       } else {
         const char* const policy_names[] = {"preserve", "reset"};
         if (!ReadStringEnum(env, policy, "operation.policy", policy_names, std::size(policy_names),
-                            &item.operation.merge_policy))
+                            &item.operation.policy))
           return false;
       }
     } else if (kind == "setTransition") {

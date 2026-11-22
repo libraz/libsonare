@@ -219,7 +219,7 @@ void sonare_vocal_operation_init(SonareVocalOperation* operation) {
   if (!operation) return;
   *operation = {};
   operation->struct_size = sizeof(*operation);
-  operation->merge_policy = SONARE_VOCAL_MERGE_PRESERVE;
+  operation->policy = SONARE_VOCAL_MERGE_PRESERVE;
   sonare_vocal_note_edit_init(&operation->edit);
   operation->transition.struct_size = sizeof(operation->transition);
 }
@@ -369,13 +369,13 @@ vocal::Operation import_operation(const SonareVocalOperation& v) {
                                         v.destination_start_sample,
                                         v.destination_length_samples};
     case SONARE_VOCAL_SPLIT:
-      return vocal::SplitNoteOp{v.note_id, v.cut_source_sample};
+      return vocal::SplitNoteOp{v.note_id, v.source_sample};
     case SONARE_VOCAL_MERGE: {
       vocal::MergeMode merge = vocal::MergeMode::kPreserveEdits;
-      if (!sonare_c_detail::ordinal_to_enum(v.merge_policy, SONARE_VOCAL_MERGE_PRESERVE,
+      if (!sonare_c_detail::ordinal_to_enum(v.policy, SONARE_VOCAL_MERGE_PRESERVE,
                                             SONARE_VOCAL_MERGE_RESET, &merge)) {
         throw vocal::VocalEditException(vocal::VocalReason::kInvalidInput, "unknown merge policy",
-                                        "merge_policy");
+                                        "policy");
       }
       return vocal::MergeNotesOp{copy_input(v.note_ids, v.note_id_count, "note_ids"), merge};
     }

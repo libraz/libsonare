@@ -573,11 +573,11 @@ def _operation_to_c(
             "source_sample",
             "source_sec",
         )
-        raw.cut_source_sample = bound.value
+        raw.source_sample = bound.value
         respelled.update(bound.respelled)
     elif isinstance(operation, VocalMergeNotes):
         raw.kind = _operation_kind("merge")
-        raw.merge_policy = _token_ordinal(operation.policy, _VOCAL_MERGE_POLICIES, "policy")
+        raw.policy = _token_ordinal(operation.policy, _VOCAL_MERGE_POLICIES, "policy")
         ids = (ctypes.c_uint32 * len(operation.note_ids))()
         for i, value in enumerate(operation.note_ids):
             ids[i] = _uint32(value, "note_ids", allow_zero=False)
