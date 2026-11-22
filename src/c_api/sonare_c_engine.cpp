@@ -403,8 +403,10 @@ SonareError sonare_engine_set_loop(SonareEngine* engine, double start_ppq, doubl
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_TRY
   engine->engine.set_loop(start_ppq, end_ppq, enabled != 0);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_add_parameter(SonareEngine* engine, const SonareParameterInfo* info) {
@@ -678,6 +680,7 @@ SonareError sonare_engine_set_loop_from_markers(SonareEngine* engine, uint32_t s
                                                 uint32_t end_marker_id) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
   if (engine->engine.set_loop_from_markers(start_marker_id, end_marker_id)) return SONARE_OK;
   return run_validation([&] {
     transport::Marker start{};
@@ -691,6 +694,7 @@ SonareError sonare_engine_set_loop_from_markers(SonareEngine* engine, uint32_t s
     util::check::refuse_relation({"end_marker_id", "start_marker_id"},
                                  "the marker {0} names must be after the marker {1} names");
   });
+  SONARE_C_CATCH
 }
 
 void sonare_engine_metronome_config_init(SonareEngineMetronomeConfig* config) {
