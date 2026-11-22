@@ -803,7 +803,7 @@ TEST_CASE("project core entries refuse by the parameter the header spells", "[pr
   CHECK(last_refusal() == "out_json must not be NULL");
 
   CHECK(sonare_project_set_sample_rate(project, 7999) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "sample_rate must be a whole number of hertz in [8000, 384000]");
+  CHECK(last_refusal() == "sample_rate must be an integer in [8000, 384000]");
 
   SonareProjectTrack track{};
   CHECK(sonare_project_track_by_index(project, 0, &track) == SONARE_ERROR_INVALID_PARAMETER);

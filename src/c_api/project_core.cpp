@@ -257,9 +257,8 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, int sample_ra
   if (!sonare::is_supported_sample_rate(static_cast<double>(sample_rate))) {
     // Name the rule, read from the constants the predicate checks, so a facade can
     // report why a rate it passed through was refused.
-    sonare::util::check::refuse("sample_rate", "must be a whole number of hertz in [" +
-                                                   std::to_string(kMinSampleRate) + ", " +
-                                                   std::to_string(kMaxSampleRate) + "]");
+    sonare::util::check::refuse("sample_rate", sonare::util::refusal::integer_range_predicate(
+                                                   kMinSampleRate, kMaxSampleRate));
   }
   // Through the history like every other setter. Set directly on the Project it
   // owns, this was the one piece of public project state undo could not reach:
