@@ -62,11 +62,6 @@ struct Aabb {
   Vec3 max{};
 };
 
-inline bool aabb_contains(const Aabb& box, const Vec3& p) noexcept {
-  return p.x >= box.min.x && p.x <= box.max.x && p.y >= box.min.y && p.y <= box.max.y &&
-         p.z >= box.min.z && p.z <= box.max.z;
-}
-
 /// @brief True if @p p (assumed on the triangle's plane) lies within @p tri.
 ///
 /// Barycentric test with a small inclusive tolerance so points on an edge count

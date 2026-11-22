@@ -416,9 +416,4 @@ LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
   return resolve_late_tail_with_cap(rt, sample_rate, config, resource::kMaxAcousticRirSamples);
 }
 
-std::size_t resolve_late_tail_samples(const ReverbTime& rt, int sample_rate,
-                                      const LateReverbConfig& config) noexcept {
-  return resolve_late_tail(rt, sample_rate, config).samples;
-}
-
 }  // namespace sonare::acoustic

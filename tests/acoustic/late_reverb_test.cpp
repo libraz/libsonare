@@ -208,7 +208,7 @@ TEST_CASE("late-tail sample resolver enforces the shared working-set cap",
   REQUIRE(resolution.samples == resource::kMaxAcousticRirSamples);
   REQUIRE(resolution.samples == 13'421'772u);
   REQUIRE(resolution.resource_clamped);
-  REQUIRE(resolve_late_tail_samples(rt, 384000) == resolution.samples);
+  REQUIRE(resolve_late_tail(rt, 384000).samples == resolution.samples);
   static_assert(resource::kMaxAcousticRirSamples * resource::kAcousticRirMonoLiveFloatBuffers *
                     sizeof(float) <=
                 resource::kMaxAcousticRirPeakBytes);
@@ -243,10 +243,10 @@ TEST_CASE("late-tail resolver applies explicit caps and rejects invalid rates",
   const LateTailResolution resolution = resolve_late_tail(rt, 48000, capped);
   REQUIRE(resolution.samples == 1234u);
   REQUIRE_FALSE(resolution.resource_clamped);
-  REQUIRE(resolve_late_tail_samples(rt, 48000, capped) == resolution.samples);
+  REQUIRE(resolve_late_tail(rt, 48000, capped).samples == resolution.samples);
 
-  REQUIRE(resolve_late_tail_samples(rt, 0) == 0u);
-  REQUIRE(resolve_late_tail_samples(rt, -1) == 0u);
+  REQUIRE(resolve_late_tail(rt, 0).samples == 0u);
+  REQUIRE(resolve_late_tail(rt, -1).samples == 0u);
 }
 
 TEST_CASE("late-tail resolver remains bounded for hostile sizing values",
@@ -259,7 +259,7 @@ TEST_CASE("late-tail resolver remains bounded for hostile sizing values",
   const LateTailResolution resolution = resolve_late_tail(rt, 384000, hostile);
   REQUIRE(resolution.samples == resource::kMaxAcousticRirSamples);
   REQUIRE(resolution.resource_clamped);
-  REQUIRE(resolve_late_tail_samples(rt, 384000, LateReverbConfig{1u, 17, 1.0f}) == 17u);
+  REQUIRE(resolve_late_tail(rt, 384000, LateReverbConfig{1u, 17, 1.0f}).samples == 17u);
 }
 
 TEST_CASE("late-tail pair enforces its standalone six-buffer cap",

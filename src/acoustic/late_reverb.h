@@ -157,15 +157,6 @@ struct LateTailResolution {
 
 /// @brief Resolve a late-tail length and report resource-budget clipping.
 ///
-/// `resource_clamped` describes the auto-sized length before an explicit
-/// `max_samples` cap is applied. It remains true when an explicit cap makes the
-/// returned sample count smaller, allowing RIR diagnostics to distinguish the
-/// shared resource budget from a caller-requested upper bound.
-LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
-                                     const LateReverbConfig& config = {}) noexcept;
-
-/// @brief Resolve the storage length for a late-reverberation tail.
-///
 /// The result is allocation-free and applies the same policy used by
 /// `synthesize_late_tail`: invalid sample rates and rooms with no representable
 /// positive-decay band return zero; bands at/above Nyquist do not affect the
@@ -173,8 +164,13 @@ LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
 /// `max_samples` is an upper bound. The shared acoustic full-length float-storage
 /// limit is applied after the `kMaxAutoSamples` ceiling, so even hostile
 /// sample-rate/RT60/headroom combinations remain representable as `int`.
-std::size_t resolve_late_tail_samples(const ReverbTime& rt, int sample_rate,
-                                      const LateReverbConfig& config = {}) noexcept;
+///
+/// `resource_clamped` describes the auto-sized length before an explicit
+/// `max_samples` cap is applied. It remains true when an explicit cap makes the
+/// returned sample count smaller, allowing RIR diagnostics to distinguish the
+/// shared resource budget from a caller-requested upper bound.
+LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
+                                     const LateReverbConfig& config = {}) noexcept;
 
 /// @brief Synthesize the mono statistical late-reverberation tail.
 ///
