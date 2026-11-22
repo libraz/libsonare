@@ -423,7 +423,10 @@ export interface SpectrumOptions {
   octaveFraction?: number;
   /** Linear reference for the dB conversion. Absent = 1.0; an explicit 0 is a `RangeError`. */
   dbRef?: number;
-  /** Linear floor used to avoid log(0). Absent = the library epsilon; an explicit 0 is a `RangeError`. */
+  /**
+   * Linear floor used to avoid log(0). Absent = the library epsilon; an explicit 0 is a `RangeError`.
+   * Silence reads 20*log10(dbAmin / dbRef) dB: the magnitude is clamped to dbAmin before the dB conversion.
+   */
   dbAmin?: number;
 }
 
