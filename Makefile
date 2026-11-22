@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install analysis-link-check test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -90,6 +90,13 @@ test-install:
 	  -DCMAKE_PREFIX_PATH=$(INSTALL_PREFIX_DIR)
 	$(CMAKE) --build build-install-consumer $(BUILD_PARALLEL)
 	ctest --test-dir build-install-consumer --output-on-failure --no-tests=error
+
+# Whole-archive links the archives the analysis-only WASM module is built from,
+# so a core symbol defined only in the engine, mixer or arrangement layers fails
+# natively instead of only under Emscripten.
+analysis-link-check:
+	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug
+	$(CMAKE) --build $(BUILD_DIR) --target sonare_analysis_link_check $(BUILD_PARALLEL)
 
 # Delegates instead of configuring a tree of its own, because the feature
 # flags, the output name and the analysis-only switch that decide WHICH module
@@ -1443,6 +1450,7 @@ ci-local:
 	$(MAKE) check-abi-version
 	$(MAKE) check-abi-bumps
 	$(MAKE) abi-layout-check
+	$(MAKE) analysis-link-check
 	$(MAKE) surface-check
 	$(MAKE) wasm-browser-smoke
 

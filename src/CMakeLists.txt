@@ -1281,6 +1281,24 @@ if(BUILD_SHARED)
   endif()
 endif()
 
+# Links every member of the archives the analysis-only WASM module is built
+# from, so a core symbol that reaches into the engine, mixer or arrangement
+# layers fails here instead of only in an Emscripten build. Built by
+# `make analysis-link-check`, never by default.
+if(NOT BUILD_WASM AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+  set(_sonare_analysis_archives sonare_core sonare_rt)
+  if(BUILD_PITCH_EDITOR)
+    list(APPEND _sonare_analysis_archives sonare_pitch_editor)
+  endif()
+  list(JOIN _sonare_analysis_archives "," _sonare_analysis_archive_list)
+  file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/analysis_link_check_main.cpp
+    CONTENT "int main() { return 0; }\n")
+  add_executable(sonare_analysis_link_check EXCLUDE_FROM_ALL
+    ${CMAKE_CURRENT_BINARY_DIR}/analysis_link_check_main.cpp)
+  target_link_libraries(sonare_analysis_link_check PRIVATE
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,${_sonare_analysis_archive_list}>")
+endif()
+
 # WASM build
 if(BUILD_WASM)
   # Enable WebAssembly SIMD128 across the whole WASM build (core, mastering,
