@@ -4,7 +4,9 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <unordered_map>
 
+#include "midi/note_pairing.h"
 #include "midi/sysex_framing.h"
 #include "midi/tick_conversion.h"
 #include "midi/time_signature_encoding.h"
@@ -812,12 +814,12 @@ void drop_zero_length_notes(MidiClip* clip, uint32_t* skipped, uint16_t ticks_pe
                : smf_ppq_to_ticks(a, ticks_per_quarter) == smf_ppq_to_ticks(b, ticks_per_quarter);
   };
   std::vector<bool> dropped(events.size(), false);
-  std::vector<std::vector<size_t>> open(16 * 128);
+  std::unordered_map<uint16_t, std::vector<size_t>> open;
   bool any = false;
   for (size_t i = 0; i < events.size(); ++i) {
     const Ump& ump = events[i].ump;
     if (!ump.is_note_on() && !ump.is_note_off()) continue;
-    std::vector<size_t>& keyed = open[ump.channel() * 128u + ump.note_number()];
+    std::vector<size_t>& keyed = open[detail::note_pairing_detail::key_for(ump)];
     if (ump.is_note_on()) {
       keyed.push_back(i);
       continue;

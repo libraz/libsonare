@@ -1719,3 +1719,27 @@ TEST_CASE("SMF2 import drops a zero-length note and export counts a sub-tick one
   REQUIRE(coarse_out.status == Smf2Status::kOk);
   CHECK(coarse_out.skipped_events == 2);
 }
+
+TEST_CASE("Zero-length note removal pairs notes within their own UMP group", "[midi][smf2]") {
+  // A note-off in another group never closes a note, so nothing is zero-length here.
+  MidiClip crossed;
+  crossed.add_event(MidiClipEvent{0.0, sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u)});
+  crossed.add_event(MidiClipEvent{0.0, sonare::midi::make_midi2_note_off(1, 0, 60, 0)});
+  uint32_t skipped = 0;
+  sonare::midi::drop_zero_length_notes(&crossed, &skipped, 480);
+  CHECK(skipped == 0);
+  CHECK(crossed.events().size() == 2);
+
+  // The zero-length note in group 1 goes; the group 0 note on the same key stays.
+  MidiClip mixed;
+  mixed.add_event(MidiClipEvent{0.0, sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u)});
+  mixed.add_event(MidiClipEvent{0.0, sonare::midi::make_midi2_note_on(1, 0, 60, 0x8000u)});
+  mixed.add_event(MidiClipEvent{0.0, sonare::midi::make_midi2_note_off(1, 0, 60, 0)});
+  mixed.add_event(MidiClipEvent{1.0, sonare::midi::make_midi2_note_off(0, 0, 60, 0)});
+  skipped = 0;
+  sonare::midi::drop_zero_length_notes(&mixed, &skipped, 480);
+  CHECK(skipped == 2);
+  REQUIRE(mixed.events().size() == 2);
+  CHECK(sonare::midi::ump_group_from_word0(mixed.events()[0].ump.words[0]) == 0);
+  CHECK(sonare::midi::ump_group_from_word0(mixed.events()[1].ump.words[0]) == 0);
+}
