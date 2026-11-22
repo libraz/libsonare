@@ -9,6 +9,7 @@
 #include "c_api/engine_config_domains.h"
 #include "realtime_engine_wasm.h"
 #include "streaming/realtime_limits.h"
+#include "util/refusal_predicates.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/project_timeline_internal.h"
@@ -16,11 +17,13 @@
 #endif
 
 void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size) {
-  if (!sonare::is_supported_sample_rate(sample_rate) ||
-      !sonare::is_valid_realtime_block_size(max_block_size)) {
-    throw WasmRangeError(
-        "sampleRate must be a whole number of hertz within 8000..384000; "
-        "maxBlockSize must be within 1..1048576");
+  if (!sonare::is_supported_sample_rate(sample_rate)) {
+    throw WasmRangeError("sampleRate " +
+                         sonare::util::refusal::integer_range_predicate(
+                             sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate));
+  }
+  if (!sonare::is_valid_realtime_block_size(max_block_size)) {
+    throw WasmRangeError("maxBlockSize must be within 1..1048576");
   }
 }
 

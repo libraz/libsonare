@@ -1394,7 +1394,9 @@ describe('Sonare WASM Project', () => {
         caught = error;
       }
       expectArgumentRefusal(caught, RangeError);
-      expect(String((caught as Error).message)).toContain('whole number of hertz');
+      expect(String((caught as Error).message)).toContain(
+        'sampleRate must be an integer in [8000, 384000]',
+      );
     } finally {
       project.destroy();
     }

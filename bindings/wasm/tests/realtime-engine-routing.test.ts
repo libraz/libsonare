@@ -1136,6 +1136,9 @@ describe('Sonare WASM Module', () => {
           RangeError,
         );
       }
+      expect(() => new RealtimeEngine({ sampleRate: 44100.5, maxBlockSize: 128 })).toThrow(
+        /sampleRate must be an integer in \[8000, 384000\]$/,
+      );
       new RealtimeEngine({ sampleRate: 8000, maxBlockSize: 128 }).destroy();
       new RealtimeEngine({ sampleRate: 384000, maxBlockSize: 128 }).destroy();
     });

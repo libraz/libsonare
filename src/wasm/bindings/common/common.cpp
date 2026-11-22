@@ -17,6 +17,7 @@
 #include "util/json_schema.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 // ============================================================================
 // Helper functions
@@ -534,7 +535,9 @@ int checkedIntFromVal(const val& value, const char* key) {
 int wholeHertzSampleRateFromVal(const val& value) {
   const double sample_rate = numberFromVal(value, "sampleRate");
   if (!sonare::is_supported_sample_rate(sample_rate)) {
-    throw WasmRangeError("sampleRate must be a whole number of hertz within 8000..384000");
+    throw WasmRangeError("sampleRate " +
+                         sonare::util::refusal::integer_range_predicate(
+                             sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate));
   }
   return static_cast<int>(sample_rate);
 }
