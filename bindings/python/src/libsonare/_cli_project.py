@@ -27,8 +27,6 @@ from ._cli_common import (
 )
 from ._cli_inventory import _cli_domain
 from ._cli_options import (
-    _INT64_MAX,
-    _INT64_MIN,
     SharedParsers,
     _c_int,
     _ContractArgumentParser,
@@ -41,6 +39,7 @@ from ._cli_options import (
     _tempo_bpm,
 )
 from ._cli_utilities import _MAX_GENERATOR_SAMPLE_RATE, _MIN_GENERATOR_SAMPLE_RATE
+from ._narrowing import _INT64_MAX, _INT64_MIN
 from ._project_instruments import SynthPatch
 from ._runtime import _UINT32_MAX, ErrorCode, SonareError
 
