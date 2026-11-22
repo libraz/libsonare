@@ -4,6 +4,10 @@
  *
  * This entry is bundled self-contained, so its classes are not the root entry's: an object built
  * from one entry is not an `instanceof` the other entry's class. Pass plain data between realms.
+ *
+ * Inside an AudioWorkletGlobalScope, `init()` without a `moduleFactory` is refused with
+ * `NotSupported`, because the realm cannot fetch; a processor initialises through
+ * `globalThis.SonareEmbindModuleFactory` and the `wasmBinary` in its `processorOptions`.
  */
 
 // tsup bundles ./worklet/* into one dist/worklet.js; a real AudioWorkletGlobalScope cannot

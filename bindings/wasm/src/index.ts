@@ -18,7 +18,8 @@
  * ```
  */
 
-import { withEntry } from './internal/entry.js';
+import { ErrorCode } from './errors.js';
+import { codedError, withEntry } from './internal/entry.js';
 import './lifetime.js';
 import { initModule, loadedModule, notInitializedError } from './module_state.js';
 import type { Capabilities, CapabilityCatalog, ModuleHandle, SystemInfo } from './public_types.js';
@@ -1293,7 +1294,19 @@ export async function init(options?: {
   }) => Promise<ModuleHandle>;
 }): Promise<void> {
   return withEntry('init', () =>
-    initModule('full', options, async () => (await import('./sonare.js')).default),
+    initModule('full', options, async () => {
+      // A worklet realm has no fetch, so the bundled loader could only fail later and obscurely.
+      if ('AudioWorkletGlobalScope' in globalThis) {
+        throw codedError(
+          ErrorCode.NotSupported,
+          'the module cannot be loaded inside an AudioWorkletGlobalScope; set ' +
+            'globalThis.SonareEmbindModuleFactory and pass wasmBinary in the processorOptions ' +
+            'of a processor registered with registerSonareWorkletProcessor, or call ' +
+            'init({ moduleFactory, wasmBinary })',
+        );
+      }
+      return (await import('./sonare.js')).default;
+    }),
   );
 }
 
