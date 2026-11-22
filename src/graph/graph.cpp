@@ -23,11 +23,7 @@ bool Graph::add_node(std::string id, std::unique_ptr<rt::ProcessorBase> processo
   nodes_.push_back(std::move(new_node));
   Node* raw = nodes_.back().get();
   try {
-    const bool inserted = node_map_.emplace(raw->id(), raw).second;
-    if (!inserted) {
-      nodes_.pop_back();
-      return false;
-    }
+    node_map_.emplace(raw->id(), raw);
   } catch (...) {
     // Roll back ownership so the map never retains a destroyed node.
     nodes_.pop_back();
@@ -141,7 +137,6 @@ bool Graph::compile() {
 
   for (const Connection& connection : connections_) {
     if (!validate_connection(connection)) {
-      compiled_ = false;
       return false;
     }
     outgoing[connection.source_node].push_back(connection.dest_node);
@@ -179,7 +174,6 @@ bool Graph::compile() {
     topo_order_.clear();
     topo_order_ids_.clear();
     topo_index_.clear();
-    compiled_ = false;
     return false;
   }
 
@@ -361,6 +355,8 @@ void Graph::process_block(int num_samples) noexcept {
 
       const bool first_for_port = dest_port != prev_dest_port;
       prev_dest_port = dest_port;
+      const bool overwrite =
+          first_for_port || runtime_connection.connection.mix == Connection::Mix::Replace;
 
       for (int i = 0; i < num_samples; ++i) {
         float value = source[i];
@@ -370,7 +366,7 @@ void Graph::process_block(int num_samples) noexcept {
         } else if (delay_line != nullptr) {
           value = delay_line->process(value);
         }
-        if (first_for_port || runtime_connection.connection.mix == Connection::Mix::Replace) {
+        if (overwrite) {
           dest[i] = value;
         } else {
           dest[i] += value;

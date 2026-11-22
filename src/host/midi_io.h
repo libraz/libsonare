@@ -39,6 +39,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
+#include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::host {
@@ -57,6 +58,14 @@ namespace detail {
 /// Adds a non-negative frame offset without wrapping the signed timeline.
 inline int64_t saturating_add_nonnegative(int64_t base, int64_t offset) noexcept {
   return offset <= 0 ? base : numeric::saturating_add(base, offset);
+}
+
+/// Stable in-place sort of drained events by render frame.
+inline void sort_by_render_frame(midi::MidiEvent* events, size_t count) noexcept {
+  insertion_sort(events, events + count,
+                 [](const midi::MidiEvent& lhs, const midi::MidiEvent& rhs) {
+                   return lhs.render_frame < rhs.render_frame;
+                 });
 }
 
 /// Computes an exclusive block end and reports when the mathematical end is
@@ -358,15 +367,7 @@ class FixedMidiInputSource final : public MidiInputSource {
       ++n;
     }
     publish_consumer_state(read, n);
-    for (size_t i = 1; i < n; ++i) {
-      midi::MidiEvent value = out[i];
-      size_t j = i;
-      while (j > 0 && out[j - 1].render_frame > value.render_frame) {
-        out[j] = out[j - 1];
-        --j;
-      }
-      out[j] = value;
-    }
+    detail::sort_by_render_frame(out, n);
     return n;
   }
 
@@ -421,15 +422,7 @@ class FixedMidiInputSource final : public MidiInputSource {
       ++n;
     }
     publish_consumer_state(read, n);
-    for (size_t i = 1; i < n; ++i) {
-      midi::MidiEvent value = out[i];
-      size_t j = i;
-      while (j > 0 && out[j - 1].render_frame > value.render_frame) {
-        out[j] = out[j - 1];
-        --j;
-      }
-      out[j] = value;
-    }
+    detail::sort_by_render_frame(out, n);
     return n;
   }
 
