@@ -1,5 +1,6 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
+import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
 import {
@@ -9,10 +10,6 @@ import {
   requestOnly,
   sampleOneShot,
 } from './validation.js';
-
-function requireModule() {
-  return getSonareModule();
-}
 
 /** How `formantFactor` relates to the pitch shift in {@link voiceChange}. */
 export type FormantMode = 'relative' | 'absolute';
@@ -69,7 +66,7 @@ export function voiceChange(...args: unknown[]): Float32Array {
     assertAudioInput(request.samples, request.sampleRate, request);
     const formantMode = request.formantMode ?? 'relative';
     assertString(formantMode, 'formantMode');
-    return requireModule().voiceChange(
+    return getSonareModule().voiceChange(
       request.samples,
       request.sampleRate,
       request.pitchSemitones ?? 0.0,
@@ -106,7 +103,7 @@ export function realtimeVoiceChangerRender(
   return withEntry('realtimeVoiceChangerRender', () => {
     const fnName = 'realtimeVoiceChangerRender';
     const req = requestOnly<RealtimeVoiceChangerRenderRequest>(fnName, [request]);
-    if (req.sampleRate === undefined || req.sampleRate === null) {
+    if (isAbsent(req.sampleRate)) {
       throw refuseType(`sampleRate must be a number`);
     }
     assertAudioChannels(req.channels, req.sampleRate, req);
@@ -121,7 +118,7 @@ export function realtimeVoiceChangerRender(
     const native = withEntry('realtimeVoiceChangerRender', () =>
       nativeVoiceConfig(req.config ?? 'neutralMonitor'),
     );
-    const out = requireModule().realtimeVoiceChangerRender(
+    const out = getSonareModule().realtimeVoiceChangerRender(
       interleavePlanes(planes),
       req.sampleRate,
       typeof native === 'string' ? native : JSON.stringify(native),

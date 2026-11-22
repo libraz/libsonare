@@ -1,6 +1,7 @@
 import { resolveSampleBound } from '../validation.js';
 import { type Respelled, refuse } from './entry.js';
 import { requireOneOf } from './one_of.js';
+import { isAbsent } from './value_guards.js';
 
 /**
  * Resolves one punch bound, given as exactly one of quarter notes, samples or seconds, into
@@ -18,7 +19,7 @@ export function capturePunchBound(
   const [ppqName, sampleName, secName] = names;
   const given = requireOneOf(
     names.map((name) => `punch.${name}`),
-    [ppq, sample, sec].map((value) => value !== undefined && value !== null),
+    [ppq, sample, sec].map((value) => !isAbsent(value)),
   );
   if (given !== 0) {
     return resolveSampleBound(

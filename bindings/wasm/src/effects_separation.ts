@@ -15,10 +15,6 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Canonical request form for HPSS. */
 export interface HpssRequest {
   /** Mono input audio. */
@@ -103,7 +99,7 @@ export function hpss(...args: unknown[]): HpssResult {
     const kernelHarmonic = r.kernelHarmonic ?? 31;
     const kernelPercussive = r.kernelPercussive ?? 31;
     assertHpssKernels(kernelHarmonic, kernelPercussive);
-    return requireModule().hpss(
+    return getSonareModule().hpss(
       r.samples,
       r.sampleRate,
       kernelHarmonic,
@@ -132,7 +128,7 @@ export function harmonic(...args: unknown[]): Float32Array {
   return withEntry('harmonic', () => {
     const r = sampleOneShot<HarmonicRequest>('harmonic', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().harmonic(r.samples, r.sampleRate);
+    return getSonareModule().harmonic(r.samples, r.sampleRate);
   });
 }
 
@@ -152,6 +148,6 @@ export function percussive(...args: unknown[]): Float32Array {
   return withEntry('percussive', () => {
     const r = sampleOneShot<PercussiveRequest>('percussive', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().percussive(r.samples, r.sampleRate);
+    return getSonareModule().percussive(r.samples, r.sampleRate);
   });
 }

@@ -1,9 +1,9 @@
 import {
+  assertDeclaredKeys,
   entryClass,
   nameNativeError,
   refuse,
   refuseType,
-  refuseUnknownKey,
   withEntry,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
@@ -165,11 +165,7 @@ export class RealtimeVoiceChanger {
     if (!isNonArrayObject(options)) {
       throw refuseType(`options must be an object with a sampleRate`);
     }
-    for (const key of Object.keys(options)) {
-      if (!CONSTRUCTOR_KEYS.includes(key)) {
-        throw refuseUnknownKey(key, CONSTRUCTOR_KEYS);
-      }
-    }
+    assertDeclaredKeys(options, CONSTRUCTOR_KEYS, '');
     assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
     const numChannels = options.numChannels;

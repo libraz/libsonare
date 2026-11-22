@@ -14,10 +14,6 @@ import {
   tuningCentsFromNative,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 // ============================================================================
 // Features - Pitch
 // ============================================================================
@@ -96,7 +92,7 @@ export function piptrack(...args: unknown[]): PiptrackResult {
     const fminHz = r.fminHz ?? 150;
     const fmaxHz = r.fmaxHz ?? 4000;
     assertFrequencyBounds(fminHz, fmaxHz, 'fminHz', 'fmaxHz');
-    const native = requireModule().piptrack(
+    const native = getSonareModule().piptrack(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -133,7 +129,7 @@ export function pitchYin(...args: unknown[]): PitchResult {
     const f0MaxHz = r.f0MaxHz ?? 2093.0;
     assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
     return toPitchResult(
-      requireModule().pitchYin(
+      getSonareModule().pitchYin(
         r.samples,
         r.sampleRate,
         r.frameLength ?? 2048,
@@ -161,7 +157,7 @@ export function pitchPyin(...args: unknown[]): PitchResult {
     const f0MaxHz = r.f0MaxHz ?? 2093.0;
     assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
     return toPitchResult(
-      requireModule().pitchPyin(
+      getSonareModule().pitchPyin(
         r.samples,
         r.sampleRate,
         r.frameLength ?? 2048,
@@ -234,7 +230,7 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
     if (r.f0Hz?.length !== voicing.length) {
       throw refuse(`${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`);
     }
-    return requireModule().noteSegments(r.f0Hz, prob ?? null, flags, r.frameRate, {
+    return getSonareModule().noteSegments(r.f0Hz, prob ?? null, flags, r.frameRate, {
       segmentationThresholdCents: r.segmentationThresholdCents,
       minNoteMs: r.minNoteMs,
       referenceHz: r.referenceHz,
@@ -285,7 +281,7 @@ export function pitchTuning(...args: unknown[]): number {
     const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
     assertFloat32Array(r.frequencies, 'frequencies');
     const binsPerOctave = r.binsPerOctave ?? 12;
-    const bins = requireModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);
+    const bins = getSonareModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);
     return tuningCentsFromNative((bins * 12) / binsPerOctave);
   });
 }
@@ -301,7 +297,7 @@ export function pitchTuning(...args: unknown[]): number {
  */
 export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
   return withEntry('tuningToReferenceHz', () => {
-    return requireModule().tuningToReferenceHz(tuningCents, a4Hz);
+    return getSonareModule().tuningToReferenceHz(tuningCents, a4Hz);
   });
 }
 
@@ -315,7 +311,7 @@ export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
  */
 export function referenceHzToTuning(referenceHz: number, a4Hz = 440): number {
   return withEntry('referenceHzToTuning', () => {
-    return requireModule().referenceHzToTuning(referenceHz, a4Hz);
+    return getSonareModule().referenceHzToTuning(referenceHz, a4Hz);
   });
 }
 
@@ -337,7 +333,7 @@ export function estimateTuning(...args: unknown[]): number {
     const r = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const binsPerOctave = r.binsPerOctave ?? 12;
-    const bins = requireModule().estimateTuning(
+    const bins = getSonareModule().estimateTuning(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,

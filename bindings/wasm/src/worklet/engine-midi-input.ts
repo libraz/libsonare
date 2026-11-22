@@ -1,4 +1,5 @@
 import { refuseType } from '../internal/entry.js';
+import { isAbsent } from '../internal/value_guards.js';
 import type { RequestFn } from '../request_keys.js';
 import { assertNonNegativeScalar, requestObject, resolveRenderFrame } from '../validation.js';
 
@@ -43,12 +44,12 @@ function contextTimeOption(
   positionName: string,
   positionGiven: boolean,
 ): number | undefined {
-  if (options === undefined || options === null) {
+  if (isAbsent(options)) {
     return undefined;
   }
   requestObject(method, options, 'options', true);
   const contextTimeSec = options.contextTimeSec;
-  if (contextTimeSec === undefined || contextTimeSec === null) {
+  if (isAbsent(contextTimeSec)) {
     return undefined;
   }
   if (positionGiven) {
@@ -81,12 +82,7 @@ export function resolveMidiTrackTiming(
   renderFrame: number | null | undefined,
   options: SonareEngineMidiTimingOptions | null | undefined,
 ): MidiTrackTiming {
-  const contextTimeSec = contextTimeOption(
-    method,
-    options,
-    'renderFrame',
-    renderFrame !== undefined && renderFrame !== null,
-  );
+  const contextTimeSec = contextTimeOption(method, options, 'renderFrame', !isAbsent(renderFrame));
   const frame = resolveRenderFrame(renderFrame);
   return contextTimeSec === undefined
     ? { renderFrame: frame }

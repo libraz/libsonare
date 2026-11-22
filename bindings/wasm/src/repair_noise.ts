@@ -15,10 +15,6 @@ import type {
 } from './public_types_repair.js';
 import { assertAudioChannels, assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */
 export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
 
@@ -93,7 +89,7 @@ export function masteringRepairDenoiseClassical(...args: unknown[]): DenoiseResu
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDenoiseClassical(
+    return getSonareModule().masteringRepairDenoiseClassical(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),
@@ -148,7 +144,7 @@ export function masteringRepairDenoiseClassicalStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return sharedReportResult(
-      requireModule().masteringRepairDenoiseClassicalStereo(
+      getSonareModule().masteringRepairDenoiseClassicalStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -204,7 +200,7 @@ export function masteringRepairDenoiseClassicalLinked(
     );
     assertAudioChannels(r.channels, r.sampleRate, r);
     return sharedReportResult(
-      requireModule().masteringRepairDenoiseClassicalLinked(
+      getSonareModule().masteringRepairDenoiseClassicalLinked(
         r.channels,
         r.sampleRate,
         repairNativeOptions(r),
@@ -274,7 +270,7 @@ export function masteringRepairDehum(...args: unknown[]): DehumResult {
   return withEntry('masteringRepairDehum', () => {
     const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
+    return getSonareModule().masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
   });
 }
 
@@ -298,7 +294,7 @@ export function masteringRepairDehumStereo(...args: unknown[]): MasteringRepairD
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return pairedResult(
-      requireModule().masteringRepairDehumStereo(
+      getSonareModule().masteringRepairDehumStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -360,7 +356,7 @@ export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetect
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDetectNoiseFloor(
+    return getSonareModule().masteringRepairDetectNoiseFloor(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),
@@ -407,7 +403,7 @@ export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
       'masteringRepairNoiseBandBins',
       args,
     );
-    return requireModule().masteringRepairNoiseBandBins(r.nFft ?? 1024, r.sampleRate);
+    return getSonareModule().masteringRepairNoiseBandBins(r.nFft ?? 1024, r.sampleRate);
   });
 }
 
@@ -433,7 +429,7 @@ export function masteringRepairDetectHum(...args: unknown[]): HumDetection {
   return withEntry('masteringRepairDetectHum', () => {
     const r = sampleOneShot<MasteringRepairDetectHumRequest>('masteringRepairDetectHum', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDetectHum(
+    return getSonareModule().masteringRepairDetectHum(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),

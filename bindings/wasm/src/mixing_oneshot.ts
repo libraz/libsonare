@@ -1,7 +1,7 @@
-import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { panModeToNative } from './internal/mix_scene.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MixMeterSnapshot,
@@ -18,14 +18,10 @@ import {
   requireBoolean,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Names of the built-in mixing scene presets accepted by {@link mixingScenePreset}. */
 export function mixingScenePresetNames(): MixScenePreset[] {
   return withEntry('mixingScenePresetNames', () => {
-    return Array.from(requireModule().mixingScenePresetNames()) as MixScenePreset[];
+    return Array.from(getSonareModule().mixingScenePresetNames()) as MixScenePreset[];
   });
 }
 
@@ -46,7 +42,7 @@ export function mixingScenePreset(name: MixScenePreset): MixSceneDocument {
     if (!names.includes(name)) {
       throw refuse(`name must be one of ${names.join(', ')}`);
     }
-    return JSON.parse(requireModule().mixingScenePresetJson(name)) as MixSceneDocument;
+    return JSON.parse(getSonareModule().mixingScenePresetJson(name)) as MixSceneDocument;
   });
 }
 
@@ -129,11 +125,7 @@ export function mixStereo(...args: unknown[]): MixResult {
       if (!isNonArrayObject(strip)) {
         throw refuseType(`${path} must be an object`);
       }
-      for (const key of Object.keys(strip)) {
-        if (!(STRIP_KEYS as readonly string[]).includes(key)) {
-          throw refuseUnknownKey(`${path}.${key}`, STRIP_KEYS);
-        }
-      }
+      assertDeclaredKeys(strip, STRIP_KEYS, path);
       assertAudioInput(strip.left, req.sampleRate, req, `${path}.left`);
       assertAudioInput(strip.right, req.sampleRate, req, `${path}.right`);
       if (strip.left.length !== strip.right.length) {
@@ -143,15 +135,15 @@ export function mixStereo(...args: unknown[]): MixResult {
       right.push(strip.right);
       const given: Record<string, unknown> = {};
       for (const key of STRIP_NUMBER_KEYS) {
-        if (strip[key] !== undefined && strip[key] !== null) {
+        if (!isAbsent(strip[key])) {
           assertNumber(strip[key], `${path}.${key}`);
           given[key] = strip[key];
         }
       }
-      if (strip.panMode !== undefined && strip.panMode !== null) {
+      if (!isAbsent(strip.panMode)) {
         given.panMode = panModeToNative(strip.panMode, `${path}.panMode`);
       }
-      if (strip.muted !== undefined && strip.muted !== null) {
+      if (!isAbsent(strip.muted)) {
         given.muted = requireBoolean(strip.muted, `${path}.muted`);
       }
       for (const [key, value] of Object.entries(given)) {
@@ -161,7 +153,7 @@ export function mixStereo(...args: unknown[]): MixResult {
         options[key] = column;
       }
     });
-    const native = requireModule().mixStereo(left, right, req.sampleRate, options);
+    const native = getSonareModule().mixStereo(left, right, req.sampleRate, options);
     return {
       left: native.left,
       right: native.right,

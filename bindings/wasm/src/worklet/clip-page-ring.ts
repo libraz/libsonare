@@ -1,5 +1,6 @@
 import type { ClipPagePageRequest } from '../clip_page_streamer.js';
 import { refuse, withEntry } from '../internal/entry.js';
+import { UINT32_MAX } from '../internal/value_guards.js';
 import {
   loadSonareRingCursor,
   type RingCapacityOptions,
@@ -94,10 +95,10 @@ export function pushSonareClipPageRequestRingBuffer(
   if (
     !Number.isSafeInteger(clipId) ||
     clipId < 0 ||
-    clipId > 0xffff_ffff ||
+    clipId > UINT32_MAX ||
     !Number.isSafeInteger(pageIndex) ||
     pageIndex < 0 ||
-    pageIndex > 0xffff_ffff
+    pageIndex > UINT32_MAX
   ) {
     Atomics.add(ring.header, 4, 1);
     return false;

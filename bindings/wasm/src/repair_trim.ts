@@ -13,10 +13,6 @@ import type {
 } from './public_types_repair.js';
 import { assertAudioInput, requestOnly, resolveSampleBound, sampleOneShot } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Trimming modes accepted by `masteringRepairTrimSilence`. */
 export type TrimSilenceMode = 'peak' | 'lufsGated';
 
@@ -89,7 +85,7 @@ export function masteringRepairTrimSilence(...args: unknown[]): TrimSilenceResul
     assertAudioInput(r.samples, r.sampleRate, r);
     const trim = nativeTrimOptions(r, r.sampleRate);
     return withRespelled(trim.respelled, () =>
-      requireModule().masteringRepairTrimSilence(r.samples, r.sampleRate, trim.options),
+      getSonareModule().masteringRepairTrimSilence(r.samples, r.sampleRate, trim.options),
     );
   });
 }
@@ -158,7 +154,12 @@ export function masteringRepairTrimSilenceStereo(
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     const trim = nativeTrimOptions(r, r.sampleRate);
     const native = withRespelled(trim.respelled, () =>
-      requireModule().masteringRepairTrimSilenceStereo(r.left, r.right, r.sampleRate, trim.options),
+      getSonareModule().masteringRepairTrimSilenceStereo(
+        r.left,
+        r.right,
+        r.sampleRate,
+        trim.options,
+      ),
     );
     return {
       channels: [native.left, native.right],
@@ -216,7 +217,7 @@ export function masteringRepairDetectTrimRange(...args: unknown[]): TrimRange {
     assertAudioInput(r.samples, r.sampleRate, r);
     const trim = nativeTrimOptions(r, r.sampleRate);
     return withRespelled(trim.respelled, () =>
-      requireModule().masteringRepairDetectTrimRange(r.samples, r.sampleRate, trim.options),
+      getSonareModule().masteringRepairDetectTrimRange(r.samples, r.sampleRate, trim.options),
     );
   });
 }
@@ -252,7 +253,7 @@ export function masteringRepairDetectTrimRangeStereo(...args: unknown[]): TrimRa
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     const trim = nativeTrimOptions(r, r.sampleRate);
     return withRespelled(trim.respelled, () =>
-      requireModule().masteringRepairDetectTrimRangeStereo(
+      getSonareModule().masteringRepairDetectTrimRangeStereo(
         r.left,
         r.right,
         r.sampleRate,

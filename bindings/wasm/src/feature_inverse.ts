@@ -27,10 +27,6 @@ import {
   toMatrix2D,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** The `nFft` / `hopLength` pair of a Griffin-Lim inverse: an omitted hop is left to the core. */
 function resolveInverseFftOptions(
   nFft: unknown,
@@ -152,7 +148,7 @@ export function melToStft(...args: unknown[]): Matrix2D {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    const native = requireModule().melToStft(
+    const native = getSonareModule().melToStft(
       power.data,
       power.rows,
       power.cols,
@@ -188,7 +184,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    return requireModule().melToAudio(
+    return getSonareModule().melToAudio(
       power.data,
       power.rows,
       power.cols,
@@ -224,7 +220,7 @@ export function griffinLim(...args: unknown[]): Float32Array {
     const fft = resolveInverseFftOptions(r.nFft ?? (magnitude.rows - 1) * 2, r.hopLength);
     assertGriffinLimFftSize(magnitude.rows, fft.nFft);
     const nIter = r.nIter ?? 32;
-    return requireModule().griffinLim(
+    return getSonareModule().griffinLim(
       magnitude.data,
       magnitude.rows,
       magnitude.cols,
@@ -250,7 +246,7 @@ export function mfccToMel(...args: unknown[]): Matrix2D {
     const coefficients = assertMatrix2D(r.coefficients, 'coefficients');
     const nMels = r.nMels ?? 128;
     assertInt32(nMels, 'nMels');
-    const native = requireModule().mfccToMel(
+    const native = getSonareModule().mfccToMel(
       coefficients.data,
       coefficients.rows,
       coefficients.cols,
@@ -285,7 +281,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    return requireModule().mfccToAudio(
+    return getSonareModule().mfccToAudio(
       coefficients.data,
       coefficients.rows,
       coefficients.cols,
@@ -343,6 +339,6 @@ export function phaseVocoder(...args: unknown[]): Float32Array {
     assertFiniteScalar(r.speedRatio, 'speedRatio');
     assertPositiveFloatValue(r.speedRatio, 'speedRatio');
     const { nFft, hopLength } = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return requireModule().phaseVocoder(r.samples, r.sampleRate, r.speedRatio, nFft, hopLength);
+    return getSonareModule().phaseVocoder(r.samples, r.sampleRate, r.speedRatio, nFft, hopLength);
   });
 }

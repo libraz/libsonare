@@ -13,10 +13,6 @@ import type {
 } from './public_types_repair.js';
 import { assertAudioChannels, assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Options for `masteringRepairDereverbClassical`. */
 export interface DereverbClassicalOptions {
   /** Late-reverberation threshold relative to a bin's own power, in [0, 1]; `0` suppresses every bin carrying late energy. Default `0`. */
@@ -100,7 +96,7 @@ export function masteringRepairDereverbClassical(...args: unknown[]): DereverbRe
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDereverbClassical(
+    return getSonareModule().masteringRepairDereverbClassical(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),
@@ -157,7 +153,7 @@ export function masteringRepairDereverbClassicalStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return sharedReportResult(
-      requireModule().masteringRepairDereverbClassicalStereo(
+      getSonareModule().masteringRepairDereverbClassicalStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -217,7 +213,7 @@ export function masteringRepairDereverbClassicalLinked(
     );
     assertAudioChannels(r.channels, r.sampleRate, r);
     return sharedReportResult(
-      requireModule().masteringRepairDereverbClassicalLinked(
+      getSonareModule().masteringRepairDereverbClassicalLinked(
         r.channels,
         r.sampleRate,
         repairNativeOptions(r),
@@ -283,7 +279,7 @@ export function masteringRepairDereverbConfigForRoom(...args: unknown[]): Dereve
       throw refuseType('estimate must be a room estimate');
     }
     const { estimate, ...config } = r;
-    return requireModule().masteringRepairDereverbConfigForRoom(estimate, config);
+    return getSonareModule().masteringRepairDereverbConfigForRoom(estimate, config);
   });
 }
 
@@ -323,7 +319,7 @@ export function masteringRepairDetectReverb(...args: unknown[]): ReverbDetection
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringRepairDetectReverb(
+    return getSonareModule().masteringRepairDetectReverb(
       r.samples,
       r.sampleRate,
       repairNativeOptions(r),

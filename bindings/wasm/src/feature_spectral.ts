@@ -14,10 +14,6 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Spectral centroid request. */
 export interface SpectralCentroidRequest {
   /** Mono audio samples. */
@@ -173,7 +169,7 @@ export function spectralCentroid(...args: unknown[]): Float32Array {
   return withEntry('spectralCentroid', () => {
     const r = sampleOneShot<SpectralCentroidRequest>('spectralCentroid', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().spectralCentroid(
+    return getSonareModule().spectralCentroid(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -207,7 +203,7 @@ export function spectralContrast(...args: unknown[]): Matrix2D {
     assertAudioInput(r.samples, r.sampleRate, r);
     const fminHz = r.fminHz ?? 200.0;
     assertPositiveFloatValue(fminHz, 'fminHz');
-    return requireModule().spectralContrast(
+    return getSonareModule().spectralContrast(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -234,7 +230,7 @@ export function polyFeatures(...args: unknown[]): Matrix2D {
   return withEntry('polyFeatures', () => {
     const r = sampleOneShot<PolyFeaturesRequest>('polyFeatures', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().polyFeatures(
+    return getSonareModule().polyFeatures(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -257,7 +253,7 @@ export function zeroCrossings(...args: unknown[]): Int32Array {
   return withEntry('zeroCrossings', () => {
     const r = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().zeroCrossings(
+    return getSonareModule().zeroCrossings(
       r.samples,
       r.threshold ?? 1e-10,
       requireBoolean(r.refMagnitude ?? false, 'refMagnitude'),
@@ -280,7 +276,7 @@ export function spectralBandwidth(...args: unknown[]): Float32Array {
   return withEntry('spectralBandwidth', () => {
     const r = sampleOneShot<SpectralBandwidthRequest>('spectralBandwidth', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().spectralBandwidth(
+    return getSonareModule().spectralBandwidth(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -303,7 +299,7 @@ export function spectralRolloff(...args: unknown[]): Float32Array {
   return withEntry('spectralRolloff', () => {
     const r = sampleOneShot<SpectralRolloffRequest>('spectralRolloff', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().spectralRolloff(
+    return getSonareModule().spectralRolloff(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -326,7 +322,7 @@ export function spectralFlatness(...args: unknown[]): Float32Array {
   return withEntry('spectralFlatness', () => {
     const r = sampleOneShot<SpectralFlatnessRequest>('spectralFlatness', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().spectralFlatness(
+    return getSonareModule().spectralFlatness(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -348,7 +344,7 @@ export function spectralFlux(...args: unknown[]): Float32Array {
   return withEntry('spectralFlux', () => {
     const r = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().spectralFlux(
+    return getSonareModule().spectralFlux(
       r.samples,
       r.sampleRate,
       r.nFft ?? 2048,
@@ -371,7 +367,7 @@ export function zeroCrossingRate(...args: unknown[]): Float32Array {
   return withEntry('zeroCrossingRate', () => {
     const r = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().zeroCrossingRate(
+    return getSonareModule().zeroCrossingRate(
       r.samples,
       r.sampleRate,
       r.frameLength ?? 2048,
@@ -393,7 +389,7 @@ export function rmsEnergy(...args: unknown[]): Float32Array {
   return withEntry('rmsEnergy', () => {
     const r = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().rmsEnergy(
+    return getSonareModule().rmsEnergy(
       r.samples,
       r.sampleRate,
       r.frameLength ?? 2048,

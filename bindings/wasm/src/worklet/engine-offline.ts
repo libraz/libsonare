@@ -8,7 +8,7 @@ import { capturePunchBound } from '../internal/capture_punch.js';
 import { refuse, refuseType, withEntry } from '../internal/entry.js';
 import { requireListBudget } from '../internal/list_budget.js';
 import { assignMarkerIds } from '../internal/marker_ids.js';
-import { isNonArrayObject } from '../internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from '../internal/value_guards.js';
 import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
 import {
@@ -65,7 +65,7 @@ export function buildCaptureConfig(
   }
   const source = rawSource;
   let monitor = { enabled: true, gain: 1 };
-  if (options.inputMonitor !== undefined && options.inputMonitor !== null) {
+  if (!isAbsent(options.inputMonitor)) {
     requireObject('inputMonitor', options.inputMonitor);
     const gain = options.inputMonitor.gain ?? 1;
     assertFloatValue(gain, 'inputMonitor.gain');
@@ -75,7 +75,7 @@ export function buildCaptureConfig(
     };
   }
   let punch: { startSample: number; endSample: number } | undefined;
-  if (options.punch !== undefined && options.punch !== null) {
+  if (!isAbsent(options.punch)) {
     requireObject('punch', options.punch);
     const { punch: window } = options;
     punch = {

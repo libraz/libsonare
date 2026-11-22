@@ -2,6 +2,7 @@ import { ErrorCode, isSonareError, type SonareError } from './errors.js';
 import { codedError, entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
 import { errorText, failureFromPayload } from './internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
+import { UINT64_MAX } from './internal/value_guards.js';
 import {
   compareUint64,
   stateTokenEquals,
@@ -131,7 +132,7 @@ interface CallReply<T> {
 }
 
 function incrementDecimal(value: string): string {
-  if (compareUint64(value, '18446744073709551615') >= 0) {
+  if (compareUint64(value, UINT64_MAX) >= 0) {
     throw refuse('vocal Worker intent sequence exhausted uint64');
   }
   const digits = value.split('').map((digit) => digit.charCodeAt(0) - 48);

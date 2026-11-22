@@ -4,6 +4,7 @@
 
 import type { MasteringAudioProfileDefects } from '../public_types_mastering.js';
 import type { HumDetection, NoiseDetection } from '../public_types_repair.js';
+import { isAbsent } from './value_guards.js';
 
 /** Grouped defects as the profile and repair documents carry them, with the detection arrays typed. */
 export function audioDefectsFromNative(native: unknown): MasteringAudioProfileDefects {
@@ -42,7 +43,7 @@ const NON_NATIVE_FIELDS = new Set(['samples', 'left', 'right', 'channels', 'samp
 export function repairNativeOptions(request: object): Record<string, unknown> {
   const native: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(request)) {
-    if (!NON_NATIVE_FIELDS.has(key) && value !== undefined && value !== null) {
+    if (!NON_NATIVE_FIELDS.has(key) && !isAbsent(value)) {
       native[key] = value;
     }
   }

@@ -1,5 +1,6 @@
 import { refuse, refuseType } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { isAbsent } from './internal/value_guards.js';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
@@ -124,7 +125,7 @@ function sectionTypeToken(ordinal: number): Section['type'] {
 const ALL_MODE_ORDINALS = [0, 1, 2, 3, 4, 5, 6];
 
 export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
-  if (modes === undefined || modes === null) {
+  if (isAbsent(modes)) {
     return [];
   }
   if (typeof modes === 'string') {
@@ -157,7 +158,7 @@ const KEY_PROFILE_TOKENS = [
 ] as const;
 
 export function keyProfileValue(profile: KeyDetectionOptions['profile'] | undefined): number {
-  if (profile === undefined || profile === null) {
+  if (isAbsent(profile)) {
     return -1;
   }
   return closedSetOrdinal(profile, KEY_PROFILE_TOKENS, 'profile');
@@ -167,7 +168,7 @@ const GENRE_HINTS = ['auto', 'edm', 'electronic', 'dance', 'pop', 'classical', '
 
 /** The genre hint the module reads (`''` when none is given); an unknown token is refused here. */
 export function genreHintValue(hint: GenreHint | undefined | null): string {
-  if (hint === undefined || hint === null) {
+  if (isAbsent(hint)) {
     return '';
   }
   closedSetOrdinal(hint, GENRE_HINTS, 'genreHint');

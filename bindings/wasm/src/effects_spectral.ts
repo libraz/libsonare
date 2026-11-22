@@ -11,10 +11,6 @@ import { getSonareModule } from './module_state.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './public_types.js';
 import { assertAudioInput, resolveSampleBound, sampleOneShot } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** Spectral edit request: the audio and rate (Hz, required) plus {@link SpectralEditOptions}. */
 export interface SpectralEditRequest extends SpectralEditOptions {
   /** Mono input audio. */
@@ -107,7 +103,7 @@ export function spectralEdit(...args: unknown[]): Float32Array {
         })
       : (requestOps as SpectralRegionOp[]);
     return withRespelled(mergeRespelled(...respellings), () =>
-      requireModule().spectralEdit(
+      getSonareModule().spectralEdit(
         request.samples,
         request.sampleRate,
         nativeOps,

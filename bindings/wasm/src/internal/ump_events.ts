@@ -2,9 +2,9 @@ import type { ProjectMidiEvent } from '../project_types.js';
 import { assertBoundedInteger, assertNibble } from '../validation.js';
 import { SONARE_MAX_PUBLIC_PPQ as MAX_PUBLIC_PPQ } from '../worklet/engine-rings.js';
 import { refuse } from './entry.js';
+import { UINT32_MAX } from './value_guards.js';
 
 const MIDI2_U16_MAX = 0xffff;
-const MIDI2_U32_MAX = 0xffffffff;
 
 /** Most words one UMP packet holds. */
 export const UMP_MAX_WORDS = 4;
@@ -71,7 +71,7 @@ export function midi2Event(
 }
 
 export function midi2U32(value: unknown, argName: string): number {
-  assertBoundedInteger(value, argName, 0, MIDI2_U32_MAX);
+  assertBoundedInteger(value, argName, 0, UINT32_MAX);
   return value as number;
 }
 

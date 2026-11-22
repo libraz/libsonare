@@ -16,6 +16,7 @@ import {
 import { isVocalErrorDetail } from './internal/vocal_error_detail.js';
 import './lifetime.js';
 import { init } from './index.js';
+import { isAbsent, UINT64_MAX } from './internal/value_guards.js';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
@@ -156,7 +157,7 @@ function transferables(value: unknown): Transferable[] {
   const result: Transferable[] = [];
   const seen = new Set<ArrayBuffer>();
   const visit = (item: unknown): void => {
-    if (item === null || item === undefined || typeof item !== 'object') {
+    if (isAbsent(item) || typeof item !== 'object') {
       return;
     }
     if (ArrayBuffer.isView(item)) {
@@ -539,8 +540,6 @@ export interface VocalEditWorkerDependencies {
   /** Module initialiser awaited before serving; defaults to the production one. */
   initialize?: () => Promise<void>;
 }
-
-const UINT64_MAX = '18446744073709551615';
 
 const mutationKinds = new Set<string>([
   'beginEdit',

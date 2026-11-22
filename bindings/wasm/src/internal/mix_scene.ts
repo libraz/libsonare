@@ -6,7 +6,7 @@ import type {
 } from '../public_types_mixing.js';
 import { refuse, refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
-import { isNonArrayObject } from './value_guards.js';
+import { isAbsent, isNonArrayObject } from './value_guards.js';
 
 // The per-strip and per-bus setters take these settings as call arguments, so a wrong type or an unknown token is
 // refused here as TypeError / RangeError. A whole scene document is left to the native reader, which refuses its
@@ -40,7 +40,7 @@ function sendToNative(send: MixSceneSendInput, path: string): Loose {
   if (send === null || typeof send !== 'object') {
     throw refuseType(`${path} must be an object`);
   }
-  if (send.timing === undefined || send.timing === null) {
+  if (isAbsent(send.timing)) {
     return { ...send };
   }
   tokenOrdinal(send.timing, `${path}.timing`, SEND_TIMINGS);
@@ -48,16 +48,16 @@ function sendToNative(send: MixSceneSendInput, path: string): Loose {
 }
 
 function panFieldsToNative(out: Loose, path: string): void {
-  if (out.panMode !== undefined && out.panMode !== null) {
+  if (!isAbsent(out.panMode)) {
     tokenOrdinal(out.panMode, `${path}.panMode`, PAN_MODES);
   }
-  if (out.panLaw !== undefined && out.panLaw !== null) {
+  if (!isAbsent(out.panLaw)) {
     tokenOrdinal(out.panLaw, `${path}.panLaw`, PAN_LAWS);
   }
 }
 
 function listOf(value: unknown, path: string): unknown[] | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   if (!Array.isArray(value)) {
@@ -75,7 +75,7 @@ function objectAt(value: unknown, path: string): Loose {
 
 /** Refuses an explicit 0 oversampling factor: omit the field for the library default. */
 export function assertStripMetering(metering: unknown, path = 'metering'): void {
-  if (metering === undefined || metering === null) {
+  if (isAbsent(metering)) {
     return;
   }
   const { truePeakOversample } = objectAt(metering, path);

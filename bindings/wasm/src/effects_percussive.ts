@@ -12,10 +12,6 @@ import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
 import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertPercussiveSeparation, sampleOneShot } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /**
  * The separation a percussive event's signal is lifted out with. Extraction
  * measures events against it and rendering has to repeat it, so both calls take
@@ -202,7 +198,7 @@ export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
     assertAudioInput(samples, request.sampleRate, request);
     assertPercussiveSeparation(request);
     refuseZeroDefaults(request, ['onsetWait', 'onsetDelta', 'maxEventMs']);
-    return requireModule().extractPercussiveEvents(samples, request.sampleRate, request);
+    return getSonareModule().extractPercussiveEvents(samples, request.sampleRate, request);
   });
 }
 
@@ -279,7 +275,7 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
       true,
     );
     return withRespelled(respelled, () =>
-      requireModule().renderPercussiveEvents(samples, request.sampleRate, events, request),
+      getSonareModule().renderPercussiveEvents(samples, request.sampleRate, events, request),
     );
   });
 }

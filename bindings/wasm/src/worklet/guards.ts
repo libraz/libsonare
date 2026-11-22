@@ -1,5 +1,6 @@
 import type { EngineCaptureStatus } from '../index.js';
-import { refuse, refuseType, refuseUnknownKey } from '../internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType } from '../internal/entry.js';
+import { isAbsent, UINT32_MAX } from '../internal/value_guards.js';
 import type {
   EngineClipPageRequestMessage,
   SonareEngineCaptureRequestMessage,
@@ -482,7 +483,7 @@ export function isScopeSnapshot(value: unknown): value is WorkletScopeSnapshot {
     typeof value.targetId === 'number' &&
     Number.isSafeInteger(value.targetId) &&
     value.targetId >= 0 &&
-    value.targetId <= 0xffff_ffff &&
+    value.targetId <= UINT32_MAX &&
     typeof value.frame === 'number' &&
     Number.isSafeInteger(value.frame) &&
     value.frame >= 0 &&
@@ -523,18 +524,14 @@ export type ProcessorOptionsTable = keyof typeof PROCESSOR_OPTION_KEYS;
  * @throws TypeError naming the first undeclared key.
  */
 export function assertKnownProcessorOptions(table: ProcessorOptionsTable, options: unknown): void {
-  if (options === undefined || options === null) {
+  if (isAbsent(options)) {
     return;
   }
   if (typeof options !== 'object' || Array.isArray(options)) {
     throw refuseType(`options must be an object`);
   }
   const keys: readonly string[] = PROCESSOR_OPTION_KEYS[table];
-  for (const key of Object.keys(options)) {
-    if (!keys.includes(key)) {
-      throw refuseUnknownKey(key, keys);
-    }
-  }
+  assertDeclaredKeys(options, keys, '');
 }
 
 /**

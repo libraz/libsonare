@@ -1,6 +1,7 @@
 import { chainConfigFromJson, chainConfigJson } from './internal/chain_config.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { withRespelled } from './internal/respell.js';
+import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,
@@ -21,10 +22,6 @@ import {
   requestOnly,
   sampleOneShot,
 } from './validation.js';
-
-function requireModule() {
-  return getSonareModule();
-}
 
 /** Level statistic `normalize` targets: `'peak'` or `'rms'`. */
 export type NormalizeMode = 'peak' | 'rms';
@@ -78,7 +75,7 @@ export function normalize(...args: unknown[]): Float32Array {
     const mode = resolveNormalizeMode(r.mode);
     // The core names the signal it measures `audio`; the caller wrote `samples`.
     return withRespelled({ audio: { name: 'samples', scale: 1 } }, () =>
-      requireModule().normalize(
+      getSonareModule().normalize(
         r.samples,
         r.sampleRate,
         r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
@@ -163,7 +160,7 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
     // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
     // default -- the peaks sit well above the RMS, so every one of them clips.
     const targetDb = request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0);
-    return requireModule().normalizeStereo(
+    return getSonareModule().normalizeStereo(
       request.left,
       request.right,
       request.sampleRate,
@@ -179,7 +176,7 @@ type NativeResult = Record<string, unknown>;
 function assertChainCallbacks(request: object): void {
   for (const name of ['onProgress', 'cancel'] as const) {
     const callback = (request as Record<string, unknown>)[name];
-    if (callback !== undefined && callback !== null && typeof callback !== 'function') {
+    if (!isAbsent(callback) && typeof callback !== 'function') {
       throw refuseType(`${name} must be a function`);
     }
   }
@@ -251,7 +248,7 @@ export function streamingLoudnessGain(...args: unknown[]): StreamingLoudnessGain
     const r = sampleOneShot<StreamingLoudnessGainRequest>('streamingLoudnessGain', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     return streamingGainFromNative(
-      requireModule().masteringStreamingLoudnessGain(
+      getSonareModule().masteringStreamingLoudnessGain(
         r.samples,
         r.sampleRate,
         chainConfigJson('config', r.config),
@@ -272,7 +269,7 @@ export function streamingLoudnessGainStereo(
       throw refuse('left and right must have the same length');
     }
     return streamingGainFromNative(
-      requireModule().masteringStreamingLoudnessGainStereo(
+      getSonareModule().masteringStreamingLoudnessGainStereo(
         r.left,
         r.right,
         r.sampleRate,
@@ -341,7 +338,7 @@ export interface MasterAudioStereoRequest {
  */
 export function masteringPresetNames(): MasteringPreset[] {
   return withEntry('masteringPresetNames', () => {
-    return Array.from(requireModule().masteringPresetNames()) as MasteringPreset[];
+    return Array.from(getSonareModule().masteringPresetNames()) as MasteringPreset[];
   });
 }
 
@@ -356,7 +353,7 @@ export function masteringPresetNames(): MasteringPreset[] {
 export function masteringPresetParams(preset: MasteringPreset): MasteringChainConfig {
   return withEntry('masteringPresetParams', () => {
     assertString(preset, 'preset');
-    return chainConfigFromJson(requireModule().masteringPresetParams(preset));
+    return chainConfigFromJson(getSonareModule().masteringPresetParams(preset));
   });
 }
 
@@ -392,7 +389,7 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
 export function masteringChainConfigFromJson(document: string): MasteringChainConfig {
   return withEntry('masteringChainConfigFromJson', () => {
     assertString(document, 'document');
-    return chainConfigFromJson(requireModule().masteringChainConfigParams(document));
+    return chainConfigFromJson(getSonareModule().masteringChainConfigParams(document));
   });
 }
 
@@ -406,7 +403,7 @@ export function masteringChainConfigFromJson(document: string): MasteringChainCo
  */
 export function masteringPlatformNames(): MasteringPlatform[] {
   return withEntry('masteringPlatformNames', () => {
-    return Array.from(requireModule().masteringPlatformNames()) as MasteringPlatform[];
+    return Array.from(getSonareModule().masteringPlatformNames()) as MasteringPlatform[];
   });
 }
 
@@ -432,21 +429,18 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
   return withEntry('masterAudio', () => {
     const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
     assertChainCallbacks(r);
-    if (r.preset !== undefined && r.preset !== null) {
+    if (!isAbsent(r.preset)) {
       assertString(r.preset, 'preset');
     }
     assertAudioInput(r.samples, r.sampleRate, r);
-    if (
-      (r.preset === undefined || r.preset === null) &&
-      (r.overrides === undefined || r.overrides === null)
-    ) {
+    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
       throw refuseType('give preset or overrides');
     }
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;
     const progress = r.onProgress ?? undefined;
     const cancel = r.cancel ?? undefined;
-    const module = requireModule();
+    const module = getSonareModule();
     return module.masterAudio(
       preset,
       r.samples,
@@ -471,7 +465,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   return withEntry('masterAudioStereo', () => {
     const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
     assertChainCallbacks(r);
-    if (r.preset !== undefined && r.preset !== null) {
+    if (!isAbsent(r.preset)) {
       assertString(r.preset, 'preset');
     }
     assertSampleRate(r.sampleRate);
@@ -480,17 +474,14 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     if (r.left.length !== r.right.length) {
       throw refuse('left and right must have the same length');
     }
-    if (
-      (r.preset === undefined || r.preset === null) &&
-      (r.overrides === undefined || r.overrides === null)
-    ) {
+    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
       throw refuseType('give preset or overrides');
     }
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;
     const progress = r.onProgress ?? undefined;
     const cancel = r.cancel ?? undefined;
-    const module = requireModule();
+    const module = getSonareModule();
     return module.masterAudioStereo(
       preset,
       r.left,

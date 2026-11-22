@@ -30,10 +30,6 @@ import {
   toMatrix2DByRows,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** The audio and its sample rate, which every one-shot over samples takes. */
 interface SampleInput {
   /** Mono audio samples. */
@@ -186,7 +182,7 @@ export function nnlsChroma(...args: unknown[]): Matrix2D {
     const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
-    const result = requireModule().nnlsChroma(
+    const result = getSonareModule().nnlsChroma(
       request.samples,
       request.sampleRate,
       optionalBoolean(request.enableStftBlend, 'enableStftBlend', true),
@@ -244,7 +240,7 @@ export function cqt(
 export function cqt(...args: unknown[]): CqtResult {
   return withEntry('cqt', () => {
     return cqtFamily<CqtRequest>('cqt', args, (r, hop, fmin, nBins, bpo) =>
-      requireModule().cqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
+      getSonareModule().cqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
     );
   });
 }
@@ -262,7 +258,7 @@ export function pseudoCqt(
 export function pseudoCqt(...args: unknown[]): CqtResult {
   return withEntry('pseudoCqt', () => {
     return cqtFamily<PseudoCqtRequest>('pseudoCqt', args, (r, hop, fmin, nBins, bpo) =>
-      requireModule().pseudoCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
+      getSonareModule().pseudoCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
     );
   });
 }
@@ -280,7 +276,7 @@ export function hybridCqt(
 export function hybridCqt(...args: unknown[]): CqtResult {
   return withEntry('hybridCqt', () => {
     return cqtFamily<HybridCqtRequest>('hybridCqt', args, (r, hop, fmin, nBins, bpo) =>
-      requireModule().hybridCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
+      getSonareModule().hybridCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo, r.filterScale),
     );
   });
 }
@@ -302,7 +298,7 @@ export function vqt(
 export function vqt(...args: unknown[]): CqtResult {
   return withEntry('vqt', () => {
     return cqtFamily<VqtRequest>('vqt', args, (r, hop, fmin, nBins, bpo) =>
-      requireModule().vqt(
+      getSonareModule().vqt(
         r.samples,
         r.sampleRate,
         hop,
@@ -341,7 +337,7 @@ export function cqtToAudio(request: CqtToAudioRequest): Float32Array {
   return withEntry('cqtToAudio', () => {
     const r = requestOnly<CqtToAudioRequest>('cqtToAudio', [request]);
     const c = cqtInverseInput(r);
-    return requireModule().cqtToAudio(
+    return getSonareModule().cqtToAudio(
       r.magnitude.data,
       r.magnitude.rows,
       r.magnitude.cols,
@@ -364,7 +360,7 @@ export function vqtToAudio(request: VqtToAudioRequest): Float32Array {
   return withEntry('vqtToAudio', () => {
     const r = requestOnly<VqtToAudioRequest>('vqtToAudio', [request]);
     const c = cqtInverseInput(r);
-    return requireModule().vqtToAudio(
+    return getSonareModule().vqtToAudio(
       r.magnitude.data,
       r.magnitude.rows,
       r.magnitude.cols,
@@ -402,7 +398,7 @@ export function analyzeSections(...args: unknown[]): SectionAnalysis {
     // Symbol.species, leaving a result that structuredClone (and so postMessage to
     // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
     // plain Array before mapping.
-    const native = requireModule().analyzeSections(
+    const native = getSonareModule().analyzeSections(
       request.samples,
       request.sampleRate,
       request.nFft ?? 2048,
@@ -472,7 +468,7 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
       throw refuse('require useMfcc or useChroma');
     }
     const nativeOptions: Record<string, unknown> = { ...request };
-    const result = requireModule().detectBoundaries(samples, sampleRate, nativeOptions);
+    const result = getSonareModule().detectBoundaries(samples, sampleRate, nativeOptions);
     // Re-root the embind array as a plain Array, for the reason analyzeSections
     // spells out: chaining onto it propagates a constructor structuredClone
     // rejects, so a result posted from a Worker would fail to clone.
@@ -533,7 +529,7 @@ export function analyzeMelody(...args: unknown[]): MelodyResult {
   return withEntry('analyzeMelody', () => {
     const request = sampleOneShot<AnalyzeMelodyRequest>('analyzeMelody', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const result = requireModule().analyzeMelody(
+    const result = getSonareModule().analyzeMelody(
       request.samples,
       request.sampleRate,
       request.f0MinHz ?? 65.0,
@@ -578,7 +574,7 @@ export function onsetStrength(...args: unknown[]): Float32Array {
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
     const nMels = request.nMels ?? 128;
-    return requireModule().onsetEnvelope(
+    return getSonareModule().onsetEnvelope(
       request.samples,
       request.sampleRate,
       fft.nFft,
@@ -609,7 +605,7 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
     const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
     const nMels = request.nMels ?? 128;
     const nBands = request.nBands ?? 3;
-    const result = requireModule().onsetStrengthMulti(
+    const result = getSonareModule().onsetStrengthMulti(
       request.samples,
       request.sampleRate,
       fft.nFft,
@@ -639,7 +635,7 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
     assertSampleRate(sampleRate);
     assertSamples(r.onsetEnvelope, true, 'onsetEnvelope');
     // Native takes a `norm` flag; the normalised form is the only one exposed.
-    const result = requireModule().fourierTempogram(
+    const result = getSonareModule().fourierTempogram(
       r.onsetEnvelope,
       sampleRate,
       hopLength,
@@ -665,7 +661,7 @@ export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
     const sampleRate = r.sampleRate ?? 22050;
     const hopLength = r.hopLength ?? 512;
     assertSampleRate(sampleRate);
-    return requireModule().tempogramRatio(
+    return getSonareModule().tempogramRatio(
       tempogram.data,
       tempogram.rows,
       sampleRate,
@@ -692,7 +688,7 @@ export function lufs(...args: unknown[]): LufsResult {
   return withEntry('lufs', () => {
     const request = sampleOneShot<LufsRequest>('lufs', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const native = requireModule().lufs(request.samples, request.sampleRate);
+    const native = getSonareModule().lufs(request.samples, request.sampleRate);
     return { ...native };
   });
 }
@@ -714,7 +710,7 @@ export function momentaryLufs(...args: unknown[]): Float32Array {
   return withEntry('momentaryLufs', () => {
     const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return requireModule().momentaryLufs(request.samples, request.sampleRate);
+    return getSonareModule().momentaryLufs(request.samples, request.sampleRate);
   });
 }
 
@@ -735,6 +731,6 @@ export function shortTermLufs(...args: unknown[]): Float32Array {
   return withEntry('shortTermLufs', () => {
     const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return requireModule().shortTermLufs(request.samples, request.sampleRate);
+    return getSonareModule().shortTermLufs(request.samples, request.sampleRate);
   });
 }

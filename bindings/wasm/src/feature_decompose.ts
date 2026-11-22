@@ -19,10 +19,6 @@ import {
   toMatrix2D,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /** NMF initialisation: a deterministic random start or an SVD-based warm start. */
 export type NmfInit = 'random' | 'nndsvd';
 
@@ -179,7 +175,7 @@ export function decompose(...args: unknown[]): DecomposeResult {
     const s = assertMatrix2D(r.s, 's');
     // An empty token is the embind reader's spelling of the library's initialiser.
     const init = optionalToken(r.init, 'init', NMF_INITS) ?? '';
-    const native = requireModule().decompose(
+    const native = getSonareModule().decompose(
       s.data,
       s.rows,
       s.cols,
@@ -255,7 +251,7 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
   return withEntry('decomposeStems', () => {
     const r = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().decomposeStems(r.samples, r.sampleRate, {
+    return getSonareModule().decomposeStems(r.samples, r.sampleRate, {
       nComponents: r.nComponents,
       nFft: r.nFft,
       hopLength: r.hopLength,
@@ -320,7 +316,7 @@ export function decomposeStemsLinked(
   return withEntry('decomposeStemsLinked', () => {
     const r = requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
     assertAudioChannels(r.channels, r.sampleRate, r);
-    return requireModule().decomposeStemsLinked(r.channels, r.sampleRate, {
+    return getSonareModule().decomposeStemsLinked(r.channels, r.sampleRate, {
       nComponents: r.nComponents,
       nFft: r.nFft,
       hopLength: r.hopLength,
@@ -346,7 +342,7 @@ export function nnFilter(...args: unknown[]): Matrix2D {
     const s = assertMatrix2D(r.s, 's');
     // An empty token is the embind reader's spelling of the library's aggregate.
     const aggregate = optionalToken(r.aggregate, 'aggregate', NN_FILTER_AGGREGATES) ?? '';
-    return requireModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width);
+    return getSonareModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width);
   });
 }
 
@@ -376,7 +372,7 @@ export function remix(...args: unknown[]): Float32Array {
     // boundary the conversion changed would cut the slice somewhere the caller
     // never named.
     const intervals = toInt32Array(r.intervals, 'intervals');
-    return requireModule().remix(r.samples, intervals, r.sampleRate, alignZeros);
+    return getSonareModule().remix(r.samples, intervals, r.sampleRate, alignZeros);
   });
 }
 
@@ -408,7 +404,7 @@ export function remixAlignedIntervals(...args: unknown[]): Int32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     const alignZeros = optionalBoolean(r.alignZeros, 'alignZeros', true);
     const intervals = toInt32Array(r.intervals, 'intervals');
-    return requireModule().remixAlignedIntervals(r.samples, intervals, r.sampleRate, alignZeros);
+    return getSonareModule().remixAlignedIntervals(r.samples, intervals, r.sampleRate, alignZeros);
   });
 }
 
@@ -426,7 +422,7 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
     if (x.rows !== y.rows) {
       throw refuse('feature dimensions must match');
     }
-    const native = requireModule().segmentCrossSimilarity(
+    const native = getSonareModule().segmentCrossSimilarity(
       x.data,
       x.rows,
       x.cols,
@@ -451,7 +447,7 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceMatrix', () => {
     const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
     const data = assertMatrix2D(r.data, 'data');
-    const native = requireModule().segmentRecurrenceMatrix(
+    const native = getSonareModule().segmentRecurrenceMatrix(
       data.data,
       data.rows,
       data.cols,
@@ -476,7 +472,7 @@ export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
     const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
     const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
     assertSquare(recurrence, 'recurrence');
-    const native = requireModule().segmentRecurrenceToLag(
+    const native = getSonareModule().segmentRecurrenceToLag(
       recurrence.data,
       recurrence.rows,
       optionalBoolean(r.pad, 'pad', true),
@@ -495,7 +491,7 @@ export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
   return withEntry('segmentLagToRecurrence', () => {
     const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
     const lag = assertMatrix2D(r.lag, 'lag');
-    const native = requireModule().segmentLagToRecurrence(lag.data, lag.cols, lag.rows);
+    const native = getSonareModule().segmentLagToRecurrence(lag.data, lag.cols, lag.rows);
     return toMatrix2D(native.values, native.rows, native.cols);
   });
 }
@@ -506,7 +502,7 @@ export function segmentSubsegment(...args: unknown[]): Int32Array {
   return withEntry('segmentSubsegment', () => {
     const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
     const data = assertMatrix2D(r.data, 'data');
-    return requireModule().segmentSubsegment(
+    return getSonareModule().segmentSubsegment(
       data.data,
       data.rows,
       data.cols,
@@ -522,7 +518,7 @@ export function segmentAgglomerative(...args: unknown[]): Int32Array {
   return withEntry('segmentAgglomerative', () => {
     const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
     const data = assertMatrix2D(r.data, 'data');
-    return requireModule().segmentAgglomerative(
+    return getSonareModule().segmentAgglomerative(
       data.data,
       data.rows,
       data.cols,
@@ -543,7 +539,7 @@ export function segmentPathEnhance(...args: unknown[]): Matrix2D {
     const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
     const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
     assertSquare(recurrence, 'recurrence');
-    const native = requireModule().segmentPathEnhance(
+    const native = getSonareModule().segmentPathEnhance(
       recurrence.data,
       recurrence.rows,
       r.win,

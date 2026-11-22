@@ -9,17 +9,17 @@ import type {
   SynthPatch,
 } from './instrument_types.js';
 import {
+  assertDeclaredKeys,
   entryClass,
   invalidState,
   refuse,
   refuseType,
-  refuseUnknownKey,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject, UINT32_MAX } from './internal/value_guards.js';
 import {
   assertProjectMidiEvents,
   compSegmentsToNative,
@@ -141,7 +141,7 @@ function validateAssistSidecarUint32(value: unknown, field: string): number {
     typeof value !== 'number' ||
     !Number.isSafeInteger(value) ||
     value < 0 ||
-    value > 0xffff_ffff
+    value > UINT32_MAX
   ) {
     throw refuse(`${field} must be a uint32`);
   }
@@ -185,11 +185,7 @@ function partRigKey(key: unknown): PartRigKey {
   if (typeof key !== 'object' || key === null || Array.isArray(key)) {
     throw refuseType(`key must be an object`);
   }
-  for (const name of Object.keys(key)) {
-    if (!PART_RIG_KEY_KEYS.includes(name)) {
-      throw refuseUnknownKey(`key.${name}`, PART_RIG_KEY_KEYS);
-    }
-  }
+  assertDeclaredKeys(key, PART_RIG_KEY_KEYS, 'key');
   return key as PartRigKey;
 }
 
@@ -1044,7 +1040,7 @@ export class Project {
             },
             'builtinInstruments',
           );
-    if (instruments !== undefined && instruments !== null) {
+    if (!isAbsent(instruments)) {
       const pairs = Array.isArray(instruments) ? instruments : [instruments];
       requireListBudget(pairs, 'instruments');
       pairs.forEach((pair, index) => {
@@ -1369,7 +1365,7 @@ export class Project {
       'input',
       true,
     );
-    if (name !== undefined && name !== null && typeof name !== 'string') {
+    if (!isAbsent(name) && typeof name !== 'string') {
       throw refuseType('name must be a string');
     }
     if (name === '') {

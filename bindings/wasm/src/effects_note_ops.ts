@@ -12,6 +12,7 @@ import {
 import { codedError, mergeRespelled, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import { withRespelled } from './internal/respell.js';
+import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AssignNoteTargetsResult,
@@ -36,10 +37,6 @@ import {
   resolveSampleBound,
   sampleOneShot,
 } from './validation.js';
-
-function requireModule() {
-  return getSonareModule();
-}
 
 // Shared input checks of the entry points that take audio plus a whole F0 track,
 // returning the voicing flags in the Float32Array form the embind layer reads. A
@@ -285,7 +282,7 @@ export function noteStretch(...args: unknown[]): Float32Array {
       'offsetSec',
     );
     return withRespelled(mergeRespelled(onset.respelled, offset.respelled), () =>
-      requireModule().noteStretch(
+      getSonareModule().noteStretch(
         request.samples,
         rate,
         onset.value ?? 0,
@@ -337,7 +334,7 @@ export function noteMove(...args: unknown[]): Float32Array {
       'offsetSec',
     );
     return withRespelled(mergeRespelled(target.respelled, onset.respelled, offset.respelled), () =>
-      requireModule().noteMove(
+      getSonareModule().noteMove(
         request.samples,
         rate,
         onset.value ?? 0,
@@ -412,7 +409,7 @@ export function extractNotes(...args: unknown[]): NoteObject[] {
   return withEntry('extractNotes', () => {
     const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
     const voicedF32 = assertNoteTrack(request);
-    return requireModule().extractNotes(
+    return getSonareModule().extractNotes(
       request.samples,
       request.sampleRate,
       request.f0Hz,
@@ -518,7 +515,7 @@ export function renderNotes(...args: unknown[]): Float32Array {
       true,
     );
     return withRespelled(respelled, () =>
-      requireModule().renderNotes(request.samples, request.sampleRate, notes, options),
+      getSonareModule().renderNotes(request.samples, request.sampleRate, notes, options),
     );
   });
 }
@@ -571,7 +568,7 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
     assertFiniteScalar(request.frameRate, 'frameRate');
     const voiced = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
     assertPitchTrackLengths(request.f0Hz, request.voiced);
-    return requireModule().decomposeNotePitch(
+    return getSonareModule().decomposeNotePitch(
       request.f0Hz,
       voiced,
       request.frameRate,
@@ -640,8 +637,8 @@ export function splitNote(...args: unknown[]): NoteObject[] {
   return withEntry('splitNote', () => {
     const request = sampleOneShot<SplitNoteRequest>('splitNote', args);
     const voicedF32 = assertNoteTrack(request);
-    const hasFrame = request.frame !== undefined && request.frame !== null;
-    const hasFrameSec = request.frameSec !== undefined && request.frameSec !== null;
+    const hasFrame = !isAbsent(request.frame);
+    const hasFrameSec = !isAbsent(request.frameSec);
     requireOneOf(['frame', 'frameSec'], [hasFrame, hasFrameSec]);
     assertFloatValue(hasFrame ? request.frame : request.frameSec, hasFrame ? 'frame' : 'frameSec');
     const frame = hasFrame
@@ -658,7 +655,7 @@ export function splitNote(...args: unknown[]): NoteObject[] {
       false,
     );
     return withRespelled(respelled, () =>
-      requireModule().splitNote(
+      getSonareModule().splitNote(
         request.samples,
         request.sampleRate,
         request.f0Hz,
@@ -736,7 +733,7 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
       false,
     );
     return withRespelled(respelled, () =>
-      requireModule().mergeNotes(
+      getSonareModule().mergeNotes(
         request.samples,
         request.sampleRate,
         request.f0Hz,
@@ -784,7 +781,7 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
 export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
   return withEntry('noteTargetsFromSmf', () => {
     requestObject('noteTargetsFromSmf', request, 'request', true);
-    const module = requireModule();
+    const module = getSonareModule();
     if (typeof module.noteTargetsFromSmf !== 'function') {
       throw codedError(ErrorCode.NotSupported, 'libsonare was built without arrangement support');
     }
@@ -841,7 +838,7 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
 export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNoteTargetsResult {
   return withEntry('assignNoteTargets', () => {
     requestObject('assignNoteTargets', request, 'request', true);
-    return requireModule().assignNoteTargets(
+    return getSonareModule().assignNoteTargets(
       request.notes,
       request.sampleRate,
       request.targets,

@@ -1,4 +1,5 @@
 import { withEntry } from './internal/entry.js';
+import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import {
   assertAudioInput,
@@ -6,10 +7,6 @@ import {
   requireToken,
   sampleOneShot,
 } from './validation.js';
-
-function requireModule() {
-  return getSonareModule();
-}
 
 // ============================================================================
 // Mastering — offline dynamics processors (compressor / gate / transient_shaper)
@@ -168,11 +165,11 @@ export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcess
     );
     assertAudioInput(r.samples, r.sampleRate, r);
     const opts = nativeOptions(r);
-    if (r.detector !== undefined && r.detector !== null) {
+    if (!isAbsent(r.detector)) {
       const token = requireToken(r.detector, 'detector', COMPRESSOR_DETECTOR_TOKENS, 'peak');
       opts.detector = COMPRESSOR_DETECTOR_ORDINAL[token];
     }
-    return requireModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
+    return getSonareModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
   });
 }
 
@@ -189,10 +186,10 @@ export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResu
   return withEntry('masteringDynamicsGate', () => {
     const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    if (r.keyHighPassHz !== undefined && r.keyHighPassHz !== null) {
+    if (!isAbsent(r.keyHighPassHz)) {
       assertNonNegativeFloatValue(r.keyHighPassHz, 'keyHighPassHz');
     }
-    return requireModule().masteringDynamicsGate(r.samples, r.sampleRate, nativeOptions(r));
+    return getSonareModule().masteringDynamicsGate(r.samples, r.sampleRate, nativeOptions(r));
   });
 }
 
@@ -212,6 +209,6 @@ export function masteringDynamicsTransientShaper(...args: unknown[]): DynamicsPr
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().masteringDynamicsTransientShaper(r.samples, r.sampleRate, r);
+    return getSonareModule().masteringDynamicsTransientShaper(r.samples, r.sampleRate, r);
   });
 }

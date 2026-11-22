@@ -12,6 +12,7 @@ import { failurePayload } from './internal/failure_payload.js';
 import './lifetime.js';
 import { ErrorCode, type SonareError } from './errors.js';
 import { init } from './index.js';
+import { isAbsent } from './internal/value_guards.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import { masterAudio, masterAudioStereo } from './mastering_chain.js';
 import type {
@@ -44,7 +45,7 @@ function transferableBuffers(value: unknown, seen = new Set<object>()): Transfer
   const buffers: Transferable[] = [];
   const seenBuffers = new Set<ArrayBuffer>();
   const visit = (item: unknown): void => {
-    if (item === null || item === undefined || typeof item !== 'object') {
+    if (isAbsent(item) || typeof item !== 'object') {
       return;
     }
     if (ArrayBuffer.isView(item)) {

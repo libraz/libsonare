@@ -1,13 +1,14 @@
+import { resolveEnumOrdinal } from './codes.js';
 import { chainConfigJson } from './internal/chain_config.js';
 import {
+  assertDeclaredKeys,
   entryClass,
   nameNativeError,
   refuse,
   refuseType,
-  refuseUnknownKey,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AutoGainOptions,
@@ -21,12 +22,12 @@ import type {
   StreamingRetuneConfig,
 } from './public_types.js';
 import {
+  assertClosedToken,
   assertInt32,
   assertIntegerValue,
   assertKnownRequestKeys,
   assertRetuneGrain,
   requireBoolean,
-  requireToken,
 } from './validation.js';
 
 /** Global equalizer phase mode. */
@@ -43,16 +44,10 @@ const EQ_PLACEMENT_ORDINALS: Record<EqStereoPlacement, number> = {
 
 /** Absent or null takes `'stereo'`; a non-string is a `TypeError`, an unknown token a `RangeError`. */
 function eqPlacementOrdinal(value: unknown): number {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return EQ_PLACEMENT_ORDINALS.stereo;
   }
-  if (typeof value !== 'string') {
-    throw refuseType(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);
-  }
-  if (!Object.keys(EQ_PLACEMENT_ORDINALS).includes(value)) {
-    throw refuse(`placement must be one of ${Object.keys(EQ_PLACEMENT_ORDINALS).join(', ')}`);
-  }
-  return EQ_PLACEMENT_ORDINALS[value as EqStereoPlacement];
+  return resolveEnumOrdinal(value, EQ_PLACEMENT_ORDINALS, 'placement');
 }
 
 /** One block of planar stereo audio: the left and right channels, equal in length. */
@@ -79,7 +74,7 @@ function assertConfigObject(config: unknown): asserts config is object {
 
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
 function optionalIntegerBlockSize(value: unknown): number | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   assertInt32(value, 'maxBlockSize');
@@ -387,12 +382,7 @@ function assertEqBand(band: unknown): asserts band is EqBandInput {
   if (!isNonArrayObject(band)) {
     throw refuseType('band must be an object');
   }
-  for (const key of Object.keys(band)) {
-    // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
-    if (!Object.prototype.hasOwnProperty.call(EQ_BAND_KEYS, key)) {
-      throw refuseUnknownKey(`band.${key}`, Object.keys(EQ_BAND_KEYS));
-    }
-  }
+  assertDeclaredKeys(band, Object.keys(EQ_BAND_KEYS), 'band');
 }
 
 /**
@@ -469,11 +459,11 @@ export class StreamingEqualizer {
    * any spelling other than the three tokens (numbers and synonyms included).
    */
   setPhaseMode(mode: EqPhaseMode): void {
-    if (mode === undefined || mode === null) {
+    if (isAbsent(mode)) {
       throw refuseType('mode must be a string');
     }
-    const token = requireToken(mode, 'mode', EQ_PHASE_MODES, 'zero');
-    this.eq.setPhaseMode(EQ_PHASE_MODE_ORDINALS[token]);
+    assertClosedToken(mode, EQ_PHASE_MODES, 'mode');
+    this.eq.setPhaseMode(EQ_PHASE_MODE_ORDINALS[mode]);
   }
 
   /**
@@ -672,7 +662,7 @@ function assertRetuneConfig(config: StreamingRetuneConfig): Record<string, unkno
   }
   assertKnownRequestKeys('StreamingRetune', config);
   const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
-  if (grainSizeSamples === undefined || grainSizeSamples === null) {
+  if (isAbsent(grainSizeSamples)) {
     return rest;
   }
   assertRetuneGrain(grainSizeSamples, 'grainSizeSamples');

@@ -226,7 +226,7 @@ function requireSample(value: number, field: string): number {
 
 function requireUint32(value: number, field: string): number {
   requireSample(value, field);
-  if (value > 0xffffffff) {
+  if (value > UINT32_MAX) {
     throw refuse(`${field} must fit uint32`);
   }
   return value;
@@ -237,7 +237,7 @@ function requireToken(value: string | undefined, field: string, fallback = '0'):
   if (typeof token !== 'string' || !/^(0|[1-9]\d*)$/.test(token)) {
     throw refuse(`${field} must be a canonical decimal uint64 string`);
   }
-  if (token.length > 20 || (token.length === 20 && token > '18446744073709551615')) {
+  if (token.length > 20 || (token.length === 20 && token > UINT64_MAX)) {
     throw refuse(`${field} must fit uint64`);
   }
   return token;
@@ -462,7 +462,7 @@ function copyRender(value: VocalRenderResult): VocalRenderResult {
 function nativeSessionLimits(
   limits: VocalSessionLimits | null | undefined,
 ): Record<string, unknown> | undefined {
-  if (limits === undefined || limits === null) {
+  if (isAbsent(limits)) {
     return undefined;
   }
   if (typeof limits !== 'object' || Array.isArray(limits)) {
@@ -501,7 +501,7 @@ function validateCreate(request: VocalCreateRequest): void {
   if (request.outputLengthSamples !== undefined) {
     requireSample(request.outputLengthSamples, 'outputLengthSamples');
   }
-  if (request.analysis !== undefined && request.analysis !== null) {
+  if (!isAbsent(request.analysis)) {
     const analysis = request.analysis;
     if (typeof analysis !== 'object' || Array.isArray(analysis)) {
       throw refuseType('analysis must be an object');
@@ -1109,6 +1109,8 @@ export type {
   VocalEditResult,
   VocalHistory,
 } from './public_types_vocal_edit.js';
+
+import { isAbsent, UINT32_MAX, UINT64_MAX } from './internal/value_guards.js';
 
 // The public wrappers have protected constructors so a raw handle never appears in the
 // package declaration; these subclasses are the module's only construction path.

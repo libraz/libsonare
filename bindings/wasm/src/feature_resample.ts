@@ -2,10 +2,6 @@ import { refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import { assertAudioSamples, assertInt32, requestOnly } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 // ============================================================================
 // Core - Resample
 // ============================================================================
@@ -54,6 +50,10 @@ export function resample(...args: unknown[]): Float32Array {
     assertAudioSamples(request.samples, { scanFinite: false });
     assertInt32(request.sampleRate, 'sampleRate');
     assertInt32(request.targetSampleRate, 'targetSampleRate');
-    return requireModule().resample(request.samples, request.sampleRate, request.targetSampleRate);
+    return getSonareModule().resample(
+      request.samples,
+      request.sampleRate,
+      request.targetSampleRate,
+    );
   });
 }

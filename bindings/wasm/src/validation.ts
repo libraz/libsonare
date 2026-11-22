@@ -1,7 +1,13 @@
-import { type Respelled, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import {
+  assertDeclaredKeys,
+  type Respelled,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject, isPlainRecord, UINT32_MAX } from './internal/value_guards.js';
 import type { Matrix2D } from './public_types.js';
 import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_keys.js';
 
@@ -159,8 +165,8 @@ export function assertFrequencyBounds(
   minName: string,
   maxName: string,
 ): void {
-  const hasMin = min !== undefined && min !== null;
-  const hasMax = max !== undefined && max !== null;
+  const hasMin = !isAbsent(min);
+  const hasMax = !isAbsent(max);
   if (hasMin) {
     assertPositiveFloatValue(min, minName);
   }
@@ -243,7 +249,7 @@ export function requireBoolean(value: unknown, argName: string): boolean {
 
 /** An optional boolean: `undefined` and `null` take the fallback, any other non-boolean is a `TypeError`. */
 export function optionalBoolean(value: unknown, argName: string, fallback: boolean): boolean {
-  return value === undefined || value === null ? fallback : requireBoolean(value, argName);
+  return isAbsent(value) ? fallback : requireBoolean(value, argName);
 }
 
 /** A string argument the native layer reads through embind; anything else is a `TypeError`, never a raw `BindingError`. */
@@ -255,7 +261,7 @@ export function assertString(value: unknown, argName: string): void {
 
 /** An optional string: `undefined` and `null` take the fallback, any other non-string is a `TypeError`. */
 export function optionalString(value: unknown, argName: string, fallback: string): string {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return fallback;
   }
   assertString(value, argName);
@@ -452,7 +458,7 @@ export function assertNonNegativeSafeInteger(value: number, argName: string): vo
 }
 
 export function assertU32(value: number, argName: string): void {
-  assertBoundedInteger(value, argName, 0, 0xffffffff);
+  assertBoundedInteger(value, argName, 0, UINT32_MAX);
 }
 
 /**
@@ -531,13 +537,7 @@ export function requireSampleBound(
   secName: string,
   sign: SampleBoundSign = 'non-negative',
 ): SampleBound & { readonly value: number } {
-  requireOneOf(
-    [sampleName, secName],
-    [
-      sampleValue !== undefined && sampleValue !== null,
-      secValue !== undefined && secValue !== null,
-    ],
-  );
+  requireOneOf([sampleName, secName], [!isAbsent(sampleValue), !isAbsent(secValue)]);
   return resolveSampleBound(
     sampleValue,
     secValue,
@@ -580,8 +580,8 @@ export function resolveSampleBound(
   sign: SampleBoundSign = 'non-negative',
   subject: string = sampleName,
 ): SampleBound {
-  const hasSample = sampleValue !== undefined && sampleValue !== null;
-  const hasSec = secValue !== undefined && secValue !== null;
+  const hasSample = !isAbsent(sampleValue);
+  const hasSec = !isAbsent(secValue);
   if (!hasSample && !hasSec) {
     return { value: undefined, respelled: {} };
   }
@@ -617,7 +617,7 @@ export function resolveOptionalNonNegative(
   value: number | null | undefined,
   argName: string,
 ): number {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return C_ABSENT;
   }
   if (typeof value !== 'number') {
@@ -634,7 +634,7 @@ export function resolveOptionalNonNegative(
  * (-1), and a negative frame is refused rather than read as the same thing.
  */
 export function resolveRenderFrame(renderFrame: number | null | undefined): number {
-  if (renderFrame === undefined || renderFrame === null) {
+  if (isAbsent(renderFrame)) {
     return C_ABSENT;
   }
   if (typeof renderFrame !== 'number') {
@@ -676,11 +676,7 @@ export function assertKnownRequestKeys(requestName: RequestFn, request: object):
       if (!isNonArrayObject(item)) {
         continue;
       }
-      for (const key of Object.keys(item)) {
-        if (!keys.includes(key)) {
-          throw refuseUnknownKey(`${path}.${key}`, keys);
-        }
-      }
+      assertDeclaredKeys(item, keys, path);
     }
   }
 }
@@ -722,12 +718,7 @@ export function requestObject<T>(
   argName = 'samples',
   requestOnly = false,
 ): T {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value) ||
-    ArrayBuffer.isView(value)
-  ) {
+  if (!isPlainRecord(value)) {
     if (requestOnly) {
       throw refuseType(`request must be an object`);
     }
@@ -807,16 +798,11 @@ export function optionalToken<T extends string>(
   argName: string,
   tokens: readonly T[],
 ): T | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
-  if (typeof value !== 'string') {
-    throw refuseType(`${argName} must be one of ${tokens.join(', ')}`);
-  }
-  if (!(tokens as readonly string[]).includes(value)) {
-    throw refuse(`${argName} must be one of ${tokens.join(', ')}`);
-  }
-  return value as T;
+  assertClosedToken(value, tokens, argName);
+  return value;
 }
 
 /** `estimateTuning` / `pitchTuning` report a semitone fraction (librosa mirrors); the JS surface speaks cents. */
@@ -828,15 +814,6 @@ export function tuningCentsFromNative(semitoneFraction: number): number {
 interface SampleRequest {
   samples: Float32Array;
   sampleRate: number;
-}
-
-function plainObject(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    !ArrayBuffer.isView(value)
-  );
 }
 
 function assertNoExtraArguments(args: readonly unknown[], from: number): void {
@@ -868,7 +845,7 @@ export function sampleOneShot<R extends SampleRequest>(
     const sampleRate = args[1];
     assertSampleRate(sampleRate);
     const options = args[2] ?? {};
-    if (!plainObject(options)) {
+    if (!isPlainRecord(options)) {
       throw refuseType(`options must be an object`);
     }
     for (const key of POSITIONAL_KEYS) {
@@ -879,7 +856,7 @@ export function sampleOneShot<R extends SampleRequest>(
     optionsBag(requestName, options);
     return { ...options, samples: first, sampleRate } as unknown as R;
   }
-  if (plainObject(first)) {
+  if (isPlainRecord(first)) {
     assertNoExtraArguments(args, 1);
     assertKnownRequestKeys(requestName, first);
     assertSampleRate(first.sampleRate);
@@ -895,7 +872,7 @@ export function sampleOneShot<R extends SampleRequest>(
  */
 export function requestOnly<R extends object>(requestName: RequestFn, args: readonly unknown[]): R {
   const request = args[0];
-  if (!plainObject(request)) {
+  if (!isPlainRecord(request)) {
     throw refuseType(`request must be an object`);
   }
   assertNoExtraArguments(args, 1);
@@ -911,7 +888,7 @@ export function assertSurroundPan(pan: {
 }): void {
   const check = (name: 'azimuth' | 'divergence' | 'lfe', min: number, max: number): void => {
     const value = pan[name];
-    if (value === undefined || value === null) {
+    if (isAbsent(value)) {
       return;
     }
     if (typeof value !== 'number') {

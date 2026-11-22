@@ -1,5 +1,5 @@
 import { chordQualityToken } from './analysis_helpers.js';
-import { entryClass, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { assertDeclaredKeys, entryClass, refuse, refuseType } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { windowOrdinal } from './internal/window_type.js';
@@ -271,11 +271,7 @@ export class StreamAnalyzer {
     if (!isNonArrayObject(config)) {
       throw refuseType('config must be an object with a sampleRate');
     }
-    for (const key of Object.keys(config)) {
-      if (!CONFIG_KEYS.has(key)) {
-        throw refuseUnknownKey(key, [...CONFIG_KEYS]);
-      }
-    }
+    assertDeclaredKeys(config, [...CONFIG_KEYS], '');
     if (config.window !== undefined) {
       windowOrdinal(config.window);
     }

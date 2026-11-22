@@ -4,6 +4,7 @@ import {
   automationCurveCode,
   panLawCode,
   panModeCode,
+  resolveEnumOrdinal,
   sendTimingCode,
   sidechainCheckFromCode,
   sidechainSourceKindCode,
@@ -40,7 +41,7 @@ import { MARKER_KINDS, WARP_MODES } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { assertUmpWordCount } from './internal/ump_events.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject, UINT32_MAX } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -203,7 +204,6 @@ export const EXPECTED_ENGINE_ABI_VERSION = 4;
 export const MAX_TRACK_LANES = 32;
 
 const UMP_WORD_MIN = -0x80000000;
-const UMP_WORD_MAX = 0xffffffff;
 
 // A word may be spelled `(0x4 << 28) | …`, which is a signed int once bit 31 is
 // set, so the signed 32-bit range is accepted alongside the unsigned one.
@@ -218,7 +218,7 @@ function assertUmpWords(words: UmpWords): UmpWords {
       typeof word !== 'number' ||
       !Number.isInteger(word) ||
       word < UMP_WORD_MIN ||
-      word > UMP_WORD_MAX
+      word > UINT32_MAX
     ) {
       throw refuse(`words[${i}] must be an integer 32-bit word`);
     }
@@ -259,23 +259,6 @@ const TELEMETRY_ERRORS: readonly EngineTelemetryError[] = [
   'parameterBaseOverflow',
 ];
 
-/** Resolves a closed-set string token; an ordinal is a `TypeError` and an unknown spelling a `RangeError`. */
-function tokenCode(
-  argName: string,
-  value: unknown,
-  table: Readonly<Record<string, number>>,
-): number {
-  const accepted = Object.keys(table).join(', ');
-  if (typeof value !== 'string') {
-    throw refuseType(`${argName} must be one of ${accepted}`);
-  }
-  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
-  if (!Object.prototype.hasOwnProperty.call(table, value)) {
-    throw refuse(`${argName} must be one of ${accepted}`);
-  }
-  return table[value];
-}
-
 function tokenName<T extends string>(table: Readonly<Record<T, number>>, ordinal: number): T {
   const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
   if (name === undefined) {
@@ -293,7 +276,7 @@ function noOrdinal(argName: string, value: unknown): void {
 
 /** An optional positive integer count: absent stays `undefined`, and an explicit `0` is refused. */
 function optionalCount(argName: string, value: unknown): number | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   if (typeof value !== 'number') {
@@ -320,7 +303,7 @@ function graphName(path: string, value: unknown): void {
 
 /** An optional id that names a bus: absent routes to the master mix, so an explicit `0` is refused. */
 function optionalBusId(argName: string, value: unknown): number {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return 0;
   }
   if (typeof value !== 'number') {
@@ -437,7 +420,9 @@ function nativeClip(clip: EngineClip, label: string): WasmEngineClip {
     ...rest,
     ...(warpMode === undefined
       ? {}
-      : { warpMode: tokenCode(`${label}.warpMode`, warpMode, WARP_MODES) as 0 | 1 | 2 | 3 }),
+      : {
+          warpMode: resolveEnumOrdinal(warpMode, WARP_MODES, `${label}.warpMode`) as 0 | 1 | 2 | 3,
+        }),
     ...(pageProvider === undefined
       ? {}
       : { pageProvider: nativeClipPageProviderOf(pageProvider) as WasmEngineClip['pageProvider'] }),
@@ -449,7 +434,7 @@ function nativeClip(clip: EngineClip, label: string): WasmEngineClip {
  * negative or a value past `max` is refused out of domain under the path the caller typed.
  */
 function engineCount(path: string, value: unknown, max?: number): number | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   const name = path.slice(path.lastIndexOf('.') + 1);
@@ -482,10 +467,8 @@ function midiClipsToNative(clips: ReadonlyArray<EngineMidiClipSchedule>): unknow
     const { lengthSamples, loopLengthSamples, ...rest } = clip;
     return {
       ...rest,
-      ...(lengthSamples === undefined || lengthSamples === null ? {} : { lengthSamples }),
-      ...(loopLengthSamples === undefined || loopLengthSamples === null
-        ? {}
-        : { loopLengthSamples }),
+      ...(isAbsent(lengthSamples) ? {} : { lengthSamples }),
+      ...(isAbsent(loopLengthSamples) ? {} : { loopLengthSamples }),
     };
   });
 }
@@ -495,10 +478,10 @@ function nativeMarker(marker: EngineMarker, i: number): Record<string, unknown> 
   if (name === '') {
     throw refuse(`markers[${i}].name must not be empty; omit it for an unnamed marker`);
   }
-  const named = name === undefined || name === null ? rest : { ...rest, name };
+  const named = isAbsent(name) ? rest : { ...rest, name };
   return kind === undefined
     ? named
-    : { ...named, kind: tokenCode(`markers[${i}].kind`, kind, MARKER_KINDS) };
+    : { ...named, kind: resolveEnumOrdinal(kind, MARKER_KINDS, `markers[${i}].kind`) };
 }
 
 function markerFromNative(marker: {
@@ -1930,8 +1913,8 @@ export class RealtimeEngine {
   setMetronome(config: EngineMetronomeConfig): void {
     requestObject('setMetronome', config, 'config', true);
     const { clickSamples, clickSec, ...rest } = config;
-    const hasSamples = clickSamples !== undefined && clickSamples !== null;
-    const hasSec = clickSec !== undefined && clickSec !== null;
+    const hasSamples = !isAbsent(clickSamples);
+    const hasSec = !isAbsent(clickSec);
     engineCount('clickSamples', clickSamples, METRONOME_CLICK_SAMPLES_MAX);
     if (hasSec) {
       if (typeof clickSec !== 'number') {
@@ -1992,9 +1975,9 @@ export class RealtimeEngine {
             const { type, ...node } = entry;
             return {
               ...node,
-              ...(type === undefined || type === null
+              ...(isAbsent(type)
                 ? {}
-                : { type: tokenCode(`nodes[${i}].type`, type, GRAPH_NODE_TYPES) }),
+                : { type: resolveEnumOrdinal(type, GRAPH_NODE_TYPES, `nodes[${i}].type`) }),
             };
           })
         : spec.nodes,
@@ -2008,9 +1991,9 @@ export class RealtimeEngine {
             const { mix, ...connection } = entry;
             return {
               ...connection,
-              ...(mix === undefined || mix === null
+              ...(isAbsent(mix)
                 ? {}
-                : { mix: tokenCode(`connections[${i}].mix`, mix, GRAPH_MIXES) }),
+                : { mix: resolveEnumOrdinal(mix, GRAPH_MIXES, `connections[${i}].mix`) }),
             };
           })
         : spec.connections,
@@ -2108,10 +2091,10 @@ export class RealtimeEngine {
         ...(sourceChannelLayout === undefined
           ? {}
           : {
-              sourceChannelLayout: tokenCode(
-                `lanes[${i}].sourceChannelLayout`,
+              sourceChannelLayout: resolveEnumOrdinal(
                 sourceChannelLayout,
                 CHANNEL_LAYOUT_VALUES,
+                `lanes[${i}].sourceChannelLayout`,
               ),
             }),
       };
@@ -2220,10 +2203,10 @@ export class RealtimeEngine {
               ...(channelLayout === undefined
                 ? {}
                 : {
-                    channelLayout: tokenCode(
-                      `buses[${i}].channelLayout`,
+                    channelLayout: resolveEnumOrdinal(
                       channelLayout,
                       CHANNEL_LAYOUT_VALUES,
+                      `buses[${i}].channelLayout`,
                     ),
                   }),
             };
@@ -2674,13 +2657,13 @@ export class RealtimeEngine {
       throw refuseType('capacityFrames must be an integer');
     }
     const numChannels = options.numChannels ?? 2;
-    const source = tokenCode('source', options.source ?? 'output', CAPTURE_SOURCES);
+    const source = resolveEnumOrdinal(options.source ?? 'output', CAPTURE_SOURCES, 'source');
     const offset = options.recordOffsetSamples ?? 0;
     if (typeof offset !== 'number') {
       throw refuseType('recordOffsetSamples must be an integer');
     }
     let monitor = { enabled: true, gain: 1 };
-    if (options.inputMonitor !== undefined && options.inputMonitor !== null) {
+    if (!isAbsent(options.inputMonitor)) {
       requireObject('inputMonitor', options.inputMonitor);
       const gain = options.inputMonitor.gain ?? 1;
       assertFloatValue(gain, 'inputMonitor.gain');
@@ -2690,7 +2673,7 @@ export class RealtimeEngine {
       };
     }
     let punch: { start: number; end: number; respelled: Respelled } | undefined;
-    if (options.punch !== undefined && options.punch !== null) {
+    if (!isAbsent(options.punch)) {
       requireObject('punch', options.punch);
       const start = capturePunchBound(
         options.punch.startPpq,
@@ -2902,7 +2885,9 @@ export class RealtimeEngine {
     }
     const { dither, ...rest } = options;
     const ditherCode =
-      dither === undefined ? undefined : (tokenCode('dither', dither, DITHERS) as 1 | 2 | 3);
+      dither === undefined
+        ? undefined
+        : (resolveEnumOrdinal(dither, DITHERS, 'dither') as 1 | 2 | 3);
     const bits = options.ditherBits;
     if (ditherCode !== undefined && typeof bits === 'number') {
       if (!Number.isInteger(bits)) {

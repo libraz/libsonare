@@ -1,5 +1,6 @@
 import { ErrorCode } from '../errors.js';
-import { codedError, refuse, refuseType, refuseUnknownKey } from '../internal/entry.js';
+import { assertDeclaredKeys, codedError, refuse, refuseType } from '../internal/entry.js';
+import { isAbsent, UINT32_MAX } from '../internal/value_guards.js';
 export const RING_CURSOR_RANGE = 0x1_0000_0000;
 
 // Overwrite records use one atomic state word per slot. The high bit excludes
@@ -164,7 +165,7 @@ export function resolveRingOptions<K extends string>(
   options: unknown,
   defaults: Record<K, number | undefined>,
 ): Record<K, unknown> {
-  if (options === undefined || options === null) {
+  if (isAbsent(options)) {
     options = {};
   }
   if (typeof options !== 'object' || Array.isArray(options)) {
@@ -172,11 +173,7 @@ export function resolveRingOptions<K extends string>(
   }
   const given = options as Record<string, unknown>;
   const known = new Set<string>(Object.keys(defaults));
-  for (const key of Object.keys(given)) {
-    if (!known.has(key)) {
-      throw refuseUnknownKey(key, [...known]);
-    }
-  }
+  assertDeclaredKeys(given, [...known], '');
   const resolved = {} as Record<K, unknown>;
   for (const key of Object.keys(defaults) as K[]) {
     const value = given[key] ?? defaults[key];
@@ -322,7 +319,7 @@ export function recordOffset(cursor: number, capacity: number, recordBytes: numb
  */
 export function isUint32Slot(value: number | undefined): boolean {
   return (
-    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff_ffff
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= UINT32_MAX
   );
 }
 

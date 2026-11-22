@@ -5,7 +5,7 @@ import type { EngineBus, EngineTrackLane, EngineTrackSend, RealtimeEngine } from
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { codedError, refuse, refuseType } from '../internal/entry.js';
 import { requireListBudget } from '../internal/list_budget.js';
-import { isNonArrayObject } from '../internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from '../internal/value_guards.js';
 import type {
   SonareEngineSyncMessage,
   SonareEngineSyncMixerInsertParamOverride,
@@ -723,7 +723,7 @@ export function setTrackOutputBus(
   const draft = cloneMixerRouting(ctx);
   const laneIndex = ensureTrackLaneInDraft(draft, target);
   const trackId = draft.trackLaneIds[laneIndex];
-  if (busId === null || busId === undefined) {
+  if (isAbsent(busId)) {
     draft.trackOutputBus.delete(trackId);
   } else {
     draft.trackOutputBus.set(trackId, busId);

@@ -17,10 +17,6 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-function requireModule() {
-  return getSonareModule();
-}
-
 /**
  * Time-stretch request. `sampleRate` is required (Hz); `speedRatio` is required.
  * A missing field is a `TypeError`, a non-finite or out-of-range value a `RangeError`.
@@ -109,7 +105,7 @@ export function timeStretch(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertPositiveFloatValue(r.speedRatio, 'speedRatio');
     const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return requireModule().timeStretch(
+    return getSonareModule().timeStretch(
       r.samples,
       r.sampleRate,
       r.speedRatio,
@@ -144,7 +140,7 @@ export function pitchShift(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFloatValue(r.pitchSemitones, 'pitchSemitones');
     const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return requireModule().pitchShift(
+    return getSonareModule().pitchShift(
       r.samples,
       r.sampleRate,
       r.pitchSemitones,
@@ -180,7 +176,12 @@ export function pitchCorrectToMidi(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFloatValue(r.currentMidi, 'currentMidi');
     assertFloatValue(r.targetMidi, 'targetMidi');
-    return requireModule().pitchCorrectToMidi(r.samples, r.sampleRate, r.currentMidi, r.targetMidi);
+    return getSonareModule().pitchCorrectToMidi(
+      r.samples,
+      r.sampleRate,
+      r.currentMidi,
+      r.targetMidi,
+    );
   });
 }
 
@@ -234,7 +235,7 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
       voiced: voicedF32,
       voicedProb: r.voiced == null ? (voicedProb ?? undefined) : undefined,
     };
-    return requireModule().pitchCorrectTimevarying(
+    return getSonareModule().pitchCorrectTimevarying(
       r.samples,
       r.sampleRate,
       r.f0Hz,
@@ -290,7 +291,7 @@ export function autoTune(...args: unknown[]): AutoTuneResult {
       keyModeOrdinal(keyOrDetect.mode, 'key.mode');
       nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
     }
-    const result = requireModule().autoTune(samples, sampleRate, nativeKey, options) as Omit<
+    const result = getSonareModule().autoTune(samples, sampleRate, nativeKey, options) as Omit<
       AutoTuneResult,
       'key'
     > & {

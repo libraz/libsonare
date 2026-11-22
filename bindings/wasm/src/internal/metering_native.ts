@@ -10,6 +10,7 @@ import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../va
 import { refuse, refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
 import { interleavePlanes } from './pod_config.js';
+import { isAbsent } from './value_guards.js';
 
 /**
  * An optional numeric field whose native `0` means "library default": an explicit 0 is refused,
@@ -18,7 +19,7 @@ import { interleavePlanes } from './pod_config.js';
 export function refuseZeroSentinel(request: object, fields: readonly string[]): void {
   for (const field of fields) {
     const value = (request as Record<string, unknown>)[field];
-    if (value === undefined || value === null) {
+    if (isAbsent(value)) {
       continue;
     }
     if (value === 0) {

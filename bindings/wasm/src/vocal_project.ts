@@ -1,6 +1,6 @@
-import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject, UINT32_MAX, UINT64_MAX } from './internal/value_guards.js';
 import { vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import type { VocalReason, VocalStateToken } from './public_types_vocal_edit.js';
 import type {
@@ -21,9 +21,7 @@ export interface VocalProjectNative {
   rehydrateVocalEdits: (originals: unknown, cancel?: unknown) => unknown;
 }
 
-const UINT32_MAX = 0xffff_ffff;
 const PROJECT_ID_MAX = UINT32_MAX - 1;
-const UINT64_MAX = '18446744073709551615';
 
 function requireObject(value: unknown, field: string): Record<string, unknown> {
   if (!isNonArrayObject(value)) {
@@ -196,8 +194,7 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyReq
   }
   return {
     clipId: requestNumber(source.clipId, 'clipId'),
-    takeId:
-      source.takeId === undefined || source.takeId === null ? 0 : requestTakeId(source.takeId),
+    takeId: isAbsent(source.takeId) ? 0 : requestTakeId(source.takeId),
     expectedSourceId: requestNumber(source.expectedSourceId, 'expectedSourceId'),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
@@ -349,11 +346,7 @@ export function projectRehydrateVocalEdits(
   if (!isNonArrayObject(options)) {
     throw refuseType('options must be an object');
   }
-  for (const key of Object.keys(options)) {
-    if (key !== 'cancel') {
-      throw refuseUnknownKey(key, ['cancel']);
-    }
-  }
+  assertDeclaredKeys(options, ['cancel'], '');
   const { cancel } = options;
   if (cancel !== undefined && typeof cancel !== 'function') {
     throw refuseType('cancel must be a function');

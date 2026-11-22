@@ -6,7 +6,7 @@ import type {
 import type { WasmRealtimeVoiceChangerPodConfig } from '../sonare.js';
 import { assertRetuneGrain } from '../validation.js';
 import { refuse, refuseType } from './entry.js';
-import { isNonArrayObject } from './value_guards.js';
+import { isAbsent, isNonArrayObject } from './value_guards.js';
 import { checkedVoicePresetId, voicePresetOrdinal } from './voice_preset_ids.js';
 
 /** True for the flat config object (as opposed to a nested preset document). */
@@ -46,7 +46,7 @@ function assertFlatConfigFields(config: Record<string, unknown>): void {
  */
 function withRetuneGrain(config: Record<string, unknown>): Record<string, unknown> {
   const grain = config.retuneGrainSizeSamples;
-  if (grain === undefined || grain === null) {
+  if (isAbsent(grain)) {
     const { retuneGrainSizeSamples: _omitted, ...rest } = config;
     return rest;
   }

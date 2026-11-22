@@ -1,4 +1,4 @@
-import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMidiCcBindingListBytes } from './internal/midi_cc_binding.js';
 import { packMidi2Program } from './internal/midi_program_pack.js';
 import {
@@ -9,7 +9,7 @@ import {
   midi2U16,
   midi2U32,
 } from './internal/ump_events.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import {
   projectAutomationPointFromNative,
   projectMidi1Event,
@@ -72,7 +72,7 @@ function boundedInt(value: unknown, argName: string, max: number): number {
 
 /** An optional {@link boundedInt}: absent (`undefined`/`null`) takes the fallback. */
 function boundedIntOr(value: unknown, argName: string, max: number, fallback: number): number {
-  return value === undefined || value === null ? fallback : boundedInt(value, argName, max);
+  return isAbsent(value) ? fallback : boundedInt(value, argName, max);
 }
 
 /** A bank object `{ msb, lsb }`, each 0..127. */
@@ -81,11 +81,7 @@ function bankPair(value: unknown): MidiBank {
     throw refuseType(`bank must be an object { msb, lsb }`);
   }
   const { msb, lsb } = value as Record<string, unknown>;
-  for (const key of Object.keys(value)) {
-    if (key !== 'msb' && key !== 'lsb') {
-      throw refuseUnknownKey(`bank.${key}`, ['msb', 'lsb']);
-    }
-  }
+  assertDeclaredKeys(value, ['msb', 'lsb'], 'bank');
   return {
     msb: boundedInt(msb, 'bank.msb', 127),
     lsb: boundedInt(lsb, 'bank.lsb', 127),
@@ -328,7 +324,7 @@ export function midi2Program(request: Midi2ProgramRequest): ProjectMidiEvent {
     const r = requestObject(fn, request, 'request', true);
     const ppq = num(r.ppq, 'ppq');
     assertEventPpq(ppq);
-    const bank = r.bank === undefined || r.bank === null ? undefined : bankPair(r.bank);
+    const bank = isAbsent(r.bank) ? undefined : bankPair(r.bank);
     const [word0, word1] = packMidi2Program(
       boundedInt(r.group, 'group', 15),
       boundedInt(r.channel, 'channel', 15),
@@ -715,7 +711,7 @@ export function midiRouteEvents(request: MidiRouteEventsRequest): ProjectMidiRou
     const { events, ...config } = requestObject('midiRouteEvents', request, 'request', true);
     const present: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(config)) {
-      if (value !== null && value !== undefined) {
+      if (!isAbsent(value)) {
         present[key] = value;
       }
     }
@@ -770,7 +766,7 @@ export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent |
       num(r.paramId, 'paramId'),
       num(r.unitValue, 'unitValue'),
       num(r.group, 'group'),
-      r.ppq === undefined || r.ppq === null ? 0 : num(r.ppq, 'ppq'),
+      isAbsent(r.ppq) ? 0 : num(r.ppq, 'ppq'),
     );
   });
 }

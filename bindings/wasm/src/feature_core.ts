@@ -1,6 +1,7 @@
 import type { TrimResult } from './feature_spectrogram.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D, NormType, TempogramMode } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -27,10 +28,6 @@ import {
   toMatrix2D,
   toMatrix2DByRows,
 } from './validation.js';
-
-function requireModule() {
-  return getSonareModule();
-}
 
 /** Sine tone request. Every field is optional. */
 export interface ToneRequest {
@@ -419,7 +416,7 @@ export function tone(...args: unknown[]): Float32Array {
     const frequencyHz = r.frequencyHz ?? 440;
     const durationSec = r.durationSec ?? 1;
     assertFloatFields({ frequencyHz, durationSec });
-    return requireModule().tone(
+    return getSonareModule().tone(
       frequencyHz,
       r.sampleRate ?? 22050,
       durationSec,
@@ -438,7 +435,7 @@ export function chirp(...args: unknown[]): Float32Array {
     const fmaxHz = r.fmaxHz ?? 880;
     const durationSec = r.durationSec ?? 1;
     assertFloatFields({ fminHz, fmaxHz, durationSec });
-    return requireModule().chirp(
+    return getSonareModule().chirp(
       fminHz,
       fmaxHz,
       r.sampleRate ?? 22050,
@@ -459,7 +456,7 @@ export function clicks(...args: unknown[]): Float32Array {
     const frequencyHz = r.frequencyHz ?? 1000;
     const clickDurationSec = r.clickDurationSec ?? 0.1;
     assertFloatFields({ frequencyHz, clickDurationSec });
-    return requireModule().clicks(
+    return getSonareModule().clicks(
       r.times,
       r.sampleRate ?? 22050,
       r.length,
@@ -488,7 +485,7 @@ export function clicks(...args: unknown[]): Float32Array {
 export function hzToMel(hz: number): number {
   return withEntry('hzToMel', () => {
     assertNumber(hz, 'hz');
-    return requireModule().hzToMel(hz);
+    return getSonareModule().hzToMel(hz);
   });
 }
 
@@ -502,7 +499,7 @@ export function hzToMel(hz: number): number {
 export function melToHz(mel: number): number {
   return withEntry('melToHz', () => {
     assertNumber(mel, 'mel');
-    return requireModule().melToHz(mel);
+    return getSonareModule().melToHz(mel);
   });
 }
 
@@ -520,7 +517,7 @@ export function melToHz(mel: number): number {
 export function hzToMidi(hz: number): number {
   return withEntry('hzToMidi', () => {
     assertNumber(hz, 'hz');
-    return requireModule().hzToMidi(hz);
+    return getSonareModule().hzToMidi(hz);
   });
 }
 
@@ -534,7 +531,7 @@ export function hzToMidi(hz: number): number {
 export function midiToHz(midi: number): number {
   return withEntry('midiToHz', () => {
     assertNumber(midi, 'midi');
-    return requireModule().midiToHz(midi);
+    return getSonareModule().midiToHz(midi);
   });
 }
 
@@ -552,7 +549,7 @@ export function midiToHz(midi: number): number {
 export function hzToNote(hz: number): string {
   return withEntry('hzToNote', () => {
     assertNumber(hz, 'hz');
-    return requireModule().hzToNote(hz);
+    return getSonareModule().hzToNote(hz);
   });
 }
 
@@ -567,7 +564,7 @@ export function hzToNote(hz: number): string {
 export function noteToHz(note: string): number {
   return withEntry('noteToHz', () => {
     assertString(note, 'note');
-    return requireModule().noteToHz(note);
+    return getSonareModule().noteToHz(note);
   });
 }
 
@@ -583,7 +580,7 @@ export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512
   return withEntry('framesToTime', () => {
     assertNumber(frames, 'frames');
     assertNumber(sampleRate, 'sampleRate');
-    return requireModule().framesToTime(frames, sampleRate, hopLength);
+    return getSonareModule().framesToTime(frames, sampleRate, hopLength);
   });
 }
 
@@ -599,13 +596,13 @@ export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 51
   return withEntry('timeToFrames', () => {
     assertNumber(timeSec, 'timeSec');
     assertNumber(sampleRate, 'sampleRate');
-    return requireModule().timeToFrames(timeSec, sampleRate, hopLength);
+    return getSonareModule().timeToFrames(timeSec, sampleRate, hopLength);
   });
 }
 
 // Absent nFft is the native "no centring" 0; an explicit 0 or negative is out of domain.
 function resolveOptionalFft(nFft: number | undefined | null): number {
-  if (nFft === undefined || nFft === null) {
+  if (isAbsent(nFft)) {
     return 0;
   }
   assertIntegerValue(nFft, 'nFft');
@@ -627,7 +624,7 @@ export function framesToSamples(frames: number, hopLength = 512, nFft?: number):
     assertNumber(frames, 'frames');
     assertPositiveInteger(hopLength, 'hopLength');
     const fft = resolveOptionalFft(nFft);
-    return requireModule().framesToSamples(frames, hopLength, fft);
+    return getSonareModule().framesToSamples(frames, hopLength, fft);
   });
 }
 
@@ -642,7 +639,7 @@ export function samplesToFrames(samples: number, hopLength = 512, nFft?: number)
     assertNumber(samples, 'samples');
     assertPositiveInteger(hopLength, 'hopLength');
     const fft = resolveOptionalFft(nFft);
-    return requireModule().samplesToFrames(samples, hopLength, fft);
+    return getSonareModule().samplesToFrames(samples, hopLength, fft);
   });
 }
 
@@ -661,7 +658,7 @@ function convertElementwise(
   if (values instanceof Float32Array) {
     return convert(values);
   }
-  if (typeof values !== 'object' || values === null || Array.isArray(values)) {
+  if (!isNonArrayObject(values)) {
     throw refuseType('values must be a Float32Array or a Matrix2D');
   }
   const matrix = assertMatrix2D(values, 'values', false);
@@ -674,7 +671,7 @@ export function powerToDb(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('powerToDb', () => {
     const r = requestOnly<PowerToDbRequest>('powerToDb', args);
     return convertElementwise(r.values, (data) =>
-      requireModule().powerToDb(data, r.ref ?? 1.0, r.amin ?? 1e-10, r.topDb ?? 80.0),
+      getSonareModule().powerToDb(data, r.ref ?? 1.0, r.amin ?? 1e-10, r.topDb ?? 80.0),
     );
   });
 }
@@ -687,7 +684,7 @@ export function amplitudeToDb(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('amplitudeToDb', () => {
     const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
     return convertElementwise(r.values, (data) =>
-      requireModule().amplitudeToDb(data, r.ref ?? 1.0, r.amin ?? 1e-5, r.topDb ?? 80.0),
+      getSonareModule().amplitudeToDb(data, r.ref ?? 1.0, r.amin ?? 1e-5, r.topDb ?? 80.0),
     );
   });
 }
@@ -698,7 +695,7 @@ export function dbToPower(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('dbToPower', () => {
     const r = requestOnly<DbToPowerRequest>('dbToPower', args);
     assertNumber(r.ref ?? 1.0, 'ref');
-    return convertElementwise(r.values, (data) => requireModule().dbToPower(data, r.ref ?? 1.0));
+    return convertElementwise(r.values, (data) => getSonareModule().dbToPower(data, r.ref ?? 1.0));
   });
 }
 
@@ -711,7 +708,7 @@ export function dbToAmplitude(...args: unknown[]): Float32Array | Matrix2D {
     const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
     assertNumber(r.ref ?? 1.0, 'ref');
     return convertElementwise(r.values, (data) =>
-      requireModule().dbToAmplitude(data, r.ref ?? 1.0),
+      getSonareModule().dbToAmplitude(data, r.ref ?? 1.0),
     );
   });
 }
@@ -727,7 +724,7 @@ export function preemphasis(...args: unknown[]): Float32Array {
   return withEntry('preemphasis', () => {
     const r = sampleOneShot<PreemphasisRequest>('preemphasis', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().preemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
+    return getSonareModule().preemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
   });
 }
 
@@ -742,7 +739,7 @@ export function deemphasis(...args: unknown[]): Float32Array {
   return withEntry('deemphasis', () => {
     const r = sampleOneShot<DeemphasisRequest>('deemphasis', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().deemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
+    return getSonareModule().deemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
   });
 }
 
@@ -757,7 +754,7 @@ export function trimSilence(...args: unknown[]): TrimResult {
   return withEntry('trimSilence', () => {
     const r = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().trimSilence(
+    return getSonareModule().trimSilence(
       r.samples,
       r.topDb ?? 60.0,
       r.frameLength ?? 2048,
@@ -777,7 +774,7 @@ export function splitSilence(...args: unknown[]): Int32Array {
   return withEntry('splitSilence', () => {
     const r = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return requireModule().splitSilence(
+    return getSonareModule().splitSilence(
       r.samples,
       r.topDb ?? 60.0,
       r.frameLength ?? 2048,
@@ -810,7 +807,7 @@ export function splitSilenceCommon(...args: unknown[]): Int32Array {
   return withEntry('splitSilenceCommon', () => {
     const r = requestOnly<SplitSilenceCommonRequest>('splitSilenceCommon', args);
     assertCommonSignals(r.signals);
-    return requireModule().splitSilenceCommon(
+    return getSonareModule().splitSilenceCommon(
       r.signals,
       r.topDb ?? 60.0,
       r.frameLength ?? 2048,
@@ -844,7 +841,7 @@ export function splitSilenceCommonWithReport(
       args,
     );
     assertCommonSignals(r.signals);
-    return requireModule().splitSilenceCommon(
+    return getSonareModule().splitSilenceCommon(
       r.signals,
       r.topDb ?? 60.0,
       r.frameLength ?? 2048,
@@ -870,7 +867,11 @@ export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const { nFrames, frames } = requireModule().frameSignal(r.samples, r.frameLength, r.hopLength);
+    const { nFrames, frames } = getSonareModule().frameSignal(
+      r.samples,
+      r.frameLength,
+      r.hopLength,
+    );
     // Native stores one frame after another; the surface puts samples on rows and frames on columns.
     const data = new Float32Array(frames.length);
     for (let f = 0; f < nFrames; f++) {
@@ -889,7 +890,7 @@ export function padCenter(...args: unknown[]): Float32Array {
     const r = requestOnly<PadCenterRequest>('padCenter', args);
     assertFloat32Array(r.values, 'values');
     assertIntegerValue(r.targetSize, 'targetSize');
-    return requireModule().padCenter(r.values, r.targetSize, r.padValue ?? 0.0);
+    return getSonareModule().padCenter(r.values, r.targetSize, r.padValue ?? 0.0);
   });
 }
 
@@ -900,7 +901,7 @@ export function fixLength(...args: unknown[]): Float32Array {
     const r = requestOnly<FixLengthRequest>('fixLength', args);
     assertFloat32Array(r.values, 'values');
     assertIntegerValue(r.targetSize, 'targetSize');
-    return requireModule().fixLength(r.values, r.targetSize, r.padValue ?? 0.0);
+    return getSonareModule().fixLength(r.values, r.targetSize, r.padValue ?? 0.0);
   });
 }
 
@@ -909,7 +910,7 @@ export function fixFrames(request: FixFramesRequest): Int32Array;
 export function fixFrames(...args: unknown[]): Int32Array {
   return withEntry('fixFrames', () => {
     const r = requestOnly<FixFramesRequest>('fixFrames', args);
-    return requireModule().fixFrames(
+    return getSonareModule().fixFrames(
       toInt32Array(r.frames, 'frames'),
       r.xMin ?? 0,
       resolveOptionalNonNegative(r.xMax, 'xMax'),
@@ -925,7 +926,7 @@ export function onsetBacktrack(...args: unknown[]): Int32Array {
     const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
     const events = toInt32Array(r.events, 'events');
     assertFloat32Array(r.energy, 'energy');
-    return requireModule().onsetBacktrack(events, r.energy);
+    return getSonareModule().onsetBacktrack(events, r.energy);
   });
 }
 
@@ -942,7 +943,7 @@ export function peakPick(...args: unknown[]): Int32Array {
     assertNonNegativeSafeInteger(r.postAvg, 'postAvg');
     assertNonNegativeSafeInteger(r.wait, 'wait');
     assertFloatValue(r.delta, 'delta');
-    return requireModule().peakPick(
+    return getSonareModule().peakPick(
       r.values,
       r.preMax,
       r.postMax,
@@ -967,7 +968,11 @@ export function vectorNormalize(...args: unknown[]): Float32Array {
     const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
     assertFloat32Array(r.values, 'values');
     const norm = requireToken(r.norm, 'norm', NORM_TOKENS, 'max');
-    return requireModule().vectorNormalize(r.values, NORM_TOKENS.indexOf(norm), r.threshold ?? 0.0);
+    return getSonareModule().vectorNormalize(
+      r.values,
+      NORM_TOKENS.indexOf(norm),
+      r.threshold ?? 0.0,
+    );
   });
 }
 
@@ -993,11 +998,11 @@ export function pcen(...args: unknown[]): Matrix2D {
     const values = assertMatrix2D(r.values, 'values');
     const options: Record<string, number> = {};
     for (const key of PCEN_OPTION_KEYS) {
-      if (r[key] !== undefined && r[key] !== null) {
+      if (!isAbsent(r[key])) {
         options[key] = r[key] as number;
       }
     }
-    const out = requireModule().pcen(values.data, values.rows, values.cols, options);
+    const out = getSonareModule().pcen(values.data, values.rows, values.cols, options);
     return toMatrix2D(out, values.rows, values.cols);
   });
 }
@@ -1012,7 +1017,7 @@ export function tonnetz(...args: unknown[]): Matrix2D {
   return withEntry('tonnetz', () => {
     const r = requestOnly<TonnetzRequest>('tonnetz', args);
     const chromagram = assertMatrix2D(r.chromagram, 'chromagram');
-    const out = requireModule().tonnetz(chromagram.data, chromagram.rows, chromagram.cols);
+    const out = getSonareModule().tonnetz(chromagram.data, chromagram.rows, chromagram.cols);
     return toMatrix2D(out, 6, chromagram.cols);
   });
 }
@@ -1031,7 +1036,7 @@ export function tempogram(...args: unknown[]): Matrix2D {
     const r = requestOnly<TempogramRequest>('tempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const mode = requireToken(r.mode, 'mode', TEMPOGRAM_MODES, 'autocorrelation');
-    const native = requireModule().tempogram(
+    const native = getSonareModule().tempogram(
       r.onsetEnvelope,
       r.sampleRate ?? 22050,
       r.hopLength ?? 512,
@@ -1055,7 +1060,7 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
     const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     assertSampleRate(r.sampleRate);
-    const native = requireModule().cyclicTempogram(
+    const native = getSonareModule().cyclicTempogram(
       r.onsetEnvelope,
       r.sampleRate,
       r.hopLength ?? 512,
@@ -1073,7 +1078,7 @@ export function plp(...args: unknown[]): Float32Array {
   return withEntry('plp', () => {
     const r = requestOnly<PlpRequest>('plp', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
-    return requireModule().plp(
+    return getSonareModule().plp(
       r.onsetEnvelope,
       r.sampleRate ?? 22050,
       r.hopLength ?? 512,

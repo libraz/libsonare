@@ -1,4 +1,4 @@
-import { AUTOMATION_CURVE_VALUES } from './codes.js';
+import { AUTOMATION_CURVE_VALUES, resolveEnumOrdinal } from './codes.js';
 import { ErrorCode } from './errors.js';
 import type {
   BuiltinSynthConfig,
@@ -41,7 +41,7 @@ import {
 } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { assertEventPpq, umpWord0 } from './internal/ump_events.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject, UINT32_MAX } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AlignTakeToReferenceRequest,
@@ -296,7 +296,7 @@ export function normalizeInstrumentBindings<E, R extends object>(
   entry: (instrument: E) => R,
   option = 'instruments',
 ): NativeInstrumentBinding<R>[] {
-  if (value === null || value === undefined) {
+  if (isAbsent(value)) {
     return [];
   }
   if (!Array.isArray(value)) {
@@ -309,12 +309,8 @@ export function normalizeInstrumentBindings<E, R extends object>(
       throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
     }
     const record = pair as Record<string, unknown>;
-    for (const key of Object.keys(record)) {
-      if (!INSTRUMENT_BINDING_KEYS.includes(key)) {
-        throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS);
-      }
-    }
-    if (record.instrument === undefined || record.instrument === null) {
+    assertDeclaredKeys(record, INSTRUMENT_BINDING_KEYS, label);
+    if (isAbsent(record.instrument)) {
       throw refuseType(`${label}.instrument must be given`);
     }
     const instrument = record.instrument;
@@ -334,7 +330,7 @@ export function normalizeInstrumentBindings<E, R extends object>(
  * wrong shape by field name. Returns `undefined` when there are none.
  */
 function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
-  if (inserts === undefined || inserts === null) {
+  if (isAbsent(inserts)) {
     return undefined;
   }
   if (!Array.isArray(inserts)) {
@@ -739,29 +735,6 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
   });
 }
 
-/**
- * A closed-set token to its native ordinal. A non-string is a `TypeError` (an
- * ordinal included) and a string outside the set is a `RangeError`; an absent
- * value takes `fallback` when one is given.
- */
-function tokenCode(
-  argName: string,
-  value: unknown,
-  table: Readonly<Record<string, number>>,
-  fallback?: string,
-): number {
-  const token = value === undefined || value === null ? fallback : value;
-  const accepted = Object.keys(table).join(', ');
-  if (typeof token !== 'string') {
-    throw refuseType(`${argName} must be one of ${accepted}`);
-  }
-  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
-  if (!Object.prototype.hasOwnProperty.call(table, token)) {
-    throw refuse(`${argName} must be one of ${accepted}`);
-  }
-  return table[token];
-}
-
 /** A native ordinal back to its token; an ordinal outside the table is a binding defect. */
 function tokenName<T extends string>(
   table: Readonly<Record<T, number>>,
@@ -787,7 +760,7 @@ export function optionalId(
   allowZero = false,
   hint = 'for the default',
 ): number | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   if (typeof value !== 'number') {
@@ -796,7 +769,7 @@ export function optionalId(
   if (value === 0 && !allowZero) {
     throw refuse(`${argName} must not be 0; omit it ${hint}`);
   }
-  if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
+  if (!Number.isInteger(value) || value < 0 || value > UINT32_MAX) {
     throw refuse(`${argName} must be an integer in [${allowZero ? 0 : 1}, 4294967295]`);
   }
   return value;
@@ -807,7 +780,7 @@ export function optionalId(
  * `""` is refused by name. `hint` finishes "omit it ...".
  */
 export function optionalName(argName: string, value: unknown, hint: string): string | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   if (typeof value !== 'string') {
@@ -823,15 +796,6 @@ export function optionalName(argName: string, value: unknown, hint: string): str
 const TAKE_KEYS = ['id', 'sourceId', 'sourceOffsetPpq', 'name'];
 const COMP_SEGMENT_KEYS = ['startPpq', 'endPpq', 'takeId', 'crossfadePpq'];
 
-/** Refuse the first key of `record` outside `keys`, by its path. */
-function refuseUnknownFields(record: object, where: string, keys: readonly string[]): void {
-  for (const key of Object.keys(record)) {
-    if (!keys.includes(key)) {
-      throw refuseUnknownKey(`${where}.${key}`, keys);
-    }
-  }
-}
-
 /** The take list as the native layer reads it, each take checked by name; absent fields are missing keys. */
 export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(takes)) {
@@ -843,7 +807,7 @@ export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
     if (!isNonArrayObject(entry)) {
       throw refuseType(`${where} must be an object`);
     }
-    refuseUnknownFields(entry, where, TAKE_KEYS);
+    assertDeclaredKeys(entry, TAKE_KEYS, where);
     const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
     if (typeof id !== 'number') {
       throw refuseType(`${where}.id must be an integer`);
@@ -873,7 +837,7 @@ export function compSegmentsToNative(segments: unknown): Array<Record<string, un
     if (!isNonArrayObject(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
     }
-    refuseUnknownFields(entry, `segments[${index}]`, COMP_SEGMENT_KEYS);
+    assertDeclaredKeys(entry, COMP_SEGMENT_KEYS, `segments[${index}]`);
     const { takeId, ...rest } = entry as Record<string, unknown>;
     const take = optionalId(`segments[${index}].takeId`, takeId, false, 'for the active take');
     return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
@@ -886,7 +850,7 @@ export function optionalPositiveInt(
   value: unknown,
   max: number,
 ): number | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   if (typeof value !== 'number') {
@@ -902,7 +866,7 @@ export function optionalPositiveInt(
 }
 
 export function projectTrackKindValue(kind: ProjectTrackKind): number {
-  return tokenCode('kind', kind, TRACK_KINDS);
+  return resolveEnumOrdinal(kind, TRACK_KINDS, 'kind');
 }
 
 export function projectTrackKindName(ordinal: number): ProjectTrackKind {
@@ -914,7 +878,7 @@ export function projectSourceKindName(ordinal: number): ProjectSourceKind {
 }
 
 export function projectOverlapPolicyValue(policy: ProjectOverlapPolicy): number {
-  return tokenCode('policy', policy, OVERLAP_POLICIES);
+  return resolveEnumOrdinal(policy, OVERLAP_POLICIES, 'policy');
 }
 
 export function projectOverlapPolicyName(ordinal: number): ProjectOverlapPolicy {
@@ -934,7 +898,7 @@ export function projectKeySegmentsToNative(
   return keys.map((key) =>
     key.mode === undefined
       ? (key as NativeKeySegment)
-      : { ...key, mode: tokenCode('mode', key.mode, KEY_MODES) },
+      : { ...key, mode: resolveEnumOrdinal(key.mode, KEY_MODES, 'mode') },
   );
 }
 
@@ -947,7 +911,7 @@ export function projectChordSymbolsToNative(
       ? (chord as NativeChordSymbol)
       : {
           ...chord,
-          quality: tokenCode('quality', chord.quality, CHORD_QUALITY_CODES),
+          quality: resolveEnumOrdinal(chord.quality, CHORD_QUALITY_CODES, 'quality'),
         },
   );
 }
@@ -964,11 +928,11 @@ export function projectFadeCurveValue(
   argName: string,
   curve: ProjectFadeCurve | undefined,
 ): number {
-  return tokenCode(argName, curve, FADE_CURVES, 'linear');
+  return resolveEnumOrdinal(isAbsent(curve) ? 'linear' : curve, FADE_CURVES, argName);
 }
 
 export function projectMarkerKindValue(kind: ProjectMarkerKind | undefined): number {
-  return tokenCode('kind', kind, MARKER_KINDS, 'marker');
+  return resolveEnumOrdinal(isAbsent(kind) ? 'marker' : kind, MARKER_KINDS, 'kind');
 }
 
 export function projectMarkerKindName(ordinal: number): ProjectMarkerKind {
@@ -976,7 +940,7 @@ export function projectMarkerKindName(ordinal: number): ProjectMarkerKind {
 }
 
 export function projectStemLayoutValue(layout: unknown): number {
-  return tokenCode('stems[].layout', layout, STEM_LAYOUTS);
+  return resolveEnumOrdinal(layout, STEM_LAYOUTS, 'stems[].layout');
 }
 
 /** One native diagnostic as the typed record, with no target when `0`. */
@@ -1073,11 +1037,10 @@ export function projectAutomationPointValue(
   index: number,
 ): NativeAutomationPoint {
   assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${index}]`);
-  const curveToNext = tokenCode(
-    'curveToNext',
-    point.curveToNext,
+  const curveToNext = resolveEnumOrdinal(
+    isAbsent(point.curveToNext) ? 'linear' : point.curveToNext,
     AUTOMATION_CURVE_VALUES,
-    'linear',
+    'curveToNext',
   );
   return { ...point, curveToNext };
 }
@@ -1101,15 +1064,15 @@ export function projectAutomationLaneValue(
 }
 
 export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKind): number {
-  return tokenCode('targetKind', kind, AUTOMATION_TARGET_KINDS);
+  return resolveEnumOrdinal(kind, AUTOMATION_TARGET_KINDS, 'targetKind');
 }
 
 export function projectWarpModeValue(mode: ProjectWarpMode): number {
-  return tokenCode('mode', mode, WARP_MODES);
+  return resolveEnumOrdinal(mode, WARP_MODES, 'mode');
 }
 
 export function projectLoopModeValue(mode: ProjectLoopMode): number {
-  return tokenCode('loopMode', mode, LOOP_MODES);
+  return resolveEnumOrdinal(mode, LOOP_MODES, 'loopMode');
 }
 
 export function projectLoopModeName(ordinal: number): ProjectLoopMode {

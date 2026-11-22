@@ -4,6 +4,7 @@ import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { refuse, refuseType } from '../internal/entry.js';
 import { errorText, failurePayload } from '../internal/failure_payload.js';
 import { umpWord0 } from '../internal/ump_events.js';
+import { UINT32_MAX } from '../internal/value_guards.js';
 import {
   DEFAULT_METRONOME_CONFIG,
   type EngineClipPageRequestMessage,
@@ -1406,7 +1407,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           typeof laneIndex !== 'number' ||
           !Number.isSafeInteger(laneIndex) ||
           laneIndex < 0 ||
-          laneIndex > 0xffff_ffff
+          laneIndex > UINT32_MAX
         ) {
           throw refuse(`Invalid track monitor lane index: ${String(laneIndex)}`);
         }
