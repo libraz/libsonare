@@ -66,9 +66,13 @@ bool ValidateAcousticInput(const Napi::Env& env, const char* name, const float* 
   return true;
 }
 
-// Reads an optional Float32Array/number[] option into a vector (empty if absent).
+// Reads an optional Float32Array/number[] option of finite coefficients (empty if absent); any
+// other value is refused by name with FloatArrayProperty's wording.
 std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* key) {
   Napi::Value value = opts.Get(key);
+  if (value.IsUndefined() || value.IsNull()) {
+    return {};
+  }
   if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
     auto typed = value.As<Napi::Float32Array>();
     return std::vector<float>(typed.Data(), typed.Data() + typed.ElementLength());
@@ -82,7 +86,8 @@ std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* ke
     }
     return out;
   }
-  return {};
+  throw Napi::TypeError::New(opts.Env(),
+                             std::string(key) + " must be a Float32Array or a number array");
 }
 
 // Builds a uniform shoebox + placement from a JS options object, honouring the

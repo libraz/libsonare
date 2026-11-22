@@ -223,6 +223,24 @@ describe('geometric room acoustics', () => {
     expect(() => synthesizeRir({ sampleRate: 48000, absorption: 1, maxSec: 0.1 })).not.toThrow();
   });
 
+  it('refuses a per-band array given as anything but an array instead of ignoring it', () => {
+    const base = { sampleRate: 48000, maxSec: 0.1 };
+    for (const key of ['bandAbsorption', 'bandScattering'] as const) {
+      for (const bad of [0.3, 'loud', { 0: 0.2 }, new Float64Array([0.2, 0.3])]) {
+        expect(
+          () => synthesizeRir({ ...base, [key]: bad as unknown as number[] }),
+          `${key} ${String(bad)}`,
+        ).toThrow(new TypeError(`synthesizeRir: ${key} must be a Float32Array or a number array`));
+      }
+    }
+    // Absent and null both read as "no per-band values", and an array is still read.
+    const omitted = synthesizeRir(base);
+    const nulled = synthesizeRir({ ...base, bandAbsorption: null as unknown as number[] });
+    expect(Array.from(nulled.rir)).toEqual(Array.from(omitted.rir));
+    const banded = synthesizeRir({ ...base, bandAbsorption: new Float32Array([0.9, 0.9, 0.9]) });
+    expect(Array.from(banded.rir)).not.toEqual(Array.from(omitted.rir));
+  });
+
   it('rejects invalid estimation priors and room-morph configuration', () => {
     const samples = new Float32Array(2000);
     samples[0] = 1;
