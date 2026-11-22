@@ -599,7 +599,10 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   if (!result_ready) {
     return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
   }
-  SONARE_C_STUB_NOT_SUPPORTED(project, desc, result);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
+                                     sonare_c_detail::Feature::kPitchEditor),
+      project, desc, result);
 #endif
 }
 
@@ -697,7 +700,8 @@ SonareError sonare_project_get_vocal_edit_dependencies(
   if (!result_ready) {
     return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
   }
-  SONARE_C_STUB_NOT_SUPPORTED(project, result);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 result);
 #endif
 }
 
@@ -1024,7 +1028,10 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   if (!result_ready) {
     return sonare_c_detail::run_validation([&] { check_header(*result, "result"); });
   }
-  SONARE_C_STUB_NOT_SUPPORTED(project, originals, original_count, cancel, user_data, result);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
+                                     sonare_c_detail::Feature::kPitchEditor),
+      project, originals, original_count, cancel, user_data, result);
 #endif
 }
 

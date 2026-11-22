@@ -124,17 +124,9 @@ SonareError sonare_mixing_assistant_suggest(
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(json_out);
-  (void)input_left;
-  (void)input_right;
-  (void)track_ids;
-  (void)track_names;
-  (void)track_lengths;
-  (void)track_sample_rates;
-  (void)input_count;
-  (void)sample_rate;
-  (void)params;
-  (void)param_count;
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kMixingAssistant, input_left, input_right, track_ids,
+                                track_names, track_lengths, track_sample_rates, input_count,
+                                sample_rate, params, param_count);
 #endif
 }
 

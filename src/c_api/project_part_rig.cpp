@@ -76,14 +76,18 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
 #if defined(SONARE_WITH_MASTERING)
   if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_FORMAT;
 #else
-  if (rig.mode == midi::PartRigMode::kChain) return SONARE_ERROR_NOT_SUPPORTED;
+  if (rig.mode == midi::PartRigMode::kChain) {
+    return sonare_c_detail::refuse_value_not_compiled_in(sonare_c_detail::Feature::kMastering,
+                                                         "mode");
+  }
 #endif
   auto command = std::make_unique<arr::SetPartRig>(destination_id, part, std::move(rig));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, destination_id, part, mode, inserts_json);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 destination_id, part, mode, inserts_json);
 #endif
 }
 
@@ -116,8 +120,9 @@ SonareError sonare_project_get_part_rig(const SonareProject* project, uint32_t d
   if (out_mode) *out_mode = {};
   if (out_inserts_json) *out_inserts_json = {};
   if (out_present) *out_present = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, destination_id, part, out_mode, out_inserts_json,
-                              out_present);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 destination_id, part, out_mode, out_inserts_json,
+                                                 out_present);
 #endif
 }
 
@@ -139,6 +144,7 @@ SonareError sonare_project_clear_part_rig(SonareProject* project, uint32_t desti
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, destination_id, part);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 destination_id, part);
 #endif
 }

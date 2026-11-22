@@ -1152,6 +1152,87 @@ class CErrorPathRule(unittest.TestCase):
         self.assertTrue(verdict.failed)
 
 
+class CNotCompiledInRule(unittest.TestCase):
+    GATED = (
+        "SonareError sonare_f(int value) {\n"
+        "#if defined(SONARE_WITH_THING)\n"
+        "  if (value < 0) return SONARE_ERROR_NOT_SUPPORTED;\n"
+        "  return SONARE_OK;\n"
+        "#else\n"
+        "  return refuse_not_compiled_in(Feature::kThing, value);\n"
+        "#endif\n"
+        "}\n"
+    )
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def judge(self, **files: str):
+        root = Path(self._tmp.name)
+        (root / "src" / "c_api").mkdir(parents=True, exist_ok=True)
+        for name, text in files.items():
+            (root / "src" / "c_api" / name).write_text(text)
+        r = rule("c-not-compiled-in")
+        return check.judge(r, r.scan(root))
+
+    def keys(self, verdict) -> list[str]:
+        return [f.key for f in verdict.violations]
+
+    def test_the_helper_in_a_feature_off_branch_passes(self) -> None:
+        verdict = self.judge(**{"unit.cpp": self.GATED})
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+    def test_a_bare_code_in_a_feature_off_branch_is_named(self) -> None:
+        bare = self.GATED.replace(
+            "  return refuse_not_compiled_in(Feature::kThing, value);",
+            '  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "thing is not built");\n'
+            "  return SONARE_ERROR_NOT_SUPPORTED;",
+        )
+        verdict = self.judge(**{"unit.cpp": bare})
+        self.assertEqual(self.keys(verdict), ["c:src/c_api/unit.cpp:6", "c:src/c_api/unit.cpp:7"])
+        self.assertIn("SONARE_ERROR_NOT_SUPPORTED", verdict.violations[0].detail)
+
+    def test_a_negated_gate_is_a_feature_off_branch(self) -> None:
+        negated = (
+            "SonareError sonare_f() {\n"
+            "#if !defined(SONARE_WITH_THING)\n"
+            "  return SONARE_ERROR_NOT_SUPPORTED;\n"
+            "#endif\n"
+            "  return SONARE_OK;\n"
+            "}\n"
+        )
+        self.assertEqual(self.keys(self.judge(**{"unit.cpp": negated})), ["c:src/c_api/unit.cpp:3"])
+
+    def test_a_whole_stub_unit_is_read_without_a_gate(self) -> None:
+        stub = "SonareError sonare_f() { return SONARE_ERROR_NOT_SUPPORTED; }\n"
+        self.assertEqual(
+            self.keys(self.judge(**{"thing_stubs.cpp": stub})), ["c:src/c_api/thing_stubs.cpp:1"]
+        )
+
+    def test_a_statement_spelling_the_helper_message_on_its_next_line_passes(self) -> None:
+        split = self.GATED.replace(
+            "  return refuse_not_compiled_in(Feature::kThing, value);",
+            "  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED,\n"
+            "                        not_compiled_in_message(Feature::kThing));\n"
+            "  return SONARE_ERROR_NOT_SUPPORTED;",
+        )
+        self.assertEqual(self.keys(self.judge(**{"unit.cpp": split})), ["c:src/c_api/unit.cpp:8"])
+
+    def test_a_thrown_code_spelling_the_helper_message_passes(self) -> None:
+        thrown = (
+            "#if !defined(SONARE_WITH_THING)\n"
+            "#define BODY(...) \\\n"
+            "  throw SonareException(ErrorCode::NotSupported, \\\n"
+            "                        not_compiled_in_message(Feature::kThing))\n"
+            "#endif\n"
+        )
+        verdict = self.judge(**{"unit.cpp": thrown})
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+
 class CEntryForwardRule(unittest.TestCase):
     SOURCE = (
         "SonareError sonare_stft(const float* samples, size_t length, int sample_rate) {\n"

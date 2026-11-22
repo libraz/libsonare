@@ -125,8 +125,9 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
   SONARE_C_CATCH
 #else
   if (out_count) *out_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, options, candidates, capacity,
-                              out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 audio, len, sample_rate, options, candidates,
+                                                 capacity, out_count);
 #endif
 }
 
@@ -165,8 +166,9 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
   SONARE_C_CATCH
 #else
   if (out_bpm) *out_bpm = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, options, candidate_index,
-                              apply_time_signatures, out_bpm);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 audio, len, sample_rate, options, candidate_index,
+                                                 apply_time_signatures, out_bpm);
 #endif
 }
 
@@ -220,7 +222,8 @@ SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq
   SONARE_C_CATCH
 #else
   if (out_ppq) *out_ppq = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, ppq, strength, options, out_ppq);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 ppq, strength, options, out_ppq);
 #endif
 }
 
@@ -294,7 +297,8 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, keys, count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 keys, count);
 #endif
 }
 
@@ -348,7 +352,8 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, chords, count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 chords, count);
 #endif
 }
 
@@ -415,8 +420,9 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
   if (out_quality) *out_quality = {};
   if (out_extension_count) *out_extension_count = {};
   if (out_slash_bass_pc) *out_slash_bass_pc = {};
-  SONARE_C_STUB_NOT_SUPPORTED(root, quality, bass, out_root_pc, out_quality, out_extensions,
-                              extension_capacity, out_extension_count, out_slash_bass_pc);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::Feature::kArrangement, root, quality, bass, out_root_pc, out_quality,
+      out_extensions, extension_capacity, out_extension_count, out_slash_bass_pc);
 #endif
 }
 
@@ -440,7 +446,8 @@ SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode) {
   SONARE_C_CATCH
 #else
   if (out_mode) *out_mode = {};
-  SONARE_C_STUB_NOT_SUPPORTED(mode, out_mode);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, mode,
+                                                 out_mode);
 #endif
 }
 
@@ -586,8 +593,9 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 #else
   if (out_anchors) *out_anchors = nullptr;
   if (out_count) *out_count = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(reference, reference_len, reference_sample_rate, take, take_len,
-                              take_sample_rate, config, out_anchors, out_count, out_alignment);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::Feature::kArrangement, reference, reference_len, reference_sample_rate, take,
+      take_len, take_sample_rate, config, out_anchors, out_count, out_alignment);
 #endif
 }
 

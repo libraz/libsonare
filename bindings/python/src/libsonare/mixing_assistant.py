@@ -476,7 +476,7 @@ def mixing_assistant_source_class_names() -> list[str]:
         lib.sonare_mixing_assistant_source_class_names(), "mixing assistant source class names"
     )
     if not names:
-        raise _not_supported("libsonare was built without mixing assistant support")
+        raise _not_supported("mixing assistant support is not compiled in")
     return names
 
 

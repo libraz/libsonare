@@ -137,6 +137,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - When adding a translation unit under `src/c_api/`, copy the source-list rows of its closest existing sibling.
 - After moving a C-ABI translation unit between library targets, check `nm -gU` on the built shared library.
 - Open every exported C function with `SONARE_C_API_ENTRY` and put everything that can throw inside `SONARE_C_TRY` / `SONARE_C_CATCH*`; write out-params only after every allocation has succeeded. `make conformance` runs the entry-guard scan.
+- Refuse an entry whose subsystem is compiled out through `sonare_c_detail::refuse_not_compiled_in` (or its `_handle` / `refuse_value_` forms), which records `<feature> support is not compiled in`; `make conformance` flags a bare NOT_SUPPORTED in a feature-off branch.
 - Document the lifecycle of every pointer in a public header in its own doc comment: who frees it, which `sonare_free_*` releases it, or what ends the library's retention of a caller's buffer.
 
 ### WASM

@@ -791,7 +791,8 @@ SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float scale
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(out_quantized_midi);
-  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, scale_reference_midi, midi, out_quantized_midi);
+  return refuse_not_compiled_in(Feature::kPitchEditor, root, mode_mask, scale_reference_midi, midi,
+                                out_quantized_midi);
 #endif
 }
 
@@ -815,7 +816,8 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask,
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(out_semitones);
-  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, scale_reference_midi, midi, out_semitones);
+  return refuse_not_compiled_in(Feature::kPitchEditor, root, mode_mask, scale_reference_midi, midi,
+                                out_semitones);
 #endif
 }
 
@@ -839,7 +841,7 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(out_enabled);
-  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, pitch_class, out_enabled);
+  return refuse_not_compiled_in(Feature::kPitchEditor, root, mode_mask, pitch_class, out_enabled);
 #endif
 }
 

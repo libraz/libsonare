@@ -41,7 +41,7 @@ SonareError sonare_hrtf_set_create_default(SonareHrtfSet** out) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(out);
+  return refuse_not_compiled_in(Feature::kPlayback, out);
 #endif
 }
 #endif
@@ -60,7 +60,7 @@ SonareError sonare_hrtf_set_create_from_memory(const uint8_t* data, size_t size,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(data, size, out);
+  return refuse_not_compiled_in(Feature::kPlayback, data, size, out);
 #endif
 }
 
@@ -91,7 +91,8 @@ SonareError sonare_playback_renderer_create_json(const char* config_json, const 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(config_json, hrtf, sample_rate, max_block_size, out);
+  return refuse_not_compiled_in(Feature::kPlayback, config_json, hrtf, sample_rate, max_block_size,
+                                out);
 #endif
 }
 
@@ -111,7 +112,7 @@ SonareError sonare_playback_renderer_reset(SonarePlaybackRenderer* renderer) {
   renderer->renderer->reset();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer);
 #endif
   SONARE_C_CATCH
 }
@@ -128,7 +129,7 @@ SonareError sonare_playback_renderer_set_config_json(SonarePlaybackRenderer* ren
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, config_json);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, config_json);
 #endif
 }
 
@@ -144,7 +145,7 @@ SonareError sonare_playback_renderer_config_json(const SonarePlaybackRenderer* r
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out_json);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out_json);
 #endif
 }
 
@@ -158,7 +159,7 @@ SonareError sonare_playback_renderer_set_head_orientation(SonarePlaybackRenderer
   renderer->renderer->set_head_orientation(yaw_deg, pitch_deg, roll_deg);
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, yaw_deg, pitch_deg, roll_deg);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, yaw_deg, pitch_deg, roll_deg);
 #endif
 }
 
@@ -172,7 +173,7 @@ SonareError sonare_playback_renderer_num_input_channels(const SonarePlaybackRend
   *out = renderer->renderer->input_channel_count();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out);
 #endif
 }
 
@@ -186,7 +187,7 @@ SonareError sonare_playback_renderer_max_input_channels(const SonarePlaybackRend
   *out = renderer->renderer->max_input_channel_count();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out);
 #endif
 }
 
@@ -202,7 +203,7 @@ SonareError sonare_playback_config_num_output_channels(const char* config_json, 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(config_json, out);
+  return refuse_not_compiled_in(Feature::kPlayback, config_json, out);
 #endif
 }
 
@@ -216,7 +217,7 @@ SonareError sonare_playback_renderer_num_output_channels(const SonarePlaybackRen
   *out = renderer->renderer->output_channel_count();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out);
 #endif
 }
 
@@ -231,7 +232,8 @@ SonareError sonare_playback_renderer_process_planar(SonarePlaybackRenderer* rend
   const bool ok = renderer->renderer->process_planar(in, in_channels, out, out_channels, frames);
   return ok ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, in, in_channels, out, out_channels, frames);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, in, in_channels, out, out_channels,
+                                frames);
 #endif
 }
 
@@ -246,7 +248,8 @@ SonareError sonare_playback_renderer_process_interleaved(SonarePlaybackRenderer*
       renderer->renderer->process_interleaved(in, in_channels, out, out_channels, frames);
   return ok ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, in, in_channels, out, out_channels, frames);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, in, in_channels, out, out_channels,
+                                frames);
 #endif
 }
 
@@ -260,7 +263,7 @@ SonareError sonare_playback_renderer_process_silence(SonarePlaybackRenderer* ren
   const bool ok = renderer->renderer->process_silence(out, num_output_channels, frames);
   return ok ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out, num_output_channels, frames);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out, num_output_channels, frames);
 #endif
 }
 
@@ -275,7 +278,7 @@ SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRendere
   *out = renderer->renderer->latency_samples();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out);
 #endif
   SONARE_C_CATCH
 }
@@ -290,7 +293,7 @@ SonareError sonare_playback_renderer_max_block_size(const SonarePlaybackRenderer
   *out = renderer->renderer->max_block_size();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out);
 #endif
 }
 
@@ -306,7 +309,7 @@ SonareError sonare_playback_renderer_diagnostics_json(const SonarePlaybackRender
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out_json);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out_json);
 #endif
 }
 
@@ -320,7 +323,7 @@ SonareError sonare_playback_renderer_non_finite_discard_count(
   *out_count = renderer->renderer->non_finite_discard_count();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, out_count);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, out_count);
 #endif
 }
 
@@ -347,8 +350,8 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(in, frames, in_channels, sample_rate, config_json, hrtf, out,
-                              out_frames, out_channels);
+  return refuse_not_compiled_in(Feature::kPlayback, in, frames, in_channels, sample_rate,
+                                config_json, hrtf, out, out_frames, out_channels);
 #endif
 }
 
@@ -372,7 +375,8 @@ SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* rend
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(renderer, in, frames, in_channels, out, out_frames, out_channels);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, in, frames, in_channels, out,
+                                out_frames, out_channels);
 #endif
 }
 
@@ -389,7 +393,7 @@ SonareError sonare_playback_loudness_meter_create(int channels, int sample_rate,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(channels, sample_rate, out);
+  return refuse_not_compiled_in(Feature::kPlayback, channels, sample_rate, out);
 #endif
 }
 
@@ -404,7 +408,7 @@ SonareError sonare_playback_loudness_meter_push_interleaved(SonarePlaybackLoudne
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(meter, in, frames);
+  return refuse_not_compiled_in(Feature::kPlayback, meter, in, frames);
 #endif
 }
 
@@ -420,7 +424,7 @@ SonareError sonare_playback_loudness_meter_integrated_lufs(const SonarePlaybackL
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(meter, out);
+  return refuse_not_compiled_in(Feature::kPlayback, meter, out);
 #endif
 }
 

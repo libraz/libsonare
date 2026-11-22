@@ -389,7 +389,7 @@ inline float* copy_float_vector_padded(const std::vector<float>& values, size_t 
   return out.release();
 }
 
-/// @brief Variadic no-op used by SONARE_C_STUB_NOT_SUPPORTED to swallow unused
+/// @brief Variadic no-op used by the refuse_not_compiled_in family to swallow unused
 ///        parameters in out-of-feature build configurations without resorting
 ///        to per-parameter (void) casts.
 template <typename... T>
@@ -436,6 +436,79 @@ constexpr const char* not_compiled_in_message(Feature feature) noexcept {
   return "support is not compiled in";
 }
 
+/// @brief Whether this build carries @p feature.
+constexpr bool is_compiled_in(Feature feature) noexcept {
+  switch (feature) {
+    case Feature::kAcousticSim:
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kArrangement:
+#if defined(SONARE_WITH_ARRANGEMENT)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kAssist:
+#if defined(SONARE_WITH_ASSIST)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kGraph:
+#if defined(SONARE_WITH_GRAPH)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kMastering:
+#if defined(SONARE_WITH_MASTERING)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kMixing:
+#if defined(SONARE_WITH_MIXING)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kMixingAssistant:
+#if defined(SONARE_WITH_MIXING_ASSISTANT)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kPitchEditor:
+#if defined(SONARE_WITH_PITCH_EDITOR)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kPlayback:
+#if defined(SONARE_WITH_PLAYBACK)
+      return true;
+#else
+      return false;
+#endif
+    case Feature::kVoiceChanger:
+#if defined(SONARE_WITH_VOICE_CHANGER)
+      return true;
+#else
+      return false;
+#endif
+  }
+  return false;
+}
+
+/// @brief For an entry gated on both @p first and @p second: the one this build lacks,
+///        @p first when both are missing.
+constexpr Feature first_missing(Feature first, Feature second) noexcept {
+  return is_compiled_in(first) ? second : first;
+}
+
 /// @brief The one refusal of an entry whose subsystem is compiled out: records
 ///        @p feature's message and returns SONARE_ERROR_NOT_SUPPORTED.
 /// @details @p unused are the entry's parameters, swallowed in place of (void) casts.
@@ -443,6 +516,28 @@ template <typename... T>
 [[nodiscard]] SonareError refuse_not_compiled_in(Feature feature, const T&... unused) noexcept {
   ignore_args(unused...);
   set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature));
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
+/// @brief refuse_not_compiled_in for an entry that returns a handle: records the same
+///        message and returns a null @p Handle pointer.
+template <typename Handle, typename... T>
+[[nodiscard]] Handle* refuse_not_compiled_in_handle(Feature feature, const T&... unused) noexcept {
+  ignore_args(unused...);
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature));
+  return nullptr;
+}
+
+/// @brief Refuses one requested value that only a compiled-out subsystem serves, while the
+///        rest of the entry works: records "<subject>: <feature> support is not compiled in".
+[[nodiscard]] inline SonareError refuse_value_not_compiled_in(Feature feature,
+                                                              const char* subject) noexcept {
+  try {
+    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                   (std::string(subject) + ": " + not_compiled_in_message(feature)).c_str());
+  } catch (...) {
+    set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature));
+  }
   return SONARE_ERROR_NOT_SUPPORTED;
 }
 
@@ -507,17 +602,6 @@ inline std::string join_names(const std::vector<std::string>& values) {
 }
 
 }  // namespace sonare_c_detail
-
-// Stubs out a C API function body when an optional module is not compiled in:
-// swallows the (otherwise unused) parameters via ignore_args and returns
-// SONARE_ERROR_NOT_SUPPORTED. Shared by the optional-module translation units
-// (voice changer / pitch editor) so they suppress unused-parameter warnings the
-// same way instead of hand-rolling (void) casts.
-#define SONARE_C_STUB_NOT_SUPPORTED(...)       \
-  do {                                         \
-    sonare_c_detail::ignore_args(__VA_ARGS__); \
-    return SONARE_ERROR_NOT_SUPPORTED;         \
-  } while (false)
 
 // Common entry guard for every public SonareError-returning C ABI function,
 // except the documented audio-thread process entries below.

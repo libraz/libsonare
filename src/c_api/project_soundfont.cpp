@@ -145,7 +145,8 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, data, size);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 data, size);
 #endif
 }
 
@@ -157,7 +158,7 @@ SonareError sonare_project_clear_soundfont(SonareProject* project) {
   project->soundfont.reset();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project);
 #endif
   SONARE_C_CATCH
 }
@@ -172,7 +173,8 @@ SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t
   return SONARE_OK;
 #else
   if (out_count) *out_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
 }
 
@@ -197,6 +199,7 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
   SONARE_C_CATCH
 #else
   if (out_count) *out_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out, max_entries, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out, max_entries, out_count);
 #endif
 }

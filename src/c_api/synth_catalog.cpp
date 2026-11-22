@@ -109,7 +109,7 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(name, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, name, out);
 #endif
 }
 
@@ -354,10 +354,9 @@ SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  (void)engine_mode;
   SONARE_C_REQUIRE_NONNULL(out_json);
-  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED, "built without arrangement support");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement,
+                                                 engine_mode);
 #endif
 }
 
@@ -372,8 +371,7 @@ SonareError sonare_synth_patch_param_info(char** out_json) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED, "built without arrangement support");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement);
 #endif
 }
 

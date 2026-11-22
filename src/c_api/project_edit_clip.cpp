@@ -592,7 +592,8 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
   SONARE_C_CATCH
 #else
   if (out_clip_id) *out_clip_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 desc, out_clip_id);
 #endif
 }
 
@@ -647,7 +648,9 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, interleaved, frames, channels, sample_rate);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 source_id, interleaved, frames, channels,
+                                                 sample_rate);
 #endif
 }
 
@@ -682,7 +685,8 @@ SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uin
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, content_hash, external_stem_role);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 source_id, content_hash, external_stem_role);
 #endif
 }
 
@@ -846,7 +850,8 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
 #else
   if (out_clip_id) *out_clip_id = {};
   if (out_take_count) *out_take_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id, out_take_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 desc, out_clip_id, out_take_count);
 #endif
 }
 
@@ -909,7 +914,8 @@ SonareError sonare_project_add_midi_clip(SonareProject* project, double start_pp
 #else
   if (out_clip_id) *out_clip_id = {};
   if (out_track_id) *out_track_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, start_ppq, length_ppq, out_track_id, out_clip_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 start_ppq, length_ppq, out_track_id, out_clip_id);
 #endif
 }
 
@@ -946,7 +952,8 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
   SONARE_C_CATCH
 #else
   if (out_new_clip_id) *out_new_clip_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, split_ppq, out_new_clip_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, split_ppq, out_new_clip_id);
 #endif
 }
 
@@ -975,7 +982,8 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, new_start_ppq, new_length_ppq);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, new_start_ppq, new_length_ppq);
 #endif
 }
 
@@ -1006,7 +1014,8 @@ SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, d
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, new_start_ppq, new_track_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, new_start_ppq, new_track_id);
 #endif
 }
 
@@ -1037,7 +1046,8 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, warp_ref_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, warp_ref_id);
 #endif
 }
 
@@ -1078,7 +1088,8 @@ SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t c
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, mode);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, mode);
 #endif
 }
 
@@ -1127,7 +1138,8 @@ SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, takes, take_count, active_take_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, takes, take_count, active_take_id);
 #endif
 }
 
@@ -1171,7 +1183,8 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, segments, segment_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, segments, segment_count);
 #endif
 }
 
@@ -1209,7 +1222,8 @@ SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id)
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id);
 #endif
 }
 
@@ -1236,7 +1250,8 @@ SonareError sonare_project_set_clip_gain(SonareProject* project, uint32_t clip_i
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, gain);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, gain);
 #endif
 }
 
@@ -1273,7 +1288,8 @@ SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_i
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, fade_in, fade_out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, fade_in, fade_out);
 #endif
 }
 
@@ -1310,7 +1326,9 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, loop_mode, loop_length_ppq, loop_crossfade_ppq);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, loop_mode, loop_length_ppq,
+                                                 loop_crossfade_ppq);
 #endif
 }
 
@@ -1341,7 +1359,8 @@ SonareError sonare_project_set_clip_source(SonareProject* project, uint32_t clip
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, source_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, source_id);
 #endif
 }
 
@@ -1378,6 +1397,7 @@ SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_
   SONARE_C_CATCH
 #else
   if (out_new_clip_id) *out_new_clip_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, new_start_ppq, out_new_clip_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, new_start_ppq, out_new_clip_id);
 #endif
 }

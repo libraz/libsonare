@@ -562,8 +562,8 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
                        return copy_audio_result(result, out, out_length);
                      });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, current_midi, target_midi, out,
-                              out_length);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, current_midi,
+                                target_midi, out, out_length);
 #endif
 }
 
@@ -604,8 +604,9 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
         return copy_audio_result(result, out, out_length);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
-                              hop_length, target_midi, out, out_length);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
+                                voiced_prob, voiced, n_frames, hop_length, target_midi, out,
+                                out_length);
 #endif
 }
 
@@ -694,8 +695,8 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
         return copy_audio_result(result, out, out_length);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
-                              hop_length, config, out, out_length);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
+                                voiced_prob, voiced, n_frames, hop_length, config, out, out_length);
 #endif
 }
 
@@ -742,7 +743,8 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
                        return copy_audio_result(result.audio, out, out_length);
                      });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, key, config, out, out_length, out_key);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, key, config,
+                                out, out_length, out_key);
 #endif
 }
 
@@ -777,8 +779,8 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                        return copy_audio_result(result, out, out_length);
                      });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, onset_sample, offset_sample,
-                              stretch_ratio, out, out_length);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, onset_sample,
+                                offset_sample, stretch_ratio, out, out_length);
 #endif
 }
 
@@ -812,8 +814,8 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
                            editing::note_model::extract_notes(audio, track, extractor_config), out);
                      });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
-                              frame_rate, config, out);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
+                                voiced_prob, voiced, n_frames, frame_rate, config, out);
 #endif
 }
 
@@ -909,9 +911,9 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
         return copy_audio_result(result, out, out_length);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, notes, note_count, envelopes,
-                              envelope_count, f0_hz, voiced, n_frames, frame_rate, config, out,
-                              out_length);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, notes,
+                                note_count, envelopes, envelope_count, f0_hz, voiced, n_frames,
+                                frame_rate, config, out, out_length);
 #endif
 }
 
@@ -965,8 +967,8 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voice
   SONARE_C_CATCH
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(f0_hz, voiced, n_frames, frame_rate, median_hz, vibrato_cutoff_hz,
-                              out);
+  return refuse_not_compiled_in(Feature::kPitchEditor, f0_hz, voiced, n_frames, frame_rate,
+                                median_hz, vibrato_cutoff_hz, out);
 #endif
 }
 
@@ -1009,9 +1011,9 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
                                                                     frame, extractor_config);
                            });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
-                              frame_rate, config, notes, note_count, envelopes, envelope_count,
-                              index, frame, out);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
+                                voiced_prob, voiced, n_frames, frame_rate, config, notes,
+                                note_count, envelopes, envelope_count, index, frame, out);
 #endif
   SONARE_C_CATCH
 }
@@ -1048,9 +1050,9 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                                                                      first, last, extractor_config);
                            });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
-                              frame_rate, config, notes, note_count, envelopes, envelope_count,
-                              first, last, out);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
+                                voiced_prob, voiced, n_frames, frame_rate, config, notes,
+                                note_count, envelopes, envelope_count, first, last, out);
 #endif
   SONARE_C_CATCH
 }
@@ -1093,7 +1095,7 @@ SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int t
 #else
   if (out) *out = nullptr;
   if (out_count) *out_count = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(bytes, len, track_index, out, out_count);
+  return refuse_not_compiled_in(Feature::kArrangement, bytes, len, track_index, out, out_count);
 #endif
 }
 
@@ -1172,8 +1174,8 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
   SONARE_C_CATCH
 #else
   if (out_assigned_count) *out_assigned_count = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(notes, note_count, sample_rate, targets, target_count, config,
-                              out_assigned_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, notes, note_count, sample_rate, targets,
+                                target_count, config, out_assigned_count);
 #endif
 }
 
@@ -1382,7 +1384,7 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
         return copy_audio_result(result, out, out_length);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, onset_sample, offset_sample,
-                              target_onset_sample, out, out_length);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, onset_sample,
+                                offset_sample, target_onset_sample, out, out_length);
 #endif
 }

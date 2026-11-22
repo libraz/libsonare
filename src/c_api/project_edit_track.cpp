@@ -198,7 +198,8 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
   SONARE_C_CATCH
 #else
   if (out_track_id) *out_track_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_track_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 desc, out_track_id);
 #endif
 }
 
@@ -218,7 +219,8 @@ SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t o
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, overlap_policy);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 overlap_policy);
 #endif
 }
 
@@ -270,7 +272,8 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, segments, segment_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 segments, segment_count);
 #endif
 }
 
@@ -321,7 +324,8 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, segments, segment_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 segments, segment_count);
 #endif
 }
 
@@ -349,7 +353,8 @@ SonareError sonare_project_set_marker(SonareProject* project, const SonareProjec
   SONARE_C_CATCH
 #else
   if (out_marker_id) *out_marker_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, marker, name, out_marker_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 marker, name, out_marker_id);
 #endif
 }
 
@@ -381,7 +386,8 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, scene_json);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 scene_json);
 #endif
 }
 
@@ -403,7 +409,8 @@ SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, kind);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, kind);
 #endif
 }
 
@@ -453,7 +460,8 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, desc);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 desc);
 #endif
 }
 
@@ -471,7 +479,8 @@ SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, warp_ref_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 warp_ref_id);
 #endif
 }
 
@@ -487,7 +496,8 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, destination_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, destination_id);
 #endif
 }
 
@@ -507,7 +517,8 @@ SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, gain);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, gain);
 #endif
 }
 
@@ -522,7 +533,8 @@ SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, mute);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, mute);
 #endif
 }
 
@@ -537,7 +549,8 @@ SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, solo);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, solo);
 #endif
 }
 
@@ -558,7 +571,8 @@ SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, pan);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, pan);
 #endif
 }
 
@@ -589,7 +603,8 @@ SonareError sonare_project_remove_track(SonareProject* project, uint32_t track_i
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id);
 #endif
 }
 
@@ -606,7 +621,8 @@ SonareError sonare_project_rename_track(SonareProject* project, uint32_t track_i
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, name);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, name);
 #endif
 }
 
@@ -625,7 +641,8 @@ SonareError sonare_project_set_track_route(SonareProject* project, uint32_t trac
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, channel_strip_ref, output_target);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, channel_strip_ref, output_target);
 #endif
 }
 
@@ -648,7 +665,8 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
   SONARE_C_CATCH
 #else
   if (out_target_param_id) *out_target_param_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, desc, out_target_param_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, desc, out_target_param_id);
 #endif
 }
 
@@ -679,7 +697,8 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, target_param_id, desc);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, target_param_id, desc);
 #endif
 }
 
@@ -696,7 +715,8 @@ SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, target_param_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 track_id, target_param_id);
 #endif
 }
 
@@ -708,7 +728,7 @@ SonareError sonare_project_undo(SonareProject* project) {
   return project->history.undo() ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project);
 #endif
 }
 
@@ -720,7 +740,7 @@ SonareError sonare_project_redo(SonareProject* project) {
   return project->history.redo() ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project);
 #endif
 }
 
@@ -733,7 +753,7 @@ SonareError sonare_project_clear_history(SonareProject* project) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project);
 #endif
 }
 
@@ -746,7 +766,8 @@ SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t dep
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, depth);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 depth);
 #endif
 }
 
@@ -759,6 +780,7 @@ SonareError sonare_project_set_max_history_bytes(SonareProject* project, size_t 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, bytes);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 bytes);
 #endif
 }

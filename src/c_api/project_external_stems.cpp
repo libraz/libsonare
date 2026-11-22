@@ -287,7 +287,8 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   SONARE_C_CATCH
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, request, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 request, out);
 #endif
 }
 

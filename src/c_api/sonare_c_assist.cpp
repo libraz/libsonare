@@ -336,7 +336,10 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(out_json);
-  SONARE_C_STUB_NOT_SUPPORTED(project, request_json, out_json);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
+                                     sonare_c_detail::Feature::kAssist),
+      project, request_json, out_json);
 #endif
 }
 
@@ -351,6 +354,9 @@ SonareError sonare_project_assist_apply_json(SonareProject* project, const char*
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(out_json);
-  SONARE_C_STUB_NOT_SUPPORTED(project, request_json, out_json);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
+                                     sonare_c_detail::Feature::kAssist),
+      project, request_json, out_json);
 #endif
 }

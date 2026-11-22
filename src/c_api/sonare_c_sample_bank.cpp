@@ -33,9 +33,7 @@ SonareError sonare_sample_bank_create(SonareSampleBank** out) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                                  "sample bank: arrangement support is not built");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, out);
 #endif
 }
 
@@ -99,7 +97,8 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(bank, data, n_frames, desc, out_index);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bank, data,
+                                                 n_frames, desc, out_index);
 #endif
 }
 
@@ -161,7 +160,8 @@ SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_ind
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(bank, set_index, zone);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bank,
+                                                 set_index, zone);
 #endif
 }
 
@@ -174,7 +174,8 @@ SonareError sonare_sample_bank_sample_count(const SonareSampleBank* bank, size_t
   *out_count = bank->bank->sample_count();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bank,
+                                                 out_count);
 #endif
 }
 
@@ -187,7 +188,8 @@ SonareError sonare_sample_bank_set_count(const SonareSampleBank* bank, size_t* o
   *out_count = bank->bank->set_count();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bank,
+                                                 out_count);
 #endif
 }
 

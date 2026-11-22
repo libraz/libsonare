@@ -280,10 +280,7 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
       return err;
     }
 #else
-    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                   "options.dither is not supported because mastering support is not "
-                   "compiled in");
-    return SONARE_ERROR_NOT_SUPPORTED;
+    return refuse_value_not_compiled_in(Feature::kMastering, "options.dither");
 #endif
   }
   // prepare admits only whole-hertz rates, so the prepared rate converts exactly.

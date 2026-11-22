@@ -11,12 +11,6 @@
 
 using namespace sonare_c_detail;
 
-namespace {
-
-constexpr const char* kNotCompiledIn = "mixing support is not compiled in";
-
-}  // namespace
-
 SonareError sonare_mixer_create(int sample_rate, int max_block_size, SonareMixer** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
@@ -32,11 +26,7 @@ void sonare_mixer_add_strip_options_init(SonareMixerAddStripOptions* options) {
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id,
                                     const SonareMixerAddStripOptions* options) {
   SONARE_C_API_ENTRY;
-  (void)mixer;
-  (void)id;
-  (void)options;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return nullptr;
+  return refuse_not_compiled_in_handle<SonareStrip>(Feature::kMixing, mixer, id, options);
 }
 
 SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db) {
@@ -225,18 +215,12 @@ SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_c
 
 SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index) {
   SONARE_C_API_ENTRY;
-  (void)mixer;
-  (void)index;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return nullptr;
+  return refuse_not_compiled_in_handle<SonareStrip>(Feature::kMixing, mixer, index);
 }
 
 SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id) {
   SONARE_C_API_ENTRY;
-  (void)mixer;
-  (void)id;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return nullptr;
+  return refuse_not_compiled_in_handle<SonareStrip>(Feature::kMixing, mixer, id);
 }
 
 SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned int insert_index,
@@ -273,11 +257,8 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
 
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
-  (void)json;
-  (void)sample_rate;
-  (void)max_block_size;
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, kNotCompiledIn);
-  return nullptr;
+  return refuse_not_compiled_in_handle<SonareMixer>(Feature::kMixing, json, sample_rate,
+                                                    max_block_size);
 }
 
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out) {

@@ -630,9 +630,7 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
     });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
-  (void)destination_id;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "part rigs require a build with arrangement");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
   sonare::midi::PartRig rig;
@@ -647,8 +645,7 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
   if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_FORMAT;
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
-    set_last_error(SONARE_ERROR_NOT_SUPPORTED, "chain part rigs require a build with mastering");
-    return SONARE_ERROR_NOT_SUPPORTED;
+    return refuse_value_not_compiled_in(Feature::kMastering, "mode");
   }
 #endif
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);

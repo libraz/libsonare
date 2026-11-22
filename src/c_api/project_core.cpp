@@ -57,7 +57,7 @@ SonareError sonare_project_create(SonareProject** out) {
   SONARE_C_CATCH
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, out);
 #endif
 }
 
@@ -87,7 +87,8 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 #else
   if (out_json) *out_json = {};
   if (out_len) *out_len = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_json, out_len);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_json, out_len);
 #endif
 }
 
@@ -157,7 +158,8 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
 #else
   if (out) *out = {};
   if (out_diag) *out_diag = {};
-  SONARE_C_STUB_NOT_SUPPORTED(json, len, out, out_diag);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, json, len,
+                                                 out, out_diag);
 #endif
 }
 
@@ -191,7 +193,8 @@ SonareError sonare_project_unresolved_audio_source_count(const SonareProject* pr
   return SONARE_OK;
 #else
   if (out_count) *out_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
 }
 
@@ -215,7 +218,8 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
   return refuse_index_past("unresolved audio sources");
 #else
   if (out_source_id) *out_source_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out_source_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out_source_id);
 #endif
 }
 
@@ -239,7 +243,8 @@ SonareError sonare_project_unresolved_audio_source_by_index(const SonareProject*
   return refuse_index_past("unresolved audio sources");
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
 }
 
@@ -266,7 +271,8 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, int sample_ra
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, sample_rate);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 sample_rate);
 #endif
 }
 
@@ -280,7 +286,8 @@ SonareError sonare_project_get_sample_rate(const SonareProject* project, double*
   return SONARE_OK;
 #else
   if (out_sample_rate) *out_sample_rate = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_sample_rate);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_sample_rate);
 #endif
 }
 
@@ -295,7 +302,8 @@ SonareError sonare_project_get_overlap_policy(const SonareProject* project,
   return SONARE_OK;
 #else
   if (out_overlap_policy) *out_overlap_policy = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_overlap_policy);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_overlap_policy);
 #endif
 }
 
@@ -320,7 +328,8 @@ SonareError sonare_project_track_count(const SonareProject* project, size_t* out
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.tracks().size(); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -331,7 +340,8 @@ SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.clips().size(); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -343,7 +353,8 @@ SonareError sonare_project_source_count(const SonareProject* project, size_t* ou
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.sources().size(); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -355,7 +366,8 @@ SonareError sonare_project_marker_count(const SonareProject* project, size_t* ou
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.markers().size(); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -378,7 +390,8 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
   return SONARE_OK;
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
 }
 
@@ -398,7 +411,8 @@ SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, 
   return SONARE_OK;
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
 }
 
@@ -418,7 +432,8 @@ SonareError sonare_project_time_signature_by_index(const SonareProject* project,
   return SONARE_OK;
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
 }
 
@@ -443,7 +458,8 @@ SonareError sonare_project_track_by_index(const SonareProject* project, size_t i
   return SONARE_OK;
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
 }
 
@@ -472,7 +488,8 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
   return SONARE_OK;
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
 }
 
@@ -491,7 +508,8 @@ SonareError sonare_project_track_name_by_index(const SonareProject* project, siz
   SONARE_C_CATCH
 #else
   if (out_name) *out_name = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out_name);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out_name);
 #endif
 }
 
@@ -515,7 +533,8 @@ SonareError sonare_project_source_name_or_uri_by_index(const SonareProject* proj
   SONARE_C_CATCH
 #else
   if (out_name_or_uri) *out_name_or_uri = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out_name_or_uri);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out_name_or_uri);
 #endif
 }
 
@@ -542,7 +561,8 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
   return SONARE_OK;
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
   SONARE_C_CATCH
 }
@@ -570,7 +590,8 @@ SonareError sonare_project_get_audio_source_metadata(const SonareProject* projec
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 source_id, out);
 #endif
 }
 
@@ -590,7 +611,8 @@ SonareError sonare_project_get_audio_source_uri(const SonareProject* project, ui
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, out_uri);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 source_id, out_uri);
 #endif
 }
 
@@ -618,7 +640,8 @@ SonareError sonare_project_marker_name_by_index(const SonareProject* project, si
   SONARE_C_CATCH
 #else
   if (out_name) *out_name = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out_name);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out_name);
 #endif
 }
 
@@ -629,7 +652,8 @@ SonareError sonare_project_tempo_segment_count(const SonareProject* project, siz
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.tempo_segments().size(); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -641,7 +665,8 @@ SonareError sonare_project_time_signature_count(const SonareProject* project, si
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.time_signatures().size(); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -689,7 +714,8 @@ SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileR
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, out, out_timeline);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out, out_timeline);
 #endif
 }
 
@@ -707,7 +733,8 @@ SonareError sonare_project_last_bounce_compile_result(const SonareProject* proje
   SONARE_C_CATCH
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out);
 #endif
 }
 
@@ -757,8 +784,9 @@ SonareError sonare_project_set_assist_sidecar(SonareProject* project, const char
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, module_id, schema_version, target_track_id, region_start_ppq,
-                              region_end_ppq, payload, payload_len);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::Feature::kArrangement, project, module_id, schema_version, target_track_id,
+      region_start_ppq, region_end_ppq, payload, payload_len);
 #endif
 }
 
@@ -800,7 +828,8 @@ SonareError sonare_project_get_assist_sidecar(const SonareProject* project, size
   SONARE_C_CATCH
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out);
 #endif
 }
 

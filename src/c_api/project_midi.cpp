@@ -93,7 +93,8 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, events, count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, events, count);
 #endif
 }
 
@@ -111,7 +112,8 @@ SonareError sonare_midi_note_on(double ppq, uint8_t group, uint8_t channel, uint
       },
       [&] { return sonare::midi::make_midi1_note_on(group, channel, note, velocity); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, velocity, out);
 #endif
 }
 
@@ -129,7 +131,8 @@ SonareError sonare_midi_note_off(double ppq, uint8_t group, uint8_t channel, uin
       },
       [&] { return sonare::midi::make_midi1_note_off(group, channel, note, velocity); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, velocity, out);
 #endif
 }
 
@@ -147,7 +150,8 @@ SonareError sonare_midi_cc(double ppq, uint8_t group, uint8_t channel, uint8_t c
       },
       [&] { return sonare::midi::make_midi1_control_change(group, channel, controller, value); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, controller, value, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, controller, value, out);
 #endif
 }
 
@@ -165,7 +169,8 @@ SonareError sonare_midi_poly_pressure(double ppq, uint8_t group, uint8_t channel
       },
       [&] { return sonare::midi::make_midi1_poly_pressure(group, channel, note, pressure); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, pressure, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, pressure, out);
 #endif
 }
 
@@ -182,7 +187,8 @@ SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint
       },
       [&] { return sonare::midi::make_midi1_program_change(group, channel, program); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, program, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, program, out);
 #endif
 }
 
@@ -203,8 +209,9 @@ SonareError sonare_midi2_note_on(double ppq, uint8_t group, uint8_t channel, uin
                                                 attribute_data);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity16, attribute_type, attribute_data,
-                              out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, velocity16, attribute_type,
+                                                 attribute_data, out);
 #endif
 }
 
@@ -221,7 +228,8 @@ SonareError sonare_midi2_note_off(double ppq, uint8_t group, uint8_t channel, ui
       },
       [&] { return sonare::midi::make_midi2_note_off(group, channel, note, velocity16); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity16, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, velocity16, out);
 #endif
 }
 
@@ -238,7 +246,8 @@ SonareError sonare_midi2_cc(double ppq, uint8_t group, uint8_t channel, uint8_t 
       },
       [&] { return sonare::midi::make_midi2_control_change(group, channel, controller, value32); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, controller, value32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, controller, value32, out);
 #endif
 }
 
@@ -255,7 +264,8 @@ SonareError sonare_midi2_poly_pressure(double ppq, uint8_t group, uint8_t channe
       },
       [&] { return sonare::midi::make_midi2_poly_pressure(group, channel, note, pressure32); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, pressure32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, pressure32, out);
 #endif
 }
 
@@ -268,7 +278,8 @@ SonareError sonare_midi2_channel_pressure(double ppq, uint8_t group, uint8_t cha
       out, ppq, [&] { check_midi_head(ppq, group, channel); },
       [&] { return sonare::midi::make_midi2_channel_pressure(group, channel, pressure32); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, pressure32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, pressure32, out);
 #endif
 }
 
@@ -281,7 +292,8 @@ SonareError sonare_midi2_pitch_bend(double ppq, uint8_t group, uint8_t channel, 
       out, ppq, [&] { check_midi_head(ppq, group, channel); },
       [&] { return sonare::midi::make_midi2_pitch_bend(group, channel, bend32); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bend32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, bend32, out);
 #endif
 }
 
@@ -308,7 +320,9 @@ SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uin
                                                        bank_valid != 0);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, program, bank_valid, bank_msb, bank_lsb, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, program, bank_valid, bank_msb, bank_lsb,
+                                                 out);
 #endif
 }
 
@@ -329,7 +343,8 @@ SonareError sonare_midi2_registered_controller(double ppq, uint8_t group, uint8_
         return sonare::midi::make_midi2_registered_controller(group, channel, bank, index, value32);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, value32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, bank, index, value32, out);
 #endif
 }
 
@@ -350,7 +365,8 @@ SonareError sonare_midi2_assignable_controller(double ppq, uint8_t group, uint8_
         return sonare::midi::make_midi2_assignable_controller(group, channel, bank, index, value32);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, value32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, bank, index, value32, out);
 #endif
 }
 
@@ -372,7 +388,8 @@ SonareError sonare_midi2_relative_registered_controller(double ppq, uint8_t grou
             group, channel, bank, index, static_cast<uint32_t>(delta32));
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, delta32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, bank, index, delta32, out);
 #endif
 }
 
@@ -394,7 +411,8 @@ SonareError sonare_midi2_relative_assignable_controller(double ppq, uint8_t grou
             group, channel, bank, index, static_cast<uint32_t>(delta32));
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, delta32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, bank, index, delta32, out);
 #endif
 }
 
@@ -414,7 +432,8 @@ SonareError sonare_midi2_registered_per_note_controller(double ppq, uint8_t grou
         return sonare::midi::make_midi2_per_note_controller(group, channel, note, index, value32);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, index, value32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, index, value32, out);
 #endif
 }
 
@@ -435,7 +454,8 @@ SonareError sonare_midi2_assignable_per_note_controller(double ppq, uint8_t grou
                                                                        value32);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, index, value32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, index, value32, out);
 #endif
 }
 
@@ -453,7 +473,8 @@ SonareError sonare_midi2_per_note_pitch_bend(double ppq, uint8_t group, uint8_t 
       },
       [&] { return sonare::midi::make_midi2_per_note_pitch_bend(group, channel, note, bend32); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, bend32, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, bend32, out);
 #endif
 }
 
@@ -474,7 +495,8 @@ SonareError sonare_midi2_per_note_management(double ppq, uint8_t group, uint8_t 
                                                             reset != 0);
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, detach, reset, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, note, detach, reset, out);
 #endif
 }
 
@@ -725,8 +747,9 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
   *out_count = messages.count;
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank_msb, bank_lsb, program, out_events,
-                              out_capacity, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, bank_msb, bank_lsb, program, out_events,
+                                                 out_capacity, out_count);
 #endif
 }
 
@@ -833,8 +856,9 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(events, count, config, out_events, out_capacity, out_count,
-                              out_overflowed, out_overflow_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, events,
+                                                 count, config, out_events, out_capacity, out_count,
+                                                 out_overflowed, out_overflow_count);
 #endif
 }
 
@@ -876,8 +900,9 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
   return SONARE_ERROR_INVALID_STATE;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(events, count, param_id, min_value, max_value, min_movement,
-                              out_binding);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, events,
+                                                 count, param_id, min_value, max_value,
+                                                 min_movement, out_binding);
 #endif
 }
 
@@ -912,7 +937,8 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(bindings, binding_count, event, out_point);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bindings,
+                                                 binding_count, event, out_point);
 #endif
 }
 
@@ -943,7 +969,9 @@ SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(bindings, binding_count, param_id, unit_value, group, ppq, out_event);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bindings,
+                                                 binding_count, param_id, unit_value, group, ppq,
+                                                 out_event);
 #endif
 }
 
@@ -960,7 +988,8 @@ SonareError sonare_midi_channel_pressure(double ppq, uint8_t group, uint8_t chan
       },
       [&] { return sonare::midi::make_midi1_channel_pressure(group, channel, pressure); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, pressure, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, pressure, out);
 #endif
 }
 
@@ -977,7 +1006,8 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
       },
       [&] { return sonare::midi::make_midi1_pitch_bend(group, channel, bend); });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bend, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
+                                                 channel, bend, out);
 #endif
 }
 
@@ -1021,7 +1051,8 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   SONARE_C_CATCH
 #else
   if (out_first_clip_id) *out_first_clip_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, bytes, len, out_first_clip_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 bytes, len, out_first_clip_id);
 #endif
 }
 
@@ -1055,7 +1086,8 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
   SONARE_C_CATCH
 #else
   if (out_first_clip_id) *out_first_clip_id = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, bytes, len, out_first_clip_id);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 bytes, len, out_first_clip_id);
 #endif
 }
 
@@ -1124,7 +1156,8 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
 #else
   if (out_bytes) *out_bytes = {};
   if (out_len) *out_len = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_bytes, out_len);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_bytes, out_len);
 #endif
 }
 
@@ -1193,7 +1226,8 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 #else
   if (out_bytes) *out_bytes = {};
   if (out_len) *out_len = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, out_bytes, out_len);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_bytes, out_len);
 #endif
 }
 
@@ -1240,7 +1274,8 @@ SonareError sonare_project_set_program(SonareProject* project, uint32_t clip_id,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, group, channel, program, bank);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, group, channel, program, bank);
 #endif
 }
 
@@ -1276,7 +1311,8 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, out);
 #endif
 }
 
@@ -1318,8 +1354,9 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
   SONARE_C_CATCH
 #else
   if (out_count) *out_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, config_json, out_source_index, out_capacity,
-                              out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, config_json, out_source_index,
+                                                 out_capacity, out_count);
 #endif
 }
 
@@ -1348,7 +1385,8 @@ SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, u
   SONARE_C_CATCH
 #else
   if (out_count) *out_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, config_json, out_count);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, config_json, out_count);
 #endif
 }
 

@@ -305,7 +305,10 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   SONARE_C_CATCH
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, tempo_bpm, config, out);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
+                                     sonare_c_detail::Feature::kPitchEditor),
+      samples, length, sample_rate, tempo_bpm, config, out);
 #endif
 }
 
@@ -349,7 +352,9 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, samples, length, sample_rate, config,
-                              out_note_count);
+  return sonare_c_detail::refuse_not_compiled_in(
+      sonare_c_detail::first_missing(sonare_c_detail::Feature::kArrangement,
+                                     sonare_c_detail::Feature::kPitchEditor),
+      project, clip_id, samples, length, sample_rate, config, out_note_count);
 #endif
 }

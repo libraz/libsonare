@@ -783,7 +783,9 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
   if (out_interleaved) *out_interleaved = {};
   if (out_len) *out_len = {};
   if (out_num_channels) *out_num_channels = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(project, options, out_interleaved, out_len, out_num_channels);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 options, out_interleaved, out_len,
+                                                 out_num_channels);
 #endif
 }
 

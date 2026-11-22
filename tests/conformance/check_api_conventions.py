@@ -1369,6 +1369,91 @@ def _c_error_path_files(root: Path) -> list[dict]:
     return out
 
 
+# A preprocessor condition that holds only while some optional subsystem is compiled out.
+_C_FEATURE_OFF = re.compile(r"#\s*ifndef\s+SONARE_WITH_\w+|!\s*defined\s*\(?\s*SONARE_WITH_\w+")
+_C_FEATURE_ON = re.compile(r"(?<!!)\bdefined\s*\(?\s*SONARE_WITH_\w+|#\s*ifdef\s+SONARE_WITH_\w+")
+_C_NOT_SUPPORTED = re.compile(
+    r"\b(refuse_(?:value_)?not_compiled_in(?:_handle)?|not_compiled_in_message)\b"
+    r"|\b(SONARE_ERROR_NOT_SUPPORTED|SONARE_C_STUB_NOT_SUPPORTED"
+    r"|ErrorCode::NotSupported)\b"
+)
+# The translation units that stand in for a compiled-out subsystem as a whole.
+_C_STUB_UNIT = re.compile(r"_stubs\.cpp$")
+
+
+def _c_feature_off_lines(code: str) -> set[int]:
+    """1-based lines that compile only while some SONARE_WITH_* subsystem is off."""
+    off: set[int] = set()
+    # One frame per open #if: (this branch is feature-off, the #if named a feature as on).
+    stack: list[tuple[bool, bool]] = []
+    for number, line in enumerate(code.split("\n"), 1):
+        directive = line.strip()
+        if re.match(r"#\s*if", directive):
+            stack.append(
+                (bool(_C_FEATURE_OFF.search(directive)), bool(_C_FEATURE_ON.search(directive)))
+            )
+        elif re.match(r"#\s*elif", directive) and stack:
+            stack[-1] = (bool(_C_FEATURE_OFF.search(directive)) or stack[-1][1], stack[-1][1])
+        elif re.match(r"#\s*else", directive) and stack:
+            stack[-1] = (stack[-1][1], stack[-1][1])
+        elif re.match(r"#\s*endif", directive) and stack:
+            stack.pop()
+        elif any(frame[0] for frame in stack):
+            off.add(number)
+    return off
+
+
+def _c_statement_rest(code: str, at: int) -> str:
+    """``code`` from ``at`` to the end of its statement: a ``;``, or a macro's last line."""
+    eol = code.find("\n", at)
+    in_macro = eol > 0 and code[:eol].rstrip(" \t").endswith("\\")
+    end = re.compile(r";|(?<!\\)\n" if in_macro else ";").search(code, at)
+    return code[at : end.end() if end else len(code)]
+
+
+def _c_not_compiled_in_sites(root: Path) -> list[dict]:
+    """Every NOT_SUPPORTED a compiled-out subsystem returns, and the form it takes."""
+    out: list[dict] = []
+    for path in sorted((root / "src" / "c_api").glob("*.[ch]*")):
+        if path.name == "sonare_c_internal.h":
+            continue
+        code = _c_blank(path.read_text(encoding="utf-8"))
+        rel = path.relative_to(root).as_posix()
+        whole = bool(_C_STUB_UNIT.search(path.name))
+        off = _c_feature_off_lines(code)
+        start = 0
+        for number, line in enumerate(code.split("\n"), 1):
+            matches = list(_C_NOT_SUPPORTED.finditer(line))
+            # A line spelling its message through the helper family is one helper site, and
+            # a code whose statement goes on to spell it is counted at that helper's line.
+            if any(m.group(1) for m in matches):
+                matches = [next(m for m in matches if m.group(1))]
+            else:
+                matches = [
+                    m
+                    for m in matches
+                    if m.group(2) == "SONARE_C_STUB_NOT_SUPPORTED"
+                    or not any(
+                        later.group(1)
+                        for later in _C_NOT_SUPPORTED.finditer(_c_statement_rest(code, start + m.end()))
+                    )
+                ]
+            start += len(line) + 1
+            for m in matches:
+                stub_macro = m.group(2) == "SONARE_C_STUB_NOT_SUPPORTED"
+                if not (whole or number in off or stub_macro):
+                    continue
+                out.append(
+                    {
+                        "surface": "c",
+                        "kind": "c-not-compiled-in",
+                        "name": f"{rel}:{number}",
+                        "form": "helper" if m.group(1) else m.group(2),
+                    }
+                )
+    return out
+
+
 _C_FORWARD = re.compile(r"\breturn\s+(sonare_\w+)\s*\(")
 
 
@@ -1756,6 +1841,17 @@ RULES: list[Rule] = [
             else None
         ),
         scan=_document_refusal_sites,
+    ),
+    Rule(
+        name="c-not-compiled-in",
+        summary="a C-ABI entry of a compiled-out subsystem refuses through refuse_not_compiled_in",
+        population=lambda r: r["kind"] == "c-not-compiled-in",
+        violation=lambda r: (
+            None
+            if r["form"] == "helper"
+            else f"refuses with {r['form']} instead of refuse_not_compiled_in"
+        ),
+        scan=_c_not_compiled_in_sites,
     ),
     Rule(
         name="c-entry-forward",

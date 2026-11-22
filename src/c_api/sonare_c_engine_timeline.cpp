@@ -43,6 +43,6 @@ SonareError sonare_engine_apply_project_timeline(SonareEngine* engine,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(engine, timeline);
+  return refuse_not_compiled_in(Feature::kArrangement, engine, timeline);
 #endif
 }

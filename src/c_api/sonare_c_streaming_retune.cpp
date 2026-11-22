@@ -87,12 +87,8 @@ SonareError sonare_streaming_retune_create(float pitch_semitones, float mix, int
   SONARE_C_CATCH
 #else
   SONARE_C_REQUIRE_NONNULL(out);
-  (void)pitch_semitones;
-  (void)mix;
-  (void)grain_size_samples;
-  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                                  "streaming retune: voice changer support is not built");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger,
+                                                 pitch_semitones, mix, grain_size_samples);
 #endif
 }
 
@@ -122,7 +118,8 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, int s
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune, sample_rate, max_block_size);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger, retune,
+                                                 sample_rate, max_block_size);
 #endif
 }
 
@@ -135,7 +132,7 @@ SonareError sonare_streaming_retune_reset(SonareStreamingRetune* retune) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger, retune);
 #endif
 }
 
@@ -156,7 +153,8 @@ SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, fl
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune, pitch_semitones, mix, grain_size_samples);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger, retune,
+                                                 pitch_semitones, mix, grain_size_samples);
 #endif
 }
 
@@ -174,7 +172,9 @@ SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune,
   if (out_grain_size_samples) *out_grain_size_samples = config.grain_size;
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune, out_pitch_semitones, out_mix, out_grain_size_samples);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger, retune,
+                                                 out_pitch_semitones, out_mix,
+                                                 out_grain_size_samples);
 #endif
   SONARE_C_CATCH
 }
@@ -203,7 +203,8 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
   retune->retune->process_block(retune->scratch.data(), samples, static_cast<int>(num_samples));
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune, samples, num_samples);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger, retune,
+                                                 samples, num_samples);
 #endif
   SONARE_C_CATCH
 }
@@ -218,7 +219,8 @@ SonareError sonare_streaming_retune_grain_size_samples(SonareStreamingRetune* re
   *out_grain_size_samples = retune->retune->grain_size();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune, out_grain_size_samples);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger, retune,
+                                                 out_grain_size_samples);
 #endif
 }
 
@@ -233,7 +235,8 @@ SonareError sonare_streaming_retune_latency_samples(SonareStreamingRetune* retun
   *out_latency_samples = retune->retune->latency_samples();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(retune, out_latency_samples);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kVoiceChanger, retune,
+                                                 out_latency_samples);
 #endif
   SONARE_C_CATCH
 }

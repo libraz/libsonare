@@ -643,8 +643,10 @@ vocal::VocalSessionCreateOptions import_options(const SonareVocalCreateOptions* 
 #elif defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
-#define VOCAL_SUPPORTED_BODY(...) \
-  throw sonare::SonareException(sonare::ErrorCode::NotSupported, "vocal editing unavailable")
+#define VOCAL_SUPPORTED_BODY(...)      \
+  throw sonare::SonareException(       \
+      sonare::ErrorCode::NotSupported, \
+      sonare_c_detail::not_compiled_in_message(sonare_c_detail::Feature::kPitchEditor))
 #define VOCAL_ACTION(...) return invoke([] { VOCAL_SUPPORTED_BODY(__VA_ARGS__); })
 #endif
 // A result struct is caller-versioned, so it is cleared only when its header is valid; the body

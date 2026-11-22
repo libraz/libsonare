@@ -290,7 +290,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(config, sample_rate, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kAcousticSim, config,
+                                                 sample_rate, out);
 #endif
 }
 
@@ -367,7 +368,8 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
       });
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kAcousticSim, samples,
+                                                 length, sample_rate, config, out);
 #endif
 }
 
@@ -466,7 +468,8 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
 #else
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kAcousticSim, samples,
+                                                 length, sample_rate, config, out, out_length);
 #endif
 }
 
@@ -510,6 +513,7 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   SONARE_C_REQUIRE_NONNULL(out_left);
   SONARE_C_REQUIRE_NONNULL(out_right);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  SONARE_C_STUB_NOT_SUPPORTED(left, right, length, sample_rate, config);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kAcousticSim, left,
+                                                 right, length, sample_rate, config);
 #endif
 }

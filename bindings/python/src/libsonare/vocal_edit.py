@@ -402,7 +402,7 @@ class VocalEditSession(_HandleOwner):
         """
         lib = _get_lib()
         if not int(lib.sonare_has_feature(b"vocalEdit")):
-            raise VocalEditError(6, "libsonare was built without vocal-edit support")
+            raise VocalEditError(6, "pitch editor support is not compiled in")
         source = _validate_samples(samples)
         rate = _vocal_sample_rate(sample_rate)
         raw_options, keepalive = _create_options_to_c(

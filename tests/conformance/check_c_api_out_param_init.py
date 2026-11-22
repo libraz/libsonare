@@ -328,9 +328,8 @@ _DEFINE = re.compile(r"^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)", re.MULTILINE)
 def unconditional_return_macros(paths: list[Path]) -> set[str]:
     """Macro names whose expansion always returns from the enclosing function.
 
-    The feature-disabled stub is written as a macro, so a scan that only looks
-    for the ``return`` keyword sees a gated entry point as having no exit at all
-    in its disabled branch.  A macro qualifies when its body returns and carries
+    A statement macro can carry the return, so a scan that only looks for the
+    ``return`` keyword would see a branch ending in one as having no exit at all.  A macro qualifies when its body returns and carries
     neither ``catch`` nor ``if``: that keeps the exception-translation macro,
     whose returns are all on catch arms, out of the set.
     """

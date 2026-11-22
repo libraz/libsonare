@@ -258,7 +258,7 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
         return SONARE_OK;
       });
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
+  return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, config, out);
 #endif
   SONARE_C_CATCH
 }
@@ -275,7 +275,7 @@ SonareError sonare_polyphonic_note_count(const SonarePolyphonicAnalysis* analysi
   *out_count = analysis->analysis.notes.size();
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, out_count);
 #endif
 }
 
@@ -290,7 +290,7 @@ SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analys
   *out_count = static_cast<size_t>(analysis->analysis.spectrum.n_frames());
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -313,7 +313,7 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
   *out_count = written;
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, out, capacity, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, out, capacity, out_count);
 #endif
 }
 
@@ -354,7 +354,8 @@ SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, note, edit, envelope, envelope_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, note, edit, envelope,
+                                envelope_count);
 #endif
 }
 
@@ -376,7 +377,7 @@ SonareError sonare_polyphonic_polyphony(const SonarePolyphonicAnalysis* analysis
   *out_count = written;
   return SONARE_OK;
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, out, capacity, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, out, capacity, out_count);
 #endif
 }
 
@@ -390,7 +391,7 @@ SonareError sonare_polyphonic_note_f0(const SonarePolyphonicAnalysis* analysis, 
   if (error != SONARE_OK) return error;
   return copy_curve(analysis->analysis.notes[note].f0_hz.values, out, capacity, out_count);
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, note, out, capacity, out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -405,7 +406,7 @@ SonareError sonare_polyphonic_note_amplitude(const SonarePolyphonicAnalysis* ana
   if (error != SONARE_OK) return error;
   return copy_curve(analysis->analysis.notes[note].amplitude.values, out, capacity, out_count);
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, note, out, capacity, out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -441,7 +442,7 @@ SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* anal
   }
   return copy_curve(span, out, capacity, out_count);
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, note, out, capacity, out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -457,7 +458,7 @@ SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* anal
   return copy_curve(analysis->analysis.notes[note].edit.amplitude_envelope, out, capacity,
                     out_count);
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, note, out, capacity, out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -477,7 +478,7 @@ SonareError sonare_polyphonic_note_inharmonicity(const SonarePolyphonicAnalysis*
   }
   return copy_curve(fitted, out, capacity, out_count);
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, out, capacity, out_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, out, capacity, out_count);
 #endif
   SONARE_C_CATCH
 }
@@ -504,6 +505,6 @@ SonareError sonare_polyphonic_render(const SonarePolyphonicAnalysis* analysis,
   return copy_audio_result(rendered, out, out_length);
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(analysis, config, out, out_length);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, config, out, out_length);
 #endif
 }
