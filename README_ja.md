@@ -15,7 +15,7 @@
 
 ## sonare studio
 
-**[sonare studio](https://sonare-studio.libraz.net)** は、音声処理を libsonare の WASM エンジンで動かすブラウザ完結の DAW です。マルチトラック再生、インストゥルメント、ミキサー、マスタリング、音声の書き出しがクライアントサイドで動きます。音楽理論と作曲機能は [`@libraz/libcantus`](https://github.com/libraz/libcantus)、楽譜の描画は別のライブラリが担当しています。エンジンをエンドツーエンドで試すホスト済みのライブデモで、製品ではありません。
+**[sonare studio](https://sonare-studio.libraz.net)** は、音声処理を libsonare の WASM エンジンで動かすブラウザ完結の DAW です。マルチトラック再生、インストゥルメント、ミキサー、マスタリング、音声の書き出しがクライアントサイドで動きます。音楽理論と作曲機能は [`@libraz/libcantus`](https://github.com/libraz/libcantus)、楽譜の描画は別のライブラリが担当しています。エンジンをエンドツーエンドで試すホスト済みのライブデモで、製品ではありません。ソース: [libraz/sonare-studio](https://github.com/libraz/sonare-studio)。
 
 ## できること
 
