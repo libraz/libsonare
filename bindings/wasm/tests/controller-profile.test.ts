@@ -138,22 +138,18 @@ describe('Sonare WASM controller profile', () => {
       expect(engine.controllerNoteTracking(0, 'pressure')).toBe('highest');
       // A misspelling is refused rather than resolved to a default, which would
       // configure a dimension the caller never named.
-      // @ts-expect-error unknown dimension name is rejected at runtime
-      expect(
-        expectRefusalOf(
-          () => engine.setControllerNoteTracking(0, 'no-such-dimension', 'last'),
-          RangeError,
-        ).message,
-      ).toBe(
+      const unknownDimension = () =>
+        // @ts-expect-error unknown dimension name is rejected at runtime
+        engine.setControllerNoteTracking(0, 'no-such-dimension', 'last');
+      expect(expectRefusalOf(unknownDimension, RangeError).message).toBe(
         "RealtimeEngine.setControllerNoteTracking: Unknown dimension name: 'no-such-dimension'",
       );
-      // @ts-expect-error unknown tracking name is rejected at runtime
-      expect(
-        expectRefusalOf(
-          () => engine.setControllerNoteTracking(0, 'bend', 'no-such-rule'),
-          RangeError,
-        ).message,
-      ).toBe("RealtimeEngine.setControllerNoteTracking: Unknown tracking name: 'no-such-rule'");
+      const unknownTracking = () =>
+        // @ts-expect-error unknown tracking name is rejected at runtime
+        engine.setControllerNoteTracking(0, 'bend', 'no-such-rule');
+      expect(expectRefusalOf(unknownTracking, RangeError).message).toBe(
+        "RealtimeEngine.setControllerNoteTracking: Unknown tracking name: 'no-such-rule'",
+      );
     });
   });
 
@@ -226,15 +222,18 @@ describe('Sonare WASM controller profile', () => {
       expect(() => engine.bindController(0, { ...base, input: 256 as never })).toThrow(TypeError);
       expect(() => engine.bindController(0, { ...base, axis: 257 as never })).toThrow(TypeError);
       // input and axis have no default.
-      // @ts-expect-error input is required
-      expect(
-        expectRefusalOf(() => engine.bindController(0, { axis: 'excitation' }), TypeError).message,
-      ).toBe('RealtimeEngine.bindController: binding.input must be given');
-      // @ts-expect-error axis is required
-      expect(
-        expectRefusalOf(() => engine.bindController(0, { input: 'controlChange' }), TypeError)
-          .message,
-      ).toBe('RealtimeEngine.bindController: binding.axis must be given');
+      const noInput = () =>
+        // @ts-expect-error input is required
+        engine.bindController(0, { axis: 'excitation' });
+      expect(expectRefusalOf(noInput, TypeError).message).toBe(
+        'RealtimeEngine.bindController: binding.input must be given',
+      );
+      const noAxis = () =>
+        // @ts-expect-error axis is required
+        engine.bindController(0, { input: 'controlChange' });
+      expect(expectRefusalOf(noAxis, TypeError).message).toBe(
+        'RealtimeEngine.bindController: binding.axis must be given',
+      );
     });
   });
 
