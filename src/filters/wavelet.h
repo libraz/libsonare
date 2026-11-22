@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file wavelet.h
-/// @brief Wavelet / semitone filterbank and window-utility helpers.
+/// @brief Wavelet kernel and length helpers for the CQT / VQT.
 
 #include <complex>
 #include <vector>
@@ -15,8 +15,12 @@ namespace sonare {
 namespace detail {
 
 /// @brief Builds wavelet kernels with an explicitly selected periodic window.
-/// @details This is the internal implementation used by CQT. The public
-/// `wavelet` entry point remains the Hann-windowed compatibility wrapper.
+/// @details Mirrors `librosa.filters.wavelet` sizing and normalization. By default returns the
+/// concatenation of kernel arrays (lengths given by @ref wavelet_lengths). When @p pad_fft is true
+/// the kernels are zero-padded (centered) to a common length `n_fft = next_pow2(max(lengths))` and
+/// the result is a flat `[n_filters x n_fft]` row-major matrix; @p n_fft_out (if non-null)
+/// receives the chosen `n_fft`. A positive @p Q overrides the default length rule so each kernel
+/// length is `Q * sr / freq`.
 std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& freqs, int sr,
                                                      float window_param, bool is_cqt, bool pad_fft,
                                                      float Q, WindowType window,
@@ -34,27 +38,11 @@ float geometric_relative_bandwidth(int bins_per_octave);
 
 }  // namespace detail
 
-/// @brief Complex Hann-windowed sinusoid kernels at @p freqs.
-/// @details Mirrors `librosa.filters.wavelet` sizing and normalization. By default returns the
-/// concatenation of kernel arrays (lengths given by @ref wavelet_lengths).
-/// When @p pad_fft is true the kernels are zero-padded (centered) to a
-/// common length `n_fft = next_pow2(max(lengths))` and the result is a flat
-/// `[n_filters x n_fft]` row-major matrix; @p n_fft_out (if non-null)
-/// receives the chosen `n_fft`.
-/// @param Q If positive, overrides the default length rule so each kernel
-///          length is `Q * sr / freq` (the raw, unrounded value from
-///          @ref wavelet_lengths). Use this for librosa-style explicit
-///          Q-factor control.
-std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr,
-                                         float window_param = 1.0f, bool is_cqt = true,
-                                         bool pad_fft = false, float Q = 0.0f,
-                                         int* n_fft_out = nullptr);
-
 /// @brief What the sample rate of wavelet_lengths accepts.
 inline constexpr util::check::NumericDomain kWaveletSampleRateDomain =
     util::check::integer_domain_of<int>(1);
 
-/// @brief Lengths of each wavelet kernel computed in @ref wavelet.
+/// @brief Lengths of each wavelet kernel computed by detail::wavelet_with_window.
 /// @details Returns the RAW fractional lengths to match librosa exactly (no
 ///          ceiling, no odd-length rounding); callers floor/ceil as needed.
 ///          The default rule is `window_param * sr / freq`.
@@ -62,38 +50,5 @@ inline constexpr util::check::NumericDomain kWaveletSampleRateDomain =
 ///          (still returned as a raw fractional value).
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr,
                                    float window_param = 1.0f, float Q = 0.0f);
-
-/// @brief Semitone biquad bandpass filterbank coefficients.
-/// @details Returns a flattened matrix `[(n_octaves * bins_per_octave) x 6]`
-/// where each row is `(b0, b1, b2, a0, a1, a2)`.
-std::vector<float> semitone_filterbank(int n_octaves = 7, int bins_per_octave = 12,
-                                       float fmin = constants::kC1Hz, int sr = 22050);
-
-/// @brief CQT-to-chroma projection matrix.
-/// @details Mirrors `librosa.filters.cq_to_chroma`: merge groups are centered
-/// (roll by `n_merge // 2`, `n_merge = bins_per_octave / n_chroma`) and rows are
-/// rotated by the `fmin` pitch class; no column normalization is applied. The
-/// `tuning` argument is a libsonare extension (librosa has none) that shifts the
-/// first bin's pitch class.
-/// @return Row-major `[n_chroma x n_input]`.
-std::vector<float> cq_to_chroma(int n_input, int bins_per_octave = 12, int n_chroma = 12,
-                                float fmin = 0.0f, float tuning = 0.0f);
-
-/// @brief 2D diagonal smoothing filter.
-/// @param n Kernel size (`n x n`).
-/// @param direction 0 = anti-diagonal, 1 = main diagonal.
-/// @param window_param Width of the Gaussian along the diagonal.
-/// @return Row-major `[n x n]`.
-std::vector<float> diagonal_filter(int n, int direction = 0, float window_param = 1.0f);
-
-/// @brief Equivalent noise bandwidth of @p window (normalised so that 1.0
-///        corresponds to a rectangular window).
-float window_bandwidth(const std::vector<float>& window, int n = 1000);
-
-/// @brief Sum-of-squares of @p window centered on each STFT frame.
-/// @details Mirrors `librosa.filters.window_sumsquare`. Used for OLA
-///          synthesis normalisation.
-std::vector<float> window_sumsquare(const std::vector<float>& window, int n_frames, int hop_length,
-                                    int n_fft = 0);
 
 }  // namespace sonare

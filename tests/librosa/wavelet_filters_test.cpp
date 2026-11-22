@@ -46,8 +46,9 @@ TEST_CASE("wavelet (padded) kernel values match librosa", "[librosa][wavelet]") 
   const int expected_n_fft = d["n_fft"].as_int();
 
   int n_fft_out = 0;
-  auto kernels = wavelet(freqs, sr, /*window_param=*/1.0f, /*is_cqt=*/true,
-                         /*pad_fft=*/true, /*Q=*/0.0f, &n_fft_out);
+  auto kernels =
+      detail::wavelet_with_window(freqs, sr, /*window_param=*/1.0f, /*is_cqt=*/true,
+                                  /*pad_fft=*/true, /*Q=*/0.0f, WindowType::Hann, &n_fft_out);
   REQUIRE(n_fft_out == expected_n_fft);
   REQUIRE(kernels.size() == static_cast<size_t>(freqs.size()) * static_cast<size_t>(n_fft_out));
 

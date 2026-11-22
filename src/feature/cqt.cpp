@@ -856,7 +856,7 @@ int chroma_class_of_frequency(float hz, int n_chroma) {
   // Chroma classes are subdivisions of the twelve pitch classes, not of the
   // absolute MIDI number. Reduce the MIDI pitch modulo one octave before
   // scaling and rounding it to the requested chroma resolution, matching
-  // wavelet::cq_to_chroma/librosa.filters.cq_to_chroma at tuning=0.
+  // librosa.filters.cq_to_chroma at tuning=0.
   const double midi_pitch_class = std::fmod(static_cast<double>(hz_to_midi(hz)), 12.0);
   int chroma_class =
       static_cast<int>(std::lround(midi_pitch_class * (static_cast<double>(n_chroma) / 12.0)));

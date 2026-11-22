@@ -5,9 +5,7 @@
 #include <limits>
 #include <string>
 
-#include "core/convert.h"
 #include "core/window.h"
-#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -15,8 +13,6 @@
 #include "util/parameter_checks.h"
 
 namespace sonare {
-
-using sonare::constants::kSemitonesPerOctave;
 
 namespace detail {
 
@@ -248,135 +244,5 @@ std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& f
 }
 
 }  // namespace detail
-
-std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr,
-                                         float window_param, bool is_cqt, bool pad_fft, float Q,
-                                         int* n_fft_out) {
-  return detail::wavelet_with_window(freqs, sr, window_param, is_cqt, pad_fft, Q, WindowType::Hann,
-                                     n_fft_out);
-}
-
-std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float fmin, int sr) {
-  if (n_octaves <= 0 || bins_per_octave <= 0 || sr <= 0 || fmin <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "semitone_filterbank: invalid parameters");
-  }
-  const int n_filters = n_octaves * bins_per_octave;
-  std::vector<float> out(static_cast<size_t>(n_filters) * 6, 0.0f);
-  const double nyquist = 0.5 * static_cast<double>(sr);
-  for (int i = 0; i < n_filters; ++i) {
-    const double fc =
-        static_cast<double>(fmin) * std::pow(2.0, static_cast<double>(i) / bins_per_octave);
-    if (fc <= 0.0 || fc >= nyquist) {
-      // Identity biquad (passes signal through unchanged).
-      out[i * 6 + 0] = 1.0f;
-      out[i * 6 + 3] = 1.0f;
-      continue;
-    }
-    const auto coeffs = rt::rbj_bandpass_raw_d(fc, static_cast<double>(sr), 25.0);
-    out[i * 6 + 0] = static_cast<float>(coeffs.b0);
-    out[i * 6 + 1] = static_cast<float>(coeffs.b1);
-    out[i * 6 + 2] = static_cast<float>(coeffs.b2);
-    out[i * 6 + 3] = static_cast<float>(coeffs.a0);
-    out[i * 6 + 4] = static_cast<float>(coeffs.a1);
-    out[i * 6 + 5] = static_cast<float>(coeffs.a2);
-  }
-  return out;
-}
-
-std::vector<float> cq_to_chroma(int n_input, int bins_per_octave, int n_chroma, float fmin,
-                                float tuning) {
-  if (n_input <= 0 || bins_per_octave <= 0 || n_chroma <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "cq_to_chroma: invalid parameters");
-  }
-  // Mirrors librosa.filters.cq_to_chroma: np.repeat(eye(n_chroma), n_merge)
-  // builds a column->chroma map, then np.roll(..., -n_merge//2, axis=1) shifts
-  // the columns left by half a merge group to CENTER each output chroma bin on
-  // its CQ bins (n_merge = bins_per_octave / n_chroma). Without this centering
-  // offset every output bin was shifted ~half a merge group when
-  // bins_per_octave > n_chroma. librosa applies no column normalization (each CQ
-  // column is a 0/1 indicator), so none is applied here either.
-  const int n_merge_half = (bins_per_octave / n_chroma) / 2;
-
-  // Pitch-class rotation of the chroma rows. librosa uses
-  // round(mod(hz_to_midi(fmin), 12) * n_chroma/12) with no tuning term; `tuning`
-  // is a libsonare extension that shifts the first bin's pitch class, scaled by
-  // n_chroma/12 like the fmin rotation so it stays correct for n_chroma != 12.
-  int pitch_class_offset = 0;
-  if (fmin > 0.0f) {
-    const double midi_0 =
-        std::fmod(static_cast<double>(hz_to_midi(fmin)) + tuning, kSemitonesPerOctave);
-    pitch_class_offset = static_cast<int>(std::lround(
-                             midi_0 * (static_cast<double>(n_chroma) / kSemitonesPerOctave))) %
-                         n_chroma;
-    if (pitch_class_offset < 0) pitch_class_offset += n_chroma;
-  }
-
-  std::vector<float> out(static_cast<size_t>(n_chroma) * n_input, 0.0f);
-  for (int i = 0; i < n_input; ++i) {
-    const int col = i % bins_per_octave;
-    const int shifted = (col + n_merge_half) % bins_per_octave;
-    int chroma_bin = (shifted * n_chroma) / bins_per_octave;
-    chroma_bin = (chroma_bin + pitch_class_offset) % n_chroma;
-    if (chroma_bin < 0) chroma_bin += n_chroma;
-    out[chroma_bin * n_input + i] = 1.0f;
-  }
-  return out;
-}
-
-std::vector<float> diagonal_filter(int n, int direction, float window_param) {
-  if (n <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "diagonal_filter: n must be positive");
-  if (window_param <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "diagonal_filter: window_param must be positive");
-  }
-  std::vector<float> out(static_cast<size_t>(n) * n, 0.0f);
-  for (int r = 0; r < n; ++r) {
-    for (int c = 0; c < n; ++c) {
-      const float d =
-          (direction == 0) ? static_cast<float>(r - (n - 1 - c)) : static_cast<float>(r - c);
-      out[r * n + c] = std::exp(-0.5f * d * d / (window_param * window_param));
-    }
-  }
-  return out;
-}
-
-float window_bandwidth(const std::vector<float>& window, int /*n*/) {
-  // Equivalent Noise Bandwidth: N * sum(w^2) / (sum(w))^2.
-  if (window.empty()) return 0.0f;
-  double sum_sq = 0.0;
-  double sum = 0.0;
-  for (float w : window) {
-    sum_sq += static_cast<double>(w) * w;
-    sum += static_cast<double>(w);
-  }
-  if (sum == 0.0) return 0.0f;
-  return static_cast<float>(static_cast<double>(window.size()) * sum_sq / (sum * sum));
-}
-
-std::vector<float> window_sumsquare(const std::vector<float>& window, int n_frames, int hop_length,
-                                    int n_fft) {
-  if (hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "window_sumsquare: hop_length must be positive");
-  }
-  const int win_len = static_cast<int>(window.size());
-  if (n_fft <= 0) n_fft = win_len;
-  if (n_frames <= 0) return {};
-  const int total = n_fft + hop_length * (n_frames - 1);
-  std::vector<float> out(total, 0.0f);
-  std::vector<float> w_sq(win_len);
-  for (int i = 0; i < win_len; ++i) w_sq[i] = window[i] * window[i];
-  // Window is centered inside an n_fft-length frame.
-  int pad = (n_fft - win_len) / 2;
-  for (int t = 0; t < n_frames; ++t) {
-    int start = t * hop_length + pad;
-    for (int i = 0; i < win_len; ++i) {
-      int idx = start + i;
-      if (idx >= 0 && idx < total) out[idx] += w_sq[i];
-    }
-  }
-  return out;
-}
 
 }  // namespace sonare
