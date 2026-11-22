@@ -48,13 +48,16 @@ function harness() {
   return `<!doctype html>
 <meta charset="utf-8">
 <output id="result" data-status="running">running</output>
+<script>
+// A module that fails to link never runs its own catch, so report it here instead of timing out.
+window.addEventListener('error', (event) => {
+  const result = document.querySelector('#result');
+  result.dataset.status = 'error';
+  result.textContent = String(event.message);
+});
+</script>
 <script type="module">
-import {
-  ErrorCode,
-  VocalEditWorkerClient,
-  VocalEditWorkerStaleResultError,
-  isSonareError,
-} from '/dist/index.js';
+import { ErrorCode, isSonareError, VocalEditWorkerClient } from '/dist/index.js';
 
 const result = document.querySelector('#result');
 const sampleRate = 16000;
@@ -147,17 +150,12 @@ const dominantFrequency = (samples) => {
   return { frequency: bestFrequency, power: bestPower };
 };
 
-const isStale = (error) =>
-  error instanceof VocalEditWorkerStaleResultError ||
-  (error instanceof Error && error.name === 'StaleResultError');
+const isCoded = (error, code) => isSonareError(error) && error.code === code;
 
 const errorShape = (error) => ({
   name: error instanceof Error ? error.name : typeof error,
   code: error?.code,
-  reason: error?.reason,
-  field: error?.field,
-  expected: error?.expected,
-  actual: error?.actual,
+  detail: error?.detail,
 });
 
 const runFlow = async () => {
@@ -237,7 +235,7 @@ const runFlow = async () => {
 
     const targetMidi = note.centerMidi + 2;
     const targetFrequency = 440 * Math.pow(2, (targetMidi - 69) / 12);
-    await session.beginEdit();
+    const draft = await session.beginEdit();
     const edit = {
       ...note.edit,
       pitch: {
@@ -248,11 +246,11 @@ const runFlow = async () => {
         speedMs: 0,
       },
     };
-    await session.apply({
-      expectedGeneration: session.token().generation,
+    await draft.apply({
+      expectedGeneration: draft.token.generation,
       operations: [{ kind: 'setEdit', noteId: note.id, edit }],
     });
-    const draftPreview = await session.preview({ requestId: '2' });
+    const draftPreview = await draft.preview({ requestId: '2' });
     const draftFrequency = dominantFrequency(draftPreview.samples);
     const draftDelta = maxAbsDelta(baseline.samples, draftPreview.samples);
     assert(draftDelta > 1e-3, 'pitch edit produced identity PCM');
@@ -261,7 +259,7 @@ const runFlow = async () => {
       'pitch edit did not move the dominant frequency',
     );
 
-    const committed = await session.commit();
+    const committed = await draft.commit();
     const committedPreview = await session.preview({ requestId: '3' });
     assert(
       maxAbsDelta(draftPreview.samples, committedPreview.samples) <= 1e-6,
@@ -278,40 +276,43 @@ const runFlow = async () => {
     }
     assert(isSonareError(conflict), 'revision conflict was not a structured SonareError');
     assert(conflict.code === ErrorCode.InvalidState, 'revision conflict has the wrong error code');
-    assert(Number.isInteger(conflict.reason) && conflict.reason > 0, 'missing conflict reason');
-    assert(conflict.field === 'revision', 'missing conflict field');
-    assert(conflict.expected === '0', 'conflict expected value was not serialized');
-    assert(conflict.actual === session.token().revision, 'conflict actual value was not serialized');
+    const detail = conflict.detail;
+    assert(detail?.reason === 'revisionConflict', 'missing conflict reason');
+    assert(detail.field === 'revision', 'missing conflict field');
+    assert(detail.expected === '0', 'conflict expected value was not serialized');
+    assert(detail.actual === session.token.revision, 'conflict actual value was not serialized');
 
     const staleTask = session.preview({ requestId: '10' });
     const freshTask = session.preview({ requestId: '11' });
     let staleError;
     try {
-      await staleTask.result;
+      await staleTask;
     } catch (error) {
       staleError = error;
     }
-    const fresh = await freshTask.result;
-    assert(isStale(staleError), 'superseded preview did not reject as stale');
+    const fresh = await freshTask;
+    assert(isCoded(staleError, ErrorCode.StaleResult), 'superseded preview did not reject as stale');
     assert(fresh.samples.length === committedPreview.samples.length, 'fresh preview is incomplete');
 
+    const controller = new AbortController();
     const cancelTask = session.preview({
       range: { startSample: 0, endSample: sampleCount },
       requestId: '12',
+      signal: controller.signal,
     });
-    setTimeout(() => cancelTask.cancel(), 0);
+    setTimeout(() => controller.abort(), 0);
     let cancelError;
     try {
-      await cancelTask.result;
+      await cancelTask;
     } catch (error) {
       cancelError = error;
     }
-    assert(cancelError instanceof Error && cancelError.name === 'AbortError', 'render cancellation failed');
+    assert(isCoded(cancelError, ErrorCode.Cancelled), 'render cancellation failed');
 
     const exported = await session.exportState();
-    assert(exported.data instanceof Uint8Array && exported.data.length > 32, 'state export is empty');
+    assert(exported instanceof Uint8Array && exported.length > 32, 'state export is empty');
     restored = await worker.restore(
-      { samples: source, sampleRate, state: exported.data.slice() },
+      { samples: source, sampleRate, state: exported.slice() },
       { copy: true },
     );
     assert(restored.created.notes.notes.length === 1, 'restore lost the monophonic note');
@@ -337,7 +338,7 @@ const runFlow = async () => {
       targetFrequency,
       maxPitchEditDelta: draftDelta,
       committedRevision: committed.token.revision,
-      stateBytes: exported.data.length,
+      stateBytes: exported.length,
       staleRejected: true,
       cancellationRejected: true,
       conflict: errorShape(conflict),

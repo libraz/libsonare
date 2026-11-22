@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install test refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install test wasm-browser-smoke refusal-spelling refusal-spelling-check surface-allowlist-audit test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance conformance-checks doc-examples test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check numeric-domains numeric-domains-check check-abi-version check-abi-bumps check-c-exports \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -560,6 +560,12 @@ test-node: build-node
 test-wasm: build-wasm-binding
 	cd bindings/wasm && yarn test
 	cd bindings/wasm && yarn test:types
+
+# The four headless-Chrome smokes (AudioWorklet from the packed tarball, offline
+# worker, boundary recovery, vocal-edit worker) against the dist/ already built.
+# Chrome comes from CHROME_BIN.
+wasm-browser-smoke:
+	cd bindings/wasm && yarn test:browser:all
 
 # Runs each JS suite with its public exports wrapped and ratchets how many of the
 # refusals it provokes name a field in C spelling (tests/conformance/
@@ -1438,6 +1444,7 @@ ci-local:
 	$(MAKE) check-abi-bumps
 	$(MAKE) abi-layout-check
 	$(MAKE) surface-check
+	$(MAKE) wasm-browser-smoke
 
 # Coverage targets
 coverage-build:

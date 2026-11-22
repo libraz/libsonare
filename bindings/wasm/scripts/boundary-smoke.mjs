@@ -92,7 +92,7 @@ window.runBoundarySmoke = async () => {
       );
     }
     const valid = module.melToStft(new Float32Array([1]), 1, 1, SR, 2, 0, 0, false);
-    assert(valid.nFrames === 1 && valid.power.length > 0, 'inverse module recovery failed');
+    assert(valid.nFrames === 1 && valid.magnitude.length > 0, 'inverse module recovery failed');
   });
 
   checked('allocation preflight rejected and recovered', () => {
@@ -126,8 +126,10 @@ window.runBoundarySmoke = async () => {
       const key = sine(0.8);
       expected.setSidechainStereo(key, key);
       const expectedOutputs = [expected.processMono(sine(0.005)), expected.processMono(sine(0.005))];
+      dry.processMono(sine(0.005));
       const dryOutput = dry.processMono(sine(0.005));
-      assert(rms(expectedOutputs[0]) < rms(dryOutput) * 0.8, 'sidechain did not engage');
+      // Controls update on a fixed 64-sample grid, so the sidechain acts from the second block.
+      assert(rms(expectedOutputs[1]) < rms(dryOutput) * 0.8, 'sidechain did not engage');
 
       actual.setSidechainStereo(key, key);
       expectThrow(
