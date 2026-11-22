@@ -1946,6 +1946,61 @@ TEST_CASE("a receiver spacing past the default geometry's limit builds in a larg
 }
 #endif
 
+TEST_CASE("only a coupled number publishes its own domain, and its range sits inside it",
+          "[mastering][catalog]") {
+  size_t domains = 0;
+  for (const std::string& name : insert_factory_names()) {
+    for (const json::Value& parameter : param_info(name)) {
+      const std::string key = name + "." + field(parameter, "name").as_string();
+      INFO(key);
+      const bool coupled_number = !field(parameter, "coupledWith").as_array().empty() &&
+                                  field(parameter, "type").as_string() == "number" &&
+                                  field(parameter, "choices").is_null();
+      for (const char* bound : {"domainMin", "domainMax"}) {
+        const std::string flag = std::string(bound) + "Exclusive";
+        CHECK(parameter.contains(bound) == coupled_number);
+        CHECK(parameter.contains(flag) == coupled_number);
+        // An unbounded side is null with its flag false, as `min` / `max` spell it.
+        if (coupled_number && field(parameter, bound).is_null()) {
+          CHECK_FALSE(field(parameter, flag.c_str()).as_bool());
+        }
+      }
+      if (!coupled_number) continue;
+      ++domains;
+      if (!field(parameter, "domainMin").is_null()) {
+        const double low = field(parameter, "domainMin").as_number();
+        REQUIRE_FALSE(field(parameter, "min").is_null());
+        CHECK(low <= field(parameter, "min").as_number());
+      }
+      if (!field(parameter, "domainMax").is_null()) {
+        const double high = field(parameter, "domainMax").as_number();
+        if (!field(parameter, "max").is_null()) CHECK(field(parameter, "max").as_number() <= high);
+      }
+    }
+  }
+  CHECK(domains > 0);
+}
+
+#ifdef SONARE_WITH_FX
+TEST_CASE("a receiver spacing's own domain is the library's limit, not the default room's",
+          "[mastering][catalog]") {
+  for (const std::string name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    const std::vector<std::string> names = insert_factory_names();
+    if (std::find(names.begin(), names.end(), name) == names.end()) continue;
+    INFO(name);
+    const json::Array params = param_info(name);
+    const json::Value* spacing = find_param(params, "receiverSpacingM");
+    REQUIRE(spacing != nullptr);
+    CHECK(field(*spacing, "domainMin").as_number() == 0.0);
+    CHECK(field(*spacing, "domainMinExclusive").as_bool());
+    CHECK(field(*spacing, "domainMax").as_number() ==
+          static_cast<double>(sonare::acoustic::kMaxReceiverSpacingM));
+    CHECK_FALSE(field(*spacing, "domainMaxExclusive").as_bool());
+    CHECK(field(*spacing, "max").as_number() < field(*spacing, "domainMax").as_number());
+  }
+}
+#endif
+
 TEST_CASE("an enum parameter's name resolves to the number the flat lists carry",
           "[mastering][catalog]") {
   using sonare::mastering::api::mastering_enum_value;

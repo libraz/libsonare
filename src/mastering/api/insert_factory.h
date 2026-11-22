@@ -121,9 +121,10 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         by the builder that reads the key rather than measured. See
 ///         insert_param_info_schema_paths() for the exact field set; every
 ///         entry carries every field, with `null` where a value could not be
-///         measured. A repair stage with no insert form is served by repair_param_info_json(), so
-///         the answer is the catalog's `params` for every catalog id. Returns `[]` for an
-///         unknown @p name.
+///         measured, except the four `domain*` fields only a coupled number carries.
+///         A repair stage with no insert form is served by repair_param_info_json(), so
+///         the answer is the catalog's `params` for every catalog id. Returns `[]` for an unknown
+///         @p name.
 std::string insert_param_info_json(const std::string& name);
 
 /// @brief Parameter descriptors for a repair stage, in the shape of insert_param_info_json().

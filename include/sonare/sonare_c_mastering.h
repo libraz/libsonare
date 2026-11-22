@@ -443,7 +443,7 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
 /// @details A JSON array
-///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn","coupledWith"},
+///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","domainMin","domainMinExclusive","domainMax","domainMaxExclusive","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn","coupledWith"},
 ///   ...]` (UTF-8), `[]` for an unknown @p insert.
 ///
 ///   Entries come in two runs. The first lists the processor's realtime
@@ -530,7 +530,14 @@ const char* sonare_mastering_insert_param_names(const char* insert);
 ///   and a bound that merely restates it is left null (see above). `coupledWith` lists the
 ///   other siblings whose value moves this key's accepted range in a way `dependsOn` cannot
 ///   state (a receiver spacing against the room geometry), empty for an independent key;
-///   `min` and `max` are measured with them at their defaults. All of these describe
+///   `min` and `max` are measured with them at their defaults, so each bound builds there. A
+///   number with a non-empty `coupledWith` and no `choices` also carries the key's own limits:
+///   `domainMin` / `domainMax`, each with its `domainMinExclusive` / `domainMaxExclusive` flag,
+///   measured with the relation to the coupled siblings set aside (a receiver spacing's
+///   `domainMax` is 4 while `max` is the default room's 2.5). A value inside them can still be
+///   refused by that relation. A side the key does not bound on its own is `null` with its flag
+///   false, as for `min` / `max`, meaning the relation is its only limit; every other key carries
+///   none of the four. A `domainMax` follows `maxRelativeTo` as `max` does. All of these describe
 ///   what construction accepts; the realtime parameter path clamps instead of
 ///   refusing.
 ///   Every key whose `maxRelativeTo` is `"nyquist"` reports, as `max` and `maxExclusive`,

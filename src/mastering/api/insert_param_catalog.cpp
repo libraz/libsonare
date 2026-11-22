@@ -103,6 +103,26 @@ class OfflineFormMeasurement {
   bool previous_;
 };
 
+// Set while a coupled key's own domain is measured: a refusal that only relates the value to a
+// sibling's default then counts as accepted, so the bounds found are the key's alone.
+thread_local bool measuring_own_domain = false;
+
+class OwnDomainMeasurement {
+ public:
+  OwnDomainMeasurement() : previous_(measuring_own_domain) { measuring_own_domain = true; }
+  ~OwnDomainMeasurement() { measuring_own_domain = previous_; }
+  OwnDomainMeasurement(const OwnDomainMeasurement&) = delete;
+  OwnDomainMeasurement& operator=(const OwnDomainMeasurement&) = delete;
+
+ private:
+  bool previous_;
+};
+
+// A relation refusal is the value held against its siblings; only an own-domain probe accepts it.
+bool accepted_despite(const SonareParameterRefusal& e) {
+  return measuring_own_domain && e.form() == SonareParameterRefusal::Form::Relation;
+}
+
 // A flat chain stage: its key prefix and the catalog processor its keys are, or nullptr.
 struct ChainStage {
   const char* prefix;
@@ -394,6 +414,7 @@ bool shared_probe_verdict(const std::string& name, const std::string& key, doubl
   shape += '\n';
   shape.append(reinterpret_cast<const char*>(&value), sizeof(value));
   shape.append(reinterpret_cast<const char*>(&sample_rate), sizeof(sample_rate));
+  shape += measuring_own_domain ? 'd' : 'a';
   const auto found = t_shared_probe_verdicts->find(shape);
   if (found != t_shared_probe_verdicts->end()) return found->second;
   const bool verdict = probe();
@@ -410,6 +431,8 @@ bool insert_accepts(const std::string& name, const std::string& key, double valu
   const auto probe = [&] {
     try {
       return constructs(name, probe_map(name, key, value, released));
+    } catch (const SonareParameterRefusal& e) {
+      return accepted_despite(e);
     } catch (...) {
       return false;
     }
@@ -431,6 +454,8 @@ bool insert_accepts_at_rate(const std::string& name, const std::string& key, dou
       if (processor == nullptr) return read_offline_config(name, probe);
       processor->prepare(sample_rate, kInsertProbeBlockSize);
       return true;
+    } catch (const SonareParameterRefusal& e) {
+      return accepted_despite(e);
     } catch (...) {
       return false;
     }
@@ -825,6 +850,39 @@ void resolve_log_axis(detail::Unit unit, const MeasuredBounds& bounds, double* u
   if (!std::isnan(*ui_min) && *ui_min >= top) *ui_min = top / 1000.0;
 }
 
+// The accepted range of a non-enum number with every other key at its default, or its choices
+// through @p has_choices / @p choices when the accepted values form a closed set.
+MeasuredBounds measure_numeric_range(const std::string& name, const std::string& key,
+                                     const ParamMap& params, ParamKind param_kind, bool unit_is_hz,
+                                     double sample_rate, bool* has_choices,
+                                     std::vector<detail::EnumChoice>* choices) {
+  MeasuredBounds bounds = measure_bounds(name, key, param_kind == ParamKind::Integer);
+  long long stride = 0;
+  if (param_kind == ParamKind::Integer && bounds.has_min) {
+    bool open_with_holes = false;
+    *has_choices =
+        measure_integer_choices(name, key, bounds.min, choices, &open_with_holes, &stride);
+    if (open_with_holes) {
+      bounds.max_exclusive = false;
+      bounds.has_max = stride > 0 && measure_strided_ceiling(name, key, std::llround(bounds.min),
+                                                             stride, &bounds.max);
+    }
+  }
+  const auto& defaults = params.probed_defaults();
+  const auto fallback = defaults.find(key);
+  if (param_kind == ParamKind::Integer && !*has_choices && !bounds.has_min && !bounds.has_max &&
+      fallback != defaults.end() && !fallback->second.ambiguous) {
+    *has_choices = measure_power_of_two_choices(
+        name, key, fallback->second.value, lower_bounding_siblings_at_one(params, key), choices);
+  }
+  if (!*has_choices) drop_dependency_bounds(params, key, stride, &bounds);
+  if (unit_is_hz) bounds.max_follows_nyquist = max_follows_nyquist(name, key, bounds);
+  if (bounds.max_follows_nyquist && sample_rate > 0.0) {
+    measure_ceiling_at_rate(name, key, sample_rate, &bounds);
+  }
+  return bounds;
+}
+
 // Appends one entry. @p id_json is the automation id, or "null" for a key only
 // construction reads.
 void append_param_entry(std::string& out, const std::string& name, const std::string& key,
@@ -853,6 +911,9 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   bool has_choices = false;
   std::vector<detail::EnumChoice> choices;
   MeasuredBounds bounds;
+  // A coupled number's own range, measured with the relations to its coupled siblings set aside.
+  bool publishes_domain = false;
+  MeasuredBounds domain;
   // The declaration the reader made beside the type and default; a key no
   // reader declared carries none, which the catalog test refuses for a number.
   const auto declared_meta = params.probed_meta().find(key);
@@ -864,30 +925,16 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
       choices = measure_enum_choices(name, key, declared->second);
       has_choices = true;
     } else {
-      bounds = measure_bounds(name, key, param_kind == ParamKind::Integer);
-      long long stride = 0;
-      if (param_kind == ParamKind::Integer && bounds.has_min) {
-        bool open_with_holes = false;
-        has_choices =
-            measure_integer_choices(name, key, bounds.min, &choices, &open_with_holes, &stride);
-        if (open_with_holes) {
-          bounds.max_exclusive = false;
-          bounds.has_max =
-              stride > 0 &&
-              measure_strided_ceiling(name, key, std::llround(bounds.min), stride, &bounds.max);
-        }
-      }
-      const auto fallback = defaults.find(key);
-      if (param_kind == ParamKind::Integer && !has_choices && !bounds.has_min && !bounds.has_max &&
-          fallback != defaults.end() && !fallback->second.ambiguous) {
-        has_choices =
-            measure_power_of_two_choices(name, key, fallback->second.value,
-                                         lower_bounding_siblings_at_one(params, key), &choices);
-      }
-      if (!has_choices) drop_dependency_bounds(params, key, stride, &bounds);
-      if (unit_is_hz) bounds.max_follows_nyquist = max_follows_nyquist(name, key, bounds);
-      if (bounds.max_follows_nyquist && sample_rate > 0.0) {
-        measure_ceiling_at_rate(name, key, sample_rate, &bounds);
+      bounds = measure_numeric_range(name, key, params, param_kind, unit_is_hz, sample_rate,
+                                     &has_choices, &choices);
+      const auto coupled = params.probed_coupled().find(key);
+      if (!has_choices && coupled != params.probed_coupled().end() && !coupled->second.empty()) {
+        const OwnDomainMeasurement own_domain;
+        bool domain_has_choices = false;
+        std::vector<detail::EnumChoice> domain_choices;
+        domain = measure_numeric_range(name, key, params, param_kind, unit_is_hz, sample_rate,
+                                       &domain_has_choices, &domain_choices);
+        publishes_domain = !domain_has_choices;
       }
     }
   }
@@ -911,6 +958,17 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   out += bounds.max_exclusive ? "true" : "false";
   out += ",\"maxRelativeTo\":";
   out += bounds.max_follows_nyquist ? "\"nyquist\"" : "null";
+  // A coupled number states its own domain on both sides; null where it has no bound of its own.
+  if (publishes_domain) {
+    out += ",\"domainMin\":";
+    out += domain.has_min ? format_catalog_number(domain.min) : "null";
+    out += ",\"domainMinExclusive\":";
+    out += domain.has_min && domain.min_exclusive ? "true" : "false";
+    out += ",\"domainMax\":";
+    out += domain.has_max ? format_catalog_number(domain.max) : "null";
+    out += ",\"domainMaxExclusive\":";
+    out += domain.has_max && domain.max_exclusive ? "true" : "false";
+  }
 
   out += ",\"default\":";
   const auto fallback = defaults.find(key);
@@ -1268,6 +1326,10 @@ const std::vector<std::string>& insert_param_info_schema_paths() {
       "[].minExclusive",
       "[].maxExclusive",
       "[].maxRelativeTo",
+      "[].domainMin",
+      "[].domainMinExclusive",
+      "[].domainMax",
+      "[].domainMaxExclusive",
       "[].default",
       "[].unit",
       "[].uiMin",

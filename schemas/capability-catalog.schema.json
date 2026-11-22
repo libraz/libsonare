@@ -170,6 +170,10 @@
         "minExclusive": { "type": "boolean" },
         "maxExclusive": { "type": "boolean" },
         "maxRelativeTo": { "enum": ["nyquist", null] },
+        "domainMin": { "type": ["number", "null"] },
+        "domainMinExclusive": { "type": "boolean" },
+        "domainMax": { "type": ["number", "null"] },
+        "domainMaxExclusive": { "type": "boolean" },
         "default": { "type": ["number", "boolean", "null"] },
         "unit": {
           "enum": [

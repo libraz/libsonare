@@ -280,7 +280,11 @@ class MasteringInsertParamInfo:
     dependency at the sibling's default is ``None``, so ``min`` / ``max`` are
     limits of the key's own. ``coupled_with`` names the other siblings that
     move this key's accepted range in a way ``depends_on`` cannot state;
-    ``min`` / ``max`` are measured with them at their defaults.
+    ``min`` / ``max`` are measured with them at their defaults. A coupled
+    number also carries ``domain_min`` / ``domain_max``, the bounds of its own
+    domain with that relation set aside; ``None`` there, with its flag false,
+    means the relation is the only limit on that side. All four ``domain_*``
+    fields are ``None`` on every other key.
     """
 
     name: str
@@ -322,6 +326,16 @@ class MasteringInsertParamInfo:
     slot: str | None
     """Name of the :class:`MasteringInsertSlot` this key belongs to; None for a key that always
     exists."""
+    domain_min: float | None = None
+    """Smallest value of a coupled number's own domain; None when only the relation bounds it."""
+    domain_min_exclusive: bool | None = None
+    """Whether ``domain_min`` itself is rejected; false when ``domain_min`` is None on a coupled
+    number, None on any other key."""
+    domain_max: float | None = None
+    """Largest value of a coupled number's own domain; None when only the relation bounds it."""
+    domain_max_exclusive: bool | None = None
+    """Whether ``domain_max`` itself is rejected; false when ``domain_max`` is None on a coupled
+    number, None on any other key."""
 
 
 MasteringProcessorCategory = Literal[
