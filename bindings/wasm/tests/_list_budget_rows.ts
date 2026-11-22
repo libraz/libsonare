@@ -4,7 +4,7 @@
  * list-taking-callable coverage test can join them against the callables the type checker finds.
  */
 
-import type { RealtimeEngine } from '../dist/index.js';
+import type { MixSceneStripInput, RealtimeEngine } from '../dist/index.js';
 import type { SonareEngine } from '../dist/worklet.js';
 import * as worklet from '../dist/worklet.js';
 
@@ -390,7 +390,8 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   {
     callable: 'Mixer.constructor',
     message: `Mixer: ${overBudget('scene')}`,
-    run: (api, l) => new api.Mixer({ sampleRate: 48000, scene: { strips: l, buses: [] } as never }),
+    run: (api, l) =>
+      new api.Mixer({ sampleRate: 48000, scene: { strips: l as MixSceneStripInput[] } }),
   },
   {
     callable: 'Project.rehydrateVocalEdits',
