@@ -68,12 +68,11 @@ enum class FeatureSet { kBoth, kTimbreOnly, kHarmonyOnly };
 /// ([coefficient * n_frames + frame]).
 struct FrameFeatures {
   int n_frames = 0;
-  float frame_sec = 0.0f;     ///< Hop duration
-  float duration_sec = 0.0f;  ///< Analysis audio duration
-  std::vector<float> mfcc;    ///< MFCC c1..c13 (13 x n_frames)
-  std::vector<float> chroma;  ///< 12 x n_frames
-  std::vector<float> rms;     ///< Frame RMS
-  std::vector<float> frame_times;
+  float frame_sec = 0.0f;                ///< Hop duration
+  float duration_sec = 0.0f;             ///< Analysis audio duration
+  std::vector<float> mfcc;               ///< MFCC c1..c13 (13 x n_frames)
+  std::vector<float> chroma;             ///< 12 x n_frames
+  std::vector<float> rms;                ///< Frame RMS
   std::vector<float> vocal_band_energy;  ///< Spectral energy in the vocal band
   std::vector<float> total_energy;       ///< Spectral energy over all bins
   std::vector<float> tonality;           ///< 1 - spectral flatness

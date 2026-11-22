@@ -83,7 +83,6 @@ class AcousticAnalyzer {
 
   void analyze_impulse_response(const Audio& ir);
   void analyze_blind(const Audio& audio);
-  void set_unsupported_blind_result();
 
   AcousticConfig config_;
   AcousticParameters parameters_;

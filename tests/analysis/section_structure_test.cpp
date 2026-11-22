@@ -405,7 +405,6 @@ ss::FrameFeatures hand_frames(const std::vector<int>& mfcc_dim, const std::vecto
   frames.chroma.assign(static_cast<std::size_t>(ss::kFrameChroma) * n, 0.0f);
   frames.rms = level;
   for (int f = 0; f < n; ++f) {
-    frames.frame_times.push_back(0.5f * static_cast<float>(f));
     frames.mfcc[static_cast<std::size_t>(mfcc_dim[static_cast<std::size_t>(f)]) * n + f] += 10.0f;
     frames.chroma[static_cast<std::size_t>(pitch_class[static_cast<std::size_t>(f)]) * n + f] =
         1.0f;
@@ -434,12 +433,10 @@ ss::FrameFeatures strongest_boundary_frames(float scale, bool periodic_modulatio
   frames.vocal_band_energy.assign(kFrames, 1.0f);
   frames.total_energy.assign(kFrames, 1.0f);
   frames.tonality.assign(kFrames, 1.0f);
-  frames.frame_times.reserve(kFrames);
   for (int f = 0; f < kFrames; ++f) {
     const int column = f / 4;
     const int material = column / 32;
     const int note = (column / 5) % 4;
-    frames.frame_times.push_back(static_cast<float>(f) * frames.frame_sec);
     frames.mfcc[static_cast<std::size_t>(material) * kFrames + f] = 10.0f;
     if (periodic_modulation) {
       frames.mfcc[static_cast<std::size_t>(4 + note) * kFrames + f] = 20.0f;
@@ -475,10 +472,8 @@ ss::FrameFeatures endpoint_boundary_frames(bool reverse) {
   frames.vocal_band_energy.assign(kFrames, 1.0f);
   frames.total_energy.assign(kFrames, 1.0f);
   frames.tonality.assign(kFrames, 1.0f);
-  frames.frame_times.reserve(kFrames);
   for (int f = 0; f < kFrames; ++f) {
     const int c = f / 4;
-    frames.frame_times.push_back(static_cast<float>(f) * frames.frame_sec);
     if (c < 8) {
       frames.mfcc[f] = 10.0f;
       frames.chroma[f] = 1.0f;

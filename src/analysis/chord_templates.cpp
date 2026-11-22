@@ -469,56 +469,20 @@ ChordTemplate create_diminished_template(PitchClass root) {
   return make_template(root, ChordQuality::Diminished);
 }
 
-ChordTemplate create_augmented_template(PitchClass root) {
-  return make_template(root, ChordQuality::Augmented);
-}
-
 ChordTemplate create_dominant7_template(PitchClass root) {
   return make_template(root, ChordQuality::Dominant7);
-}
-
-ChordTemplate create_major7_template(PitchClass root) {
-  return make_template(root, ChordQuality::Major7);
-}
-
-ChordTemplate create_minor7_template(PitchClass root) {
-  return make_template(root, ChordQuality::Minor7);
-}
-
-ChordTemplate create_sus2_template(PitchClass root) {
-  return make_template(root, ChordQuality::Sus2);
-}
-
-ChordTemplate create_sus4_template(PitchClass root) {
-  return make_template(root, ChordQuality::Sus4);
 }
 
 ChordTemplate create_add9_template(PitchClass root) {
   return make_template(root, ChordQuality::Add9);
 }
 
-ChordTemplate create_minor_add9_template(PitchClass root) {
-  return make_template(root, ChordQuality::MinorAdd9);
-}
-
-ChordTemplate create_dim7_template(PitchClass root) {
-  return make_template(root, ChordQuality::Dim7);
-}
-
 ChordTemplate create_half_dim7_template(PitchClass root) {
   return make_template(root, ChordQuality::HalfDim7);
 }
 
-ChordTemplate create_major9_template(PitchClass root) {
-  return make_template(root, ChordQuality::Major9);
-}
-
 ChordTemplate create_dominant9_template(PitchClass root) {
   return make_template(root, ChordQuality::Dominant9);
-}
-
-ChordTemplate create_sus2_add4_template(PitchClass root) {
-  return make_template(root, ChordQuality::Sus2Add4);
 }
 
 ChordTemplate create_chord_template(PitchClass root, ChordQuality quality) {
@@ -552,19 +516,19 @@ std::vector<ChordTemplate> generate_all_chord_templates() {
     templates.push_back(create_major_template(pc));
     templates.push_back(create_minor_template(pc));
     templates.push_back(create_diminished_template(pc));
-    templates.push_back(create_augmented_template(pc));
+    templates.push_back(create_chord_template(pc, ChordQuality::Augmented));
     templates.push_back(create_dominant7_template(pc));
-    templates.push_back(create_major7_template(pc));
-    templates.push_back(create_minor7_template(pc));
-    templates.push_back(create_sus2_template(pc));
-    templates.push_back(create_sus4_template(pc));
+    templates.push_back(create_chord_template(pc, ChordQuality::Major7));
+    templates.push_back(create_chord_template(pc, ChordQuality::Minor7));
+    templates.push_back(create_chord_template(pc, ChordQuality::Sus2));
+    templates.push_back(create_chord_template(pc, ChordQuality::Sus4));
     templates.push_back(create_add9_template(pc));
-    templates.push_back(create_minor_add9_template(pc));
-    templates.push_back(create_dim7_template(pc));
+    templates.push_back(create_chord_template(pc, ChordQuality::MinorAdd9));
+    templates.push_back(create_chord_template(pc, ChordQuality::Dim7));
     templates.push_back(create_half_dim7_template(pc));
-    templates.push_back(create_major9_template(pc));
+    templates.push_back(create_chord_template(pc, ChordQuality::Major9));
     templates.push_back(create_dominant9_template(pc));
-    templates.push_back(create_sus2_add4_template(pc));
+    templates.push_back(create_chord_template(pc, ChordQuality::Sus2Add4));
     for (ChordQuality quality : extended_chord_qualities()) {
       templates.push_back(create_chord_template(pc, quality));
     }
@@ -583,7 +547,7 @@ std::vector<ChordTemplate> generate_triad_templates() {
     templates.push_back(create_major_template(pc));
     templates.push_back(create_minor_template(pc));
     templates.push_back(create_diminished_template(pc));
-    templates.push_back(create_augmented_template(pc));
+    templates.push_back(create_chord_template(pc, ChordQuality::Augmented));
   }
 
   return templates;
@@ -597,8 +561,8 @@ std::vector<ChordTemplate> generate_seventh_templates() {
     PitchClass pc = static_cast<PitchClass>(root);
 
     templates.push_back(create_dominant7_template(pc));
-    templates.push_back(create_major7_template(pc));
-    templates.push_back(create_minor7_template(pc));
+    templates.push_back(create_chord_template(pc, ChordQuality::Major7));
+    templates.push_back(create_chord_template(pc, ChordQuality::Minor7));
   }
 
   return templates;

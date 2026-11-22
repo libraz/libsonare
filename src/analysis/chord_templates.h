@@ -86,44 +86,17 @@ ChordTemplate create_minor_template(PitchClass root);
 /// @brief Creates a diminished chord template for a given root.
 ChordTemplate create_diminished_template(PitchClass root);
 
-/// @brief Creates an augmented chord template for a given root.
-ChordTemplate create_augmented_template(PitchClass root);
-
 /// @brief Creates a dominant 7th chord template for a given root.
 ChordTemplate create_dominant7_template(PitchClass root);
-
-/// @brief Creates a major 7th chord template for a given root.
-ChordTemplate create_major7_template(PitchClass root);
-
-/// @brief Creates a minor 7th chord template for a given root.
-ChordTemplate create_minor7_template(PitchClass root);
-
-/// @brief Creates a sus2 chord template for a given root.
-ChordTemplate create_sus2_template(PitchClass root);
-
-/// @brief Creates a sus4 chord template for a given root.
-ChordTemplate create_sus4_template(PitchClass root);
 
 /// @brief Creates an add9 chord template for a given root.
 ChordTemplate create_add9_template(PitchClass root);
 
-/// @brief Creates a minor add9 chord template for a given root.
-ChordTemplate create_minor_add9_template(PitchClass root);
-
-/// @brief Creates a diminished 7th chord template for a given root.
-ChordTemplate create_dim7_template(PitchClass root);
-
 /// @brief Creates a half-diminished 7th / minor 7 flat 5 chord template for a given root.
 ChordTemplate create_half_dim7_template(PitchClass root);
 
-/// @brief Creates a major 9th chord template for a given root.
-ChordTemplate create_major9_template(PitchClass root);
-
 /// @brief Creates a dominant 9th chord template for a given root.
 ChordTemplate create_dominant9_template(PitchClass root);
-
-/// @brief Creates a sus2 add4 chord template for a given root.
-ChordTemplate create_sus2_add4_template(PitchClass root);
 
 /// @brief Creates the template for any quality at a given root.
 /// @details The generic form of the per-quality factories above; the extended

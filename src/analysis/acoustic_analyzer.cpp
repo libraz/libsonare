@@ -198,16 +198,6 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
   }
 }
 
-void AcousticAnalyzer::set_unsupported_blind_result() {
-  parameters_.rt60 = nan_value();
-  parameters_.edt = nan_value();
-  parameters_.c50 = nan_value();
-  parameters_.c80 = nan_value();
-  parameters_.d50 = nan_value();
-  parameters_.confidence = 0.0f;
-  parameters_.is_blind = true;
-}
-
 AcousticParameters detect_acoustic(const Audio& audio, const AcousticConfig& config) {
   return AcousticAnalyzer(audio, config).parameters();
 }

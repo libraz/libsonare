@@ -174,10 +174,6 @@ FrameFeatures frame_features(const Audio& audio, const Spectrogram& spec,
   out.n_frames = n_frames;
   out.frame_sec = static_cast<float>(config.hop_length) / static_cast<float>(sr);
   out.duration_sec = audio.duration();
-  out.frame_times.resize(static_cast<size_t>(n_frames));
-  for (int f = 0; f < n_frames; ++f) {
-    out.frame_times[static_cast<size_t>(f)] = static_cast<float>(f) * out.frame_sec;
-  }
 
   const ChromaConfig chroma_config = section_chroma_config(config, sr);
   MelFilterConfig mel_filter;
