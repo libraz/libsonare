@@ -1024,5 +1024,15 @@ if(BUILD_CLI AND NOT BUILD_WASM)
 endif()
 
 include(CTest)
+set(SONARE_TEST_SHARDS 0 CACHE STRING "Register sonare_tests as N Catch2 shards instead of one ctest entry per case (0 = per case)")
 include(Catch)
-catch_discover_tests(sonare_tests WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+if(SONARE_TEST_SHARDS GREATER 0)
+  math(EXPR _sonare_last_shard "${SONARE_TEST_SHARDS} - 1")
+  foreach(_i RANGE ${_sonare_last_shard})
+    add_test(NAME sonare_tests-shard-${_i}/${_sonare_last_shard}
+      COMMAND sonare_tests --shard-index ${_i} --shard-count ${SONARE_TEST_SHARDS} --rng-seed 0x5eed --order rand
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+  endforeach()
+else()
+  catch_discover_tests(sonare_tests WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+endif()
