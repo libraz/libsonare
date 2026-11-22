@@ -18,6 +18,7 @@ import {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, UINT32_MAX } from './internal/value_guards.js';
 import {
@@ -30,9 +31,7 @@ import {
   normalizeInstrumentBindings,
   normalizePartRig,
   normalizeSynthInstrument,
-  optionalId,
   optionalName,
-  optionalPositiveInt,
   partRigFromNative,
   projectAutomationLaneValue,
   projectBounceResult,
@@ -548,7 +547,6 @@ export class Project {
     const trackId = optionalId(
       'trackId',
       optionsObject('Project.moveClip', options).trackId,
-      false,
       'to keep the track',
     );
     this.native.moveClip(clipId, newStartPpq, trackId ?? 0);

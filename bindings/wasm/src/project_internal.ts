@@ -25,6 +25,7 @@ import {
 } from './internal/entry.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
+import { optionalId } from './internal/optional_ints.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import {
   AUTOMATION_TARGET_KINDS,
@@ -92,7 +93,13 @@ import type {
 // leaves the other working, so the property is pinned by
 // tests/sample-bank-module-cycle.test.ts rather than left to review.
 import { SampleBank } from './sample_bank.js';
-import { assertAudioChannels, assertNibble, assertU7, assertU32 } from './validation.js';
+import {
+  assertAudioChannels,
+  assertBoundedInteger,
+  assertNibble,
+  assertU7,
+  assertU32,
+} from './validation.js';
 import { SONARE_MAX_PUBLIC_PPQ as MAX_PUBLIC_PPQ } from './worklet/engine-rings.js';
 
 /**
@@ -321,8 +328,10 @@ export function normalizeInstrumentBindings<E, R extends object>(
     if ('destinationId' in instrument) {
       throw refuseUnknownKey(`${label}.instrument.destinationId`, [`${label}.destinationId`]);
     }
-    const destinationId = optionalId(`${label}.destinationId`, record.destinationId, true);
-    return { ...entry(instrument as E), destinationId: destinationId ?? 0 };
+    // 0 is a real destination here, so an omitted id is 0 rather than refused.
+    const destinationId = isAbsent(record.destinationId) ? 0 : record.destinationId;
+    assertBoundedInteger(destinationId, `${label}.destinationId`, 0, UINT32_MAX);
+    return { ...entry(instrument as E), destinationId };
   });
 }
 
@@ -739,33 +748,6 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
 /** A native ordinal back to its token; an ordinal outside the table is a binding defect. */
 
 /**
- * An optional id: absent (`undefined` / `null`) is `undefined`, an explicit `0`
- * is refused because native reads it as "not given", and anything else must be
- * a positive 32-bit integer. `allowZero` is for a destination id, where `0` is a
- * real destination.
- */
-export function optionalId(
-  argName: string,
-  value: unknown,
-  allowZero = false,
-  hint = 'for the default',
-): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (value === 0 && !allowZero) {
-    throw refuse(`${argName} must not be 0; omit it ${hint}`);
-  }
-  if (!Number.isInteger(value) || value < 0 || value > UINT32_MAX) {
-    throw refuse(`${argName} must be an integer in [${allowZero ? 0 : 1}, 4294967295]`);
-  }
-  return value;
-}
-
-/**
  * An optional string field whose empty form would read as "not given": absent stays absent and
  * `""` is refused by name. `hint` finishes "omit it ...".
  */
@@ -806,7 +788,7 @@ export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
       throw refuse(`${where}.id must not be 0`);
     }
     const takeId = optionalId(`${where}.id`, id);
-    const source = optionalId(`${where}.sourceId`, sourceId, false, "for the clip's source");
+    const source = optionalId(`${where}.sourceId`, sourceId, "for the clip's source");
     const label = optionalName(`${where}.name`, name, 'for an unnamed take');
     return {
       ...rest,
@@ -829,30 +811,9 @@ export function compSegmentsToNative(segments: unknown): Array<Record<string, un
     }
     assertDeclaredKeys(entry, COMP_SEGMENT_KEYS, `segments[${index}]`);
     const { takeId, ...rest } = entry as Record<string, unknown>;
-    const take = optionalId(`segments[${index}].takeId`, takeId, false, 'for the active take');
+    const take = optionalId(`segments[${index}].takeId`, takeId, 'for the active take');
     return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
   });
-}
-
-/** An optional strictly positive integer count: absent is `undefined`, an explicit `0` is refused. */
-export function optionalPositiveInt(
-  argName: string,
-  value: unknown,
-  max: number,
-): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (value === 0) {
-    throw refuse(`${argName} must not be 0; omit it for the default`);
-  }
-  if (!Number.isInteger(value) || value < 0 || value > max) {
-    throw refuse(`${argName} must be an integer in [1, ${max}]`);
-  }
-  return value;
 }
 
 export function projectTrackKindValue(kind: ProjectTrackKind): number {

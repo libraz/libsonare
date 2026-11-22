@@ -35,6 +35,7 @@ import { assignMarkerIds } from './internal/marker_ids.js';
 import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
+import { optionalCount, optionalId } from './internal/optional_ints.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
 import { MARKER_KINDS, tokenName, WARP_MODES } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
@@ -58,7 +59,6 @@ import {
   automationPointValue,
   normalizePartRig,
   normalizeSynthInstrument,
-  optionalId,
   projectTimelineNativeId,
 } from './project_internal.js';
 import type {
@@ -128,7 +128,6 @@ import {
   assertClosedToken,
   assertFloatValue,
   assertSurroundPan,
-  C_INT_MAX,
   optionalBoolean,
   requestObject,
   requireBoolean,
@@ -265,23 +264,6 @@ function noOrdinal(argName: string, value: unknown): void {
   }
 }
 
-/** An optional positive integer count: absent stays `undefined`, and an explicit `0` is refused. */
-function optionalCount(argName: string, value: unknown): number | undefined {
-  if (isAbsent(value)) {
-    return undefined;
-  }
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be an integer`);
-  }
-  if (value === 0) {
-    throw refuse(`${argName} must not be 0; omit it for the default`);
-  }
-  if (!Number.isInteger(value) || value < 1 || value > C_INT_MAX) {
-    throw refuse(`${argName} must be an integer in [1, ${C_INT_MAX}]`);
-  }
-  return value;
-}
-
 /** A graph node name: a string, and never empty. */
 function graphName(path: string, value: unknown): void {
   if (typeof value !== 'string') {
@@ -294,7 +276,7 @@ function graphName(path: string, value: unknown): void {
 
 /** An optional id that names a bus: absent routes to the master mix, so an explicit `0` is refused. */
 function optionalBusId(argName: string, value: unknown): number {
-  return optionalId(argName, value, false, 'to route to the master mix') ?? 0;
+  return optionalId(argName, value, 'to route to the master mix') ?? 0;
 }
 
 function requireObject(argName: string, value: unknown): void {
