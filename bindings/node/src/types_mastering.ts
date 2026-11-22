@@ -13837,8 +13837,14 @@ export interface MasteringChainConfig {
       makeupGainDb?: number;
       /** Derives the makeup gain from the threshold and ratio instead of using `makeupGainDb`. Default false. */
       autoMakeup?: boolean;
+      /** Level detector: `'peak'`, `'rms'` or `'logRms'`. Default `'rms'`. */
+      detector?: CompressorDetector;
       /** Sidechain high-pass corner in Hz, greater than 0; absent = no high-pass. */
       sidechainHighPassHz?: number;
+      /** Program-dependent release time in ms; 0 leaves the release fixed. Default 0. */
+      pdrTimeMs?: number;
+      /** Program-dependent release multiplier. Default 1. */
+      pdrReleaseScale?: number;
     };
     /** Sibilance reduction in a detection band. */
     deesser?: {
