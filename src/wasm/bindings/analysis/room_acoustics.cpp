@@ -4,12 +4,15 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <array>
 #include <limits>
+#include <optional>
 #include <string>
 #include <type_traits>
 
 #include "acoustic/estimate_geometry.h"
 #include "acoustic/material.h"
+#include "acoustic/rir_synthesizer.h"
 #include "acoustic/selector_names.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -107,12 +110,11 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   return make_uniform_room(dims, request);
 }
 
-// Reads `{ x, y, z }` under @p key: absent (undefined or null) takes @p fallback, anything else
+// Reads `{ x, y, z }` under @p key: absent (undefined or null) is not given, anything else
 // must be an object whose three components are finite numbers, each refused by name.
-sonare::acoustic::Vec3 positionFromVal(val opts, const char* key,
-                                       const sonare::acoustic::Vec3& fallback) {
+std::array<std::optional<float>, 3> requestedPositionFromVal(val opts, const char* key) {
   val position = objectProperty(opts, key);
-  if (position.isUndefined() || position.isNull()) return fallback;
+  if (position.isUndefined() || position.isNull()) return {};
   if (position.typeOf().as<std::string>() != "object" || position.isArray()) {
     throw WasmTypeError(std::string(key) + " must be an object with x, y and z");
   }
@@ -124,13 +126,19 @@ sonare::acoustic::Vec3 positionFromVal(val opts, const char* key,
   return {component("x"), component("y"), component("z")};
 }
 
+// The source and listener asked for, each absent when omitted.
+sonare::acoustic::RoomPlacementRequest placementRequestFromVal(val opts) {
+  sonare::acoustic::RoomPlacementRequest request;
+  request.source = requestedPositionFromVal(opts, "source");
+  request.listener = requestedPositionFromVal(opts, "listener");
+  return request;
+}
+
 // The source and listener asked for, an omitted one taking the default placement scaled to @p room.
 sonare::acoustic::SourceListener placementFromVal(val opts,
                                                   const sonare::acoustic::ShoeboxRoom& room) {
-  const sonare::acoustic::SourceListener fallback = sonare::acoustic::scaled_default_placement(
-      room.dims.length, room.dims.width, room.dims.height);
-  return {positionFromVal(opts, "source", fallback.source),
-          positionFromVal(opts, "listener", fallback.listener)};
+  return sonare::acoustic::resolve_room_placement(room.dims, placementRequestFromVal(opts))
+      .placement;
 }
 
 // Acoustic sample-rate bounds, sourced from the shared core limits
@@ -295,10 +303,19 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   return out;
 }
 
-static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opts) {
+// The stereo entry reads `receiverSpacingM` and passes it in; an absent spacing is fitted to the
+// room and placement.
+static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(
+    val opts, std::optional<float> receiver_spacing_m) {
   sonare::effects::acoustic::RoomMorphConfig config;
   config.target = roomFromVal(opts, sonare::acoustic::kDefaultWallAbsorption);
-  config.placement = placementFromVal(opts, config.target);
+  sonare::acoustic::RoomPlacementRequest request = placementRequestFromVal(opts);
+  request.receiver_spacing_m = receiver_spacing_m;
+  const sonare::acoustic::ResolvedRoomPlacement resolved =
+      sonare::acoustic::resolve_room_placement(config.target.dims, request);
+  config.placement = resolved.placement;
+  config.receiver_spacing_m = resolved.receiver_spacing_m;
+  config.supplied = resolved.supplied;
   config.source_tail_suppression =
       domainFloatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
   config.wet = domainFloatProperty(opts, "wet", config.wet);
@@ -328,7 +345,7 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   // The config's own validation runs inside the respelling, so it refuses in the request's keys.
   const auto result = sonare::util::check::with_camel_paths(
       [&] {
-        const auto config = roomMorphConfigFromVal(opts);
+        const auto config = roomMorphConfigFromVal(opts, std::nullopt);
         return sonare::effects::acoustic::room_morph(audio, config);
       },
       sonare::effects::acoustic::kRoomMorphRenamedKeys);
@@ -355,9 +372,11 @@ val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val op
   Audio right_audio = acousticAudioFromVector("right", std::move(right_data), sample_rate);
   const auto result = sonare::util::check::with_camel_paths(
       [&] {
-        auto config = roomMorphConfigFromVal(opts);
-        config.receiver_spacing_m =
-            domainFloatProperty(opts, "receiverSpacingM", config.receiver_spacing_m);
+        const std::optional<float> receiver_spacing_m =
+            hasProperty(opts, "receiverSpacingM")
+                ? std::optional<float>(domainFloatProperty(opts, "receiverSpacingM", 0.0f))
+                : std::nullopt;
+        const auto config = roomMorphConfigFromVal(opts, receiver_spacing_m);
         return sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, config);
       },
       sonare::effects::acoustic::kRoomMorphRenamedKeys);

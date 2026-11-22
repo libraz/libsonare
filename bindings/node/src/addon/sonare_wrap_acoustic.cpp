@@ -1,7 +1,9 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -41,17 +43,20 @@ bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
 // directly), which is why the guard has to be reachable from the core rather
 // than sitting in the C-ABI translation unit.
 
-// Validates the RIR timing config against the same bounds the C ABI checks
-// before building a room, so Node rejects (rather than silently accepts) the
-// out-of-range inputs the C ABI/Python already refuse.
-void ValidateRirShapeAndTiming(const sonare::acoustic::RirSynthConfig& cfg) {
+// The core's geometry and synthesis rules, run ahead of the synthesis so a refusal names the
+// key the JS caller wrote.
+void RequireRirRequest(const sonare::acoustic::ShoeboxRoom& room,
+                       const sonare::acoustic::SourceListener& placement,
+                       const sonare::acoustic::RirSynthConfig& cfg) {
   using namespace sonare::acoustic;
-  // Finiteness is FloatProperty's at the read; what is left is each field's own bound.
-  if (cfg.max_seconds < 0.0f || cfg.max_seconds > kMaxRirSeconds || cfg.mixing_time_ms < 0.0f ||
-      cfg.mixing_time_ms > kMaxRirMixingTimeMs || cfg.crossfade_ms < 0.0f ||
-      cfg.crossfade_ms > kMaxRirCrossfadeMs) {
+  std::vector<sonare::Diagnostic> diagnostics =
+      validate_shoebox(room, placement, kShoeboxJsFieldNames);
+  const std::vector<sonare::Diagnostic> synthesis =
+      validate_rir_synth_config(cfg, kRirSynthJsFieldNames);
+  diagnostics.insert(diagnostics.end(), synthesis.begin(), synthesis.end());
+  if (sonare::has_error(diagnostics)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RIR timing parameters out of range");
+                                  first_error_text(diagnostics));
   }
 }
 
@@ -116,16 +121,25 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
   return make_uniform_room(dims, request);
 }
 
+// The source and listener asked for, each absent when omitted (undefined or null).
+sonare::acoustic::RoomPlacementRequest PlacementRequestFromOptions(const Napi::Object& opts) {
+  const auto requested = [&](const char* key) -> std::array<std::optional<float>, 3> {
+    const Napi::Value value = opts.Get(key);
+    if (value.IsUndefined() || value.IsNull()) return {};
+    const auto xyz = XyzProperty(opts, key, {});
+    return {xyz[0], xyz[1], xyz[2]};
+  };
+  sonare::acoustic::RoomPlacementRequest request;
+  request.source = requested("source");
+  request.listener = requested("listener");
+  return request;
+}
+
 // The source and listener asked for, an omitted one taking the default placement scaled to @p room.
 sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts,
                                                       const sonare::acoustic::ShoeboxRoom& room) {
-  const sonare::acoustic::SourceListener fallback = sonare::acoustic::scaled_default_placement(
-      room.dims.length, room.dims.width, room.dims.height);
-  const auto position = [&](const char* key, const sonare::acoustic::Vec3& defaulted) {
-    const auto xyz = XyzProperty(opts, key, {defaulted.x, defaulted.y, defaulted.z});
-    return sonare::acoustic::Vec3{xyz[0], xyz[1], xyz[2]};
-  };
-  return {position("source", fallback.source), position("listener", fallback.listener)};
+  return sonare::acoustic::resolve_room_placement(room.dims, PlacementRequestFromOptions(opts))
+      .placement;
 }
 
 // Wire string for a diagnostic severity, matching the RirDiagnostic type.
@@ -186,7 +200,7 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
 
   const auto room = RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption);
   const auto placement = PlacementFromOptions(opts, room);
-  ValidateRirShapeAndTiming(cfg);
+  RequireRirRequest(room, placement, cfg);
   const auto result = sonare::acoustic::synthesize_rir(room, placement, sample_rate, cfg);
   if (sonare::has_error(result.diagnostics)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -329,11 +343,19 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   SONARE_NODE_CATCH(env)
 }
 
-// Options shared by roomMorph and roomMorphStereo.
-sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(const Napi::Object& opts) {
+// Options shared by roomMorph and roomMorphStereo. The stereo entry reads `receiverSpacingM` and
+// passes it in; an absent spacing is fitted to the room and placement.
+sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(
+    const Napi::Object& opts, std::optional<float> receiver_spacing_m) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
   cfg.target = RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption);
-  cfg.placement = PlacementFromOptions(opts, cfg.target);
+  sonare::acoustic::RoomPlacementRequest request = PlacementRequestFromOptions(opts);
+  request.receiver_spacing_m = receiver_spacing_m;
+  const sonare::acoustic::ResolvedRoomPlacement resolved =
+      sonare::acoustic::resolve_room_placement(cfg.target.dims, request);
+  cfg.placement = resolved.placement;
+  cfg.receiver_spacing_m = resolved.receiver_spacing_m;
+  cfg.supplied = resolved.supplied;
   cfg.source_tail_suppression =
       DomainFloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);
   cfg.wet = DomainFloatProperty(opts, "wet", cfg.wet);
@@ -371,7 +393,8 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   Napi::Object opts = info[2].As<Napi::Object>();
 
-  const sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
+  const sonare::effects::acoustic::RoomMorphConfig cfg =
+      RoomMorphConfigFromOptions(opts, std::nullopt);
 
   const auto result = sonare::util::check::with_camel_paths(
       [&] { return sonare::effects::acoustic::room_morph(audio, cfg); },
@@ -418,8 +441,13 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
       sonare::Audio::from_buffer(right.Data(), right.ElementLength(), sr);
   Napi::Object opts = info[3].As<Napi::Object>();
 
-  sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
-  cfg.receiver_spacing_m = DomainFloatProperty(opts, "receiverSpacingM", cfg.receiver_spacing_m);
+  const Napi::Value spacing = opts.Get("receiverSpacingM");
+  const std::optional<float> receiver_spacing_m =
+      spacing.IsUndefined() || spacing.IsNull()
+          ? std::nullopt
+          : std::optional<float>(DomainFloatProperty(opts, "receiverSpacingM", 0.0f));
+  const sonare::effects::acoustic::RoomMorphConfig cfg =
+      RoomMorphConfigFromOptions(opts, receiver_spacing_m);
 
   const auto result = sonare::util::check::with_camel_paths(
       [&] { return sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, cfg); },

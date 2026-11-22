@@ -869,8 +869,8 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
  *
  * @throws {TypeError} when `sampleRate` is missing
  * @throws {RangeError} when the geometry, placement or timing is unusable (for
- *   example a source outside the room: the message leads with the diagnostic code,
- *   such as `acoustic.source_outside_room`), on an out-of-range `sampleRate`, or
+ *   example a source outside the room: the message names the refused value and
+ *   the range it must lie in), on an out-of-range `sampleRate`, or
  *   on an explicit 0 where omission selects the default
  */
 export function synthesizeRir(request: SynthesizeRirRequest): RirResult;

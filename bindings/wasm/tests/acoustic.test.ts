@@ -42,7 +42,7 @@ describe('geometric room acoustics', () => {
         heightM: 3,
         source: { x: 99, y: 1, z: 1 },
       });
-    expect(attempt).toThrow(/acoustic\.source_outside_room/);
+    expect(attempt).toThrow(/source\.x must be finite and in \[0, 7\]/);
     expect(attempt).toThrow(RangeError);
   });
 
@@ -382,7 +382,7 @@ describe('geometric room acoustics', () => {
   // The diagnostic list is transcribed by the WASM wrapper independently of the
   // C ABI, so Node passing says nothing about this surface. Until these two, the
   // only WASM assertion on the RIR result was the band-length invariant above.
-  it('names the diagnostic that fired in the thrown error, and carries warnings on success', () => {
+  it('names the refused value and its range in the thrown error, and carries warnings on success', () => {
     expect(() =>
       synthesizeRir({
         sampleRate: 48000,
@@ -391,7 +391,7 @@ describe('geometric room acoustics', () => {
         heightM: 3,
         source: { x: 99, y: 1, z: 1 },
       }),
-    ).toThrow(/acoustic\.source_outside_room/);
+    ).toThrow(/source\.x must be finite and in \[0, 7\]/);
 
     const clean = synthesizeRir({
       sampleRate: 48000,
@@ -530,7 +530,7 @@ describe('geometric room acoustics', () => {
     expect(Array.from(ignored.rir)).toEqual(Array.from(off.rir));
   });
 
-  it('throws on an implausible air climate, naming the diagnostic', () => {
+  it('throws on an implausible air climate, naming the refused value', () => {
     expect(() =>
       synthesizeRir({
         sampleRate: 48000,
@@ -539,7 +539,7 @@ describe('geometric room acoustics', () => {
         airAbsorptionEnabled: true,
         airTemperatureC: -500,
       }),
-    ).toThrow(/acoustic\.invalid_air_absorption/);
+    ).toThrow(/airTemperatureC must be finite and greater than -273\.15/);
   });
 
   it('routes air absorption into the room-morph target room', () => {
@@ -765,11 +765,47 @@ describe('roomMorphStereo', () => {
         sampleRate: 48000,
         ...room,
         listener: { x: 0.1, y: 3, z: 1.5 },
+        receiverSpacingM: 0.5,
       });
     expect(attempt).toThrow(RangeError);
     // The core's receiver-pair check, not the facade's listener reader.
     expect(attempt).toThrow(
       /^roomMorphStereo: receiverSpacingM must place both receivers inside the room for /,
+    );
+  });
+});
+
+describe('roomMorphStereo receiver spacing fitted to the room', () => {
+  const impulse = () => {
+    const x = new Float32Array(1000);
+    x[0] = 1;
+    return x;
+  };
+  // A listener 0.1 m from a side wall: the 0.5 m pair does not fit there, a narrower one does.
+  const narrow = {
+    left: impulse(),
+    right: impulse(),
+    sampleRate: 48000,
+    lengthM: 12,
+    widthM: 9,
+    heightM: 5,
+    maxSec: 0.2,
+    listener: { x: 0.1, y: 4, z: 1.7 },
+  };
+
+  it('renders with an omitted spacing where the default pair would leave the room', () => {
+    const out = roomMorphStereo(narrow);
+    expect(out.left.length).toBe(out.right.length);
+    expect(out.left.every(Number.isFinite)).toBe(true);
+    expect(Array.from(out.left)).not.toEqual(Array.from(out.right));
+    expect(() => roomMorphStereo({ ...narrow, receiverSpacingM: 0.5 })).toThrow(
+      /^roomMorphStereo: receiverSpacingM must place both receivers inside the room for /,
+    );
+  });
+
+  it('still refuses a given NaN spacing by the domain', () => {
+    expect(() => roomMorphStereo({ ...narrow, receiverSpacingM: Number.NaN })).toThrow(
+      'roomMorphStereo: receiverSpacingM must be finite and in (0, 4]',
     );
   });
 });
