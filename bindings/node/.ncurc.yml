@@ -11,10 +11,10 @@
 cooldown: 1d
 
 reject:
-  # typescript: v7 is the native port and its npm package ships only tsc.js,
-  # getExePath and version — the compiler API is gone, so `import * as ts from
-  # 'typescript'` in tests/type-exports.test.ts resolves to lib/version and
-  # every ts.Symbol / ts.Type / ts.TypeFlags reference fails with TS2694/TS2339.
+  # typescript: v7 is the native port. Its package root still resolves to
+  # lib/version (7.0.2); the only API it ships is the separate ./unstable/*
+  # surface, so `import * as ts from 'typescript'` in tests/type-exports.test.ts
+  # finds no ts.Symbol / ts.Type / ts.TypeFlags and fails with TS2694/TS2339.
   - typescript
 
   # @types/node: tracks the runtime major, not npm's latest. mise.toml runs
