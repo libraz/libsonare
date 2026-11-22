@@ -1,5 +1,6 @@
 import { chordQualityOrdinal, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpers.js';
 import { refuseType, withEntry } from './internal/entry.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { projectChordQualityName, projectKeyModeName, projectModule } from './project_internal.js';
 import type { ProjectChordQuality, ProjectKeyMode } from './project_types.js';
 import type { Chord, KeyMode } from './public_types.js';
@@ -50,7 +51,7 @@ export function chordSymbolFromAnalysis(
   chord: Pick<Chord, 'root' | 'bass' | 'quality'>,
 ): ChordSymbolFields {
   return withEntry('chordSymbolFromAnalysis', () => {
-    if (typeof chord !== 'object' || chord === null || Array.isArray(chord)) {
+    if (!isNonArrayObject(chord)) {
       throw refuseType('chord must be an object');
     }
     const root = pitchClassOrdinal(chord.root, 'root');

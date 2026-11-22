@@ -19,6 +19,7 @@ import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import {
   assertProjectMidiEvents,
   compSegmentsToNative,
@@ -564,7 +565,7 @@ export class Project {
 
   /** Add or replace a first-class warp map referenced by clip warp ids. */
   setWarpMap(map: ProjectWarpMapDesc): void {
-    if (typeof map !== 'object' || map === null || Array.isArray(map)) {
+    if (!isNonArrayObject(map)) {
       throw refuseType('map must be an object');
     }
     const { name, ...rest } = map;

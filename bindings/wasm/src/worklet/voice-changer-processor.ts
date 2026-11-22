@@ -1,7 +1,7 @@
 import { ErrorCode } from '../errors.js';
 import { RealtimeVoiceChanger } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
-import { failurePayload } from '../internal/failure_payload.js';
+import { errorText, failurePayload } from '../internal/failure_payload.js';
 import type { SonareRealtimeVoiceChangerErrorMessage } from '../internal/voice_changer_messages.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type { SonareRealtimeVoiceChangerWorkletProcessorOptions } from '../public_types_worklet.js';
@@ -281,7 +281,7 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
           port?.postMessage?.({
             type: 'error',
             request,
-            message: error instanceof Error ? error.message : String(error),
+            message: errorText(error),
             failure: failurePayload(error),
           } satisfies SonareRealtimeVoiceChangerErrorMessage);
         };

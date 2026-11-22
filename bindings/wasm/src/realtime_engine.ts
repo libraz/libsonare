@@ -28,7 +28,7 @@ import {
 } from './internal/entry.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
-import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
@@ -36,6 +36,7 @@ import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene
 import { deinterleavePlanes } from './internal/pod_config.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -320,7 +321,7 @@ function optionalBusId(argName: string, value: unknown): number {
 }
 
 function requireObject(argName: string, value: unknown): void {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isNonArrayObject(value)) {
     throw refuseType(`${argName} must be an object`);
   }
 }
@@ -2994,9 +2995,7 @@ export class ClipPageProvider {
   }
 
   private get native(): WasmClipPageProvider {
-    if (this.disposed) {
-      throw releasedHandleError('ClipPageProvider');
-    }
+    assertHandleLive(this.disposed, 'ClipPageProvider');
     return this.nativeHandle;
   }
 

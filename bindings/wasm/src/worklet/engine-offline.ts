@@ -7,6 +7,7 @@ import type {
 import { capturePunchBound } from '../internal/capture_punch.js';
 import { refuse, refuseType, withEntry } from '../internal/entry.js';
 import { assignMarkerIds } from '../internal/marker_ids.js';
+import { isNonArrayObject } from '../internal/value_guards.js';
 import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
 import {
@@ -27,7 +28,7 @@ export type CaptureSyncConfig = Omit<SonareEngineSyncCaptureMessage, 'type'> & {
 
 /** Refuses a value that is not a plain object, naming the argument. */
 export function requireObject(what: string, value: unknown): asserts value is object {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isNonArrayObject(value)) {
     throw refuseType(`${what} must be an object`);
   }
 }

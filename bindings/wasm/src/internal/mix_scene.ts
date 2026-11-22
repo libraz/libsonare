@@ -7,6 +7,7 @@ import type {
   SendTiming,
 } from '../public_types_mixing.js';
 import { refuse, refuseType } from './entry.js';
+import { isNonArrayObject } from './value_guards.js';
 
 // The native scene document reads and writes the public tokens; these helpers refuse a wrong type or an unknown token
 // with TypeError / RangeError before the document reaches native, which would refuse it as an invalid format.
@@ -66,7 +67,7 @@ function listOf(value: unknown, path: string): unknown[] | undefined {
 }
 
 function objectAt(value: unknown, path: string): Loose {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isNonArrayObject(value)) {
     throw refuseType(`${path} must be an object`);
   }
   return value as Loose;
@@ -135,7 +136,7 @@ export function mixSceneJsonToNative(json: string): string {
   } catch {
     return json;
   }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  if (!isNonArrayObject(parsed)) {
     return json;
   }
   return JSON.stringify(mixSceneToNative(parsed as MixSceneDocumentInput));

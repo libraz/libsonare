@@ -8,6 +8,7 @@ import {
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import {
   checkedVoicePresetId,
   VOICE_PRESET_IDS,
@@ -159,7 +160,7 @@ export class RealtimeVoiceChanger {
    *   `numChannels` or an unknown preset id or token.
    */
   constructor(options: RealtimeVoiceChangerOptions) {
-    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    if (!isNonArrayObject(options)) {
       throw refuseType(`options must be an object with a sampleRate`);
     }
     for (const key of Object.keys(options)) {

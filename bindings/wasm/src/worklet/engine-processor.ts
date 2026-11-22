@@ -2,7 +2,7 @@ import type { EngineClip, SynthPatch } from '../index.js';
 import { ClipPageProvider, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { refuse, refuseType } from '../internal/entry.js';
-import { failurePayload } from '../internal/failure_payload.js';
+import { errorText, failurePayload } from '../internal/failure_payload.js';
 import {
   DEFAULT_METRONOME_CONFIG,
   type EngineClipPageRequestMessage,
@@ -98,6 +98,12 @@ const METER_TARGET_SLOTS = 42;
 // `meterScratchValue` fields past the stereo set: channel count, then four 8-plane blocks.
 const METER_SCRATCH_CHANNEL_COUNT = 11;
 const METER_SCRATCH_PLANES = 12;
+/** Plane blocks a surround meter record carries after the stereo set. */
+const METER_PLANE_KINDS = 4;
+/** Most events one render quantum drains from a telemetry, meter, scope or command queue. */
+const DRAIN_LIMIT_PER_QUANTUM = 64;
+/** Most external MIDI events one render quantum drains. */
+const EXTERNAL_MIDI_DRAIN_LIMIT = 256;
 
 /** The wire spells "apply at the next block head" as a negative frame; the engine facade as absence. */
 function wireRenderFrame(frame: number | bigint | undefined): number | undefined {
@@ -310,7 +316,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     // A quantum larger than the pre-allocated scratch renders silence and still
     // publishes telemetry; it is never clamped and never reallocates.
     if (frames > this.blockSize) {
-      for (const channel of output ?? []) {
+      for (const channel of output) {
         channel.fill(0);
       }
       this.publishTelemetry();
@@ -402,7 +408,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       this.transport?.postMessage?.({
         type: 'syncError',
         syncType: message.type,
-        message: error instanceof Error ? error.message : String(error),
+        message: errorText(error),
         failure: failurePayload(error),
         ...(typeof entry === 'string' ? { entry } : {}),
       });
@@ -1048,7 +1054,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         type: 'captureResponse',
         requestId: message.requestId,
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorText(error),
         failure: failurePayload(error),
       } satisfies SonareEngineCaptureResponseMessageInternal);
     }
@@ -1071,7 +1077,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         type: 'transportResponse',
         requestId: message.requestId,
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorText(error),
         failure: failurePayload(error),
       } satisfies SonareEngineTransportResponseMessage);
     }
@@ -1094,7 +1100,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         type: 'insertGainReductionResponse',
         requestId: message.requestId,
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorText(error),
         failure: failurePayload(error),
       } satisfies SonareEngineInsertGainReductionResponseMessage);
     }
@@ -1114,7 +1120,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.destroy();
   }
 
-  private drainCommands(limit = 64): void {
+  private drainCommands(limit = DRAIN_LIMIT_PER_QUANTUM): void {
     if (!this.commandRing) {
       return;
     }
@@ -1230,8 +1236,8 @@ export class SonareRealtimeEngineWorkletProcessor {
       case SonareEngineCommandType.SetSoloMute:
         this.native.setSoloMute(
           Math.trunc(Number(command.targetId ?? 0)),
-          Boolean((Number(command.argInt ?? 0) & 0x2) !== 0),
-          Boolean((Number(command.argInt ?? 0) & 0x1) !== 0),
+          (Number(command.argInt ?? 0) & 0x2) !== 0,
+          (Number(command.argInt ?? 0) & 0x1) !== 0,
           renderFrame,
         );
         break;
@@ -1276,12 +1282,16 @@ export class SonareRealtimeEngineWorkletProcessor {
   private publishTelemetry(): void {
     const ring = this.telemetryRing;
     if (ring) {
-      for (let count = 0; count < 64 && this.native.popTelemetryToScratch(); count++) {
+      for (
+        let count = 0;
+        count < DRAIN_LIMIT_PER_QUANTUM && this.native.popTelemetryToScratch();
+        count++
+      ) {
         this.writeTelemetryScratch(ring);
       }
       return;
     }
-    for (const item of this.engine.drainTelemetry(64)) {
+    for (const item of this.engine.drainTelemetry(DRAIN_LIMIT_PER_QUANTUM)) {
       this.publishTelemetryRecord(telemetryFromEngine(item));
     }
   }
@@ -1344,7 +1354,11 @@ export class SonareRealtimeEngineWorkletProcessor {
       return;
     }
     if (this.meterRing) {
-      for (let count = 0; count < 64 && this.native.popMeterTelemetryToScratch(); count++) {
+      for (
+        let count = 0;
+        count < DRAIN_LIMIT_PER_QUANTUM && this.native.popMeterTelemetryToScratch();
+        count++
+      ) {
         if (
           !this.meterDue(
             this.native.meterScratchTargetId(),
@@ -1359,7 +1373,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     const delivered: WorkletMeterSnapshot[] = [];
     const newestByTarget = new Map<number, WorkletMeterSnapshot>();
-    for (const item of this.engine.drainMeterTelemetry(64)) {
+    for (const item of this.engine.drainMeterTelemetry(DRAIN_LIMIT_PER_QUANTUM)) {
       const meter = meterFromEngine(item);
       if (!this.meterDue(meter.targetId, meter.frame)) {
         continue;
@@ -1416,7 +1430,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     const channelCount = +this.native.meterScratchValue(METER_SCRATCH_CHANNEL_COUNT);
     scratch[SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = channelCount;
     const planes = channelCount > 2 ? Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS) : 0;
-    for (let kind = 0; kind < 4 && planes > 0; kind++) {
+    for (let kind = 0; kind < METER_PLANE_KINDS && planes > 0; kind++) {
       const out = SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
       const field = METER_SCRATCH_PLANES + kind * SONARE_METER_RING_MAX_CHANNELS;
       for (let ch = 0; ch < planes; ch++) {
@@ -1431,7 +1445,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     for (let field = 0; field < SONARE_METER_RING_PLANES_OFFSET; field++) {
       records[offset + field] = scratch[field];
     }
-    for (let kind = 0; kind < 4 && planes > 0; kind++) {
+    for (let kind = 0; kind < METER_PLANE_KINDS && planes > 0; kind++) {
       const out = offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
       const source = SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
       for (let ch = 0; ch < planes; ch++) {
@@ -1441,12 +1455,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     commitOverwriteWrite(header, slotStates, capacity, writeIndex);
   }
 
-  // A snapshot-object ring writer used to live here as well. It was
-  // unreachable: publishMeters returns after the writeMeterScratch loop
-  // whenever a ring exists, so the ring is never fed from a materialised
-  // snapshot. writeMeterScratch above is the only ring writer, and it keeps the
-  // render callback allocation-free by reading the engine's scratch registers
-  // directly.
+  // writeMeterScratch is the only ring writer; it reads the engine's scratch registers directly.
   //
   // An overwrite ring keeps no drop count: readers detect overrun from the
   // cursor distance, so header slot 3 is left at its initial 0.
@@ -1461,7 +1470,11 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     const ring = this.scopeRing;
     const transport = this.transport;
-    for (let count = 0; count < 64 && this.native.popScopeTelemetryToScratch(); count++) {
+    for (
+      let count = 0;
+      count < DRAIN_LIMIT_PER_QUANTUM && this.native.popScopeTelemetryToScratch();
+      count++
+    ) {
       if (ring) {
         this.writeScopeScratch(ring);
       } else {
@@ -1556,7 +1569,11 @@ export class SonareRealtimeEngineWorkletProcessor {
   private publishExternalMidi(): void {
     const ring = this.externalMidiRing;
     if (ring) {
-      for (let count = 0; count < 256 && this.native.popExternalMidiToScratch(); count++) {
+      for (
+        let count = 0;
+        count < EXTERNAL_MIDI_DRAIN_LIMIT && this.native.popExternalMidiToScratch();
+        count++
+      ) {
         // A full ring leaves the event in the scratch for the next quantum; only
         // a record the ring refuses as malformed is consumed and counted.
         if (!sonareExternalMidiRingHasRoom(ring)) {
@@ -1579,7 +1596,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     if (this.engine.externalMidiPendingCount === 0) {
       return;
     }
-    const events = this.engine.drainExternalMidi(256);
+    const events = this.engine.drainExternalMidi(EXTERNAL_MIDI_DRAIN_LIMIT);
     if (events.length === 0) {
       return;
     }

@@ -1,5 +1,6 @@
 import { type Respelled, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import type { Matrix2D } from './public_types.js';
 import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_keys.js';
 
@@ -666,7 +667,7 @@ export function assertKnownRequestKeys(requestName: RequestFn, request: object):
       ? value.map((item, i) => [`${field}[${i}]`, item])
       : [[field, value]];
     for (const [path, item] of items) {
-      if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      if (!isNonArrayObject(item)) {
         continue;
       }
       for (const key of Object.keys(item)) {
@@ -748,7 +749,7 @@ export function toMatrix2DByRows(data: Float32Array, rows: number): Matrix2D {
  * `validate` is `false`) a NaN or infinity.
  */
 export function assertMatrix2D(value: unknown, argName: string, validate = true): Matrix2D {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isNonArrayObject(value)) {
     throw refuseType(`${argName} must be a Matrix2D`);
   }
   const m = value as Partial<Matrix2D>;

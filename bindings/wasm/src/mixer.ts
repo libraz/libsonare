@@ -8,6 +8,7 @@ import {
 import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { assertStripMetering, mixSceneJsonToNative } from './internal/mix_scene.js';
+import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AutomationCurve,
@@ -153,19 +154,6 @@ export interface InsertAutomationPoint extends MixerAutomationPointBase {
   value: number;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    !ArrayBuffer.isView(value)
-  );
-}
-
-function isAbsent(value: unknown): value is undefined | null {
-  return value === undefined || value === null;
-}
-
 /** A required finite number field of an object argument. */
 function requiredNumber(value: unknown, name: string): number {
   assertFloatValue(value, name);
@@ -277,7 +265,7 @@ export class Mixer {
     const maxBlockSize = maxBlockSizeOf(bag.maxBlockSize);
     let sceneJson = json;
     if (sceneJson === undefined) {
-      if (!isAbsent(bag.scene) && !isObject(bag.scene)) {
+      if (!isAbsent(bag.scene) && !isPlainRecord(bag.scene)) {
         throw refuseType('scene must be an object');
       }
       sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });

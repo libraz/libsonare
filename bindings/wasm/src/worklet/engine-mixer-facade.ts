@@ -4,6 +4,7 @@ import { ErrorCode, type SonareError } from '../errors.js';
 import type { EngineBus, EngineTrackLane, EngineTrackSend, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { codedError, refuse, refuseType } from '../internal/entry.js';
+import { isNonArrayObject } from '../internal/value_guards.js';
 import type {
   SonareEngineSyncMessage,
   SonareEngineSyncMixerInsertParamOverride,
@@ -78,7 +79,7 @@ export type StripJsonTarget =
 type SceneObject = Record<string, unknown>;
 
 function isSceneObject(value: unknown): value is SceneObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return isNonArrayObject(value);
 }
 
 function hasOwn(object: SceneObject, key: string): boolean {

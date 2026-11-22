@@ -5,6 +5,7 @@
 import type { VoicedFlags } from '../public_types.js';
 import { resolveSampleBound } from '../validation.js';
 import { mergeRespelled, type Respelled, refuse, refuseType } from './entry.js';
+import { isNonArrayObject } from './value_guards.js';
 
 // The embind layer reads the companion voicing array as Float32Array. Keep the
 // public union a runtime contract before conversion: strings, Float64Arrays and
@@ -45,10 +46,6 @@ export function assertPitchTrackLengths(
   if (voiced == null && voicedProb != null && voicedProb.length !== f0Hz.length) {
     throw refuse(`voicedProb must have the same length as f0Hz`);
   }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** The time fields a note or event entry may spell in samples or in seconds. */
@@ -105,7 +102,7 @@ export function resolveEntryTimes<T extends TimedEntry>(
       resolved.offsetSample = offsetBound.value;
       respellings.push(onset.respelled, offsetBound.respelled);
     }
-    if (isPlainObject(entry.edit)) {
+    if (isNonArrayObject(entry.edit)) {
       const { timeOffsetSec, ...edit } = entry.edit;
       const offset = resolveSampleBound(
         edit.timeOffsetSamples,

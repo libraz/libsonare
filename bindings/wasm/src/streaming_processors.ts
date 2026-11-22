@@ -7,6 +7,7 @@ import {
   refuseUnknownKey,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   EqBandInput,
@@ -70,7 +71,7 @@ const EQ_PHASE_MODE_ORDINALS: Record<EqPhaseMode, number> = {
 const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
 
 function assertConfigObject(config: unknown): asserts config is object {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be an object`);
   }
 }
@@ -381,7 +382,7 @@ const EQ_BAND_KEYS: Readonly<Record<keyof EqBandInput, true>> = {
 
 /** Refuse a band that is not an object or carries a key no band reads. */
 function assertEqBand(band: unknown): asserts band is EqBandInput {
-  if (typeof band !== 'object' || band === null || Array.isArray(band)) {
+  if (!isNonArrayObject(band)) {
     throw refuseType('band must be an object');
   }
   for (const key of Object.keys(band)) {
@@ -664,7 +665,7 @@ export class StreamingEqualizer {
 // The grain is checked here because native rounds a fraction and reads a negative as automatic;
 // native refuses wrong-typed controls.
 function assertRetuneConfig(config: StreamingRetuneConfig): Record<string, unknown> {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be an object`);
   }
   assertKnownRequestKeys('StreamingRetune', config);

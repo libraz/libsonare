@@ -4,6 +4,7 @@ import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { masteringPlatformNames } from './mastering_chain.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -309,7 +310,7 @@ function previewPlatforms(platforms: unknown): StreamingPlatform[] {
     throw refuse(`platforms must not be empty; omit it for the built-in set`);
   }
   platforms.forEach((platform, i) => {
-    if (typeof platform !== 'object' || platform === null || Array.isArray(platform)) {
+    if (!isNonArrayObject(platform)) {
       throw refuseType(`platforms[${i}] must be an object`);
     }
     for (const key of Object.keys(platform)) {

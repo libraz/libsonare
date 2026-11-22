@@ -11,6 +11,11 @@ export interface SonareFailurePayload {
   bare?: string;
 }
 
+/** The message of an `Error`, or the string form of any other thrown value. */
+export function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** Captures `error` for posting, keeping a SonareError's code and codeName. */
 export function failurePayload(error: unknown): SonareFailurePayload {
   // Nothing on the far side of a port is an entry the consumer called, so its text crosses bare.

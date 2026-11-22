@@ -22,7 +22,6 @@ import type {
 } from './quick_analysis.js';
 import { analyze, detectBpm, detectChords, detectKey } from './quick_analysis.js';
 import type {
-  OfflineWorkerErrorMessage,
   OfflineWorkerRequestMessage,
   OfflineWorkerResponseMessage,
   OfflineWorkerRunMessage,
@@ -75,10 +74,6 @@ function transferableBuffers(value: unknown, seen = new Set<object>()): Transfer
   };
   visit(value);
   return buffers;
-}
-
-function errorMessage(error: unknown): OfflineWorkerErrorMessage['error'] {
-  return failurePayload(error);
 }
 
 function cancelledError(): SonareError {
@@ -164,7 +159,7 @@ export function installOfflineWorkerEndpoint(endpoint: OfflineWorkerEndpoint): v
         endpoint.postMessage({
           type: 'sonare:offline-error',
           id: message.id,
-          error: errorMessage(error),
+          error: failurePayload(error),
         });
       } finally {
         cancelled.delete(message.id);

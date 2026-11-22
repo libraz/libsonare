@@ -9,7 +9,7 @@ import {
   refuseType,
   withEntry,
 } from './internal/entry.js';
-import { releasedHandleError } from './internal/handle_guard.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import { withRespelled } from './internal/respell.js';
 import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import { getSonareModule } from './module_state.js';
@@ -667,9 +667,7 @@ export class VocalEditSession {
   }
 
   private native(): number {
-    if (this.disposed) {
-      throw releasedHandleError('VocalEditSession');
-    }
+    assertHandleLive(this.disposed, 'VocalEditSession');
     return this.handle;
   }
 
@@ -942,9 +940,7 @@ export class VocalRenderSnapshot {
   }
 
   private native(): number {
-    if (this.disposed) {
-      throw releasedHandleError('VocalRenderSnapshot');
-    }
+    assertHandleLive(this.disposed, 'VocalRenderSnapshot');
     return this.handle;
   }
 

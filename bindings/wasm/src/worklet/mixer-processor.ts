@@ -2,7 +2,7 @@ import { ErrorCode } from '../errors.js';
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
-import { failurePayload } from '../internal/failure_payload.js';
+import { errorText, failurePayload } from '../internal/failure_payload.js';
 import type { SonareWorkletMessage, TypedWorkletTransport } from '../internal/worklet_messages.js';
 import type {
   SonareWorkletProcessorConstructorOptions,
@@ -496,7 +496,7 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
           } catch (error) {
             port?.postMessage?.({
               type: 'error',
-              message: error instanceof Error ? error.message : String(error),
+              message: errorText(error),
               failure: failurePayload(error),
             });
           }
@@ -523,7 +523,7 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
             .catch((error: unknown) => {
               port?.postMessage?.({
                 type: 'error',
-                message: error instanceof Error ? error.message : String(error),
+                message: errorText(error),
                 failure: failurePayload(error),
               });
             });

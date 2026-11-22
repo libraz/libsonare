@@ -1,6 +1,6 @@
 import { ErrorCode } from '../errors.js';
 import { codedError, invalidState, withEntry } from '../internal/entry.js';
-import { failurePayload } from '../internal/failure_payload.js';
+import { errorText, failurePayload } from '../internal/failure_payload.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_types_worklet.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
@@ -155,7 +155,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         } catch (error) {
           port?.postMessage?.({
             type: 'error',
-            message: error instanceof Error ? error.message : String(error),
+            message: errorText(error),
             failure: failurePayload(error),
           });
         }

@@ -1,6 +1,7 @@
 import { ErrorCode } from '../errors.js';
 import { HrtfSet, PlaybackRenderer } from '../index.js';
 import { codedError, withEntry } from '../internal/entry.js';
+import { errorText } from '../internal/failure_payload.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -121,7 +122,7 @@ export class SonarePlaybackWorkletProcessor {
       this.port?.postMessage?.({
         type: 'error',
         request: message.type,
-        message: error instanceof Error ? error.message : String(error),
+        message: errorText(error),
       } satisfies SonarePlaybackErrorMessage);
     }
   }
@@ -286,7 +287,7 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
               port?.postMessage?.({
                 type: 'error',
                 request: 'init',
-                message: error instanceof Error ? error.message : String(error),
+                message: errorText(error),
               } satisfies SonarePlaybackErrorMessage);
             });
         }

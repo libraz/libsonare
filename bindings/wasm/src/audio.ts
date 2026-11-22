@@ -58,7 +58,9 @@ import {
   zeroCrossingRate,
 } from './features.js';
 import { CHANNEL_LAYOUT_VALUES, CHANNEL_LAYOUTS } from './internal/channel_layout.js';
-import { codedError, entryClass, invalidState, refuseType, withEntry } from './internal/entry.js';
+import { codedError, entryClass, refuseType, withEntry } from './internal/entry.js';
+import { errorText } from './internal/failure_payload.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import type { MasterAudioRequest, NormalizeRequest } from './mastering_chain.js';
 import { masterAudio } from './mastering_chain.js';
 import type {
@@ -339,9 +341,9 @@ async function decodeWithBrowserCodec(
   if (!context) {
     throw codedError(
       ErrorCode.NotSupported,
-      `${nativeDecoder} failed and browser decodeAudioData is unavailable: ${
-        nativeError instanceof Error ? nativeError.message : String(nativeError)
-      }`,
+      `${nativeDecoder} failed and browser decodeAudioData is unavailable: ${errorText(
+        nativeError,
+      )}`,
       { cause: nativeError },
     );
   }
@@ -356,9 +358,9 @@ async function decodeWithBrowserCodec(
   } catch (fallbackError) {
     throw codedError(
       ErrorCode.DecodeFailed,
-      `${nativeDecoder} failed and browser decodeAudioData fallback failed: ${
-        fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-      }`,
+      `${nativeDecoder} failed and browser decodeAudioData fallback failed: ${errorText(
+        fallbackError,
+      )}`,
       { cause: fallbackError },
     );
   } finally {
@@ -433,7 +435,7 @@ export class Audio {
   /** The held samples; refuses once {@link destroy} released them. */
   private requireAlive(): Float32Array {
     if (this._samples === null) {
-      throw invalidState('Audio has been destroyed');
+      throw releasedHandleError('Audio');
     }
     return this._samples;
   }

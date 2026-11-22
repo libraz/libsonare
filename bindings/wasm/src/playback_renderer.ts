@@ -1,5 +1,6 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   PlaybackDiagnostics,
@@ -19,7 +20,7 @@ import {
 } from './validation.js';
 
 function configJsonText(config: PlaybackRendererConfig): string {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a configuration object`);
   }
   return JSON.stringify(config);

@@ -21,6 +21,7 @@ import { releasedHandleError } from './internal/handle_guard.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { assertEventPpq, umpWord0 } from './internal/ump_events.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AlignTakeToReferenceRequest,
@@ -235,7 +236,7 @@ export type NativeInstrumentBinding<T> = T & { destinationId: number };
  * class with a method the parity tool would then read as a facade op.
  */
 export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding {
-  if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
+  if (!isNonArrayObject(patch)) {
     throw refuseType(`patch must be a SynthPatch object; a preset is named by its preset field`);
   }
   refuseSynthPatchOrdinals(patch);
@@ -282,7 +283,7 @@ export function normalizeInstrumentBindings<E, R extends object>(
   }
   return value.map((pair: unknown, index: number) => {
     const label = `${option}[${index}]`;
-    if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
+    if (!isNonArrayObject(pair)) {
       throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
     }
     const record = pair as Record<string, unknown>;
@@ -329,7 +330,7 @@ function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | unde
       if (params === undefined) {
         return { processor: insert.processor, params: {} };
       }
-      if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+      if (!isNonArrayObject(params)) {
         throw refuseType(`inserts[${index}].params must be an object`);
       }
       return { processor: insert.processor, params };
@@ -861,7 +862,7 @@ export function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   }
   return takes.map((entry: unknown, index) => {
     const where = `takes[${index}]`;
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    if (!isNonArrayObject(entry)) {
       throw refuseType(`${where} must be an object`);
     }
     refuseUnknownFields(entry, where, TAKE_KEYS);
@@ -890,7 +891,7 @@ export function compSegmentsToNative(segments: unknown): Array<Record<string, un
     throw refuseType(`segments must be an array`);
   }
   return segments.map((entry: unknown, index) => {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    if (!isNonArrayObject(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
     }
     refuseUnknownFields(entry, `segments[${index}]`, COMP_SEGMENT_KEYS);

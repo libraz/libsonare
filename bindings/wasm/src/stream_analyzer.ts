@@ -1,6 +1,7 @@
 import { chordQualityToken } from './analysis_helpers.js';
 import { entryClass, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
 import type { Key, PitchClass } from './public_types.js';
@@ -267,7 +268,7 @@ export class StreamAnalyzer {
    *   TypeError and an out-of-domain value a RangeError.
    */
   constructor(config: StreamConfig) {
-    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    if (!isNonArrayObject(config)) {
       throw refuseType('config must be an object with a sampleRate');
     }
     for (const key of Object.keys(config)) {

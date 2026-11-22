@@ -6,15 +6,12 @@ import type {
 import type { WasmRealtimeVoiceChangerPodConfig } from '../sonare.js';
 import { assertRetuneGrain } from '../validation.js';
 import { refuse, refuseType } from './entry.js';
+import { isNonArrayObject } from './value_guards.js';
 import { checkedVoicePresetId, voicePresetOrdinal } from './voice_preset_ids.js';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /** True for the flat config object (as opposed to a nested preset document). */
 function isFlatConfig(config: unknown): config is Record<string, unknown> {
-  return isRecord(config) && 'retunePitchSemitones' in config;
+  return isNonArrayObject(config) && 'retunePitchSemitones' in config;
 }
 
 let flatReference: RealtimeVoiceChangerConfig | undefined;
@@ -97,7 +94,7 @@ export function nativeVoiceConfig(
       unknown
     >;
   }
-  if (!isRecord(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType(`config must be a preset id or an object`);
   }
   return config as unknown as Record<string, unknown>;

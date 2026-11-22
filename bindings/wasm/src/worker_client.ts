@@ -1,7 +1,9 @@
 import { ErrorCode, type SonareError } from './errors.js';
 import { failureFromPayload, isFailurePayload } from './internal/failure_payload.js';
 import './lifetime.js';
-import { codedError, entryClass, invalidState, refuseType } from './internal/entry.js';
+import { codedError, entryClass, refuseType } from './internal/entry.js';
+import { errorText } from './internal/failure_payload.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type { ProgressCallback } from './public_types.js';
 import type {
@@ -392,16 +394,12 @@ export class OfflineWorkerClient {
   };
 
   private readonly onNodeError = (error: unknown): void => {
-    this.onError(
-      error instanceof Error
-        ? ({ message: error.message, error } as ErrorEvent)
-        : ({ message: String(error), error } as ErrorEvent),
-    );
+    this.onError({ message: errorText(error), error } as ErrorEvent);
   };
 }
 
 function destroyedError(): SonareError {
-  return invalidState('OfflineWorkerClient has been destroyed');
+  return releasedHandleError('OfflineWorkerClient');
 }
 
 function cancelledError(signal: AbortSignal): SonareError {

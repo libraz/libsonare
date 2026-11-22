@@ -9,6 +9,7 @@ import {
   midi2U16,
   midi2U32,
 } from './internal/ump_events.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import {
   projectAutomationPointFromNative,
   projectMidi1Event,
@@ -76,7 +77,7 @@ function boundedIntOr(value: unknown, argName: string, max: number, fallback: nu
 
 /** A bank object `{ msb, lsb }`, each 0..127. */
 function bankPair(value: unknown): MidiBank {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isNonArrayObject(value)) {
     throw refuseType(`bank must be an object { msb, lsb }`);
   }
   const { msb, lsb } = value as Record<string, unknown>;
@@ -745,7 +746,7 @@ export function midiCcToBreakpoint(
     if (!Array.isArray(bindings)) {
       throw refuseType('bindings must be an array');
     }
-    if (typeof event !== 'object' || event === null || Array.isArray(event)) {
+    if (!isNonArrayObject(event)) {
       throw refuseType('event must be an object');
     }
     assertMidiCcBindingListBytes(bindings);

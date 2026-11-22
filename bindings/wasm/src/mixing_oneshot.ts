@@ -1,5 +1,6 @@
 import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
 import { panModeToNative } from './internal/mix_scene.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MixMeterSnapshot,
@@ -124,7 +125,7 @@ export function mixStereo(...args: unknown[]): MixResult {
     const options: Record<string, unknown[]> = {};
     req.strips.forEach((strip, index) => {
       const path = `strips[${index}]`;
-      if (strip === null || typeof strip !== 'object' || Array.isArray(strip)) {
+      if (!isNonArrayObject(strip)) {
         throw refuseType(`${path} must be an object`);
       }
       for (const key of Object.keys(strip)) {

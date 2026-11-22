@@ -1,7 +1,7 @@
 import { ErrorCode, isSonareError, type SonareError } from './errors.js';
 import { codedError, entryClass, invalidState, refuse, refuseType } from './internal/entry.js';
-import { failureFromPayload } from './internal/failure_payload.js';
-import { releasedHandleError } from './internal/handle_guard.js';
+import { errorText, failureFromPayload } from './internal/failure_payload.js';
+import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import {
   compareUint64,
   stateTokenEquals,
@@ -468,9 +468,7 @@ class ClientCore {
     options: VocalEditWorkerCallOptions = {},
     session?: SessionState,
   ): Promise<CallReply<T>> {
-    if (this.closed) {
-      throw releasedHandleError('VocalEditWorkerClient');
-    }
+    assertHandleLive(this.closed, 'VocalEditWorkerClient');
     const id = this.nextId++;
     const transfers: Transferable[] = [];
     const message = cloneRequest(
@@ -635,7 +633,7 @@ class ClientCore {
   };
 
   private readonly onNodeError = (error: unknown): void => {
-    this.onError({ message: error instanceof Error ? error.message : String(error) } as ErrorEvent);
+    this.onError({ message: errorText(error) } as ErrorEvent);
   };
 }
 
@@ -1044,9 +1042,7 @@ export class VocalEditWorkerSession {
   }
 
   private requireAlive(): void {
-    if (this.state.disposed) {
-      throw releasedHandleError('VocalEditWorkerSession');
-    }
+    assertHandleLive(this.state.disposed, 'VocalEditWorkerSession');
   }
 }
 

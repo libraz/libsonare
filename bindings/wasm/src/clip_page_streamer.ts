@@ -1,5 +1,6 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
-import { releasedHandleError } from './internal/handle_guard.js';
+import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,
@@ -116,7 +117,7 @@ export class ClipPageStreamer {
   private nextFetchToken = 1;
 
   constructor(options: ClipPageStreamerOptions) {
-    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    if (!isNonArrayObject(options)) {
       throw refuseType('options must be an object holding the engine');
     }
     assertKnownRequestKeys('ClipPageStreamer', options);
@@ -141,9 +142,7 @@ export class ClipPageStreamer {
    * `InvalidState` once the streamer has been destroyed.
    */
   addSource(source: ClipPageStreamSource, initialResidentPages: Iterable<number> = []): void {
-    if (this.epoch.closed) {
-      throw releasedHandleError('ClipPageStreamer');
-    }
+    assertHandleLive(this.epoch.closed, 'ClipPageStreamer');
     for (const field of ['pageFrames', 'numSamples'] as const) {
       const value = source[field];
       if (!Number.isSafeInteger(value) || value < 1) {

@@ -39,7 +39,7 @@ import type {
 import { RealtimeEngine } from '../index.js';
 import { opfsClipPageProviderFactoryFor } from '../internal/clip_page_native.js';
 import { entryClass, invalidState, refuse } from '../internal/entry.js';
-import { releasedHandleError } from '../internal/handle_guard.js';
+import { assertHandleLive } from '../internal/handle_guard.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import {
@@ -869,9 +869,7 @@ export class SonareEngine {
   async attachOpfsClipStream(
     options: OpfsClipStreamOptions,
   ): Promise<{ binding: OpfsClipPageProviderBinding; provider: ClipPageProvider }> {
-    if (this.epoch.closed) {
-      throw releasedHandleError('SonareEngine');
-    }
+    assertHandleLive(this.epoch.closed, 'SonareEngine');
     const { clipId, primePages = 1, ...providerOptions } = options;
     if ([...this.workletPageProviderClipIds.values()].some((entry) => entry.clipId === clipId)) {
       throw invalidState(`An OPFS stream is already attached for clip ${clipId}.`);
@@ -975,9 +973,7 @@ export class SonareEngine {
    * Safe to call during playback.
    */
   setClipPagePrefetchFrames(frames: number): void {
-    if (this.epoch.closed) {
-      throw releasedHandleError('SonareEngine');
-    }
+    assertHandleLive(this.epoch.closed, 'SonareEngine');
     commitSync(
       this.commitContext,
       (offline) => offline.setClipPagePrefetchFrames(frames),
@@ -995,9 +991,7 @@ export class SonareEngine {
    * stretching through a voice at that moment.
    */
   setWarpVoiceCapacity(voices: number): void {
-    if (this.epoch.closed) {
-      throw releasedHandleError('SonareEngine');
-    }
+    assertHandleLive(this.epoch.closed, 'SonareEngine');
     commitSync(
       this.commitContext,
       (offline) => offline.setWarpVoiceCapacity(voices),

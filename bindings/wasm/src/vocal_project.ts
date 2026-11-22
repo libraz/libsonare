@@ -1,4 +1,5 @@
 import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import type { VocalReason, VocalStateToken } from './public_types_vocal_edit.js';
 import type {
@@ -24,7 +25,7 @@ const PROJECT_ID_MAX = UINT32_MAX - 1;
 const UINT64_MAX = '18446744073709551615';
 
 function requireObject(value: unknown, field: string): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isNonArrayObject(value)) {
     throw refuseType(`${field} must be an object`);
   }
   return value as Record<string, unknown>;
@@ -343,7 +344,7 @@ export function projectRehydrateVocalEdits(
   originals: readonly ProjectVocalOriginalSource[],
   options: ProjectVocalRehydrateOptions = {},
 ): ProjectVocalRehydrateItem[] {
-  if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+  if (!isNonArrayObject(options)) {
     throw refuseType('options must be an object');
   }
   for (const key of Object.keys(options)) {

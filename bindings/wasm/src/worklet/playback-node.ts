@@ -1,6 +1,8 @@
 import { ErrorCode, type SonareError } from '../errors.js';
 import { init, isInitialized } from '../index.js';
-import { codedError, entryClass, invalidState, refuseType, withEntry } from '../internal/entry.js';
+import { codedError, entryClass, refuseType, withEntry } from '../internal/entry.js';
+import { releasedHandleError } from '../internal/handle_guard.js';
+import { isNonArrayObject } from '../internal/value_guards.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -20,7 +22,7 @@ function configObject(config: PlaybackRendererConfig | undefined): PlaybackRende
   if (config === undefined) {
     return {};
   }
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (!isNonArrayObject(config)) {
     throw refuseType('config must be a configuration object');
   }
   return config;
@@ -197,7 +199,7 @@ export class SonarePlaybackNode {
 
   private post(message: SonarePlaybackMessage): void {
     if (this.destroyed) {
-      throw invalidState('SonarePlaybackNode has been destroyed');
+      throw releasedHandleError('SonarePlaybackNode');
     }
     this.node.port.postMessage(message);
   }
@@ -227,7 +229,7 @@ export class SonarePlaybackNode {
     this.node.disconnect();
     this.node.port.onmessage = null;
     this.errorListeners.clear();
-    const released = invalidState('SonarePlaybackNode has been destroyed');
+    const released = releasedHandleError('SonarePlaybackNode');
     for (const pending of this.pendingDiagnostics.splice(0)) {
       pending.reject(released);
     }
