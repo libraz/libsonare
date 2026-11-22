@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { bindWebMidi, isWebMidiAvailable, webMidiEventContextTime } from '../dist/index.js';
+import { unknownKeyError } from './_helpers';
 
 type MidiMessage =
   | {
@@ -485,6 +486,19 @@ describe('Web MIDI helper', () => {
       /^bindWebMidi: inputIds must not be empty; omit it to bind every input$/,
     );
     expect(engine.messages).toEqual([]);
+  });
+
+  it('refuses an undeclared option key before requesting MIDI access', async () => {
+    const access = new FakeAccess();
+    const calls: unknown[] = [];
+    installMidi(access, calls);
+    const engine = new FakeEngine();
+    await expect(bindWebMidi(engine as never, { inputIDs: ['a'] } as never)).rejects.toThrow(
+      unknownKeyError('bindWebMidi: unknown key inputIDs'),
+    );
+    await expect(bindWebMidi(engine as never, null as never)).rejects.toThrow(TypeError);
+    expect(calls).toEqual([]);
+    expect(engine.sourceDestination).toBeNull();
   });
 
   it('binds hot-plugged matching inputs and unbinds disconnected ports', async () => {

@@ -376,7 +376,7 @@ import type {
   MasteringRepairTrimSilenceStereoRequest,
 } from './repair_trim.js';
 import type { TranscribeRequest } from './transcribe.js';
-import type { WebMidiEventContextTimeOptions } from './web_midi.js';
+import type { BindWebMidiOptions, WebMidiEventContextTimeOptions } from './web_midi.js';
 import type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.js';
 import type { SonareEngineMidiTimingOptions } from './worklet/engine-midi-input.js';
 import type { SonareEngineSetParamOptions } from './worklet/engine-parameter-facade.js';
@@ -1540,6 +1540,18 @@ const MasteringRepairNoiseBandBinsRequestKeys = keysOf<MasteringRepairNoiseBandB
   'sampleRate',
 ]);
 const MelDeltaRequestKeys = keysOf<MelDeltaRequest>()(['features', 'width']);
+const BindWebMidiRequestKeys = keysOf<BindWebMidiOptions>()([
+  'destinationId',
+  'group',
+  'inputIds',
+  'sysex',
+  'software',
+  'ccBindings',
+  'timestampToOffsetInBlockSamples',
+  'context',
+  'scheduleAheadSec',
+  'onInputsChanged',
+]);
 const WebMidiEventContextTimeRequestKeys = keysOf<WebMidiEventContextTimeOptions>()([
   'scheduleAheadSec',
 ]);
@@ -2995,6 +3007,7 @@ export const REQUEST_SHAPES = {
   melDelta: { keys: MelDeltaRequestKeys },
   melFilterbank: { keys: MelFilterbankRequestKeys },
   melFrequencies: { keys: MelFrequenciesRequestKeys },
+  bindWebMidi: { keys: BindWebMidiRequestKeys },
   webMidiEventContextTime: { keys: WebMidiEventContextTimeRequestKeys },
   melSpectrogram: { keys: MelSpectrogramRequestKeys },
   melToAudio: { keys: MelToAudioRequestKeys },

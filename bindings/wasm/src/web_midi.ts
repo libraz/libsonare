@@ -268,6 +268,7 @@ export function isWebMidiAvailable(): boolean {
  * replaces it.
  *
  * @throws SonareError `NotSupported` when Web MIDI is unavailable.
+ * @throws TypeError when `options` is not an object or holds an undeclared key.
  * @throws RangeError when `options.group` is outside 0 to 15.
  * @throws RangeError when `options.inputIds` is an empty array.
  * @throws TypeError when `options.context` is given with `timestampToOffsetInBlockSamples`, lacks
@@ -295,6 +296,7 @@ export async function bindWebMidi(
       throw codedError(ErrorCode.NotSupported, 'Web MIDI is not available in this environment');
     }
 
+    requestObject('bindWebMidi', options, 'options', true);
     const group = options.group ?? 0;
     assertNibble(group, 'group');
     const destinationId = options.destinationId ?? 0;
