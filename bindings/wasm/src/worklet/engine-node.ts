@@ -170,6 +170,7 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
  */
 @entryClass('SonareRealtimeEngineNode', [
   'assertOpen',
+  'postOrdered',
   'shutdown',
   'emitTelemetry',
   'startRingPolling',
