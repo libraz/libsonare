@@ -230,11 +230,4 @@ bool StreamingReverb::discard_non_finite() noexcept {
   return true;
 }
 
-void StreamingReverb::process_block(const float* input, float* output, int num_samples) noexcept {
-  if (input == nullptr || output == nullptr || num_samples <= 0) return;
-  for (int i = 0; i < num_samples; ++i) {
-    output[i] = process_sample(input[i]);
-  }
-}
-
 }  // namespace sonare::editing::voice_changer

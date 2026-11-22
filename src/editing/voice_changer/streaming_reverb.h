@@ -76,9 +76,6 @@ class StreamingReverb {
   ///          @p input unchanged.
   float process_sample(float input) noexcept;
 
-  /// @brief Processes a contiguous block sample-by-sample.
-  void process_block(const float* input, float* output, int num_samples) noexcept;
-
   /// @brief How long the wet path rings after its input goes silent.
   /// @param output_scale Linear gain applied downstream of the reverb.
   /// @param num_channels Channels sharing @p config, each with its own seed-derived taps.

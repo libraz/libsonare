@@ -79,26 +79,10 @@ const char* enum_spelling(Enum value) noexcept {
   return EnumNames<Enum>::kNames[0].name.data();
 }
 
-// Row-table forms of the two lookups below, defined once in config_json.cpp.
+// Row-table lookups, defined once in config_json.cpp.
 bool enum_value_from_spelling(const EnumName* rows, std::size_t count, std::string_view name,
                               int* out) noexcept;
 std::string enum_spelling_list(const EnumName* rows, std::size_t count);
-
-template <typename Enum>
-bool enum_from_spelling(std::string_view name, Enum* out) noexcept {
-  const auto& names = EnumNames<Enum>::kNames;
-  int value = 0;
-  if (!enum_value_from_spelling(names.data(), names.size(), name, &value)) return false;
-  *out = static_cast<Enum>(value);
-  return true;
-}
-
-/// "'a', 'b' or 'c'" over every spelling of @p Enum.
-template <typename Enum>
-std::string enum_spelling_list() {
-  const auto& names = EnumNames<Enum>::kNames;
-  return enum_spelling_list(names.data(), names.size());
-}
 
 struct Range {
   double lo;

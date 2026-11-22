@@ -1,8 +1,0 @@
-#pragma once
-
-/// @file voice_changer_core.h
-/// @brief Realtime voice changer primitives.
-
-#include "editing/voice_changer/streaming_retune.h"
-#include "editing/voice_changer/voice_changer.h"
-#include "effects/formant_warp.h"
