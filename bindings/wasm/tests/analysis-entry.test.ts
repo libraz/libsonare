@@ -128,6 +128,8 @@ describe('the analysis entry exports only what its binary registers', () => {
     expect(analysis.stft(samples, 22050).magnitude.cols).toBeGreaterThan(0);
     expect(analysis.melSpectrogram(samples, 22050).power.rows).toBeGreaterThan(0);
     expect(analysis.chroma(samples, 22050).features.rows).toBeGreaterThan(0);
+    expect(analysis.melFilterbank({ sampleRate: 22050, nFft: 1024, nMels: 16 }).cols).toBe(513);
+    expect(analysis.melFrequencies({ nMels: 4, fmaxHz: 8000 })).toHaveLength(4);
   });
 });
 

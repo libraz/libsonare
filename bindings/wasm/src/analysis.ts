@@ -75,6 +75,8 @@ export {
   chromaCens,
   chromaCqt,
   melDelta,
+  melFilterbank,
+  melFrequencies,
   melSpectrogram,
   mfcc,
   reassignedSpectrogram,

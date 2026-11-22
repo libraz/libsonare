@@ -69,6 +69,8 @@ export type SonareAnalysisModule = Pick<
   | 'lufsInterleaved'
   | 'lufsSeriesInterleaved'
   | 'melDelta'
+  | 'melFilterbank'
+  | 'melFrequencies'
   | 'melSpectrogram'
   | 'melToAudio'
   | 'melToHz'
