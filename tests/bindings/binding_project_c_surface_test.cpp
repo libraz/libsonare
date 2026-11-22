@@ -193,7 +193,7 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(set_marker_named(project, 0, -1.0, "bad", &marker_id) == SONARE_ERROR_INVALID_PARAMETER);
 
   const std::string json = serialize(project);
-  CHECK(json.find("\"overlapPolicy\":1") != std::string::npos);
+  CHECK(json.find("\"overlapPolicy\":\"allow\"") != std::string::npos);
   CHECK(json.find("\"bpm\":132") != std::string::npos);
   CHECK(json.find("\"denominator\":8") != std::string::npos);
   CHECK(json.find("\"name\":\"Chorus\"") != std::string::npos);
@@ -482,10 +482,10 @@ TEST_CASE("project C surface sets a clip warp reference", "[project]") {
           SONARE_OK);
   const std::string warped = serialize(project);
   REQUIRE(warped.find("\"warpRefId\":123") != std::string::npos);
-  REQUIRE(warped.find("\"warpMode\":1") != std::string::npos);
+  REQUIRE(warped.find("\"warpMode\":\"repitch\"") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warpMode\":0") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":\"off\"") != std::string::npos);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project).find("\"warpRefId\":0") != std::string::npos);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
@@ -496,7 +496,7 @@ TEST_CASE("project C surface sets a clip warp reference", "[project]") {
   REQUIRE(serialize(project).find("\"warpRefId\":0") != std::string::npos);
   REQUIRE(sonare_project_set_clip_warp_mode(project, clip_id,
                                             SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warpMode\":2") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":\"tempoSync\"") != std::string::npos);
   CHECK(sonare_project_set_clip_warp_ref(project, 999999u, 1) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_set_clip_warp_mode(project, 999999u, SONARE_PROJECT_WARP_MODE_REPITCH) ==
         SONARE_ERROR_INVALID_PARAMETER);

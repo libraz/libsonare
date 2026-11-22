@@ -1,19 +1,25 @@
 #pragma once
 
 /// @file serialized_enum_bounds.h
-/// @brief Decode bounds for every enum the project serializer encodes.
+/// @brief Token names and decode bounds for every enum the project serializer encodes.
+///
+/// Each enum's @c name() is the one spelling table its document writer, its
+/// document reader and the argument parsers of every surface read: the
+/// document carries the token, never the ordinal.
 ///
 /// The decoder admits an ordinal only up to the enum's last enumerator. Writing
 /// that bound as a literal duplicates the enum definition, and the copy goes
 /// stale the moment an enumerator is added: the encoder emits the new ordinal,
 /// the decoder rejects the document it just wrote, and the outer catch in
 /// project_from_json discards the whole project. Every bound here is therefore
-/// stated as an enumerator, and pinned two ways -- @c declared() switches over
+/// stated as an enumerator, and pinned two ways -- @c name() switches over
 /// the enum with no @c default label, so a new enumerator is a -Wswitch error
 /// (the build is -Werror), and @ref serialized_enum_bound_is_last static_asserts
 /// that [0, kLast] is dense and that kLast + 1 is not itself an enumerator.
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 #include "arrangement/edit_model.h"
 #include "arrangement/edit_source.h"
@@ -23,8 +29,8 @@
 
 namespace sonare::serialize {
 
-/// @brief Serialized-enum description: the last enumerator plus the exhaustive
-///        enumerator set it must be the last of.
+/// @brief Serialized-enum description: the last enumerator plus the token of
+///        every enumerator, null for a value that is none.
 /// @details The primary template is deliberately left undefined, so encoding a
 ///          new enum without giving it a bound fails to compile instead of
 ///          silently inheriting one.
@@ -35,17 +41,18 @@ template <>
 struct SerializedEnum<arrangement::WarpMode> {
   using Enum = arrangement::WarpMode;
   static constexpr Enum kLast = Enum::kTimeStretch;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kOff:
+        return "off";
       case Enum::kRepitch:
+        return "repitch";
       case Enum::kTempoSync:
+        return "tempoSync";
       case Enum::kTimeStretch:
-        known = true;
-        break;
+        return "timeStretch";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -53,17 +60,18 @@ template <>
 struct SerializedEnum<arrangement::FadeCurve> {
   using Enum = arrangement::FadeCurve;
   static constexpr Enum kLast = Enum::kLogarithmic;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kLinear:
+        return "linear";
       case Enum::kEqualPower:
+        return "equalPower";
       case Enum::kExponential:
+        return "exponential";
       case Enum::kLogarithmic:
-        known = true;
-        break;
+        return "logarithmic";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -71,15 +79,14 @@ template <>
 struct SerializedEnum<arrangement::LoopMode> {
   using Enum = arrangement::LoopMode;
   static constexpr Enum kLast = Enum::kLoop;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kOff:
+        return "off";
       case Enum::kLoop:
-        known = true;
-        break;
+        return "loop";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -87,15 +94,14 @@ template <>
 struct SerializedEnum<arrangement::OverlapPolicy> {
   using Enum = arrangement::OverlapPolicy;
   static constexpr Enum kLast = Enum::kAllow;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kDisallow:
+        return "disallow";
       case Enum::kAllow:
-        known = true;
-        break;
+        return "allow";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -103,18 +109,20 @@ template <>
 struct SerializedEnum<arrangement::MarkerKind> {
   using Enum = arrangement::MarkerKind;
   static constexpr Enum kLast = Enum::kKeySignature;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kMarker:
+        return "marker";
       case Enum::kText:
+        return "text";
       case Enum::kLyric:
+        return "lyric";
       case Enum::kCuePoint:
+        return "cuePoint";
       case Enum::kKeySignature:
-        known = true;
-        break;
+        return "keySignature";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -122,16 +130,16 @@ template <>
 struct SerializedEnum<arrangement::Track::Kind> {
   using Enum = arrangement::Track::Kind;
   static constexpr Enum kLast = Enum::kAux;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kAudio:
+        return "audio";
       case Enum::kMidi:
+        return "midi";
       case Enum::kAux:
-        known = true;
-        break;
+        return "aux";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -139,15 +147,14 @@ template <>
 struct SerializedEnum<arrangement::SourceKind> {
   using Enum = arrangement::SourceKind;
   static constexpr Enum kLast = Enum::kMidi;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kAudio:
+        return "audio";
       case Enum::kMidi:
-        known = true;
-        break;
+        return "midi";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -155,21 +162,26 @@ template <>
 struct SerializedEnum<arrangement::ChordQuality> {
   using Enum = arrangement::ChordQuality;
   static constexpr Enum kLast = Enum::kSuspended;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kUnknown:
+        return "unknown";
       case Enum::kMajor:
+        return "major";
       case Enum::kMinor:
+        return "minor";
       case Enum::kDiminished:
+        return "diminished";
       case Enum::kAugmented:
+        return "augmented";
       case Enum::kDominant:
+        return "dominant";
       case Enum::kHalfDiminished:
+        return "halfDiminished";
       case Enum::kSuspended:
-        known = true;
-        break;
+        return "suspended";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -177,21 +189,26 @@ template <>
 struct SerializedEnum<arrangement::KeyMode> {
   using Enum = arrangement::KeyMode;
   static constexpr Enum kLast = Enum::kLocrian;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kUnknown:
+        return "unknown";
       case Enum::kMajor:
+        return "major";
       case Enum::kMinor:
+        return "minor";
       case Enum::kDorian:
+        return "dorian";
       case Enum::kPhrygian:
+        return "phrygian";
       case Enum::kLydian:
+        return "lydian";
       case Enum::kMixolydian:
+        return "mixolydian";
       case Enum::kLocrian:
-        known = true;
-        break;
+        return "locrian";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -199,16 +216,16 @@ template <>
 struct SerializedEnum<automation::AutomationTargetKind> {
   using Enum = automation::AutomationTargetKind;
   static constexpr Enum kLast = Enum::kTrackPan;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kOpaque:
+        return "opaque";
       case Enum::kTrackFaderDb:
+        return "trackFaderDb";
       case Enum::kTrackPan:
-        known = true;
-        break;
+        return "trackPan";
     }
-    return known;
+    return nullptr;
   }
 };
 
@@ -216,19 +233,26 @@ template <>
 struct SerializedEnum<AutomationCurve> {
   using Enum = AutomationCurve;
   static constexpr Enum kLast = Enum::SCurve;
-  static constexpr bool declared(Enum value) noexcept {
-    bool known = false;
+  static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::Linear:
+        return "linear";
       case Enum::Exponential:
+        return "exponential";
       case Enum::Hold:
+        return "hold";
       case Enum::SCurve:
-        known = true;
-        break;
+        return "sCurve";
     }
-    return known;
+    return nullptr;
   }
 };
+
+/// @brief The token of @p value, or null when @p value is no enumerator.
+template <typename Enum>
+constexpr const char* serialized_enum_name(Enum value) noexcept {
+  return SerializedEnum<Enum>::name(value);
+}
 
 /// @brief Highest ordinal the decoder accepts for @p Enum.
 template <typename Enum>
@@ -243,9 +267,9 @@ inline constexpr uint32_t kMaxSerializedOrdinal =
 template <typename Enum>
 constexpr bool serialized_enum_bound_is_last() noexcept {
   for (uint32_t ordinal = 0; ordinal <= kMaxSerializedOrdinal<Enum>; ++ordinal) {
-    if (!SerializedEnum<Enum>::declared(static_cast<Enum>(ordinal))) return false;
+    if (serialized_enum_name(static_cast<Enum>(ordinal)) == nullptr) return false;
   }
-  return !SerializedEnum<Enum>::declared(static_cast<Enum>(kMaxSerializedOrdinal<Enum> + 1u));
+  return serialized_enum_name(static_cast<Enum>(kMaxSerializedOrdinal<Enum> + 1u)) == nullptr;
 }
 
 static_assert(serialized_enum_bound_is_last<arrangement::WarpMode>(),
@@ -270,5 +294,29 @@ static_assert(serialized_enum_bound_is_last<automation::AutomationTargetKind>(),
               "AutomationTargetKind decode bound is not the last enumerator of a dense range");
 static_assert(serialized_enum_bound_is_last<AutomationCurve>(),
               "AutomationCurve decode bound is not the last enumerator of a dense range");
+
+/// @brief The enumerator @p token names; false when it names none.
+template <typename Enum>
+bool serialized_enum_from_name(std::string_view token, Enum* out) noexcept {
+  for (uint32_t ordinal = 0; ordinal <= kMaxSerializedOrdinal<Enum>; ++ordinal) {
+    const auto value = static_cast<Enum>(ordinal);
+    if (token == serialized_enum_name(value)) {
+      *out = value;
+      return true;
+    }
+  }
+  return false;
+}
+
+/// @brief Every token of @p Enum in ordinal order, comma-separated: "a, b, c".
+template <typename Enum>
+std::string serialized_enum_choices() {
+  std::string names;
+  for (uint32_t ordinal = 0; ordinal <= kMaxSerializedOrdinal<Enum>; ++ordinal) {
+    if (!names.empty()) names += ", ";
+    names += serialized_enum_name(static_cast<Enum>(ordinal));
+  }
+  return names;
+}
 
 }  // namespace sonare::serialize

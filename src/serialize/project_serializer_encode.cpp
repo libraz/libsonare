@@ -43,14 +43,14 @@ Value automation_lane_to_json(const automation::AutomationLane& lane) {
   Object o;
   o["targetParamId"] = static_cast<double>(lane.target_param_id());
   if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
-    o["targetKind"] = static_cast<int>(lane.target_kind());
+    o["targetKind"] = enum_token(lane.target_kind());
   }
   Array points;
   for (const auto& p : lane.points()) {
     Object po;
     po["ppq"] = p.ppq;
     po["value"] = p.value;
-    po["curveToNext"] = static_cast<int>(p.curve_to_next);
+    po["curveToNext"] = enum_token(p.curve_to_next);
     points.push_back(std::move(po));
   }
   o["points"] = std::move(points);
@@ -61,7 +61,7 @@ Value track_to_json(const arrangement::Track& t) {
   Object o;
   o["id"] = static_cast<double>(t.id);
   o["name"] = t.name;
-  o["kind"] = static_cast<int>(t.kind);
+  o["kind"] = enum_token(t.kind);
   o["gain"] = static_cast<double>(t.gain);
   o["mute"] = t.mute;
   o["solo"] = t.solo;
@@ -80,7 +80,7 @@ Value track_to_json(const arrangement::Track& t) {
 Value fade_to_json(const arrangement::ClipFade& f) {
   Object o;
   o["lengthPpq"] = f.length_ppq;
-  o["curve"] = static_cast<int>(f.curve);
+  o["curve"] = enum_token(f.curve);
   return o;
 }
 
@@ -134,7 +134,7 @@ Value clip_to_json(const arrangement::EditClip& c) {
   o["gain"] = c.gain;
   o["fadeIn"] = fade_to_json(c.fade_in);
   o["fadeOut"] = fade_to_json(c.fade_out);
-  o["loopMode"] = static_cast<int>(c.loop_mode);
+  o["loopMode"] = enum_token(c.loop_mode);
   o["loopLengthPpq"] = c.loop_length_ppq;
   if (c.loop_anchor.has_value()) {
     o["loopPeriodSec"] = c.loop_anchor->period_seconds;
@@ -143,7 +143,7 @@ Value clip_to_json(const arrangement::EditClip& c) {
   // Optional; only emitted when set so existing projects round-trip byte-for-byte.
   if (c.loop_crossfade_ppq != 0.0) o["loopCrossfadePpq"] = c.loop_crossfade_ppq;
   o["warpRefId"] = static_cast<double>(c.warp_ref_id);
-  o["warpMode"] = static_cast<int>(c.warp_mode);
+  o["warpMode"] = enum_token(c.warp_mode);
   if (!c.takes.empty()) {
     Array takes;
     for (const auto& take : c.takes) {
@@ -189,7 +189,7 @@ Value warp_map_to_json(const arrangement::WarpMapRef& map) {
 Value source_to_json(const arrangement::ClipSource& src) {
   Object o;
   if (const auto* audio = std::get_if<arrangement::AudioSourceRef>(&src)) {
-    o["kind"] = static_cast<int>(arrangement::SourceKind::kAudio);
+    o["kind"] = enum_token(arrangement::SourceKind::kAudio);
     o["id"] = static_cast<double>(audio->id);
     // Host-local reference only; the core never opens the URI. Recording /
     // generated audio with no file defaults to this ref (URI/asset id) and/or a
@@ -220,7 +220,7 @@ Value source_to_json(const arrangement::ClipSource& src) {
     }
   } else {
     const auto& m = std::get<arrangement::MidiSourceRef>(src);
-    o["kind"] = static_cast<int>(arrangement::SourceKind::kMidi);
+    o["kind"] = enum_token(arrangement::SourceKind::kMidi);
     o["id"] = static_cast<double>(m.id);
     o["name"] = m.name;
     o["channelHint"] = static_cast<double>(m.channel_hint);
@@ -242,7 +242,7 @@ Value marker_to_json(const arrangement::ProjectMarker& m) {
   // zeroed key fields still emits nothing, so ordinary marker JSON is
   // byte-identical.
   if (m.kind != static_cast<uint8_t>(arrangement::MarkerKind::kMarker)) {
-    o["kind"] = static_cast<double>(m.kind);
+    o["kind"] = enum_token(static_cast<arrangement::MarkerKind>(m.kind));
   }
   if (m.kind == static_cast<uint8_t>(arrangement::MarkerKind::kKeySignature) || m.key_fifths != 0 ||
       m.key_minor) {
@@ -257,7 +257,7 @@ Value chord_to_json(const arrangement::ChordSymbol& c) {
   o["startPpq"] = c.start_ppq;
   o["endPpq"] = c.end_ppq;
   o["rootPc"] = static_cast<double>(c.root_pc);
-  o["quality"] = static_cast<int>(c.quality);
+  o["quality"] = enum_token(c.quality);
   Array ext;
   for (uint8_t e : c.extensions) ext.push_back(static_cast<double>(e));
   o["extensions"] = std::move(ext);
@@ -272,7 +272,7 @@ Value key_segment_to_json(const arrangement::KeySegment& k) {
   o["startPpq"] = k.start_ppq;
   o["endPpq"] = k.end_ppq;
   o["tonicPc"] = static_cast<double>(k.tonic_pc);
-  o["mode"] = static_cast<int>(k.mode);
+  o["mode"] = enum_token(k.mode);
   return o;
 }
 

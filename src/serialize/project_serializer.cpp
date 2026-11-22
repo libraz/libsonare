@@ -263,9 +263,8 @@ void check_project_keys(const Value& root) {
     refuse_unknown_keys(v, p, {"startPpq", "numerator", "denominator"});
   });
   each_record(root, "sources", "", [](const Value& v, const std::string& p) {
-    const Value* kind = v.find("kind");
-    const bool midi = kind != nullptr && kind->is_number() &&
-                      kind->as_number() == static_cast<double>(arrangement::SourceKind::kMidi);
+    const bool midi =
+        enum_or(v, p, "kind", arrangement::SourceKind::kAudio) == arrangement::SourceKind::kMidi;
     if (midi) {
       refuse_unknown_keys(v, p, {"kind", "id", "name", "channelHint"});
     } else {
@@ -375,7 +374,7 @@ Value project_to_value(const arrangement::Project& project,
   Object root;
   root["version"] = static_cast<double>(SONARE_PROJECT_SCHEMA_VERSION);
   root["sampleRate"] = project.sample_rate();
-  root["overlapPolicy"] = static_cast<int>(project.overlap_policy());
+  root["overlapPolicy"] = enum_token(project.overlap_policy());
 
   Array tempo;
   for (const auto& s : project.tempo_segments()) tempo.push_back(tempo_segment_to_json(s));
@@ -598,15 +597,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
       return result;
     }
     project.set_sample_rate(sample_rate);
-    const uint32_t overlap_policy = uint_or(root, "", "overlapPolicy", 0);
-    if (overlap_policy > kMaxSerializedOrdinal<arrangement::OverlapPolicy>) {
-      throw SonareException(
-          ErrorCode::InvalidFormat,
-          schema::refusal("overlapPolicy",
-                          schema::integer_range_predicate(
-                              0, kMaxSerializedOrdinal<arrangement::OverlapPolicy>)));
-    }
-    project.set_overlap_policy(static_cast<arrangement::OverlapPolicy>(overlap_policy));
+    project.set_overlap_policy(
+        enum_or(root, "", "overlapPolicy", arrangement::OverlapPolicy::kDisallow));
 
     // Tempo / time signature. Segments are validated (finite, positive BPM and
     // start_ppq) and normalized on load: a segment with NaN/Inf or non-positive
@@ -894,15 +886,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
         m.id = uint_or(mv, at, "id", 0);
         m.ppq = num_or(mv, at, "ppq", 0.0);
         m.name = str_or(mv, at, "name", "");
-        const uint32_t marker_kind = uint_or(mv, at, "kind", 0);
-        if (marker_kind > kMaxSerializedOrdinal<arrangement::MarkerKind>) {
-          throw SonareException(
-              ErrorCode::InvalidFormat,
-              schema::refusal(schema::child_path(at, "kind"),
-                              schema::integer_range_predicate(
-                                  0, kMaxSerializedOrdinal<arrangement::MarkerKind>)));
-        }
-        m.kind = static_cast<uint8_t>(marker_kind);
+        m.kind = static_cast<uint8_t>(enum_or(mv, at, "kind", arrangement::MarkerKind::kMarker));
         // Read unconditionally, and written by marker_to_json whenever non-zero
         // regardless of kind, so a marker that carries key fields on a non-key
         // kind (which the C ABI accepts) survives a save/load unchanged. Only

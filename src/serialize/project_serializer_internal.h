@@ -21,8 +21,11 @@
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer.h"
+#include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 #include "util/json.h"
+#include "util/json_schema.h"
 
 namespace sonare::serialize {
 namespace detail {
@@ -107,6 +110,32 @@ bool parse_uint32_key(const std::string& key, uint32_t* out);
 std::string str_or(const Value& obj, const std::string& path, const char* key,
                    const std::string& fallback);
 bool bool_or(const Value& obj, const std::string& path, const char* key, bool fallback);
+
+/// The enumerator the token at @p key names, or @p fallback when the key is absent. A number
+/// or a token the enum does not declare is refused, naming the key and listing every token.
+template <typename Enum>
+Enum enum_or(const Value& obj, const std::string& path, const char* key, Enum fallback) {
+  const Value* v = obj.find(key);
+  if (v == nullptr) return fallback;
+  Enum out = fallback;
+  if (!v->is_string() || !serialized_enum_from_name(v->as_string(), &out)) {
+    namespace schema = sonare::util::json::schema;
+    throw SonareException(ErrorCode::InvalidFormat,
+                          schema::refusal(schema::child_path(path, key),
+                                          "must be one of " + serialized_enum_choices<Enum>()));
+  }
+  return out;
+}
+
+/// The token the document writes for @p value.
+template <typename Enum>
+Value enum_token(Enum value) {
+  const char* name = serialized_enum_name(value);
+  if (name == nullptr) {
+    throw SonareException(ErrorCode::InvalidState, "a project enum holds a value with no name");
+  }
+  return Value(std::string(name));
+}
 uint32_t midi_word_or_warn(const Value& obj, const std::string& path, const char* key,
                            uint32_t clip_id, BoundedDiagnostics* diagnostics);
 // Container readers: NULL when absent, InvalidFormat when present with the wrong type.

@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -115,16 +116,46 @@ Fixture round_trip(const Fixture& f) {
 // The bound is serialize::kMaxSerializedOrdinal, which is pinned to the enum's
 // own last enumerator, so a newly added enumerator extends this sweep by itself
 // (and failing to teach serialized_enum_bounds.h about it is a build error).
+// `omitted` names the one value the writer leaves out as the field's default.
 template <typename Enum, typename Apply, typename Read>
-void check_every_enumerator(Apply apply, Read read) {
+void check_every_enumerator(Apply apply, Read read, std::optional<Enum> omitted = std::nullopt) {
   for (uint32_t ordinal = 0; ordinal <= sz::kMaxSerializedOrdinal<Enum>; ++ordinal) {
     INFO("ordinal " << ordinal);
     const Enum value = static_cast<Enum>(ordinal);
     Fixture f = make_fixture();
     apply(&f, value);
+    const char* token = sz::serialized_enum_name(value);
+    REQUIRE(token != nullptr);
+    const bool written =
+        sz::project_to_json(f.project, f.midi).find('"' + std::string(token) + '"') !=
+        std::string::npos;
+    CHECK(written == (omitted != value));
     const Fixture loaded = round_trip(f);
     CHECK(read(loaded) == value);
   }
+}
+
+// Every enumerator has its own token, the token reads back to it, and the
+// choices list a refusal prints names every one of them.
+template <typename Enum>
+void check_every_token() {
+  const std::string choices = sz::serialized_enum_choices<Enum>();
+  std::vector<std::string> seen;
+  for (uint32_t ordinal = 0; ordinal <= sz::kMaxSerializedOrdinal<Enum>; ++ordinal) {
+    INFO("ordinal " << ordinal);
+    const Enum value = static_cast<Enum>(ordinal);
+    const char* token = sz::serialized_enum_name(value);
+    REQUIRE(token != nullptr);
+    Enum back{};
+    CHECK(sz::serialized_enum_from_name<Enum>(token, &back));
+    CHECK(back == value);
+    CHECK(choices.find(token) != std::string::npos);
+    for (const std::string& other : seen) CHECK(other != token);
+    seen.emplace_back(token);
+  }
+  Enum unused{};
+  CHECK_FALSE(sz::serialized_enum_from_name<Enum>("0", &unused));
+  CHECK_FALSE(sz::serialized_enum_from_name<Enum>("", &unused));
 }
 
 }  // namespace
@@ -167,7 +198,8 @@ TEST_CASE("every enumerator of every serialized enum survives a project round-tr
       },
       [](const Fixture& f) {
         return static_cast<arr::MarkerKind>(f.project.markers().front().kind);
-      });
+      },
+      arr::MarkerKind::kMarker);
 
   check_every_enumerator<arr::ChordQuality>(
       [](Fixture* f, arr::ChordQuality value) {
@@ -185,7 +217,8 @@ TEST_CASE("every enumerator of every serialized enum survives a project round-tr
       },
       [](const Fixture& f) {
         return f.project.tracks().front().automation_lanes.front().target_kind();
-      });
+      },
+      aut::AutomationTargetKind::kOpaque);
 
   check_every_enumerator<sonare::AutomationCurve>(
       [](Fixture* f, sonare::AutomationCurve value) {
@@ -205,6 +238,33 @@ TEST_CASE("every enumerator of every serialized enum survives a project round-tr
     const Fixture loaded = round_trip(make_fixture(kind));
     REQUIRE(!loaded.project.sources().empty());
     CHECK(arr::source_kind(loaded.project.sources().front()) == kind);
+  }
+}
+
+TEST_CASE("every enumerator of every serialized enum has a distinct token", "[serialize]") {
+  check_every_token<arr::WarpMode>();
+  check_every_token<arr::FadeCurve>();
+  check_every_token<arr::LoopMode>();
+  check_every_token<arr::OverlapPolicy>();
+  check_every_token<arr::MarkerKind>();
+  check_every_token<arr::Track::Kind>();
+  check_every_token<arr::SourceKind>();
+  check_every_token<arr::ChordQuality>();
+  check_every_token<arr::KeyMode>();
+  check_every_token<aut::AutomationTargetKind>();
+  check_every_token<sonare::AutomationCurve>();
+}
+
+TEST_CASE("a project enum field is refused as a number and as an unknown token", "[serialize]") {
+  for (const char* doc :
+       {R"({"version":7,"overlapPolicy":0})", R"({"version":7,"overlapPolicy":"Disallow"})"}) {
+    INFO(doc);
+    const sz::DeserializeResult result = sz::project_from_json(doc);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+    CHECK(result.diagnostics.back().message.find("overlapPolicy must be one of disallow, allow") !=
+          std::string::npos);
   }
 }
 

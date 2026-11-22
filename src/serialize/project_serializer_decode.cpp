@@ -50,22 +50,6 @@ namespace schema = sonare::util::json::schema;
 
 namespace {
 
-// The accepted ordinal range comes from the enum's own last enumerator (see
-// serialized_enum_bounds.h), never from a literal repeated at the call site: a
-// literal that lags the enum makes the decoder reject a document the encoder
-// just produced, which discards the whole project.
-template <typename Enum>
-Enum enum_or(const Value& value, const std::string& path, const char* key, Enum fallback) {
-  const uint32_t ordinal = uint_or(value, path, key, static_cast<uint32_t>(fallback));
-  if (ordinal > kMaxSerializedOrdinal<Enum>) {
-    throw SonareException(
-        ErrorCode::InvalidFormat,
-        schema::refusal(schema::child_path(path, key),
-                        schema::integer_range_predicate(0, kMaxSerializedOrdinal<Enum>)));
-  }
-  return static_cast<Enum>(ordinal);
-}
-
 uint8_t pitch_class_or(const Value& value, const std::string& path, const char* key) {
   const uint32_t pitch_class = uint_or(value, path, key, arrangement::kUnknownPitchClass);
   if (pitch_class > 11 && pitch_class != arrangement::kUnknownPitchClass) {
@@ -112,15 +96,8 @@ transport::TimeSignatureSegment time_signature_from_json(const Value& v, const s
 }
 
 automation::AutomationLane automation_lane_from_json(const Value& v, const std::string& path) {
-  const uint32_t ordinal = uint_or(v, path, "targetKind", 0);
-  if (ordinal > kMaxSerializedOrdinal<automation::AutomationTargetKind>) {
-    throw SonareException(
-        ErrorCode::InvalidFormat,
-        schema::refusal(schema::child_path(path, "targetKind"),
-                        schema::integer_range_predicate(
-                            0, kMaxSerializedOrdinal<automation::AutomationTargetKind>)));
-  }
-  const auto target_kind = static_cast<automation::AutomationTargetKind>(ordinal);
+  const auto target_kind =
+      enum_or(v, path, "targetKind", automation::AutomationTargetKind::kOpaque);
   automation::AutomationLane lane(uint_or(v, path, "targetParamId", 0), target_kind);
   std::vector<automation::Breakpoint> points;
   if (const auto* arr = array_at(v, path, "points")) {

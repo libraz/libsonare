@@ -214,19 +214,19 @@ inline void create_surround_master_project(const std::string& path, const char* 
 inline void create_takes_project(const std::string& path) {
   const char* clip_tail =
       R"("startPpq":0,"lengthPpq":960,"sourceOffsetPpq":0,"gain":1,)"
-      R"("fadeIn":{"lengthPpq":0,"curve":0},"fadeOut":{"lengthPpq":0,"curve":0},)"
-      R"("loopMode":0,"loopLengthPpq":0,"warpRefId":0,"warpMode":0})";
+      R"("fadeIn":{"lengthPpq":0,"curve":"linear"},"fadeOut":{"lengthPpq":0,"curve":"linear"},)"
+      R"("loopMode":"off","loopLengthPpq":0,"warpRefId":0,"warpMode":"off"})";
   std::ofstream file(path);
   file << R"({"version":7,"sampleRate":22050,"sources":[)";
   for (int id = 1; id <= 2; ++id) {
-    file << (id == 1 ? "" : ",") << R"({"kind":0,"id":)" << id
+    file << (id == 1 ? "" : ",") << R"({"kind":"audio","id":)" << id
          << R"(,"uri":"","channelCount":1,"sampleRateHint":22050,"storageHandleId":0})";
   }
   file << R"(],"tracks":[)";
   for (int id = 1; id <= 2; ++id) {
     file << (id == 1 ? "" : ",") << R"({"id":)" << id << R"(,"name":")"
          << (id == 1 ? "reference" : "take")
-         << R"(","kind":0,"channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
+         << R"(","kind":"audio","channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
          << R"("automationLanes":[]})";
   }
   file << R"(],"clips":[)";

@@ -222,14 +222,14 @@ TEST_CASE("CLI project command group", "[cli]") {
         "version": 7,
         "sampleRate": 48000,
         "tempoSegments": [{"startPpq": 0, "bpm": 120, "startSample": 0, "endBpm": 90}],
-        "sources": [{"kind": 0, "id": 1, "uri": "missing.wav", "channelCount": 1,
+        "sources": [{"kind": "audio", "id": 1, "uri": "missing.wav", "channelCount": 1,
                      "sampleRateHint": 48000, "storageHandleId": 0}],
-        "tracks": [{"id": 1, "name": "audio", "kind": 0, "gain": 1, "mute": false,
+        "tracks": [{"id": 1, "name": "audio", "kind": "audio", "gain": 1, "mute": false,
                     "solo": false, "pan": 0, "channelStripRef": "", "outputTarget": "",
                     "midiDestinationId": 0, "automationLanes": []}],
         "clips": [{"id": 1, "trackId": 1, "sourceId": 1, "startPpq": 0,
-                   "lengthPpq": 1, "sourceOffsetPpq": 0, "gain": 1, "loopMode": 0,
-                   "loopLengthPpq": 0, "warpRefId": 0, "warpMode": 0}]
+                   "lengthPpq": 1, "sourceOffsetPpq": 0, "gain": 1, "loopMode": "off",
+                   "loopLengthPpq": 0, "warpRefId": 0, "warpMode": "off"}]
       })json";
     }
 

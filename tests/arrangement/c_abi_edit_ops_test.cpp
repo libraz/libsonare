@@ -1175,7 +1175,7 @@ TEST_CASE("C-ABI set_track_kind with undo", "[project][c-abi-edit]") {
   REQUIRE(sonare_project_set_track_kind(project, track, SONARE_TRACK_AUX) == SONARE_OK);
   const std::string aux = serialize(project);
   REQUIRE(aux != before);
-  REQUIRE(aux.find("\"kind\":2") != std::string::npos);
+  REQUIRE(aux.find("\"kind\":\"aux\"") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
@@ -1213,10 +1213,10 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   REQUIRE(mapped.find("\"id\":77") != std::string::npos);
   REQUIRE(mapped.find("\"name\":\"manual warp\"") != std::string::npos);
   REQUIRE(mapped.find("\"warpRefId\":77") != std::string::npos);
-  REQUIRE(mapped.find("\"warpMode\":1") != std::string::npos);
+  REQUIRE(mapped.find("\"warpMode\":\"repitch\"") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warpMode\":0") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":\"off\"") != std::string::npos);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project).find("\"warpRefId\":0") != std::string::npos);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
@@ -1251,7 +1251,7 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   REQUIRE(serialize(project) == mapped);
   REQUIRE(sonare_project_set_clip_warp_mode(project, fx.clip,
                                             SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) == SONARE_OK);
-  REQUIRE(serialize(project).find("\"warpMode\":2") != std::string::npos);
+  REQUIRE(serialize(project).find("\"warpMode\":\"tempoSync\"") != std::string::npos);
   CHECK(
       sonare_project_set_clip_warp_mode(project, fx.clip, static_cast<SonareProjectWarpMode>(99)) ==
       SONARE_ERROR_INVALID_PARAMETER);
@@ -1493,7 +1493,7 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   REQUIRE(out_target == 100);
   const std::string with_fader = serialize(project);
   REQUIRE(with_fader.find("\"version\":7") != std::string::npos);
-  REQUIRE(with_fader.find("\"targetKind\":1") != std::string::npos);
+  REQUIRE(with_fader.find("\"targetKind\":\"trackFaderDb\"") != std::string::npos);
 
   // An edit that restates the kind keeps the lane typed.
   SonareAutomationPoint edited[1] = {{0.0, -6.0f, SONARE_CURVE_HOLD}};
@@ -1505,7 +1505,7 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &kept_kind_edit) ==
           SONARE_OK);
   const std::string after_edit = serialize(project);
-  REQUIRE(after_edit.find("\"targetKind\":1") != std::string::npos);
+  REQUIRE(after_edit.find("\"targetKind\":\"trackFaderDb\"") != std::string::npos);
 
   // UNCHANGED keeps the lane's kind on an edit, and names no kind a new lane could take.
   SonareAutomationPoint unchanged_points[1] = {{0.0, -9.0f, SONARE_CURVE_LINEAR}};
@@ -1516,7 +1516,7 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
           SONARE_OK);
   const std::string after_unchanged = serialize(project);
   REQUIRE(after_unchanged != after_edit);
-  REQUIRE(after_unchanged.find("\"targetKind\":1") != std::string::npos);
+  REQUIRE(after_unchanged.find("\"targetKind\":\"trackFaderDb\"") != std::string::npos);
   SonareAutomationLaneDesc unchanged_add = unchanged_edit;
   unchanged_add.target_param_id = 104;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &unchanged_add, nullptr) ==

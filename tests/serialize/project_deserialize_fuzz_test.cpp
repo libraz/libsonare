@@ -90,8 +90,8 @@ TEST_CASE("decode-path warning diagnostics are bounded for a hostile document", 
   constexpr int kClipCount = 4000;
   std::string json =
       "{\"version\": 7, \"sampleRate\": 48000, "
-      "\"sources\": [{\"id\": 1, \"kind\": 0, \"uri\": \"file://x.wav\"}], "
-      "\"tracks\": [{\"id\": 1, \"kind\": 0, \"name\": \"T\"}], "
+      "\"sources\": [{\"id\": 1, \"kind\": \"audio\", \"uri\": \"file://x.wav\"}], "
+      "\"tracks\": [{\"id\": 1, \"kind\": \"audio\", \"name\": \"T\"}], "
       "\"clips\": [";
   for (int i = 0; i < kClipCount; ++i) {
     if (i > 0) json += ",";

@@ -1297,12 +1297,12 @@ TEST_CASE("mono project bounce downmixes stereo audio clips instead of dropping 
 TEST_CASE("deserialize success returns warnings and failed bounce records missing timeline",
           "[project]") {
   const std::string json =
-      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":"audio",)"
       R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
       R"("automationLanes":[]}],"clips":[{"id":1,"trackId":1,"sourceId":99,)"
       R"("startPpq":0,"lengthPpq":1,"sourceOffsetPpq":0,"gain":1,)"
-      R"("fadeIn":{"lengthPpq":0,"curve":0},"fadeOut":{"lengthPpq":0,"curve":0},)"
-      R"("loopMode":0,"loopLengthPpq":0,"warpRefId":0}]})";
+      R"("fadeIn":{"lengthPpq":0,"curve":"linear"},"fadeOut":{"lengthPpq":0,"curve":"linear"},)"
+      R"("loopMode":"off","loopLengthPpq":0,"warpRefId":0}]})";
 
   SonareProject* project = nullptr;
   char* diag = nullptr;
@@ -1372,12 +1372,12 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   // bounce's diagnostics instead would show a host errors for a render that
   // never ran, on a call it already knows failed.
   const std::string json =
-      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"({"version":7,"sampleRate":48000,"tracks":[{"id":1,"name":"audio","kind":"audio",)"
       R"("channelStripRef":"","outputTarget":"","midiDestinationId":0,)"
       R"("automationLanes":[]}],"clips":[{"id":1,"trackId":1,"sourceId":99,)"
       R"("startPpq":0,"lengthPpq":1,"sourceOffsetPpq":0,"gain":1,)"
-      R"("fadeIn":{"lengthPpq":0,"curve":0},"fadeOut":{"lengthPpq":0,"curve":0},)"
-      R"("loopMode":0,"loopLengthPpq":0,"warpRefId":0}]})";
+      R"("fadeIn":{"lengthPpq":0,"curve":"linear"},"fadeOut":{"lengthPpq":0,"curve":"linear"},)"
+      R"("loopMode":"off","loopLengthPpq":0,"warpRefId":0}]})";
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &project, nullptr) == SONARE_OK);
 
