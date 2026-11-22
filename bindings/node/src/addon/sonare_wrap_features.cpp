@@ -212,6 +212,89 @@ Napi::Value SonareWrap::MelDelta(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+/// @brief Read a required number whose domain the core states, keeping NaN and the infinities.
+bool RequiredCoreCheckedFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                 const char* name, float* out) {
+  if (!RequireNumberValue(env, info[index], name)) return false;
+  *out = sonare::util::check::saturated_float(info[index].As<Napi::Number>().DoubleValue());
+  return true;
+}
+
+/// @brief Copies a C-owned float array into a Float32Array and frees the C copy.
+Napi::Float32Array TakeCFloats(Napi::Env env, float* data, size_t length) {
+  Napi::Float32Array out = Float32ArrayFrom(env, data, length);
+  sonare_free_floats(data);
+  return out;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::MelFilterbank(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int sample_rate{};
+  if (!RequiredIntArg(env, info, 0, "sampleRate", &sample_rate)) return env.Undefined();
+  int n_fft{};
+  if (!RequiredIntArg(env, info, 1, "nFft", &n_fft)) return env.Undefined();
+  int n_mels{};
+  if (!RequiredIntArg(env, info, 2, "nMels", &n_mels)) return env.Undefined();
+  SonareMelFilterbankOptions options;
+  sonare_mel_filterbank_options_init(&options);
+  if (!RequiredCoreCheckedFloatArg(env, info, 3, "fminHz", &options.fmin_hz)) {
+    return env.Undefined();
+  }
+  if (!RequiredCoreCheckedFloatArg(env, info, 4, "fmaxHz", &options.fmax_hz)) {
+    return env.Undefined();
+  }
+  bool htk = false;
+  if (!RequiredBoolArg(env, info, 5, "htk", &htk)) return env.Undefined();
+  options.htk = htk ? 1 : 0;
+  if (!RequiredIntArg(env, info, 6, "norm", &options.norm)) return env.Undefined();
+
+  float* data = nullptr;
+  size_t length = 0;
+  int rows = 0;
+  int cols = 0;
+  const SonareError err =
+      sonare_mel_filterbank(sample_rate, n_fft, n_mels, &options, &data, &length, &rows, &cols);
+  if (err != SONARE_OK) {
+    ThrowSonareErrorFlattening(env, err, "options");
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("data", TakeCFloats(env, data, length));
+  out.Set("nMels", Napi::Number::New(env, rows));
+  out.Set("nBins", Napi::Number::New(env, cols));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MelFrequencies(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int n_mels{};
+  if (!RequiredIntArg(env, info, 0, "nMels", &n_mels)) return env.Undefined();
+  float fmin_hz{};
+  if (!RequiredCoreCheckedFloatArg(env, info, 1, "fminHz", &fmin_hz)) return env.Undefined();
+  float fmax_hz{};
+  if (!RequiredCoreCheckedFloatArg(env, info, 2, "fmaxHz", &fmax_hz)) return env.Undefined();
+  bool htk = false;
+  if (!RequiredBoolArg(env, info, 3, "htk", &htk)) return env.Undefined();
+
+  float* data = nullptr;
+  size_t length = 0;
+  const SonareError err =
+      sonare_mel_frequencies(n_mels, fmin_hz, fmax_hz, htk ? 1 : 0, &data, &length);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return TakeCFloats(env, data, length);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::Piptrack(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return env.Undefined();

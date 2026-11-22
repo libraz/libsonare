@@ -113,6 +113,8 @@ export {
   chromaCqt,
   fade,
   melDelta,
+  melFilterbank,
+  melFrequencies,
   melSpectrogram,
   mfcc,
   reassignedSpectrogram,

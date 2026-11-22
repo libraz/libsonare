@@ -2991,6 +2991,16 @@ export interface SonareModule {
     nFrames: number,
     width: number,
   ) => Float32Array;
+  melFilterbank: (
+    sampleRate: number,
+    nFft: number,
+    nMels: number,
+    fminHz: number,
+    fmaxHz: number,
+    htk: boolean,
+    norm: number,
+  ) => { data: Float32Array; nMels: number; nBins: number };
+  melFrequencies: (nMels: number, fminHz: number, fmaxHz: number, htk: boolean) => Float32Array;
   reassignedSpectrogram: (
     samples: Float32Array,
     sampleRate: number,

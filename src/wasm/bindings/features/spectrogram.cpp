@@ -14,6 +14,7 @@
 #include "feature/vqt.h"
 #include "filters/mel.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -208,6 +209,59 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
   out.set("times", vectorToFloat32Array(result.times));
   out.set("frequencies", vectorToFloat32Array(result.frequencies));
   return out;
+}
+
+/// A number whose domain the core states: NaN and the infinities pass through to its refusal.
+static float coreCheckedFloatFromVal(const val& value, const char* key) {
+  return sonare::util::check::saturated_float(numberFromVal(value, key));
+}
+
+/// Copies a C-owned float array into a Float32Array and frees the C copy.
+static val takeCFloats(float* data, size_t length) {
+  val out = vectorToFloat32Array(data, length);
+  sonare_free_floats(data);
+  return out;
+}
+
+val js_mel_filterbank(const val& sample_rate_val, const val& n_fft_val, const val& n_mels_val,
+                      const val& fmin_val, const val& fmax_val, bool htk, const val& norm_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  SonareMelFilterbankOptions options;
+  sonare_mel_filterbank_options_init(&options);
+  options.fmin_hz = coreCheckedFloatFromVal(fmin_val, "fminHz");
+  options.fmax_hz = coreCheckedFloatFromVal(fmax_val, "fmaxHz");
+  options.htk = htk ? 1 : 0;
+  options.norm = checkedIntFromVal(norm_val, "norm");
+  float* data = nullptr;
+  size_t length = 0;
+  int rows = 0;
+  int cols = 0;
+  const SonareError err =
+      sonare_mel_filterbank(sample_rate, n_fft, n_mels, &options, &data, &length, &rows, &cols);
+  if (err != SONARE_OK) {
+    throwCodedCErrorFlattening(err, "options");
+  }
+  val out = val::object();
+  out.set("data", takeCFloats(data, length));
+  out.set("nMels", rows);
+  out.set("nBins", cols);
+  return out;
+}
+
+val js_mel_frequencies(const val& n_mels_val, const val& fmin_val, const val& fmax_val, bool htk) {
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const float fmin_hz = coreCheckedFloatFromVal(fmin_val, "fminHz");
+  const float fmax_hz = coreCheckedFloatFromVal(fmax_val, "fmaxHz");
+  float* data = nullptr;
+  size_t length = 0;
+  const SonareError err =
+      sonare_mel_frequencies(n_mels, fmin_hz, fmax_hz, htk ? 1 : 0, &data, &length);
+  if (err != SONARE_OK) {
+    throwCodedCError(err);
+  }
+  return takeCFloats(data, length);
 }
 
 // Inverse: Mel power spectrogram [n_mels x n_frames] -> STFT magnitude spectrogram
@@ -421,6 +475,8 @@ void registerFeatureSpectrogramBindings() {
   function("melSpectrogram", &js_mel_spectrogram);
   function("mfcc", &js_mfcc);
   function("melDelta", &js_mel_delta);
+  function("melFilterbank", &js_mel_filterbank);
+  function("melFrequencies", &js_mel_frequencies);
   function("reassignedSpectrogram", &js_reassigned_spectrogram);
   function("melToStft", &js_mel_to_stft);
   function("melToAudio", &js_mel_to_audio);

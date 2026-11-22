@@ -1622,6 +1622,8 @@ export const REQUEST_KEYS = {
   powerToDb: keySet('values', 'ref', 'amin', 'topDb'),
   amplitudeToDb: keySet('values', 'ref', 'amin', 'topDb'),
   stft: keySet('samples', 'sampleRate', 'nFft', 'hopLength', 'db'),
+  melFilterbank: keySet('sampleRate', 'nFft', 'nMels', 'fminHz', 'fmaxHz', 'htk', 'norm'),
+  melFrequencies: keySet('nMels', 'fminHz', 'fmaxHz', 'htk'),
   melSpectrogram: keySet(
     'samples',
     'sampleRate',

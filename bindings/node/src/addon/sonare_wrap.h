@@ -242,6 +242,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MelSpectrogramFn(const Napi::CallbackInfo& info);
   static Napi::Value Mfcc(const Napi::CallbackInfo& info);
   static Napi::Value MelDelta(const Napi::CallbackInfo& info);
+  static Napi::Value MelFilterbank(const Napi::CallbackInfo& info);
+  static Napi::Value MelFrequencies(const Napi::CallbackInfo& info);
 
   // Features - Chroma
   static Napi::Value ChromaFn(const Napi::CallbackInfo& info);

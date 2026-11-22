@@ -241,6 +241,7 @@ export type {
   MatchTonalBalanceResult,
   MaterialPresetName,
   Matrix2D,
+  MelNorm,
   MelodyOptions,
   MelodyPoint,
   MelodyResult,

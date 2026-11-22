@@ -3,12 +3,13 @@
  * their input checks.
  */
 
-import { withEntry } from './internal/entry.js';
+import { refuse, withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
   ChromaResult,
   Matrix2D,
+  MelNorm,
   MelSpectrogramResult,
   MfccResult,
   ReassignedSpectrogramResult,
@@ -433,6 +434,93 @@ export function bassChroma(...args: unknown[]): ChromaResult {
 // ============================================================================
 // Features - Mel Spectrogram
 // ============================================================================
+
+/** Request for {@link melFilterbank}. */
+export interface MelFilterbankRequest {
+  /** Sample rate in Hz the spectrum was taken at. */
+  sampleRate: number;
+  /** FFT size; the filterbank spans its `nFft / 2 + 1` bins. */
+  nFft: number;
+  /** Number of bands, in [1, 4096]. Default 128. */
+  nMels?: number;
+  /** Lower edge of the lowest band in Hz. Default 0. */
+  fminHz?: number;
+  /** Upper edge of the highest band in Hz. Absent means the Nyquist, and a value above the Nyquist is held at it; when given it must be greater than 0. */
+  fmaxHz?: number;
+  /** HTK mel formula instead of Slaney. Default false. */
+  htk?: boolean;
+  /** Band weighting. Default `'slaney'`. */
+  norm?: MelNorm;
+}
+
+/** Request for {@link melFrequencies}. */
+export interface MelFrequenciesRequest {
+  /** Number of points, at least 1. Default 128. */
+  nMels?: number;
+  /** First point in Hz. Default 0. */
+  fminHz?: number;
+  /** Last point in Hz; greater than `fminHz`. Default 11025. */
+  fmaxHz?: number;
+  /** HTK mel formula instead of Slaney. Default false. */
+  htk?: boolean;
+}
+
+const MEL_NORMS: readonly MelNorm[] = ['none', 'slaney'];
+
+/**
+ * The mel filterbank that maps an STFT power spectrum onto `nMels` bands, as rows = bands,
+ * cols = FFT bins. Band `m` is a triangle over the bins rising from point `m` of
+ * `melFrequencies({ nMels: nMels + 2, fminHz, fmaxHz, htk })` to its peak at point `m + 1`
+ * and falling to point `m + 2`.
+ *
+ * A wrong type is a `TypeError`; a value outside its domain, or an upper edge that, resolved
+ * to the Nyquist, is not above `fminHz`, is a `RangeError`.
+ */
+export function melFilterbank(request: MelFilterbankRequest): Matrix2D;
+export function melFilterbank(...args: unknown[]): Matrix2D {
+  return withEntry('melFilterbank', () => {
+    const r = requestOnly<MelFilterbankRequest>('melFilterbank', args);
+    // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+    if (r.fmaxHz !== undefined && r.fmaxHz !== null) {
+      assertFiniteScalar(r.fmaxHz, 'fmaxHz');
+      if (r.fmaxHz <= 0) {
+        throw refuse('fmaxHz must be greater than 0; omit it for the default');
+      }
+    }
+    const norm = r.norm ?? 'slaney';
+    assertClosedToken(norm, MEL_NORMS, 'norm');
+    const native = requireModule().melFilterbank(
+      r.sampleRate,
+      r.nFft,
+      r.nMels ?? 128,
+      r.fminHz ?? 0,
+      r.fmaxHz ?? 0,
+      optionalBoolean(r.htk, 'htk', false),
+      MEL_NORMS.indexOf(norm),
+    );
+    return toMatrix2D(native.data, native.nMels, native.nBins);
+  });
+}
+
+/**
+ * `nMels` frequencies in Hz equally spaced on the mel scale from `fminHz` to `fmaxHz`, both
+ * included; one point is `fminHz` alone.
+ *
+ * A wrong type is a `TypeError`; `nMels` below 1, a negative or non-finite `fminHz`, or an
+ * `fmaxHz` that is not finite or not above `fminHz` is a `RangeError`.
+ */
+export function melFrequencies(request: MelFrequenciesRequest): Float32Array;
+export function melFrequencies(...args: unknown[]): Float32Array {
+  return withEntry('melFrequencies', () => {
+    const r = requestOnly<MelFrequenciesRequest>('melFrequencies', args);
+    return requireModule().melFrequencies(
+      r.nMels ?? 128,
+      r.fminHz ?? 0,
+      r.fmaxHz ?? 11025,
+      optionalBoolean(r.htk, 'htk', false),
+    );
+  });
+}
 
 /**
  * Mel spectrogram.

@@ -14,6 +14,7 @@ import {
   gmFamilyName,
   gmInstrumentName,
   hybridCqt,
+  type Matrix2D,
   Mixer,
   masterAudio,
   masterAudioAsync,
@@ -26,6 +27,8 @@ import {
   masteringRepairDetectTrimRangeStereo,
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
+  melFilterbank,
+  melFrequencies,
   midiBankProgram,
   midiCc,
   midiCcLearn,
@@ -1489,6 +1492,59 @@ describe('the constant-Q family answers the shared corpus with one text on every
         const refusal = testCase.message
           ? `${camelKey(entry)}: ${camelText(testCase.message)}`
           : `${camelKey(entry)}: ${camelKey(testCase.key)} ${testCase.predicate}`;
+        expect(call).toThrow(
+          testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
+        );
+      });
+    }
+  }
+});
+
+type MelFamilyCase = {
+  id: string;
+  args: Record<string, unknown>;
+  only?: string[];
+  accepted?: boolean;
+  expect?: Record<string, { shape?: number[]; values?: number[] }>;
+  refused?: 'range' | 'type';
+  predicate?: string;
+};
+type MelFamilySection = {
+  entries: string[];
+  base: Record<string, Record<string, unknown>>;
+  cases: MelFamilyCase[];
+};
+
+describe('the mel filterbank and mel frequencies answer the shared corpus', () => {
+  const section = (corpus as unknown as { mel_family: MelFamilySection }).mel_family;
+  const calls: Record<string, (request: Record<string, unknown>) => Matrix2D | Float32Array> = {
+    mel_filterbank: (r) => melFilterbank(r as never),
+    mel_frequencies: (r) => melFrequencies(r as never),
+  };
+  for (const entry of section.entries) {
+    for (const testCase of section.cases.filter((c) => !c.only || c.only.includes(entry))) {
+      it(`${entry} ${testCase.id}`, () => {
+        const request: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries({ ...section.base[entry], ...testCase.args })) {
+          request[camelKey(k)] = corpusValue(v);
+        }
+        const call = () => calls[entry](request);
+        if (testCase.accepted) {
+          const out = call();
+          const want = testCase.expect?.[entry];
+          if (want?.shape) {
+            const matrix = out as Matrix2D;
+            expect([matrix.rows, matrix.cols]).toEqual(want.shape);
+          }
+          if (want?.values) {
+            expect(Array.from(out as Float32Array)).toEqual(want.values);
+          }
+          return;
+        }
+        const refusal = `${camelKey(entry)}: ${(testCase.predicate ?? '').replace(
+          /\{([a-z_]+)\}/g,
+          (_, key: string) => camelKey(key),
+        )}`;
         expect(call).toThrow(
           testCase.refused === 'range' ? new RangeError(refusal) : new TypeError(refusal),
         );

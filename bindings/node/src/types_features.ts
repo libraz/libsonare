@@ -302,6 +302,9 @@ export interface StreamStats {
   estimate: StreamProgressiveEstimate;
 }
 
+/** Mel band weighting: `'slaney'` scales each band to the same area, `'none'` leaves each at unit peak. */
+export type MelNorm = 'none' | 'slaney';
+
 /** Window shape for the streaming analyzer and spectral edits. */
 export type WindowType = 'hann' | 'hamming' | 'blackman' | 'rectangular';
 

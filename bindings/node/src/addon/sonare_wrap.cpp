@@ -470,6 +470,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MelSpectrogramFn, "melSpectrogram"));
   exports.Set("mfcc", Napi::Function::New(env, &SonareWrap::Mfcc, "mfcc"));
   exports.Set("melDelta", Napi::Function::New(env, &SonareWrap::MelDelta, "melDelta"));
+  exports.Set("melFilterbank",
+              Napi::Function::New(env, &SonareWrap::MelFilterbank, "melFilterbank"));
+  exports.Set("melFrequencies",
+              Napi::Function::New(env, &SonareWrap::MelFrequencies, "melFrequencies"));
 
   // Features - Chroma
   exports.Set("chroma", Napi::Function::New(env, &SonareWrap::ChromaFn, "chroma"));

@@ -134,6 +134,8 @@ import type {
   ChromaRequest,
   FadeRequest,
   MelDeltaRequest,
+  MelFilterbankRequest,
+  MelFrequenciesRequest,
   MelSpectrogramRequest,
   MfccRequest,
   ReassignedSpectrogramRequest,
@@ -1537,6 +1539,21 @@ const MasteringRepairNoiseBandBinsRequestKeys = keysOf<MasteringRepairNoiseBandB
   'sampleRate',
 ]);
 const MelDeltaRequestKeys = keysOf<MelDeltaRequest>()(['features', 'width']);
+const MelFilterbankRequestKeys = keysOf<MelFilterbankRequest>()([
+  'sampleRate',
+  'nFft',
+  'nMels',
+  'fminHz',
+  'fmaxHz',
+  'htk',
+  'norm',
+]);
+const MelFrequenciesRequestKeys = keysOf<MelFrequenciesRequest>()([
+  'nMels',
+  'fminHz',
+  'fmaxHz',
+  'htk',
+]);
 const MelSpectrogramRequestKeys = keysOf<MelSpectrogramRequest>()([
   'nMels',
   'fminHz',
@@ -2960,6 +2977,8 @@ export const REQUEST_SHAPES = {
   masteringStreamingPreview: { keys: MasteringStreamingPreviewRequestKeys },
   masteringStreamingPreviewStereo: { keys: MasteringStreamingPreviewStereoRequestKeys },
   melDelta: { keys: MelDeltaRequestKeys },
+  melFilterbank: { keys: MelFilterbankRequestKeys },
+  melFrequencies: { keys: MelFrequenciesRequestKeys },
   melSpectrogram: { keys: MelSpectrogramRequestKeys },
   melToAudio: { keys: MelToAudioRequestKeys },
   melToStft: { keys: MelToStftRequestKeys },

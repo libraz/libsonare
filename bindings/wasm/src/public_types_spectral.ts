@@ -641,6 +641,9 @@ export interface PercussiveEventInput {
   edit?: PercussiveEventEditInput;
 }
 
+/** Mel band weighting: `'slaney'` scales each band to the same area, `'none'` leaves each at unit peak. */
+export type MelNorm = 'none' | 'slaney';
+
 /** How a `spectralEdit` region op modifies the masked bins. */
 export type SpectralEditMode = 'gain' | 'attenuate' | 'mute' | 'heal';
 
