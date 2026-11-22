@@ -637,10 +637,7 @@ void RealtimeEngine::set_tempo(double bpm) {
   SONARE_CHECK_MSG(transport::valid_public_tempo(bpm), ErrorCode::InvalidParameter,
                    "tempo must be finite, positive, and at most 100000 BPM");
   std::vector<transport::TempoSegment> segments{{0.0, bpm, 0.0}};
-  CaptureLoop state = current_capture_loop();
-  const auto map = build_tempo_map(sample_rate_, segments, bpm);
-  state.map = map.get();
-  check_capture_loop(state);
+  check_tempo_segments(segments);
   control_single_tempo_bpm_ = bpm;
   control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();
@@ -651,12 +648,17 @@ void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> seg
     SONARE_CHECK_MSG(transport::valid_public_tempo_segment(segment), ErrorCode::InvalidParameter,
                      "tempo segments contain invalid timeline or out-of-range BPM values");
   }
+  check_tempo_segments(segments);
+  control_tempo_segments_ = std::move(segments);
+  publish_tempo_map_snapshot();
+}
+
+void RealtimeEngine::check_tempo_segments(
+    const std::vector<transport::TempoSegment>& segments) const {
   CaptureLoop state = current_capture_loop();
   const auto map = build_tempo_map(sample_rate_, segments, control_single_tempo_bpm_);
   state.map = map.get();
   check_capture_loop(state);
-  control_tempo_segments_ = std::move(segments);
-  publish_tempo_map_snapshot();
 }
 
 void RealtimeEngine::set_time_signature(int numerator, int denominator) {

@@ -232,6 +232,10 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
       }
     }
 #endif
+    // A tempo the capture setup refuses is refused here, before the first mutation.
+    engine.check_tempo_segments(timeline.tempo_segments.empty()
+                                    ? std::vector<transport::TempoSegment>{{0.0, kDefaultBpm, 0.0}}
+                                    : timeline.tempo_segments);
     playback_lanes = resolve_playback_lanes(timeline, &playback_lane_tracks);
     result.installed_automation = playback_lanes;
 

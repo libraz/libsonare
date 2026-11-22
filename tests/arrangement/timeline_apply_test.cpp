@@ -419,6 +419,65 @@ TEST_CASE("apply refuses an invalid tempo without changing the engine",
   require_refused_unchanged(bad, {}, ErrorCode::InvalidParameter);
 }
 
+namespace {
+
+// Timeline A on @p engine, then a one-quarter loop with capture armed, punch on and a record
+// offset of exactly one pass at A's 100 BPM.
+void arm_one_pass_offset(RealtimeEngine& engine, float* const* channels, int64_t frames) {
+  REQUIRE(arr::apply_to_engine(timeline_a(), *prepared(engine), {}).ok());
+  engine.set_loop(0.0, 1.0, true);
+  engine.set_capture_segment({channels, 1, frames});
+  engine.set_capture_source(sonare::engine::CaptureSource::kInput);
+  engine.set_capture_punch(0, 100, true);
+  engine.set_record_offset_samples(engine.sample_at_ppq(1.0));
+  engine.set_capture_armed(true);
+}
+
+}  // namespace
+
+TEST_CASE(
+    "apply refuses a tempo that puts the record offset past the loop without changing the "
+    "engine",
+    "[arrangement][timeline-apply][capture]") {
+  std::vector<float> take(1024, 0.0f);
+  float* channels[] = {take.data()};
+  RealtimeEngine engine;
+  arm_one_pass_offset(engine, channels, static_cast<int64_t>(take.size()));
+  const EngineState before = capture(engine);
+  REQUIRE(before.bpm_start == 100.0);
+  const int64_t offset = engine.record_offset_samples();
+  REQUIRE(offset == static_cast<int64_t>(kSr * 60.0 / 100.0));
+
+  // B's 140 BPM shortens the one-quarter loop below the offset.
+  const arr::CompiledTimeline b = timeline_b();
+  std::string direct_text;
+  {
+    RealtimeEngine twin;
+    arm_one_pass_offset(twin, channels, static_cast<int64_t>(take.size()));
+    try {
+      twin.set_tempo_segments(b.tempo_segments);
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == ErrorCode::InvalidParameter);
+      direct_text = e.what();
+    }
+  }
+  REQUIRE_FALSE(direct_text.empty());
+
+  const arr::ApplyResult result = arr::apply_to_engine(b, engine, {});
+  REQUIRE_FALSE(result.ok());
+  CHECK(result.code == ErrorCode::InvalidParameter);
+  CHECK(result.outcome == arr::ApplyOutcome::kUnchanged);
+  CHECK(result.message == direct_text);
+  CHECK(capture(engine) == before);
+  const sonare::transport::TransportState transport = engine.transport_state_control();
+  CHECK(transport.looping);
+  CHECK(transport.loop_start_ppq == 0.0);
+  CHECK(transport.loop_end_ppq == 1.0);
+  CHECK(engine.record_offset_samples() == offset);
+  CHECK(engine.capture_armed());
+  CHECK(engine.capture_punch_enabled());
+}
+
 TEST_CASE("apply refuses an invalid time signature without changing the engine",
           "[arrangement][timeline-apply]") {
   arr::CompiledTimeline bad = timeline_b();

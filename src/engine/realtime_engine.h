@@ -505,6 +505,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   transport::TransportState transport_state_control() const noexcept;
   void set_tempo(double bpm);
   void set_tempo_segments(std::vector<transport::TempoSegment> segments);
+  /// Throws the capture refusal set_tempo_segments(@p segments) would throw, changing nothing, so
+  /// a caller can refuse a tempo before its first mutation. The segments must already be valid.
+  void check_tempo_segments(const std::vector<transport::TempoSegment>& segments) const;
   void set_time_signature(int numerator, int denominator);
   void set_time_signature_segments(std::vector<transport::TimeSignatureSegment> segments);
   int64_t sample_at_ppq(double ppq) const noexcept;
