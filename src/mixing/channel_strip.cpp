@@ -24,6 +24,17 @@ void zero_taps(std::vector<std::vector<float>>& taps, int num_channels, int num_
   }
 }
 
+void rebind_plane_ptrs(std::vector<std::vector<float>>& planes, std::vector<float*>& ptrs) {
+  ptrs.resize(planes.size());
+  for (size_t row = 0; row < planes.size(); ++row) ptrs[row] = planes[row].data();
+}
+
+void silence_channels(float* const* channels, int num_channels, int num_samples) {
+  for (int ch = 0; ch < num_channels; ++ch) {
+    if (channels[ch] != nullptr) std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+  }
+}
+
 void zero_taps(std::vector<std::vector<float>>& taps, int num_channels, int start,
                int num_samples) {
   const int rows = std::min<int>(num_channels, static_cast<int>(taps.size()));
@@ -184,17 +195,11 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   pre_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   post_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   send_temp_.assign(tap_rows, std::vector<float>(cols, 0.0f));
-  send_temp_channels_.resize(tap_rows);
-  for (size_t row = 0; row < tap_rows; ++row) {
-    send_temp_channels_[row] = send_temp_[row].data();
-  }
+  rebind_plane_ptrs(send_temp_, send_temp_channels_);
   null_planes_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   stage_channels_.assign(tap_rows, nullptr);
   bypass_scratch_.assign(tap_rows, std::vector<float>(cols, 0.0f));
-  bypass_scratch_channels_.resize(tap_rows);
-  for (size_t row = 0; row < tap_rows; ++row) {
-    bypass_scratch_channels_[row] = bypass_scratch_[row].data();
-  }
+  rebind_plane_ptrs(bypass_scratch_, bypass_scratch_channels_);
 }
 
 void ChannelStrip::process(float* const* channels, int num_channels, int num_samples) {
@@ -330,11 +335,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   const int clamped_samples = std::min(num_samples, max_block_size_);
   if (muted) {
     // Run the segmented path on silence so automation lands at its sample offsets.
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) {
-        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-      }
-    }
+    silence_channels(channels, num_channels, num_samples);
   }
   zero_taps(pre_tap_, num_channels, 0, clamped_samples);
   zero_taps(post_tap_, num_channels, 0, clamped_samples);
@@ -391,11 +392,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
 
   if (muted) {
     // Keep the inserts' state advance but publish exact silence.
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) {
-        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-      }
-    }
+    silence_channels(channels, num_channels, num_samples);
     zero_taps(pre_tap_, num_channels, 0, clamped_samples);
     zero_taps(post_tap_, num_channels, 0, clamped_samples);
   }
@@ -448,11 +445,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
 
   if (muted) {
     // Feed silence through so stateful stages decay their tails while muted.
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) {
-        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-      }
-    }
+    silence_channels(channels, num_channels, num_samples);
   }
 
   input_trim_.process(channels, num_channels, num_samples);
@@ -484,11 +477,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   }
   // A muted pre-insert tail stays out of the output and meters.
   if (muted) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) {
-        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-      }
-    }
+    silence_channels(channels, num_channels, num_samples);
   }
   insert_gain_reduction_count_ = pre_inserts_.size() + post_inserts_.size();
   std::fill_n(insert_gain_reduction_db_.begin(), insert_gain_reduction_count_, 0.0f);
@@ -524,11 +513,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   }
   // Post inserts advanced on silence; discard their tail before publishing.
   if (muted) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) {
-        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-      }
-    }
+    silence_channels(channels, num_channels, num_samples);
   }
   if (!muted) {
     fold_insert_gain_reduction_db(post_inserts_,
@@ -592,9 +577,7 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   }
   const bool muted = effectively_muted();
   if (muted) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (segment[ch]) std::fill(segment[ch], segment[ch] + num_samples, 0.0f);
-    }
+    silence_channels(segment, num_channels, num_samples);
   }
   copy_to_taps(segment, pre_tap_, num_channels, num_samples, tap_offset);
 
@@ -618,9 +601,7 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
                          pre_inserts_.size(), start);
   }
   if (muted) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (segment[ch]) std::fill(segment[ch], segment[ch] + num_samples, 0.0f);
-    }
+    silence_channels(segment, num_channels, num_samples);
   }
 
   if (!effectively_muted() && num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
@@ -830,19 +811,13 @@ void ChannelStrip::set_prepared_channels(int num_channels) {
     stage_channels_.resize(tap_rows, nullptr);
   }
   if (!send_temp_.empty()) {
-    send_temp_channels_.resize(send_temp_.size());
-    for (size_t row = 0; row < send_temp_.size(); ++row) {
-      send_temp_channels_[row] = send_temp_[row].data();
-    }
+    rebind_plane_ptrs(send_temp_, send_temp_channels_);
   }
   if (!bypass_scratch_.empty() && bypass_scratch_.size() != tap_rows) {
     bypass_scratch_.resize(tap_rows, std::vector<float>(bypass_scratch_[0].size(), 0.0f));
   }
   if (!bypass_scratch_.empty()) {
-    bypass_scratch_channels_.resize(bypass_scratch_.size());
-    for (size_t row = 0; row < bypass_scratch_.size(); ++row) {
-      bypass_scratch_channels_[row] = bypass_scratch_[row].data();
-    }
+    rebind_plane_ptrs(bypass_scratch_, bypass_scratch_channels_);
   }
 }
 

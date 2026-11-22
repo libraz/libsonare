@@ -141,6 +141,7 @@ class MeterProcessor : public rt::ProcessorBase {
   int true_peak_oversample_factor() const noexcept { return true_peak_filter_.factor(); }
 
  private:
+  void reset_loudness_ring() noexcept;
   double filter_sample(int channel, double x) noexcept;
   /// @brief Returns the K-weighting filters and the sliding loudness windows to
   ///        rest when a non-finite value has reached them (see

@@ -51,7 +51,6 @@ struct ClassOffset {
 
 /// @brief A complete set of class-relative offsets.
 struct BalanceTable {
-  const char* name;
   std::array<ClassOffset, static_cast<std::size_t>(kSourceClassCount)> offsets;
 };
 
@@ -69,7 +68,6 @@ struct BalanceTable {
 // The general table is voiced for popular music, where a lead vocal is the most
 // forward element and the kick and bass anchor the bottom.
 constexpr BalanceTable kGeneralTable{
-    "general",
     {{
         // Never emitted: an unclassified track gets no offset at all. Present so
         // the table covers the enum and a new class cannot be forgotten.
@@ -185,8 +183,6 @@ std::vector<SceneDelta> decide_balance(const std::vector<TrackProfile>& profiles
   std::vector<SceneDelta> deltas;
   if (!config.enable_balance) return deltas;
 
-  const BalanceTable& table = kGeneralTable;
-
   const float strength =
       std::clamp(config.suggestion_strength, kMinSuggestionStrength, kMaxSuggestionStrength);
 
@@ -200,7 +196,7 @@ std::vector<SceneDelta> decide_balance(const std::vector<TrackProfile>& profiles
     // the classifier is of the class and by how strong a suggestion was asked
     // for. Nothing here reads the track's level — the absolute target is gain
     // staging's decision and sums in through a separate field.
-    const float table_offset_db = offset_for(table, profile.source) * strength;
+    const float table_offset_db = offset_for(kGeneralTable, profile.source) * strength;
     const float offset_db = table_offset_db * confidence;
 
     SceneDelta delta;

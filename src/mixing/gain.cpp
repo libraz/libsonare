@@ -40,7 +40,7 @@ GainProcessor::GainProcessor(GainConfig config)
 void GainProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   smoother_.prepare(sample_rate_, smoothing_ms_);
-  smoother_.reset(summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+  smoother_.reset(target_linear());
 }
 
 void GainProcessor::process(float* const* channels, int num_channels, int num_samples) {
@@ -48,8 +48,7 @@ void GainProcessor::process(float* const* channels, int num_channels, int num_sa
     return;
   }
 
-  const float target =
-      summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db());
+  const float target = target_linear();
   // Zero smoothing snaps: a full one-pole step away from a near-FLT_MAX gain cancels the target.
   if (smoothing_ms_ > 0.0f) {
     smoother_.set_target(target);
@@ -67,15 +66,17 @@ void GainProcessor::process(float* const* channels, int num_channels, int num_sa
   }
 }
 
-void GainProcessor::reset() {
-  smoother_.reset(summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+float GainProcessor::target_linear() const noexcept {
+  return summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db());
 }
+
+void GainProcessor::reset() { smoother_.reset(target_linear()); }
 
 void GainProcessor::settle() noexcept {
   // Snap straight to the current steady-state gain (the same target process()
   // would smooth toward) so the next render block opens at that gain with no
   // ramp-in, keeping an offline bounce deterministic.
-  smoother_.reset(summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+  smoother_.reset(target_linear());
 }
 
 void GainProcessor::set_gain_db(float gain_db) noexcept {

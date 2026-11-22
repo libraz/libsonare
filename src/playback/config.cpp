@@ -126,35 +126,6 @@ void check_range(float value, double lo, double hi, const std::string& key) {
   if (!(value >= lo && value <= hi)) fail(schema::refusal(key, schema::range_predicate(lo, hi)));
 }
 
-bool parse_bed_layout(const std::string& text, ChannelLayout* out) {
-  if (text == "mono") {
-    *out = ChannelLayout::Mono;
-  } else if (text == "stereo") {
-    *out = ChannelLayout::Stereo;
-  } else if (text == "5.1") {
-    *out = ChannelLayout::FivePointOne;
-  } else if (text == "7.1") {
-    *out = ChannelLayout::SevenPointOne;
-  } else {
-    return false;
-  }
-  return true;
-}
-
-const char* bed_layout_name(ChannelLayout layout) {
-  switch (layout) {
-    case ChannelLayout::Mono:
-      return "mono";
-    case ChannelLayout::Stereo:
-      return "stereo";
-    case ChannelLayout::FivePointOne:
-      return "5.1";
-    case ChannelLayout::SevenPointOne:
-      return "7.1";
-  }
-  return "stereo";
-}
-
 bool layout_has_speaker(ChannelLayout layout, SpeakerRole role) {
   if (role == SpeakerRole::LFE) return false;
   const SpeakerRole* roles = speaker_roles(layout);
@@ -185,7 +156,7 @@ void parse_input(const Value& input, PrepareConfig& prepare) {
     ChannelLayout bed = ChannelLayout::Stereo;
     if (text == "auto") {
       prepare.input_layout = InputLayout::Auto;
-    } else if (parse_bed_layout(text, &bed)) {
+    } else if (channel_layout_from_string(text, bed)) {
       prepare.input_layout = bed == ChannelLayout::Mono           ? InputLayout::Mono
                              : bed == ChannelLayout::Stereo       ? InputLayout::Stereo
                              : bed == ChannelLayout::FivePointOne ? InputLayout::FivePointOne
@@ -260,7 +231,7 @@ void parse_target(const Value& target, RendererConfig& config) {
     const std::string layout_path = schema::child_path("target", "layout");
     if (layout == nullptr) fail(schema::refusal(layout_path, "must be given for speakers"));
     const std::string& text = read_string(*layout, layout_path);
-    if (!parse_bed_layout(text, &prepare.target_layout) ||
+    if (!channel_layout_from_string(text, prepare.target_layout) ||
         prepare.target_layout == ChannelLayout::Mono) {
       fail(schema::refusal(layout_path, kTargetLayoutDomain));
     }
@@ -496,7 +467,7 @@ std::string serialize_renderer_config(const RendererConfig& config) {
   out += speakers ? "speakers\"" : "headphones\"";
   if (speakers) {
     out += ",\"layout\":\"";
-    out += bed_layout_name(p.target_layout);
+    out += channel_layout_to_string(p.target_layout);
     out += '"';
   }
   out += ",\"speakers\":{";

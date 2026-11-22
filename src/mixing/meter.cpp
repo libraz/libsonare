@@ -112,13 +112,17 @@ void MeterProcessor::reset() {
   // Clear the true-peak filter's cross-block history so a fresh run does not
   // see stale tail samples from a previous stream (no reallocation).
   true_peak_filter_.reset();
+  reset_loudness_ring();
+  reset_integrated();
+}
+
+void MeterProcessor::reset_loudness_ring() noexcept {
   std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0f);
   ring_pos_ = 0;
   filled_ = 0;
   momentary_sum_ = 0.0;
   short_term_sum_ = 0.0;
   gate_hop_counter_ = 0;
-  reset_integrated();
 }
 
 void MeterProcessor::reset_integrated() noexcept {
@@ -145,12 +149,7 @@ void MeterProcessor::discard_non_finite_loudness_state(int lufs_channels) noexce
     return;
   }
   note_non_finite_discard();
-  std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0f);
-  ring_pos_ = 0;
-  filled_ = 0;
-  momentary_sum_ = 0.0;
-  short_term_sum_ = 0.0;
-  gate_hop_counter_ = 0;
+  reset_loudness_ring();
 }
 
 void MeterProcessor::process(float* const* channels, int num_channels, int num_samples) {

@@ -1,7 +1,9 @@
 #include "mixing/api/presets.h"
 
+#include <cstddef>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "mastering/api/param_field_tables.h"
 #include "mastering/eq/eq_band.h"
@@ -113,29 +115,26 @@ Scene make_commentary_ducking() {
   return scene;
 }
 
+/// Preset names in ScenePreset enumerator order.
+constexpr const char* kPresetNames[] = {"vocalReverbSend", "drumBusSubgroup", "commentaryDucking"};
+constexpr size_t kPresetCount = sizeof(kPresetNames) / sizeof(kPresetNames[0]);
+
 }  // namespace
 
 std::vector<std::string> scene_preset_names() {
-  return {"vocalReverbSend", "drumBusSubgroup", "commentaryDucking"};
+  return std::vector<std::string>(kPresetNames, kPresetNames + kPresetCount);
 }
 
 ScenePreset scene_preset_from_string(const std::string& name) {
-  if (name == "vocalReverbSend") return ScenePreset::VocalReverbSend;
-  if (name == "drumBusSubgroup") return ScenePreset::DrumBusSubgroup;
-  if (name == "commentaryDucking") return ScenePreset::CommentaryDucking;
+  for (size_t i = 0; i < kPresetCount; ++i) {
+    if (name == kPresetNames[i]) return static_cast<ScenePreset>(i);
+  }
   throw SonareException(ErrorCode::InvalidParameter, "unknown mixing scene preset: " + name);
 }
 
 const char* scene_preset_to_string(ScenePreset preset) noexcept {
-  switch (preset) {
-    case ScenePreset::VocalReverbSend:
-      return "vocalReverbSend";
-    case ScenePreset::DrumBusSubgroup:
-      return "drumBusSubgroup";
-    case ScenePreset::CommentaryDucking:
-      return "commentaryDucking";
-  }
-  return "unknown";
+  const auto index = static_cast<size_t>(preset);
+  return index < kPresetCount ? kPresetNames[index] : "unknown";
 }
 
 Scene scene_preset(ScenePreset preset) {

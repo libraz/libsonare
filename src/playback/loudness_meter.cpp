@@ -11,13 +11,12 @@ namespace sonare::playback {
 
 struct PlaybackLoudnessMeter::Impl {
   int channels = 0;
-  mixing::MeterConfig meter_config{};
   mixing::MeterProcessor meter{};
   // Deinterleave scratch, one internal block per plane.
   std::vector<std::vector<float>> planar;
   std::vector<float*> planar_ptrs;
 
-  explicit Impl(mixing::MeterConfig config) : meter_config(config), meter(config) {}
+  explicit Impl(mixing::MeterConfig config) : meter(config) {}
 };
 
 PlaybackLoudnessMeter::PlaybackLoudnessMeter(int channels, int sample_rate) {
@@ -30,10 +29,8 @@ PlaybackLoudnessMeter::PlaybackLoudnessMeter(int channels, int sample_rate) {
                           "PlaybackLoudnessMeter: sample rate must be positive");
   }
 
-  // Configure meter for LUFS only.
-  mixing::MeterConfig config;
-  config.measure_lufs = true;
-  config.measure_true_peak = false;
+  // LUFS only: the MeterConfig defaults.
+  const mixing::MeterConfig config;
 
   impl_ = std::make_unique<Impl>(config);
   impl_->channels = channels;

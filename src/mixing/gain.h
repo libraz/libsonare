@@ -45,6 +45,7 @@ class GainProcessor : public rt::ProcessorBase {
   float vca_group_offset_db() const noexcept;
 
  private:
+  float target_linear() const noexcept;
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float smoothing_ms_ = 5.0f;
   rt::ParamSmoother smoother_{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};

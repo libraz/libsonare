@@ -166,16 +166,14 @@ class AutomationLane {
     size_t consumed = 0;
 
     // One-shot after a seek/discard: publish the value valid at block start at offset zero.
-    bool baseline_pending = state.baseline_pending;
     bool baseline_emitted = false;
 
     auto emit_baseline = [&](const AutomationEvent* next) {
-      if (!baseline_pending || baseline_emitted || !state.has_active_event) {
+      if (!state.baseline_pending || baseline_emitted || !state.has_active_event) {
         return;
       }
       // A breakpoint at block start is authoritative; the event callback publishes it.
       if (next != nullptr && next->sample_pos == block_start) {
-        baseline_pending = false;
         state.baseline_pending = false;
         return;
       }
@@ -192,7 +190,6 @@ class AutomationLane {
       callback(AutomationBlockEvent{baseline, 0});
       ++consumed;
       baseline_emitted = true;
-      baseline_pending = false;
       state.baseline_pending = false;
     };
 
@@ -234,7 +231,7 @@ class AutomationLane {
       const AutomationEvent event = buffer_[tail];
       if (event.sample_pos >= block_end) {
         if (state.has_active_event && state.active_event.sample_pos < block_start) {
-          const bool baseline_was_pending = baseline_pending;
+          const bool baseline_was_pending = state.baseline_pending;
           emit_baseline(&event);
           emit_curve_events(
               state.active_event, event,
@@ -246,7 +243,7 @@ class AutomationLane {
 
       if (state.has_active_event && state.active_event.sample_pos < block_start &&
           event.sample_pos > block_start) {
-        const bool baseline_was_pending = baseline_pending;
+        const bool baseline_was_pending = state.baseline_pending;
         emit_baseline(&event);
         emit_curve_events(
             state.active_event, event,
@@ -261,7 +258,6 @@ class AutomationLane {
       if (event.sample_pos < block_start) {
         state.active_event = event;
         state.has_active_event = true;
-        baseline_pending = true;
         state.baseline_pending = true;
         continue;
       }
@@ -270,7 +266,6 @@ class AutomationLane {
       ++consumed;
       state.active_event = event;
       state.has_active_event = true;
-      baseline_pending = false;
       state.baseline_pending = false;
 
       const size_t latest_head = head_.load(std::memory_order_acquire);

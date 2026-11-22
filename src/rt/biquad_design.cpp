@@ -336,15 +336,19 @@ BiquadCoeffs vicanek_peak(float w0, float q, float gain_db) {
   return stabilized({b0, b1, b2, p.a1, p.a2});
 }
 
-BiquadCoeffs vicanek_high_shelf(float w0, float gain_db) {
-  // Vicanek, "Matched Two-Pole Digital Shelving Filters" (2024/2025),
-  // Appendix A.1 pseudo-code for the matched Butterworth high shelf.
-  const float gain = db_to_linear(gain_db);
-  if (std::abs(gain - 1.0f) < 1.0e-6f) {
-    return {};
-  }
-  const float fc = static_cast<float>(clamp_design_domain(w0, kMinDesignQ).w0 / kPiD);
-  const float g = gain;
+namespace {
+
+// Shared core of the matched Butterworth shelves (Vicanek A.1/A.2) for the high-shelf gain @p g.
+struct VicanekShelfTerms {
+  float v;
+  float w;
+  float inva0;
+  float b0_base;
+  float aa2;
+  float bb2;
+};
+
+VicanekShelfTerms vicanek_shelf_terms(float fc, float g) {
   const float invg = 1.0f / g;
   const float fc2 = fc * fc;
   const float fc4 = fc2 * fc2;
@@ -377,11 +381,25 @@ BiquadCoeffs vicanek_high_shelf(float w0, float gain_db) {
   const float w = 0.5f * (1.0f + safe_sqrt(bb1));
   const float a0 = 0.5f * (v + safe_sqrt(v * v + aa2));
   const float inva0 = safe_div(1.0f, a0, 1.0f);
-  const float b0_unscaled = 0.5f * (w + safe_sqrt(w * w + bb2));
-  const float b0 = b0_unscaled * inva0;
-  const BiquadCoeffs coeffs{b0, (1.0f - w) * inva0,
-                            -0.25f * bb2 * inva0 / std::max(b0_unscaled, 1.0e-12f),
-                            (1.0f - v) * inva0, -0.25f * aa2 * inva0 * inva0};
+  const float b0_base = 0.5f * (w + safe_sqrt(w * w + bb2));
+  return {v, w, inva0, b0_base, aa2, bb2};
+}
+
+}  // namespace
+
+BiquadCoeffs vicanek_high_shelf(float w0, float gain_db) {
+  // Vicanek, "Matched Two-Pole Digital Shelving Filters" (2024/2025),
+  // Appendix A.1 pseudo-code for the matched Butterworth high shelf.
+  const float gain = db_to_linear(gain_db);
+  if (std::abs(gain - 1.0f) < 1.0e-6f) {
+    return {};
+  }
+  const float fc = static_cast<float>(clamp_design_domain(w0, kMinDesignQ).w0 / kPiD);
+  const VicanekShelfTerms t = vicanek_shelf_terms(fc, gain);
+  const float b0 = t.b0_base * t.inva0;
+  const BiquadCoeffs coeffs{b0, (1.0f - t.w) * t.inva0,
+                            -0.25f * t.bb2 * t.inva0 / std::max(t.b0_base, 1.0e-12f),
+                            (1.0f - t.v) * t.inva0, -0.25f * t.aa2 * t.inva0 * t.inva0};
   if (endpoint_gain_error_exceeds(coeffs, kPi * 0.999f, gain_db, 1.5f)) {
     return rbj_high_shelf(w0, kButterworthQ, gain_db);
   }
@@ -397,43 +415,11 @@ BiquadCoeffs vicanek_low_shelf(float w0, float gain_db) {
   }
   const float fc = static_cast<float>(clamp_design_domain(w0, kMinDesignQ).w0 / kPiD);
   const float g = 1.0f / gain;
-  const float invg = 1.0f / g;
-  const float fc2 = fc * fc;
-  const float fc4 = fc2 * fc2;
-  const float hny = (fc4 + g) / (fc4 + invg);
-
-  const float f1 = fc / std::sqrt(0.160f + 1.543f * fc2);
-  const float f14 = f1 * f1 * f1 * f1;
-  const float h1 = (fc4 + f14 * g) / (fc4 + f14 * invg);
-  const float phi1 = std::pow(std::sin(kHalfPi * f1), 2.0f);
-
-  const float f2 = fc / std::sqrt(0.947f + 3.806f * fc2);
-  const float f24 = f2 * f2 * f2 * f2;
-  const float h2 = (fc4 + f24 * g) / (fc4 + f24 * invg);
-  const float phi2 = std::pow(std::sin(kHalfPi * f2), 2.0f);
-
-  const float d1 = (h1 - 1.0f) * (1.0f - phi1);
-  const float c11 = -phi1 * d1;
-  const float c12 = phi1 * phi1 * (hny - h1);
-  const float d2 = (h2 - 1.0f) * (1.0f - phi2);
-  const float c21 = -phi2 * d2;
-  const float c22 = phi2 * phi2 * (hny - h2);
-  const float denom = c11 * c22 - c12 * c21;
-  const float alfa1 = safe_div(c22 * d1 - c12 * d2, denom, 0.0f);
-  const float aa1 = safe_div(d1 - c11 * alfa1, c12, 1.0f);
-  const float bb1 = hny * aa1;
-  const float aa2 = 0.25f * (alfa1 - aa1);
-  const float bb2 = 0.25f * (alfa1 - bb1);
-
-  const float v = 0.5f * (1.0f + safe_sqrt(aa1));
-  const float w = 0.5f * (1.0f + safe_sqrt(bb1));
-  const float a0 = 0.5f * (v + safe_sqrt(v * v + aa2));
-  const float inva0 = safe_div(1.0f, a0, 1.0f);
-  const float ginva0 = invg * inva0;
-  const float b0_base = 0.5f * (w + safe_sqrt(w * w + bb2));
-  const BiquadCoeffs coeffs{b0_base * ginva0, (1.0f - w) * ginva0,
-                            -0.25f * bb2 * ginva0 / std::max(b0_base, 1.0e-12f), (1.0f - v) * inva0,
-                            -0.25f * aa2 * inva0 * inva0};
+  const VicanekShelfTerms t = vicanek_shelf_terms(fc, g);
+  const float ginva0 = (1.0f / g) * t.inva0;
+  const BiquadCoeffs coeffs{t.b0_base * ginva0, (1.0f - t.w) * ginva0,
+                            -0.25f * t.bb2 * ginva0 / std::max(t.b0_base, 1.0e-12f),
+                            (1.0f - t.v) * t.inva0, -0.25f * t.aa2 * t.inva0 * t.inva0};
   if (endpoint_gain_error_exceeds(coeffs, 0.0f, gain_db, 1.5f)) {
     return rbj_low_shelf(w0, kButterworthQ, gain_db);
   }

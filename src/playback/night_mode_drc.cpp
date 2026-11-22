@@ -122,8 +122,7 @@ void NightModeDrc::prepare(double sample_rate, int max_block_size, ChannelLayout
   for (auto& s : m.k_pre) s.set(pre);
   for (auto& s : m.k_rlb) s.set(rlb);
 
-  const size_t window = std::max<size_t>(
-      1, static_cast<size_t>(std::lround(kNightModeDetectorWindowMs * 0.001 * sample_rate)));
+  const auto window = static_cast<size_t>(ms_to_frames(kNightModeDetectorWindowMs, sample_rate));
   m.power_ring.assign(window, 0.0);
 
   const size_t lookahead_samples =

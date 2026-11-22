@@ -386,7 +386,8 @@ constexpr float kReverbDecaySec = 1.6f;
 constexpr float kReverbPreDelayMs = 45.0f;
 
 // Milliseconds in a minute: the conversion from a tempo in BPM to a beat.
-constexpr float kMillisecondsPerMinute = 60000.0f;
+constexpr float kMillisecondsPerMinute =
+    static_cast<float>(sonare::constants::kSecondsPerMinute) * 1000.0f;
 // Three quarters of a beat is a dotted eighth. Setting the two sides of a
 // stereo delay to a quarter and a dotted eighth is the customary pairing: the
 // repeats interleave instead of landing on top of each other.

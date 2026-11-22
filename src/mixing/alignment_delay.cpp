@@ -1,8 +1,6 @@
 #include "mixing/alignment_delay.h"
 
 #include <algorithm>
-#include <cmath>
-#include <stdexcept>
 
 #include "rt/fractional_delay.h"
 
@@ -54,7 +52,7 @@ void AlignmentDelay::process(float* const* channels, int num_channels, int num_s
     if (channels[ch] == nullptr) {
       continue;
     }
-    if (fractional_mode_ == FractionalDelayMode::None || (delay_samples_q8_ & 0xff) == 0) {
+    if (fractional_mode_ == FractionalDelayMode::None) {
       rt::DelayLine& delay = delays_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         channels[ch][i] = delay.process(channels[ch][i]);
@@ -84,7 +82,7 @@ void AlignmentDelay::prime(const float* const* channels, int num_channels,
     if (channels[ch] == nullptr) {
       continue;
     }
-    if (fractional_mode_ == FractionalDelayMode::None || (delay_samples_q8_ & 0xff) == 0) {
+    if (fractional_mode_ == FractionalDelayMode::None) {
       rt::DelayLine& delay = delays_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         delay.process(channels[ch][i]);
@@ -209,7 +207,7 @@ AlignmentDelay::StorageSpec AlignmentDelay::spec_for(int delay_samples_q8, Fract
   StorageSpec spec;
   spec.channels = channels;
   spec.integer_delay = static_cast<size_t>(delay_samples_q8 >> 8);
-  if (mode == FractionalDelayMode::None || (delay_samples_q8 & 0xff) == 0) {
+  if (mode == FractionalDelayMode::None) {
     return spec;
   }
   spec.fractional_size = static_cast<size_t>(std::max(8, (delay_samples_q8 >> 8) + 8));

@@ -53,6 +53,12 @@ std::vector<float> staged_input_trims(const std::vector<TrackProfile>& profiles,
   return trims;
 }
 
+std::vector<float> analysis_input_trims(const std::vector<TrackProfile>& profiles,
+                                        const MixAssistantConfig& config) {
+  return staged_input_trims(profiles, config.enable_gain ? decide_gain_staging(profiles, config)
+                                                         : std::vector<SceneDelta>{});
+}
+
 void append(std::vector<SceneDelta>& into, std::vector<SceneDelta> from) {
   into.insert(into.end(), std::make_move_iterator(from.begin()),
               std::make_move_iterator(from.end()));
@@ -296,9 +302,7 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
   // the most expensive thing the assistant does.
   // Cross-track energy comparisons are taken at the levels the gain stage trims
   // each track to, since every decision reading them acts after the trim.
-  const std::vector<float> trims =
-      staged_input_trims(profiles, config.enable_gain ? decide_gain_staging(profiles, config)
-                                                      : std::vector<SceneDelta>{});
+  const std::vector<float> trims = analysis_input_trims(profiles, config);
   mix.analysis_input_trim_db = trims;
   mix.dominance_measured = config.enable_eq || config.enable_dynamics;
   if (config.enable_eq || config.enable_dynamics) {
@@ -308,12 +312,12 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
     mix.alignment = analyze_phase_alignment(tracks, profiles);
     // Both image passes read the same per-channel band energies, so they are
     // measured once and handed to each rather than transformed twice.
-    const std::vector<TrackChannelEnergy> energy = measure_track_channel_energy(tracks, profiles);
-    mix.channel_energy = energy;
+    std::vector<TrackChannelEnergy> energy = measure_track_channel_energy(tracks, profiles);
     std::vector<TrackChannelEnergy> staged = project_channel_energy(energy, trims);
     mix.image = analyze_image_occupancy(staged);
     // Mono risk reads each track's own channel ratios, which a gain does not move.
     mix.mono_risks = analyze_mono_risks(tracks, profiles, energy);
+    mix.channel_energy = std::move(energy);
   }
   return mix;
 }
@@ -366,9 +370,7 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
                      ErrorCode::InvalidParameter,
                      "mixing assistant cached input trim count does not match profiles");
 
-    const std::vector<float> current_trims =
-        staged_input_trims(profiles, config.enable_gain ? decide_gain_staging(profiles, config)
-                                                        : std::vector<SceneDelta>{});
+    const std::vector<float> current_trims = analysis_input_trims(profiles, config);
     const bool input_trims_changed = trims_differ(mix.analysis_input_trim_db, current_trims);
     effective_mix.analysis_input_trim_db = current_trims;
 

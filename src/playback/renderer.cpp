@@ -70,20 +70,6 @@ bool layout_for_channel_count(int channels, ChannelLayout* out) noexcept {
   return false;
 }
 
-const char* layout_text(ChannelLayout layout) noexcept {
-  switch (layout) {
-    case ChannelLayout::Mono:
-      return "mono";
-    case ChannelLayout::Stereo:
-      return "stereo";
-    case ChannelLayout::FivePointOne:
-      return "5.1";
-    case ChannelLayout::SevenPointOne:
-      return "7.1";
-  }
-  return "stereo";
-}
-
 uint32_t stage_bit(Stage stage) noexcept { return 1u << static_cast<unsigned>(stage); }
 
 std::vector<std::vector<float>> make_planes(int count, int frames) {
@@ -324,7 +310,7 @@ struct PlaybackRenderer::Impl {
 std::string diagnostics_to_json(const RendererDiagnostics& diagnostics) {
   const auto number = [](double value) { return util::format_general(value, 6); };
   std::string out = "{\"activeInputLayout\":\"";
-  out += layout_text(diagnostics.active_input_layout);
+  out += channel_layout_to_string(diagnostics.active_input_layout);
   out += "\",\"layoutSwitches\":" + std::to_string(diagnostics.layout_switches);
   out += ",\"truncatedDrains\":" + std::to_string(diagnostics.truncated_drains);
   out += ",\"inactiveStages\":[";

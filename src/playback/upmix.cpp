@@ -12,6 +12,7 @@
 #include "playback/frame_time.h"
 #include "playback/impulse_tail.h"
 #include "rt/biquad_design.h"
+#include "rt/delay_line.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 
@@ -87,27 +88,6 @@ struct AllpassChain {
   }
 };
 
-/// Integer delay line of a fixed length.
-struct Delay {
-  std::vector<float> buf;
-  int pos = 0;
-
-  void prepare(int delay) {
-    buf.assign(static_cast<size_t>(delay), 0.0f);
-    pos = 0;
-  }
-  void reset() noexcept {
-    std::fill(buf.begin(), buf.end(), 0.0f);
-    pos = 0;
-  }
-  float process(float x) noexcept {
-    const float y = buf[static_cast<size_t>(pos)];
-    buf[static_cast<size_t>(pos)] = x;
-    if (++pos == static_cast<int>(buf.size())) pos = 0;
-    return y;
-  }
-};
-
 mastering::multiband::CrossoverConfig lfe_crossover_config() {
   mastering::multiband::CrossoverConfig config;
   config.cutoffs_hz = {kLfeCutoffHz};
@@ -120,7 +100,6 @@ mastering::multiband::CrossoverConfig lfe_crossover_config() {
 
 struct Upmixer::Impl {
   ChannelLayout output = ChannelLayout::FivePointOne;
-  double sample_rate = constants::kDefaultDawSampleRate;
   int max_block = 0;
   int n = 0;
   int hop = 0;
@@ -153,7 +132,7 @@ struct Upmixer::Impl {
   // Rear decorrelation: ambience L/R through their own chains, the anti-phase
   // part through the opposite side's chain so Ls and Rs receive it decorrelated.
   AllpassChain ap_amb_l, ap_amb_r, ap_anti_ls, ap_anti_rs;
-  Delay dl_amb_l, dl_amb_r, dl_anti_ls, dl_anti_rs;
+  rt::DelayLine dl_amb_l, dl_amb_r, dl_anti_ls, dl_anti_rs;
 
   mastering::multiband::Crossover lfe_filter{lfe_crossover_config()};
   mastering::multiband::CrossoverScratch lfe_scratch;
@@ -365,7 +344,6 @@ Upmixer::~Upmixer() = default;
 void Upmixer::prepare(double sample_rate, int max_block_size, ChannelLayout output) {
   Impl& m = *impl_;
   m.output = output;
-  m.sample_rate = sample_rate;
   m.max_block = std::max(1, max_block_size);
   m.n = upmix_latency_frames(sample_rate);
   m.hop = m.n / 4;
@@ -409,10 +387,10 @@ void Upmixer::prepare(double sample_rate, int max_block_size, ChannelLayout outp
   m.ap_anti_ls.prepare(kAllpassMsRight, sample_rate);
   m.ap_anti_rs.prepare(kAllpassMsLeft, sample_rate);
   const int ambience_delay = ms_to_frames(kAmbienceDelayMs, sample_rate);
-  m.dl_amb_l.prepare(ambience_delay);
-  m.dl_amb_r.prepare(ambience_delay);
-  m.dl_anti_ls.prepare(ambience_delay);
-  m.dl_anti_rs.prepare(ambience_delay);
+  m.dl_amb_l.prepare(static_cast<size_t>(ambience_delay));
+  m.dl_amb_r.prepare(static_cast<size_t>(ambience_delay));
+  m.dl_anti_ls.prepare(static_cast<size_t>(ambience_delay));
+  m.dl_anti_rs.prepare(static_cast<size_t>(ambience_delay));
 
   m.lfe_filter.prepare(sample_rate, m.max_block, 1);
   m.lfe_filter.prepare_scratch(m.lfe_scratch, 1, m.max_block);
