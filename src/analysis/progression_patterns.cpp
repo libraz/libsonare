@@ -1,6 +1,7 @@
 #include "analysis/progression_patterns.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace sonare {
 
