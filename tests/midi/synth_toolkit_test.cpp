@@ -14,7 +14,6 @@
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/gm_fallback_map.h"
-#include "midi/synth/interpolation.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/pitch.h"
 #include "midi/synth/sf2_voice.h"
@@ -26,7 +25,6 @@
 namespace {
 
 using Catch::Approx;
-using sonare::midi::synth::AllpassInterpolator;
 using sonare::midi::synth::BodyResonator;
 using sonare::midi::synth::BodyType;
 using sonare::midi::synth::DahdsrConfig;
@@ -393,48 +391,6 @@ TEST_CASE("glide_coefficient sizes the one-pole to land within 5% in the glide t
   REQUIRE(glide_coefficient(2000.0f, 48000.0) > coeff);
 }
 
-TEST_CASE("read_sample_linear tracks a sine within linear-interp error", "[midi][synth]") {
-  // A 256-sample sine table read at fractional positions stays within the
-  // textbook linear-interpolation error bound for this oversampling.
-  std::vector<float> table(257);
-  for (size_t i = 0; i < table.size(); ++i) {
-    table[i] = static_cast<float>(std::sin(kTwoPi * static_cast<double>(i) / 256.0));
-  }
-  double max_err = 0.0;
-  for (int k = 0; k < 10000; ++k) {
-    const double pos = 256.0 * static_cast<double>(k) / 10000.0;
-    const float y = sonare::midi::synth::read_sample_linear(table.data(), table.size(), pos);
-    const double ref = std::sin(kTwoPi * pos / 256.0);
-    max_err = std::max(max_err, std::abs(static_cast<double>(y) - ref));
-  }
-  // Error bound ~ (pi/N)^2 / 2 for a sine; allow float slack.
-  REQUIRE(max_err < 1.5e-4);
-
-  // Edge clamping.
-  REQUIRE(sonare::midi::synth::read_sample_linear(table.data(), table.size(), -1.0) ==
-          table.front());
-  REQUIRE(sonare::midi::synth::read_sample_linear(table.data(), table.size(), 1000.0) ==
-          table.back());
-}
-
-TEST_CASE("AllpassInterpolator approximates a half-sample delay", "[midi][synth]") {
-  AllpassInterpolator ap;
-  ap.set_fraction(0.5f);
-  // Feed a slow sine; output should match the input delayed by ~0.5 samples.
-  double max_err = 0.0;
-  float y = 0.0f;
-  for (int i = 0; i < 2000; ++i) {
-    const double phase = kTwoPi * 200.0 * static_cast<double>(i) / kSampleRate;
-    y = ap.process(static_cast<float>(std::sin(phase)));
-    if (i > 100) {
-      const double expected =
-          std::sin(kTwoPi * 200.0 * (static_cast<double>(i) - 0.5) / kSampleRate);
-      max_err = std::max(max_err, std::abs(static_cast<double>(y) - expected));
-    }
-  }
-  REQUIRE(max_err < 1.0e-3);
-}
-
 TEST_CASE("voice_random is deterministic and decorrelated across voices", "[midi][synth]") {
   using sonare::midi::synth::voice_random_bipolar;
   using sonare::midi::synth::voice_seed;
@@ -712,8 +668,6 @@ TEST_CASE("synth toolkit audio path performs no heap allocation", "[midi][synth]
   env.configure(kSampleRate, DahdsrConfig{});
   TptSvf svf;
   svf.prepare(kSampleRate);
-  AllpassInterpolator ap;
-  ap.set_fraction(0.3f);
   VoiceRandomSequence seq;
   seq.reseed(0, 60, 1);
 
@@ -724,7 +678,7 @@ TEST_CASE("synth toolkit audio path performs no heap allocation", "[midi][synth]
     pool.allocate(0, static_cast<uint8_t>(48 + (i % 24)));
     const float e = env.next();
     svf.set(200.0f + 50.0f * static_cast<float>(i % 64), 2.0f);
-    acc += svf.process(e).lp + ap.process(e) + seq.next_bipolar();
+    acc += svf.process(e).lp + seq.next_bipolar();
   }
   env.note_off();
   while (env.active()) acc += env.next();

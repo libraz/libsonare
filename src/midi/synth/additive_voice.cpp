@@ -28,6 +28,12 @@ float drawbar_gain(float level) noexcept {
   return db_to_linear((stops - 8.0f) * 3.0f);
 }
 
+/// Highest generator frequency as a fraction of the sample rate.
+constexpr float kBandLimitFraction = 0.45f;
+
+/// Click / percussion envelope level below which the stage is finished.
+constexpr float kEnvelopeFinishedFloor = 1.0e-5f;
+
 // Live-control smoothing time (ms) for the morph position: the same ramp the
 // continuously-excited engines give their CC targets.
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
@@ -44,9 +50,14 @@ void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_r
   // between them holds level rather than tracking how many bars are drawn.
   sum_a_ = 0.0f;
   sum_b_ = 0.0f;
+  std::array<float, kAdditivePartials> drawn_a{};
+  std::array<float, kAdditivePartials> drawn_b{};
   for (int k = 0; k < kAdditivePartials; ++k) {
-    sum_a_ += drawbar_gain(params.drawbars[static_cast<size_t>(k)]);
-    sum_b_ += drawbar_gain(params.drawbars_b[static_cast<size_t>(k)]);
+    const size_t i = static_cast<size_t>(k);
+    drawn_a[i] = drawbar_gain(params.drawbars[i]);
+    drawn_b[i] = drawbar_gain(params.drawbars_b[i]);
+    sum_a_ += drawn_a[i];
+    sum_b_ += drawn_b[i];
   }
   // No second registration drawn: the far end is the near one, so the crossfade
   // is the identity at every position and a patch that declared nothing sounds
@@ -60,15 +71,14 @@ void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_r
     gain_b_[static_cast<size_t>(k)] = 0.0f;
     const float freq = f0 * kDrawbarRatios[static_cast<size_t>(k)];
     // Tonewheels above the generator range simply do not exist.
-    if (freq >= 0.45f * static_cast<float>(sr)) {
+    if (freq >= kBandLimitFraction * static_cast<float>(sr)) {
       partial = Partial{};
       continue;
     }
     partial.base_inc = static_cast<float>(static_cast<double>(freq) / sr);
-    const float a = drawbar_gain(params.drawbars[static_cast<size_t>(k)]);
+    const float a = drawn_a[static_cast<size_t>(k)];
     gain_a_[static_cast<size_t>(k)] = a;
-    gain_b_[static_cast<size_t>(k)] =
-        second ? drawbar_gain(params.drawbars_b[static_cast<size_t>(k)]) : a;
+    gain_b_[static_cast<size_t>(k)] = second ? drawn_b[static_cast<size_t>(k)] : a;
     // Seeded start phase: free-running tonewheels are never phase-locked.
     partial.phase = noise_.unipolar_at(static_cast<uint64_t>(k));
   }
@@ -95,7 +105,8 @@ void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_r
   perc_coeff_ = 0.0f;
   const int harmonic = params.percussion_harmonic >= 3 ? 3 : 2;
   const float perc_freq = f0 * static_cast<float>(harmonic);
-  if (percussion && params.percussion_harmonic >= 2 && perc_freq < 0.45f * static_cast<float>(sr)) {
+  if (percussion && params.percussion_harmonic >= 2 &&
+      perc_freq < kBandLimitFraction * static_cast<float>(sr)) {
     perc_base_inc_ = static_cast<float>(static_cast<double>(perc_freq) / sr);
     perc_level_ = std::clamp(params.percussion_level, 0.0f, 1.0f);
     const float perc_ms = std::max(1.0f, params.percussion_decay_ms);
@@ -160,11 +171,11 @@ float AdditiveVoiceCore::render(float pitch_ratio) noexcept {
     partial.phase += static_cast<double>(partial.base_inc * pitch_ratio);
     if (partial.phase >= 1.0) partial.phase -= std::floor(partial.phase);
   }
-  if (click_level_ > 1.0e-5f) {
+  if (click_level_ > kEnvelopeFinishedFloor) {
     mix += click_level_ * noise_.bipolar_at((1ull << 16) + click_index_++);
     click_level_ *= click_coeff_;
   }
-  if (perc_level_ > 1.0e-5f) {
+  if (perc_level_ > kEnvelopeFinishedFloor) {
     mix += std::sin(kTwoPi * static_cast<float>(perc_phase_)) * perc_level_;
     perc_phase_ += static_cast<double>(perc_base_inc_ * pitch_ratio);
     if (perc_phase_ >= 1.0) perc_phase_ -= std::floor(perc_phase_);

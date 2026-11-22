@@ -67,8 +67,7 @@ class PassiveCoupling {
   /// @param pressure_scale The valve's pressure scale (a reed's closing pressure); > 0.
   /// @param zeta           Dimensionless flow-to-pressure gain, clamped to [0, kMaxZeta].
   void configure(float pressure_scale, float zeta) noexcept {
-    pressure_scale_ = std::max(pressure_scale, std::numeric_limits<float>::min());
-    root_scale_ = std::sqrt(pressure_scale_);
+    set_pressure_scale(pressure_scale);
     set_zeta(zeta);
     reset();
   }

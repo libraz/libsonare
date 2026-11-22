@@ -19,6 +19,8 @@
 
 #include <cstdint>
 
+#include "util/constants.h"
+
 namespace sonare::midi::synth {
 
 /// Waveform selector for VaOscillator. kNoise ignores the oscillator
@@ -49,7 +51,7 @@ class VaOscillator {
 
  private:
   VaWaveform waveform_ = VaWaveform::kSaw;
-  float sample_rate_ = 48000.0f;
+  float sample_rate_ = static_cast<float>(sonare::constants::kDefaultDawSampleRate);
   float phase_ = 0.0f;  // [0,1)
   float inc_ = 0.0f;    // cycles per sample
   float pulse_width_ = 0.5f;

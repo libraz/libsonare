@@ -42,14 +42,8 @@ struct LoopPhaseServo {
   /// advances @p omega radians a sample at @p sample_rate.
   void start(float period_samples, float omega, float sample_rate) noexcept {
     lead = 0.0f;
-    len = std::max(1, static_cast<int>(std::lround(period_samples)));
-    count = 0;
     smooth = 1.0f - std::exp(-period_samples * 1000.0f / (kLoopPhaseServoMs * sample_rate));
-    cos_ = 1.0f;
-    sin_ = 0.0f;
-    rot_cos = std::cos(omega);
-    rot_sin = std::sin(omega);
-    ret_re = ret_im = inj_re = inj_im = 0.0f;
+    arm(period_samples, omega);
     x_re = x_im = 0.0f;
   }
 
@@ -71,14 +65,20 @@ struct LoopPhaseServo {
     x_re += smooth * (cx_re - x_re);
     x_im += smooth * (cx_im - x_im);
     lead = std::atan2(x_im, x_re) / omega;
+    arm(period_samples, omega);
+    return true;
+  }
+
+ private:
+  /// Restarts the period: length, phasor and coherent sums.
+  void arm(float period_samples, float omega) noexcept {
     len = std::max(1, static_cast<int>(std::lround(period_samples)));
     count = 0;
-    rot_cos = std::cos(omega);
-    rot_sin = std::sin(omega);
     cos_ = 1.0f;
     sin_ = 0.0f;
+    rot_cos = std::cos(omega);
+    rot_sin = std::sin(omega);
     ret_re = ret_im = inj_re = inj_im = 0.0f;
-    return true;
   }
 };
 

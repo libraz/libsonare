@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 
 #include "midi/synth/pitch.h"
@@ -33,15 +34,18 @@ constexpr FmAlgorithmSpec kFmAlgorithms[] = {
     {{0x00, 0x00, 0x00, 0x00}, 0x03},  // kAdd2:    op0 + op1 carriers
 };
 
+const FmAlgorithmSpec& algorithm_spec(FmAlgorithm algorithm) noexcept {
+  const size_t algo = static_cast<size_t>(
+      std::clamp(static_cast<int>(algorithm), 0, static_cast<int>(std::size(kFmAlgorithms)) - 1));
+  return kFmAlgorithms[algo];
+}
+
 }  // namespace
 
 int64_t fm_one_shot_tail_samples(const FmPatchParams& params, double sample_rate) noexcept {
   if (!(sample_rate > 0.0)) return 0;
 
-  const size_t algo = static_cast<size_t>(
-      std::clamp(static_cast<int>(params.algorithm), 0,
-                 static_cast<int>(sizeof(kFmAlgorithms) / sizeof(kFmAlgorithms[0])) - 1));
-  const FmAlgorithmSpec& spec = kFmAlgorithms[algo];
+  const FmAlgorithmSpec& spec = algorithm_spec(params.algorithm);
   int64_t longest = 0;
   for (int i = 0; i < kMaxFmOperators; ++i) {
     const FmOperatorParams& op = params.ops[static_cast<size_t>(i)];
@@ -69,10 +73,7 @@ void FmVoiceCore::start(const FmPatchParams& params, double sample_rate, uint8_t
   const float octaves_above_middle =
       (static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave;
 
-  const size_t algo = static_cast<size_t>(
-      std::clamp(static_cast<int>(params.algorithm), 0,
-                 static_cast<int>(sizeof(kFmAlgorithms) / sizeof(kFmAlgorithms[0])) - 1));
-  const FmAlgorithmSpec& spec = kFmAlgorithms[algo];
+  const FmAlgorithmSpec& spec = algorithm_spec(params.algorithm);
   carrier_mask_ = spec.carrier_mask;
   int carriers = 0;
   for (int i = 0; i < kMaxFmOperators; ++i) {

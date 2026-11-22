@@ -5,11 +5,8 @@
 
 #include "midi/synth/piano_voice_calibration.h"
 #include "midi/synth/piano_voice_math.h"
-#include "midi/synth/pitch.h"
-#include "rt/biquad_design.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
-#include "util/dsp_primitives.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
@@ -81,8 +78,7 @@ SONARE_TUNABLE(kKnockUncombed, 1.0f);
 using namespace piano_detail;
 using sonare::constants::kPi;
 
-void PianoVoiceCore::refresh_modal_coefficients(float pitch_ratio) noexcept {
-  const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+void PianoVoiceCore::refresh_modal_coefficients(float ratio) noexcept {
   modal_cached_ratio_ = ratio;
   modal_active_count_ = 0;
   for (int i = 0; i < num_modal_; ++i) {
@@ -103,8 +99,10 @@ void PianoVoiceCore::refresh_modal_coefficients(float pitch_ratio) noexcept {
     const bool was_audible = m.audible;
     m.gain = piano_modal_drive_gain(m.weight, ratio, w, m.base_period);
     m.a1 = 2.0f * m.r * std::cos(w);
-    if (!was_audible) m.a2 = -m.r * m.r;
-    if (!was_audible) m.audible = true;
+    if (!was_audible) {
+      m.a2 = -m.r * m.r;
+      m.audible = true;
+    }
     modal_active_indices_[modal_active_count_++] = static_cast<uint8_t>(i);
   }
 }

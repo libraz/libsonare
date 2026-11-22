@@ -78,6 +78,8 @@ class PianoResonanceBank {
     float y2 = 0.0f;
   };
   std::array<Mode, kResonanceModes> modes_{};
+  /// Closes the damper gate and derives its lift/fall and ring-out coefficients at @p sr.
+  void init_gate(float sr) noexcept;
   int ungated_count_ = 0;
   float gate_ = 0.0f;
   float gate_open_coeff_ = 1.0f;

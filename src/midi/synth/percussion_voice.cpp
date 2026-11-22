@@ -18,7 +18,7 @@ using sonare::constants::kLn1000D;
 
 namespace {
 
-using sonare::constants::kInvSqrt2;
+using sonare::constants::kButterworthQ;
 using sonare::constants::kPi;
 using sonare::constants::kSoundSpeedMps;
 using sonare::constants::kTwoPi;
@@ -79,15 +79,15 @@ constexpr float kStrikeBandEdge = 0.95f;
 /// Floor under sin(w) so a start frequency at the band edge cannot divide by zero.
 constexpr float kMinSinW = 1.0e-6f;
 
-/// Piston-equivalent area fraction 2 J_1(alpha) / alpha of an axisymmetric mode
-/// — the share of its displacement that moves air, and so what the cavity's
-/// spring acts on. 0.432 for the (0,1), -0.123 for the (0,2).
 /// (2m+1)!!, which is what divides a compact 2m-pole's radiated amplitude down
 /// from the monopole's. Without it the multipole law crosses over at ka = 1 for
 /// every order, so above that a mode with four nodal diameters radiates as well
 /// as the one that moves the whole head — the crossover is at ka ~ m, not 1.
 constexpr float kMultipoleNorm[] = {1.0f, 3.0f, 15.0f, 105.0f, 945.0f, 10395.0f};
 
+/// Piston-equivalent area fraction 2 J_1(alpha) / alpha of an axisymmetric mode
+/// — the share of its displacement that moves air, and so what the cavity's
+/// spring acts on. 0.432 for the (0,1), -0.123 for the (0,2).
 float piston_area(float alpha) noexcept {
   if (alpha <= 1.0e-6f) return 1.0f;
   return 2.0f * bessel_j(1, alpha) / alpha;
@@ -257,7 +257,7 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   if (noise_air_hz_ > 0.0f) {
     for (TptSvf* air : {&noise_air_, &wire_air_, &shimmer_air_}) {
       air->prepare(sr);
-      air->set(noise_air_hz_, kInvSqrt2);
+      air->set(noise_air_hz_, kButterworthQ);
       air->reset();
     }
   }
@@ -650,7 +650,7 @@ float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params,
     double shimmer_s = static_cast<double>(mode_t60) * t60_to_floor + tail_seconds(follower) +
                        tail_seconds(shimmer_filter);
     if (params.noise_air_hz > 0.0f) {
-      shimmer_s += tail_seconds(TptSvf::ring(params.noise_air_hz, kInvSqrt2, rate));
+      shimmer_s += tail_seconds(TptSvf::ring(params.noise_air_hz, kButterworthQ, rate));
     }
     parallel_s = std::max(parallel_s, shimmer_s);
   }
@@ -660,7 +660,7 @@ float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params,
     double wire_s = static_cast<double>(mode_t60) * t60_to_floor +
                     tail_seconds(TptSvf::ring(params.wire_cutoff_hz, kWireFilterQ, rate));
     if (params.noise_air_hz > 0.0f) {
-      wire_s += tail_seconds(TptSvf::ring(params.noise_air_hz, kInvSqrt2, rate));
+      wire_s += tail_seconds(TptSvf::ring(params.noise_air_hz, kButterworthQ, rate));
     }
     parallel_s = std::max(parallel_s, wire_s);
   }

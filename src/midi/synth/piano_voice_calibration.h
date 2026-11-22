@@ -107,10 +107,6 @@ extern const float kStretchTrebleCents;
 extern const float kStretchTreblePower;
 
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept;
-float allpass_phase_delay(float a, float w) noexcept;
-float onepole_phase_delay(float a, float w) noexcept;
-float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
-                           float phase_budget) noexcept;
 
 float partial_damp_gain(float natural, float damped, float strength) noexcept;
 

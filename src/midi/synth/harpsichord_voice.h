@@ -26,6 +26,7 @@
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -61,12 +62,15 @@ inline int harpsichord_slab_capacity(double sample_rate) noexcept {
   return static_cast<int>(std::min<int64_t>(slab, std::numeric_limits<int>::max()));
 }
 
+/// Highest in-band frequency as a fraction of the sample rate.
+constexpr float kHarpsichordBandLimitFraction = 0.45f;
+
 /// Where a note's HF decay is quoted: @p requested_hz kept clear of the
 /// fundamental (at least 2 * @p f0_hz) and of Nyquist (at most 0.45 * rate).
 /// At the top of the compass, where 2 * f0 no longer fits, Nyquist wins.
 inline float harpsichord_damping_ref_hz(float requested_hz, float f0_hz,
                                         double sample_rate) noexcept {
-  const float hi = 0.45f * static_cast<float>(sample_rate);
+  const float hi = kHarpsichordBandLimitFraction * static_cast<float>(sample_rate);
   return std::clamp(requested_hz, std::min(2.0f * f0_hz, hi), hi);
 }
 
@@ -347,6 +351,9 @@ class HarpsichordVoiceCore {
   Choir eight_a_;
   Choir eight_b_;
   Choir four_;
+
+  /// The drawn choirs in their fixed accumulation order (8' a, 8' b, 4').
+  std::array<Choir*, 3> choirs() noexcept { return {&eight_a_, &eight_b_, &four_}; }
 
   /// The undamped string behind the bridge. rear_level_ == 0 -> the segment is
   /// skipped and the render is the plain choirs.

@@ -41,15 +41,6 @@ constexpr std::array<float, 2> kRadiationHpSectionQ = {0.54119610f, 1.30656296f}
 
 namespace piano_detail {
 
-float allpass_phase_delay(float a, float w) noexcept { return rt::allpass_phase_delay(a, w); }
-
-float onepole_phase_delay(float a, float w) noexcept { return rt::onepole_phase_delay(a, w); }
-
-float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
-                           float phase_budget) noexcept {
-  return rt::dispersion_allpass_a(b_coeff, w0, lp_a, stages, phase_budget);
-}
-
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
   const float loops_to_t60 =
@@ -440,9 +431,8 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // Reference contact time for the register (mf): the patch contact scaled by
   // register, floored in fundamental PERIODS (treble dwell ~ a full period).
   float contact_ms = std::clamp(params.hammer_contact_ms, 0.2f, 10.0f) *
-                     std::exp2(-(static_cast<float>(note & 0x7Fu) - kMidiA4) /
-                               std::max(1.0f, kContactKeytrackSemis));
-  const float octaves_from_c4 = (static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave;
+                     std::exp2(-(note_f - kMidiA4) / std::max(1.0f, kContactKeytrackSemis));
+  const float octaves_from_c4 = (note_f - 60.0f) / kSemitonesPerOctave;
   const float contact_floor_periods = std::clamp(
       kContactPeriodsAtC4 + kContactPeriodsPerOct * octaves_from_c4, 0.0f, kContactPeriodsMax);
   contact_ms =

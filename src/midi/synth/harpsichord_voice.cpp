@@ -168,10 +168,6 @@ float bridge_force(float k, float beta, float duty, float image, float w) noexce
   return step * (rise - fall) - back;
 }
 
-float onepole_alpha(float cutoff_hz, double sample_rate) noexcept {
-  return rt::lowpass_alpha_at_rate(cutoff_hz, sample_rate);
-}
-
 double harpsichord_t60_seconds(const HarpsichordPatchParams& params, uint8_t note) noexcept {
   const double decay_s =
       std::isfinite(params.decay_s) ? std::max(0.05, static_cast<double>(params.decay_s)) : 0.05;
@@ -403,7 +399,7 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   // references hold is that fact. A treble string is where this binds, and its
   // binding is why the top of the compass is the darkest part of it.
   float narrowest = 0.0f;
-  for (const Choir* c : {&eight_a_, &eight_b_, &four_}) {
+  for (const Choir* c : choirs()) {
     if (c->level <= 0.0f) continue;
     const float room = std::min(c->duty, c->n_eff - c->duty);
     narrowest = narrowest > 0.0f ? std::min(narrowest, room) : room;
@@ -419,7 +415,7 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   // sampling of it is not, and the loop has no path that removes what is left.
   // Once per note-on against a period of render calls, so the walk is cheap
   // where a per-sample blocker would sit on the fundamental's own decay.
-  for (Choir* c : {&eight_a_, &eight_b_, &four_}) {
+  for (Choir* c : choirs()) {
     c->dc_trim = 0.0f;
     if (c->level <= 0.0f || c->inject_len <= 0) continue;
     const float beta = c->duty / c->n_eff;
@@ -441,13 +437,13 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   chiff_len_ = std::max(1, static_cast<int>(kChiffMs * 0.001f * static_cast<float>(sr)));
   chiff_pos_ = chiff_amount_ > 0.0f ? 0 : chiff_len_;
   chiff_lp_ = 0.0f;
-  chiff_alpha_ = onepole_alpha(kChiffCutoffHz, sr);
+  chiff_alpha_ = rt::lowpass_alpha_at_rate(kChiffCutoffHz, sr);
   jack_amount_ =
       std::clamp(params.jack_noise, 0.0f, 1.0f) * onepole_noise_rate_gain(kJackCutoffHz, sr);
   jack_len_ = std::max(1, static_cast<int>(kJackMs * 0.001f * static_cast<float>(sr)));
   jack_pos_ = jack_len_;  // inactive until release()
   jack_lp_ = 0.0f;
-  jack_alpha_ = onepole_alpha(kJackCutoffHz, sr);
+  jack_alpha_ = rt::lowpass_alpha_at_rate(kJackCutoffHz, sr);
   damper_delay_ = std::max(1, static_cast<int>(kDamperDelayMs * 0.001f * static_cast<float>(sr)));
 
   // Where the board stops radiating at all: below its own size it moves air
@@ -456,7 +452,7 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   const float radiate_hz = std::max(0.0f, params.board_radiating_from_hz);
   hp_on_ = radiate_hz > 0.0f;
   if (hp_on_) {
-    const float fc = std::min(radiate_hz, 0.45f * static_cast<float>(sr));
+    const float fc = std::min(radiate_hz, kHarpsichordBandLimitFraction * static_cast<float>(sr));
     const float w0 = kTwoPi * fc / static_cast<float>(sr);
     for (int i = 0; i < kRadiationStages; ++i) {
       hp_[i].set(rt::rbj_highpass(w0, rt::butterworth_stage_q(2 * kRadiationStages, i)));
@@ -472,7 +468,8 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   tilt_on_ = tilt_db_oct > 0.0f;
   if (tilt_on_) {
     const float lo = std::clamp(kBoardTiltLoHz, 10.0f, 0.2f * static_cast<float>(sr));
-    const float hi = std::clamp(kBoardTiltHiHz, lo * 2.0f, 0.45f * static_cast<float>(sr));
+    const float hi = std::clamp(kBoardTiltHiHz, lo * 2.0f,
+                                kHarpsichordBandLimitFraction * static_cast<float>(sr));
     const float span = std::pow(hi / lo, 1.0f / static_cast<float>(kTiltSections));
     // 6.0206 dB/oct is one first-order section's whole slope; the ratio below is
     // how much of one this tilt asks for.
@@ -480,7 +477,8 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
     const float pole_ratio = std::pow(span, share);
     for (int i = 0; i < kTiltSections; ++i) {
       const float zero_hz = lo * std::pow(span, static_cast<float>(i));
-      const float pole_hz = std::min(zero_hz * pole_ratio, 0.45f * static_cast<float>(sr));
+      const float pole_hz =
+          std::min(zero_hz * pole_ratio, kHarpsichordBandLimitFraction * static_cast<float>(sr));
       TiltSection& s = tilt_[i];
       s.zero = std::exp(-kTwoPi * zero_hz / static_cast<float>(sr));
       s.pole = std::exp(-kTwoPi * pole_hz / static_cast<float>(sr));
@@ -509,8 +507,8 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   diffuse_age_ = 0;
   const float follow_s = std::max(0.001f, kDiffuseFollowMs) * 0.001f;
   diffuse_follow_ = 1.0f - std::exp(-1.0f / (follow_s * static_cast<float>(sr)));
-  diffuse_tilt_ = onepole_alpha(kDiffuseSchroederHz, sr);
-  diffuse_top_a_ = onepole_alpha(std::max(kDiffuseTopHz, kDiffuseSchroederHz), sr);
+  diffuse_tilt_ = rt::lowpass_alpha_at_rate(kDiffuseSchroederHz, sr);
+  diffuse_top_a_ = rt::lowpass_alpha_at_rate(std::max(kDiffuseTopHz, kDiffuseSchroederHz), sr);
 
   // Level is set by the mechanism, not by the note: the plectrum lifts every
   // string to the same place, so a harpsichord's peak level is flat across the
@@ -522,7 +520,7 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
 
   // Every loop in use is read at one sample or more and long enough to hold its pitch.
   LoopBudget budget;
-  for (const Choir* c : {&eight_a_, &eight_b_, &four_}) {
+  for (const Choir* c : choirs()) {
     if (c->level > 0.0f) {
       budget = worst_loop_budget(budget, loop_budget(c->loop.period, c->loop.loop_comp, 1.0f, sr));
     }
@@ -578,22 +576,11 @@ float HarpsichordVoiceCore::render_internal(float pitch_ratio) noexcept {
 
   float bridge = 0.0f;
   float bridge_exc = 0.0f;
-  if (eight_a_.level > 0.0f) {
-    const float e = excite(eight_a_);
+  for (Choir* c : choirs()) {
+    if (c->level <= 0.0f) continue;
+    const float e = excite(*c);
     bridge_exc += e;
-    bridge += sound(eight_a_, e);
-  }
-  if (eight_b_.level > 0.0f) {
-    const float e = excite(eight_b_);
-    bridge_exc += e;
-    bridge += sound(eight_b_, e);
-  }
-  if (four_.level > 0.0f) {
-    // The 4' choir sounds an octave up, so its own loop runs at half the period;
-    // the shared pitch factor still applies to it.
-    const float e = excite(four_);
-    bridge_exc += e;
-    bridge += sound(four_, e);
+    bridge += sound(*c, e);
   }
 
   // What crosses the bridge is the force's transient, not the force: the
@@ -689,7 +676,7 @@ void HarpsichordVoiceCore::release() noexcept {
   released_ = true;
   // The felt reaches whichever choirs have dampers. The 4' top has none, and the
   // string behind the bridge never had any.
-  for (Choir* c : {&eight_a_, &eight_b_, &four_}) {
+  for (Choir* c : choirs()) {
     if (!c->damped) continue;
     c->loop.release();
     if (c->pol_couple > 0.0f) c->pol.release();
@@ -714,7 +701,7 @@ void HarpsichordVoiceCore::kill() noexcept {
     s.y1 = 0.0f;
   }
   for (rt::BiquadState& s : hp_) s.reset();
-  for (Choir* c : {&eight_a_, &eight_b_, &four_}) {
+  for (Choir* c : choirs()) {
     c->loop.kill();
     c->pol.kill();
   }

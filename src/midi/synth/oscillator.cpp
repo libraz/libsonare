@@ -37,7 +37,8 @@ float ideal_triangle(float phase) noexcept {
 
 void VaOscillator::start(double sample_rate, VaWaveform waveform, float phase01,
                          uint64_t noise_seed) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
+  sample_rate_ = sample_rate > 0.0 ? static_cast<float>(sample_rate)
+                                   : static_cast<float>(sonare::constants::kDefaultDawSampleRate);
   waveform_ = waveform;
   phase_ = phase01 - std::floor(phase01);
   inc_ = 0.0f;

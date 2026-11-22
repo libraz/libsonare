@@ -85,7 +85,7 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
   }
   for (int k = num_modes_; k < kMaxModalModes; ++k) modes_[static_cast<size_t>(k)] = Mode{};
 
-  release_r_ = radius_for(sample_rate_, std::max(0.01, static_cast<double>(params.release_damp_s)));
+  release_r_ = radius_for(sample_rate_, static_cast<double>(params.release_damp_s));
   cached_ratio_ = 0.0f;  // force coefficient derivation on the first render
   excite_ = true;
   contact_.configure(std::max(0.0f, params.contact) * vel01,

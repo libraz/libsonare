@@ -137,8 +137,9 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
     float a = loss_pole_at_rate(std::min(0.97f, tone_a + tone_a_offset), sr);
     // The read's magnitude at the fundamental is paid from the target before any filter is
     // solved; every other target of this loop grows with it so their ratios stay as asked.
-    const float repay = interpolation_repayment(string_loop_gain_for(period, sr, t60_s), period, a);
-    float g = string_loop_gain_for(period, sr, t60_s) * repay;
+    const float open_gain = string_loop_gain_for(period, sr, t60_s);
+    const float repay = interpolation_repayment(open_gain, period, a);
+    float g = open_gain * repay;
     float release_g = std::min(0.9999f, string_loop_gain_for(period, sr, damped_t60) * repay);
     const float w0 = kTwoPi / period;
     // A hand mute is measured against the note and the open string against the
@@ -487,7 +488,6 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
 }
 
 float KsVoiceCore::render_internal(float pitch_ratio) noexcept {
-  if (killed_) return 0.0f;
   if (string_.buffer == nullptr || string_.size < 8) return 0.0f;
 
   float exc = 0.0f;

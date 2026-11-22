@@ -150,7 +150,23 @@ constexpr float kCaseInSign[8] = {1.0f, -1.0f, 1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -
 SONARE_TUNABLE(kCaseDiffuseG, 0.0f);
 constexpr uint32_t kCaseApDelays6k[8] = {11, 13, 17, 19, 23, 29, 31, 37};
 
+/// |D(e^jw)| of a two-pole resonator's denominator: the bandpass residue's magnitude.
+float bandpass_residue_magnitude(float a1, float a2, float w) noexcept {
+  const float d_re = 1.0f - a1 * std::cos(w) - a2 * std::cos(2.0f * w);
+  const float d_im = a1 * std::sin(w) + a2 * std::sin(2.0f * w);
+  return std::sqrt(d_re * d_re + d_im * d_im);
+}
+
 }  // namespace
+
+void PianoResonanceBank::init_gate(float sr) noexcept {
+  gate_ = 0.0f;
+  // Damper-open envelope: ~10 ms to lift, ~60 ms to fall.
+  gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
+  gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
+  // Extra ring-out applied while the dampers are falling (~0.15 s t60).
+  ringout_ = std::exp(-static_cast<float>(kLn1000D) / (sr * 0.15f));
+}
 
 void PianoResonanceBank::prepare(double sample_rate) noexcept {
   const float sr = sample_rate > 0.0
@@ -210,12 +226,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
       }
     }
   }
-  gate_ = 0.0f;
-  // Damper-open envelope: ~10 ms to lift, ~60 ms to fall.
-  gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
-  gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
-  // Extra ring-out applied while the dampers are falling (~0.15 s t60).
-  ringout_ = std::exp(-static_cast<float>(kLn1000D) / (sr * 0.15f));
+  init_gate(sr);
   // Weak sympathetic coupling (the played string still dominates).
   out_gain_ = std::max(0.0f, kSympCoupling);
   floor_ = kDuplexFloor;
@@ -250,11 +261,7 @@ void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, 
     m.y1 = 0.0f;
     m.y2 = 0.0f;
   }
-  gate_ = 0.0f;
-  // Same lift/fall smoothing as the piano board (~10 ms open, ~60 ms close).
-  gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
-  gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
-  ringout_ = std::exp(-static_cast<float>(kLn1000D) / (sr * 0.15f));
+  init_gate(sr);
   out_gain_ = std::max(0.0f, out_gain);
   floor_ = floor;
   hand_damp_ = 1.0f;
@@ -386,9 +393,7 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     const float formant = 1.0f + 1.0f * std::exp(-l * l / 0.9f);
     // Bandpass residue, exactly peak-normalized: gain = envelope * |D| / (2 sin w) puts every
     // mode's peak at the envelope level; modes without the DC zero pile up a >10 dB bass shelf.
-    const float d_re = 1.0f - m.a1 * std::cos(w) - m.a2 * std::cos(2.0f * w);
-    const float d_im = m.a1 * std::sin(w) + m.a2 * std::sin(2.0f * w);
-    const float d_mag = std::sqrt(d_re * d_re + d_im * d_im);
+    const float d_mag = bandpass_residue_magnitude(m.a1, m.a2, w);
     m.gain = tilt * formant * d_mag / std::max(2.0f * std::sin(w), 1.0e-6f);
     m.y1 = 0.0f;
     m.y2 = 0.0f;
@@ -417,9 +422,7 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     const float r = std::exp(-static_cast<float>(kLn1000D) / (sr * t60));
     m.a1 = 2.0f * r * std::cos(w);
     m.a2 = -r * r;
-    const float d_re = 1.0f - m.a1 * std::cos(w) - m.a2 * std::cos(2.0f * w);
-    const float d_im = m.a1 * std::sin(w) + m.a2 * std::sin(2.0f * w);
-    const float d_mag = std::sqrt(d_re * d_re + d_im * d_im);
+    const float d_mag = bandpass_residue_magnitude(m.a1, m.a2, w);
     m.gain = kFrameLevel * d_mag / std::max(2.0f * std::sin(w), 1.0e-6f);
   }
   // Case network at its decimated rate: lengths scale with it, and the set shrinks together if it
@@ -542,7 +545,6 @@ void PianoSoundboard::reset() noexcept {
   case_strike_ = 0.0f;
   case_buf_.fill(0.0f);
   case_idx_.fill(0u);
-  case_lp_.fill(0.0f);
   case_ap_buf_.fill(0.0f);
   case_ap_idx_.fill(0u);
   // The damping poles hold energy the buffers do not; left set, an All Sound Off keeps radiating.

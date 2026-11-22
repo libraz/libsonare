@@ -4,7 +4,6 @@
 #include <cmath>
 
 #include "midi/synth/piano_voice.h"
-#include "midi/synth/pitch.h"
 #include "util/constants.h"
 #include "util/tunable.h"
 
@@ -658,14 +657,6 @@ SONARE_TUNABLE_SCOPED("piano_voice", kBoardStrikeTrebleOct, 1.0f);
 /// survivable and the fit could never see the register it was describing.
 SONARE_TUNABLE_SCOPED("piano_voice", kWidthBassOct, 0.3f);
 SONARE_TUNABLE_SCOPED("piano_voice", kWidthTrebleOct, 0.81966f);
-/// The footprint cap also rides the dynamics-gated felt compression, and the
-/// sign of that is not obvious: compressing felt stiffens it, which passes more
-/// of the pulse's top end, but it also flattens the crown and WIDENS the contact
-/// patch, and a wider patch cancels LOWER partials. Fitted as a free exponent on
-/// the compression factor, the reference declines to choose -- from +1 to -0.5
-/// it trades the h2-h7 velocity spread against the h8-h16 one and the level
-/// swing almost exactly one for one, with the total unchanged. It stays tied to
-/// the stiffness factor because nothing measured says otherwise.
 /// Strike-point keytrack (doublings per octave below C4) applied to the
 /// patch's strike_position fraction. A grand's strike ratio travels from about
 /// a twelfth of the speaking length in the middle to an eighth in the bass —
@@ -675,14 +666,6 @@ SONARE_TUNABLE_SCOPED("piano_voice", kWidthTrebleOct, 0.81966f);
 /// the register the note is heard in; the h8 notch it exists to place ended up
 /// at h3.
 SONARE_TUNABLE_SCOPED("piano_voice", kStrikePosBassOct, 0.18f);
-/// The comb below is a full `1 - z^-D`, so its nulls are infinitely deep, which
-/// no string has: the agraffe does not reflect perfectly, the round trip costs
-/// the string's own losses, and the hammer is a patch rather than a point.
-/// Attenuating the returning tap to bottom the nulls out at a finite depth was
-/// measured and kept 0.6 dB of A0's ladder at a reflection of 0.5 -- a real
-/// mechanism with almost no authority here, because what actually flattens the
-/// reference's bass ladder is not the comb. Left as a plain difference rather
-/// than as a knob that would cost a multiply per sample to do nothing.
 /// Longitudinal ("phantom partial") mode bank: the first mode's frequency at
 /// C4 and how it climbs per octave, the bank's level and its taper above C4,
 /// and the first mode's ring-down.
@@ -1010,12 +993,6 @@ SONARE_TUNABLE_SCOPED("piano_voice", kDamperVelAnchor, 120.0f);
 /// to keep a hand-edited or swept slope from removing the damper altogether.
 SONARE_TUNABLE_SCOPED("piano_voice", kDamperVelScaleMax, 4.0f);
 
-/// Stiff-string inharmonicity B, fitted to a measured concert-grand corpus
-/// (see piano_inharmonicity_b). Two branches meeting at the bass break: above
-/// it a plain-wire scale grows B by ~2.8x per octave, and below it B turns
-/// around and climbs back into the deep bass, because a wound bass string is
-/// a heavy core the scale is too short for. The turnaround is the shape a
-/// single exponential cannot express, and it is worth ~7x at the bottom note.
 /// Where the dispersion cascade stops fitting the waveguide loop, and where it
 /// is gone. The stiff-string law is realized by four allpass stages sitting
 /// INSIDE the loop, so their phase delay comes out of the same round trip the
@@ -1034,6 +1011,12 @@ SONARE_TUNABLE_SCOPED("piano_voice", kDamperVelScaleMax, 4.0f);
 /// the entire note.
 SONARE_TUNABLE_SCOPED("piano_voice", kDispersionFadeNoteLo, 98.0f);
 SONARE_TUNABLE_SCOPED("piano_voice", kDispersionFadeNoteHi, 108.0f);
+/// Stiff-string inharmonicity B, fitted to a measured concert-grand corpus
+/// (see piano_inharmonicity_b). Two branches meeting at the bass break: above
+/// it a plain-wire scale grows B by ~2.8x per octave, and below it B turns
+/// around and climbs back into the deep bass, because a wound bass string is
+/// a heavy core the scale is too short for. The turnaround is the shape a
+/// single exponential cannot express, and it is worth ~7x at the bottom note.
 SONARE_TUNABLE_SCOPED("piano_voice", kInharmBreakNote, 36.0f);
 SONARE_TUNABLE_SCOPED("piano_voice", kInharmBAtA4, 7.718e-4f);
 SONARE_TUNABLE_SCOPED("piano_voice", kInharmTrebleBeta, 0.086636f);
