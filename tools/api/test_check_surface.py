@@ -3153,3 +3153,53 @@ class PythonNodeIndexTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuotedSignature(unittest.TestCase):
+    """A ledger text quoting its member's own signature must match a declaration of it."""
+
+    def by_key(self, surface, name, *sigs, kind="function"):
+        rec = {
+            "sigs": [
+                {"params": [{"name": n, "optional": o} for n, o in sig], "returns": ""}
+                for sig in sigs
+            ]
+        }
+        return {(surface, kind, name, None): rec}
+
+    def check(self, text, surface="node", by_key=None, options=None):
+        return check_surface.quoted_signature_mismatches(
+            text, surface, "Engine.arm", None, by_key, options or {}
+        )
+
+    def test_a_matching_quote_is_compared_and_passes(self):
+        keys = self.by_key("node", "Engine.arm", [("id", False), ("state", True)], kind="method")
+        self.assertEqual(self.check("arm(id, state?) arms the track", by_key=keys), (1, []))
+
+    def test_a_name_or_optionality_mismatch_fails(self):
+        keys = self.by_key("node", "Engine.arm", [("id", False), ("state", True)], kind="method")
+        for text in ("arm(id, state) arms it", "arm(armed = true) arms it"):
+            with self.subTest(text=text):
+                compared, bad = self.check(text, by_key=keys)
+                self.assertEqual(compared, 1)
+                self.assertEqual(len(bad), 1, bad)
+                self.assertIn("Engine.arm declares (id, state?)", bad[0])
+
+    def test_any_overload_may_match(self):
+        keys = self.by_key(
+            "node", "Engine.arm", [("request", False)], [("id", False)], kind="method"
+        )
+        self.assertEqual(self.check("arm(id) or arm(request)", by_key=keys), (2, []))
+
+    def test_old_shapes_object_lists_and_other_names_are_not_read(self):
+        keys = self.by_key("node", "Engine.arm", [("id", False)], kind="method")
+        text = "arm(id) replaces arm(trackId, on); arm({ id }) or disarm(x)"
+        self.assertEqual(self.check(text, by_key=keys), (1, []))
+
+    def test_python_compares_names_as_a_set_with_keyword_only_options(self):
+        keys = self.by_key("python", "Engine.arm", [("id", False)], kind="method")
+        options = {"Engine.arm": {("state", True)}}
+        ok = self.check("arm(id, state=None)", "python", keys, options)
+        self.assertEqual(ok, (1, []))
+        compared, bad = self.check("arm(id)", "python", keys, options)
+        self.assertEqual((compared, len(bad)), (1, 1))

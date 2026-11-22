@@ -699,15 +699,86 @@ def _is_getter(r: dict | None) -> bool:
     return r.get("ts_kind") == "accessor"
 
 
+# Surfaces whose ledger texts quote a signature the checker can read back.
+_SIG_QUOTE_SURFACES = ("node", "wasm", "python")
+# A quoted signature: the member's own name, then a parameter list holding no nested
+# parentheses. A quote after "replaces" or "instead of" spells the old shape.
+_SIG_QUOTE = re.compile(r"(?<![\w.])(\w+)\(([^()]*)\)")
+_OLD_SHAPE_LEAD = re.compile(r"(?:replaces|instead of)\s*$")
+
+
+def _quoted_params(text: str) -> list[tuple[str, bool]] | None:
+    """(name, optional) per parameter, or None when the list is not a plain name list."""
+    if re.search(r"[{\[\d]|\.\.\.", text):
+        return None
+    out = []
+    for raw in (x.strip() for x in text.split(",")):
+        if not raw:
+            continue
+        m = re.match(r"^(\w+)\s*(\?)?(?:\s*[:=].*)?$", raw)
+        if not m:
+            return None
+        out.append((m.group(1), bool(m.group(2)) or "=" in raw))
+    return out
+
+
+def _declared_params(surface: str, target: str, entry, by_key, options_by_owner):
+    """Every declared parameter list of target: one per TS overload, one unordered set in Python."""
+    rec = by_key.get((surface, "method", target, entry)) or by_key.get(
+        (surface, "function", target, entry)
+    )
+    if rec is None:
+        return None
+    if surface == "python":
+        # A keyword-only parameter is an option record and not in the signature.
+        names = {
+            (p["name"], bool(p["optional"])) for sig in rec.get("sigs") or [] for p in sig["params"]
+        }
+        return [sorted(names | options_by_owner.get(target, set()))]
+    return [
+        [(p["name"], bool(p["optional"])) for p in sig["params"] if not p.get("rest")]
+        for sig in rec.get("sigs") or []
+    ]
+
+
+def quoted_signature_mismatches(text, surface, target, entry, by_key, options_by_owner):
+    """(compared, mismatches): quotes of target's own signature that no declaration matches."""
+    member = target.split(".")[-1].split("(")[0]
+    declared = None
+    bad = []
+    compared = 0
+    for m in _SIG_QUOTE.finditer(text):
+        if m.group(1) != member or _OLD_SHAPE_LEAD.search(text[: m.start()]):
+            continue
+        quoted = _quoted_params(m.group(2))
+        if quoted is None:
+            continue
+        if declared is None:
+            declared = _declared_params(surface, target, entry, by_key, options_by_owner) or []
+        if not declared:
+            return 0, []
+        compared += 1
+        want = sorted(quoted) if surface == "python" else quoted
+        if all(want != d for d in declared):
+            shown = " | ".join(", ".join(n + ("?" if o else "") for n, o in d) for d in declared)
+            bad.append(f"quotes {m.group(0)} but {target} declares ({shown})")
+    return compared, bad
+
+
 def check_ledger(entries, lookup, selected, by_key=None, baseline=None):
-    """Return (failures, changed) for valid entries on the selected surfaces.
+    """Return (failures, changed, quotes compared) for valid entries on the selected surfaces.
 
     ``by_key`` maps a lookup key to its record, for the getter claim; ``baseline``
     is the lookup of the release the ledger migrates from, or None when it could
     not be built.
     """
     failures, changed = [], []
+    quotes = 0
     by_key = by_key or {}
+    options_by_owner = collections.defaultdict(set)
+    for (surf, kind, _name, _entry), rec in by_key.items():
+        if surf == "python" and kind == "option" and rec.get("owner"):
+            options_by_owner[rec["owner"]].add((rec["member"], bool(rec.get("optional"))))
     # A changed member may change kind with it (a method that became a field).
     named = {(s, n, e) for (s, _k, n, e) in lookup}
     for le in entries:
@@ -741,6 +812,12 @@ def check_ledger(entries, lookup, selected, by_key=None, baseline=None):
                         msgs.append(f"to name {target} not present")
                 elif (s, old, entry) not in named:
                     msgs.append("changed name not present; a renamed member names its target in to")
+                if s in _SIG_QUOTE_SURFACES and kind in ("function", "method"):
+                    n, bad = quoted_signature_mismatches(
+                        e["changed"], s, target, entry, by_key, options_by_owner
+                    )
+                    quotes += n
+                    msgs += bad
                 claim = _GETTER_CLAIM.get(s)
                 m = claim and re.match(claim, e["changed"])
                 if m and (s, target, entry) in named:
@@ -768,7 +845,7 @@ def check_ledger(entries, lookup, selected, by_key=None, baseline=None):
                         "message": "; ".join(msgs),
                     }
                 )
-    return failures, changed
+    return failures, changed, quotes
 
 
 # Names a caller never spells: a C or TypeScript parameter is passed by position, so its
@@ -2810,10 +2887,24 @@ def run(args) -> tuple[int, list[str], dict]:
         for e in (r["entries"] or ["."]) if r["surface"] == "wasm" else [None]:
             by_key[(r["surface"], r["kind"], r["name"], e)] = r
     baseline = build_lookup(base_inv["records"]) if base_inv else None
-    lfail, changed = check_ledger(
+    lfail, changed, quotes = check_ledger(
         [e for e in entries if keep_entry(e)], lookup, selected, by_key, baseline
     )
+    quoting = set(selected) & set(_SIG_QUOTE_SURFACES)
+    # The tree's ledgers quote signatures; a fixture ledger need not.
+    real_ledgers = Path(args.ledger_dir).resolve() == DEFAULT_LEDGER_DIR.resolve()
+    if real_ledgers and quoting and not (want_domains or matches) and quotes == 0:
+        lfail.append(
+            {
+                "surface": ",".join(sorted(quoting)),
+                "kind": "ledger",
+                "name": "signature quotes",
+                "domain": "",
+                "message": "no quoted signature was compared; the quote reader found nothing",
+            }
+        )
     out.append(f"Ledger failures: {len(lfail)}")
+    out.append(f"  ledger signature quotes compared: {quotes}")
     out += [f"  {line_of(f)}" for f in sorted(lfail, key=line_of)]
     if baseline is None:
         out.append(f"  not compared: ledger old names against {BASELINE_TAG} ({why})")
