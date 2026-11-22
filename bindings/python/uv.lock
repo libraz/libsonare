@@ -71,6 +71,19 @@ wheels = [
 ]
 
 [[package]]
+name = "auditwheel"
+version = "6.8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pyelftools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4d/52/83393c50a4d497e6d2f62ddf0b439bf3a5eecd4e6b8ae43c219cb722224e/auditwheel-6.8.2.tar.gz", hash = "sha256:d007c4fd8c9c4b5113690ab0b159e05c5aa9b2d31b69efc40875826cc095594b", size = 4702710, upload-time = "2026-08-30T09:35:26.514Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/33/475398f5eb069aa20910ec8486bdc62a87deadd8229494cbc80a1ddbf740/auditwheel-6.8.2-py3-none-any.whl", hash = "sha256:05fd2dd4b743217cd5f66066adc95b03a079424b1f0a878ad1e40fe2cdea4704", size = 65324, upload-time = "2026-08-30T09:35:24.948Z" },
+]
+
+[[package]]
 name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -403,6 +416,13 @@ lint = [
     { name = "clang-format" },
     { name = "ruff" },
 ]
+test = [
+    { name = "pytest" },
+]
+wheel = [
+    { name = "auditwheel" },
+    { name = "wheel" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -425,6 +445,11 @@ dev = [
 lint = [
     { name = "clang-format", specifier = "==18.1.8" },
     { name = "ruff", specifier = ">=0.8" },
+]
+test = [{ name = "pytest", specifier = ">=9.0.2" }]
+wheel = [
+    { name = "auditwheel", specifier = ">=6" },
+    { name = "wheel", specifier = ">=0.45" },
 ]
 
 [[package]]
@@ -612,6 +637,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyelftools"
+version = "0.33"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/11/767522582afab1b884d277de0e6e011640cb9d7292a38694b4b1a1df1ae8/pyelftools-0.33.tar.gz", hash = "sha256:660d82dcbeb8e83d1702bd97f223f761625da06111c0cc988eac6b8ab0c1b61f", size = 15068655, upload-time = "2026-05-29T12:56:22.553Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/46/2a/f9697576603dae937727827505a6126a066affb227034e77e6f9068910da/pyelftools-0.33-py3-none-any.whl", hash = "sha256:f215ad5f47d3f1373a21496a6c9e0707c622840d0622f23ff7ce08678b020036", size = 201178, upload-time = "2026-05-29T12:56:20.587Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -684,4 +718,16 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz", hash = "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5", size = 113555, upload-time = "2026-07-02T08:40:05.92Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8", size = 45571, upload-time = "2026-07-02T08:40:04.659Z" },
+]
+
+[[package]]
+name = "wheel"
+version = "0.48.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/20/50ed6bdf27dec98b568a8ae25dc599f35baa3d9709f9e83fd1edb56b9a90/wheel-0.48.0.tar.gz", hash = "sha256:94800765601e9171bf5d58d066e640662842bcedcbab982b2c90787a2c987322", size = 66471, upload-time = "2026-08-11T22:02:27.327Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/29/69cfbb602cd91690c55d38ba9fe53e6a7e76a6fa647bf38f19c138d25449/wheel-0.48.0-py3-none-any.whl", hash = "sha256:3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab", size = 33320, upload-time = "2026-08-11T22:02:26.1Z" },
 ]

@@ -221,7 +221,7 @@ RUFF_FORMAT_PATHS = 'bindings/python/src/*.py' 'bindings/python/src/*.pyi' 'bind
 LS_EXISTING = python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))'
 
 format:
-	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | $(LS_EXISTING) | xargs -0 clang-format -i
+	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) clang-format -i
 	cd bindings/wasm && yarn lint:fix
 	cd bindings/node && yarn lint:fix
 	cd tools/audition/web && yarn lint:fix
@@ -460,7 +460,7 @@ lint:
 	python3 tools/api/gen_integer_domains.py --check
 
 format-check:
-	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror
+	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) clang-format --dry-run --Werror
 	$(MAKE) lint
 	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff format --check
 
@@ -930,9 +930,10 @@ gs-efx-coverage: gs-efx-archive-set
 # from the package entry (both are invisible to the C-ABI parity checker).
 #
 # `check_lint_scope` gates the static gates themselves. CI does not call this
-# Makefile for lint, so the ruff target, the clang-format pathspec and every
-# pinned tool version each live in three files at once; widening one and not the
-# others leaves the gate that runs on a push as narrow as it was, and green.
+# Makefile for lint, so the ruff target and the clang-format pathspec each live
+# in three files at once; widening one and not the others leaves the gate that
+# runs on a push as narrow as it was, and green. It also holds every workflow
+# install to the uv.lock dependency groups, so no tool version is hand-copied.
 conformance: conformance-checks
 	$(CHECK_REPORT)
 

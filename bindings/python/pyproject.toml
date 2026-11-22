@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.33,<2"]
 build-backend = "hatchling.build"
 
 [project]
@@ -170,11 +170,11 @@ dev = [
     # at runtime or by the published package.
     "h5py>=3.12",
     "mypy>=1.13",
-    "pytest>=9.0.2",
     # Plays and records through PortAudio for tools/voicelab/capture.py; not needed
     # at runtime or by the published package.
     "sounddevice>=0.5",
     { include-group = "lint" },
+    { include-group = "test" },
 ]
 lint = [
     # Formatting output differs between clang-format majors, so the version the
@@ -182,3 +182,6 @@ lint = [
     "clang-format==18.1.8",
     "ruff>=0.8",
 ]
+test = ["pytest>=9.0.2"]
+# Repairs and retags the built wheel in the release workflows.
+wheel = ["auditwheel>=6", "wheel>=0.45"]

@@ -31,15 +31,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Install clang-format
-        # Pinned to the version `make format` runs locally: the apt package
-        # follows the runner image, and each major release rewraps code.
-        run: python3 -m pip install --disable-pip-version-check clang-format==18.1.8
+        # The binding's lint group pins it: the apt package follows the runner
+        # image, and each major release rewraps code.
+        run: uv sync --locked --project bindings/python --only-group lint
       - name: Check formatting
         run: |
-          clang-format --version
+          uv run --no-sync --project bindings/python clang-format --version
           git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' |
-            xargs -0 clang-format --dry-run --Werror
+            xargs -0 uv run --no-sync --project bindings/python clang-format --dry-run --Werror
 
   lint:
     runs-on: ubuntu-latest
@@ -77,10 +80,8 @@ jobs:
           yarn lint
           yarn test:types
       - name: Lint Python
-        # Pinned to the resolved version in requirements-dev.lock: an unpinned
-        # install lets a new ruff release fail an unrelated pull request.
-        # Invoked as a module so the check does not depend on pip's script
-        # directory being on PATH.
+        # The ruff uv.lock resolves for the binding's lint group, so a new ruff
+        # release cannot fail an unrelated pull request.
         #
         # The repo rather than a path list, matching `make lint`. Python lives
         # in ten trees here and only the binding was gated, so a lint error
@@ -88,8 +89,8 @@ jobs:
         # unseen. Ruff respects .gitignore and skips node_modules by default.
         working-directory: .
         run: |
-          python3 -m pip install --disable-pip-version-check ruff==0.17.3
-          python3 -m ruff check .
+          uv sync --locked --project bindings/python --only-group lint
+          uv run --no-sync --project bindings/python ruff check .
       - name: Type-check the Python binding
         # main-ci type-checks the stubs, but only on main, so type errors used
         # to accumulate on develop and surface all at once at release time.
@@ -97,18 +98,17 @@ jobs:
         # src/, so the package itself is neither installed nor built. numpy is
         # needed even though the config skips following it -- the override only
         # applies once the module resolves, and without it every importing
-        # module reports import-not-found. Both are pinned for the reason ruff
-        # is, and mypy in particular reports new errors on unchanged code with
-        # every release.
+        # module reports import-not-found. Both come from uv.lock, since mypy in
+        # particular reports new errors on unchanged code with every release.
         #
         # The second invocation is the non-vacuity guard: a file that must not
         # type-check, so a misconfiguration that silently checks nothing fails
         # here rather than passing everything.
         working-directory: bindings/python
         run: |
-          python3 -m pip install --disable-pip-version-check mypy==2.4.1 numpy==2.4.6
-          python3 -m mypy --strict src/libsonare ../../tests/typing/python_smoke.py
-          if python3 -m mypy --strict ../../tests/typing/python_catalog_invalid.py; then
+          uv sync --locked --no-install-project
+          uv run --no-sync mypy --strict src/libsonare ../../tests/typing/python_smoke.py
+          if uv run --no-sync mypy --strict ../../tests/typing/python_catalog_invalid.py; then
             echo "python_catalog_invalid.py unexpectedly passed mypy" >&2
             exit 1
           fi
@@ -122,9 +122,7 @@ jobs:
         # hand-copied one silently omits whatever gate is added to `conformance`
         # next, and reports green while doing it.
         #
-        # `gen_abi_layout.py --check` stays a direct call, because the Makefile
-        # wraps it in rye -- which the runner does not have and the script does
-        # not need. It is the only gate needing a compiler, and it builds a
+        # `abi-layout-check` is the only gate needing a compiler, and it builds a
         # small probe from the public C headers rather than the project, so this
         # job stays build-free. It is also the load-bearing one: it compares
         # every ctypes Structure against sizeof/alignof/offsetof taken from the
@@ -133,11 +131,15 @@ jobs:
         #
         # `parity` depends on `conformance`, whose closing live-CLI comparison
         # skips itself when no built CLI is present, as it is here.
+        #
+        # The binding's environment goes first on PATH, so the gates that call
+        # python3 directly get the numpy uv.lock resolves.
         working-directory: .
         run: |
-          python3 -m pip install --disable-pip-version-check numpy==2.4.6
+          uv sync --locked --project bindings/python
+          export PATH="$PWD/bindings/python/.venv/bin:$PATH"
           (cd tools/audition/web && yarn install --immutable)
-          python3 tools/abi/gen_abi_layout.py --check
+          make abi-layout-check
           make check-abi-version
           make processor-types-check
           make parity
@@ -147,6 +149,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Run Python tool tests
         # `tools/` sits outside ctest and outside the drift gates, and this
         # workflow runs ctest directly rather than `make test`, so nothing else
@@ -156,15 +161,7 @@ jobs:
         # profiles -- no rendered corpus, no plugin, no built library -- so this
         # job stays build-free. Two skip themselves when there is no shared
         # library to render with.
-        #
-        # Invoked directly rather than through `make test-voicematch`, which
-        # wraps the same command in rye for a dylib these cases do not need.
-        # These versions are resolved in requirements-dev.lock, pinned
-        # for the reason ruff is: an unpinned install lets a new release fail an
-        # unrelated pull request.
-        run: |
-          python3 -m pip install --disable-pip-version-check pytest==9.2.0 numpy==2.4.6 h5py==3.16.0
-          python3 -m pytest tools/voicematch tools/audition tools/playback -q
+        run: make test-voicematch
 
   build-and-test:
     name: Native C++ (ubuntu-latest)
@@ -201,11 +198,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential libeigen3-dev
-          python -m pip install numpy
+          uv sync --locked --project bindings/python --no-dev --no-install-project
+          echo "$PWD/bindings/python/.venv/bin" >> "$GITHUB_PATH"
       - name: Generate a short WAV fixture
         run: |
           python - <<'PY'
@@ -284,6 +285,9 @@ jobs:
     container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Build, audit, and test wheel
         # The manylinux image has no system Eigen package; the top-level CMake
         # FetchContent fallback supplies its header-only dependency.
@@ -294,13 +298,16 @@ jobs:
           cmake --build build-wheel --target sonare_shared --config Release --parallel
           cp build-wheel/lib/libsonare.so bindings/python/src/libsonare/
           cd bindings/python
-          /opt/python/cp313-cp313/bin/python -m pip install wheel hatchling auditwheel pytest
-          /opt/python/cp313-cp313/bin/python -m pip wheel . --no-deps -w dist-raw/
-          auditwheel repair dist-raw/*.whl -w dist/ --plat manylinux_2_28_x86_64
-          auditwheel show dist/*.whl
-          /opt/python/cp313-cp313/bin/python -m pip install dist/*.whl
-          /opt/python/cp313-cp313/bin/python -c "import libsonare; libsonare.version()"
+          export UV_PYTHON=/opt/python/cp313-cp313/bin/python
+          uv build --wheel --out-dir dist-raw/
+          uv run --locked --only-group wheel auditwheel repair dist-raw/*.whl -w dist/ --plat manylinux_2_28_x86_64
+          uv run --locked --only-group wheel auditwheel show dist/*.whl
           # The wheel is a shipped artifact, so run its suite against the
-          # repaired wheel here rather than for the first time at publish time.
-          # pytest is installed above; `-m "not slow"` comes from pyproject.
-          /opt/python/cp313-cp313/bin/python -m pytest tests/ -x -q
+          # repaired wheel here rather than for the first time at publish time,
+          # in a venv holding the wheel and the test group from uv.lock.
+          # `-m "not slow"` comes from pyproject.
+          uv venv "$RUNNER_TEMP/wheel-test"
+          uv export --locked --only-group test --no-emit-project --no-hashes -o "$RUNNER_TEMP/test-group.txt"
+          uv pip install --python "$RUNNER_TEMP/wheel-test" dist/*.whl -r "$RUNNER_TEMP/test-group.txt"
+          "$RUNNER_TEMP/wheel-test/bin/python" -c "import libsonare; libsonare.version()"
+          "$RUNNER_TEMP/wheel-test/bin/python" -m pytest tests/ -x -q

@@ -8,10 +8,11 @@ push exactly as narrow as it was, and reports green while doing it: ruff linted
 `bindings/python` alone while Python sat in ten trees, and the clang-format glob
 once omitted `.mm` the same way.
 
-The version pins are the same shape of claim. Each workflow installs a pinned
-tool with a comment saying the pin is "the resolved version in
-uv.lock" -- true when written and enforced by nothing, so a lock
-bump silently leaves CI checking with a different tool than `make lint` uses.
+Tool versions get the same treatment by having one source. Every tool a
+workflow runs comes from a dependency group in `bindings/python/uv.lock`, so a
+lock bump moves CI and `make lint` together. What this checks is that no
+workflow reaches around the lock: a bare `pip install <name>` or an unlocked
+`uv sync` would bring back a hand-copied version that nothing keeps in step.
 
 Stdlib only, no build. Run directly:
 
@@ -21,8 +22,8 @@ Stdlib only, no build. Run directly:
 from __future__ import annotations
 
 import re
+import shlex
 import sys
-import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -34,8 +35,9 @@ WORKFLOWS = (
     REPO_ROOT / ".github/workflows/ci.yml",
     REPO_ROOT / ".github/workflows/develop-ci.yml",
 )
-LOCK = REPO_ROOT / "bindings/python/uv.lock"
-PYPROJECT = REPO_ROOT / "bindings/python/pyproject.toml"
+#: Every workflow, not just the two that lint: a release workflow installing a
+#: tool by name escapes the lock just as well.
+ALL_WORKFLOWS = tuple(sorted((REPO_ROOT / ".github/workflows").glob("*.yml")))
 
 #: `ruff check <target>`, however the interpreter in front of it is spelled and
 #: whatever flags sit between. Only the target is scope: `make format` runs the
@@ -49,13 +51,17 @@ RUFF_CALL = re.compile(r"ruff[ \t]+check(?:[ \t]+--[\w-]+)*[ \t]+(?P<target>(?!-
 #: The pathspec list a `git ls-files ... -- <specs> |` pipeline feeds clang-format.
 LS_FILES_SPECS = re.compile(r"git ls-files[^|]*?--\s+(?P<specs>(?:'[^']*'\s*)+)")
 
-#: A pinned install, as `pip install ... name==version`.
-PIN = re.compile(r"(?P<name>[A-Za-z0-9._-]+)==(?P<version>[A-Za-z0-9._-]+)")
-
-
-def normalize(name: str) -> str:
-    """PEP 503 name comparison, so `Foo_Bar` and `foo-bar` are one package."""
-    return re.sub(r"[-_.]+", "-", name).lower()
+#: Options of `pip install` / `uv pip install` that take a value, and what each
+#: value may be. `-r` must name a file `uv export` wrote from the lock; `-e` only
+#: the project itself; `--python` and `--resolution` are not packages at all.
+VALUE_OPTIONS = {
+    "--python": None,
+    "--resolution": None,
+    "-r": None,
+    "--requirement": None,
+    "-e": ".",
+    "--editable": ".",
+}
 
 
 def ruff_targets(text: str) -> list[str]:
@@ -84,42 +90,62 @@ def clang_format_specs(text: str) -> list[tuple[str, ...]]:
     return out
 
 
-def locked_versions(text: str) -> dict[str, str]:
-    """The versions a uv.lock resolves, keyed by normalized package name.
+def shell_lines(text: str) -> list[str]:
+    """@p text with backslash continuations joined, one command line per entry."""
+    return re.sub(r"\\\n\s*", " ", text).splitlines()
 
-    Raises ValueError on a lock that is not TOML or resolves no package, so a moved
-    or truncated lock fails rather than agreeing with every pin.
+
+def install_problems(line: str) -> list[str] | None:
+    """What lets @p line install around the lock, or None if it installs nothing.
+
+    An install may name a local wheel, the project in editable form, or a
+    requirements file; any other positional argument is a package name, and a
+    package name carries a version the lock does not own. `uv sync` must be
+    `--locked`, and `uv run` `--locked` or `--no-sync` after one, so a stale lock
+    fails rather than being re-resolved.
     """
-    try:
-        packages = tomllib.loads(text).get("package", [])
-    except tomllib.TOMLDecodeError as e:
-        raise ValueError(f"the lock is not TOML: {e}") from e
-    versions = {
-        normalize(p["name"]): p["version"]
-        for p in packages
-        if isinstance(p, dict) and "name" in p and "version" in p
-    }
-    if not versions:
-        raise ValueError("the lock resolves no package")
-    return versions
+    command = re.split(r"\|\||&&|[|;]", line)
+    problems: list[str] = []
+    seen = False
+    for segment in command:
+        try:
+            words = shlex.split(segment, comments=True)
+        except ValueError:
+            words = segment.split()
+        for i, word in enumerate(words):
+            if word == "sync" and i > 0 and words[i - 1] == "uv":
+                seen = True
+                if "--locked" not in words[i + 1 :]:
+                    problems.append("`uv sync` without --locked re-resolves instead of failing")
+            if word == "run" and i > 0 and words[i - 1] == "uv":
+                seen = True
+                if not {"--locked", "--no-sync"} & set(words[i + 1 :]):
+                    problems.append("`uv run` without --locked or --no-sync may re-resolve")
+            if word == "install" and i > 0 and words[i - 1] == "pip":
+                seen = True
+                problems.extend(_install_argument_problems(words[i + 1 :]))
+    return problems if seen else None
 
 
-def declared_floors(text: str) -> dict[str, str]:
-    """The `name>=version` floors pyproject declares, keyed by normalized name."""
-    return {
-        normalize(m.group("name")): m.group("version")
-        for m in re.finditer(r'"(?P<name>[A-Za-z0-9._-]+)>=(?P<version>[A-Za-z0-9._-]+)"', text)
-    }
-
-
-def pinned_installs(text: str) -> list[tuple[str, str]]:
-    """Every `name==version` a pip install line in @p text asks for."""
-    out = []
-    for line in text.splitlines():
-        if "pip install" not in line:
+def _install_argument_problems(args: list[str]) -> list[str]:
+    problems: list[str] = []
+    k = 0
+    while k < len(args):
+        arg = args[k]
+        name, eq, inline = arg.partition("=")
+        if name in VALUE_OPTIONS:
+            value = inline if eq else (args[k + 1] if k + 1 < len(args) else "")
+            k += 1 if eq else 2
+            want = VALUE_OPTIONS[name]
+            if want is not None and value != want:
+                problems.append(f"`{name} {value}` installs something other than {want!r}")
             continue
-        out.extend((m.group("name"), m.group("version")) for m in PIN.finditer(line))
-    return out
+        k += 1
+        if arg.startswith("-"):
+            continue
+        if not arg.endswith(".whl"):
+            problems.append(f"`{arg}` is installed by name, outside the lock")
+    return problems
 
 
 def check_agreement(label: str, found: dict[str, list], failures: list[str]) -> None:
@@ -154,37 +180,19 @@ def main() -> int:
         failures,
     )
 
-    locked = locked_versions(LOCK.read_text())
-    floors = declared_floors(PYPROJECT.read_text())
-    lock_name = LOCK.relative_to(REPO_ROOT).as_posix()
     checked = 0
-    for name, text in sources.items():
-        if name == "Makefile":
-            continue  # the Makefile installs through uv, which reads the lock itself
-        for package, version in pinned_installs(text):
-            want = locked.get(normalize(package))
-            if want is None:
-                # A CI-only tool the binding does not depend on -- librosa, for the
-                # reference-generation job. The lock cannot speak for it, so there is
-                # nothing here to disagree with.
+    for path in ALL_WORKFLOWS:
+        name = path.relative_to(REPO_ROOT).as_posix()
+        for line in shell_lines(path.read_text()):
+            problems = install_problems(line)
+            if problems is None:
                 continue
-            # A floor job installs the declared minimum on purpose; it answers to
-            # pyproject, not to the lock.
-            if version == floors.get(normalize(package)):
-                checked += 1
-                continue
-            if want != version:
-                failures.append(
-                    f"{name} pins {package}=={version} but {lock_name} resolves "
-                    f"{package}=={want}. The workflow comment claims the pin follows "
-                    f"the lock; a bump moved one and not the other, so CI and "
-                    f"`make lint` no longer run the same tool."
-                )
             checked += 1
+            failures.extend(f"{name}: {p}:\n    {line.strip()}" for p in problems)
     if not checked:
         failures.append(
-            "no workflow pins any tool version, so this check verified nothing. The "
-            "install lines moved and the parsing above is stale."
+            "no workflow installs anything, so the install check verified nothing. "
+            "The install lines moved and the parsing above is stale."
         )
 
     if failures:
@@ -196,7 +204,7 @@ def main() -> int:
         f"lint scope agrees across {len(sources)} file(s): ruff {ruff[0]}, "
         f"clang-format {' '.join(specs[0])}"
     )
-    print(f"{checked} pinned tool version(s) match {lock_name}")
+    print(f"{checked} workflow install line(s) take their versions from the lock")
     return 0
 
 

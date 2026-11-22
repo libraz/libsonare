@@ -27,15 +27,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Install clang-format
-        # Pinned to the version `make format` runs locally: the apt package
-        # follows the runner image, and each major release rewraps code.
-        run: python3 -m pip install --disable-pip-version-check clang-format==18.1.8
+        # The binding's lint group pins it: the apt package follows the runner
+        # image, and each major release rewraps code.
+        run: uv sync --locked --project bindings/python --only-group lint
       - name: Check formatting
         run: |
-          clang-format --version
+          uv run --no-sync --project bindings/python clang-format --version
           git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' |
-            xargs -0 clang-format --dry-run --Werror
+            xargs -0 uv run --no-sync --project bindings/python clang-format --dry-run --Werror
 
   lint:
     runs-on: ubuntu-latest
@@ -73,10 +76,8 @@ jobs:
           yarn lint
           yarn test:types
       - name: Lint Python
-        # Pinned to the resolved version in requirements-dev.lock: an unpinned
-        # install lets a new ruff release fail an unrelated pull request.
-        # Invoked as a module so the check does not depend on pip's script
-        # directory being on PATH.
+        # The ruff uv.lock resolves for the binding's lint group, so a new ruff
+        # release cannot fail an unrelated pull request.
         #
         # The repo rather than a path list, matching `make lint`. Python lives
         # in ten trees here and only the binding was gated, so a lint error
@@ -84,8 +85,8 @@ jobs:
         # unseen. Ruff respects .gitignore and skips node_modules by default.
         working-directory: .
         run: |
-          python3 -m pip install --disable-pip-version-check ruff==0.17.3
-          python3 -m ruff check .
+          uv sync --locked --project bindings/python --only-group lint
+          uv run --no-sync --project bindings/python ruff check .
       - name: Drift gates
         # The mechanical cross-surface gates, all read-only and stdlib-only
         # except numpy: the bank-policy gate imports the shipping
@@ -96,9 +97,7 @@ jobs:
         # hand-copied one silently omits whatever gate is added to `conformance`
         # next, and reports green while doing it.
         #
-        # `gen_abi_layout.py --check` stays a direct call, because the Makefile
-        # wraps it in rye -- which the runner does not have and the script does
-        # not need. It is the only gate needing a compiler, and it builds a
+        # `abi-layout-check` is the only gate needing a compiler, and it builds a
         # small probe from the public C headers rather than the project, so this
         # job stays build-free. It is also the load-bearing one: it compares
         # every ctypes Structure against sizeof/alignof/offsetof taken from the
@@ -111,13 +110,17 @@ jobs:
         # `surface-check` reads the Node and WASM facades through each package's
         # own TypeScript, so both packages' node_modules are installed; nothing
         # is built.
+        #
+        # The binding's environment goes first on PATH, so the gates that call
+        # python3 directly get the numpy uv.lock resolves.
         working-directory: .
         run: |
-          python3 -m pip install --disable-pip-version-check numpy==2.4.6
+          uv sync --locked --project bindings/python
+          export PATH="$PWD/bindings/python/.venv/bin:$PATH"
           (cd tools/audition/web && yarn install --immutable)
           (cd bindings/node && yarn install --immutable)
           (cd bindings/wasm && yarn install --immutable)
-          python3 tools/abi/gen_abi_layout.py --check
+          make abi-layout-check
           make check-abi-version
           make processor-types-check
           make parity
@@ -128,6 +131,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Run Python tool tests
         # `tools/` sits outside ctest and outside the drift gates, and this
         # workflow runs ctest directly rather than `make test`, so nothing else
@@ -137,15 +143,7 @@ jobs:
         # profiles -- no rendered corpus, no plugin, no built library -- so this
         # job stays build-free. Two skip themselves when there is no shared
         # library to render with.
-        #
-        # Invoked directly rather than through `make test-voicematch`, which
-        # wraps the same command in rye for a dylib these cases do not need.
-        # These versions are resolved in requirements-dev.lock, pinned
-        # for the reason ruff is: an unpinned install lets a new release fail an
-        # unrelated pull request.
-        run: |
-          python3 -m pip install --disable-pip-version-check pytest==9.2.0 numpy==2.4.6 h5py==3.16.0
-          python3 -m pytest tools/voicematch tools/audition tools/playback -q
+        run: make test-voicematch
 
   build-and-test:
     name: Native C++ (${{ matrix.os }})
@@ -176,11 +174,15 @@ jobs:
       # finer than the float reproducibility across architectures and libm
       # implementations, so a hash generated on one host cannot match another.
       # They stay a same-environment regression check, run locally.
+      - uses: astral-sh/setup-uv@v10
+        if: runner.os == 'Linux'
+        with:
+          cache-dependency-glob: tests/librosa/uv.lock
       - name: Verify live librosa references
         if: runner.os == 'Linux'
         run: |
-          python3 -m pip install --disable-pip-version-check librosa==0.11.0
-          python3 tests/librosa/run_live_reference_check.py --build-dir build
+          uv sync --locked --project tests/librosa
+          uv run --locked --project tests/librosa python tests/librosa/run_live_reference_check.py --build-dir build
 
   install-package:
     # The one gate that sees the library the way a C++ consumer does. Everything
@@ -341,6 +343,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
       - name: Audit optional fixture manifests
         run: |
           python -m py_compile \
@@ -376,9 +381,9 @@ jobs:
       - name: Type-check Python stubs
         working-directory: bindings/python
         run: |
-          python -m pip install -e . mypy
-          python -m mypy --strict src/libsonare ../../tests/typing/python_smoke.py
-          if python -m mypy --strict ../../tests/typing/python_catalog_invalid.py; then
+          uv sync --locked
+          uv run --locked mypy --strict src/libsonare ../../tests/typing/python_smoke.py
+          if uv run --locked mypy --strict ../../tests/typing/python_catalog_invalid.py; then
             echo "python_catalog_invalid.py unexpectedly passed mypy" >&2
             exit 1
           fi
@@ -397,13 +402,13 @@ jobs:
             echo "No shared sonare library found under $SONARE_LIB_DIR" >&2
             exit 1
           fi
-          SONARE_LIB_PATH="$libpath" python ../../tests/fixtures/realtime_voice_changer_quality_gate.py
+          SONARE_LIB_PATH="$libpath" uv run --locked python ../../tests/fixtures/realtime_voice_changer_quality_gate.py
 
       - name: Python binding tests
         # The wheel is a shipped artifact and its suite otherwise runs only in
         # publish.yml, which is after the decision to release. Reuses the shared
-        # library and the editable install from the two steps above, so this
-        # adds no build.
+        # library and the environment from the steps above, so this adds no
+        # build.
         env:
           SONARE_LIB_DIR: ${{ github.workspace }}/build-shared/lib
         working-directory: bindings/python
@@ -413,13 +418,14 @@ jobs:
             echo "No shared sonare library found under $SONARE_LIB_DIR" >&2
             exit 1
           fi
-          python -m pip install pytest
-          SONARE_LIB_PATH="$libpath" python -m pytest tests/ -q
+          SONARE_LIB_PATH="$libpath" uv run --locked python -m pytest tests/ -q
 
       - name: Python binding tests at the numpy floor
         # The numpy minimum in pyproject.toml is only a claim until the suite
-        # runs on it. A venv keeps the floor install apart from the interpreter
-        # the later steps use, and the pin must equal the declared floor.
+        # runs on it. A venv keeps the floor install apart from the binding's
+        # environment. lowest-direct installs each runtime dependency at the
+        # lower bound pyproject.toml declares, so the floor is read from there
+        # and not restated here; pytest comes from the test group in uv.lock.
         env:
           SONARE_LIB_DIR: ${{ github.workspace }}/build-shared/lib
         working-directory: bindings/python
@@ -429,8 +435,10 @@ jobs:
             echo "No shared sonare library found under $SONARE_LIB_DIR" >&2
             exit 1
           fi
-          python -m venv "$RUNNER_TEMP/numpy-floor"
-          "$RUNNER_TEMP/numpy-floor/bin/python" -m pip install -e . pytest numpy==2.0.2
+          uv venv "$RUNNER_TEMP/numpy-floor"
+          uv export --locked --only-group test --no-emit-project --no-hashes -o "$RUNNER_TEMP/test-group.txt"
+          uv pip install --python "$RUNNER_TEMP/numpy-floor" --resolution lowest-direct \
+            -e . -r "$RUNNER_TEMP/test-group.txt"
           SONARE_LIB_PATH="$libpath" "$RUNNER_TEMP/numpy-floor/bin/python" -m pytest tests/ -q
 
       - name: Type-check Node preset literals

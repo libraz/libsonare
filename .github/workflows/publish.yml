@@ -256,6 +256,10 @@ jobs:
         with:
           python-version: '3.13'
 
+      - uses: astral-sh/setup-uv@v10
+        with:
+          cache-dependency-glob: bindings/python/uv.lock
+
       - name: Build shared library (Linux)
         if: runner.os == 'Linux'
         # Pin SONARE_WITH_FFMPEG=OFF for deterministic wheels: PyPI artifacts
@@ -300,10 +304,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd bindings/python
-          /opt/python/cp313-cp313/bin/python -m pip install wheel hatchling auditwheel
-          /opt/python/cp313-cp313/bin/python -m pip wheel . --no-deps -w dist-raw/
-          auditwheel repair dist-raw/*.whl -w dist/ --plat manylinux_2_28_${{ matrix.arch }}
-          auditwheel show dist/*.whl
+          export UV_PYTHON=/opt/python/cp313-cp313/bin/python
+          uv build --wheel --out-dir dist-raw/
+          uv run --locked --only-group wheel auditwheel repair dist-raw/*.whl -w dist/ --plat manylinux_2_28_${{ matrix.arch }}
+          uv run --locked --only-group wheel auditwheel show dist/*.whl
 
       - name: Build wheel (macOS)
         if: runner.os == 'macOS'
@@ -311,9 +315,8 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: '11.0'
         run: |
           cd bindings/python
-          python -m pip install wheel hatchling
-          python -m pip wheel . --no-deps -w dist/
-          python -m wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
+          uv build --wheel --out-dir dist/
+          uv run --locked --only-group wheel wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
 
       # pyproject's license-files entry is silently skipped when the files are
       # absent: measured on hatchling 1.32.0, a build with neither present
@@ -342,19 +345,18 @@ jobs:
               print(f"{wheel}: LICENSE and NOTICE present")
           PY
 
-      - name: Test wheel (Linux)
-        if: runner.os == 'Linux'
+      # A venv holding the built wheel and the test group from uv.lock, so the
+      # suite runs against what is uploaded rather than against the source tree.
+      - name: Test wheel
+        shell: bash
         run: |
-          /opt/python/cp313-cp313/bin/python -m pip install bindings/python/dist/*.whl pytest
-          /opt/python/cp313-cp313/bin/python -c "import libsonare; print(f'Version: {libsonare.version()}')"
-          cd bindings/python && /opt/python/cp313-cp313/bin/python -m pytest tests/ -x -q
-
-      - name: Test wheel (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          python -m pip install bindings/python/dist/*.whl pytest
-          python -c "import libsonare; print(f'Version: {libsonare.version()}')"
-          cd bindings/python && python -m pytest tests/ -x -q
+          if [ "$RUNNER_OS" = Linux ]; then export UV_PYTHON=/opt/python/cp313-cp313/bin/python; fi
+          cd bindings/python
+          uv venv "$RUNNER_TEMP/wheel-test"
+          uv export --locked --only-group test --no-emit-project --no-hashes -o "$RUNNER_TEMP/test-group.txt"
+          uv pip install --python "$RUNNER_TEMP/wheel-test" dist/*.whl -r "$RUNNER_TEMP/test-group.txt"
+          "$RUNNER_TEMP/wheel-test/bin/python" -c "import libsonare; print(f'Version: {libsonare.version()}')"
+          "$RUNNER_TEMP/wheel-test/bin/python" -m pytest tests/ -x -q
 
       - uses: actions/upload-artifact@v7
         with:

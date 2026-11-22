@@ -40,8 +40,8 @@ WORKFLOW = """
             xargs -0 clang-format --dry-run --Werror
       - name: Lint Python
         run: |
-          python3 -m pip install --disable-pip-version-check ruff==0.15.14
-          python3 -m ruff check .
+          uv sync --locked --project bindings/python --only-group lint
+          uv run --no-sync --project bindings/python ruff check .
 """
 
 
@@ -123,26 +123,47 @@ def test_a_glob_dropped_from_one_workflow_is_a_disagreement() -> None:
     assert len(failures) == 1, failures
 
 
-def test_a_pin_is_read_off_a_pip_install_line() -> None:
-    assert mod.pinned_installs(WORKFLOW) == [("ruff", "0.15.14")]
+def test_the_locked_installs_raise_nothing() -> None:
+    lines = [
+        "uv sync --locked --project bindings/python --only-group lint",
+        "uv run --no-sync --project bindings/python ruff check .",
+        "uv run --locked --only-group wheel auditwheel show dist/*.whl",
+        'uv pip install --python "$RUNNER_TEMP/v" --resolution lowest-direct -e . -r "$T/test.txt"',
+        "pip install dist/*.whl",
+    ]
+    assert [mod.install_problems(line) for line in lines] == [[]] * len(lines)
 
 
-def test_the_lock_is_parsed_by_normalized_name() -> None:
-    lock = (
-        'version = 1\n'
-        '[[package]]\nname = "Ruff_Tool"\nversion = "1.0"\n'
-        '[[package]]\nname = "numpy"\nversion = "2.4.6"\n'
-    )
-    assert mod.locked_versions(lock) == {"ruff-tool": "1.0", "numpy": "2.4.6"}
+def test_a_tool_installed_by_name_is_a_problem() -> None:
+    """The defect this half exists for: a version copied into the workflow by hand."""
+    for line in (
+        "python3 -m pip install --disable-pip-version-check ruff==0.15.14",
+        "uv pip install --python .venv clang-format",
+        "pip install dist/*.whl pytest",
+    ):
+        problems = mod.install_problems(line)
+        assert problems and "by name" in problems[0], (line, problems)
 
 
-def test_an_empty_or_unparsed_lock_fails_rather_than_agreeing() -> None:
-    for text in ("", "version = 1\n", "ruff==0.15.14\n"):
-        try:
-            mod.locked_versions(text)
-        except ValueError:
-            continue
-        raise AssertionError(f"{text!r} was read as a lock")
+def test_an_editable_install_of_anything_but_the_project_is_a_problem() -> None:
+    assert mod.install_problems("uv pip install -e ../other") != []
+
+
+def test_an_unlocked_sync_or_run_is_a_problem() -> None:
+    assert mod.install_problems("uv sync --project bindings/python") != []
+    assert mod.install_problems("uv run --project bindings/python mypy src") != []
+
+
+def test_a_continued_line_is_read_whole() -> None:
+    """The floor job wraps its install; the package names sit on the second line."""
+    text = "uv pip install --python v \\\n            -e . numpy==1.0\n"
+    (line,) = mod.shell_lines(text)
+    assert mod.install_problems(line) == ["`numpy==1.0` is installed by name, outside the lock"]
+
+
+def test_a_line_installing_nothing_is_not_counted() -> None:
+    assert mod.install_problems("uv build --wheel --out-dir dist/") is None
+    assert mod.install_problems("      - name: Install clang-format") is None
 
 
 def test_the_repository_agrees_with_itself() -> None:
