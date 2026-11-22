@@ -170,6 +170,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['DoubleProperty', 'Reads a double; truncation is not in play.'],
   ['NumberMapProperty', 'Reads an object of doubles; truncation is not in play.'],
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
+  ['FloatDataProperty', 'Reads a float; truncation is not in play.'],
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
   ['DomainFloatProperty', 'Reads a float; truncation is not in play.'],
   [

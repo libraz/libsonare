@@ -88,6 +88,7 @@ export const READER_FAMILIES: Readonly<
     AutoFiniteFloatProperty: 'refuse',
     FiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
+    FloatDataProperty: 'refuse',
     ChoiceProperty: 'refuse',
     GsEfxRealizationProperty: 'refuse',
     Int8Property: 'refuse',
