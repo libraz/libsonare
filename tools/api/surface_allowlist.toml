@@ -43,6 +43,13 @@ reason = "Per-change parameter queueing stays positional like the other renderFr
 [[allow]]
 check = "one-positional-form"
 surface = "wasm"
+name = "SonareEngine.setParam"
+category = "hot-path"
+reason = "Per-change parameter queueing mirrors RealtimeEngine.setParameter; smoothed and renderFrame are the options-bag fields."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
 name = "SonareEngine.pushMidi*"
 category = "hot-path"
 reason = "Worklet-side MIDI push runs on the audio thread, where a per-event allocation is not allowed."
