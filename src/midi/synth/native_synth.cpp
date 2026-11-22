@@ -10,10 +10,8 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/mix_dc_blocker.h"
-#include "midi/synth/voice_random.h"
 #include "midi/ump.h"
 #include "util/constants.h"
-#include "util/non_finite_sample.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
@@ -209,9 +207,10 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // KS strings need a per-voice delay slab (the only allocation site; voices
   // attach their span at note-on).
   ks_capacity_ = ks_buffer_capacity(sample_rate_);
+  ks_stride_ = ks_slab_capacity(sample_rate_);
   guitar_halo_active_ = false;
   if (any_engine || config_.patch.mode == SynthEngineMode::kKarplusStrong) {
-    ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_)), 0.0f);
+    ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_stride_), 0.0f);
     // Sympathetic-string "sound halo": a bank tuned to the standard-tuning
     // open strings (E2 A2 D3 G3 B3 E4) plus their low harmonics — the
     // undamped strings ringing behind the played note. Gated by the same
@@ -228,10 +227,10 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     ks_buffers_.clear();
   }
   piano_string_capacity_ = piano_string_capacity(sample_rate_);
+  piano_stride_ = piano_slab_capacity(sample_rate_);
   piano_mode_ = config_.patch.mode == SynthEngineMode::kPiano;
   if (any_engine || piano_mode_) {
-    piano_buffers_.assign(pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_)),
-                          0.0f);
+    piano_buffers_.assign(pool_.size() * static_cast<size_t>(piano_stride_), 0.0f);
   } else {
     piano_buffers_.clear();
   }
@@ -250,10 +249,10 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // so a registration's ranks all have their own self-oscillating jet pipe). The
   // only allocation site; voices attach their slab at note-on.
   pipe_organ_capacity_ = pipe_organ_buffer_capacity(sample_rate_);
-  pipe_organ_mode_ = config_.patch.mode == SynthEngineMode::kPipeOrgan;
-  if (any_engine || pipe_organ_mode_) {
-    pipe_organ_buffers_.assign(
-        pool_.size() * static_cast<size_t>(pipe_organ_slab_capacity(sample_rate_)), 0.0f);
+  pipe_organ_stride_ = pipe_organ_slab_capacity(sample_rate_);
+  const bool pipe_organ_mode = config_.patch.mode == SynthEngineMode::kPipeOrgan;
+  if (any_engine || pipe_organ_mode) {
+    pipe_organ_buffers_.assign(pool_.size() * static_cast<size_t>(pipe_organ_stride_), 0.0f);
   } else {
     pipe_organ_buffers_.clear();
   }
@@ -262,10 +261,10 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // Bowed string: one delay slab per voice slot (two delay-line spans, the neck
   // and bridge). The only allocation site; voices attach their slab at note-on.
   bowed_string_capacity_ = bowed_string_buffer_capacity(sample_rate_);
-  bowed_string_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kBowedString;
-  if (bowed_string_mode_) {
-    bowed_string_buffers_.assign(
-        pool_.size() * static_cast<size_t>(bowed_string_slab_capacity(sample_rate_)), 0.0f);
+  bowed_string_stride_ = bowed_string_slab_capacity(sample_rate_);
+  const bool bowed_string_mode = any_engine || config_.patch.mode == SynthEngineMode::kBowedString;
+  if (bowed_string_mode) {
+    bowed_string_buffers_.assign(pool_.size() * static_cast<size_t>(bowed_string_stride_), 0.0f);
   } else {
     bowed_string_buffers_.clear();
   }
@@ -280,8 +279,8 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // Reed woodwind: one bore delay span per voice slot. The only allocation site;
   // voices attach their span at note-on.
   reed_capacity_ = reed_buffer_capacity(sample_rate_);
-  reed_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kReed;
-  if (reed_mode_) {
+  const bool reed_mode = any_engine || config_.patch.mode == SynthEngineMode::kReed;
+  if (reed_mode) {
     reed_buffers_.assign(pool_.size() * static_cast<size_t>(reed_slab_capacity(sample_rate_)),
                          0.0f);
   } else {
@@ -289,8 +288,8 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   }
   // Brass / lip reed: one bore delay span per voice slot (same as the reed).
   brass_capacity_ = brass_buffer_capacity(sample_rate_);
-  brass_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kBrass;
-  if (brass_mode_) {
+  const bool brass_mode = any_engine || config_.patch.mode == SynthEngineMode::kBrass;
+  if (brass_mode) {
     brass_buffers_.assign(pool_.size() * static_cast<size_t>(brass_slab_capacity(sample_rate_)),
                           0.0f);
   } else {
@@ -298,18 +297,19 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   }
   // Air-jet flute: a bore span plus a jet span per voice slot.
   flute_capacity_ = flute_buffer_capacity(sample_rate_);
-  flute_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kFlute;
-  if (flute_mode_) {
-    flute_buffers_.assign(pool_.size() * static_cast<size_t>(flute_slab_capacity(sample_rate_)),
-                          0.0f);
+  flute_stride_ = flute_slab_capacity(sample_rate_);
+  const bool flute_mode = any_engine || config_.patch.mode == SynthEngineMode::kFlute;
+  if (flute_mode) {
+    flute_buffers_.assign(pool_.size() * static_cast<size_t>(flute_stride_), 0.0f);
   } else {
     flute_buffers_.clear();
   }
   // Plucked string: one string delay span per voice slot. The only allocation
   // site; voices attach their span at note-on.
   plucked_string_capacity_ = plucked_string_buffer_capacity(sample_rate_);
-  plucked_string_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kPluckedString;
-  if (plucked_string_mode_) {
+  const bool plucked_string_mode =
+      any_engine || config_.patch.mode == SynthEngineMode::kPluckedString;
+  if (plucked_string_mode) {
     plucked_string_buffers_.assign(
         pool_.size() * static_cast<size_t>(plucked_string_slab_capacity(sample_rate_)), 0.0f);
   } else {
@@ -319,8 +319,8 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // voices attach theirs at note-on.
   harpsichord_capacity_ = harpsichord_buffer_capacity(sample_rate_);
   harpsichord_stride_ = harpsichord_slab_capacity(sample_rate_);
-  harpsichord_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kHarpsichord;
-  if (harpsichord_mode_) {
+  const bool harpsichord_mode = any_engine || config_.patch.mode == SynthEngineMode::kHarpsichord;
+  if (harpsichord_mode) {
     harpsichord_buffers_.assign(pool_.size() * static_cast<size_t>(harpsichord_stride_), 0.0f);
   } else {
     harpsichord_buffers_.clear();
@@ -605,7 +605,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // GM-kit behavior when this mode is disabled. Resolved BEFORE the pool is
   // touched: the exclusive-group choke below reads the resolved patch, and a
   // voice allocated first would still carry the previous note's patch pointer.
-  const ChannelState& st = channels_[ch];
+  ChannelState& st = channels_[ch];
   // Compose the per-note pitch first: an absolute pitch picks the drum piece at the target key.
   Sf2PerNoteVoice per_note;
   bind_per_note(per_note, ch, note, attribute_type, attribute_data, note);
@@ -653,7 +653,6 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // Legato continuation, before a voice is allocated: on a carrying channel a
   // note-on under a held key moves that voice to the new key rather than
   // starting one, so the exciter, the delay line and both envelopes run on.
-  ChannelState& live = channels_[ch];
   const LegatoResult legato =
       legato_continue(ch, false, note, attribute_type, attribute_data, source_track_id, patch);
   if (legato.outcome == LegatoOutcome::kCarried) {
@@ -661,10 +660,10 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
       record_velocity_axes(*legato.voice, velocity_excitation, velocity_excitation_mask);
       legato.voice->push_excitation(velocity_excitation, velocity_excitation_mask);
     }
-    live.hold_key(note, attribute_type, attribute_data, source_track_id);
+    st.hold_key(note, attribute_type, attribute_data, source_track_id);
     return;
   }
-  live.hold_key(note, attribute_type, attribute_data, source_track_id);
+  st.hold_key(note, attribute_type, attribute_data, source_track_id);
 
   NativeSynthVoice* voice = pool_.allocate(ch, note, source_track_id);
   if (voice == nullptr) return;
@@ -676,24 +675,22 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
   if (!ks_buffers_.empty()) {
-    voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * 3 * ks_capacity_,
+    voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * ks_stride_,
                      ks_capacity_);
   }
   if (!piano_buffers_.empty()) {
-    voice->piano.attach(piano_buffers_.data() + static_cast<size_t>(voice_index) *
-                                                    kMaxPianoStrings * piano_string_capacity_,
+    voice->piano.attach(piano_buffers_.data() + static_cast<size_t>(voice_index) * piano_stride_,
                         piano_string_capacity_);
   }
   if (!pipe_organ_buffers_.empty()) {
-    voice->pipe_organ.attach(pipe_organ_buffers_.data() + static_cast<size_t>(voice_index) * 2 *
-                                                              kMaxPipeRanks * pipe_organ_capacity_,
-                             pipe_organ_capacity_);
+    voice->pipe_organ.attach(
+        pipe_organ_buffers_.data() + static_cast<size_t>(voice_index) * pipe_organ_stride_,
+        pipe_organ_capacity_);
   }
   if (!bowed_string_buffers_.empty()) {
-    voice->bowed_string.attach(bowed_string_buffers_.data() + static_cast<size_t>(voice_index) *
-                                                                  kBowedSlabSpans *
-                                                                  bowed_string_capacity_,
-                               bowed_string_capacity_);
+    voice->bowed_string.attach(
+        bowed_string_buffers_.data() + static_cast<size_t>(voice_index) * bowed_string_stride_,
+        bowed_string_capacity_);
   }
   if (!vocal_buffers_.empty()) {
     voice->vocal.attach(vocal_buffers_.data() + static_cast<size_t>(voice_index) * vocal_capacity_,
@@ -708,9 +705,8 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
                         brass_capacity_);
   }
   if (!flute_buffers_.empty()) {
-    voice->flute.attach(
-        flute_buffers_.data() + static_cast<size_t>(voice_index) * 2 * flute_capacity_,
-        flute_capacity_);
+    voice->flute.attach(flute_buffers_.data() + static_cast<size_t>(voice_index) * flute_stride_,
+                        flute_capacity_);
   }
   if (!plucked_string_buffers_.empty()) {
     voice->plucked_string.attach(plucked_string_buffers_.data() +
@@ -729,7 +725,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // the last key is up.
   const bool organ_percussion = patch->mode == SynthEngineMode::kAdditive &&
                                 patch->additive.percussion_harmonic >= 2 && st.percussion_armed;
-  if (organ_percussion) channels_[ch].percussion_armed = false;
+  if (organ_percussion) st.percussion_armed = false;
   // Per-note pitch (M2-104-UM §7.4.15). An absolute pitch starts the engine on the key of its
   // integer part, so a sample zone and a delay line are chosen for the pitch that sounds; the
   // struck note stays the voice's own, which is what a note-off matches.
@@ -878,7 +874,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   }
   // A body or halo armed by this note rings past it, which the heard-patch tail counts.
   if (config_.use_gm_programs && bus_tails_before != bus_tails()) raise_tail();
-  channels_[ch].last_freq_hz = voice->base_freq_hz;
+  st.last_freq_hz = voice->base_freq_hz;
   // A second note on a member channel is what makes the channel's bend and
   // pressure ambiguous, so the attribution is recomputed as the set changes.
   // The new voice needs it anyway: it starts reading a mod on the next sample.
@@ -892,9 +888,9 @@ void NativeSynth::record_velocity_axes(NativeSynthVoice& voice, const Excitation
     if ((mask & excitation_axis_mask(axis)) == 0u) continue;
     const uint32_t axis_bit = 1u << static_cast<uint32_t>(i);
     voice.live_excitation_axes.set(axis, excitation_value(velocity, axis));
-    voice.live_mpe_pressure_axes &= ~axis_bit;
-    voice.live_mpe_timbre_axes &= ~axis_bit;
-    voice.live_mpe_bend_axes &= ~axis_bit;
+    native_synth_detail::assign_mpe_axis_owner(axis_bit, std::nullopt, voice.live_mpe_pressure_axes,
+                                               voice.live_mpe_timbre_axes,
+                                               voice.live_mpe_bend_axes);
   }
 }
 

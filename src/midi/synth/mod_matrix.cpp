@@ -43,10 +43,7 @@ float source_value(ModSource source, const ModSourceValues& values) noexcept {
 ModOffsets evaluate_mod_matrix(const ModMatrix& matrix, const ModSourceValues& values) noexcept {
   ModOffsets out;
   for (const ModRoute& route : matrix.routes) {
-    if (route.source == ModSource::kNone || route.destination == ModDestination::kNone ||
-        route.depth == 0.0f) {
-      continue;
-    }
+    if (!route.live()) continue;
     const float amount = route.depth * source_value(route.source, values);
     switch (route.destination) {
       case ModDestination::kNone:

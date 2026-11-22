@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <type_traits>
 
 #include "midi/synth/native_synth.h"
 
@@ -111,6 +112,80 @@ float clamp_finite(float value, float lo, float hi, float fallback) noexcept {
   return std::clamp(value, lo, hi);
 }
 
+/// The patch float @p id edits directly, or null for the two ids that live on the config.
+template <typename Patch>
+auto* patch_field(Patch& p, NativeSynthParamId id) noexcept {
+  using Field = std::conditional_t<std::is_const_v<Patch>, const float*, float*>;
+  switch (id) {
+    case NativeSynthParamId::kGain:
+    case NativeSynthParamId::kBusDrive:
+      return Field{nullptr};
+    case NativeSynthParamId::kCutoffHz:
+      return Field{&p.cutoff_hz};
+    case NativeSynthParamId::kResonanceQ:
+      return Field{&p.resonance_q};
+    case NativeSynthParamId::kDrive:
+      return Field{&p.drive};
+    case NativeSynthParamId::kKeyTrack:
+      return Field{&p.key_track};
+    case NativeSynthParamId::kEnvToCutoffCents:
+      return Field{&p.env_to_cutoff_cents};
+    case NativeSynthParamId::kVelToCutoffCents:
+      return Field{&p.vel_to_cutoff_cents};
+    case NativeSynthParamId::kAmpAttackMs:
+      return Field{&p.amp_env.attack_ms};
+    case NativeSynthParamId::kAmpDecayMs:
+      return Field{&p.amp_env.decay_ms};
+    case NativeSynthParamId::kAmpSustain:
+      return Field{&p.amp_env.sustain};
+    case NativeSynthParamId::kAmpReleaseMs:
+      return Field{&p.amp_env.release_ms};
+    case NativeSynthParamId::kFilterAttackMs:
+      return Field{&p.filter_env.attack_ms};
+    case NativeSynthParamId::kFilterDecayMs:
+      return Field{&p.filter_env.decay_ms};
+    case NativeSynthParamId::kFilterSustain:
+      return Field{&p.filter_env.sustain};
+    case NativeSynthParamId::kFilterReleaseMs:
+      return Field{&p.filter_env.release_ms};
+    case NativeSynthParamId::kLfoRateHz:
+      return Field{&p.lfo_rate_hz};
+    case NativeSynthParamId::kLfoToPitchCents:
+      return Field{&p.lfo_to_pitch_cents};
+    case NativeSynthParamId::kLfo2RateHz:
+      return Field{&p.lfo2_rate_hz};
+    case NativeSynthParamId::kGlideMs:
+      return Field{&p.glide_ms};
+    case NativeSynthParamId::kBodyMix:
+      return Field{&p.body_mix};
+    case NativeSynthParamId::kStereoSpread:
+      return Field{&p.stereo_spread};
+    case NativeSynthParamId::kDetuneCents:
+      return Field{&p.detune_cents};
+    case NativeSynthParamId::kDriftCents:
+      return Field{&p.drift_cents};
+    case NativeSynthParamId::kPitchOffsetCents:
+      return Field{&p.pitch_offset_cents};
+    case NativeSynthParamId::kHpCutoffHz:
+      return Field{&p.hp_cutoff_hz};
+    case NativeSynthParamId::kSampleHoldHz:
+      return Field{&p.sample_hold_hz};
+    case NativeSynthParamId::kBitDepth:
+      return Field{&p.bit_depth};
+    case NativeSynthParamId::kDriftRateHz:
+      return Field{&p.drift_rate_hz};
+    case NativeSynthParamId::kAmpDelayMs:
+      return Field{&p.amp_env.delay_ms};
+    case NativeSynthParamId::kAmpHoldMs:
+      return Field{&p.amp_env.hold_ms};
+    case NativeSynthParamId::kFilterDelayMs:
+      return Field{&p.filter_env.delay_ms};
+    case NativeSynthParamId::kFilterHoldMs:
+      return Field{&p.filter_env.hold_ms};
+  }
+  return Field{nullptr};
+}
+
 /// The value @p id reports before any patch load or live automation: the
 /// engine's own compiled-in defaults, read from a fresh NativeSynthConfig
 /// rather than this instance's config_ -- describe_parameter runs on the
@@ -118,76 +193,10 @@ float clamp_finite(float value, float lo, float hi, float fallback) noexcept {
 /// reading concurrently.
 float default_value_for(NativeSynthParamId id) noexcept {
   static const NativeSynthConfig kDefaults{};
-  const NativeSynthPatch& p = kDefaults.patch;
-  switch (id) {
-    case NativeSynthParamId::kGain:
-      return kDefaults.gain;
-    case NativeSynthParamId::kBusDrive:
-      return kDefaults.bus_drive;
-    case NativeSynthParamId::kCutoffHz:
-      return p.cutoff_hz;
-    case NativeSynthParamId::kResonanceQ:
-      return p.resonance_q;
-    case NativeSynthParamId::kDrive:
-      return p.drive;
-    case NativeSynthParamId::kKeyTrack:
-      return p.key_track;
-    case NativeSynthParamId::kEnvToCutoffCents:
-      return p.env_to_cutoff_cents;
-    case NativeSynthParamId::kVelToCutoffCents:
-      return p.vel_to_cutoff_cents;
-    case NativeSynthParamId::kAmpAttackMs:
-      return p.amp_env.attack_ms;
-    case NativeSynthParamId::kAmpDecayMs:
-      return p.amp_env.decay_ms;
-    case NativeSynthParamId::kAmpSustain:
-      return p.amp_env.sustain;
-    case NativeSynthParamId::kAmpReleaseMs:
-      return p.amp_env.release_ms;
-    case NativeSynthParamId::kFilterAttackMs:
-      return p.filter_env.attack_ms;
-    case NativeSynthParamId::kFilterDecayMs:
-      return p.filter_env.decay_ms;
-    case NativeSynthParamId::kFilterSustain:
-      return p.filter_env.sustain;
-    case NativeSynthParamId::kFilterReleaseMs:
-      return p.filter_env.release_ms;
-    case NativeSynthParamId::kLfoRateHz:
-      return p.lfo_rate_hz;
-    case NativeSynthParamId::kLfoToPitchCents:
-      return p.lfo_to_pitch_cents;
-    case NativeSynthParamId::kLfo2RateHz:
-      return p.lfo2_rate_hz;
-    case NativeSynthParamId::kGlideMs:
-      return p.glide_ms;
-    case NativeSynthParamId::kBodyMix:
-      return p.body_mix;
-    case NativeSynthParamId::kStereoSpread:
-      return p.stereo_spread;
-    case NativeSynthParamId::kDetuneCents:
-      return p.detune_cents;
-    case NativeSynthParamId::kDriftCents:
-      return p.drift_cents;
-    case NativeSynthParamId::kPitchOffsetCents:
-      return p.pitch_offset_cents;
-    case NativeSynthParamId::kHpCutoffHz:
-      return p.hp_cutoff_hz;
-    case NativeSynthParamId::kSampleHoldHz:
-      return p.sample_hold_hz;
-    case NativeSynthParamId::kBitDepth:
-      return p.bit_depth;
-    case NativeSynthParamId::kDriftRateHz:
-      return p.drift_rate_hz;
-    case NativeSynthParamId::kAmpDelayMs:
-      return p.amp_env.delay_ms;
-    case NativeSynthParamId::kAmpHoldMs:
-      return p.amp_env.hold_ms;
-    case NativeSynthParamId::kFilterDelayMs:
-      return p.filter_env.delay_ms;
-    case NativeSynthParamId::kFilterHoldMs:
-      return p.filter_env.hold_ms;
-  }
-  return 0.0f;
+  if (id == NativeSynthParamId::kGain) return kDefaults.gain;
+  if (id == NativeSynthParamId::kBusDrive) return kDefaults.bus_drive;
+  const float* field = patch_field(kDefaults.patch, id);
+  return field != nullptr ? *field : 0.0f;
 }
 
 }  // namespace
@@ -228,127 +237,46 @@ bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
   if (entry == nullptr) return false;
   NativeSynthPatch& p = config_.patch;
   live_dirty_ |= native_synth_param_bit(id) & kVoiceDerivedParams;
+  if (id == NativeSynthParamId::kGain) {
+    // The instrument master gain, not the per-voice patch gain: it multiplies
+    // the summed mix every sample, so it is the one a fader-style lane wants.
+    config_.gain = clamp_finite(value, entry->min, entry->max, config_.gain);
+    return true;
+  }
+  if (id == NativeSynthParamId::kBusDrive) {
+    config_.bus_drive = clamp_finite(value, entry->min, entry->max, config_.bus_drive);
+    // Mirror prepare()'s derivation so the change is audible this block.
+    bus_drive_gain_ = native_synth_detail::bus_drive_gain(config_.bus_drive);
+    return true;
+  }
+  float* field = patch_field(p, id);
+  if (field == nullptr) return false;
+  *field = clamp_finite(value, entry->min, entry->max, *field);
   switch (id) {
-    case NativeSynthParamId::kGain:
-      // The instrument master gain, not the per-voice patch gain: it multiplies
-      // the summed mix every sample, so it is the one a fader-style lane wants.
-      config_.gain = clamp_finite(value, entry->min, entry->max, config_.gain);
-      return true;
-    case NativeSynthParamId::kBusDrive:
-      config_.bus_drive = clamp_finite(value, entry->min, entry->max, config_.bus_drive);
-      // Mirror prepare()'s derivation so the change is audible this block.
-      bus_drive_gain_ = native_synth_detail::bus_drive_gain(config_.bus_drive);
-      return true;
-    case NativeSynthParamId::kCutoffHz:
-      p.cutoff_hz = clamp_finite(value, entry->min, entry->max, p.cutoff_hz);
-      return true;
-    case NativeSynthParamId::kResonanceQ:
-      p.resonance_q = clamp_finite(value, entry->min, entry->max, p.resonance_q);
-      return true;
-    case NativeSynthParamId::kDrive:
-      p.drive = clamp_finite(value, entry->min, entry->max, p.drive);
-      return true;
-    case NativeSynthParamId::kKeyTrack:
-      p.key_track = clamp_finite(value, entry->min, entry->max, p.key_track);
-      return true;
-    case NativeSynthParamId::kEnvToCutoffCents:
-      p.env_to_cutoff_cents = clamp_finite(value, entry->min, entry->max, p.env_to_cutoff_cents);
-      return true;
-    case NativeSynthParamId::kVelToCutoffCents:
-      p.vel_to_cutoff_cents = clamp_finite(value, entry->min, entry->max, p.vel_to_cutoff_cents);
-      return true;
+    // Attack, delay and hold lengthen a one-shot note, and a lower pitch offset plays a
+    // sample slower, so each raises the tail.
     case NativeSynthParamId::kAmpAttackMs:
-      p.amp_env.attack_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.attack_ms);
-      raise_tail();
-      return true;
     case NativeSynthParamId::kAmpDecayMs:
-      p.amp_env.decay_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.decay_ms);
-      raise_tail();
-      return true;
     case NativeSynthParamId::kAmpSustain:
-      p.amp_env.sustain = clamp_finite(value, entry->min, entry->max, p.amp_env.sustain);
-      raise_tail();
-      return true;
     case NativeSynthParamId::kAmpReleaseMs:
-      p.amp_env.release_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.release_ms);
-      raise_tail();
-      return true;
-    case NativeSynthParamId::kFilterAttackMs:
-      p.filter_env.attack_ms = clamp_finite(value, entry->min, entry->max, p.filter_env.attack_ms);
-      return true;
-    case NativeSynthParamId::kFilterDecayMs:
-      p.filter_env.decay_ms = clamp_finite(value, entry->min, entry->max, p.filter_env.decay_ms);
-      return true;
-    case NativeSynthParamId::kFilterSustain:
-      p.filter_env.sustain = clamp_finite(value, entry->min, entry->max, p.filter_env.sustain);
-      return true;
-    case NativeSynthParamId::kFilterReleaseMs:
-      p.filter_env.release_ms =
-          clamp_finite(value, entry->min, entry->max, p.filter_env.release_ms);
-      return true;
-    case NativeSynthParamId::kLfoRateHz:
-      p.lfo_rate_hz = clamp_finite(value, entry->min, entry->max, p.lfo_rate_hz);
-      return true;
-    case NativeSynthParamId::kLfoToPitchCents:
-      p.lfo_to_pitch_cents = clamp_finite(value, entry->min, entry->max, p.lfo_to_pitch_cents);
-      return true;
-    case NativeSynthParamId::kLfo2RateHz:
-      p.lfo2_rate_hz = clamp_finite(value, entry->min, entry->max, p.lfo2_rate_hz);
-      return true;
-    case NativeSynthParamId::kGlideMs:
-      p.glide_ms = clamp_finite(value, entry->min, entry->max, p.glide_ms);
-      return true;
-    case NativeSynthParamId::kBodyMix:
-      p.body_mix = clamp_finite(value, entry->min, entry->max, p.body_mix);
-      return true;
-    case NativeSynthParamId::kStereoSpread:
-      p.stereo_spread = clamp_finite(value, entry->min, entry->max, p.stereo_spread);
-      return true;
-    case NativeSynthParamId::kDetuneCents:
-      p.detune_cents = clamp_finite(value, entry->min, entry->max, p.detune_cents);
-      return true;
-    case NativeSynthParamId::kDriftCents:
-      p.drift_cents = clamp_finite(value, entry->min, entry->max, p.drift_cents);
-      return true;
-    // A lower offset plays a one-shot sample slower, so it lengthens the tail.
     case NativeSynthParamId::kPitchOffsetCents:
-      p.pitch_offset_cents = clamp_finite(value, entry->min, entry->max, p.pitch_offset_cents);
+    case NativeSynthParamId::kAmpDelayMs:
+    case NativeSynthParamId::kAmpHoldMs:
       raise_tail();
-      return true;
-    case NativeSynthParamId::kHpCutoffHz:
-      p.hp_cutoff_hz = clamp_finite(value, entry->min, entry->max, p.hp_cutoff_hz);
-      return true;
+      break;
     // The two converter halves take the same floor the patch clamp gives
     // them, so a lane and a patch edit reaching the same value land on the
     // same sound: zero is off and anything under the floor is raised to it.
     case NativeSynthParamId::kSampleHoldHz:
-      p.sample_hold_hz = clamp_finite(value, entry->min, entry->max, p.sample_hold_hz);
       if (p.sample_hold_hz > 0.0f) p.sample_hold_hz = std::max(p.sample_hold_hz, 100.0f);
-      return true;
+      break;
     case NativeSynthParamId::kBitDepth:
-      p.bit_depth = clamp_finite(value, entry->min, entry->max, p.bit_depth);
       if (p.bit_depth > 0.0f) p.bit_depth = std::max(p.bit_depth, 1.0f);
-      return true;
-    case NativeSynthParamId::kDriftRateHz:
-      p.drift_rate_hz = clamp_finite(value, entry->min, entry->max, p.drift_rate_hz);
-      return true;
-    // Delay and hold lengthen a one-shot note, so they raise the tail as attack does.
-    case NativeSynthParamId::kAmpDelayMs:
-      p.amp_env.delay_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.delay_ms);
-      raise_tail();
-      return true;
-    case NativeSynthParamId::kAmpHoldMs:
-      p.amp_env.hold_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.hold_ms);
-      raise_tail();
-      return true;
-    case NativeSynthParamId::kFilterDelayMs:
-      p.filter_env.delay_ms = clamp_finite(value, entry->min, entry->max, p.filter_env.delay_ms);
-      return true;
-    case NativeSynthParamId::kFilterHoldMs:
-      p.filter_env.hold_ms = clamp_finite(value, entry->min, entry->max, p.filter_env.hold_ms);
-      return true;
+      break;
+    default:
+      break;
   }
-  return false;
+  return true;
 }
 
 bool NativeSynth::describe_parameter(unsigned int param_id,

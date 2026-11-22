@@ -236,11 +236,8 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
                                        bool present) noexcept {
       ControllerAxisState candidate;
       if (!present) return candidate;
-      const Ump message = dimension == MpeDimension::kPressure
-                              ? make_midi2_channel_pressure(0, member, own.raw)
-                              : make_midi2_control_change(0, member, kMpeTimbreCc, own.raw);
       std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
-      const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+      const size_t count = resolve_mpe_axes(member, dimension, own, resolved);
       for (size_t i = 0; i < count; ++i) candidate.set(resolved[i].axis, resolved[i].value);
       return candidate;
     };
@@ -340,11 +337,8 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
         ControllerAxisState result;
         Control32 value = Control32::from_raw(0);
         if (!mpe_.own_control(manager, dimension, &value)) return result;
-        const Ump message = dimension == MpeDimension::kPressure
-                                ? make_midi2_channel_pressure(0, ch, value.raw)
-                                : make_midi2_control_change(0, ch, kMpeTimbreCc, value.raw);
         std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
-        const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+        const size_t count = resolve_mpe_axes(ch, dimension, value, resolved);
         for (size_t i = 0; i < count; ++i) result.set(resolved[i].axis, resolved[i].value);
         return result;
       };

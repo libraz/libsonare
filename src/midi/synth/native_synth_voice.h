@@ -432,7 +432,8 @@ struct NativeSynthVoice : VoiceState {
   }
   /// Cents between the key base_freq_hz was computed for and the voiced key now.
   float voiced_shift_cents() const noexcept {
-    return 100.0f * (note_offset_semitones + 60.0f - static_cast<float>(base_voiced_note));
+    return ::sonare::constants::kCentsPerSemitone *
+           (note_offset_semitones + 60.0f - static_cast<float>(base_voiced_note));
   }
   /// Re-derives the state start() latched from @p p for the parameters in
   /// @p mask (bit = NativeSynthParamId), from the same derivations and the

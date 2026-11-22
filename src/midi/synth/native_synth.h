@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -149,6 +150,26 @@ inline void store_excitation_value(ExcitationAxes& out, ControllerAxis axis, flo
     case ControllerAxis::kLoudness:
     case ControllerAxis::kPitchCents:
     case ControllerAxis::kVibratoDepth:
+      break;
+  }
+}
+
+/// Gives @p bit to @p owner's mask and takes it from the other two; no owner clears all three.
+inline void assign_mpe_axis_owner(uint32_t bit, std::optional<MpeDimension> owner,
+                                  uint32_t& pressure, uint32_t& timbre, uint32_t& bend) noexcept {
+  pressure &= ~bit;
+  timbre &= ~bit;
+  bend &= ~bit;
+  if (!owner) return;
+  switch (*owner) {
+    case MpeDimension::kPressure:
+      pressure |= bit;
+      break;
+    case MpeDimension::kTimbre:
+      timbre |= bit;
+      break;
+    case MpeDimension::kBend:
+      bend |= bit;
       break;
   }
 }
@@ -644,6 +665,10 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// of the zone as well when @p channel is the manager, whose value is a bias
   /// on each of them.
   void push_mpe_controller_axis(uint8_t channel, MpeDimension dimension) noexcept;
+  /// Resolves one combined MPE value (pressure or timbre) through the controller profile.
+  size_t resolve_mpe_axes(
+      uint8_t channel, MpeDimension dimension, Control32 combined,
+      std::array<ControllerAxisValue, kMaxControllerBindings>& out) const noexcept;
   /// Applies one combined MPE value to a channel's future-note template without
   /// pushing an attributed engine axis to currently sounding voices.
   void apply_mpe_channel_axes(uint8_t channel, MpeDimension dimension, Control32 combined) noexcept;
@@ -811,10 +836,12 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// is a Karplus-Strong instrument.
   std::vector<float> ks_buffers_;
   int ks_capacity_ = 0;
+  int ks_stride_ = 0;  // whole slab, per voice slot
   /// Piano delay slab: kMaxPianoStrings string spans per voice slot,
   /// allocated in prepare() only when the patch is a piano.
   std::vector<float> piano_buffers_;
   int piano_string_capacity_ = 0;
+  int piano_stride_ = 0;  // whole slab, per voice slot
   /// Shared sympathetic resonance bank, piano patches only: driven pedal-gated
   /// (the sustain-pedal sound halo), tuned in prepare() for a configured piano
   /// or lazily at the first GM piano note-on.
@@ -851,12 +878,12 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// allocated in prepare() only when the patch is a pipe organ.
   std::vector<float> pipe_organ_buffers_;
   int pipe_organ_capacity_ = 0;  // per-rank span
-  bool pipe_organ_mode_ = false;
+  int pipe_organ_stride_ = 0;    // whole slab, per voice slot
   /// Bowed-string delay slab: two delay-line spans (neck + bridge) per voice
   /// slot, allocated in prepare() only when the patch is a bowed string.
   std::vector<float> bowed_string_buffers_;
   int bowed_string_capacity_ = 0;  // per-line span
-  bool bowed_string_mode_ = false;
+  int bowed_string_stride_ = 0;    // whole slab, per voice slot
   /// Vocal section history: one span per voice slot, allocated in prepare()
   /// only when the patch is a vocal.
   std::vector<float> vocal_buffers_;
@@ -865,22 +892,19 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// prepare() only when the patch is a reed woodwind.
   std::vector<float> reed_buffers_;
   int reed_capacity_ = 0;  // bore span
-  bool reed_mode_ = false;
   /// Brass bore slab: one bore span per voice slot, allocated in prepare() only
   /// when the patch is a brass / lip reed.
   std::vector<float> brass_buffers_;
   int brass_capacity_ = 0;  // bore span
-  bool brass_mode_ = false;
   /// Flute delay slab: a bore span plus a jet span per voice slot, allocated in
   /// prepare() only when the patch is an air-jet flute.
   std::vector<float> flute_buffers_;
   int flute_capacity_ = 0;  // per-span (bore / jet) capacity
-  bool flute_mode_ = false;
+  int flute_stride_ = 0;    // whole slab, per voice slot
   /// Plucked-string delay slab: one string span per voice slot, allocated in
   /// prepare() only when the patch is a plucked string.
   std::vector<float> plucked_string_buffers_;
   int plucked_string_capacity_ = 0;  // per-span capacity
-  bool plucked_string_mode_ = false;
   /// Harpsichord registration slab: the two 8' choirs, the 4' choir and the
   /// behind-the-bridge segment per voice slot, allocated in prepare() only when
   /// the patch is a harpsichord. The spans are not all the same length, so the
@@ -888,7 +912,6 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   std::vector<float> harpsichord_buffers_;
   int harpsichord_capacity_ = 0;  // speaking-string span
   int harpsichord_stride_ = 0;    // whole registration slab, per voice slot
-  bool harpsichord_mode_ = false;
   /// Per-part organ wind supply parameters (tremulant / wind sag), armed at the
   /// note-on that resolves a pipe-organ patch on that part.
   struct OrganPartParams {

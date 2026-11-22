@@ -86,6 +86,11 @@ struct ModRoute {
   ModDestination destination = ModDestination::kNone;
   /// Destination units at full source deflection.
   float depth = 0.0f;
+
+  /// True when the slot is used and moves its destination.
+  bool live() const noexcept {
+    return source != ModSource::kNone && destination != ModDestination::kNone && depth != 0.0f;
+  }
 };
 
 inline constexpr int kMaxModRoutes = 8;
@@ -96,10 +101,7 @@ struct ModMatrix {
 
   bool empty() const noexcept {
     for (const ModRoute& r : routes) {
-      if (r.source != ModSource::kNone && r.destination != ModDestination::kNone &&
-          r.depth != 0.0f) {
-        return false;
-      }
+      if (r.live()) return false;
     }
     return true;
   }
@@ -109,7 +111,7 @@ struct ModMatrix {
   /// pitch or cutoff never reaches an engine's control setters at all.
   bool has_engine_control_route() const noexcept {
     for (const ModRoute& r : routes) {
-      if (r.source == ModSource::kNone || r.depth == 0.0f) continue;
+      if (!r.live()) continue;
       if (r.destination == ModDestination::kExcitationForce ||
           r.destination == ModDestination::kExcitationPosition ||
           r.destination == ModDestination::kExcitationBrightness ||

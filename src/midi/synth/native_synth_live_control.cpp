@@ -10,6 +10,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using native_synth_detail::assign_mpe_axis_owner;
 using native_synth_detail::excitation_axis_mask;
 using native_synth_detail::excitation_value;
 using native_synth_detail::store_excitation_value;
@@ -58,29 +59,9 @@ void NativeSynth::push_excitation_control(uint8_t channel, uint32_t changed_mask
       if ((present & engine_bit) == 0u) continue;
       const uint32_t bit = 1u << static_cast<uint32_t>(i);
       v.live_excitation_axes.set(axis, excitation_value(base, axis));
-      if (!mpe_dimension) {
-        v.live_mpe_pressure_axes &= ~bit;
-        v.live_mpe_timbre_axes &= ~bit;
-        v.live_mpe_bend_axes &= ~bit;
-        continue;
-      }
-      switch (dimension) {
-        case MpeDimension::kPressure:
-          v.live_mpe_pressure_axes |= bit;
-          v.live_mpe_timbre_axes &= ~bit;
-          v.live_mpe_bend_axes &= ~bit;
-          break;
-        case MpeDimension::kTimbre:
-          v.live_mpe_timbre_axes |= bit;
-          v.live_mpe_pressure_axes &= ~bit;
-          v.live_mpe_bend_axes &= ~bit;
-          break;
-        case MpeDimension::kBend:
-          v.live_mpe_bend_axes |= bit;
-          v.live_mpe_pressure_axes &= ~bit;
-          v.live_mpe_timbre_axes &= ~bit;
-          break;
-      }
+      assign_mpe_axis_owner(bit,
+                            mpe_dimension ? std::optional<MpeDimension>(dimension) : std::nullopt,
+                            v.live_mpe_pressure_axes, v.live_mpe_timbre_axes, v.live_mpe_bend_axes);
     }
     v.push_excitation(base, present);
   }
@@ -354,36 +335,27 @@ void NativeSynth::update_frozen_mpe_axis(uint8_t channel, ControllerAxis axis,
   }
 }
 
+size_t NativeSynth::resolve_mpe_axes(
+    uint8_t channel, MpeDimension dimension, Control32 combined,
+    std::array<ControllerAxisValue, kMaxControllerBindings>& out) const noexcept {
+  const Ump message = dimension == MpeDimension::kPressure
+                          ? make_midi2_channel_pressure(0, channel, combined.raw)
+                          : make_midi2_control_change(0, channel, kMpeTimbreCc, combined.raw);
+  return controller_profile_.resolve(message, out.data(), out.size());
+}
+
 void NativeSynth::apply_mpe_channel_axes(uint8_t channel, MpeDimension dimension,
                                          Control32 combined) noexcept {
   const uint8_t ch = channel & 0x0Fu;
-  const Ump message = dimension == MpeDimension::kPressure
-                          ? make_midi2_channel_pressure(0, ch, combined.raw)
-                          : make_midi2_control_change(0, ch, kMpeTimbreCc, combined.raw);
   std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
-  const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+  const size_t count = resolve_mpe_axes(ch, dimension, combined, resolved);
   ChannelState& state = channels_[ch];
   for (size_t i = 0; i < count; ++i) {
     const ControllerAxisValue& value = resolved[i];
     state.axes.set(value.axis, value.value);
     const uint32_t bit = 1u << static_cast<uint32_t>(value.axis);
-    switch (dimension) {
-      case MpeDimension::kPressure:
-        state.mpe_pressure_axes |= bit;
-        state.mpe_timbre_axes &= ~bit;
-        state.mpe_bend_axes &= ~bit;
-        break;
-      case MpeDimension::kTimbre:
-        state.mpe_timbre_axes |= bit;
-        state.mpe_pressure_axes &= ~bit;
-        state.mpe_bend_axes &= ~bit;
-        break;
-      case MpeDimension::kBend:
-        state.mpe_bend_axes |= bit;
-        state.mpe_pressure_axes &= ~bit;
-        state.mpe_timbre_axes &= ~bit;
-        break;
-    }
+    assign_mpe_axis_owner(bit, dimension, state.mpe_pressure_axes, state.mpe_timbre_axes,
+                          state.mpe_bend_axes);
   }
   if (count != 0) refresh_channel_mod(ch);
 }
@@ -402,11 +374,8 @@ void NativeSynth::apply_mpe_voice_axes(NativeSynthVoice& voice, uint8_t channel,
       voice.mpe_member_timbre_present = member_present;
     }
   }
-  const Ump message = dimension == MpeDimension::kPressure
-                          ? make_midi2_channel_pressure(0, ch, combined.raw)
-                          : make_midi2_control_change(0, ch, kMpeTimbreCc, combined.raw);
   std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
-  const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+  const size_t count = resolve_mpe_axes(ch, dimension, combined, resolved);
   uint32_t present = kAxisNone;
   ExcitationAxes axes{};
   for (size_t i = 0; i < count; ++i) {
@@ -417,15 +386,8 @@ void NativeSynth::apply_mpe_voice_axes(NativeSynthVoice& voice, uint8_t channel,
     store_excitation_value(axes, value.axis, value.value);
     present |= engine_bit;
     voice.live_excitation_axes.set(value.axis, value.value);
-    if (dimension == MpeDimension::kPressure) {
-      voice.live_mpe_pressure_axes |= axis_bit;
-      voice.live_mpe_timbre_axes &= ~axis_bit;
-      voice.live_mpe_bend_axes &= ~axis_bit;
-    } else {
-      voice.live_mpe_timbre_axes |= axis_bit;
-      voice.live_mpe_pressure_axes &= ~axis_bit;
-      voice.live_mpe_bend_axes &= ~axis_bit;
-    }
+    assign_mpe_axis_owner(axis_bit, dimension, voice.live_mpe_pressure_axes,
+                          voice.live_mpe_timbre_axes, voice.live_mpe_bend_axes);
   }
   if (present != kAxisNone) voice.push_excitation(axes, present);
 }
@@ -572,30 +534,11 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
     if (value.note == kControllerAnyNote) {
       channels_[ch].axes.set(value.axis, value.value);
       const uint32_t bit = 1u << static_cast<uint32_t>(value.axis);
-      if (mpe_dimension) {
-        switch (dimension) {
-          case MpeDimension::kBend:
-            channels_[ch].mpe_bend_axes |= bit;
-            channels_[ch].mpe_pressure_axes &= ~bit;
-            channels_[ch].mpe_timbre_axes &= ~bit;
-            break;
-          case MpeDimension::kPressure:
-            channels_[ch].mpe_pressure_axes |= bit;
-            channels_[ch].mpe_bend_axes &= ~bit;
-            channels_[ch].mpe_timbre_axes &= ~bit;
-            break;
-          case MpeDimension::kTimbre:
-            channels_[ch].mpe_timbre_axes |= bit;
-            channels_[ch].mpe_pressure_axes &= ~bit;
-            channels_[ch].mpe_bend_axes &= ~bit;
-            break;
-        }
-      } else {
-        channels_[ch].mpe_pressure_axes &= ~bit;
-        channels_[ch].mpe_timbre_axes &= ~bit;
-        channels_[ch].mpe_bend_axes &= ~bit;
-        update_frozen_mpe_axis(ch, value.axis, value.value);
-      }
+      assign_mpe_axis_owner(bit,
+                            mpe_dimension ? std::optional<MpeDimension>(dimension) : std::nullopt,
+                            channels_[ch].mpe_pressure_axes, channels_[ch].mpe_timbre_axes,
+                            channels_[ch].mpe_bend_axes);
+      if (!mpe_dimension) update_frozen_mpe_axis(ch, value.axis, value.value);
       channel_moved = true;
       channel_changed_mask |= excitation_axis_mask(value.axis);
       continue;
@@ -613,29 +556,9 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
       if (v.active && (!mpe_dimension || v.key_down) && v.note == value.note && v.channel == ch &&
           v.patch != nullptr) {
         v.live_excitation_axes.set(value.axis, value.value);
-        if (!mpe_dimension) {
-          v.live_mpe_pressure_axes &= ~axis_bit;
-          v.live_mpe_timbre_axes &= ~axis_bit;
-          v.live_mpe_bend_axes &= ~axis_bit;
-        } else {
-          switch (dimension) {
-            case MpeDimension::kBend:
-              v.live_mpe_bend_axes |= axis_bit;
-              v.live_mpe_pressure_axes &= ~axis_bit;
-              v.live_mpe_timbre_axes &= ~axis_bit;
-              break;
-            case MpeDimension::kPressure:
-              v.live_mpe_pressure_axes |= axis_bit;
-              v.live_mpe_timbre_axes &= ~axis_bit;
-              v.live_mpe_bend_axes &= ~axis_bit;
-              break;
-            case MpeDimension::kTimbre:
-              v.live_mpe_timbre_axes |= axis_bit;
-              v.live_mpe_pressure_axes &= ~axis_bit;
-              v.live_mpe_bend_axes &= ~axis_bit;
-              break;
-          }
-        }
+        assign_mpe_axis_owner(
+            axis_bit, mpe_dimension ? std::optional<MpeDimension>(dimension) : std::nullopt,
+            v.live_mpe_pressure_axes, v.live_mpe_timbre_axes, v.live_mpe_bend_axes);
         v.push_excitation(axes, present);
       }
     }

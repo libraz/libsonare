@@ -881,8 +881,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     const float to = drive_shape(sample, drive_gain, drive_makeup);
     sample = from + drive_fade.fade01 * (to - from);
     advance_law_fade(drive_fade);
-  } else if (drive_gain > 0.0f) {
-    sample = std::tanh(drive_gain * sample) * drive_makeup;
+  } else {
+    sample = drive_shape(sample, drive_gain, drive_makeup);
   }
 
   // --- filter: cutoff = patch Fc * 2^((env + velocity + keytrack)/1200) ---
@@ -1171,19 +1171,21 @@ void NativeSynthVoice::release() noexcept {
   if (is_harpsichord) harpsichord.release();
   amp_env.note_off();
   filter_env.note_off();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kFm) fm.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kKarplusStrong) ks.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kModal) modal.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kPiano) piano.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kPipeOrgan) pipe_organ.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kBowedString) bowed_string.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kReed) reed.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kBrass) brass.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kFlute) flute.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kPluckedString) plucked_string.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kVocal) vocal.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kFreeReed) free_reed.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kSinging) singing.release();
+  if (patch != nullptr) {
+    if (patch->mode == SynthEngineMode::kFm) fm.release();
+    if (patch->mode == SynthEngineMode::kKarplusStrong) ks.release();
+    if (patch->mode == SynthEngineMode::kModal) modal.release();
+    if (patch->mode == SynthEngineMode::kPiano) piano.release();
+    if (patch->mode == SynthEngineMode::kPipeOrgan) pipe_organ.release();
+    if (patch->mode == SynthEngineMode::kBowedString) bowed_string.release();
+    if (patch->mode == SynthEngineMode::kReed) reed.release();
+    if (patch->mode == SynthEngineMode::kBrass) brass.release();
+    if (patch->mode == SynthEngineMode::kFlute) flute.release();
+    if (patch->mode == SynthEngineMode::kPluckedString) plucked_string.release();
+    if (patch->mode == SynthEngineMode::kVocal) vocal.release();
+    if (patch->mode == SynthEngineMode::kFreeReed) free_reed.release();
+    if (patch->mode == SynthEngineMode::kSinging) singing.release();
+  }
   if (is_harpsichord && !harpsichord_tail_latched && harpsichord.tail_active()) {
     harpsichord_tail_level = release_level;
     harpsichord_tail_latched = true;
