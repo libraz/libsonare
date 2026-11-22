@@ -13411,9 +13411,9 @@ export interface StereoMonoCompatCheckResult {
   correlation: number;
   /** Stereo width; absent for a fully out-of-phase pair. */
   width?: number;
-  /** Peak of the mono fold-down. */
+  /** Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude. */
   monoPeak: number;
-  /** RMS level of the side signal. */
+  /** RMS of the side signal 0.5 * (L - R), as a linear full-scale amplitude. */
   sideRms: number;
   /** True when the pair is likely to survive a mono fold-down. */
   likelyMonoCompatible: boolean;
@@ -13427,7 +13427,7 @@ export interface StereoMonoCompatBand {
   highHz: number;
   /** Inter-channel correlation (-1 to 1). */
   correlation: number;
-  /** RMS level of the side signal. */
+  /** RMS of the band's share of the side signal 0.5 * (L - R), as a linear full-scale amplitude. */
   sideRms: number;
 }
 

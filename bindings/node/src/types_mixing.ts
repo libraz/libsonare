@@ -55,9 +55,9 @@ export interface MixMeterSnapshot {
   correlation: number;
   /** Stereo width measured by the mono-compatibility check. */
   monoCompatWidth: number;
-  /** Peak level of the mono sum used by the mono-compatibility check. */
+  /** Peak of the mono fold-down 0.5 * (L + R), as a linear full-scale amplitude. */
   monoCompatPeak: number;
-  /** RMS level of the side signal used by the mono-compatibility check. */
+  /** RMS of the side signal 0.5 * (L - R), as a linear full-scale amplitude. */
   monoCompatSideRms: number;
   /** True when the mono-compatibility check finds no collapse risk. */
   likelyMonoCompatible: boolean;
