@@ -356,8 +356,8 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
     {0x400132, 0, GsParam::kReverbPreLpf, GsLevel::kState, 1, 0x00, 0x07, 0x00, nullptr},
     {0x400133, 0, GsParam::kReverbLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
     {0x400134, 0, GsParam::kReverbTime, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
-    // The one row that does not even reach GsEffectsConfig: the conversion exists
-    // (gs_reverb_delay_feedback_coefficient) and has no caller.
+    // Reaches GsEffectsConfig through gs_reverb_delay_feedback_coefficient, but only
+    // the delay characters (6 and 7) read it.
     {0x400135, 0, GsParam::kReverbDelayFeedback, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x400137, 0, GsParam::kReverbPredelay, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
 
@@ -1043,6 +1043,13 @@ struct GsWrite {
   uint8_t value = 0;
   uint32_t addr = 0;  ///< The address this byte landed on.
 };
+
+/// Whether @p write lands on a known row with a value inside its range. An out-of-range value is
+/// ignored rather than clamped (docs/gs.md).
+inline bool gs_write_in_range(const GsWrite& write) noexcept {
+  const GsAddressEntry* entry = gs_lookup_address(write.addr);
+  return entry != nullptr && gs_value_in_range(*entry, write.value);
+}
 
 /// Enumerates the writes @p frame carries, one per data byte, walking the main
 /// table then the range table. Returns the number of writes the frame contains

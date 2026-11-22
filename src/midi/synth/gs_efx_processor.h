@@ -9,9 +9,11 @@
 /// realization requires constructing a new processor.
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -19,6 +21,16 @@
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
+
+/// Realtime descriptors of the GS EFX parameter bytes: `byte<slot>` for each of @p count slots.
+inline std::vector<rt::ParamDescriptor> gs_efx_byte_descriptors(std::size_t count) {
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(count);
+  for (unsigned int slot = 0; slot < count; ++slot) {
+    descriptors.push_back({"byte" + std::to_string(slot), slot});
+  }
+  return descriptors;
+}
 
 /// Construction policy for missing modern stages.  Sf2Player keeps the stage
 /// position when its injected factory cannot build a processor; a standalone

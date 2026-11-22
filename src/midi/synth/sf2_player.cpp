@@ -2,11 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
-#include <cstring>
 #include <limits>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -372,95 +369,55 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   ++prepared_domain_;
   release_prepared_nodes();
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
-  residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
-  residual_splitter_.reset();
-  for (SourceResidualSplitter& s : part_bus_splitters_) {
+  const auto prepare_splitter = [this](SourceResidualSplitter& s) {
     s.configure(sample_rate_, kResidualTauSeconds);
     s.reset();
-  }
-  for (SourceResidualSplitter& s : unit_splitters_) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
-  }
-  send_residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
-  send_residual_splitter_.reset();
-  for (SourceResidualSplitter& s : body_residual_splitters_) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
-  }
+  };
+  prepare_splitter(residual_splitter_);
+  for (SourceResidualSplitter& s : part_bus_splitters_) prepare_splitter(s);
+  for (SourceResidualSplitter& s : unit_splitters_) prepare_splitter(s);
+  prepare_splitter(send_residual_splitter_);
+  for (SourceResidualSplitter& s : body_residual_splitters_) prepare_splitter(s);
   pool_.prepare(config_.polyphony);
   fallback_pool_.prepare(config_.synth_fallback ? config_.polyphony : 1);
+  // Each fallback slot gets its delay slab, or nothing when the fallback is off.
+  const auto assign_slab = [this](std::vector<float>& buffers, int slab_capacity) {
+    buffers.assign(
+        config_.synth_fallback ? fallback_pool_.size() * static_cast<size_t>(slab_capacity) : 0,
+        0.0f);
+  };
   fallback_per_note_.assign(fallback_pool_.size(), Sf2PerNoteVoice{});
   // Plucked GM fallback programs are Karplus-Strong voices: give every
   // fallback slot its delay span here (the only allocation site; voices
   // attach their span at note-on).
   fallback_ks_capacity_ = ks_buffer_capacity(sample_rate_);
-  fallback_ks_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_ks_buffers_, ks_slab_capacity(sample_rate_));
   fallback_piano_string_capacity_ = piano_string_capacity(sample_rate_);
-  fallback_piano_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_piano_buffers_, piano_slab_capacity(sample_rate_));
   // The Church Organ GM program is a flue-pipe waveguide voice; give every
   // fallback slot its full registration slab (kMaxPipeRanks pipe spans) here.
   fallback_pipe_organ_capacity_ = pipe_organ_buffer_capacity(sample_rate_);
-  fallback_pipe_organ_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(pipe_organ_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_pipe_organ_buffers_, pipe_organ_slab_capacity(sample_rate_));
   // The acoustic waveguide GM families (bowed string / reed / brass / air-jet
   // flute) each get their per-slot delay slab here, sized by the engine's
   // *_slab_capacity(); voices attach their span at note-on.
   fallback_bowed_capacity_ = bowed_string_buffer_capacity(sample_rate_);
-  fallback_bowed_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(bowed_string_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_bowed_buffers_, bowed_string_slab_capacity(sample_rate_));
   fallback_vocal_capacity_ = vocal_slab_capacity(sample_rate_);
-  fallback_vocal_buffers_.assign(
-      config_.synth_fallback ? fallback_pool_.size() * static_cast<size_t>(fallback_vocal_capacity_)
-                             : 0,
-      0.0f);
+  assign_slab(fallback_vocal_buffers_, fallback_vocal_capacity_);
   fallback_reed_capacity_ = reed_buffer_capacity(sample_rate_);
-  fallback_reed_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(reed_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_reed_buffers_, reed_slab_capacity(sample_rate_));
   fallback_brass_capacity_ = brass_buffer_capacity(sample_rate_);
-  fallback_brass_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(brass_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_brass_buffers_, brass_slab_capacity(sample_rate_));
   fallback_flute_capacity_ = flute_buffer_capacity(sample_rate_);
-  fallback_flute_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(flute_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_flute_buffers_, flute_slab_capacity(sample_rate_));
   fallback_plucked_string_capacity_ = plucked_string_buffer_capacity(sample_rate_);
-  fallback_plucked_string_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(plucked_string_slab_capacity(sample_rate_))
-          : 0,
-      0.0f);
+  assign_slab(fallback_plucked_string_buffers_, plucked_string_slab_capacity(sample_rate_));
   // A harpsichord fallback voice needs its whole registration reserved, not one
   // string: a stop drawn at note-on cannot allocate.
   fallback_harpsichord_capacity_ = harpsichord_buffer_capacity(sample_rate_);
   fallback_harpsichord_stride_ = harpsichord_slab_capacity(sample_rate_);
-  fallback_harpsichord_buffers_.assign(
-      config_.synth_fallback
-          ? fallback_pool_.size() * static_cast<size_t>(fallback_harpsichord_stride_)
-          : 0,
-      0.0f);
+  assign_slab(fallback_harpsichord_buffers_, fallback_harpsichord_stride_);
   clear_control_owned_gs_state();
   // Power-on matches GS defaults (reverb send 40): a bare SMF that never
   // sends a reset SysEx should still land in the default room, as on

@@ -297,6 +297,11 @@ void gs_apply_delay_macro(GsSystemEffects& fx, uint8_t macro) noexcept;
 /// Whether a REVERB CHARACTER sounds the delay unit rather than the reverb.
 bool gs_reverb_character_is_delay(uint8_t character) noexcept;
 
+/// The unit a REVERB CHARACTER sounds: the tank, or the delay (6) or panning delay (7).
+enum class GsReverbUnit : uint8_t { kTank, kDelay, kPanningDelay };
+inline constexpr uint8_t kGsReverbCharacterDelay = 6;
+GsReverbUnit gs_reverb_character_unit(uint8_t character) noexcept;
+
 /// Tank damping a REVERB CHARACTER carries, [0, 1].
 float gs_reverb_character_damping(uint8_t character) noexcept;
 

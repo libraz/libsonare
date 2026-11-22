@@ -166,6 +166,7 @@ class GsEffectBus {
   void reset_child_tail_history() noexcept;
   void activate_reverb_mode(uint8_t character) noexcept;
   void reset_reverb_activation() noexcept;
+  void reset_histories() noexcept;
 };
 
 }  // namespace sonare::midi::synth

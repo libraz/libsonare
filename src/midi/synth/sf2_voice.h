@@ -48,6 +48,9 @@ namespace sonare::midi::synth {
 /// Full-scale magnitude of an SF2 pan generator / MIDI CC10, in 0.1% units.
 inline constexpr float kPanUnitsFullScale = 500.0f;
 
+/// Frequency of absolute cents 0 (SF2 absolute pitch reference), in Hz.
+inline constexpr float kSf2AbsoluteCentsZeroHz = 8.176f;
+
 /// @brief Constant-power gains for a voice at @p pan_units.
 ///
 /// Shared by the SF2 voices and the native-synth voices so both spread a voice
@@ -351,12 +354,12 @@ struct Sf2VoiceParams {
 
   // --- LFOs ---
   float mod_lfo_delay_s = 0.0f;
-  float mod_lfo_freq_hz = 8.176f;
+  float mod_lfo_freq_hz = kSf2AbsoluteCentsZeroHz;
   float mod_lfo_to_pitch = 0.0f;      // cents
   float mod_lfo_to_filter_fc = 0.0f;  // cents
   float mod_lfo_to_volume_cb = 0.0f;  // centibels
   float vib_lfo_delay_s = 0.0f;
-  float vib_lfo_freq_hz = 8.176f;
+  float vib_lfo_freq_hz = kSf2AbsoluteCentsZeroHz;
   float vib_lfo_to_pitch = 0.0f;  // cents
 
   // --- effect sends (consumed by the GS effect units) ---

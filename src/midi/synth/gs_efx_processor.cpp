@@ -171,8 +171,6 @@ Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>&
                                 double sample_rate, int max_block) {
   Sf2EfxUnitRt out;
   out.realization = realization;
-  const double fade_samples = static_cast<double>(kSf2EfxFadeMs) * 1e-3 * sample_rate;
-  out.fade_step = fade_samples > 1.0 ? static_cast<float>(1.0 / fade_samples) : 1.0f;
   if (realization == GsEfxRealization::kClassic) {
 #if defined(SONARE_GS_CLASSIC)
     const gs_classic::GsClassicModelRegistry& registry = gs_classic::gs_classic_default_registry();
@@ -340,6 +338,8 @@ void sf2_prepare_efx_unit(Sf2EfxUnitRt& unit, double sample_rate, int max_block)
   if (max_block <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "GS EFX max block must be positive");
   }
+  const double fade_samples = static_cast<double>(kSf2EfxFadeMs) * 1e-3 * sample_rate;
+  unit.fade_step = fade_samples > 1.0 ? static_cast<float>(1.0 / fade_samples) : 1.0f;
   int64_t front = 0;
   int64_t half_a = 0;
   int64_t half_b = 0;
@@ -521,7 +521,6 @@ GsEfxProcessor::GsEfxProcessor(const GsEfx& state, GsEfxRealization realization,
     throw SonareException(ErrorCode::InvalidParameter,
                           "GsEfxProcessor: type bytes are not a canonical 7-bit pair");
   }
-  state_.type_msb = static_cast<uint8_t>(state_.type >> 8);
   if (state_.type != 0 && gs_efx_type_defaults(state_.type) == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "GsEfxProcessor: unsupported EFX type " + std::to_string(state_.type));
@@ -684,8 +683,6 @@ void GsEfxProcessor::prepare(double sample_rate, int max_block_size, int max_cha
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   max_channels_ = max_channels;
-  const double fade_samples = static_cast<double>(kSf2EfxFadeMs) * 1e-3 * sample_rate;
-  unit_.fade_step = fade_samples > 1.0 ? static_cast<float>(1.0 / fade_samples) : 1.0f;
   prepared_ = true;
   reset();
   apply_enable_state(true);
@@ -726,12 +723,10 @@ void GsEfxProcessor::process(float* const* channels, int num_channels, int num_s
 void GsEfxProcessor::reset() { sf2_reset_efx_unit(unit_); }
 
 int GsEfxProcessor::latency_samples() const noexcept {
-  if (realization_ != GsEfxRealization::kModern || state_.type == 0) return 0;
   return sf2_efx_unit_latency_samples_q8(unit_) >> 8;
 }
 
 int GsEfxProcessor::latency_samples_q8() const noexcept {
-  if (realization_ != GsEfxRealization::kModern || state_.type == 0) return 0;
   return sf2_efx_unit_latency_samples_q8(unit_);
 }
 
@@ -749,12 +744,7 @@ bool GsEfxProcessor::parameter_is_realtime_safe(unsigned int param_id) const noe
 }
 
 std::vector<rt::ParamDescriptor> GsEfxProcessor::parameter_descriptors() const {
-  std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(state_.params.size());
-  for (unsigned int slot = 0; slot < state_.params.size(); ++slot) {
-    descriptors.push_back({"byte" + std::to_string(slot), slot});
-  }
-  return descriptors;
+  return gs_efx_byte_descriptors(state_.params.size());
 }
 
 bool GsEfxProcessor::set_parameter_impl(unsigned int param_id, float value) {

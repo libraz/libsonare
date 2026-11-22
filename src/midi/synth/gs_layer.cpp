@@ -17,6 +17,7 @@
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_efx_convert.h"
+#include "midi/synth/gs_system_effects.h"
 #include "midi/synth/pitch.h"
 #include "midi/sysex_framing.h"
 #include "rt/biquad_design.h"
@@ -135,9 +136,7 @@ float gs_mod_amp_fraction(uint8_t value) noexcept {
   return static_cast<float>(centred_offset(value)) / 64.0f;
 }
 
-float gs_mod_tva_depth(uint8_t value) noexcept {
-  return static_cast<float>(value & 0x7Fu) / 127.0f;
-}
+float gs_mod_tva_depth(uint8_t value) noexcept { return gs_effect_level(value); }
 
 float gs_mod_lfo_rate_cents(uint8_t value) noexcept {
   return kGsVibRateCentsPerStep * static_cast<float>(centred_offset(value));
@@ -150,7 +149,7 @@ float gs_master_tune_cents(const GsMasterParams& master) noexcept {
 }
 
 float gs_master_volume_gain(uint8_t value) noexcept {
-  const float v = static_cast<float>(value & 0x7Fu) / 127.0f;
+  const float v = gs_effect_level(value);
   return v * v;
 }
 
@@ -328,7 +327,7 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
                                         static_cast<double>(kSemitonesPerOctave));
   }
   if ((drum.flags & GsDrumNoteParams::kLevel) != 0) {
-    const float v = static_cast<float>(drum.level & 0x7Fu) / 127.0f;
+    const float v = gs_effect_level(drum.level);
     params.attenuation_gain *= v * v;  // same square law as CC7/velocity
   }
   if ((drum.flags & GsDrumNoteParams::kPan) != 0) {
@@ -339,13 +338,13 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
   // 0.0-1.0). The scale is carried to the render, which applies it to the zone's
   // send and the part's together.
   if ((drum.flags & GsDrumNoteParams::kReverb) != 0) {
-    params.reverb_send_scale *= static_cast<float>(drum.reverb & 0x7Fu) / 127.0f;
+    params.reverb_send_scale *= gs_effect_level(drum.reverb);
   }
   if ((drum.flags & GsDrumNoteParams::kChorus) != 0) {
-    params.chorus_send_scale *= static_cast<float>(drum.chorus & 0x7Fu) / 127.0f;
+    params.chorus_send_scale *= gs_effect_level(drum.chorus);
   }
   if ((drum.flags & GsDrumNoteParams::kDelay) != 0) {
-    params.delay_send_scale *= static_cast<float>(drum.delay & 0x7Fu) / 127.0f;
+    params.delay_send_scale *= gs_effect_level(drum.delay);
   }
   // ASSIGN GROUP replaces the kit's own exclusive class rather than adding to
   // it, so 00 takes a note out of every group. The caller chokes on the value

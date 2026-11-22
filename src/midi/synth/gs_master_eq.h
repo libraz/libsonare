@@ -43,10 +43,6 @@ float gs_eq_high_freq_hz(uint8_t value) noexcept;
 /// EQ LOW/HIGH GAIN `34`-`4C` -> dB, `40` = 0 dB, clamped to +-12 dB.
 float gs_eq_gain_db(uint8_t value) noexcept;
 
-/// True when both bands sit at 0 dB — the power-on state, where the EQ is a
-/// bit-exact pass-through.
-bool gs_master_eq_is_flat(const GsMasterEq& eq) noexcept;
-
 /// Stereo two-band shelving EQ across the output.
 class GsMasterEqFilter {
  public:

@@ -123,7 +123,6 @@ class RenderPathRecorder {
   std::array<std::vector<std::string>, 16> refused_{};
   std::string reason_;
   int64_t frame_ = 0;
-  int64_t max_frame_ = 0;
   bool stopped_ = false;
   bool has_topology_ = false;
 };

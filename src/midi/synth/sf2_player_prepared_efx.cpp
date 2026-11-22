@@ -90,7 +90,6 @@ std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_no
   node->unit = static_cast<uint8_t>(unit);
   node->type = type;
   node->unit_rt = part_fx_.build_unit(defaults);
-  node->stage_count = static_cast<uint8_t>(std::min<size_t>(node->unit_rt.stages.size(), 255));
   for (size_t s = 0; s < std::min(node->unit_rt.stages.size(), node->default_enabled.size()); ++s) {
     // All on: the enable rules alone carry selector/switch state.
     node->default_enabled[s] = true;
@@ -141,7 +140,7 @@ std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_no
     }
   } else if (!node->unit_rt.stages.empty() && node->unit_rt.stages.front().proc != nullptr) {
     const rt::ProcessorBase* proc = node->unit_rt.stages.front().proc.get();
-    for (size_t slot = 0; slot < 20; ++slot) {
+    for (size_t slot = 0; slot < defaults.params.size(); ++slot) {
       if (!proc->parameter_is_realtime_safe(static_cast<unsigned int>(slot))) return nullptr;
     }
   }
@@ -389,8 +388,7 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
   raise_prepared_fx_tail();
 }
 
-void Sf2Player::apply_prepared_candidate(const PreparedSysEx& token,
-                                         const PreparedEfxCandidate& candidate) noexcept {
+void Sf2Player::apply_prepared_candidate(const PreparedEfxCandidate& candidate) noexcept {
   if (candidate.node == nullptr || candidate.unit >= kGsEfxUnitCount) return;
   const PreparedEfxNode* previous = prepared_active_nodes_[candidate.unit];
   const bool switching = previous != candidate.node;
@@ -402,7 +400,6 @@ void Sf2Player::apply_prepared_candidate(const PreparedSysEx& token,
   if (switching) {
     sf2_reset_efx_unit(candidate.node->unit_rt);
   }
-  (void)token;
 }
 
 void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_t* data,
@@ -462,7 +459,7 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
       for (const PreparedEfxCandidate& candidate : token.candidates) {
         if (candidate.unit == unit && candidate.type == prepared_efx_[unit].type) {
           selected = candidate.node;
-          apply_prepared_candidate(token, candidate);
+          apply_prepared_candidate(candidate);
           break;
         }
       }

@@ -52,6 +52,14 @@ const T& table_entry(const std::array<T, N>& table, uint8_t index) noexcept {
   return table[table_index(table, index)];
 }
 
+float chorus_ms_from_steps(uint8_t value) noexcept {
+  return static_cast<float>((value & 0x7Fu) + 1) / kChorusMsSteps;
+}
+
+float unsigned_feedback_from_byte(uint8_t value) noexcept {
+  return static_cast<float>(value & 0x7Fu) / kMax7Bit * kMaxUnsignedFeedback;
+}
+
 }  // namespace
 
 float gs_delay_time_ms(uint8_t value) noexcept {
@@ -97,23 +105,19 @@ float gs_reverb_delay_time_ms_designed(uint8_t value) noexcept {
 }
 
 float gs_reverb_delay_feedback_coefficient(uint8_t value) noexcept {
-  return static_cast<float>(value & 0x7Fu) / kMax7Bit * kMaxUnsignedFeedback;
+  return unsigned_feedback_from_byte(value);
 }
 
 float gs_chorus_rate_hz(uint8_t value) noexcept {
   return static_cast<float>(value & 0x7Fu) * kChorusRateHzPerStep;
 }
 
-float gs_chorus_depth_ms(uint8_t value) noexcept {
-  return static_cast<float>((value & 0x7Fu) + 1) / kChorusMsSteps;
-}
+float gs_chorus_depth_ms(uint8_t value) noexcept { return chorus_ms_from_steps(value); }
 
-float gs_chorus_delay_ms(uint8_t value) noexcept {
-  return static_cast<float>((value & 0x7Fu) + 1) / kChorusMsSteps;
-}
+float gs_chorus_delay_ms(uint8_t value) noexcept { return chorus_ms_from_steps(value); }
 
 float gs_chorus_feedback_coefficient(uint8_t value) noexcept {
-  return static_cast<float>(value & 0x7Fu) / kMax7Bit * kMaxUnsignedFeedback;
+  return unsigned_feedback_from_byte(value);
 }
 
 float gs_effect_level(uint8_t value) noexcept {
@@ -179,6 +183,11 @@ void gs_apply_delay_macro(GsSystemEffects& fx, uint8_t macro) noexcept {
 
 bool gs_reverb_character_is_delay(uint8_t character) noexcept {
   return table_entry(kGsReverbCharacters, character).delay_type;
+}
+
+GsReverbUnit gs_reverb_character_unit(uint8_t character) noexcept {
+  if (!gs_reverb_character_is_delay(character)) return GsReverbUnit::kTank;
+  return character == kGsReverbCharacterDelay ? GsReverbUnit::kDelay : GsReverbUnit::kPanningDelay;
 }
 
 float gs_reverb_character_damping(uint8_t character) noexcept {

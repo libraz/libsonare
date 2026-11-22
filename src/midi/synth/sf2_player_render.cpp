@@ -684,17 +684,9 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       // rather than from the clean input.
       // The send amounts come from the overlay while active, else the snapshot.
       if (rev_l != nullptr) {
-        const GsEfx* unit_efx =
-            prepared ? &prepared_efx_[unit] : (efx != nullptr ? &efx->gs_efx_state[unit] : nullptr);
-        const float send_reverb =
-            unit_efx != nullptr ? kCcSendDepth * static_cast<float>(unit_efx->send_reverb) / 127.0f
-                                : 0.0f;
-        const float send_chorus =
-            unit_efx != nullptr ? kCcSendDepth * static_cast<float>(unit_efx->send_chorus) / 127.0f
-                                : 0.0f;
-        const float send_delay =
-            unit_efx != nullptr ? kCcSendDepth * static_cast<float>(unit_efx->send_delay) / 127.0f
-                                : 0.0f;
+        const float send_reverb = unit_send_reverb[unit];
+        const float send_chorus = unit_send_chorus[unit];
+        const float send_delay = unit_send_delay[unit];
         for (int i = 0; i < n; ++i) {
           if (send_reverb > 0.0f) {
             rev_l[i] += unit_l[i] * send_reverb;

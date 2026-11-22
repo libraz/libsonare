@@ -98,16 +98,6 @@ class ByteReader {
     return std::string(p, len);
   }
 
-  const uint8_t* raw(size_t n) noexcept {
-    if (pos_ + n > size_) {
-      ok_ = false;
-      return nullptr;
-    }
-    const uint8_t* p = data_ + pos_;
-    pos_ += n;
-    return p;
-  }
-
  private:
   const uint8_t* data_ = nullptr;
   size_t size_ = 0;
@@ -122,6 +112,20 @@ bool id_is(const char id[4], const char* expect) noexcept {
 bool fail(std::string* error, const char* message) {
   if (error != nullptr) *error = message;
   return false;
+}
+
+/// Reads one pdta record table: null on success, else the refusal message.
+template <typename Record, typename Decode>
+const char* read_pdta_table(ByteReader& sub, uint32_t sub_size, size_t record_size,
+                            const char* size_message, std::vector<Record>& table, Decode decode) {
+  if (sub_size % record_size != 0) return size_message;
+  const size_t record_count = sub_size / record_size;
+  if (!resource::sf2_table_records_fit(table.size(), record_count)) {
+    return "sf2: pdta table resource limit exceeded";
+  }
+  table.reserve(table.size() + record_count);
+  for (size_t i = 0; i < record_count; ++i) table.push_back(decode(sub));
+  return nullptr;
 }
 
 Sf2Gen normalize_generator(Sf2Gen gen) noexcept {
@@ -298,7 +302,6 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
   size_t sm24_bytes = 0;
   size_t pdta_pos = 0;
   size_t pdta_size = 0;
-  bool saw_info = false;
 
   while (file.remaining() >= 8) {
     if (!file.fourcc(id)) return fail(error, "sf2: truncated chunk header");
@@ -309,9 +312,7 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
       ByteReader list(data + chunk_pos, chunk_size);
       char list_type[4];
       list.fourcc(list_type);
-      if (id_is(list_type, "INFO")) {
-        saw_info = true;
-      } else if (id_is(list_type, "sdta")) {
+      if (id_is(list_type, "sdta")) {
         // Sub-chunks: smpl (16-bit PCM), optional sm24 (low bytes).
         while (list.remaining() >= 8) {
           char sub_id[4];
@@ -339,7 +340,6 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
     file.seek(chunk_pos + chunk_size + (chunk_size & 1u));
   }
 
-  (void)saw_info;  // INFO is informational; a missing INFO list is tolerated.
   if (pdta_size == 0) return fail(error, "sf2: missing pdta LIST");
 
   // --- pdta sub-chunks ---
@@ -360,102 +360,71 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
       const uint32_t sub_size = pdta.u32();
       if (sub_size > pdta.remaining()) return fail(error, "sf2: pdta sub-chunk overruns");
       ByteReader sub(data + pdta_pos + pdta.pos(), sub_size);
+      const char* table_error = nullptr;
       if (id_is(sub_id, "phdr")) {
-        if (sub_size % 38 != 0) return fail(error, "sf2: phdr record size mismatch");
-        const size_t record_count = sub_size / 38;
-        if (!resource::sf2_table_records_fit(phdr.size(), record_count)) {
-          return fail(error, "sf2: pdta table resource limit exceeded");
-        }
-        phdr.reserve(phdr.size() + record_count);
-        for (size_t i = 0; i < record_count; ++i) {
-          PresetHeader h;
-          h.name = sub.name(20);
-          h.preset = sub.u16();
-          h.bank = sub.u16();
-          h.bag_index = sub.u16();
-          sub.skip(12);  // library / genre / morphology
-          phdr.push_back(std::move(h));
-        }
+        table_error = read_pdta_table(sub, sub_size, 38, "sf2: phdr record size mismatch", phdr,
+                                      [](ByteReader& r) {
+                                        PresetHeader h;
+                                        h.name = r.name(20);
+                                        h.preset = r.u16();
+                                        h.bank = r.u16();
+                                        h.bag_index = r.u16();
+                                        r.skip(12);  // library / genre / morphology
+                                        return h;
+                                      });
       } else if (id_is(sub_id, "pbag") || id_is(sub_id, "ibag")) {
-        if (sub_size % 4 != 0) return fail(error, "sf2: bag record size mismatch");
-        auto& bags = sub_id[0] == 'p' ? pbag : ibag;
-        const size_t record_count = sub_size / 4;
-        if (!resource::sf2_table_records_fit(bags.size(), record_count)) {
-          return fail(error, "sf2: pdta table resource limit exceeded");
-        }
-        bags.reserve(bags.size() + record_count);
-        for (size_t i = 0; i < record_count; ++i) {
-          Bag b;
-          b.gen_index = sub.u16();
-          b.mod_index = sub.u16();
-          bags.push_back(b);
-        }
+        table_error = read_pdta_table(sub, sub_size, 4, "sf2: bag record size mismatch",
+                                      sub_id[0] == 'p' ? pbag : ibag, [](ByteReader& r) {
+                                        Bag b;
+                                        b.gen_index = r.u16();
+                                        b.mod_index = r.u16();
+                                        return b;
+                                      });
       } else if (id_is(sub_id, "pmod") || id_is(sub_id, "imod")) {
-        if (sub_size % 10 != 0) return fail(error, "sf2: mod record size mismatch");
-        auto& mods = sub_id[0] == 'p' ? pmod : imod;
-        const size_t record_count = sub_size / 10;
-        if (!resource::sf2_table_records_fit(mods.size(), record_count)) {
-          return fail(error, "sf2: pdta table resource limit exceeded");
-        }
-        mods.reserve(mods.size() + record_count);
-        for (size_t i = 0; i < record_count; ++i) {
-          Sf2Mod m;
-          m.src_oper = sub.u16();
-          m.dest_oper = sub.u16();
-          m.amount = sub.s16();
-          m.amount_src_oper = sub.u16();
-          m.transform_oper = sub.u16();
-          mods.push_back(m);
-        }
+        table_error = read_pdta_table(sub, sub_size, 10, "sf2: mod record size mismatch",
+                                      sub_id[0] == 'p' ? pmod : imod, [](ByteReader& r) {
+                                        Sf2Mod m;
+                                        m.src_oper = r.u16();
+                                        m.dest_oper = r.u16();
+                                        m.amount = r.s16();
+                                        m.amount_src_oper = r.u16();
+                                        m.transform_oper = r.u16();
+                                        return m;
+                                      });
       } else if (id_is(sub_id, "pgen") || id_is(sub_id, "igen")) {
-        if (sub_size % 4 != 0) return fail(error, "sf2: gen record size mismatch");
-        auto& gens = sub_id[0] == 'p' ? pgen : igen;
-        const size_t record_count = sub_size / 4;
-        if (!resource::sf2_table_records_fit(gens.size(), record_count)) {
-          return fail(error, "sf2: pdta table resource limit exceeded");
-        }
-        gens.reserve(gens.size() + record_count);
-        for (size_t i = 0; i < record_count; ++i) {
-          Sf2Gen g;
-          g.oper = sub.u16();
-          g.amount = sub.s16();
-          gens.push_back(normalize_generator(g));
-        }
+        table_error = read_pdta_table(sub, sub_size, 4, "sf2: gen record size mismatch",
+                                      sub_id[0] == 'p' ? pgen : igen, [](ByteReader& r) {
+                                        Sf2Gen g;
+                                        g.oper = r.u16();
+                                        g.amount = r.s16();
+                                        return normalize_generator(g);
+                                      });
       } else if (id_is(sub_id, "inst")) {
-        if (sub_size % 22 != 0) return fail(error, "sf2: inst record size mismatch");
-        const size_t record_count = sub_size / 22;
-        if (!resource::sf2_table_records_fit(inst.size(), record_count)) {
-          return fail(error, "sf2: pdta table resource limit exceeded");
-        }
-        inst.reserve(inst.size() + record_count);
-        for (size_t i = 0; i < record_count; ++i) {
-          InstHeader h;
-          h.name = sub.name(20);
-          h.bag_index = sub.u16();
-          inst.push_back(std::move(h));
-        }
+        table_error = read_pdta_table(sub, sub_size, 22, "sf2: inst record size mismatch", inst,
+                                      [](ByteReader& r) {
+                                        InstHeader h;
+                                        h.name = r.name(20);
+                                        h.bag_index = r.u16();
+                                        return h;
+                                      });
       } else if (id_is(sub_id, "shdr")) {
-        if (sub_size % 46 != 0) return fail(error, "sf2: shdr record size mismatch");
-        const size_t record_count = sub_size / 46;
-        if (!resource::sf2_table_records_fit(samples_.size(), record_count)) {
-          return fail(error, "sf2: pdta table resource limit exceeded");
-        }
-        samples_.reserve(samples_.size() + record_count);
-        for (size_t i = 0; i < record_count; ++i) {
-          Sf2Sample s;
-          s.name = sub.name(20);
-          s.start = sub.u32();
-          s.end = sub.u32();
-          s.loop_start = sub.u32();
-          s.loop_end = sub.u32();
-          s.sample_rate = sub.u32();
-          s.original_pitch = sub.u8();
-          s.correction = static_cast<int8_t>(sub.u8());
-          s.sample_link = sub.u16();
-          s.sample_type = sub.u16();
-          samples_.push_back(std::move(s));
-        }
+        table_error = read_pdta_table(sub, sub_size, 46, "sf2: shdr record size mismatch", samples_,
+                                      [](ByteReader& r) {
+                                        Sf2Sample s;
+                                        s.name = r.name(20);
+                                        s.start = r.u32();
+                                        s.end = r.u32();
+                                        s.loop_start = r.u32();
+                                        s.loop_end = r.u32();
+                                        s.sample_rate = r.u32();
+                                        s.original_pitch = r.u8();
+                                        s.correction = static_cast<int8_t>(r.u8());
+                                        s.sample_link = r.u16();
+                                        s.sample_type = r.u16();
+                                        return s;
+                                      });
       }
+      if (table_error != nullptr) return fail(error, table_error);
       if (!sub.ok()) return fail(error, "sf2: truncated pdta records");
       pdta.skip(sub_size + (sub_size & 1u));
     }

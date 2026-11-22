@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include "midi/synth/gs_classic/numpy_math.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth::gs_classic {
@@ -21,14 +22,6 @@ constexpr double kFloatStorageTolerance = 0x1p-22;
 constexpr std::size_t kNoHistory = SIZE_MAX;
 constexpr std::size_t kKindCount = static_cast<std::size_t>(GsClassicNodeKind::kXNoise) + 1;
 constexpr uint8_t kByteMask = 0x7F;
-
-/// numpy's float remainder: the sign of the divisor, and +0 for an exact multiple.
-double py_mod(double a, double b) noexcept {
-  double m = std::fmod(a, b);
-  if (m == 0.0) return std::copysign(0.0, b);
-  if ((b < 0.0) != (m < 0.0)) m += b;
-  return m;
-}
 
 /// numpy's compiled `interp` over n points given by accessors; ends held.
 template <typename Xs, typename Ys>
@@ -203,13 +196,6 @@ double lfo_shape(const GsClassicRenderContext& ctx, const GsClassicNode& node,
     }
   }
   return 0.0;
-}
-
-void render_gain(const GsClassicRenderContext& ctx, const GsClassicNode& node, double*,
-                 std::size_t a, std::size_t b) {
-  const double* x = ctx.input(node, 0);
-  double* y = ctx.output(node);
-  for (std::size_t i = a; i < b; ++i) y[i] = x[i] * ctx.value(node, 0, i);
 }
 
 void render_mix(const GsClassicRenderContext& ctx, const GsClassicNode& node, double*,
@@ -431,7 +417,8 @@ bool reads_points(const GsClassicNode& n) {
   return (n.kind == GsClassicNodeKind::kLfo &&
           n.flags == static_cast<uint8_t>(GsClassicLfoShape::kPoints)) ||
          (n.kind == GsClassicNodeKind::kShaper &&
-          (n.flags & 0x0F) == static_cast<uint8_t>(GsClassicShaperCurve::kPoints));
+          (n.flags & kGsClassicShaperCurveMask) ==
+              static_cast<uint8_t>(GsClassicShaperCurve::kPoints));
 }
 
 /// Values and inputs a kind drawn here requires, or false for a malformed node.
@@ -458,8 +445,10 @@ bool well_formed(const GsClassicModelSet& m, const GsClassicNode& n) {
       return n.n_inputs == 0 && n.value_count == 2 &&
              n.flags <= static_cast<uint8_t>(GsClassicNoise::kHum);
     case GsClassicNodeKind::kShaper:
-      return n.n_inputs == 1 && n.value_count == 1 && (n.flags >> 4) == 1 &&
-             (n.flags & 0x0F) <= static_cast<uint8_t>(GsClassicShaperCurve::kPoints);
+      return n.n_inputs == 1 && n.value_count == 1 &&
+             (n.flags >> kGsClassicShaperOversampleShift) == 1 &&
+             (n.flags & kGsClassicShaperCurveMask) <=
+                 static_cast<uint8_t>(GsClassicShaperCurve::kPoints);
     default:
       return n.n_inputs <= kGsClassicMaxInputs;
   }
@@ -558,7 +547,7 @@ bool GsClassicGraph::prepare(const GsClassicModelSet& models, const GsClassicTyp
                              std::size_t max_block, const GsClassicKernelTable* kernels) {
   static const std::array<GsClassicNodeKernel, kKindCount> kOwn = [] {
     std::array<GsClassicNodeKernel, kKindCount> k{};
-    k[kind_index(GsClassicNodeKind::kGain)] = {nullptr, nullptr, render_gain};
+    k[kind_index(GsClassicNodeKind::kGain)] = {nullptr, nullptr, gs_classic_render_vca};
     k[kind_index(GsClassicNodeKind::kMix)] = {nullptr, nullptr, render_mix};
     k[kind_index(GsClassicNodeKind::kPan)] = {nullptr, nullptr, render_pan};
     k[kind_index(GsClassicNodeKind::kDelay)] = {nullptr, nullptr, render_delay};

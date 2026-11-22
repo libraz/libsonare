@@ -76,6 +76,19 @@ const Sf2EfxUnitRt kNoUnitRuntime{};
 /// Whether an EFX CONTROL SOURCE byte names a controller; 00 and 62-7F are off.
 bool efx_source_live(uint8_t source) noexcept { return source != 0 && source <= kEfxSourceBend; }
 
+/// Writes one control destination's value into its stage; false when the destination is unusable
+/// or the stage refused the value.
+bool apply_efx_control_dest(const std::vector<Sf2EfxStageRt>& stages, const Sf2EfxControlDest& dest,
+                            uint8_t byte) {
+  if (dest.stage_index >= stages.size()) return false;
+  rt::ProcessorBase* proc = stages[dest.stage_index].proc.get();
+  if (proc == nullptr || !proc->parameter_is_realtime_safe(dest.param_id)) return false;
+  const float value = dest.binding != nullptr
+                          ? sf2_efx_destination_value(*dest.binding, byte, dest.transform)
+                          : byte;
+  return proc->set_parameter(dest.param_id, value);
+}
+
 int clamp_tail(int64_t samples) noexcept {
   return samples > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
                                                    : static_cast<int>(samples);
@@ -262,8 +275,7 @@ bool PartFxStage::set_part_rig(uint8_t part, const PartRig& rig) {
     }
   }
   const size_t index = part == kPartRigAllParts ? kDestinationRig : part;
-  PartRig copy = rig;
-  rigs_.rigs[index] = std::move(copy);
+  rigs_.rigs[index] = rig;
   rigs_.present[index] = true;
   refresh_bank_parts();
   return true;
@@ -271,7 +283,6 @@ bool PartFxStage::set_part_rig(uint8_t part, const PartRig& rig) {
 
 bool PartFxStage::set_part_rig_and_publish(uint8_t part, const PartRig& rig,
                                            bool publish_now) noexcept {
-  if (!validate_part_rig(part, rig)) return false;
   try {
     RigTable previous = rig_table();
     if (!set_part_rig(part, rig)) return false;
@@ -427,11 +438,15 @@ bool PartFxStage::apply_control_sysex(const uint8_t* data, size_t size) {
   if (!touched) return assign_changed;
   if (assign_changed || type_changed != 0) return true;
 
-  const auto state_changed = [](const GsEfx& a, const GsEfx& b) noexcept {
-    return a.type != b.type || a.type_msb != b.type_msb || a.params != b.params ||
-           a.send_reverb != b.send_reverb || a.send_chorus != b.send_chorus ||
-           a.send_delay != b.send_delay || a.control_source != b.control_source ||
-           a.control_depth != b.control_depth || a.assigned != b.assigned;
+  // The fields only a full-snapshot publication carries.
+  const auto rebuild_field_changed = [](const GsEfx& a, const GsEfx& b) noexcept {
+    return a.type_msb != b.type_msb || a.send_reverb != b.send_reverb ||
+           a.send_chorus != b.send_chorus || a.send_delay != b.send_delay ||
+           a.control_source != b.control_source || a.control_depth != b.control_depth ||
+           a.assigned != b.assigned;
+  };
+  const auto state_changed = [&](const GsEfx& a, const GsEfx& b) noexcept {
+    return a.type != b.type || a.params != b.params || rebuild_field_changed(a, b);
   };
   std::array<bool, kGsEfxUnitCount> changed{};
   bool needs_rebuild = false;
@@ -440,15 +455,7 @@ bool PartFxStage::apply_control_sysex(const uint8_t* data, size_t size) {
     if (!changed[unit]) continue;
     // The full-snapshot publication is the only carrier of sends, control
     // routing, a held type MSB, or the transition from an untouched unit.
-    if (previous[unit].type_msb != efx_[unit].type_msb ||
-        previous[unit].send_reverb != efx_[unit].send_reverb ||
-        previous[unit].send_chorus != efx_[unit].send_chorus ||
-        previous[unit].send_delay != efx_[unit].send_delay ||
-        previous[unit].control_source != efx_[unit].control_source ||
-        previous[unit].control_depth != efx_[unit].control_depth ||
-        previous[unit].assigned != efx_[unit].assigned) {
-      needs_rebuild = true;
-    }
+    if (rebuild_field_changed(previous[unit], efx_[unit])) needs_rebuild = true;
   }
   if (needs_rebuild) return true;
   if (std::none_of(changed.begin(), changed.end(), [](bool value) { return value; })) return false;
@@ -737,7 +744,7 @@ void PartFxStage::apply_legacy_plan(size_t unit, const GsEfx& target, int contro
       continue;
     }
     const uint8_t source = target.control_source[k];
-    if (source == 0 || source > kEfxSourceBend) continue;
+    if (!efx_source_live(source)) continue;
     Sf2EfxControlRt effective;
     effective.source = target.control_source[k];
     effective.depth = target.control_depth[k];
@@ -749,14 +756,7 @@ void PartFxStage::apply_legacy_plan(size_t unit, const GsEfx& target, int contro
     const uint8_t byte =
         efx_control_byte(effective, host.part_controller_position(control_part, effective.source));
     for (uint8_t d = 0; d < control.n_dest; ++d) {
-      const Sf2EfxControlDest& dest = control.dest[d];
-      if (dest.stage_index >= live.stages.size()) continue;
-      rt::ProcessorBase* proc = live.stages[dest.stage_index].proc.get();
-      if (proc == nullptr || !proc->parameter_is_realtime_safe(dest.param_id)) continue;
-      const float value = dest.binding != nullptr
-                              ? sf2_efx_destination_value(*dest.binding, byte, dest.transform)
-                              : byte;
-      proc->set_parameter(dest.param_id, value);
+      apply_efx_control_dest(live.stages, control.dest[d], byte);
     }
   }
 
@@ -995,14 +995,7 @@ void PartFxStage::apply_controls(const PartFxHost& host) noexcept {
     control.dirty = false;
     control.applied_byte = byte;
     for (uint8_t d = 0; d < control.n_dest; ++d) {
-      const Sf2EfxControlDest& dest = control.dest[d];
-      if (dest.stage_index >= stages.size()) continue;
-      rt::ProcessorBase* proc = stages[dest.stage_index].proc.get();
-      if (proc == nullptr || !proc->parameter_is_realtime_safe(dest.param_id)) continue;
-      const float value = dest.binding != nullptr
-                              ? sf2_efx_destination_value(*dest.binding, byte, dest.transform)
-                              : byte;
-      if (proc->set_parameter(dest.param_id, value)) changed = true;
+      if (apply_efx_control_dest(stages, control.dest[d], byte)) changed = true;
     }
   }
   if (changed) raise_active_tail(*snapshot);

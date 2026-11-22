@@ -27,6 +27,8 @@ SONARE_TUNABLE(kReverbDampingScale, 1.0f);
 /// One circulation of the figure-8 tank. Shared by the RT60 -> tank-feedback
 /// conversion and the ring-out bound so the two cannot drift apart.
 constexpr double kTankPassSeconds = 0.15;
+/// Longest reverb predelay (and delay-line allocation), in seconds.
+constexpr double kMaxPredelaySeconds = 4.0;
 
 effects::reverb::DattorroReverbConfig reverb_config(const GsEffectsConfig& cfg) {
   effects::reverb::DattorroReverbConfig rc;
@@ -70,7 +72,8 @@ effects::delay::StereoDelayConfig reverb_delay_config(const GsEffectsConfig& cfg
 float reverb_predelay_samples(float milliseconds, double sample_rate) noexcept {
   if (!(sample_rate > 0.0)) return 0.0f;
   const float samples = std::max(0.0f, milliseconds) * 0.001f * static_cast<float>(sample_rate);
-  return std::clamp(samples, 0.0f, 4.0f * static_cast<float>(sample_rate));
+  return std::clamp(samples, 0.0f,
+                    static_cast<float>(kMaxPredelaySeconds) * static_cast<float>(sample_rate));
 }
 
 /// RT60 seconds -> tank feedback, the inverse of the ring-out bound below:
@@ -125,14 +128,12 @@ GsEffectBus::GsEffectBus(const GsEffectsConfig& config)
       delay_(delay_config(config)) {
   reverb_delay_predelay_ms_ = config.reverb_predelay_ms;
   reverb_panning_delay_predelay_ms_ = config.reverb_predelay_ms;
-  reset_reverb_predelay_history();
-  reset_child_tail_history();
-  reset_reverb_activation();
+  reset_histories();
 }
 
 void GsEffectBus::prepare(double sample_rate) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
-  const int max_delay_samples = static_cast<int>(sample_rate_ * 4.0);
+  const int max_delay_samples = static_cast<int>(sample_rate_ * kMaxPredelaySeconds);
   for (int ch = 0; ch < 2; ++ch) {
     reverb_bus_[ch].assign(kBlockFrames, 0.0f);
     reverb_delay_bus_[ch].assign(kBlockFrames, 0.0f);
@@ -147,9 +148,7 @@ void GsEffectBus::prepare(double sample_rate) {
   reverb_panning_delay_.prepare(sample_rate_, kBlockFrames);
   chorus_.prepare(sample_rate_, kBlockFrames);
   delay_.prepare(sample_rate_, kBlockFrames);
-  reset_reverb_predelay_history();
-  reset_child_tail_history();
-  reset_reverb_activation();
+  reset_histories();
 }
 
 void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
@@ -159,12 +158,16 @@ void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
         std::max(retained_seconds, static_cast<double>(std::max(0, child.tail_samples())) /
                                        static_cast<double>(sample_rate_));
   };
-  if (!gs_reverb_character_is_delay(config.reverb_character)) {
-    retain_child_tail(reverb_, max_reverb_tail_s_);
-  } else if (config.reverb_character == 6) {
-    retain_child_tail(reverb_delay_, max_reverb_delay_tail_s_);
-  } else {
-    retain_child_tail(reverb_panning_delay_, max_reverb_panning_delay_tail_s_);
+  switch (gs_reverb_character_unit(config.reverb_character)) {
+    case GsReverbUnit::kTank:
+      retain_child_tail(reverb_, max_reverb_tail_s_);
+      break;
+    case GsReverbUnit::kDelay:
+      retain_child_tail(reverb_delay_, max_reverb_delay_tail_s_);
+      break;
+    case GsReverbUnit::kPanningDelay:
+      retain_child_tail(reverb_panning_delay_, max_reverb_panning_delay_tail_s_);
+      break;
   }
   retain_child_tail(chorus_, max_chorus_tail_s_);
   retain_child_tail(delay_, max_delay_tail_s_);
@@ -180,16 +183,21 @@ void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
   // Automatable parameter ids, from each unit's header. Everything reached here
   // is a coefficient: nothing resizes a buffer or clears a delay line.
   // Update only the selected unit; the others keep draining their tail on the old macro's values.
-  if (!gs_reverb_character_is_delay(config_.reverb_character)) {
-    const effects::reverb::DattorroReverbConfig rc = reverb_config(config_);
-    reverb_.set_parameter(0, rc.decay);
-    reverb_.set_parameter(1, rc.damping);
-  } else if (config_.reverb_character == 6) {
-    reverb_delay_.set_config(reverb_delay_config(config_, false));
-    reverb_delay_predelay_ms_ = config_.reverb_predelay_ms;
-  } else {
-    reverb_panning_delay_.set_config(reverb_delay_config(config_, true));
-    reverb_panning_delay_predelay_ms_ = config_.reverb_predelay_ms;
+  switch (gs_reverb_character_unit(config_.reverb_character)) {
+    case GsReverbUnit::kTank: {
+      const effects::reverb::DattorroReverbConfig rc = reverb_config(config_);
+      reverb_.set_parameter(0, rc.decay);
+      reverb_.set_parameter(1, rc.damping);
+      break;
+    }
+    case GsReverbUnit::kDelay:
+      reverb_delay_.set_config(reverb_delay_config(config_, false));
+      reverb_delay_predelay_ms_ = config_.reverb_predelay_ms;
+      break;
+    case GsReverbUnit::kPanningDelay:
+      reverb_panning_delay_.set_config(reverb_delay_config(config_, true));
+      reverb_panning_delay_predelay_ms_ = config_.reverb_predelay_ms;
+      break;
   }
   const effects::modulation::ChorusConfig cc = chorus_config(config_);
   chorus_.set_parameter(0, cc.rate_hz);
@@ -206,9 +214,7 @@ void GsEffectBus::reset() {
   for (auto& line : reverb_panning_delay_predelay_) line.reset();
   chorus_.reset();
   delay_.reset();
-  reset_reverb_predelay_history();
-  reset_child_tail_history();
-  reset_reverb_activation();
+  reset_histories();
   begin_chunk();
 }
 
@@ -233,12 +239,16 @@ void GsEffectBus::reset_child_tail_history() noexcept {
 }
 
 void GsEffectBus::activate_reverb_mode(uint8_t character) noexcept {
-  if (!gs_reverb_character_is_delay(character)) {
-    reverb_tank_used_ = true;
-  } else if (character == 6) {
-    reverb_delay_used_ = true;
-  } else {
-    reverb_panning_delay_used_ = true;
+  switch (gs_reverb_character_unit(character)) {
+    case GsReverbUnit::kTank:
+      reverb_tank_used_ = true;
+      break;
+    case GsReverbUnit::kDelay:
+      reverb_delay_used_ = true;
+      break;
+    case GsReverbUnit::kPanningDelay:
+      reverb_panning_delay_used_ = true;
+      break;
   }
 }
 
@@ -247,6 +257,12 @@ void GsEffectBus::reset_reverb_activation() noexcept {
   reverb_delay_used_ = false;
   reverb_panning_delay_used_ = false;
   activate_reverb_mode(config_.reverb_character);
+}
+
+void GsEffectBus::reset_histories() noexcept {
+  reset_reverb_predelay_history();
+  reset_child_tail_history();
+  reset_reverb_activation();
 }
 
 void GsEffectBus::begin_chunk() noexcept {
@@ -264,9 +280,10 @@ void GsEffectBus::render_returns(float* out_l, float* out_r, int n) noexcept {
   if (n <= 0) return;
   n = std::min(n, kBlockFrames);
   if (config_.enable_reverb) {
-    const bool normal_reverb = !gs_reverb_character_is_delay(config_.reverb_character);
-    const bool normal_delay = config_.reverb_character == 6;
-    const bool panning_delay = !normal_delay && !normal_reverb;
+    const GsReverbUnit unit = gs_reverb_character_unit(config_.reverb_character);
+    const bool normal_reverb = unit == GsReverbUnit::kTank;
+    const bool normal_delay = unit == GsReverbUnit::kDelay;
+    const bool panning_delay = unit == GsReverbUnit::kPanningDelay;
     activate_reverb_mode(config_.reverb_character);
 
     // Only the selected unit gets the send; a once-selected inactive unit drains on a zeroed bus.
@@ -275,11 +292,7 @@ void GsEffectBus::render_returns(float* out_l, float* out_r, int n) noexcept {
         std::memcpy((normal_delay ? reverb_delay_bus_[ch] : reverb_panning_delay_bus_[ch]).data(),
                     reverb_bus_[ch].data(), sizeof(float) * static_cast<size_t>(n));
       }
-      if (normal_reverb) {
-        std::memset(reverb_delay_bus_[ch].data(), 0, sizeof(float) * static_cast<size_t>(n));
-        std::memset(reverb_panning_delay_bus_[ch].data(), 0,
-                    sizeof(float) * static_cast<size_t>(n));
-      } else {
+      if (!normal_reverb) {
         std::memset(reverb_bus_[ch].data(), 0, sizeof(float) * static_cast<size_t>(n));
       }
     }
@@ -288,26 +301,19 @@ void GsEffectBus::render_returns(float* out_l, float* out_r, int n) noexcept {
     float* reverb_panning_delay_bus[2] = {reverb_panning_delay_bus_[0].data(),
                                           reverb_panning_delay_bus_[1].data()};
     if (reverb_tank_used_) reverb_.process(reverb_bus, 2, n);
-    if (reverb_delay_used_) {
-      const float predelay_samples =
-          reverb_predelay_samples(reverb_delay_predelay_ms_, sample_rate_);
+    const auto apply_predelay = [&](auto& lines, float* const* bus, float predelay_ms) {
+      const float predelay_samples = reverb_predelay_samples(predelay_ms, sample_rate_);
       for (int ch = 0; ch < 2; ++ch) {
-        for (int i = 0; i < n; ++i) {
-          reverb_delay_bus[ch][i] =
-              reverb_delay_predelay_[ch].process(reverb_delay_bus[ch][i], predelay_samples);
-        }
+        for (int i = 0; i < n; ++i) bus[ch][i] = lines[ch].process(bus[ch][i], predelay_samples);
       }
+    };
+    if (reverb_delay_used_) {
+      apply_predelay(reverb_delay_predelay_, reverb_delay_bus, reverb_delay_predelay_ms_);
       reverb_delay_.process(reverb_delay_bus, 2, n);
     }
     if (reverb_panning_delay_used_) {
-      const float predelay_samples =
-          reverb_predelay_samples(reverb_panning_delay_predelay_ms_, sample_rate_);
-      for (int ch = 0; ch < 2; ++ch) {
-        for (int i = 0; i < n; ++i) {
-          reverb_panning_delay_bus[ch][i] = reverb_panning_delay_predelay_[ch].process(
-              reverb_panning_delay_bus[ch][i], predelay_samples);
-        }
-      }
+      apply_predelay(reverb_panning_delay_predelay_, reverb_panning_delay_bus,
+                     reverb_panning_delay_predelay_ms_);
       reverb_panning_delay_.process(reverb_panning_delay_bus, 2, n);
     }
     // Each unit's LEVEL scales its return. A unit is linear, so this is the same

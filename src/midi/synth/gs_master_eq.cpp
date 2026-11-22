@@ -29,10 +29,6 @@ float gs_eq_gain_db(uint8_t value) noexcept {
   return std::clamp(db, -kGsEqGainLimitDb, kGsEqGainLimitDb);
 }
 
-bool gs_master_eq_is_flat(const GsMasterEq& eq) noexcept {
-  return gs_eq_gain_db(eq.low_gain) == 0.0f && gs_eq_gain_db(eq.high_gain) == 0.0f;
-}
-
 void GsMasterEqFilter::prepare(double sample_rate) noexcept {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   reset();

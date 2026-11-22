@@ -75,7 +75,6 @@ bool Sf2Player::append_direct_gs_node(const uint8_t* data, size_t size,
     sweep_direct_gs_nodes();
     auto node = std::make_unique<DirectGsNode>();
     node->seq = direct_queue_->next_seq++;
-    node->size = size;
     node->bytes = std::make_shared<const std::vector<uint8_t>>(data, data + size);
     node->prepared_owner = std::move(prepared);
     node->prepared_raw = node->prepared_owner != nullptr
@@ -154,7 +153,7 @@ void Sf2Player::drain_direct_gs_nodes() noexcept {
       adopt_legacy_direct_snapshot();
     } else if (next->prepared_raw != nullptr && next->bytes != nullptr) {
       // Direct deltas update and activate the audio-owned overlay.
-      apply_prepared_gs_delta(*next->prepared_raw, next->bytes->data(), next->size, false);
+      apply_prepared_gs_delta(*next->prepared_raw, next->bytes->data(), next->bytes->size(), false);
     }
     direct_queue_->audio_head = next;
     direct_queue_->consumed_seq.store(next->seq, std::memory_order_release);
@@ -184,8 +183,7 @@ void Sf2Player::publish_direct_system_patch(bool reset, const uint8_t* data, siz
 
   if (!reset) {
     gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
-      const GsAddressEntry* entry = gs_lookup_address(w.addr);
-      if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
+      if (!gs_write_in_range(w)) return false;
       const size_t param = static_cast<size_t>(w.param);
       const size_t first_param = static_cast<size_t>(GsParam::kReverbMacro);
       const size_t last_param = static_cast<size_t>(GsParam::kDelaySendToReverb);

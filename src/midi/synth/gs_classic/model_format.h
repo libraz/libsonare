@@ -209,6 +209,12 @@ enum class GsClassicCrossfade : uint8_t { kHann, kLinear, kSCurve };
 enum class GsClassicLfoShape : uint8_t { kSine, kTriangle, kSquare, kSaw, kPoints };
 enum class GsClassicShaperCurve : uint8_t { kTanh, kHard, kCubic, kPoints };
 
+/// Packed `flags` layout: shaper = curve | oversample << 4, pitch = interpolation | crossfade << 2.
+inline constexpr uint8_t kGsClassicShaperCurveMask = 0x0F;
+inline constexpr unsigned kGsClassicShaperOversampleShift = 4;
+inline constexpr uint8_t kGsClassicPitchInterpolationMask = 0x03;
+inline constexpr unsigned kGsClassicPitchCrossfadeShift = 2;
+
 /// Envelope flag bits; each clear bit is the first-named alternative (peak, branching, linear).
 inline constexpr uint8_t kGsClassicEnvelopeRms = 1u << 0;
 inline constexpr uint8_t kGsClassicEnvelopeDecoupled = 1u << 1;

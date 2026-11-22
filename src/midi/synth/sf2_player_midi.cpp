@@ -24,7 +24,6 @@ namespace {
 
 using ::sonare::constants::kCentsPerOctave;
 using ::sonare::constants::kCentsPerSemitone;
-using ::sonare::constants::kSemitonesPerOctave;
 
 /// GS drum-kit NRPN MSBs; the LSB is the drum note.
 constexpr uint8_t kNrpnDrumPitch = 0x18;
@@ -41,6 +40,16 @@ constexpr uint8_t kFlagPerNoteDetach = 0x02;
 
 /// Damper strength of a half-pedal at @p level: 1 with the pedal up, 0 fully down.
 float half_pedal_strength(int level) noexcept { return static_cast<float>(127 - level) / 63.0f; }
+
+/// Releases a fallback voice, or under a held pedal lets a half-raised damper rest on its string.
+void release_or_damp(NativeSynthVoice& v, bool sustain, uint8_t sustain_level) noexcept {
+  if (!sustain) {
+    v.release();
+  } else if (sustain_level < 127 && v.patch != nullptr &&
+             v.patch->mode == SynthEngineMode::kPiano) {
+    v.piano.damp(half_pedal_strength(sustain_level));
+  }
+}
 
 /// Bend range in cents from the RPN 0/0 data word: semitones in the top seven bits, cents below.
 float bend_range_cents_from_word(uint16_t v14) noexcept {
@@ -564,13 +573,7 @@ void Sf2Player::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id
         v.key_down) {
       v.key_down = false;
       if (v.sostenuto) continue;
-      if (!st.sustain) {
-        v.release();
-      } else if (st.sustain_level < 127 && v.patch != nullptr &&
-                 v.patch->mode == SynthEngineMode::kPiano) {
-        // Half-pedal: the partially raised damper rests on the string.
-        v.piano.damp(half_pedal_strength(st.sustain_level));
-      }
+      release_or_damp(v, st.sustain, st.sustain_level);
     }
   }
   recharge_percussion(ch);
@@ -676,12 +679,7 @@ void Sf2Player::all_notes_off(uint8_t channel) noexcept {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
       if (v.sostenuto) continue;
-      if (!st.sustain) {
-        v.release();
-      } else if (st.sustain_level < 127 && v.patch != nullptr &&
-                 v.patch->mode == SynthEngineMode::kPiano) {
-        v.piano.damp(half_pedal_strength(st.sustain_level));
-      }
+      release_or_damp(v, st.sustain, st.sustain_level);
     }
   }
   recharge_percussion(ch);

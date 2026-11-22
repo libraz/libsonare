@@ -112,8 +112,7 @@ bool Sf2Player::apply_gs_system_sysex_to(GsSystemEffects& fx, GsMasterEq& eq,
   // including bytes that cross from system effects into master EQ.
   return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
     // An out-of-range value is ignored rather than clamped (docs/gs.md).
-    const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
+    if (!gs_write_in_range(w)) return false;
     switch (w.param) {
       // A macro is a one-shot write of the parameters it covers, so it lands
       // through gs_apply_*_macro rather than on a field of its own.
@@ -411,8 +410,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
 
 bool Sf2Player::apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept {
   return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
-    const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
+    if (!gs_write_in_range(w)) return false;
     switch (w.param) {
       case GsParam::kMasterTune:
         master_.tune[w.index & 0x03u] = w.value;
@@ -435,8 +433,7 @@ bool Sf2Player::apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept
 
 bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
   return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
-    const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
+    if (!gs_write_in_range(w)) return false;
     // The address nibble is zero-based, so it indexes the slabs directly — where
     // 40 1x 15's value is one-based and goes through drum_map_slot(). A map the
     // machine does not have is ignored like any other out-of-range write.
@@ -486,8 +483,7 @@ bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
 
 bool Sf2Player::apply_gs_user_drum_sysex(const uint8_t* data, size_t size) noexcept {
   return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
-    const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
+    if (!gs_write_in_range(w)) return false;
     if (w.part >= kGsUserDrumSetCount) return false;
     GsUserDrumSource& src = user_drum_sources_[w.part][w.index & 0x7Fu];
     GsDrumNoteParams& d = user_drum_params_[w.part][w.index & 0x7Fu];

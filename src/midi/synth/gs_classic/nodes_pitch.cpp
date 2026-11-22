@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "midi/synth/gs_classic/graph_engine.h"
+#include "midi/synth/gs_classic/numpy_math.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth::gs_classic {
@@ -13,18 +14,8 @@ using sonare::constants::kPiD;
 namespace {
 
 constexpr double kMsPerSecond = 1000.0;
-constexpr uint8_t kInterpolationMask = 0x03;
-constexpr unsigned kCrossfadeShift = 2;
 /// The two read pointers sit half a window apart.
 constexpr double kPointerOffsets[2] = {0.0, 0.5};
-
-/// numpy's float remainder: the sign of the divisor, and +0 for an exact multiple.
-double py_mod(double a, double b) noexcept {
-  double m = std::fmod(a, b);
-  if (m == 0.0) return std::copysign(0.0, b);
-  if ((b < 0.0) != (m < 0.0)) m += b;
-  return m;
-}
 
 /// A pointer's gain at triangle position `t`: 0 where it wraps, 1 half a window later.
 double faded(GsClassicCrossfade shape, double t) noexcept {
@@ -60,8 +51,10 @@ std::size_t gs_classic_pitch_state_size(const GsClassicModelSet&, const GsClassi
 
 void gs_classic_render_pitch(const GsClassicRenderContext& ctx, const GsClassicNode& node, double*,
                              std::size_t a, std::size_t b) {
-  const auto interpolation = static_cast<GsClassicInterpolation>(node.flags & kInterpolationMask);
-  const auto crossfade = static_cast<GsClassicCrossfade>(node.flags >> kCrossfadeShift);
+  const auto interpolation =
+      static_cast<GsClassicInterpolation>(node.flags & kGsClassicPitchInterpolationMask);
+  const auto crossfade =
+      static_cast<GsClassicCrossfade>(node.flags >> kGsClassicPitchCrossfadeShift);
   const bool linear = interpolation == GsClassicInterpolation::kLinear;
   // How far the interpolator reads towards the present from the delay it was asked for.
   const double reach = linear ? 1.0 : 0.0;

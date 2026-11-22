@@ -92,8 +92,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   // the sum below is over six terms and four of them can move.
   std::array<float, kGsCtrlSourceCount> source01{};
   source01[static_cast<size_t>(GsCtrlSource::kModulation)] = mod.mod_wheel01;
-  source01[static_cast<size_t>(GsCtrlSource::kChannelAftertouch)] =
-      st.channel_pressure.f7() / 127.0f;
+  source01[static_cast<size_t>(GsCtrlSource::kChannelAftertouch)] = mod.aftertouch01;
   // Read through the number rather than stored beside it, so pointing a source
   // at a controller that is already somewhere reads where it is: a file writes
   // the assignment and the controller in whichever order it likes.

@@ -949,7 +949,6 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   struct DirectGsNode {
     std::atomic<DirectGsNode*> next{nullptr};
     uint64_t seq = 0;
-    size_t size = 0;
     /// The CONTROL thread owns the allocation; AUDIO only borrows this immutable
     /// vector while applying the node, so long DT1 frames stay allocation-free
     /// on the realtime path as well.
@@ -1101,7 +1100,6 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     uint8_t enable_plan_count = 0;
     std::array<Sf2EfxControlRt, 2> controls{};
     std::array<bool, 32> default_enabled{};
-    uint8_t stage_count = 0;
   };
 
   struct PreparedEfxCandidate {
@@ -1132,8 +1130,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   void activate_prepared_node(size_t unit, PreparedEfxNode* node) noexcept;
   void apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_t* data, size_t size,
                                bool apply_performance) noexcept;
-  void apply_prepared_candidate(const PreparedSysEx& token,
-                                const PreparedEfxCandidate& candidate) noexcept;
+  void apply_prepared_candidate(const PreparedEfxCandidate& candidate) noexcept;
   void apply_prepared_node_plan(PreparedEfxNode& node, const GsEfx& target,
                                 bool preserve_enable_fade) noexcept;
   void release_prepared_nodes() noexcept;

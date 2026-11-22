@@ -13,7 +13,6 @@ namespace {
 constexpr double kMsPerSecond = 1000.0;
 constexpr double kDbPerAmplitudeDecade = 20.0;
 constexpr double kDbPerPowerDecade = 10.0;
-constexpr uint8_t kShaperCurveMask = 0x0F;
 
 /// A one-pole coefficient reaching 1 - 1/e of a step in `ms`.
 double pole_of(double ms) noexcept {
@@ -29,7 +28,7 @@ enum EnvelopeState : std::size_t { kInit, kLevel, kHeld, kEnvelopeSize };
 void gs_classic_render_shaper(const GsClassicRenderContext& ctx, const GsClassicNode& node, double*,
                               std::size_t a, std::size_t b) {
   // Every shipped model oversamples by 1, so the curve runs at the model's own rate.
-  const auto curve = static_cast<GsClassicShaperCurve>(node.flags & kShaperCurveMask);
+  const auto curve = static_cast<GsClassicShaperCurve>(node.flags & kGsClassicShaperCurveMask);
   const double* x = ctx.input(node, 0);
   double* y = ctx.output(node);
   for (std::size_t i = a; i < b; ++i) {

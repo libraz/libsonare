@@ -118,13 +118,12 @@ bool RenderPathUnit::operator==(const RenderPathUnit& o) const {
 
 void RenderPathRecorder::set_block_frame(int64_t frame) {
   if (stopped_) return;
-  if (frame < max_frame_) {
+  if (frame < frame_) {
     stopped_ = true;
     mark_incomplete("the instrument rendered more than one pass; only the first is recorded");
     return;
   }
   frame_ = frame;
-  max_frame_ = frame;
 }
 
 void RenderPathRecorder::record_topology(RenderPathTopology topology) {

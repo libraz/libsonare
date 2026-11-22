@@ -6,6 +6,7 @@
 #include <string>
 
 #include "CDSPResampler.h"
+#include "midi/synth/gs_efx_processor.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -194,12 +195,7 @@ bool GsClassicUnit::parameter_is_realtime_safe(unsigned int param_id) const noex
 }
 
 std::vector<rt::ParamDescriptor> GsClassicUnit::parameter_descriptors() const {
-  std::vector<rt::ParamDescriptor> out;
-  out.reserve(kGsClassicByteSlots);
-  for (unsigned int slot = 0; slot < kGsClassicByteSlots; ++slot) {
-    out.push_back({"byte" + std::to_string(slot), slot});
-  }
-  return out;
+  return gs_efx_byte_descriptors(kGsClassicByteSlots);
 }
 
 }  // namespace sonare::midi::synth::gs_classic

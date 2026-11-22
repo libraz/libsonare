@@ -115,17 +115,20 @@ constexpr EnvelopeOps kModEnvOps = {
     kGenDecayModEnv,        kGenSustainModEnv,       kGenReleaseModEnv,
     kGenKeynumToModEnvHold, kGenKeynumToModEnvDecay, false};
 
+/// Timecents at or below the floor mean no time at all.
+float timecents_to_seconds_or_zero(int32_t timecents) noexcept {
+  return timecents <= kMinTimecents ? 0.0f : timecents_to_seconds(timecents);
+}
+
 /// Converts a DAHDSR generator block (timecents / sustain unit) to ms config at @p key.
 DahdsrConfig envelope_from_gens(const Sf2GenSet& gens, const EnvelopeOps& ops, int key) noexcept {
   const int32_t key_steps = kKeynumEnvelopePivotKey - key;
   const int32_t hold_tc = gens.get(ops.hold) + gens.get(ops.keynum_to_hold) * key_steps;
   const int32_t decay_tc = gens.get(ops.decay) + gens.get(ops.keynum_to_decay) * key_steps;
   DahdsrConfig cfg;
-  cfg.delay_ms = gens.get(ops.delay) <= kMinTimecents
-                     ? 0.0f
-                     : 1000.0f * timecents_to_seconds(gens.get(ops.delay));
+  cfg.delay_ms = 1000.0f * timecents_to_seconds_or_zero(gens.get(ops.delay));
   cfg.attack_ms = 1000.0f * timecents_to_seconds(gens.get(ops.attack));
-  cfg.hold_ms = hold_tc <= kMinTimecents ? 0.0f : 1000.0f * timecents_to_seconds(hold_tc);
+  cfg.hold_ms = 1000.0f * timecents_to_seconds_or_zero(hold_tc);
   cfg.decay_ms = 1000.0f * timecents_to_seconds(decay_tc);
   if (ops.sustain_is_centibels) {
     cfg.sustain = centibels_to_gain(static_cast<float>(gens.get(ops.sustain)));
@@ -176,7 +179,9 @@ float centibel_offset_to_gain(float centibels) noexcept {
   return std::pow(10.0f, centibels / 200.0f);
 }
 
-float abs_cents_to_hz(float cents) noexcept { return 8.176f * std::exp2(cents / kCentsPerOctave); }
+float abs_cents_to_hz(float cents) noexcept {
+  return kSf2AbsoluteCentsZeroHz * std::exp2(cents / kCentsPerOctave);
+}
 
 float sf2_velocity_gain(Velocity16 velocity) noexcept {
   // The spec's concave 960 cB velocity->attenuation modulator reduces to
@@ -241,7 +246,8 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
 
   // --- attenuation / pan ---
   p.attenuation_gain = centibels_to_gain(static_cast<float>(gens.get(kGenInitialAttenuation)));
-  p.pan_units = std::clamp(static_cast<float>(gens.get(kGenPan)), -500.0f, 500.0f);
+  p.pan_units =
+      std::clamp(static_cast<float>(gens.get(kGenPan)), -kPanUnitsFullScale, kPanUnitsFullScale);
 
   // --- volume / modulation envelopes ---
   p.volume_env = envelope_from_gens(gens, kVolumeEnvOps, effective_key);
@@ -254,19 +260,15 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
   p.filter_fc_cents = static_cast<float>(gens.get(kGenInitialFilterFc)) + vel_offset;
   // initialFilterQ is the resonance peak height in centibels: Q = 10^(cB/200).
   const float q_cb = static_cast<float>(gens.get(kGenInitialFilterQ));
-  p.filter_q = std::max(constants::kButterworthQ, std::pow(10.0f, q_cb / 200.0f));
+  p.filter_q = std::max(constants::kButterworthQ, centibel_offset_to_gain(q_cb));
 
   // --- LFOs ---
-  p.mod_lfo_delay_s = gens.get(kGenDelayModLfo) <= kMinTimecents
-                          ? 0.0f
-                          : timecents_to_seconds(gens.get(kGenDelayModLfo));
+  p.mod_lfo_delay_s = timecents_to_seconds_or_zero(gens.get(kGenDelayModLfo));
   p.mod_lfo_freq_hz = abs_cents_to_hz(static_cast<float>(gens.get(kGenFreqModLfo)));
   p.mod_lfo_to_pitch = static_cast<float>(gens.get(kGenModLfoToPitch));
   p.mod_lfo_to_filter_fc = static_cast<float>(gens.get(kGenModLfoToFilterFc));
   p.mod_lfo_to_volume_cb = static_cast<float>(gens.get(kGenModLfoToVolume));
-  p.vib_lfo_delay_s = gens.get(kGenDelayVibLfo) <= kMinTimecents
-                          ? 0.0f
-                          : timecents_to_seconds(gens.get(kGenDelayVibLfo));
+  p.vib_lfo_delay_s = timecents_to_seconds_or_zero(gens.get(kGenDelayVibLfo));
   p.vib_lfo_freq_hz = abs_cents_to_hz(static_cast<float>(gens.get(kGenFreqVibLfo)));
   p.vib_lfo_to_pitch = static_cast<float>(gens.get(kGenVibLfoToPitch));
 

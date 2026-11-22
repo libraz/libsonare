@@ -9,6 +9,7 @@
 #include "effects/common/control_ranges.h"
 #include "midi/synth/gs_efx_tables.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::midi::synth {
 
@@ -17,8 +18,6 @@ namespace {
 /// Drive bytes 0 and 2 are one measured state, and 48 is unity gain.
 constexpr int kDriveFloorByte = 2;
 constexpr float kDriveUnityByte = 48.0f;
-/// dB per decade of amplitude.
-constexpr float kDbPerDecade = 20.0f;
 
 /// Keeps a ladder knot that lands on a whole sample from falling one ulp short of it.
 constexpr double kSampleCutGuard = 1e-6;
@@ -80,7 +79,7 @@ double accel_step_hz() noexcept {
 float level_db(uint8_t value) noexcept {
   const float multiplier = gs_efx_level_mul(value);
   if (multiplier <= 0.0f) return sonare::effects::common::kLevelFloorDb;
-  return kDbPerDecade * std::log10(multiplier);
+  return linear_to_db(multiplier);
 }
 
 }  // namespace
@@ -234,8 +233,7 @@ int gs_efx_enum_index(uint8_t value, int count) noexcept {
 }
 
 float gs_efx_drive_db(uint8_t value) noexcept {
-  return kDbPerDecade *
-         std::log10(static_cast<float>(std::max<int>(value, kDriveFloorByte)) / kDriveUnityByte);
+  return linear_to_db(static_cast<float>(std::max<int>(value, kDriveFloorByte)) / kDriveUnityByte);
 }
 
 float gs_efx_drive_pedal_db(uint8_t value) noexcept {
@@ -272,7 +270,7 @@ float gs_efx_designed_value(const GsEfxDesignedLaw& law, uint8_t byte, uint8_t b
       return static_cast<float>(law.lo * std::pow(static_cast<double>(law.hi) / law.lo, along));
     case kGsEfxFormDb: {
       const double db = law.lo + (static_cast<double>(law.hi) - law.lo) * along;
-      return static_cast<float>(std::pow(10.0, db / kDbPerDecade));
+      return static_cast<float>(db_to_linear(db));
     }
     case kGsEfxFormBipolar:
       return static_cast<float>((2.0 * along - 1.0) * law.hi);
