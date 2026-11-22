@@ -1408,10 +1408,7 @@ def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate)
         "project", "bounce", str(proj), "-o", str(wav), "--frames", "64", "--json"
     )
     assert result.returncode == 5
-    assert (
-        "invalid_sample_rate: sampleRate must be a whole number of hertz within the "
-        "supported range" in result.stderr
-    )
+    assert "invalid_sample_rate: sampleRate must be an integer in [8000, 384000]" in result.stderr
     assert not wav.exists()
 
 
