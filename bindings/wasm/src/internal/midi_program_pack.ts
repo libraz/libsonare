@@ -1,4 +1,4 @@
-import { assertBoundedInteger } from '../validation.js';
+import { assertBoundedInteger, requestObject } from '../validation.js';
 import { refuse } from './entry.js';
 
 /** An integer in `[0, max]`: a non-number is a `TypeError`, anything else outside a `RangeError`. */
@@ -31,4 +31,24 @@ export function packMidi2Program(
   const word0 = ((0x4 << 28) | (g << 24) | (0xc << 20) | (ch << 16) | (bankValid ? 1 : 0)) >>> 0;
   const word1 = ((p << 24) | (msb << 8) | lsb) >>> 0;
   return [word0, word1];
+}
+
+/**
+ * Pack a Program Change whose bank is the `{ msb, lsb }` request of `requestName` (omitted or
+ * null: no bank), refusing an undeclared bank key by that name.
+ */
+export function packMidi2ProgramRequest(
+  requestName: 'pushMidiProgram' | 'pushMidiInputProgram',
+  group: number,
+  channel: number,
+  program: number,
+  bank: { msb: number; lsb: number } | null | undefined,
+): Uint32Array {
+  const bankValid = bank !== undefined && bank !== null;
+  if (bankValid) {
+    requestObject(requestName, bank, 'bank', true);
+  }
+  return Uint32Array.from(
+    packMidi2Program(group, channel, program, bankValid, bank?.msb ?? 0, bank?.lsb ?? 0),
+  );
 }

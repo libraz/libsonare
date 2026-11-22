@@ -31,6 +31,14 @@ type MidiMessage =
       channel: number;
       bend14: number;
       time: number;
+    }
+  | {
+      kind: 'program';
+      group: number;
+      channel: number;
+      program: number;
+      bank: { msb: number; lsb: number } | undefined;
+      time: number;
     };
 
 class FakeInput {
@@ -150,6 +158,16 @@ class FakeEngine {
 
   pushMidiInputPitchBend(group: number, channel: number, bend14: number, time = 0) {
     this.messages.push({ kind: 'pitch-bend', group, channel, bend14, time });
+  }
+
+  pushMidiInputProgram(
+    group: number,
+    channel: number,
+    program: number,
+    bank?: { msb: number; lsb: number },
+    time = 0,
+  ) {
+    this.messages.push({ kind: 'program', group, channel, program, bank, time });
   }
 }
 
@@ -366,7 +384,8 @@ describe('Web MIDI helper', () => {
     input.emit([0xf8], 3);
     input.emit([66], 3.5);
     input.emit([0xe2, 1, 64], 4);
-    input.emit([0xc2, 10], 5); // A valid one-data-byte program change is ignored.
+    input.emit([0xc2, 10], 5);
+    input.emit([11], 5.5);
 
     expect(engine.messages).toEqual([
       { kind: 'poly-pressure', group: 0, channel: 2, note: 60, pressure: 70, time: 48 },
@@ -374,7 +393,64 @@ describe('Web MIDI helper', () => {
       { kind: 'channel-pressure', group: 0, channel: 2, pressure: 65, time: 120 },
       { kind: 'channel-pressure', group: 0, channel: 2, pressure: 66, time: 168 },
       { kind: 'pitch-bend', group: 0, channel: 2, bend14: 8193, time: 192 },
+      // The bank rides the preceding CC 0 / CC 32, which the receiver latches itself.
+      { kind: 'program', group: 0, channel: 2, program: 10, bank: undefined, time: 240 },
+      { kind: 'program', group: 0, channel: 2, program: 11, bank: undefined, time: 264 },
     ]);
+    binding.destroy();
+  });
+
+  it('gives every channel voice status a push and drops only the system messages', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('sweep');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    const voiceKind: Record<number, MidiMessage['kind']> = {
+      128: 'off',
+      144: 'on',
+      160: 'poly-pressure',
+      176: 'cc',
+      192: 'program',
+      208: 'channel-pressure',
+      224: 'pitch-bend',
+    };
+    for (let status = 0x80; status <= 0xef; status++) {
+      const kind = voiceKind[status & 0xf0];
+      const oneDataByte = kind === 'program' || kind === 'channel-pressure';
+      engine.messages.length = 0;
+      input.emit(oneDataByte ? [status, 5] : [status, 5, 6]);
+      expect(engine.messages.map((m) => [m.kind, m.channel])).toEqual([[kind, status & 0x0f]]);
+    }
+
+    // No live input entry exists for these: SysEx (0xF0 ... 0xF7), MIDI time code, song position,
+    // song select, tune request and the real-time bytes (clock, start, continue, stop, active
+    // sensing, reset). The engine's external MIDI clock is an output, not an input.
+    const system: number[][] = [
+      [0xf0, 0x7e, 0x7f, 0xf7],
+      [0xf1, 0x01],
+      [0xf2, 0x01, 0x02],
+      [0xf3, 0x01],
+      [0xf4],
+      [0xf5],
+      [0xf6],
+      [0xf7],
+      [0xf8],
+      [0xf9],
+      [0xfa],
+      [0xfb],
+      [0xfc],
+      [0xfd],
+      [0xfe],
+      [0xff],
+    ];
+    engine.messages.length = 0;
+    for (const message of system) {
+      input.emit(message);
+    }
+    expect(engine.messages).toEqual([]);
     binding.destroy();
   });
 
@@ -464,12 +540,21 @@ describe('Web MIDI helper', () => {
     input.emit([(0x4 << 28) | (4 << 24) | (0xa << 20) | (3 << 16) | (60 << 8), 70 << 25], 1);
     input.emit([(0x4 << 28) | (4 << 24) | (0xd << 20) | (3 << 16), 64 << 25], 2);
     input.emit([(0x4 << 28) | (4 << 24) | (0xe << 20) | (3 << 16), 0x12345678], 3);
+    input.emit([(0x2 << 28) | (4 << 24) | (0xc << 20) | (3 << 16) | (9 << 8)], 4);
+    input.emit([(0x4 << 28) | (4 << 24) | (0xc << 20) | (3 << 16), 12 << 24], 5);
+    input.emit(
+      [(0x4 << 28) | (4 << 24) | (0xc << 20) | (3 << 16) | 1, (13 << 24) | (8 << 8) | 2],
+      6,
+    );
 
     expect(engine.messages).toEqual([
       { kind: 'channel-pressure', group: 4, channel: 3, pressure: 64, time: 24 },
       { kind: 'poly-pressure', group: 4, channel: 3, note: 60, pressure: 70, time: 48 },
       { kind: 'channel-pressure', group: 4, channel: 3, pressure: 64, time: 96 },
       { kind: 'pitch-bend', group: 4, channel: 3, bend14: 0x12345678 >>> 18, time: 144 },
+      { kind: 'program', group: 4, channel: 3, program: 9, bank: undefined, time: 192 },
+      { kind: 'program', group: 4, channel: 3, program: 12, bank: undefined, time: 240 },
+      { kind: 'program', group: 4, channel: 3, program: 13, bank: { msb: 8, lsb: 2 }, time: 288 },
     ]);
     binding.destroy();
   });

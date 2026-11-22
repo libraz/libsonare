@@ -2793,6 +2793,7 @@ export const REQUEST_SHAPES = {
   'SonareEngine.pushMidiInputNoteOn': { keys: SonareEngineMidiTimingRequestKeys },
   'SonareEngine.pushMidiInputPitchBend': { keys: SonareEngineMidiTimingRequestKeys },
   'SonareEngine.pushMidiInputPolyPressure': { keys: SonareEngineMidiTimingRequestKeys },
+  'SonareEngine.pushMidiInputProgram': { keys: SonareEngineMidiTimingRequestKeys },
   'SonareEngine.pushMidiInputUmp': { keys: SonareEngineMidiTimingRequestKeys },
   'SonareEngine.setParam': { keys: SonareEngineSetParamRequestKeys },
   bounceOffline: { keys: BounceOfflineRequestKeys },

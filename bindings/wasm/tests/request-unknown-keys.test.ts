@@ -62,6 +62,7 @@ const METHOD_SHAPES = [
   'SonareEngine.pushMidiInputNoteOn',
   'SonareEngine.pushMidiInputPitchBend',
   'SonareEngine.pushMidiInputPolyPressure',
+  'SonareEngine.pushMidiInputProgram',
   'SonareEngine.pushMidiInputUmp',
   'SonareEngine.renderOffline',
   'SonareEngine.setParam',

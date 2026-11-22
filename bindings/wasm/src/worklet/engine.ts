@@ -41,6 +41,7 @@ import { RealtimeEngine } from '../index.js';
 import { opfsClipPageProviderFactoryFor } from '../internal/clip_page_native.js';
 import { entryClass, invalidState, refuse } from '../internal/entry.js';
 import { assertHandleLive } from '../internal/handle_guard.js';
+import { packMidi2ProgramRequest } from '../internal/midi_program_pack.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import {
@@ -1604,6 +1605,38 @@ export class SonareEngine {
       offsetInBlockSamples,
       options,
     );
+  }
+
+  /**
+   * Push a live MIDI 2.0 Program Change, with an optional bank, to the engine-owned MIDI input
+   * source. The arguments and refusals match {@link pushMidiProgram}; which receivers select
+   * programs is described there.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `bank` or `options` holds an undeclared key, a `contextTimeSec` that is
+   *   not a number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `group`, `channel`, `program` or a bank byte is out of range, or `contextTimeSec` is negative
+   *   or not finite.
+   */
+  pushMidiInputProgram(
+    group: number,
+    channel: number,
+    program: number,
+    bank?: { msb: number; lsb: number },
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiTimingOptions,
+  ): void {
+    const timing = resolveMidiInputTiming(
+      'SonareEngine.pushMidiInputProgram',
+      offsetInBlockSamples,
+      options,
+    );
+    const words = packMidi2ProgramRequest('pushMidiInputProgram', group, channel, program, bank);
+    this.offlineEngine.pushMidiInputUmp(words, timing.offsetInBlockSamples);
+    this.postSync({ type: 'syncMidiInputUmp', words, ...timing });
   }
 
   /**

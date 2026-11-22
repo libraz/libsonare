@@ -70,6 +70,19 @@ export interface WebMidiEngine {
     offsetInBlockSamples?: number,
     options?: WebMidiEngineInputOptions,
   ): void;
+  /**
+   * Pushes a live program change to the input source; `program` is 0 to 127 and `bank` is
+   * `{ msb, lsb }` (omitted: the bank the receiver latched from CC 0 / CC 32). Dropped when the
+   * engine lacks this method.
+   */
+  pushMidiInputProgram?(
+    group: number,
+    channel: number,
+    program: number,
+    bank?: { msb: number; lsb: number },
+    offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
+  ): void;
   /** Pushes one raw UMP message (1 to 4 words) to the input source. When the engine lacks this method, UMP input is lowered to the individual push methods. */
   pushMidiInputUmp?(
     words: Uint32Array | readonly number[],
@@ -595,6 +608,8 @@ function dispatchMidiMessage(
     engine.pushMidiInputChannelPressure?.(group, channel, a, ...at);
   } else if (message === 0xe0 && b >= 0) {
     engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), ...at);
+  } else if (message === 0xc0) {
+    engine.pushMidiInputProgram?.(group, channel, a, undefined, ...at);
   }
 
   return status;
@@ -653,6 +668,8 @@ function dispatchUmpMessage(engine: WebMidiEngine, words: Uint32Array, at: Event
       engine.pushMidiInputChannelPressure?.(group, channel, a, ...at);
     } else if (message === 0xe0) {
       engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), ...at);
+    } else if (message === 0xc0) {
+      engine.pushMidiInputProgram?.(group, channel, a, undefined, ...at);
     }
     return;
   }
@@ -678,6 +695,9 @@ function dispatchUmpMessage(engine: WebMidiEngine, words: Uint32Array, at: Event
       engine.pushMidiInputChannelPressure?.(group, channel, (word1 >>> 25) & 0x7f, ...at);
     } else if (status === 0xe) {
       engine.pushMidiInputPitchBend?.(group, channel, word1 >>> 18, ...at);
+    } else if (status === 0xc) {
+      const bank = (word0 & 1) === 1 ? { msb: (word1 >>> 8) & 0x7f, lsb: word1 & 0x7f } : undefined;
+      engine.pushMidiInputProgram?.(group, channel, (word1 >>> 24) & 0x7f, bank, ...at);
     }
   }
 }

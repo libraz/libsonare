@@ -470,3 +470,72 @@ describe('SonareEngine track MIDI timing options', () => {
     }
   });
 });
+
+describe('SonareEngine.pushMidiInputProgram', () => {
+  setupWorklet();
+
+  it('posts a MIDI 2.0 program change through the live input with the input timing', async () => {
+    const { engine, live, posted } = await bridgedEngine();
+    const offline = (
+      engine as unknown as {
+        offlineEngine: { pushMidiInputUmp: (words: unknown, offset: number) => void };
+      }
+    ).offlineEngine;
+    const mirrored = vi.spyOn(offline, 'pushMidiInputUmp');
+    try {
+      posted.length = 0;
+      engine.pushMidiInputProgram(2, 3, 9);
+      engine.pushMidiInputProgram(2, 3, 13, { msb: 8, lsb: 2 }, 17);
+      engine.pushMidiInputProgram(0, 0, 1, undefined, undefined, { contextTimeSec: 0.5 });
+      const word0 = (group: number, channel: number, bankValid: number) =>
+        ((0x4 << 28) | (group << 24) | (0xc << 20) | (channel << 16) | bankValid) >>> 0;
+      expect(posted).toEqual([
+        expect.objectContaining({
+          type: 'syncMidiInputUmp',
+          words: Uint32Array.from([word0(2, 3, 0), 9 << 24]),
+          offsetInBlockSamples: 0,
+        }),
+        expect.objectContaining({
+          type: 'syncMidiInputUmp',
+          words: Uint32Array.from([word0(2, 3, 1), (13 << 24) | (8 << 8) | 2]),
+          offsetInBlockSamples: 17,
+        }),
+        expect.objectContaining({
+          type: 'syncMidiInputUmp',
+          words: Uint32Array.from([word0(0, 0, 0), 1 << 24]),
+          offsetInBlockSamples: 0,
+          contextTimeSec: 0.5,
+        }),
+      ]);
+      expect(posted[0]).not.toHaveProperty('contextTimeSec');
+      expect(posted[1]).not.toHaveProperty('contextTimeSec');
+      expect(mirrored.mock.calls.map((call) => call[1])).toEqual([0, 17, 0]);
+    } finally {
+      engine.destroy();
+      live.destroy();
+    }
+  });
+
+  it('refuses what pushMidiProgram refuses, and an offset beside a context time', async () => {
+    const { engine, live, posted } = await bridgedEngine();
+    try {
+      posted.length = 0;
+      expect(() => engine.pushMidiInputProgram(0, 16, 0)).toThrow(RangeError);
+      expect(() => engine.pushMidiInputProgram(0, 0, 128)).toThrow(RangeError);
+      expect(() => engine.pushMidiInputProgram(0, 0, 0, { msb: 128, lsb: 0 })).toThrow(RangeError);
+      expect(() =>
+        engine.pushMidiInputProgram(0, 0, 0, { msb: 1, lsb: 0, valid: 1 } as never),
+      ).toThrow(unknownKeyError('SonareEngine.pushMidiInputProgram: unknown key valid'));
+      expect(() =>
+        engine.pushMidiInputProgram(0, 0, 0, undefined, 3, { contextTimeSec: 1 }),
+      ).toThrow(/offsetInBlockSamples and contextTimeSec must not both be given/);
+      expect(() =>
+        engine.pushMidiInputProgram(0, 0, 0, undefined, undefined, { when: 1 } as never),
+      ).toThrow(unknownKeyError('SonareEngine.pushMidiInputProgram: unknown key when'));
+      expect(posted).toEqual([]);
+    } finally {
+      engine.destroy();
+      live.destroy();
+    }
+  });
+});

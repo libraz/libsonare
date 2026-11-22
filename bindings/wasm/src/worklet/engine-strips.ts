@@ -13,7 +13,7 @@ import type {
 } from '../index.js';
 import { codedError, refuse, refuseType } from '../internal/entry.js';
 import { eqBandJson } from '../internal/eq_band_json.js';
-import { packMidi2Program } from '../internal/midi_program_pack.js';
+import { packMidi2ProgramRequest } from '../internal/midi_program_pack.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { SurroundPan } from '../public_types.js';
 import type { MidiFxConfig } from '../public_types_engine.js';
@@ -680,18 +680,8 @@ export function pushMidiProgram(
   options: SonareEngineMidiTimingOptions | undefined,
 ): void {
   const timing = resolveMidiTrackTiming('SonareEngine.pushMidiProgram', renderFrame, options);
-  if (bank !== undefined && bank !== null) {
-    requestObject('pushMidiProgram', bank, 'bank', true);
-  }
-  const words = packMidi2Program(
-    group,
-    channel,
-    program,
-    bank !== undefined && bank !== null,
-    bank?.msb ?? 0,
-    bank?.lsb ?? 0,
-  );
-  postMidiUmp(ctx, trackId, Uint32Array.from(words), renderFrame, timing);
+  const words = packMidi2ProgramRequest('pushMidiProgram', group, channel, program, bank);
+  postMidiUmp(ctx, trackId, words, renderFrame, timing);
 }
 
 export function setBuiltinInstrument(
