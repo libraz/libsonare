@@ -934,9 +934,9 @@ def metering_dynamic_range(
     try:
         windows = _from_c_float_array(out.window_rms_db, int(out.window_count))
         return DynamicRangeReport(
-            dynamic_range_db=float(out.dynamic_range_db),
-            low_percentile_db=float(out.low_percentile_db),
-            high_percentile_db=float(out.high_percentile_db),
+            dynamic_range_db=_measured_level(out.dynamic_range_db),
+            low_percentile_db=_measured_level(out.low_percentile_db),
+            high_percentile_db=_measured_level(out.high_percentile_db),
             window_rms_db=windows,
         )
     finally:

@@ -434,14 +434,24 @@ class ClippingReport:
 class DynamicRangeReport:
     """Sliding-window dynamic range report (mirrors SonareDynamicRangeResult)."""
 
-    dynamic_range_db: float
-    """High percentile minus low percentile of the window levels, in dB."""
-    low_percentile_db: float
-    """Window RMS level at the low percentile, in dBFS."""
-    high_percentile_db: float
-    """Window RMS level at the high percentile, in dBFS."""
+    dynamic_range_db: float | None
+    """High percentile minus low percentile of the window levels, in dB.
+
+    ``inf`` when the low percentile lands on a silent window; ``None`` when the
+    high percentile is silent too (silent input) or the input is empty.
+    """
+    low_percentile_db: float | None
+    """Window RMS level at the low percentile, in dBFS.
+
+    ``-inf`` on a silent window, ``None`` for empty input.
+    """
+    high_percentile_db: float | None
+    """Window RMS level at the high percentile, in dBFS.
+
+    ``-inf`` on a silent window, ``None`` for empty input.
+    """
     window_rms_db: npt.NDArray[np.float32]
-    """RMS level of each analysis window, in dBFS."""
+    """RMS level of each analysis window, in dBFS; a silent window is ``-inf``."""
 
 
 @dataclass(frozen=True, slots=True)

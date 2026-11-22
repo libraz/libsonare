@@ -15,6 +15,7 @@ from ._cli_common import (
     _array_stats,
     _decode_mono,
     _fmt_optional,
+    _omit_absent,
     _strict_json_dumps,
     _styled,
 )
@@ -241,19 +242,24 @@ def cmd_dynamic_range(args: argparse.Namespace) -> int:
     if args.json:
         print(
             _strict_json_dumps(
-                {
-                    "dynamic_range_db": result.dynamic_range_db,
-                    "low_percentile_db": result.low_percentile_db,
-                    "high_percentile_db": result.high_percentile_db,
-                    "window_rms_db": result.window_rms_db.tolist(),
-                }
+                _omit_absent(
+                    {
+                        "dynamic_range_db": result.dynamic_range_db,
+                        "low_percentile_db": result.low_percentile_db,
+                        "high_percentile_db": result.high_percentile_db,
+                        "window_rms_db": result.window_rms_db.tolist(),
+                    },
+                    "dynamic_range_db",
+                    "low_percentile_db",
+                    "high_percentile_db",
+                )
             )
         )
     else:
         print("Dynamic Range:")
-        print(f"  Dynamic Range:   {result.dynamic_range_db:.2f} dB")
-        print(f"  Low Percentile:  {result.low_percentile_db:.2f} dB")
-        print(f"  High Percentile: {result.high_percentile_db:.2f} dB")
+        print(f"  Dynamic Range:   {_fmt_optional(result.dynamic_range_db, '.2f', ' dB')}")
+        print(f"  Low Percentile:  {_fmt_optional(result.low_percentile_db, '.2f', ' dB')}")
+        print(f"  High Percentile: {_fmt_optional(result.high_percentile_db, '.2f', ' dB')}")
     return 0
 
 

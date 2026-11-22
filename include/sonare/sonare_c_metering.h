@@ -84,10 +84,13 @@ void sonare_free_clipping_result(SonareClippingResult* result);
 /// @brief Offline dynamic-range result. @c window_rms_db is heap-allocated;
 ///        free with @ref sonare_free_dynamic_range_result.
 typedef struct {
-  float dynamic_range_db;    ///< high_percentile_db - low_percentile_db, in dB.
-  float low_percentile_db;   ///< Window RMS level at the low percentile, in dBFS.
-  float high_percentile_db;  ///< Window RMS level at the high percentile, in dBFS.
-  float* window_rms_db;      ///< Per-window RMS levels in dBFS, in time order.
+  float dynamic_range_db;    ///< high - low, in dB. +inf when only the low percentile is silent;
+                             ///< NaN (not measured) when both are silent or the input is empty.
+  float low_percentile_db;   ///< Window RMS level at the low percentile, in dBFS. -inf on a
+                             ///< silent window, NaN for empty input.
+  float high_percentile_db;  ///< Window RMS level at the high percentile, in dBFS. -inf on a
+                             ///< silent window, NaN for empty input.
+  float* window_rms_db;      ///< Per-window RMS levels in dBFS, in time order; -inf when silent.
   size_t window_count;       ///< Number of entries in window_rms_db.
 } SonareDynamicRangeResult;
 

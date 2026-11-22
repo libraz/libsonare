@@ -65,6 +65,21 @@ def test_ebur128_loudness_range_is_none_without_a_gated_window() -> None:
     assert long_range is not None and math.isfinite(long_range)
 
 
+def test_metering_dynamic_range_reads_a_silent_low_end_as_infinite_and_silence_as_none() -> None:
+    gapped = np.concatenate([_tone(2.0), np.zeros(SR * 2, dtype=np.float32)])
+    report = libsonare.metering_dynamic_range(gapped, SR, window_sec=0.4, hop_sec=0.2)
+    assert report.low_percentile_db == -math.inf
+    assert report.high_percentile_db is not None and math.isfinite(report.high_percentile_db)
+    assert report.dynamic_range_db == math.inf
+
+    silent = libsonare.metering_dynamic_range(np.zeros(SR * 2, dtype=np.float32), SR)
+    assert silent.dynamic_range_db is None
+    assert silent.low_percentile_db == silent.high_percentile_db == -math.inf
+
+    sounding = libsonare.metering_dynamic_range(_tone(2.0), SR)
+    assert sounding.dynamic_range_db is not None and math.isfinite(sounding.dynamic_range_db)
+
+
 def test_metering_crest_factor_is_none_for_silence() -> None:
     assert libsonare.metering_crest_factor_db(SILENCE, SR) is None
     assert libsonare.metering_crest_factor_db_stereo(SILENCE, SILENCE, SR) is None
