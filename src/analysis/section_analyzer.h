@@ -9,6 +9,7 @@
 
 #include "analysis/boundary_detector.h"
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -57,15 +58,16 @@ struct SectionConfig {
   float tuning = 0.0f;
 };
 
-/// @brief Domain of the SectionConfig members n_fft and hop_length.
+/// @brief Domain of SectionConfig::hop_length; n_fft takes @ref kStftNFftDomain.
 inline constexpr util::check::NumericDomain kSectionCountDomain =
     util::check::integer_domain_of<int>(1);
 
 /// @brief Refuses a SectionConfig outside the argument domain every public surface shares.
-/// @throws SonareException(InvalidParameter) unless n_fft and hop_length are positive and
+/// @throws SonareException(InvalidParameter) unless n_fft is in @ref kStftNFftDomain and even,
+///         hop_length is positive, and
 ///         min_section_sec and boundary_threshold are finite and non-negative.
 inline void validate_section_config(const SectionConfig& config) {
-  util::check::integer_within<int>(config.n_fft, kSectionCountDomain, "n_fft");
+  util::check::even_within(config.n_fft, kStftNFftDomain, "n_fft");
   util::check::integer_within<int>(config.hop_length, kSectionCountDomain, "hop_length");
   util::check::at_least(config.min_section_sec, 0.0, "min_section_sec");
   util::check::at_least(config.boundary_threshold, 0.0, "boundary_threshold");

@@ -23,7 +23,7 @@ namespace sonare {
 void validate_config(const MusicAnalyzerConfig& config) {
   // A real-valued FFT of an odd size has no n_fft/2 + 1 bin layout, so an odd
   // size is rejected rather than silently rounded.
-  util::check::even_within(config.n_fft, kMusicNfftDomain, "n_fft");
+  util::check::even_within(config.n_fft, kStftNFftDomain, "n_fft");
   util::check::integer_within<int>(config.hop_length, kMusicCountDomain, "hop_length");
   util::check::greater_than(config.bpm_min, 0.0, "bpm_min");
   if (!(numeric::finite(config.bpm_max) && config.bpm_max >= config.bpm_min)) {

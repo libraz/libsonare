@@ -11,6 +11,7 @@
 #include "analysis/chord_hmm.h"
 #include "analysis/chord_templates.h"
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -165,9 +166,6 @@ struct ChordConfig {
   std::optional<float> tuning;
 };
 
-/// @brief Domain of ChordConfig::n_fft.
-inline constexpr util::check::NumericDomain kChordCountDomain =
-    util::check::integer_domain_of<int>(1);
 /// @brief Domain of ChordConfig::hop_length: the chord chroma runs at
 ///        @ref chord_constants::kChordChromaHopMultiplier times it, which has to stay a constant-Q
 ///        hop.
@@ -180,13 +178,15 @@ inline constexpr util::check::NumericDomain kChordBeamWidthDomain =
 /// @brief Refuses a ChordConfig outside the argument domain every public surface shares.
 /// @throws SonareException(InvalidParameter) unless min_duration is finite and at least 0,
 ///         smoothing_window is finite and at least 0 (one hop or less, 0 included, smooths
-///         nothing), threshold is finite in [0, 1], n_fft and hop_length are positive, and
+///         nothing), threshold is finite in [0, 1], n_fft is in @ref kStftNFftDomain and even,
+///         hop_length is in
+///         @ref kChordHopLengthDomain, and
 ///         hmm_beam_width is at least 0.
 inline void validate_chord_config(const ChordConfig& config) {
   util::check::at_least(config.min_duration, 0.0, "min_duration");
   util::check::at_least(config.smoothing_window, 0.0, "smoothing_window");
   util::check::in_range(config.threshold, 0.0, 1.0, "threshold");
-  util::check::integer_within<int>(config.n_fft, kChordCountDomain, "n_fft");
+  util::check::even_within(config.n_fft, kStftNFftDomain, "n_fft");
   util::check::integer_within<int>(config.hop_length, kChordHopLengthDomain, "hop_length");
   util::check::integer_within<int>(config.hmm_beam_width, kChordBeamWidthDomain, "hmm_beam_width");
 }

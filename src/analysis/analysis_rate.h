@@ -18,6 +18,7 @@
 #include "feature/onset.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -67,13 +68,23 @@ inline int window_length_at_rate(int samples_at_reference_rate, int sample_rate,
 
 /// @brief Converts @p n_fft_at_reference_rate to the window and FFT length for @p sample_rate.
 /// @details The window is a time quantity in samples at @p reference_rate. Factor 1 returns
-///          `{0, n_fft}` unchanged. Throws if the FFT length exceeds @ref kMaxStftNFft.
+///          `{0, n_fft}` unchanged. Refuses (n_fft, sample_rate) when the FFT length would exceed
+///          @ref kMaxStftNFft.
 inline RateWindow window_at_rate(int n_fft_at_reference_rate, int sample_rate,
                                  int reference_rate = kAnalysisSampleRate) {
+  if (n_fft_at_reference_rate > 0 && sample_rate > 0 && reference_rate > 0 &&
+      sample_rate != reference_rate) {
+    const double scaled =
+        static_cast<double>(n_fft_at_reference_rate) * sample_rate / reference_rate;
+    if (scaled > static_cast<double>(kMaxStftNFft) ||
+        fast_fft_length(std::max(2, static_cast<int>(std::lround(scaled)))) > kMaxStftNFft) {
+      util::check::refuse_relation({"n_fft", "sample_rate"},
+                                   "{0} rescaled to {1} must fit the largest FFT size");
+    }
+  }
   const int win = window_length_at_rate(n_fft_at_reference_rate, sample_rate, reference_rate);
   if (sample_rate == reference_rate) return {0, n_fft_at_reference_rate};
   const int fft = fast_fft_length(win);
-  SONARE_CHECK(fft <= kMaxStftNFft, ErrorCode::InvalidParameter);
   return {win, fft};
 }
 

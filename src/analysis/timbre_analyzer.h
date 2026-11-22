@@ -39,10 +39,10 @@ inline constexpr util::check::NumericDomain kTimbreWindowSecDomain =
     util::check::real_domain_above(0.0, false);
 
 /// @brief Refuses a TimbreConfig outside the argument domain every public surface shares.
-/// @throws SonareException(InvalidParameter) unless n_fft, hop_length, n_mels and n_mfcc are
-///         positive and window_sec is finite and positive.
+/// @throws SonareException(InvalidParameter) unless n_fft is in @ref kStftNFftDomain and even,
+///         hop_length, n_mels and n_mfcc are positive, and window_sec is finite and positive.
 inline void validate_timbre_config(const TimbreConfig& config) {
-  util::check::within(config.n_fft, kTimbreCountDomain, "n_fft");
+  util::check::even_within(config.n_fft, kStftNFftDomain, "n_fft");
   util::check::within(config.hop_length, kTimbreCountDomain, "hop_length");
   util::check::within(config.n_mels, kTimbreCountDomain, "n_mels");
   util::check::within(config.n_mfcc, kTimbreCountDomain, "n_mfcc");

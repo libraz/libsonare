@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -102,15 +103,15 @@ struct BpmConfig {
   int hop_length = 512;      ///< Hop length in samples of the input buffer
 };
 
-/// @brief Domain of the tempo search members n_fft and hop_length.
+/// @brief Domain of the tempo search hop_length; n_fft takes @ref kStftNFftDomain.
 inline constexpr util::check::NumericDomain kBpmCountDomain =
     util::check::integer_domain_of<int>(1);
 
 /// @brief Refuses a tempo search outside the argument domain every public surface shares.
 /// @details The rule @ref validate_bpm_config and validate_rhythm_config both apply.
 /// @throws SonareParameterRefusal(InvalidParameter) unless bpm_min is finite and positive, bpm_max
-///         is finite and above bpm_min, start_bpm is finite and positive, and n_fft and hop_length
-///         are positive.
+///         is finite and above bpm_min, start_bpm is finite and positive, n_fft is even and in
+///         @ref kStftNFftDomain, and hop_length is positive.
 inline void validate_tempo_search(float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length) {
   util::check::greater_than(bpm_min, 0.0, "bpm_min");
@@ -118,7 +119,7 @@ inline void validate_tempo_search(float bpm_min, float bpm_max, float start_bpm,
     util::check::refuse_relation({"bpm_max", "bpm_min"}, "{0} must be finite and greater than {1}");
   }
   util::check::greater_than(start_bpm, 0.0, "start_bpm");
-  util::check::integer_within<int>(n_fft, kBpmCountDomain, "n_fft");
+  util::check::even_within(n_fft, kStftNFftDomain, "n_fft");
   util::check::integer_within<int>(hop_length, kBpmCountDomain, "hop_length");
 }
 

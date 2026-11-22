@@ -444,12 +444,19 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
   CHECK(last_message() == "chords[1].quality must be an integer in [0, 24]");
 }
 
-TEST_CASE("the key entries refuse their hop and high-pass options by their names",
+TEST_CASE("the key entries refuse their FFT, hop and high-pass options by their names",
           "[c_api][feature]") {
   const std::vector<float> samples(22050, 0.1f);
   SonareDetectKeyOptions options;
   sonare_detect_key_options_init(&options);
   SonareKey key{};
+  for (const int n_fft : {1000000000, 2049}) {
+    options.n_fft = n_fft;
+    CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "options.n_fft must be an even integer in [2, 524288]");
+  }
+  options.n_fft = 2048;
   options.hop_length = 16385;
   CHECK(sonare_detect_key(samples.data(), samples.size(), 22050, &options, &key, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);

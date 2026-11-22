@@ -189,9 +189,6 @@ struct MusicAnalyzerConfig {
 /// tempo_update_interval_beats.
 inline constexpr util::check::NumericDomain kMusicCountDomain =
     util::check::integer_domain_of<int>(1);
-/// @brief Domain of MusicAnalyzerConfig::n_fft, an even integer.
-inline constexpr util::check::NumericDomain kMusicNfftDomain =
-    util::check::integer_domain(2, std::numeric_limits<int>::max());
 /// @brief Domain of MusicAnalyzerConfig::chord_hmm_beam_width.
 inline constexpr util::check::NumericDomain kMusicChordBeamWidthDomain =
     util::check::integer_domain_of<int>(1);

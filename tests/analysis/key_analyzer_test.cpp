@@ -506,7 +506,7 @@ TEST_CASE("KeyAnalyzer refuses an n_fft of 0 even where the call leaves it unrea
   const std::array<float, 12> mean_chroma{1.0f, 0.0f, 0.5f, 0.0f, 0.8f, 0.6f,
                                           0.0f, 0.9f, 0.0f, 0.4f, 0.0f, 0.3f};
   const auto message =
-      Catch::Matchers::ContainsSubstring("n_fft must be an integer in [1, 2147483647]");
+      Catch::Matchers::ContainsSubstring("n_fft must be an even integer in [2, 524288]");
   REQUIRE_THROWS_WITH(KeyAnalyzer(audio, config), message);
   REQUIRE_THROWS_WITH(KeyAnalyzer(mean_chroma, config), message);
 }

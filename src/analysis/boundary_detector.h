@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -107,16 +108,18 @@ struct BoundaryConfig {
   bool use_chroma = true;  ///< Use chroma features
 };
 
-/// @brief Domain of the BoundaryConfig counts n_fft, hop_length, kernel_size, n_mfcc and n_chroma.
+/// @brief Domain of the BoundaryConfig counts hop_length, kernel_size, n_mfcc and n_chroma; n_fft
+///        takes @ref kStftNFftDomain.
 inline constexpr util::check::NumericDomain kBoundaryCountDomain =
     util::check::integer_domain_of<int>(1);
 
 /// @brief Refuses a BoundaryConfig outside the argument domain every public surface shares.
-/// @throws SonareException(InvalidParameter) unless n_fft, hop_length, kernel_size, n_mfcc and
-///         n_chroma are positive, threshold, absolute_threshold, peak_distance and
-///         reference_window are finite and non-negative, and at least one feature stream is on.
+/// @throws SonareException(InvalidParameter) unless n_fft is in @ref kStftNFftDomain and even,
+///         hop_length, kernel_size, n_mfcc and n_chroma are positive, threshold,
+///         absolute_threshold, peak_distance and reference_window are finite and non-negative, and
+///         at least one feature stream is on.
 inline void validate_boundary_config(const BoundaryConfig& config) {
-  util::check::integer_within<int>(config.n_fft, kBoundaryCountDomain, "n_fft");
+  util::check::even_within(config.n_fft, kStftNFftDomain, "n_fft");
   util::check::integer_within<int>(config.hop_length, kBoundaryCountDomain, "hop_length");
   util::check::integer_within<int>(config.kernel_size, kBoundaryCountDomain, "kernel_size");
   util::check::integer_within<int>(config.n_mfcc, kBoundaryCountDomain, "n_mfcc");

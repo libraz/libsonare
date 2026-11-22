@@ -1274,5 +1274,5 @@ TEST_CASE("ChordAnalyzer refuses an n_fft of 0 even where the call leaves it unr
   const Audio audio = Audio::from_buffer(tone.data(), tone.size(), 22050);
   REQUIRE_THROWS_WITH(
       ChordAnalyzer(audio, config),
-      Catch::Matchers::ContainsSubstring("n_fft must be an integer in [1, 2147483647]"));
+      Catch::Matchers::ContainsSubstring("n_fft must be an even integer in [2, 524288]"));
 }
