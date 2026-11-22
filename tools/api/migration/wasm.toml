@@ -35474,3 +35474,37 @@ changed = "a missing (undefined or null) or non-array-like segment list is refus
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/new-apis.test.ts::refuses a missing segment list instead of clearing the map"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTempo"
+changed = "a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through)"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngineTransportFacade.setTempo"
+changed = "a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through)"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "Mixer.processStereoInto"
+changed = "an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/caller-length-refusal.test.ts::refuses input lists that are not arrays instead of mixing nothing"
+
+[[entry]]
+kind = "method"
+old = "ClipPageProvider.supply"
+changed = "a channel list that is not array-like is refused with TypeError naming channels instead of a channel-count RangeError"
+domain = "project"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/caller-length-refusal.test.ts::refuses a channel list that is not an array instead of counting it as empty"

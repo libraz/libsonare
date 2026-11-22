@@ -11056,9 +11056,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError |
 | `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError |
 | `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
 | `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError |
+| `SonareEngine.setTempo` (`./worklet`) | a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through) |
+| `SonareEngineTransportFacade.setTempo` (`./worklet`) | a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through) |
 
 #### String values are lowerCamelCase tokens
 
@@ -11889,6 +11892,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `ClipPageProvider.supply` | a channel list that is not array-like is refused with TypeError naming channels instead of a channel-count RangeError |
 | `Project.addMidiClip` | a NaN, infinite or out-of-range startPpq or lengthPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.duplicateClip` | a NaN, infinite or out-of-range newStartPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.removeAutomationLane` | a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through) |
