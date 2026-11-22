@@ -47,7 +47,7 @@ void ProjectWasm::annotateKeys(val keys) {
   const SonareError err = sonare_project_annotate_keys(
       project_.get(), segments.empty() ? nullptr : segments.data(), segments.size());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -98,7 +98,7 @@ void ProjectWasm::annotateChords(val chords) {
   const SonareError err = sonare_project_annotate_chords(
       project_.get(), symbols.empty() ? nullptr : symbols.data(), symbols.size());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -114,7 +114,7 @@ void ProjectWasm::setAssistSidecar(const std::string& module_id, const val& sche
       project_.get(), wasmCString(module_id, "moduleId"), schema_version, target_track_id,
       region_start_ppq, region_end_ppq, bytes.empty() ? nullptr : bytes.data(), bytes.size());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -127,7 +127,7 @@ val ProjectWasm::getAssistSidecar(double index) const {
   const SonareError err =
       sonare_project_get_assist_sidecar(project_.get(), wasmIndexArg(index, "index"), &sidecar);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   val out = val::object();
   out.set("moduleId", std::string(sidecar.module_id != nullptr ? sidecar.module_id : ""));
@@ -145,7 +145,7 @@ void ProjectWasm::setOverlapPolicy(const val& policy_val) {
   const uint32_t policy = checkedUintFromVal(policy_val, "policy");
   const SonareError err = sonare_project_set_overlap_policy(project_.get(), policy);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -153,7 +153,7 @@ uint32_t ProjectWasm::getOverlapPolicy() const {
   uint32_t out = 0;
   const SonareError err = sonare_project_get_overlap_policy(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return out;
 }
@@ -162,7 +162,7 @@ double ProjectWasm::getSampleRate() const {
   double out = 0.0;
   const SonareError err = sonare_project_get_sample_rate(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return out;
 }
@@ -171,7 +171,7 @@ void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   const SonareError err =
       sonare_project_set_mixer_scene_json(project_.get(), wasmCString(scene_json, "sceneJson"));
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -201,12 +201,12 @@ val ProjectWasm::markerByIndex(const val& index_val) const {
   const SonareError err =
       sonare_project_marker_by_index(project_.get(), static_cast<size_t>(index), &desc);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   char* full_name = nullptr;
   const SonareError name_err =
       sonare_project_marker_name_by_index(project_.get(), static_cast<size_t>(index), &full_name);
-  if (name_err != SONARE_OK) throwCError(name_err);
+  if (name_err != SONARE_OK) throwCodedCError(name_err);
   val out = val::object();
   out.set("id", desc.id);
   out.set("ppq", desc.ppq);
@@ -223,11 +223,11 @@ val ProjectWasm::trackByIndex(const val& index_val) const {
   SonareProjectTrack d{};
   const SonareError err =
       sonare_project_track_by_index(project_.get(), static_cast<size_t>(index), &d);
-  if (err != SONARE_OK) throwCError(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   HeapStringGuard name;
   const SonareError name_err =
       sonare_project_track_name_by_index(project_.get(), static_cast<size_t>(index), &name.value);
-  if (name_err != SONARE_OK) throwCError(name_err);
+  if (name_err != SONARE_OK) throwCodedCError(name_err);
   val out = val::object();
   out.set("id", d.id);
   out.set("kind", d.kind);
@@ -245,7 +245,7 @@ val ProjectWasm::clipByIndex(const val& index_val) const {
   SonareProjectClip d{};
   const SonareError err =
       sonare_project_clip_by_index(project_.get(), static_cast<size_t>(index), &d);
-  if (err != SONARE_OK) throwCError(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   val out = val::object();
   out.set("id", d.id);
   out.set("trackId", d.track_id);
@@ -265,11 +265,11 @@ val ProjectWasm::sourceByIndex(const val& index_val) const {
   SonareProjectSource d{};
   const SonareError err =
       sonare_project_source_by_index(project_.get(), static_cast<size_t>(index), &d);
-  if (err != SONARE_OK) throwCError(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   HeapStringGuard name_or_uri;
   const SonareError name_err = sonare_project_source_name_or_uri_by_index(
       project_.get(), static_cast<size_t>(index), &name_or_uri.value);
-  if (name_err != SONARE_OK) throwCError(name_err);
+  if (name_err != SONARE_OK) throwCodedCError(name_err);
   return sourceToVal(d, name_or_uri.value);
 }
 
@@ -279,7 +279,7 @@ val ProjectWasm::sourceToVal(const SonareProjectSource& d, const char* name_or_u
     const SonareError metadata_err =
         sonare_project_get_audio_source_metadata(project_.get(), d.id, &metadata.value);
     if (metadata_err != SONARE_OK) {
-      throwCError(metadata_err);
+      throwCodedCError(metadata_err);
     }
   }
   val out = val::object();
@@ -301,7 +301,7 @@ double ProjectWasm::markerCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_marker_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return static_cast<double>(out);
 }
@@ -310,7 +310,7 @@ double ProjectWasm::trackCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_track_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return static_cast<double>(out);
 }
@@ -319,7 +319,7 @@ double ProjectWasm::clipCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_clip_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return static_cast<double>(out);
 }
@@ -328,7 +328,7 @@ double ProjectWasm::sourceCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_source_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return static_cast<double>(out);
 }
@@ -337,7 +337,7 @@ double ProjectWasm::tempoSegmentCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_tempo_segment_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return static_cast<double>(out);
 }
@@ -346,7 +346,7 @@ double ProjectWasm::timeSignatureCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_time_signature_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return static_cast<double>(out);
 }
@@ -357,7 +357,7 @@ val ProjectWasm::tempoSegmentByIndex(const val& index_val) const {
   const SonareError err =
       sonare_project_tempo_segment_by_index(project_.get(), static_cast<size_t>(index), &seg);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   val out = val::object();
   // The same three fields setTempoSegments reads, so a segment read back can be
@@ -374,7 +374,7 @@ val ProjectWasm::timeSignatureByIndex(const val& index_val) const {
   const SonareError err =
       sonare_project_time_signature_by_index(project_.get(), static_cast<size_t>(index), &seg);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   val out = val::object();
   out.set("startPpq", seg.start_ppq);
@@ -400,7 +400,7 @@ void ProjectWasm::setTempoSegments(val segments) {
   const SonareError err = sonare_project_set_tempo_segments(
       project_.get(), segs.empty() ? nullptr : segs.data(), segs.size());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -423,7 +423,7 @@ void ProjectWasm::setTimeSignatures(val segments) {
   const SonareError err = sonare_project_set_time_signatures(
       project_.get(), segs.empty() ? nullptr : segs.data(), segs.size());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -432,7 +432,7 @@ val ProjectWasm::lastBounceCompileResult() const {
   const SonareError err = sonare_project_last_bounce_compile_result(project_.get(), &result);
   if (err != SONARE_OK) {
     sonare_free_project_compile_result(&result);
-    throwCError(err);
+    throwCodedCError(err);
   }
   val out = projectCompileResultToVal(result);
   sonare_free_project_compile_result(&result);
@@ -517,14 +517,14 @@ std::string js_synth_engine_param_info(const val& engine_mode) {
   char* json = nullptr;
   const SonareError err =
       sonare_synth_engine_param_info(checkedIntFromVal(engine_mode, "engineMode"), &json);
-  if (err != SONARE_OK) throwCError(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   return takeCString(json);
 }
 
 std::string js_synth_patch_param_info() {
   char* json = nullptr;
   const SonareError err = sonare_synth_patch_param_info(&json);
-  if (err != SONARE_OK) throwCError(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   return takeCString(json);
 }
 

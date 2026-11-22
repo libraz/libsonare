@@ -96,7 +96,7 @@ val ProjectWasm::importExternalStems(val request) {
   SonareExternalStemImportResult result{};
   const SonareError error =
       sonare_project_import_external_stems(project_.get(), &request_desc, &result);
-  if (error != SONARE_OK) throwCError(error);
+  if (error != SONARE_OK) throwCodedCError(error);
   try {
     val output = val::object();
     val track_ids = val::array();

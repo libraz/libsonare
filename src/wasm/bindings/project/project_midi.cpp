@@ -32,7 +32,7 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   const SonareError err = sonare_project_set_midi_events(
       project_.get(), clip_id, pods.empty() ? nullptr : pods.data(), pods.size());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -42,7 +42,7 @@ uint32_t ProjectWasm::importSmf(val data) {
   const SonareError err = sonare_project_import_smf(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return first_clip;
 }
@@ -53,7 +53,7 @@ val ProjectWasm::exportSmf() {
   const SonareError err = sonare_project_export_smf(project_.get(), &bytes, &len);
   if (err != SONARE_OK) {
     sonare_free_bytes(bytes);
-    throwCError(err);
+    throwCodedCError(err);
   }
   std::vector<uint8_t> out(bytes, bytes + len);
   sonare_free_bytes(bytes);
@@ -66,7 +66,7 @@ uint32_t ProjectWasm::importClipFile(val data) {
   const SonareError err = sonare_project_import_clip_file(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return first_clip;
 }
@@ -77,7 +77,7 @@ val ProjectWasm::exportClipFile() {
   const SonareError err = sonare_project_export_clip_file(project_.get(), &bytes, &len);
   if (err != SONARE_OK) {
     sonare_free_bytes(bytes);
-    throwCError(err);
+    throwCodedCError(err);
   }
   std::vector<uint8_t> out(bytes, bytes + len);
   sonare_free_bytes(bytes);
@@ -99,7 +99,7 @@ void ProjectWasm::setProgram(const val& clip_id_val, const val& program_val, con
   const SonareError err =
       sonare_project_set_program(project_.get(), clip_id, group, channel, program, bank);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -112,7 +112,7 @@ val ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_js
     const SonareError err = sonare_project_bake_midi_fx(
         project_.get(), clip_id, wasmCString(config_json, "configJson"), nullptr, 0, nullptr);
     if (err != SONARE_OK) {
-      throwCError(err);
+      throwCodedCError(err);
     }
     return val::undefined();
   }
@@ -123,7 +123,7 @@ val ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_js
   const SonareError count_err = sonare_project_preview_midi_fx_count(
       project_.get(), clip_id, wasmCString(config_json, "configJson"), &expected);
   if (count_err != SONARE_OK) {
-    throwCError(count_err);
+    throwCodedCError(count_err);
   }
   static_assert(sizeof(int) == sizeof(int32_t), "vectorToInt32Array assumes a 32-bit int");
   std::vector<int> source_index(expected, -1);
@@ -132,7 +132,7 @@ val ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_js
       sonare_project_bake_midi_fx(project_.get(), clip_id, wasmCString(config_json, "configJson"),
                                   source_index.data(), source_index.size(), &written);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   source_index.resize(std::min(written, source_index.size()));
   return vectorToInt32Array(source_index);
@@ -144,7 +144,7 @@ uint32_t ProjectWasm::previewMidiFxCount(const val& clip_id_val, const std::stri
   const SonareError err = sonare_project_preview_midi_fx_count(
       project_.get(), clip_id, wasmCString(config_json, "configJson"), &count);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return static_cast<uint32_t>(count);
 }
@@ -154,7 +154,7 @@ val ProjectWasm::validateMidiNotes(const val& clip_id_val) {
   SonareNotePairValidation result{};
   const SonareError err = sonare_project_validate_midi_notes(project_.get(), clip_id, &result);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   val out = val::object();
   out.set("ok", result.ok != 0);
@@ -195,7 +195,7 @@ val ProjectWasm::analyzeTempo(val audio, const val& sample_rate_val, val options
       sonare_project_analyze_tempo(project_.get(), samples.data(), samples.size(), sample_rate,
                                    &resolved, candidates, std::size(candidates), &count);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   val output = val::array();
   const char* labels[] = {"primary", "half", "double"};
@@ -226,7 +226,7 @@ float ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& c
   const SonareError err = sonare_project_auto_tempo(
       project_.get(), samples.data(), samples.size(), sample_rate, &resolved,
       static_cast<size_t>(std::max(candidate_index, 0)), apply_time_signatures ? 1 : 0, &bpm);
-  if (err != SONARE_OK) throwCError(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   return bpm;
 }
 
@@ -243,7 +243,7 @@ double ProjectWasm::snapToGrid(const val& ppq_val, const val& strength_val,
   const SonareError err =
       sonare_project_snap_to_grid(project_.get(), ppq, strength, &options, &out);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return out;
 }

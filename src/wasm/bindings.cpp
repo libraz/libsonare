@@ -502,23 +502,13 @@ val js_realtime_voice_changer_preset_config(const val& preset_val) {
 val js_audio_from_memory(val bytes) {
   std::vector<uint8_t> data = uint8ArrayToVector(bytes, "bytes");
   const Audio audio = Audio::from_memory(data.data(), data.size());
-  const std::vector<float> samples(audio.data(), audio.data() + audio.size());
   val out = val::object();
-  out.set("samples", vectorToFloat32Array(samples));
+  out.set("samples", vectorToFloat32Array(audio.data(), audio.size()));
   out.set("sampleRate", audio.sample_rate());
   return out;
 }
 
 namespace {
-
-// Raises a C-ABI failure as its recorded refusal, else as the core exception the JS facade
-// already classifies.
-[[noreturn]] void throw_c_error(SonareError err) {
-  rethrowLastCRefusal();
-  const char* detail = sonare_last_error_message();
-  const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(err);
-  throw SonareException(sonare_c_detail::error_code_from_c_error(err), text);
-}
 
 struct CFloatBuffer {
   float* data = nullptr;
@@ -535,7 +525,7 @@ val js_decode_channels(val bytes) {
   int sample_rate = 0;
   const SonareError err = sonare_decode_channels(data.data(), data.size(), &planar.data, &frames,
                                                  &channels, &sample_rate);
-  if (err != SONARE_OK) throw_c_error(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   val planes = val::array();
   for (int channel = 0; channel < channels; ++channel) {
     planes.call<void>(
@@ -577,7 +567,7 @@ val js_downmix(val channels, val target_layout_value, val options) {
   CFloatBuffer mixed;
   const SonareError err =
       sonare_downmix(packed.data(), frames, count, target_layout, &fold, &mixed.data);
-  if (err != SONARE_OK) throw_c_error(err);
+  if (err != SONARE_OK) throwCodedCError(err);
   const size_t out_channels =
       static_cast<size_t>(channel_count(static_cast<ChannelLayout>(target_layout)));
   val planes = val::array();

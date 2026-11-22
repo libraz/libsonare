@@ -189,8 +189,7 @@ class PlaybackRendererWasm {
     checkPlayback(sonare_playback_renderer_render_offline(
         renderer_.get(), input.data(), frames, in_channels, &rendered, &out_frames, &out_channels));
     std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_floats);
-    return vectorToFloat32Array(std::vector<float>(
-        owned.get(), owned.get() + out_frames * static_cast<std::size_t>(out_channels)));
+    return vectorToFloat32Array(owned.get(), out_frames * static_cast<std::size_t>(out_channels));
   }
 
   void setConfig(const std::string& config_json) {

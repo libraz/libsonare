@@ -72,13 +72,6 @@ val chordEntryToVal(int root, int quality, float start_time, float confidence,
 /// @brief Whether a constructor field was given; an absent one keeps the StreamConfig default.
 bool given(const val& value) { return !value.isUndefined() && !value.isNull(); }
 
-/// @brief A given boolean field, refused by name when it is not a boolean.
-bool boolFromVal(const val& value, const char* key) {
-  if (value.typeOf().as<std::string>() != "boolean") {
-    throw WasmTypeError(std::string(key) + " must be a boolean");
-  }
-  return value.as<bool>();
-}
 /// @brief JavaScript wrapper for StreamAnalyzer.
 class StreamAnalyzerWrapper {
  public:
@@ -104,15 +97,15 @@ class StreamAnalyzerWrapper {
     if (given(tuning_ref_hz_val)) {
       config.tuning_ref_hz = checkedFloatFromVal(tuning_ref_hz_val, "referenceHz");
     }
-    if (given(compute_mel_val)) config.compute_mel = boolFromVal(compute_mel_val, "computeMel");
+    if (given(compute_mel_val)) config.compute_mel = *optionalBool(compute_mel_val, "computeMel");
     if (given(compute_chroma_val)) {
-      config.compute_chroma = boolFromVal(compute_chroma_val, "computeChroma");
+      config.compute_chroma = *optionalBool(compute_chroma_val, "computeChroma");
     }
     if (given(compute_onset_val)) {
-      config.compute_onset = boolFromVal(compute_onset_val, "computeOnset");
+      config.compute_onset = *optionalBool(compute_onset_val, "computeOnset");
     }
     if (given(compute_spectral_val)) {
-      config.compute_spectral = boolFromVal(compute_spectral_val, "computeSpectral");
+      config.compute_spectral = *optionalBool(compute_spectral_val, "computeSpectral");
     }
     if (given(emit_every_n_frames_val)) {
       config.emit_every_n_frames = checkedIntFromVal(emit_every_n_frames_val, "emitEveryNFrames");

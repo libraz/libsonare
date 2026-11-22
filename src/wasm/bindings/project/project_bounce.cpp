@@ -348,7 +348,7 @@ val ProjectWasm::compile(const val& with_timeline_val) {
   if (err != SONARE_OK) {
     sonare_free_project_compile_result(&result);
     sonare_project_timeline_destroy(timeline);
-    throwCError(err);
+    throwCodedCError(err);
   }
   val out = projectCompileResultToVal(result);
   sonare_free_project_compile_result(&result);
@@ -530,7 +530,7 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   // The native failure is reported ahead of a callback's, as in the Python binding.
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throwCError(err);
+    throwCodedCError(err);
   }
   if (failure.failed) {
     sonare_free_floats(interleaved);
@@ -548,14 +548,14 @@ void ProjectWasm::loadSoundFont(val data) {
   const SonareError err = sonare_project_load_soundfont(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
 void ProjectWasm::clearSoundFont() {
   const SonareError err = sonare_project_clear_soundfont(project_.get());
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
 }
 
@@ -563,7 +563,7 @@ size_t ProjectWasm::soundFontPresetCount() {
   size_t count = 0;
   const SonareError err = sonare_project_soundfont_preset_count(project_.get(), &count);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   return count;
 }
@@ -572,13 +572,13 @@ val ProjectWasm::soundFontManifest() {
   size_t total = 0;
   SonareError err = sonare_project_soundfont_manifest(project_.get(), nullptr, 0, &total);
   if (err != SONARE_OK) {
-    throwCError(err);
+    throwCodedCError(err);
   }
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
     err = sonare_project_soundfont_manifest(project_.get(), entries.data(), total, &total);
     if (err != SONARE_OK) {
-      throwCError(err);
+      throwCodedCError(err);
     }
   }
   val out = val::array();

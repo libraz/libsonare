@@ -356,7 +356,7 @@ val ProjectWasm::applyVocalEdit(val request) {
   SonareProjectVocalEditApplyResult result{};
   sonare_project_vocal_edit_apply_result_init(&result);
   const SonareError error = sonare_project_apply_vocal_edit(project_.get(), &desc, &result);
-  if (error != SONARE_OK) throwCError(error);
+  if (error != SONARE_OK) throwCodedCError(error);
   return applyResultToVal(result);
 }
 
@@ -364,7 +364,7 @@ val ProjectWasm::getVocalEditDependencies() {
   DependenciesGuard result;
   const SonareError error =
       sonare_project_get_vocal_edit_dependencies(project_.get(), &result.value);
-  if (error != SONARE_OK) throwCError(error);
+  if (error != SONARE_OK) throwCodedCError(error);
   return dependenciesToVal(result.value);
 }
 
@@ -392,7 +392,7 @@ val ProjectWasm::rehydrateVocalEdits(val originals, val cancel) {
     failure.set("cancelFailure", cancel_storage.callback_failure);
     return failure;
   }
-  if (error != SONARE_OK) throwCError(error);
+  if (error != SONARE_OK) throwCodedCError(error);
   return rehydrateItemsToVal(result.value);
 }
 

@@ -231,7 +231,6 @@ mastering::api::MasteringChainConfig presetConfigWithOverrides(const val& preset
         mastering::api::chain_params_argument("overrides"));
   }
   const std::string preset_name = stringFromVal(preset, "preset");
-  wasmRefuseEmbeddedNul(preset_name, "preset");
   auto config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
   if (no_overrides) return config;
   return mastering::api::chain_config_overrides_from_json(

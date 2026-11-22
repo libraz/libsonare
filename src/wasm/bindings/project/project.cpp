@@ -57,7 +57,7 @@ val ProjectWasm::fromJson(const std::string& json, const val& with_diagnostics_v
 }
 
 void ProjectWasm::setSampleRate(const val& sample_rate) {
-  checkCError(
+  checkCodedCError(
       sonare_project_set_sample_rate(project_.get(), wholeHertzSampleRateFromVal(sample_rate)));
 }
 

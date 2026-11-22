@@ -401,15 +401,16 @@ bool hasProperty(val object, const char* key) {
   if (object.isNull() || object.isUndefined()) {
     return false;
   }
-  return !object[key].isUndefined() && !object[key].isNull();
+  const val value = object[key];
+  return !value.isUndefined() && !value.isNull();
 }
 
 val requireTypedProperty(const val& object, const char* key, const char* subject,
                          const char* js_type, const char* article_type) {
   namespace schema = sonare::util::json::schema;
-  if (!hasProperty(object, key))
+  val value = objectProperty(object, key);
+  if (value.isUndefined())
     throw WasmTypeError(schema::missing_key(schema::child_path(subject, key)));
-  val value = object[key];
   if (value.typeOf().as<std::string>() != js_type) {
     throw WasmTypeError(
         schema::refusal(schema::child_path(subject, key), std::string("must be ") + article_type));
@@ -418,10 +419,11 @@ val requireTypedProperty(const val& object, const char* key, const char* subject
 }
 
 val objectProperty(val object, const char* key) {
-  if (!hasProperty(object, key)) {
+  if (object.isNull() || object.isUndefined()) {
     return val::undefined();
   }
-  return object[key];
+  val value = object[key];
+  return value.isNull() ? val::undefined() : value;
 }
 
 namespace {
