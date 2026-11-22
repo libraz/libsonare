@@ -2,12 +2,12 @@ import type { EngineCaptureStatus } from '../index.js';
 import { refuse, refuseType, refuseUnknownKey } from '../internal/entry.js';
 import type {
   EngineClipPageRequestMessage,
-  SonareEngineArticulationRequestMessage,
-  SonareEngineArticulationResponseMessage,
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
   SonareEngineInsertGainReductionRequestMessage,
   SonareEngineInsertGainReductionResponseMessage,
+  SonareEngineReadRequestMessage,
+  SonareEngineReadResponseMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportRequestMessage,
   SonareEngineTransportResponseMessage,
@@ -268,25 +268,27 @@ export function isEngineTransportResponseMessage(
   );
 }
 
-export function isEngineArticulationRequestMessage(
+export function isEngineReadRequestMessage(
   value: unknown,
-): value is SonareEngineArticulationRequestMessage {
+): value is SonareEngineReadRequestMessage {
   return (
     isRecord(value) &&
-    value.type === 'articulationRequest' &&
+    value.type === 'engineReadRequest' &&
     typeof value.requestId === 'number' &&
-    (value.op === 'articulation' || value.op === 'legatoFallbackCount') &&
+    (value.op === 'articulation' ||
+      value.op === 'legatoFallbackCount' ||
+      value.op === 'lateMidiInputCount') &&
     typeof value.destinationId === 'number' &&
     typeof value.channel === 'number'
   );
 }
 
-export function isEngineArticulationResponseMessage(
+export function isEngineReadResponseMessage(
   value: unknown,
-): value is SonareEngineArticulationResponseMessage {
+): value is SonareEngineReadResponseMessage {
   return (
     isRecord(value) &&
-    value.type === 'articulationResponse' &&
+    value.type === 'engineReadResponse' &&
     typeof value.requestId === 'number' &&
     typeof value.ok === 'boolean'
   );

@@ -375,6 +375,7 @@ import type {
 } from './repair_trim.js';
 import type { TranscribeRequest } from './transcribe.js';
 import type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.js';
+import type { SonareEngineMidiInputOptions } from './worklet/engine-midi-input.js';
 import type { SonareEngineSetParamOptions } from './worklet/engine-parameter-facade.js';
 
 /** Declared keys of `T`, without the index-signature widening. */
@@ -2288,6 +2289,7 @@ const CapturePunchKeys = keysOf<CapturePunch>()([
 const EngineProcessRequestKeys = keysOf<EngineProcessOptions>()(['withMonitor']);
 const ArmCaptureRequestKeys = keysOf<{ armed: boolean }>()(['armed']);
 const ScheduleParamRequestKeys = keysOf<EngineAutomationPoint>()(['ppq', 'value', 'curveToNext']);
+const SonareEngineMidiInputRequestKeys = keysOf<SonareEngineMidiInputOptions>()(['contextTimeSec']);
 const SonareEngineSetParamRequestKeys = keysOf<SonareEngineSetParamOptions>()([
   'smoothed',
   'renderFrame',
@@ -2753,6 +2755,13 @@ export const REQUEST_SHAPES = {
   processPrepared: { keys: EngineProcessRequestKeys },
   scheduleParam: { keys: ScheduleParamRequestKeys },
   'SonareEngine.renderOffline': { keys: SonareEngineRenderOfflineRequestKeys },
+  'SonareEngine.pushMidiInputChannelPressure': { keys: SonareEngineMidiInputRequestKeys },
+  'SonareEngine.pushMidiInputCc': { keys: SonareEngineMidiInputRequestKeys },
+  'SonareEngine.pushMidiInputNoteOff': { keys: SonareEngineMidiInputRequestKeys },
+  'SonareEngine.pushMidiInputNoteOn': { keys: SonareEngineMidiInputRequestKeys },
+  'SonareEngine.pushMidiInputPitchBend': { keys: SonareEngineMidiInputRequestKeys },
+  'SonareEngine.pushMidiInputPolyPressure': { keys: SonareEngineMidiInputRequestKeys },
+  'SonareEngine.pushMidiInputUmp': { keys: SonareEngineMidiInputRequestKeys },
   'SonareEngine.setParam': { keys: SonareEngineSetParamRequestKeys },
   bounceOffline: { keys: BounceOfflineRequestKeys },
   freezeOffline: { keys: FreezeOfflineRequestKeys },

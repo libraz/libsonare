@@ -1,20 +1,22 @@
-import type { EngineClip, SynthPatch } from '../index.js';
+import type { EngineClip, SynthPatch, UmpWords } from '../index.js';
 import { ClipPageProvider, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { refuse, refuseType } from '../internal/entry.js';
 import { errorText, failurePayload } from '../internal/failure_payload.js';
+import { umpWord0 } from '../internal/ump_events.js';
 import {
   DEFAULT_METRONOME_CONFIG,
   type EngineClipPageRequestMessage,
   type ResolvedMetronomeConfig,
   resolveMetronomeConfig,
-  type SonareEngineArticulationRequestMessage,
-  type SonareEngineArticulationResponseMessage,
   type SonareEngineCaptureRequestMessage,
   type SonareEngineCaptureResponseMessageInternal,
   type SonareEngineInsertGainReductionRequestMessage,
   type SonareEngineInsertGainReductionResponseMessage,
+  type SonareEngineReadRequestMessage,
+  type SonareEngineReadResponseMessage,
   type SonareEngineSyncMessage,
+  type SonareEngineSyncMidiInputEventMessage,
   type SonareEngineTransportRequestMessage,
   type SonareEngineTransportResponseMessage,
   type TypedWorkletTransport,
@@ -113,6 +115,105 @@ function wireRenderFrame(frame: number | bigint | undefined): number | undefined
   return value < 0 ? undefined : value;
 }
 
+/** The AudioContext frame of the quantum the scope is rendering; 0 outside an AudioWorklet scope. */
+function scopeCurrentFrame(): number {
+  const frame = (globalThis as { currentFrame?: unknown }).currentFrame;
+  return typeof frame === 'number' ? frame : 0;
+}
+
+/** UMP status nibble of each typed live MIDI input event. */
+const MIDI1_STATUS = {
+  syncMidiInputNoteOff: 0x8,
+  syncMidiInputNoteOn: 0x9,
+  syncMidiInputPolyPressure: 0xa,
+  syncMidiInputCc: 0xb,
+  syncMidiInputChannelPressure: 0xd,
+  syncMidiInputPitchBend: 0xe,
+} as const satisfies Record<SonareEngineSyncMidiInputEventMessage['type'], number>;
+
+/** One-word scratch a timed typed event is packed into; embind copies it out. */
+const MIDI1_WORD = new Uint32Array(1);
+
+/** The MIDI 1.0 channel-voice packet of a typed event, laid out as `sonare::midi::make_midi1_*`; the facade validated it. */
+function midi1InputWords(message: SonareEngineSyncMidiInputEventMessage): Uint32Array {
+  let byte2 = message.data0;
+  let byte3 = message.data1;
+  if (message.type === 'syncMidiInputPitchBend') {
+    byte2 = message.data0 & 0x7f;
+    byte3 = (message.data0 >> 7) & 0x7f;
+  }
+  MIDI1_WORD[0] = umpWord0(
+    0x2,
+    message.group,
+    MIDI1_STATUS[message.type],
+    message.channel,
+    byte2,
+    byte3,
+  );
+  return MIDI1_WORD;
+}
+
+/** Pushes a typed live MIDI input event at its block offset through the engine's own encoder. */
+function pushMidiInputEvent(
+  engine: RealtimeEngine,
+  message: SonareEngineSyncMidiInputEventMessage,
+): void {
+  switch (message.type) {
+    case 'syncMidiInputNoteOn':
+      engine.pushMidiInputNoteOn(
+        message.group,
+        message.channel,
+        message.data0,
+        message.data1,
+        message.offsetInBlockSamples,
+      );
+      break;
+    case 'syncMidiInputNoteOff':
+      engine.pushMidiInputNoteOff(
+        message.group,
+        message.channel,
+        message.data0,
+        message.data1,
+        message.offsetInBlockSamples,
+      );
+      break;
+    case 'syncMidiInputCc':
+      engine.pushMidiInputCc(
+        message.group,
+        message.channel,
+        message.data0,
+        message.data1,
+        message.offsetInBlockSamples,
+      );
+      break;
+    case 'syncMidiInputPitchBend':
+      engine.pushMidiInputPitchBend(
+        message.group,
+        message.channel,
+        message.data0,
+        message.offsetInBlockSamples,
+      );
+      break;
+    case 'syncMidiInputChannelPressure':
+      engine.pushMidiInputChannelPressure(
+        message.group,
+        message.channel,
+        message.data0,
+        message.offsetInBlockSamples,
+      );
+      break;
+    case 'syncMidiInputPolyPressure':
+      engine.pushMidiInputPolyPressure(
+        message.group,
+        message.channel,
+        message.data0,
+        message.data1,
+        message.offsetInBlockSamples,
+      );
+      break;
+  }
+}
+
 /**
  * AudioWorklet-style bridge for the DAW realtime engine facade.
  *
@@ -129,6 +230,11 @@ export class SonareRealtimeEngineWorkletProcessor {
   /** The embind object behind `engine`: scratch reads and the code-carrying sync messages. */
   private native: ReturnType<typeof engineNativeHandle>;
   private closed = false;
+  /** Timed live MIDI input events whose render frame had already been rendered on arrival. */
+  private lateMidiInputCount = 0;
+  /** Render frame and AudioContext frame of the last quantum's head; maps a context time to a render frame. */
+  private headRenderFrame: number | undefined;
+  private headContextFrame = 0;
   private commandRing?: SonareEngineCommandRingBuffer;
   /** Sequence number of the last control sync received; SAB commands wait for theirs. */
   private syncSequence = 0;
@@ -326,6 +432,8 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
 
     this.drainCommands();
+    this.headRenderFrame = this.native.renderFrame();
+    this.headContextFrame = scopeCurrentFrame();
 
     // Defend against WASM linear-memory growth detaching the cached heap views:
     // if any view's backing ArrayBuffer has been detached (byteLength === 0),
@@ -964,59 +1072,23 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.bindMidiCc(message.binding);
         break;
       case 'syncMidiInputNoteOn':
-        this.engine.pushMidiInputNoteOn(
-          message.group,
-          message.channel,
-          message.data0,
-          message.data1,
-          message.offsetInBlockSamples,
-        );
-        break;
       case 'syncMidiInputNoteOff':
-        this.engine.pushMidiInputNoteOff(
-          message.group,
-          message.channel,
-          message.data0,
-          message.data1,
-          message.offsetInBlockSamples,
-        );
-        break;
       case 'syncMidiInputCc':
-        this.engine.pushMidiInputCc(
-          message.group,
-          message.channel,
-          message.data0,
-          message.data1,
-          message.offsetInBlockSamples,
-        );
-        break;
       case 'syncMidiInputPitchBend':
-        this.engine.pushMidiInputPitchBend(
-          message.group,
-          message.channel,
-          message.data0,
-          message.offsetInBlockSamples,
-        );
-        break;
       case 'syncMidiInputChannelPressure':
-        this.engine.pushMidiInputChannelPressure(
-          message.group,
-          message.channel,
-          message.data0,
-          message.offsetInBlockSamples,
-        );
-        break;
       case 'syncMidiInputPolyPressure':
-        this.engine.pushMidiInputPolyPressure(
-          message.group,
-          message.channel,
-          message.data0,
-          message.data1,
-          message.offsetInBlockSamples,
-        );
+        if (message.contextTimeSec !== undefined) {
+          this.pushMidiInputAtContextTime(midi1InputWords(message), message.contextTimeSec);
+        } else {
+          pushMidiInputEvent(this.engine, message);
+        }
         break;
       case 'syncMidiInputUmp':
-        this.engine.pushMidiInputUmp(message.words, message.offsetInBlockSamples);
+        if (message.contextTimeSec !== undefined) {
+          this.pushMidiInputAtContextTime(message.words, message.contextTimeSec);
+        } else {
+          this.engine.pushMidiInputUmp(message.words, message.offsetInBlockSamples);
+        }
         break;
     }
   }
@@ -1101,29 +1173,50 @@ export class SonareRealtimeEngineWorkletProcessor {
     });
   }
 
+  /**
+   * Queues a live MIDI input event at the render frame rendered at `contextTimeSec`, through the
+   * last quantum head's render-frame ↔ context-frame pair. A frame already rendered is late: it
+   * plays at the next block's start and is counted.
+   */
+  private pushMidiInputAtContextTime(words: UmpWords, contextTimeSec: number): void {
+    const nextRenderFrame = this.native.renderFrame();
+    // Before the first quantum the two clocks are read as they stand.
+    const headRender = this.headRenderFrame ?? nextRenderFrame;
+    const headContext =
+      this.headRenderFrame === undefined ? scopeCurrentFrame() : this.headContextFrame;
+    let target = headRender + Math.round(contextTimeSec * this.sampleRate) - headContext;
+    if (target < nextRenderFrame) {
+      this.lateMidiInputCount++;
+      target = nextRenderFrame;
+    }
+    this.native.pushMidiInputUmpAtRenderFrame(words, target);
+  }
+
   /** @internal */
-  receiveArticulationRequest(message: SonareEngineArticulationRequestMessage): void {
+  receiveReadRequest(message: SonareEngineReadRequestMessage): void {
     this.receiveOrdered(message, () => {
       try {
         this.settleCommands();
         const value =
-          message.op === 'articulation'
-            ? this.engine.articulation(message.destinationId, message.channel)
-            : this.engine.legatoFallbackCount(message.destinationId);
+          message.op === 'lateMidiInputCount'
+            ? this.lateMidiInputCount
+            : message.op === 'articulation'
+              ? this.engine.articulation(message.destinationId, message.channel)
+              : this.engine.legatoFallbackCount(message.destinationId);
         this.transport?.postMessage?.({
-          type: 'articulationResponse',
+          type: 'engineReadResponse',
           requestId: message.requestId,
           ok: true,
           value,
-        } satisfies SonareEngineArticulationResponseMessage);
+        } satisfies SonareEngineReadResponseMessage);
       } catch (error) {
         this.transport?.postMessage?.({
-          type: 'articulationResponse',
+          type: 'engineReadResponse',
           requestId: message.requestId,
           ok: false,
           error: errorText(error),
           failure: failurePayload(error),
-        } satisfies SonareEngineArticulationResponseMessage);
+        } satisfies SonareEngineReadResponseMessage);
       }
     });
   }

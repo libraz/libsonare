@@ -92,6 +92,7 @@ export {
 } from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
 export type { SonareEngineRenderOfflineRequest } from './worklet/engine-export.js';
+export type { SonareEngineMidiInputOptions } from './worklet/engine-midi-input.js';
 export { SonareRealtimeEngineNode } from './worklet/engine-node.js';
 export type { SonareEngineTransportFacade } from './worklet/engine-offline.js';
 export type { SonareEngineOptions } from './worklet/engine-options.js';

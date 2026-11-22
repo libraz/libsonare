@@ -1,8 +1,9 @@
 import { ErrorCode } from './errors.js';
-import { codedError, refuse, withEntry } from './internal/entry.js';
+import { codedError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { ProjectMidiCcBinding } from './project_types.js';
-import { assertNibble } from './validation.js';
+import { assertNibble, assertNonNegativeScalar } from './validation.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './worklet/render_quantum.js';
 
 /** The slice of {@link RealtimeEngine} that {@link bindWebMidi} drives. */
 export interface WebMidiEngine {
@@ -19,6 +20,7 @@ export interface WebMidiEngine {
     note: number,
     velocity: number,
     offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
   ): void;
   /** Pushes a live note-off to the input source. `group` and `channel` are 0 to 15; `note` is 0 to 127; `velocity` is 0 to 127 (omitted: 0); `offsetInBlockSamples` is samples into the next drained block (omitted: 0). */
   pushMidiInputNoteOff(
@@ -27,6 +29,7 @@ export interface WebMidiEngine {
     note: number,
     velocity?: number,
     offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
   ): void;
   /** Pushes a live control change to the input source. `group` and `channel` are 0 to 15; `controller` and `value` are 0 to 127; `offsetInBlockSamples` is samples into the next drained block (omitted: 0). */
   pushMidiInputCc(
@@ -35,6 +38,7 @@ export interface WebMidiEngine {
     controller: number,
     value: number,
     offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
   ): void;
   /** Pushes a live pitch bend to the input source; `bend14` is unsigned 14-bit with centre 8192 (0 to 16383). Pitch-bend input is dropped when the engine lacks this method. */
   pushMidiInputPitchBend?(
@@ -42,6 +46,7 @@ export interface WebMidiEngine {
     channel: number,
     bend14: number,
     offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
   ): void;
   /** Pushes a live channel pressure to the input source; `pressure` is 0 to 127. Dropped when the engine lacks this method. */
   pushMidiInputChannelPressure?(
@@ -49,6 +54,7 @@ export interface WebMidiEngine {
     channel: number,
     pressure: number,
     offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
   ): void;
   /** Pushes a live polyphonic key pressure to the input source; `note` and `pressure` are 0 to 127. Dropped when the engine lacks this method. */
   pushMidiInputPolyPressure?(
@@ -57,9 +63,37 @@ export interface WebMidiEngine {
     note: number,
     pressure: number,
     offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
   ): void;
   /** Pushes one raw UMP message (1 to 4 words) to the input source. When the engine lacks this method, UMP input is lowered to the individual push methods. */
-  pushMidiInputUmp?(words: Uint32Array | readonly number[], offsetInBlockSamples?: number): void;
+  pushMidiInputUmp?(
+    words: Uint32Array | readonly number[],
+    offsetInBlockSamples?: number,
+    options?: WebMidiEngineInputOptions,
+  ): void;
+  /**
+   * Present on an engine whose pushes take `options.contextTimeSec` (the AudioWorklet
+   * `SonareEngine`); {@link BindWebMidiOptions.context} requires it.
+   */
+  lateMidiInputCount?(): Promise<number>;
+}
+
+/** Trailing options of a {@link WebMidiEngine} push; only an engine with `lateMidiInputCount` reads them. */
+export interface WebMidiEngineInputOptions {
+  /** AudioContext time in seconds the event is due at; exclusive with `offsetInBlockSamples`. */
+  contextTimeSec?: number;
+}
+
+/** The part of an `AudioContext` that {@link bindWebMidi} reads to place events on its clock. */
+export interface WebMidiAudioContext {
+  /** Context and performance clocks of the sample currently leaving the output. */
+  getOutputTimestamp(): { contextTime?: number; performanceTime?: number };
+  /** Seconds the context adds between the render thread and the output; read per event. */
+  baseLatency?: number;
+  /** Seconds the output device adds; read per event. */
+  outputLatency?: number;
+  /** Context sample rate in Hz. */
+  sampleRate: number;
 }
 
 type MidiInputState = 'connected' | 'disconnected';
@@ -143,8 +177,25 @@ export interface BindWebMidiOptions {
    * Convert a Web MIDI event timestamp to an offset in samples into the next block drained (clamped
    * to its last frame, negative reads as 0). Return a block-relative offset, not the timestamp
    * scaled to samples: an absolute value lands every event on one frame. Omit for offset 0.
+   * Exclusive with {@link context}.
    */
   timestampToOffsetInBlockSamples?: (eventTimeMs: number) => number;
+  /**
+   * The AudioContext the engine renders in. Each event's timestamp is placed on its clock through
+   * `getOutputTimestamp()`, delayed by {@link scheduleAheadSec}, and pushed with `contextTimeSec`,
+   * so events keep their spacing to the sample instead of bunching at block heads. Requires an
+   * engine whose pushes take `contextTimeSec` (the AudioWorklet `SonareEngine`). Exclusive with
+   * {@link timestampToOffsetInBlockSamples}.
+   */
+  context?: WebMidiAudioContext;
+  /**
+   * Seconds each event is delayed on the context clock in {@link context} mode. Default: the
+   * context's `baseLatency + outputLatency` (a missing or non-finite value reads as 0) plus two
+   * render quanta, read per event. A smaller value answers sooner and plays more events late, at
+   * the next block's start; a larger one keeps every event on its sample at the cost of that delay.
+   * `0` is allowed.
+   */
+  scheduleAheadSec?: number;
   /** Observe hot-plug updates after the helper rebinds matching inputs. */
   onInputsChanged?: (inputs: WebMidiInputInfo[]) => void;
 }
@@ -195,6 +246,20 @@ export function isWebMidiAvailable(): boolean {
  * @throws SonareError `NotSupported` when Web MIDI is unavailable.
  * @throws RangeError when `options.group` is outside 0 to 15.
  * @throws RangeError when `options.inputIds` is an empty array.
+ * @throws TypeError when `options.context` is given with `timestampToOffsetInBlockSamples`, lacks
+ *   `getOutputTimestamp`, or is given for an engine without `lateMidiInputCount`; when
+ *   `options.scheduleAheadSec` is given without `context` or is not a number.
+ * @throws RangeError when `options.scheduleAheadSec` is negative or not finite.
+ *
+ * @example
+ * ```ts
+ * // Events keep their device timing to the sample through the AudioWorklet engine.
+ * const engine = await SonareEngine.create(context, { numChannels: 2 });
+ * const midi = await bindWebMidi(engine, { context });
+ * // ...
+ * console.log('late events', await engine.lateMidiInputCount());
+ * midi.destroy();
+ * ```
  */
 export async function bindWebMidi(
   engine: WebMidiEngine,
@@ -213,6 +278,7 @@ export async function bindWebMidi(
       throw refuse('inputIds must not be empty; omit it to bind every input');
     }
     const selectedIds = new Set(options.inputIds ?? []);
+    const timing = resolveEventTiming(engine, options);
     // Invoke through the navigator so the browser's native method keeps its
     // required `this` binding (detached calls throw "Illegal invocation").
     const access = await navigatorWithMidi.requestMIDIAccess({
@@ -255,7 +321,7 @@ export async function bindWebMidi(
             event,
             group,
             entry.runningStatus,
-            options.timestampToOffsetInBlockSamples,
+            timing,
           );
         },
         runningStatus: 0,
@@ -350,12 +416,63 @@ export async function bindWebMidi(
   });
 }
 
+/** The trailing push arguments placing one event: a block offset, or a context time the engine maps itself. */
+type EventAt = [offsetInBlockSamples?: number, options?: WebMidiEngineInputOptions];
+
+type EventTiming = (eventTimeMs: number) => EventAt;
+
+const AT_BLOCK_HEAD: EventAt = [0];
+
+/** A latency a context reports, read as 0 when missing or not finite. */
+function reportedLatency(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+/** Validates the timing options of {@link bindWebMidi} and returns how each event is placed. */
+function resolveEventTiming(engine: WebMidiEngine, options: BindWebMidiOptions): EventTiming {
+  const { context, scheduleAheadSec, timestampToOffsetInBlockSamples } = options;
+  if (context === undefined) {
+    if (scheduleAheadSec !== undefined) {
+      throw refuseType('scheduleAheadSec is read only with context');
+    }
+    if (!timestampToOffsetInBlockSamples) {
+      return () => AT_BLOCK_HEAD;
+    }
+    return (eventTimeMs) => [timestampToOffsetInBlockSamples(eventTimeMs)];
+  }
+  if (timestampToOffsetInBlockSamples !== undefined) {
+    throw refuseType('context and timestampToOffsetInBlockSamples must not both be given');
+  }
+  if (typeof context?.getOutputTimestamp !== 'function') {
+    throw refuseType('context must be an AudioContext with getOutputTimestamp');
+  }
+  if (typeof engine.lateMidiInputCount !== 'function') {
+    throw refuseType(
+      'context needs an engine whose live MIDI input pushes take contextTimeSec (the AudioWorklet SonareEngine)',
+    );
+  }
+  if (scheduleAheadSec !== undefined) {
+    assertNonNegativeScalar(scheduleAheadSec, 'scheduleAheadSec');
+  }
+  return (eventTimeMs) => {
+    const stamp = context.getOutputTimestamp();
+    const ahead =
+      scheduleAheadSec ??
+      reportedLatency(context.baseLatency) +
+        reportedLatency(context.outputLatency) +
+        (2 * AUDIO_WORKLET_RENDER_QUANTUM) / context.sampleRate;
+    const eventContextTime =
+      (stamp.contextTime ?? 0) + (eventTimeMs - (stamp.performanceTime ?? 0)) / 1000;
+    return [undefined, { contextTimeSec: Math.max(0, eventContextTime + ahead) }];
+  };
+}
+
 function dispatchMidiMessage(
   engine: WebMidiEngine,
   event: MidiMessageEventLike,
   group: number,
   runningStatus: number,
-  timestampToOffsetInBlockSamples?: (eventTimeMs: number) => number,
+  timing: EventTiming,
 ): number {
   const data = event.data;
   if (data.length === 0) {
@@ -363,11 +480,7 @@ function dispatchMidiMessage(
   }
   const first = data[0];
   if (first > 0xff || data instanceof Uint32Array) {
-    dispatchUmpMessages(
-      engine,
-      data,
-      timestampToOffsetInBlockSamples?.(event.receivedTime ?? event.timeStamp ?? 0) ?? 0,
-    );
+    dispatchUmpMessages(engine, data, timing(event.receivedTime ?? event.timeStamp ?? 0));
     return 0;
   }
 
@@ -398,36 +511,30 @@ function dispatchMidiMessage(
     return status;
   }
 
-  const offsetInBlockSamples = timestampToOffsetInBlockSamples
-    ? timestampToOffsetInBlockSamples(event.receivedTime ?? event.timeStamp ?? 0)
-    : 0;
+  const at = timing(event.receivedTime ?? event.timeStamp ?? 0);
 
   if (message === 0x80) {
-    engine.pushMidiInputNoteOff(group, channel, a, b, offsetInBlockSamples);
+    engine.pushMidiInputNoteOff(group, channel, a, b, ...at);
   } else if (message === 0x90) {
     if (b === 0) {
-      engine.pushMidiInputNoteOff(group, channel, a, 0, offsetInBlockSamples);
+      engine.pushMidiInputNoteOff(group, channel, a, 0, ...at);
     } else {
-      engine.pushMidiInputNoteOn(group, channel, a, b, offsetInBlockSamples);
+      engine.pushMidiInputNoteOn(group, channel, a, b, ...at);
     }
   } else if (message === 0xb0 && b >= 0) {
-    engine.pushMidiInputCc(group, channel, a, b, offsetInBlockSamples);
+    engine.pushMidiInputCc(group, channel, a, b, ...at);
   } else if (message === 0xa0 && b >= 0) {
-    engine.pushMidiInputPolyPressure?.(group, channel, a, b, offsetInBlockSamples);
+    engine.pushMidiInputPolyPressure?.(group, channel, a, b, ...at);
   } else if (message === 0xd0) {
-    engine.pushMidiInputChannelPressure?.(group, channel, a, offsetInBlockSamples);
+    engine.pushMidiInputChannelPressure?.(group, channel, a, ...at);
   } else if (message === 0xe0 && b >= 0) {
-    engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), offsetInBlockSamples);
+    engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), ...at);
   }
 
   return status;
 }
 
-function dispatchUmpMessages(
-  engine: WebMidiEngine,
-  words: ArrayLike<number>,
-  offsetInBlockSamples: number,
-): void {
+function dispatchUmpMessages(engine: WebMidiEngine, words: ArrayLike<number>, at: EventAt): void {
   let offset = 0;
   while (offset < words.length) {
     const word0 = words[offset] >>> 0;
@@ -439,16 +546,12 @@ function dispatchUmpMessages(
     for (let index = 0; index < wordCount; index++) {
       packet[index] = words[offset + index] >>> 0;
     }
-    dispatchUmpMessage(engine, packet, offsetInBlockSamples);
+    dispatchUmpMessage(engine, packet, at);
     offset += wordCount;
   }
 }
 
-function dispatchUmpMessage(
-  engine: WebMidiEngine,
-  words: Uint32Array,
-  offsetInBlockSamples: number,
-): void {
+function dispatchUmpMessage(engine: WebMidiEngine, words: Uint32Array, at: EventAt): void {
   const word0 = words[0] >>> 0;
   const messageType = word0 >>> 28;
   const group = (word0 >>> 24) & 0x0f;
@@ -458,7 +561,7 @@ function dispatchUmpMessage(
     return;
   }
   if (engine.pushMidiInputUmp) {
-    engine.pushMidiInputUmp(words, offsetInBlockSamples);
+    engine.pushMidiInputUmp(words, ...at);
     return;
   }
 
@@ -469,21 +572,21 @@ function dispatchUmpMessage(
     const a = (word0 >>> 8) & 0x7f;
     const b = word0 & 0x7f;
     if (message === 0x80) {
-      engine.pushMidiInputNoteOff(group, channel, a, b, offsetInBlockSamples);
+      engine.pushMidiInputNoteOff(group, channel, a, b, ...at);
     } else if (message === 0x90) {
       if (b === 0) {
-        engine.pushMidiInputNoteOff(group, channel, a, 0, offsetInBlockSamples);
+        engine.pushMidiInputNoteOff(group, channel, a, 0, ...at);
       } else {
-        engine.pushMidiInputNoteOn(group, channel, a, b, offsetInBlockSamples);
+        engine.pushMidiInputNoteOn(group, channel, a, b, ...at);
       }
     } else if (message === 0xb0) {
-      engine.pushMidiInputCc(group, channel, a, b, offsetInBlockSamples);
+      engine.pushMidiInputCc(group, channel, a, b, ...at);
     } else if (message === 0xa0) {
-      engine.pushMidiInputPolyPressure?.(group, channel, a, b, offsetInBlockSamples);
+      engine.pushMidiInputPolyPressure?.(group, channel, a, b, ...at);
     } else if (message === 0xd0) {
-      engine.pushMidiInputChannelPressure?.(group, channel, a, offsetInBlockSamples);
+      engine.pushMidiInputChannelPressure?.(group, channel, a, ...at);
     } else if (message === 0xe0) {
-      engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), offsetInBlockSamples);
+      engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), ...at);
     }
     return;
   }
@@ -494,38 +597,21 @@ function dispatchUmpMessage(
     const data1 = (word0 >>> 8) & 0x7f;
     const word1 = words[1] >>> 0;
     if (status === 0x8) {
-      engine.pushMidiInputNoteOff(
-        group,
-        channel,
-        data1,
-        (word1 >>> 25) & 0x7f,
-        offsetInBlockSamples,
-      );
+      engine.pushMidiInputNoteOff(group, channel, data1, (word1 >>> 25) & 0x7f, ...at);
     } else if (status === 0x9) {
       // MIDI 2.0 note-on is distinct from note-off (status 0x8). Downsample
       // its 16-bit velocity to the engine's 7-bit API, retaining a nonzero
       // note-on even when the top seven bits are all zero.
       const velocity = Math.max(1, (word1 >>> 25) & 0x7f);
-      engine.pushMidiInputNoteOn(group, channel, data1, velocity, offsetInBlockSamples);
+      engine.pushMidiInputNoteOn(group, channel, data1, velocity, ...at);
     } else if (status === 0xb) {
-      engine.pushMidiInputCc(group, channel, data1, (word1 >>> 25) & 0x7f, offsetInBlockSamples);
+      engine.pushMidiInputCc(group, channel, data1, (word1 >>> 25) & 0x7f, ...at);
     } else if (status === 0xa) {
-      engine.pushMidiInputPolyPressure?.(
-        group,
-        channel,
-        data1,
-        (word1 >>> 25) & 0x7f,
-        offsetInBlockSamples,
-      );
+      engine.pushMidiInputPolyPressure?.(group, channel, data1, (word1 >>> 25) & 0x7f, ...at);
     } else if (status === 0xd) {
-      engine.pushMidiInputChannelPressure?.(
-        group,
-        channel,
-        (word1 >>> 25) & 0x7f,
-        offsetInBlockSamples,
-      );
+      engine.pushMidiInputChannelPressure?.(group, channel, (word1 >>> 25) & 0x7f, ...at);
     } else if (status === 0xe) {
-      engine.pushMidiInputPitchBend?.(group, channel, word1 >>> 18, offsetInBlockSamples);
+      engine.pushMidiInputPitchBend?.(group, channel, word1 >>> 18, ...at);
     }
   }
 }

@@ -1230,7 +1230,8 @@ export class RealtimeEngine {
    * Push a live MIDI note-on to the engine-owned MIDI input source.
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
-   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0. Exact here, because
+   *   the caller drives the block.
    */
   pushMidiInputNoteOn(
     group: number,
@@ -1246,7 +1247,8 @@ export class RealtimeEngine {
    * Push a live MIDI note-off to the engine-owned MIDI input source.
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
-   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0. Exact here, because
+   *   the caller drives the block.
    */
   pushMidiInputNoteOff(
     group: number,
@@ -1262,7 +1264,8 @@ export class RealtimeEngine {
    * Push a live MIDI control change to the engine-owned MIDI input source.
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
-   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0. Exact here, because
+   *   the caller drives the block.
    */
   pushMidiInputCc(
     group: number,
@@ -1282,7 +1285,8 @@ export class RealtimeEngine {
    * source must be enabled with {@link setMidiInputSource} first.
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
-   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0. Exact here, because
+   *   the caller drives the block.
    */
   pushMidiInputPitchBend(
     group: number,
@@ -1299,7 +1303,8 @@ export class RealtimeEngine {
    * per-note pressure.
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
-   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0. Exact here, because
+   *   the caller drives the block.
    */
   pushMidiInputChannelPressure(
     group: number,
@@ -1315,7 +1320,8 @@ export class RealtimeEngine {
    * source. `note` and `pressure` are 7-bit (0..127).
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
-   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0. Exact here, because
+   *   the caller drives the block.
    */
   pushMidiInputPolyPressure(
     group: number,
@@ -1553,7 +1559,7 @@ export class RealtimeEngine {
    * Push one raw UMP message (1 to 4 words) to the engine-owned MIDI input
    * source. The message rules match {@link pushMidiUmp}. `offsetInBlockSamples` is
    * an offset into the next block drained (clamped to its last frame, negative reads as 0), not
-   * an absolute clock position.
+   * an absolute clock position; exact here, because the caller drives the block.
    */
   pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
     this.native.pushMidiInputUmp(assertUmpWords(words), offsetInBlockSamples);

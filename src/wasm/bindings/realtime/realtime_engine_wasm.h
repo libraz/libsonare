@@ -88,6 +88,7 @@ class RealtimeEngineWasm {
   emscripten::val metronome() const;
   int64_t countInEndSample(int64_t start_sample, const emscripten::val& bars_val) const;
   emscripten::val getTransportState() const;
+  double renderFrame() const;
 
   // ---- Parameters & automation (realtime_engine_params.cpp) ------------
   void addParameter(emscripten::val info);
@@ -203,6 +204,8 @@ class RealtimeEngineWasm {
   void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& words_val,
                    const emscripten::val& render_frame_val);
   void pushMidiInputUmp(const emscripten::val& words_val, int64_t offset_in_block_samples);
+  void pushMidiInputUmpAtRenderFrame(const emscripten::val& words_val,
+                                     const emscripten::val& render_frame_val);
   void pushMidiProgram(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                        const emscripten::val& channel_val, const emscripten::val& program_val,
                        const emscripten::val& bank_valid_val, const emscripten::val& bank_msb_val,

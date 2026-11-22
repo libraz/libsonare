@@ -15,9 +15,9 @@ import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.
 import type {
   EngineClipPageRequestMessage,
   EngineSyncErrorMessage,
-  SonareEngineArticulationRequestMessage,
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
+  SonareEngineReadRequestMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportResponseMessage,
 } from '../internal/worklet_messages.js';
@@ -35,10 +35,10 @@ import {
   assertKnownProcessorOptions,
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
-  isEngineArticulationResponseMessage,
   isEngineCaptureResponseForOperation,
   isEngineCaptureResponseMessage,
   isEngineInsertGainReductionResponseMessage,
+  isEngineReadResponseMessage,
   isEngineTelemetryRecord,
   isEngineTransportResponseMessage,
   isExternalMidiBatchMessage,
@@ -183,7 +183,7 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
   'emitScope',
   'sendCaptureRequest',
   'sendTransportRequest',
-  'sendArticulationRequest',
+  'sendReadRequest',
 ])
 export class SonareRealtimeEngineNode {
   /** The underlying AudioWorkletNode; connect it into the audio graph. */
@@ -236,8 +236,8 @@ export class SonareRealtimeEngineNode {
       reject: (reason?: unknown) => void;
     }
   >();
-  private articulationRequestId = 1;
-  private readonly articulationRequests = new Map<
+  private readRequestId = 1;
+  private readonly readRequests = new Map<
     number,
     {
       resolve: (value: Articulation | number | undefined) => void;
@@ -334,14 +334,14 @@ export class SonareRealtimeEngineNode {
             pending.reject(workletFailure(event.data, 'Transport request failed'));
           }
         }
-      } else if (isEngineArticulationResponseMessage(event.data)) {
-        const pending = this.articulationRequests.get(event.data.requestId);
+      } else if (isEngineReadResponseMessage(event.data)) {
+        const pending = this.readRequests.get(event.data.requestId);
         if (pending) {
-          this.articulationRequests.delete(event.data.requestId);
+          this.readRequests.delete(event.data.requestId);
           if (event.data.ok) {
             pending.resolve(event.data.value);
           } else {
-            pending.reject(workletFailure(event.data, 'Articulation request failed'));
+            pending.reject(workletFailure(event.data, 'Engine read request failed'));
           }
         }
       } else if (isEngineInsertGainReductionResponseMessage(event.data)) {
@@ -1030,10 +1030,10 @@ export class SonareRealtimeEngineNode {
       pending.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
     this.insertGainReductionRequests.clear();
-    for (const pending of this.articulationRequests.values()) {
+    for (const pending of this.readRequests.values()) {
       pending.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
-    this.articulationRequests.clear();
+    this.readRequests.clear();
     this.telemetryListeners.clear();
     this.meterListeners.clear();
     this.scopeListeners.clear();
@@ -1140,7 +1140,7 @@ export class SonareRealtimeEngineNode {
    *   `InvalidState` once the node is destroyed.
    */
   requestArticulation(destinationId: number, channel: number): Promise<Articulation> {
-    return this.sendArticulationRequest('articulation', destinationId, channel).then((value) => {
+    return this.sendReadRequest('articulation', destinationId, channel).then((value) => {
       if (typeof value !== 'string') {
         throw codedError(ErrorCode.InvalidFormat, 'Articulation response is missing its value.');
       }
@@ -1156,7 +1156,7 @@ export class SonareRealtimeEngineNode {
    *   and `InvalidState` once the node is destroyed.
    */
   requestLegatoFallbackCount(destinationId: number): Promise<number> {
-    return this.sendArticulationRequest('legatoFallbackCount', destinationId, 0).then((value) => {
+    return this.sendReadRequest('legatoFallbackCount', destinationId, 0).then((value) => {
       if (typeof value !== 'number') {
         throw codedError(
           ErrorCode.InvalidFormat,
@@ -1167,30 +1167,48 @@ export class SonareRealtimeEngineNode {
     });
   }
 
-  private sendArticulationRequest(
-    op: SonareEngineArticulationRequestMessage['op'],
+  /**
+   * Reads how many timed live MIDI input events reached the worklet after the render frame
+   * their context time named had been rendered. Cumulative since the processor was created.
+   *
+   * @throws SonareError (as a rejection) with `InvalidState` once the node is destroyed.
+   */
+  requestLateMidiInputCount(): Promise<number> {
+    return this.sendReadRequest('lateMidiInputCount', 0, 0).then((value) => {
+      if (typeof value !== 'number') {
+        throw codedError(
+          ErrorCode.InvalidFormat,
+          'Late MIDI input count response is missing its value.',
+        );
+      }
+      return value;
+    });
+  }
+
+  private sendReadRequest(
+    op: SonareEngineReadRequestMessage['op'],
     destinationId: number,
     channel: number,
   ): Promise<Articulation | number | undefined> {
     if (this.epoch.closed) {
       return Promise.reject(releasedHandleError('SonareRealtimeEngineNode'));
     }
-    const requestId = this.articulationRequestId++;
+    const requestId = this.readRequestId++;
     let rejectRequest!: (reason?: unknown) => void;
     const promise = new Promise<Articulation | number | undefined>((resolve, reject) => {
       rejectRequest = reject;
-      this.articulationRequests.set(requestId, { resolve, reject });
+      this.readRequests.set(requestId, { resolve, reject });
     });
     try {
       this.postOrdered({
-        type: 'articulationRequest',
+        type: 'engineReadRequest',
         requestId,
         op,
         destinationId,
         channel,
-      } satisfies SonareEngineArticulationRequestMessage);
+      } satisfies SonareEngineReadRequestMessage);
     } catch (error) {
-      this.articulationRequests.delete(requestId);
+      this.readRequests.delete(requestId);
       rejectRequest(error);
     }
     return promise;

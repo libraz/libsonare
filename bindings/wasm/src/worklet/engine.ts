@@ -77,6 +77,11 @@ import type {
 import * as exporter from './engine-export.js';
 import type { EngineMarkerContext } from './engine-markers.js';
 import * as markerOps from './engine-markers.js';
+import {
+  type MidiInputPushName,
+  resolveMidiInputTiming,
+  type SonareEngineMidiInputOptions,
+} from './engine-midi-input.js';
 import type { EngineMixerContext, InsertParamOverrideMap } from './engine-mixer-facade.js';
 import * as mixer from './engine-mixer-facade.js';
 import { SonareRealtimeEngineNode } from './engine-node.js';
@@ -1327,7 +1332,7 @@ export class SonareEngine {
 
   /** Pushes a live MIDI input event into the offline engine, then mirrors it to the worklet. */
   private mirrorMidiInput(
-    pushOffline: () => void,
+    pushOffline: (offsetInBlockSamples: number) => void,
     type:
       | 'syncMidiInputNoteOn'
       | 'syncMidiInputNoteOff'
@@ -1339,10 +1344,17 @@ export class SonareEngine {
     channel: number,
     data0: number,
     data1: number,
-    offsetInBlockSamples: number,
+    offsetInBlockSamples: number | undefined,
+    options: SonareEngineMidiInputOptions | undefined,
   ): void {
-    pushOffline();
-    this.postSync({ type, group, channel, data0, data1, offsetInBlockSamples });
+    const timing = resolveMidiInputTiming(
+      `SonareEngine.pushMidiInput${type.slice('syncMidiInput'.length)}` as MidiInputPushName,
+      offsetInBlockSamples,
+      options,
+    );
+    // The offline mirror has no AudioContext clock; a timed event reaches it at the block head.
+    pushOffline(timing.offsetInBlockSamples);
+    this.postSync({ type, group, channel, data0, data1, ...timing });
   }
 
   /**
@@ -1350,29 +1362,29 @@ export class SonareEngine {
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
    *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `options` holds an undeclared key, a `contextTimeSec` that is not a
+   *   number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `contextTimeSec` is negative or not finite.
    */
   pushMidiInputNoteOn(
     group: number,
     channel: number,
     note: number,
     velocity: number,
-    offsetInBlockSamples = 0,
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiInputOptions,
   ): void {
     this.mirrorMidiInput(
-      () =>
-        this.offlineEngine.pushMidiInputNoteOn(
-          group,
-          channel,
-          note,
-          velocity,
-          offsetInBlockSamples,
-        ),
+      (offset) => this.offlineEngine.pushMidiInputNoteOn(group, channel, note, velocity, offset),
       'syncMidiInputNoteOn',
       group,
       channel,
       note,
       velocity,
       offsetInBlockSamples,
+      options,
     );
   }
 
@@ -1381,29 +1393,29 @@ export class SonareEngine {
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
    *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `options` holds an undeclared key, a `contextTimeSec` that is not a
+   *   number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `contextTimeSec` is negative or not finite.
    */
   pushMidiInputNoteOff(
     group: number,
     channel: number,
     note: number,
     velocity = 0,
-    offsetInBlockSamples = 0,
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiInputOptions,
   ): void {
     this.mirrorMidiInput(
-      () =>
-        this.offlineEngine.pushMidiInputNoteOff(
-          group,
-          channel,
-          note,
-          velocity,
-          offsetInBlockSamples,
-        ),
+      (offset) => this.offlineEngine.pushMidiInputNoteOff(group, channel, note, velocity, offset),
       'syncMidiInputNoteOff',
       group,
       channel,
       note,
       velocity,
       offsetInBlockSamples,
+      options,
     );
   }
 
@@ -1412,23 +1424,29 @@ export class SonareEngine {
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
    *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `options` holds an undeclared key, a `contextTimeSec` that is not a
+   *   number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `contextTimeSec` is negative or not finite.
    */
   pushMidiInputCc(
     group: number,
     channel: number,
     controller: number,
     value: number,
-    offsetInBlockSamples = 0,
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiInputOptions,
   ): void {
     this.mirrorMidiInput(
-      () =>
-        this.offlineEngine.pushMidiInputCc(group, channel, controller, value, offsetInBlockSamples),
+      (offset) => this.offlineEngine.pushMidiInputCc(group, channel, controller, value, offset),
       'syncMidiInputCc',
       group,
       channel,
       controller,
       value,
       offsetInBlockSamples,
+      options,
     );
   }
 
@@ -1437,21 +1455,28 @@ export class SonareEngine {
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
    *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `options` holds an undeclared key, a `contextTimeSec` that is not a
+   *   number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `contextTimeSec` is negative or not finite.
    */
   pushMidiInputPitchBend(
     group: number,
     channel: number,
     bend14: number,
-    offsetInBlockSamples = 0,
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiInputOptions,
   ): void {
     this.mirrorMidiInput(
-      () => this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, offsetInBlockSamples),
+      (offset) => this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, offset),
       'syncMidiInputPitchBend',
       group,
       channel,
       bend14,
       0,
       offsetInBlockSamples,
+      options,
     );
   }
 
@@ -1460,27 +1485,28 @@ export class SonareEngine {
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
    *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `options` holds an undeclared key, a `contextTimeSec` that is not a
+   *   number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `contextTimeSec` is negative or not finite.
    */
   pushMidiInputChannelPressure(
     group: number,
     channel: number,
     pressure: number,
-    offsetInBlockSamples = 0,
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiInputOptions,
   ): void {
     this.mirrorMidiInput(
-      () =>
-        this.offlineEngine.pushMidiInputChannelPressure(
-          group,
-          channel,
-          pressure,
-          offsetInBlockSamples,
-        ),
+      (offset) => this.offlineEngine.pushMidiInputChannelPressure(group, channel, pressure, offset),
       'syncMidiInputChannelPressure',
       group,
       channel,
       pressure,
       0,
       offsetInBlockSamples,
+      options,
     );
   }
 
@@ -1489,29 +1515,30 @@ export class SonareEngine {
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
    *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `options` holds an undeclared key, a `contextTimeSec` that is not a
+   *   number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `contextTimeSec` is negative or not finite.
    */
   pushMidiInputPolyPressure(
     group: number,
     channel: number,
     note: number,
     pressure: number,
-    offsetInBlockSamples = 0,
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiInputOptions,
   ): void {
     this.mirrorMidiInput(
-      () =>
-        this.offlineEngine.pushMidiInputPolyPressure(
-          group,
-          channel,
-          note,
-          pressure,
-          offsetInBlockSamples,
-        ),
+      (offset) =>
+        this.offlineEngine.pushMidiInputPolyPressure(group, channel, note, pressure, offset),
       'syncMidiInputPolyPressure',
       group,
       channel,
       note,
       pressure,
       offsetInBlockSamples,
+      options,
     );
   }
 
@@ -1520,11 +1547,36 @@ export class SonareEngine {
    *
    * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
    *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   * @param options `contextTimeSec` places the event on the AudioContext clock instead;
+   *   exclusive with `offsetInBlockSamples`.
+   * @throws TypeError when `options` holds an undeclared key, a `contextTimeSec` that is not a
+   *   number, or a `contextTimeSec` beside an `offsetInBlockSamples`; RangeError when
+   *   `contextTimeSec` is negative or not finite.
    */
-  pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
+  pushMidiInputUmp(
+    words: UmpWords,
+    offsetInBlockSamples?: number,
+    options?: SonareEngineMidiInputOptions,
+  ): void {
+    const timing = resolveMidiInputTiming(
+      'SonareEngine.pushMidiInputUmp',
+      offsetInBlockSamples,
+      options,
+    );
     const copiedWords = words instanceof Uint32Array ? new Uint32Array(words) : words.slice();
-    this.offlineEngine.pushMidiInputUmp(copiedWords, offsetInBlockSamples);
-    this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, offsetInBlockSamples });
+    this.offlineEngine.pushMidiInputUmp(copiedWords, timing.offsetInBlockSamples);
+    this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, ...timing });
+  }
+
+  /**
+   * Reads from the worklet's live engine how many timed live MIDI input events arrived after
+   * the render frame their `contextTimeSec` named had been rendered, so they played at the
+   * start of the next block instead. Cumulative since the engine was created.
+   *
+   * @throws SonareError (as a rejection) with `InvalidState` once the engine is destroyed.
+   */
+  async lateMidiInputCount(): Promise<number> {
+    return this.realtimeNode.requestLateMidiInputCount();
   }
 
   /** Queues a MIDI panic (all-notes-off) releasing every sounding note on both engines. `renderFrame` is the absolute render frame to fire at; omitted: immediate. */

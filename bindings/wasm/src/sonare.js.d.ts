@@ -1398,6 +1398,7 @@ export interface WasmRealtimeEngine {
   setSoloMute: (laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number) => void;
   setTrackMonitorMode: (laneIndex: number, mode: number, renderFrame?: number) => void;
   getTransportState: () => WasmEngineTransportState;
+  renderFrame: () => number;
   play: (renderFrame?: number) => void;
   stop: (renderFrame?: number) => void;
   resetMasterLoudnessMeter: (renderFrame?: number) => void;
@@ -1717,6 +1718,10 @@ export interface WasmRealtimeEngine {
     renderFrame?: number,
   ) => void;
   pushMidiInputUmp: (words: Uint32Array | readonly number[], offsetInBlockSamples: number) => void;
+  pushMidiInputUmpAtRenderFrame: (
+    words: Uint32Array | readonly number[],
+    renderFrame: number,
+  ) => void;
   pushMidiProgram: (
     destinationId: number,
     group: number,

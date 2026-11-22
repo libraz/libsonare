@@ -260,6 +260,11 @@ void RealtimeEngineWasm::seekMarker(const val& id_val, const val& render_frame_v
   }
 }
 
+// Allocation-free, so the AudioWorklet processor can read it once per render quantum.
+double RealtimeEngineWasm::renderFrame() const {
+  return static_cast<double>(engine_.transport_state_control().render_frame);
+}
+
 val RealtimeEngineWasm::getTransportState() const {
   const sonare::transport::TransportState state = engine_.transport_state_control();
   val out = val::object();
@@ -357,6 +362,7 @@ val RealtimeEngineWasm::markerToVal(const sonare::transport::Marker& marker) {
 
 void registerRealtimeEngineTransport(class_<RealtimeEngineWasm>& cls) {
   cls.function("getTransportState", &RealtimeEngineWasm::getTransportState)
+      .function("renderFrame", &RealtimeEngineWasm::renderFrame)
       .function("play", &RealtimeEngineWasm::play)
       .function("stop", &RealtimeEngineWasm::stop)
       .function("resetMasterLoudnessMeter", &RealtimeEngineWasm::resetMasterLoudnessMeter)

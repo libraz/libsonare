@@ -173,6 +173,48 @@ class ThrowingRawUmpEngine extends RawUmpEngine {
   }
 }
 
+/** An engine whose pushes take a trailing `{ contextTimeSec }`, as the AudioWorklet SonareEngine's do. */
+class TimedEngine extends RawUmpEngine {
+  timed: Array<{ kind: string; offset: number | undefined; contextTimeSec: number | undefined }> =
+    [];
+
+  override pushMidiInputNoteOn(
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    offset?: number,
+    options?: { contextTimeSec?: number },
+  ) {
+    this.timed.push({ kind: 'on', offset, contextTimeSec: options?.contextTimeSec });
+    super.pushMidiInputNoteOn(group, channel, note, velocity, offset);
+  }
+
+  override pushMidiInputUmp(
+    words: Uint32Array | readonly number[],
+    offset?: number,
+    options?: { contextTimeSec?: number },
+  ) {
+    this.timed.push({ kind: 'ump', offset, contextTimeSec: options?.contextTimeSec });
+    super.pushMidiInputUmp(words, offset);
+  }
+
+  lateMidiInputCount() {
+    return Promise.resolve(0);
+  }
+}
+
+/** An AudioContext whose output clock reads `contextTime` at `performanceTime` ms. */
+function fakeContext(latency: { baseLatency?: number; outputLatency?: number } = {}) {
+  return {
+    sampleRate: 48000,
+    ...latency,
+    getOutputTimestamp: () => ({ contextTime: 2, performanceTime: 1000 }),
+  };
+}
+
+const TWO_QUANTA_SEC = 256 / 48000;
+
 const originalNavigator = globalThis.navigator;
 
 afterEach(() => {
@@ -552,6 +594,73 @@ describe('Web MIDI helper', () => {
     const binding = await bindWebMidi(new FakeEngine() as never);
     expect(binding.inputs()).toEqual([]);
     binding.destroy();
+  });
+
+  it('places each event on the context clock, delayed by the latency the context reports', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('a');
+    access.inputs.set(input.id, input);
+    installMidi(access);
+    const engine = new TimedEngine();
+    const context = fakeContext({ baseLatency: 0.01, outputLatency: 0.02 });
+    await bindWebMidi(engine as never, { context });
+
+    input.emit([0x90, 60, 100], 1010);
+    // The latency is read per event, so a device change moves the next event's mapping.
+    context.outputLatency = 0.05;
+    input.emit([0x20903c64], 1010);
+    expect(engine.timed.map((event) => event.offset)).toEqual([undefined, undefined]);
+    const [first, second] = engine.timed.map((event) => event.contextTimeSec ?? Number.NaN);
+    expect(first).toBeCloseTo(2 + 0.01 + 0.01 + 0.02 + TWO_QUANTA_SEC, 12);
+    expect(second - first).toBeCloseTo(0.03, 12);
+  });
+
+  it('takes an explicit scheduleAheadSec as given, and reads a missing latency as 0', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('a');
+    access.inputs.set(input.id, input);
+    installMidi(access);
+    const engine = new TimedEngine();
+    await bindWebMidi(engine as never, { context: fakeContext(), scheduleAheadSec: 0 });
+    const defaulted = new TimedEngine();
+    await bindWebMidi(defaulted as never, {
+      context: fakeContext({ outputLatency: Number.NaN }),
+    });
+
+    input.emit([0x90, 60, 100], 1250);
+    expect(engine.timed[0].contextTimeSec).toBeCloseTo(2.25, 12);
+    expect(defaulted.timed[0].contextTimeSec).toBeCloseTo(2.25 + TWO_QUANTA_SEC, 12);
+  });
+
+  it('refuses a context mode it cannot honour, before requesting MIDI access', async () => {
+    const calls: unknown[] = [];
+    installMidi(new FakeAccess(), calls);
+    const context = fakeContext();
+    await expect(
+      bindWebMidi(new TimedEngine() as never, {
+        context,
+        timestampToOffsetInBlockSamples: () => 0,
+      }),
+    ).rejects.toThrow(TypeError);
+    await expect(bindWebMidi(new RawUmpEngine() as never, { context })).rejects.toThrow(
+      /context needs an engine whose live MIDI input pushes take contextTimeSec/,
+    );
+    await expect(
+      bindWebMidi(new TimedEngine() as never, { context: { sampleRate: 48000 } as never }),
+    ).rejects.toThrow(TypeError);
+    await expect(
+      bindWebMidi(new TimedEngine() as never, { context, scheduleAheadSec: -0.001 }),
+    ).rejects.toThrow(RangeError);
+    await expect(
+      bindWebMidi(new TimedEngine() as never, {
+        context,
+        scheduleAheadSec: Number.POSITIVE_INFINITY,
+      }),
+    ).rejects.toThrow(RangeError);
+    await expect(
+      bindWebMidi(new TimedEngine() as never, { scheduleAheadSec: 0.01 }),
+    ).rejects.toThrow(TypeError);
+    expect(calls).toEqual([]);
   });
 
   it('throws when Web MIDI is unavailable', async () => {

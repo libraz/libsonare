@@ -441,6 +441,36 @@ void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t offset_i
 #endif
 }
 
+void RealtimeEngineWasm::pushMidiInputUmpAtRenderFrame(const val& words_val,
+                                                       const val& render_frame_val) {
+  uint32_t words[4] = {0, 0, 0, 0};
+  const size_t count = umpWordsFromVal(words_val, words);
+  const int64_t render_frame = checkedInt64FromVal(render_frame_val, "renderFrame");
+  if (render_frame < 0) {
+    throw WasmRangeError("renderFrame must be an integer of at least 0");
+  }
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, count)) {
+    throw WasmRangeError(std::string(sonare::midi::kLivePushUmpShapeError));
+  }
+  if (!midi_input_source_enabled_) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "the MIDI input source is not enabled");
+  }
+  sonare::midi::Ump ump{};
+  for (size_t i = 0; i < count; ++i) ump.words[i] = words[i];
+  ump.word_count = static_cast<uint8_t>(count);
+  ump.group = sonare::midi::ump_group_from_word0(words[0]);
+  if (!midi_input_source_.push_event_at_render_frame(ump, render_frame)) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, "the MIDI input queue is full");
+  }
+#else
+  (void)count;
+  (void)render_frame;
+  throwMidiEngineUnavailable();
+#endif
+}
+
 namespace {
 struct ProgramArgs {
   int group;
@@ -719,6 +749,7 @@ void registerRealtimeEngineMidiIo(class_<RealtimeEngineWasm>& cls) {
       .function("pushMidiPolyPressure", &RealtimeEngineWasm::pushMidiPolyPressure)
       .function("pushMidiUmp", &RealtimeEngineWasm::pushMidiUmp)
       .function("pushMidiInputUmp", &RealtimeEngineWasm::pushMidiInputUmp)
+      .function("pushMidiInputUmpAtRenderFrame", &RealtimeEngineWasm::pushMidiInputUmpAtRenderFrame)
       .function("pushMidiProgram", &RealtimeEngineWasm::pushMidiProgram)
       .function("pushMidiInputProgram", &RealtimeEngineWasm::pushMidiInputProgram)
       .function("pushMidiSysex", &RealtimeEngineWasm::pushMidiSysex)

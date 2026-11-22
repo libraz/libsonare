@@ -156,7 +156,7 @@ export interface TypedWorkletTransport {
       | SonareEngineCaptureResponseMessageInternal
       | SonareEngineTransportResponseMessage
       | SonareEngineInsertGainReductionResponseMessage
-      | SonareEngineArticulationResponseMessage
+      | SonareEngineReadResponseMessage
       | SonareEngineSyncErrorWireMessage,
     transfer?: Transferable[],
   ) => void;
@@ -670,12 +670,16 @@ export interface SonareEngineSyncMidiInputEventMessage {
   data0: number;
   data1: number;
   offsetInBlockSamples: number;
+  /** AudioContext time the event is due at; when present the processor maps it and the offset is 0. */
+  contextTimeSec?: number;
 }
 
 export interface SonareEngineSyncMidiInputUmpMessage {
   type: 'syncMidiInputUmp';
   words: UmpWords;
   offsetInBlockSamples: number;
+  /** AudioContext time the event is due at; when present the processor maps it and the offset is 0. */
+  contextTimeSec?: number;
 }
 
 /** Releases the realtime engine and all worklet-owned clip buffers. */
@@ -823,21 +827,23 @@ export interface SonareEngineInsertGainReductionRequestMessage {
 }
 
 /**
- * Reads what the worklet's live engine holds for one destination's instrument:
- * a channel's articulation, or the legato fallback count.
+ * Reads a value the worklet's live engine holds: a channel's articulation or the
+ * legato fallback count of one destination's instrument, or the processor's late
+ * live-MIDI count.
  */
-export interface SonareEngineArticulationRequestMessage {
-  type: 'articulationRequest';
+export interface SonareEngineReadRequestMessage {
+  type: 'engineReadRequest';
   requestId: number;
-  op: 'articulation' | 'legatoFallbackCount';
+  op: 'articulation' | 'legatoFallbackCount' | 'lateMidiInputCount';
+  /** The destination the articulation ops read; unused by `'lateMidiInputCount'`. */
   destinationId: number;
-  /** The channel `op: 'articulation'` reads; unused by `'legatoFallbackCount'`. */
+  /** The channel `op: 'articulation'` reads; unused by the other ops. */
   channel: number;
 }
 
-/** Reply to {@link SonareEngineArticulationRequestMessage}; `value` is present when `ok`. */
-export interface SonareEngineArticulationResponseMessage {
-  type: 'articulationResponse';
+/** Reply to {@link SonareEngineReadRequestMessage}; `value` is present when `ok`. */
+export interface SonareEngineReadResponseMessage {
+  type: 'engineReadResponse';
   requestId: number;
   ok: boolean;
   value?: Articulation | number;
