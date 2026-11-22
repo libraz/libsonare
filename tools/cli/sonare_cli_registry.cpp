@@ -1087,7 +1087,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(library_default(global_int("hop-length"), "n_fft/4"), greater_than(0.0))});
     add_command(
         commands, "pitch-correct", true,
-        {number_value("current-midi", 69.0), number_value("target-midi", 69.0), required_output()});
+        {number_value("current-midi", true), number_value("target-midi", true), required_output()});
     // The MIDI value is the positional, and the three narrowed options carry
     // the ranges the scale quantizer refuses outside of -- the pitch class, the
     // twelve-bit mode mask, and the grid anchor. Each is a value the caller

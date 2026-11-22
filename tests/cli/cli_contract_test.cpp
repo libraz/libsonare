@@ -597,6 +597,14 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(semitones->required);
   REQUIRE(semitones->default_value.kind == CliOptionDefaultKind::Null);
 
+  // Like the library, pitch-correct assumes neither pitch.
+  for (const char* pitch : {"current-midi", "target-midi"}) {
+    const auto* spec = cli_option_spec_for_command("pitch-correct", pitch);
+    REQUIRE(spec != nullptr);
+    REQUIRE(spec->required);
+    REQUIRE(spec->default_value.kind == CliOptionDefaultKind::Null);
+  }
+
   const auto* target_rate = cli_option_spec_for_command("resample", "target-sample-rate");
   REQUIRE(target_rate != nullptr);
   REQUIRE(target_rate->required);

@@ -4370,11 +4370,11 @@
         {
           "name": "current-midi",
           "type": "number",
-          "default": 69,
-          "stated_default": "69.0",
+          "default": null,
+          "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -4402,11 +4402,11 @@
         {
           "name": "target-midi",
           "type": "number",
-          "default": 69,
-          "stated_default": "69.0",
+          "default": null,
+          "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],
@@ -12658,11 +12658,11 @@
         {
           "name": "current-midi",
           "type": "number",
-          "default": 69,
-          "stated_default": "69.0",
+          "default": null,
+          "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         },
         {
@@ -12690,11 +12690,11 @@
         {
           "name": "target-midi",
           "type": "number",
-          "default": 69,
-          "stated_default": "69.0",
+          "default": null,
+          "stated_default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false,
+          "required": true,
           "domain": null
         }
       ],

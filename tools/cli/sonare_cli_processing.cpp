@@ -103,8 +103,9 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
 int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
-  const float current_midi = args.get_float("current-midi", 69.0f);
-  const float target_midi = args.get_float("target-midi", 69.0f);
+  // Both pitches are required options (the registry refuses an absent one), as in the library.
+  const float current_midi = args.get_float("current-midi", 0.0f);
+  const float target_midi = args.get_float("target-midi", 0.0f);
   editing::pitch_editor::PitchCorrector corrector;
   // The constant-pitch overload, not the time-varying one. Feeding a synthetic
   // single-frame F0Track to the time-varying path runs the retune IIR, whose

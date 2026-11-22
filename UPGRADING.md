@@ -12503,6 +12503,13 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `note-stretch --offset` | `note-stretch --offset-sample`: renamed --offset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `note-stretch --onset` | `note-stretch --onset-sample`: renamed --onset-sample; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 
+#### An option left out takes the library's default
+
+| 1.x | 2.0.0 |
+|---|---|
+| `pitch-correct --current-midi` | required: an omitted --current-midi no longer reads as MIDI 69 (A4) and is refused as a usage error (exit 2) before the input is read, as the library assumes no pitch; pass 69 to keep the 1.x result |
+| `pitch-correct --target-midi` | required: an omitted --target-midi no longer reads as MIDI 69 (A4) and is refused as a usage error (exit 2) before the input is read, as the library assumes no pitch; pass 69 to keep the 1.x result |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |

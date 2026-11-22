@@ -418,6 +418,7 @@ def test_effect_commands_require_output(tmp_path, command, effect_args) -> None:
     [
         ("pitch-shift", "Missing required option '--pitch-semitones'"),
         ("time-stretch", "Missing required option '--rate'"),
+        ("pitch-correct", "Missing required option '--current-midi'"),
     ],
 )
 def test_transform_commands_require_their_primary_parameter(

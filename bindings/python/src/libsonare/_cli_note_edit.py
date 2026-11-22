@@ -48,8 +48,8 @@ def cmd_pitch_correct(args: argparse.Namespace) -> int:
     from . import pitch_correct_to_midi
 
     samples, sr = _load_audio(args.file)
-    current_midi = getattr(args, "current_midi", 69.0)
-    target_midi = getattr(args, "target_midi", 69.0)
+    current_midi = args.current_midi
+    target_midi = args.target_midi
     # The constant-pitch facade is the API that preserves the command's
     # requested-pitch behavior.  It has no hop-length control; the parser and
     # native registry must not advertise --hop-length until a matching facade
@@ -556,13 +556,10 @@ def register_note_edit_parsers(
         "pitch-correct", parents=[common], help="Pitch-correct from a current to a target MIDI note"
     )
     pitch_correct_p.add_argument(
-        "--current-midi",
-        type=_finite_float,
-        default=69.0,
-        help="Current pitch as a MIDI note number",
+        "--current-midi", type=_finite_float, help="Current pitch as a MIDI note number"
     )
     pitch_correct_p.add_argument(
-        "--target-midi", type=_finite_float, default=69.0, help="Target pitch as a MIDI note number"
+        "--target-midi", type=_finite_float, help="Target pitch as a MIDI note number"
     )
     pitch_tv_p = sub.add_parser(
         "pitch-correct-timevarying",
