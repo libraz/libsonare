@@ -476,7 +476,15 @@ Bus bus_from_value(const JsonValue& object, const std::string& path) {
   static const KeySet kKnown = known_keys("buses[]");
   Bus bus;
   bus.id = string_or(object, path, "id", bus.id);
-  bus.role = string_or(object, path, "role", bus.role);
+  if (const auto* role = object.find("role")) {
+    // A number is refused naming the roles, like every other closed set here.
+    const std::string at = schema::child_path(path, "role");
+    if (role->is_string()) bus.role = role->as_string();
+    if (role->is_number() || (role->is_string() && !bus_role::is_declared(bus.role))) {
+      refuse(schema::refusal(at, std::string("must be one of ") + bus_role::kChoices));
+    }
+    if (!role->is_string()) refuse(schema::must_be(at, schema::Kind::String));
+  }
   bus.layout = channel_layout_or(object, path, "layout", bus.layout);
   bus.input_trim_db =
       number_or_earlier(object, path, "inputTrimDb", "input_trim_db", bus.input_trim_db);

@@ -37,11 +37,11 @@ namespace {
 // resolves it by. The role is what actually selects it, so a master whose id
 // had to be renamed around a track of the same name is still the master.
 constexpr const char* kMasterBusId = "master";
-constexpr const char* kMasterBusRole = "master";
+constexpr const char* kMasterBusRole = api::bus_role::kMaster;
 // A subgroup sums parts that travel together. The other role this stage uses,
 // the aux that receives sends, is declared with the effect buses because it is
 // reachable only when they are.
-constexpr const char* kSubmixBusRole = "submix";
+constexpr const char* kSubmixBusRole = api::bus_role::kSubmix;
 // Appended to a subgroup's bus id to name the VCA group riding it.
 constexpr const char* kVcaIdSuffix = "Vca";
 // First numeric suffix tried when a generated id is already taken. Counting
@@ -245,7 +245,7 @@ namespace json = sonare::util::json;
 
 // An effect bus receives sends rather than a summed group, which is the role
 // the mixer reads to keep it out of the default master routing.
-constexpr const char* kAuxBusRole = "aux";
+constexpr const char* kAuxBusRole = api::bus_role::kAux;
 
 // One decimal is the resolution a mixer acts on; more digits make the
 // explanation read like a measurement rather than a suggestion.

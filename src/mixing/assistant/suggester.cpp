@@ -435,8 +435,9 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
     }
     const float headroom_db = decide_master_headroom_db(profiles, result.scene, config);
     if (headroom_db < 0.0f) {
-      const auto master = std::find_if(result.scene.buses.begin(), result.scene.buses.end(),
-                                       [](const api::Bus& bus) { return bus.role == "master"; });
+      const auto master =
+          std::find_if(result.scene.buses.begin(), result.scene.buses.end(),
+                       [](const api::Bus& bus) { return bus.role == api::bus_role::kMaster; });
       if (master != result.scene.buses.end()) {
         master->input_trim_db += headroom_db;
         notes.push_back("pulled the master bus down to leave the summed mix its headroom");

@@ -438,6 +438,30 @@ TEST_CASE("Scene channel layout round-trips and defaults to stereo", "[mixing][r
   REQUIRE(restored.buses[0].layout == ChannelLayout::SevenPointOne);
 }
 
+TEST_CASE("scene_from_json reads a bus role only from the closed role set", "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  namespace api = sonare::mixing::api;
+  for (const char* role : {R"("bogus")", R"("Master")", R"("")", "1"}) {
+    INFO(role);
+    const std::string doc =
+        std::string(R"({"version":2,"buses":[{"id":"b","role":)") + role + "}]}";
+    try {
+      (void)api::scene_from_json(doc);
+      FAIL("an undeclared bus role was accepted");
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK_THAT(e.what(), ContainsSubstring("buses[0].role must be one of master, aux, submix"));
+    }
+  }
+  for (const char* role : {"master", "aux", "submix"}) {
+    INFO(role);
+    const auto scene = api::scene_from_json(
+        std::string(R"({"version":2,"buses":[{"id":"b","role":")") + role + R"("}]})");
+    REQUIRE(scene.buses.size() == 1);
+    CHECK(scene.buses[0].role == role);
+  }
+}
+
 TEST_CASE("scene_from_json rejects out-of-range strip enums like the project walker",
           "[mixing][routing]") {
   // The project-embedded scene walker (project_serializer_decode.cpp) already

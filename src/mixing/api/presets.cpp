@@ -24,8 +24,8 @@ std::string vocal_eq_params() {
 
 Scene make_vocal_reverb_send() {
   Scene scene;
-  scene.buses.push_back({"master", "master"});
-  scene.buses.push_back({"vocal-verb", "aux"});
+  scene.buses.push_back({"master", bus_role::kMaster});
+  scene.buses.push_back({"vocal-verb", bus_role::kAux});
 
   Strip vocal;
   vocal.id = "vocal";
@@ -52,8 +52,8 @@ Scene make_vocal_reverb_send() {
 
 Scene make_drum_bus_subgroup() {
   Scene scene;
-  scene.buses.push_back({"master", "master"});
-  scene.buses.push_back({"drum-bus", "submix"});
+  scene.buses.push_back({"master", bus_role::kMaster});
+  scene.buses.push_back({"drum-bus", bus_role::kSubmix});
 
   for (const char* id : {"kick", "snare", "overheads"}) {
     Strip strip;
@@ -80,7 +80,7 @@ Scene make_drum_bus_subgroup() {
 
 Scene make_commentary_ducking() {
   Scene scene;
-  scene.buses.push_back({"master", "master"});
+  scene.buses.push_back({"master", bus_role::kMaster});
 
   Strip host;
   host.id = "host";

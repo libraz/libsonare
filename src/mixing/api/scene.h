@@ -4,6 +4,7 @@
 /// @brief Pure-data mixer scene schema and JSON helpers.
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -128,12 +129,29 @@ struct Strip {
   StripEq eq;
 };
 
+/// @brief The closed set of bus roles a scene may declare.
+/// The master is summed at the render's output, an aux receives sends and stays
+/// out of the default master routing, and a submix sums parts that travel together.
+namespace bus_role {
+inline constexpr const char* kMaster = "master";
+inline constexpr const char* kAux = "aux";
+inline constexpr const char* kSubmix = "submix";
+/// The accepted roles as a refusal lists them.
+inline constexpr const char* kChoices = "master, aux, submix";
+
+/// @brief True when @p role is one of the declared roles.
+inline bool is_declared(std::string_view role) noexcept {
+  return role == kMaster || role == kAux || role == kSubmix;
+}
+}  // namespace bus_role
+
 struct Bus {
   Bus() = default;
-  Bus(std::string id_, std::string role_ = "aux") : id(std::move(id_)), role(std::move(role_)) {}
+  Bus(std::string id_, std::string role_ = bus_role::kAux)
+      : id(std::move(id_)), role(std::move(role_)) {}
 
   std::string id;
-  std::string role = "aux";
+  std::string role = bus_role::kAux;
   // Channel layout of this bus. A 5.1/7.1 bus processes that many planes; mono
   // and stereo buses process two. The master (role == "master") is instead built
   // at the render's output width, and its layout is the widest output allowed.
