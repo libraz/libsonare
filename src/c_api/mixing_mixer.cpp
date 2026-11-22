@@ -6,12 +6,14 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/retired_names.h"
+#include "mixing/api/scene.h"
 #include "mixing/channel_strip_eq.h"
 #include "util/json.h"
 #include "util/json_schema.h"
 #include "util/parameter_checks.h"
 
 using namespace sonare_c_mixing_detail;
+namespace bus_role = sonare::mixing::api::bus_role;
 
 namespace {
 
@@ -221,16 +223,16 @@ SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char*
   SONARE_C_REQUIRE_NONNULL(mixer);
   SONARE_C_REQUIRE_NONNULL(id);
   SONARE_C_TRY
-  const std::string bus_role = role != nullptr ? std::string(role) : std::string("aux");
-  if (bus_role != "master" && bus_role != "aux" && bus_role != "submix") {
+  const std::string role_name = role != nullptr ? std::string(role) : std::string(bus_role::kAux);
+  if (!bus_role::is_declared(role_name)) {
     return sonare_c_detail::run_validation(
-        [] { check::refuse("role", "must be one of master, aux, submix"); });
+        [] { check::refuse("role", std::string("must be one of ") + bus_role::kChoices); });
   }
   const std::string bus_id = id;
   for (const auto& bus : mixer->buses) {
     if (bus.id == bus_id) return refuse_duplicate_id("a bus");
   }
-  mixer->buses.emplace_back(bus_id, bus_role);
+  mixer->buses.emplace_back(bus_id, role_name);
   mixer->compiled_dirty = true;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -668,13 +670,13 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   mixer->connections = scene.connections;
   bool has_master = false;
   for (const auto& bus : mixer->buses) {
-    if (bus.role == "master" || bus.id == "master") {
+    if (bus.role == bus_role::kMaster || bus.id == "master") {
       has_master = true;
       break;
     }
   }
   if (!has_master) {
-    mixer->buses.push_back({"master", "master"});
+    mixer->buses.push_back({"master", bus_role::kMaster});
   }
 
   // Bus inserts are built here, at the same lifecycle stage as strip inserts
@@ -769,7 +771,7 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
   }
   scene.vca_groups = mixer->vca_groups;
   if (scene.buses.empty()) {
-    scene.buses.push_back({"master", "master"});
+    scene.buses.push_back({"master", bus_role::kMaster});
   }
   scene.connections = mixer->connections;
   for (const auto& strip : mixer->strips) {

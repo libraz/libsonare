@@ -39,7 +39,6 @@
 #include "c_api/project_bounce_mixer.h"
 #include "c_api/project_bounce_stems.h"
 #include "engine/mixing_runtime.h"
-#include "mixing/api/scene.h"
 #endif
 
 using namespace sonare_c_bounce_detail;
@@ -146,7 +145,7 @@ bool replay_destination_events(const arr::CompiledTimeline& timeline,
 int master_output_channels(const sonare::mixing::api::Scene& scene) noexcept {
   const sonare::mixing::api::Bus* master = nullptr;
   for (const auto& bus : scene.buses) {
-    if (bus.role == "master") {
+    if (bus.role == sonare::mixing::api::bus_role::kMaster) {
       master = &bus;
       break;
     }

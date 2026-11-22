@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "c_api/mixing_internal.h"
+#include "mixing/api/scene.h"
 #include "mixing/downmix.h"
 #include "mixing/gain.h"
 #include "mixing/solo_mute.h"
@@ -374,7 +375,7 @@ std::string resolve_master_bus_id(const std::vector<sonare::mixing::api::Bus>& b
                                   bool* implicit) {
   if (implicit != nullptr) *implicit = false;
   for (const auto& bus : buses) {
-    if (bus.role == "master") return bus.id;
+    if (bus.role == sonare::mixing::api::bus_role::kMaster) return bus.id;
   }
   for (const auto& bus : buses) {
     if (bus.id == "master") return bus.id;
@@ -466,7 +467,7 @@ void build_and_compile(SonareMixer* mixer) {
   bool master_implicit = false;
   std::string master_id = resolve_master_bus_id(buses, &master_implicit);
   if (master_implicit) {
-    buses.push_back({master_id, "master"});
+    buses.push_back({master_id, sonare::mixing::api::bus_role::kMaster});
   }
 
   // Any send destination that isn't already a bus becomes an implicit aux bus
@@ -496,7 +497,7 @@ void build_and_compile(SonareMixer* mixer) {
         refuse_scene(destination_path(), "must be the id of a bus, not of a strip");
       }
       if (!is_bus.count(send.destination_bus_id)) {
-        buses.push_back({send.destination_bus_id, "aux"});
+        buses.push_back({send.destination_bus_id, sonare::mixing::api::bus_role::kAux});
         is_bus[send.destination_bus_id] = true;
         is_implicit_bus[send.destination_bus_id] = true;
       }
