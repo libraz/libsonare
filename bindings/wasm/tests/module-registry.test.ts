@@ -52,14 +52,15 @@ describe('the module holder of a realm', () => {
        });`,
       { eval: true },
     );
+    // Listen before awaiting init: an answer posted with no listener attached is lost.
+    const answer = new Promise((resolve, reject) => {
+      worker.once('message', resolve);
+      worker.once('error', reject);
+    });
     try {
       await index.init();
       expect(index.isInitialized()).toBe(true);
-      const answer = await new Promise((resolve, reject) => {
-        worker.once('message', resolve);
-        worker.once('error', reject);
-      });
-      expect(answer).toBe(false);
+      expect(await answer).toBe(false);
     } finally {
       await worker.terminate();
     }
