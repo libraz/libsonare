@@ -12,6 +12,7 @@ import { mergeRespelled, refuse, refuseType, withEntry } from './internal/entry.
 import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
 import { withRespelled } from './internal/respell.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   AssignNoteTargetsResult,
@@ -627,8 +628,8 @@ export function splitNote(...args: unknown[]): NoteObject[] {
       ...options
     } = request;
     const nativeVoiced = assertNoteTrackRequest(request);
-    const hasFrame = requestFrame !== undefined && requestFrame !== null;
-    const hasFrameSec = frameSec !== undefined && frameSec !== null;
+    const hasFrame = !isAbsent(requestFrame);
+    const hasFrameSec = !isAbsent(frameSec);
     requireOneOf(['frame', 'frameSec'], [hasFrame, hasFrameSec]);
     assertFloatValue(hasFrame ? requestFrame : frameSec, hasFrame ? 'frame' : 'frameSec');
     const frame = hasFrame ? requestFrame : Math.round((frameSec as number) * frameRate);

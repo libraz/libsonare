@@ -6,6 +6,7 @@ import {
   refuseZeroSentinel,
   waveformReportFromNative,
 } from './internal/metering_native.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { OptionsOf } from './validation.js';
 import {
@@ -33,7 +34,7 @@ const DEFAULT_SPECTRUM_N_FFT = 2048;
 function assertSpectrumOptions(options: SpectrumOptions): void {
   for (const field of ['nFft', 'octaveFraction'] as const) {
     const value = options[field];
-    if (value !== undefined && value !== null) {
+    if (!isAbsent(value)) {
       assertInt32(value, field);
     }
   }
@@ -300,7 +301,7 @@ export function meteringTruePeakDbtp(...args: unknown[]): number {
     assertAudioInput(r.samples, r.sampleRate, r);
     refuseZeroSentinel(r, ['oversampleFactor']);
     // An omitted factor is the library's; the power-of-two rule stays the core's, which names the field.
-    if (r.oversampleFactor !== undefined && r.oversampleFactor !== null) {
+    if (!isAbsent(r.oversampleFactor)) {
       assertNonNegativeSafeInteger(r.oversampleFactor, 'oversampleFactor');
     }
     return addon.meteringTruePeakDb(r.samples, r.sampleRate, r.oversampleFactor);
@@ -324,7 +325,7 @@ export function meteringDetectClipping(...args: unknown[]): ClippingReport {
     const r = sampleOneShot<MeteringDetectClippingRequest>('meteringDetectClipping', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     refuseZeroSentinel(r, ['minRegionSamples']);
-    if (r.minRegionSamples !== undefined && r.minRegionSamples !== null) {
+    if (!isAbsent(r.minRegionSamples)) {
       assertNonNegativeSafeInteger(r.minRegionSamples, 'minRegionSamples');
     }
     return clippingReportFromNative(

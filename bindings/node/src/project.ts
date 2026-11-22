@@ -1,4 +1,5 @@
 import {
+  assertDeclaredKeys,
   entryClass,
   invalidState,
   refuse,
@@ -203,15 +204,6 @@ function optionalName(argName: string, value: unknown, hint: string): string | u
 const TAKE_KEYS = ['id', 'sourceId', 'sourceOffsetPpq', 'name'];
 const COMP_SEGMENT_KEYS = ['startPpq', 'endPpq', 'takeId', 'crossfadePpq'];
 
-/** Refuse the first key of `record` outside `keys`, by its path. */
-function refuseUnknownFields(record: object, where: string, keys: readonly string[]): void {
-  for (const key of Object.keys(record)) {
-    if (!keys.includes(key)) {
-      throw refuseUnknownKey(`${where}.${key}`, keys);
-    }
-  }
-}
-
 /** The take list as the native layer reads it, each take checked by name; absent fields are missing keys. */
 function takesToNative(takes: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(takes)) {
@@ -223,7 +215,7 @@ function takesToNative(takes: unknown): Array<Record<string, unknown>> {
     if (!isNonArrayObject(entry)) {
       throw refuseType(`${where} must be an object`);
     }
-    refuseUnknownFields(entry, where, TAKE_KEYS);
+    assertDeclaredKeys(entry, TAKE_KEYS, where);
     const { id, sourceId, name, ...rest } = entry as Record<string, unknown>;
     const takeId = requireInteger(id, `${where}.id`);
     assertU32(takeId, `${where}.id`);
@@ -251,7 +243,7 @@ function compSegmentsToNative(segments: unknown): Array<Record<string, unknown>>
     if (!isNonArrayObject(entry)) {
       throw refuseType(`segments[${index}] must be an object`);
     }
-    refuseUnknownFields(entry, `segments[${index}]`, COMP_SEGMENT_KEYS);
+    assertDeclaredKeys(entry, COMP_SEGMENT_KEYS, `segments[${index}]`);
     const { takeId, ...rest } = entry as Record<string, unknown>;
     const take = optionalId(`segments[${index}].takeId`, takeId, 'for the active take');
     return { ...rest, ...(take === undefined ? {} : { takeId: take }) };
@@ -321,11 +313,7 @@ function instrumentBinding(pair: unknown, label: string): Record<string, unknown
     throw refuseType(`${label} must be a { destinationId?, instrument } pair`);
   }
   const record = pair as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    if (!INSTRUMENT_BINDING_KEYS.includes(key)) {
-      throw refuseUnknownKey(`${label}.${key}`, INSTRUMENT_BINDING_KEYS);
-    }
-  }
+  assertDeclaredKeys(record, INSTRUMENT_BINDING_KEYS, label);
   if (isAbsent(record.instrument)) {
     throw refuseType(`${label}.instrument must be given`);
   }

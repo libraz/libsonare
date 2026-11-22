@@ -6,6 +6,7 @@
 import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
+import { isAbsent } from './internal/value_guards.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
@@ -92,7 +93,7 @@ export function spectralEdit(...args: unknown[]): Float32Array {
     const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
     const { samples: input, sampleRate, ops, ...requestOptions } = request;
     assertAudioInput(input, sampleRate);
-    if (ops === undefined || ops === null) {
+    if (isAbsent(ops)) {
       throw refuseType('ops must be an array');
     }
     if (requestOptions.window !== undefined) {

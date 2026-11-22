@@ -3,6 +3,7 @@ import { withEntry } from './internal/entry.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
 import { resolveInsertParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   MasteringChainConfig,
@@ -179,7 +180,7 @@ export function masteringInsertParamInfo(
 ): MasteringInsertParamInfo[] {
   return withEntry('masteringInsertParamInfo', () => {
     const r = requestOnly<MasteringInsertParamInfoRequest>('masteringInsertParamInfo', [request]);
-    if (r.sampleRate !== undefined && r.sampleRate !== null) {
+    if (!isAbsent(r.sampleRate)) {
       assertSampleRate(r.sampleRate);
     }
     const json = addon.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);

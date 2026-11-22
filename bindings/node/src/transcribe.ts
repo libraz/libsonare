@@ -1,4 +1,5 @@
 import { withEntry } from './internal/entry.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { TranscribeRequest, TranscribeResult } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -49,7 +50,7 @@ export function transcribe(...args: unknown[]): TranscribeResult {
     const request = sampleOneShot<TranscribeRequest>('transcribe', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const { ...rest } = request;
-    if (rest.tempoBpm !== undefined && rest.tempoBpm !== null) {
+    if (!isAbsent(rest.tempoBpm)) {
       assertPositiveFloatValue(rest.tempoBpm, 'tempoBpm');
     }
     return addon.transcribe(rest);

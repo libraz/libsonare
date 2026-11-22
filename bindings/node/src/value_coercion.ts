@@ -2,6 +2,7 @@ import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
 import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
@@ -177,7 +178,7 @@ export function sendTimingValue(timing: SendTiming, key: string): number {
  * thing on both.
  */
 export function normalizeSynthInstrument(patch: SynthPatch): SynthPatch {
-  if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
+  if (!isNonArrayObject(patch)) {
     throw refuseType(`patch must be a SynthPatch object; a preset is named by its preset field`);
   }
   refuseSynthPatchOrdinals(patch);
@@ -199,7 +200,7 @@ export function normalizeSynthInstrument(patch: SynthPatch): SynthPatch {
  * wrong shape by field name. Returns `undefined` when there are none.
  */
 export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
-  if (inserts === undefined || inserts === null) {
+  if (isAbsent(inserts)) {
     return undefined;
   }
   if (!Array.isArray(inserts)) {

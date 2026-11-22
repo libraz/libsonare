@@ -20,9 +20,10 @@ import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene
 import { requireOneOf } from './internal/one_of.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
+import { tokenOrdinal } from './internal/project_tokens.js';
 import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
-import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject, isPlainRecord } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
@@ -111,15 +112,6 @@ import {
 
 export * from './clip_page_provider.js';
 
-function isObjectValue(value: unknown): value is object {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    !ArrayBuffer.isView(value)
-  );
-}
-
 function requireFinite(value: unknown, argName: string): number {
   if (typeof value !== 'number') {
     throw refuseType(`${argName} must be a number`);
@@ -196,15 +188,6 @@ function graphName(path: string, value: unknown): void {
   if (value === '') {
     throw refuse(`${path} must not be empty`);
   }
-}
-
-function requireToken<T extends string>(
-  value: unknown,
-  table: Readonly<Record<T, number>>,
-  argName: string,
-): number {
-  assertClosedToken(value, Object.keys(table) as T[], argName);
-  return table[value];
 }
 
 function tokenOf<T extends string>(
@@ -296,7 +279,7 @@ function toNativeClip(clip: EngineClip, label: string): unknown {
     native.pageProvider = nativeClipPageProviderOf(clip.pageProvider);
   }
   if (!isAbsent(clip.warpMode)) {
-    native.warpMode = requireToken(clip.warpMode, WARP_MODE, `${label}.warpMode`);
+    native.warpMode = tokenOrdinal(clip.warpMode, WARP_MODE, `${label}.warpMode`);
   }
   return native;
 }
@@ -309,7 +292,7 @@ function normalizeSends(sends: EngineTrackSend[], where: string): EngineTrackSen
       ? send
       : {
           ...send,
-          sendTiming: requireToken(
+          sendTiming: tokenOrdinal(
             send.sendTiming,
             SEND_TIMING,
             `${where}[${i}].sendTiming`,
@@ -332,7 +315,7 @@ function laneToNative(requestName: 'setTrackLanes', lane: EngineTrackLane, index
     delete native.outputBusId;
   }
   if (!isAbsent(record.sourceChannelLayout)) {
-    native.sourceChannelLayout = requireToken(
+    native.sourceChannelLayout = tokenOrdinal(
       record.sourceChannelLayout,
       CHANNEL_LAYOUT_VALUES,
       `${label}.sourceChannelLayout`,
@@ -352,7 +335,7 @@ function busToNative(requestName: 'setTrackBuses', bus: EngineBus, index: number
     delete native.outputBusId;
   }
   if (!isAbsent(record.channelLayout)) {
-    native.channelLayout = requireToken(
+    native.channelLayout = tokenOrdinal(
       record.channelLayout,
       CHANNEL_LAYOUT_VALUES,
       `${label}.channelLayout`,
@@ -404,7 +387,7 @@ function sidechainSourcePair(
     return { kind: SIDECHAIN_SOURCE_KIND.track, id: 0 };
   }
   const record = requestObject(requestName, source, 'source', true);
-  const kind = requireToken(record.kind, SIDECHAIN_SOURCE_KIND, 'source.kind');
+  const kind = tokenOrdinal(record.kind, SIDECHAIN_SOURCE_KIND, 'source.kind');
   const id = requireFiniteInteger(record.id, 'source.id');
   if (id === 0) {
     throw refuse(`source.id must not be 0 (pass null to remove the binding)`);
@@ -534,7 +517,7 @@ function markerToNative(marker: EngineMarker, i: number): unknown {
   if (isAbsent(marker.kind)) {
     return named;
   }
-  return { ...named, kind: requireToken(marker.kind, MARKER_KIND, `markers[${i}].kind`) };
+  return { ...named, kind: tokenOrdinal(marker.kind, MARKER_KIND, `markers[${i}].kind`) };
 }
 
 /** An unnamed marker reads back without a `name` key, so the record can be passed to `setMarkers` again. */
@@ -598,7 +581,7 @@ function graphToNative(spec: EngineGraphSpec): unknown {
             ...rest,
             ...(isAbsent(type)
               ? {}
-              : { type: requireToken(type, GRAPH_NODE_TYPE, `nodes[${i}].type`) }),
+              : { type: tokenOrdinal(type, GRAPH_NODE_TYPE, `nodes[${i}].type`) }),
           };
         })
       : nodes,
@@ -614,7 +597,7 @@ function graphToNative(spec: EngineGraphSpec): unknown {
             ...rest,
             ...(isAbsent(mix)
               ? {}
-              : { mix: requireToken(mix, GRAPH_MIX, `connections[${i}].mix`) }),
+              : { mix: tokenOrdinal(mix, GRAPH_MIX, `connections[${i}].mix`) }),
           };
         })
       : connections,
@@ -626,7 +609,7 @@ function bounceToNative(options: EngineBounceOptions): Record<string, unknown> {
   const request = requestObject(fnName, options, 'options', true);
   const native: Record<string, unknown> = { ...request };
   if (!isAbsent(request.dither)) {
-    native.dither = requireToken(request.dither, DITHER, 'dither');
+    native.dither = tokenOrdinal(request.dither, DITHER, 'dither');
   }
   return native;
 }
@@ -1764,7 +1747,7 @@ export class RealtimeEngine {
     let monitor = { enabled: true, gain: 1 };
     if (!isAbsent(request.inputMonitor)) {
       const inputMonitor = request.inputMonitor;
-      if (!isObjectValue(inputMonitor)) {
+      if (!isPlainRecord(inputMonitor)) {
         throw refuseType(`inputMonitor must be an object`);
       }
       monitor = {
@@ -1802,7 +1785,7 @@ export class RealtimeEngine {
     end: number;
     respelled: Respelled;
   } {
-    if (!isObjectValue(punch)) {
+    if (!isPlainRecord(punch)) {
       throw refuseType(`punch must be an object`);
     }
     const request = punch as Record<string, unknown>;
@@ -2130,7 +2113,7 @@ export class RealtimeEngine {
   setTrackMonitorMode(trackId: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
     this.native.setTrackMonitorMode(
       this.laneIndexOf(trackId),
-      requireToken(mode, TRACK_MONITOR_MODE, 'mode'),
+      tokenOrdinal(mode, TRACK_MONITOR_MODE, 'mode'),
       resolveRenderFrame(renderFrame),
     );
   }

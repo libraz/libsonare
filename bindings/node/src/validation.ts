@@ -1,14 +1,20 @@
-import { type Respelled, refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import {
+  assertDeclaredKeys,
+  type Respelled,
+  refuse,
+  refuseType,
+  refuseUnknownKey,
+} from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
-import { isPlainRecord } from './internal/value_guards.js';
+import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { NESTED_REQUEST_KEYS, REQUEST_KEYS, type RequestFn } from './request_keys.js';
 import type { ProjectMidiEvent } from './types.js';
 
 /** The options of request `R` in the positional form `(samples, sampleRate, options)`. */
 export type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
 
-export function assertNonEmptySamples(samples: ArrayLike<number>, argName = 'samples'): void {
+function assertNonEmptySamples(samples: ArrayLike<number>, argName = 'samples'): void {
   if (samples.length === 0) {
     throw refuse(`${argName} must not be empty`);
   }
@@ -164,8 +170,8 @@ export function assertFrequencyBounds(
   minName: string,
   maxName: string,
 ): void {
-  const hasMin = min !== undefined && min !== null;
-  const hasMax = max !== undefined && max !== null;
+  const hasMin = !isAbsent(min);
+  const hasMax = !isAbsent(max);
   if (hasMin) {
     assertPositiveFloatValue(min, minName);
   }
@@ -180,8 +186,8 @@ export function assertFrequencyBounds(
  * the WASM/Python surfaces. Used where a wrong `sampleRate` would corrupt the
  * result rather than merely pick a default, so it must be supplied explicitly.
  */
-export const MIN_AUDIO_SAMPLE_RATE = 8000;
-export const MAX_AUDIO_SAMPLE_RATE = 384000;
+const MIN_AUDIO_SAMPLE_RATE = 8000;
+const MAX_AUDIO_SAMPLE_RATE = 384000;
 
 /**
  * The integrality half of {@link assertSampleRate}, for an entry point whose
@@ -378,7 +384,7 @@ export function assertPositiveInteger(value: unknown, argName: string): asserts 
 }
 
 /** The constant-Q family's largest hop, in samples; the core states the same bound. */
-export const CQT_MAX_HOP_LENGTH = 65536;
+const CQT_MAX_HOP_LENGTH = 65536;
 
 /** A constant-Q hop: an integer in `[1, CQT_MAX_HOP_LENGTH]`. */
 export function assertCqtHopLength(value: unknown): asserts value is number {
@@ -444,7 +450,7 @@ export function midi1Event(
 }
 
 /** Bounds of the native `int` every addon argument below is narrowed into. */
-export const C_INT_MIN = -2147483648;
+const C_INT_MIN = -2147483648;
 export const C_INT_MAX = 2147483647;
 
 /**
@@ -554,7 +560,7 @@ export function secondsToSampleCount(seconds: number, sampleRate: number, argNam
 }
 
 /** How {@link resolveSampleBound} treats the sign of the value it resolves. */
-export type SampleBoundSign = 'non-negative' | 'signed';
+type SampleBoundSign = 'non-negative' | 'signed';
 
 /** {@link resolveSampleBound} for a bound the call cannot do without: neither spelling is a `TypeError`. */
 export function requireSampleBound(
@@ -565,13 +571,7 @@ export function requireSampleBound(
   secName: string,
   sign: SampleBoundSign = 'non-negative',
 ): SampleBound & { readonly value: number } {
-  requireOneOf(
-    [sampleName, secName],
-    [
-      sampleValue !== undefined && sampleValue !== null,
-      secValue !== undefined && secValue !== null,
-    ],
-  );
+  requireOneOf([sampleName, secName], [!isAbsent(sampleValue), !isAbsent(secValue)]);
   return resolveSampleBound(
     sampleValue,
     secValue,
@@ -614,8 +614,8 @@ export function resolveSampleBound(
   sign: SampleBoundSign = 'non-negative',
   subject: string = sampleName,
 ): SampleBound {
-  const hasSample = sampleValue !== undefined && sampleValue !== null;
-  const hasSec = secValue !== undefined && secValue !== null;
+  const hasSample = !isAbsent(sampleValue);
+  const hasSec = !isAbsent(secValue);
   if (!hasSample && !hasSec) {
     return { value: undefined, respelled: {} };
   }
@@ -647,7 +647,7 @@ const RENDER_FRAME_IMMEDIATE = -1;
  * (-1), and a negative frame is refused rather than read as the same thing.
  */
 export function resolveRenderFrame(renderFrame: number | null | undefined): number {
-  if (renderFrame === undefined || renderFrame === null) {
+  if (isAbsent(renderFrame)) {
     return RENDER_FRAME_IMMEDIATE;
   }
   if (typeof renderFrame !== 'number') {
@@ -671,7 +671,7 @@ export function resolveOptionalNonNegative(
   value: number | null | undefined,
   argName: string,
 ): number {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return C_ABSENT;
   }
   if (typeof value !== 'number') {
@@ -750,11 +750,7 @@ export function assertKnownRequestKeys(
       if (!isPlainRecord(item)) {
         continue;
       }
-      for (const key of Object.keys(item)) {
-        if (!ownKey(set, key)) {
-          throw refuseUnknownKey(`${path}.${key}`, Object.keys(set));
-        }
-      }
+      assertDeclaredKeys(item, Object.keys(set), path);
     }
   }
 }

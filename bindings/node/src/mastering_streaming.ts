@@ -1,12 +1,12 @@
 import { chainConfigJson } from './internal/chain_config.js';
 import {
+  assertDeclaredKeys,
   entryClass,
   nameNativeError,
   refuse,
   refuseType,
-  refuseUnknownKey,
 } from './internal/entry.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
@@ -93,7 +93,7 @@ function assertConfigObject(config: unknown): asserts config is object {
 
 /** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
 function optionalIntegerBlockSize(value: unknown): number | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   assertIntegerValue(value, 'maxBlockSize');
@@ -573,11 +573,7 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
   if (!isNonArrayObject(config)) {
     throw refuseType('config must be an object with a sampleRate');
   }
-  for (const key of Object.keys(config)) {
-    if (!STREAM_CONFIG_KEYS.has(key)) {
-      throw refuseUnknownKey(key, [...STREAM_CONFIG_KEYS]);
-    }
-  }
+  assertDeclaredKeys(config, [...STREAM_CONFIG_KEYS], '');
   assertIntegerValue(config.sampleRate, 'sampleRate');
   const { fminHz, fmaxHz, referenceHz, window, ...rest } = config;
   const native: Record<string, unknown> = { ...rest };
@@ -838,7 +834,7 @@ const EQ_PLACEMENT_ORDINALS: Record<EqStereoPlacement, number> = {
 
 /** Absent or null takes `'stereo'`; a non-string is a `TypeError`, an unknown token a `RangeError`. */
 function checkedEqPlacement(value: unknown): EqStereoPlacement {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return 'stereo';
   }
   if (typeof value !== 'string') {
@@ -899,11 +895,7 @@ function assertEqBand(band: unknown): asserts band is EqBandInput {
   if (!isNonArrayObject(band)) {
     throw refuseType('band must be an object');
   }
-  for (const key of Object.keys(band)) {
-    if (!Object.hasOwn(EQ_BAND_KEYS, key)) {
-      throw refuseUnknownKey(`band.${key}`, Object.keys(EQ_BAND_KEYS));
-    }
-  }
+  assertDeclaredKeys(band, Object.keys(EQ_BAND_KEYS), 'band');
 }
 
 /**

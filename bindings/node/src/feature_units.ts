@@ -1,6 +1,7 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D } from './internal/feature_matrix.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types_analysis.js';
 import { assertPositiveInteger, requestOnly } from './validation.js';
@@ -136,7 +137,7 @@ export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 51
 
 /** Absent `nFft` leaves out the centring offset; the offset must otherwise be a positive integer. */
 function resolveCentringNFft(nFft: number | null | undefined): number {
-  if (nFft === undefined || nFft === null) {
+  if (isAbsent(nFft)) {
     return 0;
   }
   const resolved = resolveIntegerOption('nFft', nFft, 0);
@@ -188,7 +189,7 @@ function convertElementwise(
   if (values instanceof Float32Array) {
     return convert(values);
   }
-  if (typeof values !== 'object' || values === null || Array.isArray(values)) {
+  if (!isNonArrayObject(values)) {
     throw refuseType('values must be a Float32Array or a Matrix2D');
   }
   assertMatrix2D(values, 'values', false);

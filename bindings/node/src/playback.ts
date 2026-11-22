@@ -1,6 +1,6 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   PlaybackDiagnostics,
@@ -36,7 +36,7 @@ function configJsonText(config: PlaybackRendererConfig): string {
  * handle accessor no caller wants.
  */
 function nativeHrtf(hrtf: HrtfSet | undefined): NativeHrtfSet | undefined {
-  if (hrtf === undefined || hrtf === null) {
+  if (isAbsent(hrtf)) {
     return undefined;
   }
   if (!(hrtf instanceof HrtfSet)) {
@@ -114,7 +114,7 @@ export class PlaybackRenderer {
     requestObject(fnName, options, 'options', true);
     assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize;
-    if (maxBlockSize !== undefined && maxBlockSize !== null) {
+    if (!isAbsent(maxBlockSize)) {
       if (maxBlockSize === 0) {
         throw refuse(`maxBlockSize must not be 0; omit it for the default`);
       }

@@ -1,5 +1,6 @@
 import { chainConfigJson } from './internal/chain_config.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   MasteringChainConfigInput,
@@ -18,7 +19,7 @@ type NativeResult = Record<string, unknown>;
 function assertChainCallbacks(request: object): void {
   for (const name of ['onProgress', 'cancel'] as const) {
     const callback = (request as Record<string, unknown>)[name];
-    if (callback !== undefined && callback !== null && typeof callback !== 'function') {
+    if (!isAbsent(callback) && typeof callback !== 'function') {
       throw refuseType(`${name} must be a function`);
     }
   }
@@ -202,10 +203,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
     const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
     assertChainCallbacks(r);
     assertAudioInput(r.samples, r.sampleRate, r);
-    if (
-      (r.preset === undefined || r.preset === null) &&
-      (r.overrides === undefined || r.overrides === null)
-    ) {
+    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
       throw refuseType('give preset or overrides');
     }
     const overrides = chainConfigJson('overrides', r.overrides);
@@ -238,10 +236,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     if (r.left.length !== r.right.length) {
       throw refuse('left and right must have the same length');
     }
-    if (
-      (r.preset === undefined || r.preset === null) &&
-      (r.overrides === undefined || r.overrides === null)
-    ) {
+    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
       throw refuseType('give preset or overrides');
     }
     const overrides = chainConfigJson('overrides', r.overrides);
@@ -329,10 +324,7 @@ export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResu
     try {
       const r = sampleOneShot<MasterAudioAsyncRequest>('masterAudioAsync', args);
       assertAudioInput(r.samples, r.sampleRate, r);
-      if (
-        (r.preset === undefined || r.preset === null) &&
-        (r.overrides === undefined || r.overrides === null)
-      ) {
+      if (isAbsent(r.preset) && isAbsent(r.overrides)) {
         throw refuseType('give preset or overrides');
       }
       return addon
@@ -361,10 +353,7 @@ export function masterAudioStereoAsync(
       if (r.left.length !== r.right.length) {
         throw refuse('left and right must have the same length');
       }
-      if (
-        (r.preset === undefined || r.preset === null) &&
-        (r.overrides === undefined || r.overrides === null)
-      ) {
+      if (isAbsent(r.preset) && isAbsent(r.overrides)) {
         throw refuseType('give preset or overrides');
       }
       return addon

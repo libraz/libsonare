@@ -1,6 +1,6 @@
-import { refuse, refuseType, refuseUnknownKey } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import type { VocalReason, VocalStateToken } from './types_vocal_edit.js';
 import type {
   ProjectVocalEditApplyRequest,
@@ -221,9 +221,7 @@ function normalizeApplyRequest(request: ProjectVocalEditApplyRequest): NativeApp
   }
   return {
     clipId: requestNumber(input.clipId, 'request.clipId'),
-    ...(input.takeId === undefined || input.takeId === null
-      ? {}
-      : { takeId: requestTakeId(input.takeId) }),
+    ...(isAbsent(input.takeId) ? {} : { takeId: requestTakeId(input.takeId) }),
     expectedSourceId: requestNumber(input.expectedSourceId, 'request.expectedSourceId'),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
@@ -381,11 +379,7 @@ export function projectRehydrateVocalEdits(
   }
   requireListBudget(originals, 'originals');
   const opts = objectValue(options, 'options');
-  for (const key of Object.keys(opts)) {
-    if (key !== 'cancel') {
-      throw refuseUnknownKey(key, ['cancel']);
-    }
-  }
+  assertDeclaredKeys(opts, ['cancel'], '');
   const cancel = opts.cancel as (() => boolean) | undefined;
   if (cancel !== undefined && typeof cancel !== 'function') {
     throw refuseType('cancel must be a function');

@@ -12,6 +12,7 @@ import {
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
+import { isAbsent } from './internal/value_guards.js';
 import { expectedRevisionOption } from './internal/vocal_revision.js';
 import { addon } from './native.js';
 import type {
@@ -212,7 +213,7 @@ function nativeLimits(limits: VocalSessionLimits): object {
   const out: Record<string, unknown> = { ...limits };
   for (const key of LIMIT_BYTE_FIELDS) {
     const value = limits[key];
-    if (value === undefined || value === null) {
+    if (isAbsent(value)) {
       continue;
     }
     if (typeof value !== 'number') {
@@ -229,7 +230,7 @@ function nativeLimits(limits: VocalSessionLimits): object {
 /** The request the addon reads: facade-only keys dropped, byte limits spelled as strings. */
 function nativeRequest(request: VocalCreateRequest | VocalRestoreRequest): object {
   const out: Record<string, unknown> = { ...request };
-  if (request.limits !== undefined && request.limits !== null) {
+  if (!isAbsent(request.limits)) {
     out.limits = nativeLimits(request.limits);
   }
   return out;

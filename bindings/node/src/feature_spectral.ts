@@ -1,6 +1,7 @@
 import { refuse, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveFftOptions } from './internal/fft_options.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   Matrix2D,
@@ -680,7 +681,7 @@ export function melFilterbank(...args: unknown[]): Matrix2D {
   return withEntry('melFilterbank', () => {
     const r = requestOnly<MelFilterbankRequest>('melFilterbank', args);
     // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
-    if (r.fmaxHz !== undefined && r.fmaxHz !== null) {
+    if (!isAbsent(r.fmaxHz)) {
       assertFiniteScalar(r.fmaxHz, 'fmaxHz');
       if (r.fmaxHz <= 0) {
         throw refuse('fmaxHz must be greater than 0; omit it for the default');

@@ -1,5 +1,6 @@
 import { refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
+import { isAbsent } from './value_guards.js';
 
 /** SynthPatch fields that hold a closed-set name. */
 const PATCH_TOKEN_FIELDS = [
@@ -15,7 +16,7 @@ const PATCH_TOKEN_FIELDS = [
 ] as const;
 
 function requireName(path: string, value: unknown): void {
-  if (value !== undefined && value !== null && typeof value !== 'string') {
+  if (!isAbsent(value) && typeof value !== 'string') {
     throw refuseType(`${path} must be a name`);
   }
 }

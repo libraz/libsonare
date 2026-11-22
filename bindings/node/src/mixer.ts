@@ -396,7 +396,7 @@ export class Mixer {
   stripById(id: string): number {
     requiredString(id, 'id');
     const index = this.native.stripById(id);
-    if (index === null || index === undefined) {
+    if (isAbsent(index)) {
       throw refuse(`no strip with id '${id}'`);
     }
     return index;

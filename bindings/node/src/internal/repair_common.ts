@@ -5,6 +5,7 @@
 import type { MasteringAudioProfileDefects } from '../types_mastering.js';
 import type { DehumReport, DenoiseReport, HumDetection, NoiseDetection } from '../types_repair.js';
 import { assertIntegerValue, assertPositiveInteger } from '../validation.js';
+import { isAbsent } from './value_guards.js';
 
 /**
  * Check the STFT geometry the denoise and dereverb entries share, before the
@@ -36,7 +37,7 @@ const NON_NATIVE_FIELDS = new Set(['samples', 'left', 'right', 'channels', 'samp
 export function repairNativeOptions(request: object): Record<string, unknown> {
   const native: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(request)) {
-    if (!NON_NATIVE_FIELDS.has(key) && value !== undefined && value !== null) {
+    if (!NON_NATIVE_FIELDS.has(key) && !isAbsent(value)) {
       native[key] = value;
     }
   }

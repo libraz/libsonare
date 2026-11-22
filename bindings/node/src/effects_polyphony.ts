@@ -1,5 +1,6 @@
 import { entryClass, refuse, withEntry } from './internal/entry.js';
 import { withRespelled } from './internal/respell.js';
+import { isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   NoteEditInput,
@@ -167,7 +168,7 @@ export class PolyphonicAnalysis {
    * @throws {SonareError} `note` is past the last note.
    */
   setNoteEdit(note: number, edit?: NoteEditInput): void {
-    if (edit === undefined || edit === null || typeof edit !== 'object' || Array.isArray(edit)) {
+    if (!isNonArrayObject(edit)) {
       this.native.setNoteEdit(note, edit);
       return;
     }

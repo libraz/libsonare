@@ -1,6 +1,7 @@
 import type { MasteringChainConfig } from '../types.js';
 import { refuseType } from './entry.js';
 import { stringifyWithinBudget } from './list_budget.js';
+import { isAbsent } from './value_guards.js';
 
 /**
  * Serialize a chain config to the document the native chain reader takes. The
@@ -10,7 +11,7 @@ import { stringifyWithinBudget } from './list_budget.js';
  * @throws TypeError when `config` is given and is not an object
  */
 export function chainConfigJson(field: string, config: unknown): string | null {
-  if (config === undefined || config === null) {
+  if (isAbsent(config)) {
     return null;
   }
   if (typeof config !== 'object' || Array.isArray(config)) {

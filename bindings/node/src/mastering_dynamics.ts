@@ -1,4 +1,5 @@
 import { withEntry } from './internal/entry.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import {
   assertAudioInput,
@@ -139,7 +140,7 @@ export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcess
     );
     assertAudioInput(r.samples, r.sampleRate, r);
     const opts = { ...r } as MasteringDynamicsCompressorRequest & Record<string, unknown>;
-    if (r.detector !== undefined && r.detector !== null) {
+    if (!isAbsent(r.detector)) {
       assertClosedToken(r.detector, COMPRESSOR_DETECTORS, 'detector');
       opts.detector = COMPRESSOR_DETECTOR_ORDINAL[r.detector] as never;
     }
@@ -160,7 +161,7 @@ export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResu
   return withEntry('masteringDynamicsGate', () => {
     const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    if (r.keyHighPassHz !== undefined && r.keyHighPassHz !== null) {
+    if (!isAbsent(r.keyHighPassHz)) {
       assertNonNegativeFloatValue(r.keyHighPassHz, 'keyHighPassHz');
     }
     return addon.masteringDynamicsGate(r.samples, r.sampleRate, r);

@@ -6,6 +6,7 @@ import type {
 } from '../types_mixing.js';
 import { refuse, refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
+import { isAbsent } from './value_guards.js';
 
 // The per-strip and per-bus setters take these settings as call arguments, so a wrong type or an unknown token is
 // refused here as TypeError / RangeError. A whole scene document is left to the native reader, which refuses its
@@ -39,24 +40,23 @@ function sendToNative(send: MixSceneSendInput, path: string): Loose {
   if (send === null || typeof send !== 'object') {
     throw refuseType(`${path} must be an object`);
   }
-  if (send.timing === undefined || send.timing === null) {
-    return { ...send };
+  if (!isAbsent(send.timing)) {
+    tokenOrdinal(send.timing, `${path}.timing`, SEND_TIMINGS);
   }
-  tokenOrdinal(send.timing, `${path}.timing`, SEND_TIMINGS);
   return { ...send };
 }
 
 function panFieldsToNative(out: Loose, path: string): void {
-  if (out.panMode !== undefined && out.panMode !== null) {
+  if (!isAbsent(out.panMode)) {
     tokenOrdinal(out.panMode, `${path}.panMode`, PAN_MODES);
   }
-  if (out.panLaw !== undefined && out.panLaw !== null) {
+  if (!isAbsent(out.panLaw)) {
     tokenOrdinal(out.panLaw, `${path}.panLaw`, PAN_LAWS);
   }
 }
 
 function listOf(value: unknown, path: string): unknown[] | undefined {
-  if (value === undefined || value === null) {
+  if (isAbsent(value)) {
     return undefined;
   }
   if (!Array.isArray(value)) {
@@ -75,7 +75,7 @@ function objectAt(value: unknown, path: string): Loose {
 
 /** Refuses an explicit 0 oversampling factor: omit the field for the library default. */
 export function assertStripMetering(metering: unknown, path = 'metering'): void {
-  if (metering === undefined || metering === null) {
+  if (isAbsent(metering)) {
     return;
   }
   const { truePeakOversample } = objectAt(metering, path);
@@ -84,8 +84,8 @@ export function assertStripMetering(metering: unknown, path = 'metering'): void 
   }
 }
 
-/** A strip entry of a scene document as the native document spells it. */
-function stripToNative(strip: unknown, path: string): Loose {
+/** The native scene document for a public strip, as the engine's per-strip setters read it. */
+export function mixSceneStripToNative(strip: MixSceneStripInput, path = 'strip'): Loose {
   const out: Loose = { ...objectAt(strip, path) };
   panFieldsToNative(out, path);
   assertStripMetering(out.metering, `${path}.metering`);
@@ -98,18 +98,9 @@ function stripToNative(strip: unknown, path: string): Loose {
   return out;
 }
 
-function busToNative(bus: unknown, path: string): Loose {
+/** The native scene document for a public bus, as the engine's per-bus setters read it. */
+export function mixSceneBusToNative(bus: MixSceneBusInput, path = 'bus'): Loose {
   const out: Loose = { ...objectAt(bus, path) };
   panFieldsToNative(out, path);
   return out;
-}
-
-/** The native scene document for a public strip, as the engine's per-strip setters read it. */
-export function mixSceneStripToNative(strip: MixSceneStripInput, path = 'strip'): Loose {
-  return stripToNative(strip, path);
-}
-
-/** The native scene document for a public bus, as the engine's per-bus setters read it. */
-export function mixSceneBusToNative(bus: MixSceneBusInput, path = 'bus'): Loose {
-  return busToNative(bus, path);
 }

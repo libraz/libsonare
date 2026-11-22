@@ -1,14 +1,14 @@
 import {
+  assertDeclaredKeys,
   entryClass,
   nameNativeError,
   refuse,
   refuseType,
-  refuseUnknownKey,
   withEntry,
 } from './internal/entry.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
-import { isNonArrayObject } from './internal/value_guards.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   RealtimeVoiceChangerConfig,
@@ -92,7 +92,7 @@ function assertFlatConfigFields(config: Record<string, unknown>): void {
  */
 function withRetuneGrain(config: Record<string, unknown>): Record<string, unknown> {
   const grain = config.retuneGrainSizeSamples;
-  if (grain === undefined || grain === null) {
+  if (isAbsent(grain)) {
     const { retuneGrainSizeSamples: _omitted, ...rest } = config;
     return rest;
   }
@@ -189,11 +189,7 @@ export class RealtimeVoiceChanger {
     if (!isNonArrayObject(options)) {
       throw refuseType(`options must be an object with a sampleRate`);
     }
-    for (const key of Object.keys(options)) {
-      if (!CONSTRUCTOR_KEYS.includes(key)) {
-        throw refuseUnknownKey(key, CONSTRUCTOR_KEYS);
-      }
-    }
+    assertDeclaredKeys(options, CONSTRUCTOR_KEYS, '');
     assertSampleRate(options.sampleRate);
     const maxBlockSize = options.maxBlockSize ?? undefined;
     const numChannels = options.numChannels;
@@ -466,7 +462,7 @@ export function realtimeVoiceChangerRender(
   return withEntry('realtimeVoiceChangerRender', () => {
     const fnName = 'realtimeVoiceChangerRender';
     const req = requestOnly<RealtimeVoiceChangerRenderRequest>(fnName, [request]);
-    if (req.sampleRate === undefined || req.sampleRate === null) {
+    if (isAbsent(req.sampleRate)) {
       throw refuseType(`sampleRate must be a number`);
     }
     assertAudioChannels(req.channels, req.sampleRate, req);
@@ -574,7 +570,7 @@ function assertRetuneConfig(config: StreamingRetuneConfig): StreamingRetuneConfi
   }
   assertKnownRequestKeys('StreamingRetune', config as Record<string, unknown>);
   const { grainSizeSamples, ...rest } = config as Record<string, unknown>;
-  if (grainSizeSamples === undefined || grainSizeSamples === null) {
+  if (isAbsent(grainSizeSamples)) {
     return rest;
   }
   assertRetuneGrain(grainSizeSamples, 'grainSizeSamples');

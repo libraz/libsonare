@@ -27,7 +27,7 @@ const FOREIGN = Symbol.for('libsonare.foreignError');
 type NamedError = Error & { [UNPREFIXED]?: string; [FOREIGN]?: true };
 
 /** Mark `error` as the caller's own, so no entry renames it on the way out. */
-export function markForeign(error: unknown): unknown {
+function markForeign(error: unknown): unknown {
   if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
     try {
       Object.defineProperty(error, FOREIGN, { value: true, configurable: true });
@@ -186,11 +186,6 @@ export function codedError(
   options?: { cause?: unknown },
 ): SonareError {
   return mark(new SonareError(code, text, options), text);
-}
-
-/** The bare text of a refusal, before any entry named itself on it; undefined for an unmarked error. */
-export function bareText(error: unknown): string | undefined {
-  return error instanceof Error ? (error as NamedError)[UNPREFIXED] : undefined;
 }
 
 /** Prefix an error a native call raised with its public entry name, marking it bare first. */

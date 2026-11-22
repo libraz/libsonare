@@ -1,6 +1,7 @@
-import { refuse, refuseType, refuseUnknownKey, withEntry } from './internal/entry.js';
+import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { panModeToNative } from './internal/mix_scene.js';
+import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   MixMeterSnapshot,
@@ -119,14 +120,10 @@ export function mixStereo(...args: unknown[]): MixResult {
     const options: Record<string, unknown[]> = {};
     req.strips.forEach((strip, index) => {
       const path = `strips[${index}]`;
-      if (strip === null || typeof strip !== 'object' || Array.isArray(strip)) {
+      if (!isNonArrayObject(strip)) {
         throw refuseType(`${path} must be an object`);
       }
-      for (const key of Object.keys(strip)) {
-        if (!(STRIP_KEYS as readonly string[]).includes(key)) {
-          throw refuseUnknownKey(`${path}.${key}`, STRIP_KEYS);
-        }
-      }
+      assertDeclaredKeys(strip, STRIP_KEYS, path);
       assertAudioInput(strip.left, req.sampleRate, req, `${path}.left`);
       assertAudioInput(strip.right, req.sampleRate, req, `${path}.right`);
       if (strip.left.length !== strip.right.length) {
@@ -141,10 +138,10 @@ export function mixStereo(...args: unknown[]): MixResult {
           given[key] = strip[key];
         }
       }
-      if (strip.panMode !== undefined && strip.panMode !== null) {
+      if (!isAbsent(strip.panMode)) {
         given.panMode = panModeToNative(strip.panMode, `${path}.panMode`);
       }
-      if (strip.muted !== undefined && strip.muted !== null) {
+      if (!isAbsent(strip.muted)) {
         given.muted = requireBoolean(strip.muted, `${path}.muted`);
       }
       for (const [key, value] of Object.entries(given)) {
