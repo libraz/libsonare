@@ -794,6 +794,41 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('reads a breakpoint curve from curveToNext alone at the embind layer', () => {
+    // The embind reader reads the keys it knows and nothing else, so a raw call
+    // spelling the field `curve` keeps the default curve instead of taking it.
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio' });
+      const native = (
+        project as unknown as {
+          native: { addAutomationLane: (trackId: number, desc: unknown) => number };
+        }
+      ).native;
+      native.addAutomationLane(trackId, {
+        targetParamId: 1,
+        points: [{ ppq: 0, value: 1, curve: 3 }],
+      });
+      native.addAutomationLane(trackId, {
+        targetParamId: 2,
+        points: [{ ppq: 0, value: 1, curveToNext: 3 }],
+      });
+      const doc = JSON.parse(project.toJson()) as {
+        tracks: Array<{
+          automationLanes: Array<{ targetParamId: number; points: Array<{ curveToNext: string }> }>;
+        }>;
+      };
+      const curveOf = (id: number) =>
+        doc.tracks[0].automationLanes.find((lane) => lane.targetParamId === id)?.points[0]
+          .curveToNext;
+      expect(curveOf(1)).toBe('linear');
+      expect(curveOf(2)).toBe('sCurve');
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('writes no target kind for a lane that omits it', () => {
     const { project, trackId } = buildAudioProject();
     try {

@@ -234,16 +234,9 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
     SonareAutomationPoint p{};
     p.ppq = doubleProperty(point, "ppq", 0.0);
     p.value = floatProperty(point, "value", 0.0f);
-    // 'curveToNext' is the Node engine's spelling of the same field and the
-    // Project types document it as an alias, so reading only 'curve' turned a
-    // breakpoint Node renders as an S-curve into a silent Linear here.
-    if (hasProperty(point, "curve")) {
-      p.curve_to_next = automationCurveFromVal(point["curve"]);
-    } else if (hasProperty(point, "curveToNext")) {
-      p.curve_to_next = automationCurveFromVal(point["curveToNext"]);
-    } else {
-      p.curve_to_next = SONARE_CURVE_LINEAR;
-    }
+    p.curve_to_next = hasProperty(point, "curveToNext")
+                          ? automationCurveFromVal(point["curveToNext"])
+                          : SONARE_CURVE_LINEAR;
     out.push_back(p);
   }
   return out;
