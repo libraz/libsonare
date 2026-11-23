@@ -749,7 +749,7 @@ describe('RealtimeEngine native binding', () => {
 
   it('applies master strip JSON after lane mix', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
-    const frames = 256 * 16;
+    const frames = 256 * 64;
     engine.setClips([
       {
         id: 1,
@@ -798,8 +798,11 @@ describe('RealtimeEngine native binding', () => {
     expect(processed[0].at(-1)).toBeCloseTo(2 * 10 ** (-12 / 20), 3);
     engine.setParameter(0x4d58ff01, -24, undefined, { smoothed: true });
     engine.setParameter(0x4d58ff02, 0.25);
-    let attenuated = processed;
-    for (let block = 0; block < 8; block += 1) {
+    // A first smoothed set ramps from the -12 dB the fader holds rather than stepping.
+    let attenuated = engine.process([new Float32Array(256)]);
+    expect(attenuated[0][0]).toBeCloseTo(2 * 10 ** (-12 / 20), 2);
+    expect(attenuated[0].at(-1)).toBeGreaterThan(2 * 10 ** (-24 / 20) * 2);
+    for (let block = 0; block < 40; block += 1) {
       attenuated = engine.process([new Float32Array(256)]);
     }
     // 2 * 10^(-24/20) * sqrt((0.75^2 + 1) / 2): the linear law at pan 0.25 against its centre.

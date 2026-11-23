@@ -385,7 +385,8 @@ export interface EngineTransportState {
 /** Options for {@link RealtimeEngine.setParameter}. */
 export interface EngineSetParameterOptions {
   /**
-   * Ramp to the value over the engine smoothing time instead of stepping. Default `false`. A
+   * Ramp to the value over the engine smoothing time, from the value the target holds, instead
+   * of stepping. Default `false`. A
    * reserved target (fader, pan, width, insert or instrument parameter) de-zippers every change
    * over its fixed 5 ms either way, and under a ramp the two cascade.
    */

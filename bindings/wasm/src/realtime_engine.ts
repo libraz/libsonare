@@ -602,8 +602,9 @@ export class RealtimeEngine {
    * A non-boolean `smoothed` or an unknown key is a `TypeError`.
    *
    * @param options - `smoothed: true` ramps to the value over the engine smoothing time
-   *   ({@link setParamSmoothingMs}); the ramp's target (not its in-flight position) becomes the
-   *   base value. Default `false`.
+   *   ({@link setParamSmoothingMs}), starting from the value the target holds, so a first set
+   *   glides too; the ramp's target (not its in-flight position) becomes the base value. Default
+   *   `false`.
    *
    * Without `smoothed` the change is a step; a reserved target — fader, pan, width, insert or
    * instrument parameter — de-zippers every change over its fixed 5 ms. On a reserved target a
