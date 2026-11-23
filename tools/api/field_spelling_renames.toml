@@ -13,6 +13,7 @@ mel = "power"
 num_channels = "channels"
 in = ["planes", "samples"]
 in_channels = "numChannels"
+amplitude_envelope = "edit.amplitudeEnvelope"
 param_name = ["kind", "param.name"]
 base_sample_offset = "startSample"
 sample_offset = "startSample"
@@ -47,6 +48,7 @@ mel = "power"
 num_channels = "channels"
 in = ["planes", "samples"]
 in_channels = "numChannels"
+amplitude_envelope = "edit.amplitudeEnvelope"
 param_name = ["kind", "param.name"]
 base_sample_offset = "startSample"
 sample_offset = "startSample"
@@ -76,6 +78,7 @@ source_kind = "source.kind"
 offset_samples = "recordOffsetSamples"
 
 [python]
+amplitude_envelope = "edit.amplitude_envelope"
 source_id = "source.id"
 source_track_id = "source.id"
 source_kind = "source.kind"

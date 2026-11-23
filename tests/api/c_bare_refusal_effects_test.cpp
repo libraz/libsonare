@@ -170,7 +170,8 @@ TEST_CASE("polyphonic accessors refuse a note or out past what they hold by name
   if (note_count > 0) {
     CHECK(sonare_polyphonic_set_note_edit(analysis, 0, nullptr, nullptr, 2) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "envelope must not be NULL when envelope_count is not 0");
+    CHECK(last_message() ==
+          "amplitude_envelope must not be NULL when amplitude_envelope_count is not 0");
     size_t frames = 0;
     if (sonare_polyphonic_note_f0(analysis, 0, nullptr, 0, &frames) == SONARE_OK && frames > 0) {
       CHECK(sonare_polyphonic_note_f0(analysis, 0, nullptr, 4, &written) ==

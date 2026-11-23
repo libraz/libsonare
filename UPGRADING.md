@@ -451,6 +451,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_pitch_yin` | drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na |
+| `sonare_polyphonic_set_note_edit(envelope)` | `sonare_polyphonic_set_note_edit(amplitude_envelope)` |
+| `sonare_polyphonic_set_note_edit(envelope_count)` | `sonare_polyphonic_set_note_edit(amplitude_envelope_count)` |
 
 ### C: Effects, separation, repair and room acoustics
 

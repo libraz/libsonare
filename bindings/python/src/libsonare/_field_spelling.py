@@ -82,6 +82,7 @@ OVERRIDES: dict[tuple[str, str], str] = {
     ("plp", "bpm_min"): "tempo_min",
     ("plp", "sample_rate"): "sr",
     ("poly_features", "sample_rate"): "sr",
+    ("polyphonic_set_note_edit", "amplitude_envelope"): "edit.amplitude_envelope",
     ("project_add_clip", "audio_interleaved"): "audio",
     ("project_add_loop_recording_takes", "audio_interleaved"): "audio",
     ("project_import_clip_file", "bytes"): "data",

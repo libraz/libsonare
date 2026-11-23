@@ -318,13 +318,14 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
 }
 
 SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, size_t note,
-                                            const SonareNoteEdit* edit, const float* envelope,
-                                            size_t envelope_count) {
+                                            const SonareNoteEdit* edit,
+                                            const float* amplitude_envelope,
+                                            size_t amplitude_envelope_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(analysis);
   if (const SonareError err = check_note(analysis, note); err != SONARE_OK) return err;
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(envelope, envelope_count);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(amplitude_envelope, amplitude_envelope_count);
 
   SONARE_C_TRY
   sonare::editing::note_model::NoteEdit replacement;
@@ -347,15 +348,16 @@ SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, 
     replacement.vibrato_depth_change = edit->vibrato_depth_change;
     replacement.drift_change = edit->drift_change;
   }
-  replacement.amplitude_envelope.assign(envelope, envelope + envelope_count);
+  replacement.amplitude_envelope.assign(amplitude_envelope,
+                                        amplitude_envelope + amplitude_envelope_count);
   // Whatever the render rejects about an edit it rejects on the way out, so a
   // field is not checked twice here and a refusal names one place.
   analysis->analysis.notes[note].edit = std::move(replacement);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, note, edit, envelope,
-                                envelope_count);
+  return refuse_not_compiled_in(Feature::kPitchEditor, analysis, note, edit, amplitude_envelope,
+                                amplitude_envelope_count);
 #endif
 }
 

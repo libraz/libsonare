@@ -11,7 +11,6 @@
 [pending]
 "playback_render_interleaved.document" = "document root: node config, python config, wasm config, once src/playback/config.cpp raises structured refusals"
 "playback_renderer_set_config_json.document" = "document root: node config, python config, wasm config, once src/playback/config.cpp raises structured refusals"
-"polyphonic_set_note_edit.envelope" = "rename: node amplitudeEnvelope, python amplitude_envelope, wasm amplitudeEnvelope"
 
 [unclassified]
 node = 0

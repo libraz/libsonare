@@ -3299,6 +3299,20 @@ test = "tests/api/sonare_c_polyphony_test.cpp::the polyphonic handle reports wha
 
 [[entry]]
 kind = "option"
+old = "sonare_polyphonic_set_note_edit(envelope)"
+new = "sonare_polyphonic_set_note_edit(amplitude_envelope)"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "sonare_polyphonic_set_note_edit(envelope_count)"
+new = "sonare_polyphonic_set_note_edit(amplitude_envelope_count)"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "option"
 old = "sonare_pseudo_cqt(hop_length)"
 changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
 domain = "analysis"

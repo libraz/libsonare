@@ -248,17 +248,18 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
 /// @param note Index below @ref sonare_polyphonic_note_count.
 /// @param edit The new edit, or NULL for the identity edit; otherwise started from
 ///        @ref sonare_note_edit_init. Its @c envelope_offset
-///        and @c envelope_count are ignored: the envelope is @p envelope here, which
+///        and @c envelope_count are ignored: the envelope is @p amplitude_envelope here, which
 ///        the handle copies, so the caller's array need not outlive this call.
-/// @param envelope Per-frame linear gain points over the note's span, on top of
+/// @param amplitude_envelope Per-frame linear gain points over the note's span, on top of
 ///        @c gain_db, or NULL for none. Stretched over whatever length the note
 ///        renders at, so it survives a time stretch and need not match the note's
 ///        frame count; one entry is a constant gain. Every value must be finite and
 ///        non-negative.
-/// @param envelope_count Number of points, or 0 for no envelope.
+/// @param amplitude_envelope_count Number of points, or 0 for no envelope.
 SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, size_t note,
-                                            const SonareNoteEdit* edit, const float* envelope,
-                                            size_t envelope_count);
+                                            const SonareNoteEdit* edit,
+                                            const float* amplitude_envelope,
+                                            size_t amplitude_envelope_count);
 
 /// @brief Per-frame voice count, before tracking dropped anything.
 /// @details What the estimation saw rather than what survived: a frame reported as
