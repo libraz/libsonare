@@ -431,8 +431,6 @@ def detect_onsets(
         return _from_c_float_array(out_times, count)
 
 
-_UNKNOWN_QUALITY_ORDINAL: int = CHORD_QUALITIES.index("unknown")
-
 _BPM_RELATIONS = frozenset({"primary", "half", "double", "other"})
 
 

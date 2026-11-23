@@ -437,3 +437,12 @@ def test_parse_analysis_json_refuses_an_unmirrored_bpm_relation() -> None:
     candidate = {"bpm": 120.0, "confidence": 0.9, "relation": "triple"}
     with pytest.raises(SonareValueError, match="triple"):
         _parse_analysis_json(_payload(bpmCandidates=[candidate]))
+
+
+def test_a_streamed_chord_quality_outside_the_mirror_is_refused() -> None:
+    from libsonare import CHORD_QUALITIES, SonareValueError
+    from libsonare.streaming import _chord_change
+
+    assert _chord_change(0, CHORD_QUALITIES.index("unknown"), 0.0, 0.5).quality == "unknown"
+    with pytest.raises(SonareValueError, match="ordinal: 99"):
+        _chord_change(0, 99, 0.0, 0.5)
