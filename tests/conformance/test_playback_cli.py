@@ -44,8 +44,8 @@ _NATIVE_CLI_BUILD = "cmake --build build --target sonare"
 def _native_cli() -> Path | None:
     """Locate the native sonare-cli binary this run should exercise.
 
-    `SONARE_NATIVE_CLI` names it explicitly (a private `-B` build directory, per
-    AGENT.md's rule against building into `build/` at the repo root). Otherwise
+    `SONARE_NATIVE_CLI` names it explicitly (a private `-B` build directory, so
+    the shared `build/` at the repo root is left alone). Otherwise
     the binary beside the library `SONARE_LIB_PATH` names is used, so both front
     ends come from one build; a couple of conventional build directories are the
     fallback for a plain in-tree build.
