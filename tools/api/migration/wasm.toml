@@ -15594,6 +15594,7 @@ rule = "engine-vocabulary"
 kind = "method"
 old = "RealtimeEngine.setInputMonitor"
 changed = "takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back"
+test = "bindings/wasm/tests/engine-input-track.test.ts::round-trips the reader through the setter"
 domain = "engine"
 rule = "engine-vocabulary"
 
@@ -27026,6 +27027,14 @@ old = "CaptureOptions.bufferFrames"
 new = "CaptureOptions.capacityFrames"
 domain = "engine"
 rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "CaptureOptions.inputMonitor"
+removed = "Call setInputMonitor({ enabled, gain? }) on the engine; configureCapture leaves the monitor alone."
+domain = "engine"
+rule = "engine-vocabulary"
 entry = "./worklet"
 
 [[entry]]

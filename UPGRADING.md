@@ -3437,9 +3437,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_capture_punch(start_sample)` | removed: set CapturePunch(start_sample=...) and pass it as configure_capture(..., punch=...) |
 | `RealtimeEngine.set_capture_punch(start_sec)` | removed: set CapturePunch(start_sec=...) and pass it as configure_capture(..., punch=...) |
 | `RealtimeEngine.set_capture_punch` | `RealtimeEngine.configure_capture`: configure_capture(..., punch=CapturePunch(...)) sets the whole capture setup; each bound is exactly one of *_ppq, *_sample or *_sec, and an omitted punch (not enabled=False) leaves capture ungated |
-| `RealtimeEngine.set_input_monitor(enabled)` | removed: pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) |
-| `RealtimeEngine.set_input_monitor(gain)` | removed: pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) |
-| `RealtimeEngine.set_input_monitor` | `RealtimeEngine.configure_capture`: configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) sets the whole capture setup; an omitted monitor is enabled at gain 1 |
 | `RealtimeEngine.set_parameter_smoothed` | removed: call RealtimeEngine.set_parameter(param_id, value, render_frame, smoothed=True) |
 | `RealtimeEngine.set_record_offset_samples(offset_samples)` | removed: pass configure_capture(..., record_offset_samples=...) |
 | `RealtimeEngine.set_record_offset_samples` | `RealtimeEngine.configure_capture`: configure_capture(..., record_offset_samples=...) sets the whole capture setup; an omitted offset is 0 |
@@ -3557,6 +3554,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_bus_strip_eq_band_json` | removed: call set_bus_eq_band(bus_id, band_index, band) with an EqBandInput mapping (json.loads the text first) |
 | `RealtimeEngine.set_bus_strip_json(scene_json)` | removed: set_bus_strip(bus_id, settings) takes one MixSceneBusInput mapping as settings |
 | `RealtimeEngine.set_bus_strip_json` | `RealtimeEngine.set_bus_strip`: set_bus_strip(bus_id, settings) takes one MixSceneBusInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its buses[0]); a key or value refused inside settings is SonareValueError naming settings.<path>, where 1.x raised SonareError [2] naming buses[0].<path> |
+| `RealtimeEngine.set_input_monitor(enabled)` | removed: pass set_input_monitor(EngineInputMonitorInput(enabled, gain=1.0)) |
+| `RealtimeEngine.set_input_monitor(gain)` | removed: pass set_input_monitor(EngineInputMonitorInput(enabled, gain=1.0)) |
+| `RealtimeEngine.set_input_monitor` | set_input_monitor(monitor) takes an EngineInputMonitor or EngineInputMonitorInput(enabled, gain=1.0) in place of the enabled and gain arguments; input_monitor() reads the same record back |
 | `RealtimeEngine.set_master_strip_eq_band(band)` | `RealtimeEngine.set_strip_eq_band(band)`: takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first |
 | `RealtimeEngine.set_master_strip_eq_band_json` | removed: call set_strip_eq_band('master', band_index, band) with an EqBandInput mapping (json.loads the text first) |
 | `RealtimeEngine.set_master_strip_json(scene_json)` | removed: set_strip('master', settings) takes one MixSceneStripInput mapping as settings |
@@ -6920,10 +6920,10 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
 | `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused |
-| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch. |
+| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. |
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
-| `RealtimeEngine.setInputMonitor` | removed: Call configureCapture({ capacityFrames, inputMonitor: { enabled, gain? } }); the call states the whole capture setup. |
+| `RealtimeEngine.setInputMonitor` | takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back |
 | `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored markers in the order given (was void) |
 | `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. |
 | `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); the destination id leads (absent or null is destination 0) and config.destinationId is refused |
@@ -12320,20 +12320,21 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `CaptureOptions.inputMonitor` (`./worklet`) | removed: Call setInputMonitor({ enabled, gain? }) on the engine; configureCapture leaves the monitor alone. |
 | `EngineTelemetry.graphLatencySamplesQ8` | `EngineTelemetry.graphLatencySamples` |
 | `EngineTransportState.barCount` | `EngineTransportState.barIndex` |
 | `RealtimeEngine.graphLatencySamplesQ8` | `RealtimeEngine.graphLatencySamples` |
 | `RealtimeEngine.setBuiltinInstrument` | setBuiltinInstrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
-| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch. |
+| `RealtimeEngine.setCaptureBuffer` | removed: Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch. |
 | `RealtimeEngine.setCapturePunch` | removed: Call configureCapture({ capacityFrames, punch: { startSample, endSample } }); startSec/endSec or startPpq/endPpq work too, and omitting punch clears the window. |
 | `RealtimeEngine.setCaptureSource` | removed: Call configureCapture({ capacityFrames, source }) with source 'output' or 'input'; the call states the whole capture setup. |
-| `RealtimeEngine.setInputMonitor` | removed: Call configureCapture({ capacityFrames, inputMonitor: { enabled, gain? } }); the call states the whole capture setup. |
+| `RealtimeEngine.setInputMonitor` | takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back |
 | `RealtimeEngine.setMarkers` | an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given |
 | `RealtimeEngine.setRecordOffsetSamples` | removed: Call configureCapture({ capacityFrames, recordOffsetSamples }); the call states the whole capture setup. |
 | `RealtimeEngine.setSf2Instrument` | setSf2Instrument(destinationId?, config?); absent or null is destination 0; config.destinationId is refused |
 | `RealtimeEngine.setSynthInstrument` | setSynthInstrument(destinationId?, patch?); absent or null is destination 0; patch is a SynthPatch object only; a preset-name string is a TypeError (name the preset with { preset }) |
 | `SonareEngine.armRecord` (`./worklet`) | removed: Call armCapture({ armed }); capture is engine-global, and per-track record arming does not exist. |
-| `SonareEngine.configureCapture` (`./worklet`) | takes CaptureOptions { capacityFrames, numChannels?, source?, recordOffsetSamples?, inputMonitor?, punch? }; the call states the whole setup |
+| `SonareEngine.configureCapture` (`./worklet`) | takes CaptureOptions { capacityFrames, numChannels?, source?, recordOffsetSamples?, punch? }; the call states the whole setup, and the input monitor is set apart with setInputMonitor({ enabled, gain? }) |
 | `SonareEngine.graphLatencySamplesQ8` (`./worklet`) | `SonareEngine.graphLatencySamples` |
 | `SonareEngine.punch` (`./worklet`) | removed: Call configureCapture({ capacityFrames, punch: { startPpq, endPpq } }); omitting punch clears the window. |
 | `SonareEngine.resetMasterLoudnessMeter` (`./worklet`) | returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false |
