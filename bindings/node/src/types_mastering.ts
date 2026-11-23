@@ -13552,6 +13552,18 @@ export interface MasteringResult {
    * ```
    */
   nonFiniteSubstitutionCount: number;
+  /**
+   * Clipped runs a declip stage left as they were because they are longer than it
+   * reconstructs, summed over the channels. Absent when no declip stage ran.
+   */
+  declipUnreconstructedRuns?: number;
+  /**
+   * Samples whose value before quantization and dither lies past full scale
+   * (|x| > 1), summed over the channels; 0 when none clipped. Set by the processors
+   * that quantize (bit depth, dither, output chain). Absent when the named processor
+   * did not quantize, including a dither of type `none`.
+   */
+  quantizeClippedSamples?: number;
 }
 
 /**
@@ -13599,6 +13611,18 @@ export interface MasteringStereoResult {
    * channels.
    */
   nonFiniteSubstitutionCount: number;
+  /**
+   * Clipped runs a declip stage left as they were because they are longer than it
+   * reconstructs, summed over the channels. Absent when no declip stage ran.
+   */
+  declipUnreconstructedRuns?: number;
+  /**
+   * Samples whose value before quantization and dither lies past full scale
+   * (|x| > 1), summed over the channels; 0 when none clipped. Set by the processors
+   * that quantize (bit depth, dither, output chain). Absent when the named processor
+   * did not quantize, including a dither of type `none`.
+   */
+  quantizeClippedSamples?: number;
 }
 
 /**
@@ -14254,6 +14278,12 @@ export interface MasteringChainResult {
    * ```
    */
   nonFiniteSubstitutionCount: number;
+  /**
+   * Clipped runs the chain's declip stage left as they were because they are longer
+   * than it reconstructs, summed over the channels. Absent when the chain ran no
+   * declip stage.
+   */
+  declipUnreconstructedRuns?: number;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
   /** Before/after measurements of the run. */
@@ -14292,6 +14322,12 @@ export interface MasteringChainStereoResult {
   loudnessTargetLimited: boolean;
   /** See {@link MasteringChainResult} for field semantics. Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
+  /**
+   * Clipped runs the chain's declip stage left as they were because they are longer
+   * than it reconstructs, summed over the channels. Absent when the chain ran no
+   * declip stage.
+   */
+  declipUnreconstructedRuns?: number;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
   /** Before/after measurements of the run. */

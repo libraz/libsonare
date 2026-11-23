@@ -864,6 +864,10 @@ export interface WasmMasteringResult {
    * with, not because nothing needed replacing.
    */
   nonFiniteSubstitutionCount: number;
+  /** Present only when a declip stage ran. */
+  declipUnreconstructedRuns?: number;
+  /** Present only when a quantizing stage ran. */
+  quantizeClippedSamples?: number;
 }
 
 export interface WasmStreamingLoudnessGainResult {
@@ -929,6 +933,8 @@ export interface WasmMasteringChainResult extends WasmMasteringResult {
    * which describes a single named processor rather than a chain.
    */
   nonFiniteSubstitutionCount: number;
+  /** Present only when a declip stage ran. */
+  declipUnreconstructedRuns?: number;
   stageGainReductions: WasmStageGainReduction[];
   report: WasmMasteringReport;
 }
@@ -947,6 +953,8 @@ export interface WasmMasteringStereoChainResult {
   loudnessGainDb?: number;
   /** See {@link WasmMasteringChainResult} for field semantics. Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
+  /** Present only when a declip stage ran. */
+  declipUnreconstructedRuns?: number;
   stageGainReductions: WasmStageGainReduction[];
   report: WasmMasteringReport;
 }
@@ -962,6 +970,10 @@ export interface WasmMasteringStereoResult {
   loudnessTargetLimited: boolean;
   /** Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
+  /** Present only when a declip stage ran. */
+  declipUnreconstructedRuns?: number;
+  /** Present only when a quantizing stage ran. */
+  quantizeClippedSamples?: number;
 }
 
 export interface WasmMixMeterSnapshot {
@@ -1341,6 +1353,8 @@ export interface WasmEngineBounceResult {
   numChannels: number;
   sampleRate: number;
   integratedLufs: number;
+  /** Present only when the bounce dithered. */
+  quantizeClippedSamples?: number;
 }
 
 export interface WasmEngineFreezeOptions {

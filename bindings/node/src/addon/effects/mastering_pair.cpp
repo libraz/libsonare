@@ -74,6 +74,10 @@ Napi::Object MasteringStereoResultToObject(Napi::Env env,
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited != 0));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, result.non_finite_substitution_count));
+  SetOptionalCount(out, "declipUnreconstructedRuns", result.has_declip_unreconstructed_runs,
+                   result.declip_unreconstructed_runs);
+  SetOptionalCount(out, "quantizeClippedSamples", result.has_quantize_clipped_samples,
+                   result.quantize_clipped_samples);
   return out;
 }
 
@@ -245,6 +249,8 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, result.non_finite_substitution_count));
+  SetOptionalCount(out, "declipUnreconstructedRuns", result.declip_unreconstructed_runs);
+  SetOptionalCount(out, "quantizeClippedSamples", result.quantize_clipped_samples);
   return out;
   SONARE_NODE_CATCH(env)
 }

@@ -164,6 +164,11 @@ val vectorToInt32Array(const std::vector<int>& vec);
 inline void setMeasured(val& out, const char* key, double value) {
   if (!std::isnan(value)) out.set(key, value);
 }
+/// Sets @p key to @p value only when a count was produced: a stage that did not run leaves the
+/// member absent, while a run that counted nothing sets 0.
+inline void setOptionalCount(val& out, const char* key, const std::optional<std::size_t>& value) {
+  if (value) out.set(key, static_cast<double>(*value));
+}
 /// Sets @p key to a Float32Array of @p values, taken by a measurement of @p count elements, unless
 /// none was measured (empty or every element NaN): an array not measured as a whole is an absent
 /// member, while a measured one keeps its length, with NaN for each element that was not measured.

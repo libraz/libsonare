@@ -70,6 +70,7 @@ void SetChainMetrics(Napi::Env env, Napi::Object out, const Result& metrics) {
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, metrics.loudness_target_limited));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, metrics.non_finite_substitution_count));
+  SetOptionalCount(out, "declipUnreconstructedRuns", metrics.declip_unreconstructed_runs);
   Napi::Array reductions = Napi::Array::New(env, metrics.stage_gain_reductions.size());
   for (size_t i = 0; i < metrics.stage_gain_reductions.size(); ++i) {
     Napi::Object entry = Napi::Object::New(env);
@@ -262,6 +263,8 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, result.non_finite_substitution_count));
+  SetOptionalCount(out, "declipUnreconstructedRuns", result.declip_unreconstructed_runs);
+  SetOptionalCount(out, "quantizeClippedSamples", result.quantize_clipped_samples);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -320,6 +323,8 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, result.non_finite_substitution_count));
+  SetOptionalCount(out, "declipUnreconstructedRuns", result.declip_unreconstructed_runs);
+  SetOptionalCount(out, "quantizeClippedSamples", result.quantize_clipped_samples);
   return out;
   SONARE_NODE_CATCH(env)
 }

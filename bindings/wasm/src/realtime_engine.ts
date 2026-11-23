@@ -2726,6 +2726,9 @@ export class RealtimeEngine {
       channels: deinterleavePlanes(result.interleaved, result.numChannels),
       sampleRate: result.sampleRate,
       integratedLufs: result.integratedLufs,
+      ...(result.quantizeClippedSamples === undefined
+        ? {}
+        : { quantizeClippedSamples: result.quantizeClippedSamples }),
     };
   }
 

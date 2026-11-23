@@ -51,6 +51,7 @@ inline void setChainMetrics(emscripten::val& out, const Result& metrics) {
   out.set("loudnessTargetLimited", metrics.loudness_target_limited);
   setMeasured(out, "loudnessGainDb", metrics.loudness_gain_db);
   out.set("nonFiniteSubstitutionCount", static_cast<double>(metrics.non_finite_substitution_count));
+  setOptionalCount(out, "declipUnreconstructedRuns", metrics.declip_unreconstructed_runs);
   emscripten::val reductions = emscripten::val::array();
   for (const auto& reduction : metrics.stage_gain_reductions) {
     emscripten::val entry = emscripten::val::object();

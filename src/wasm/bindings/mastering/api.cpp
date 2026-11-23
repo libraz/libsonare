@@ -314,6 +314,8 @@ val js_mastering_process(std::string processor_name, val samples, const val& sam
   out.set("latencySamples", result.latency_samples);
   out.set("loudnessTargetLimited", result.loudness_target_limited);
   out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
+  setOptionalCount(out, "declipUnreconstructedRuns", result.declip_unreconstructed_runs);
+  setOptionalCount(out, "quantizeClippedSamples", result.quantize_clipped_samples);
   return out;
 }
 
@@ -341,6 +343,8 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
   out.set("latencySamples", result.latency_samples);
   out.set("loudnessTargetLimited", result.loudness_target_limited);
   out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
+  setOptionalCount(out, "declipUnreconstructedRuns", result.declip_unreconstructed_runs);
+  setOptionalCount(out, "quantizeClippedSamples", result.quantize_clipped_samples);
   return out;
 }
 
@@ -369,6 +373,8 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
   out.set("appliedGainDb", result.applied_gain_db);
   out.set("latencySamples", result.latency_samples);
   out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
+  setOptionalCount(out, "declipUnreconstructedRuns", result.declip_unreconstructed_runs);
+  setOptionalCount(out, "quantizeClippedSamples", result.quantize_clipped_samples);
   return out;
 }
 
@@ -415,6 +421,8 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
   out.set("latencySamples", result.latency_samples);
   out.set("loudnessTargetLimited", result.loudness_target_limited);
   out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
+  setOptionalCount(out, "declipUnreconstructedRuns", result.declip_unreconstructed_runs);
+  setOptionalCount(out, "quantizeClippedSamples", result.quantize_clipped_samples);
   return out;
 }
 

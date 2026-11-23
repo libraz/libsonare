@@ -344,6 +344,8 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   const int num_channels = result.num_channels;
   const int sample_rate = result.sample_rate;
   const float integrated_lufs = result.integrated_lufs;
+  const int has_quantize_clipped_samples = result.has_quantize_clipped_samples;
+  const size_t quantize_clipped_samples = result.quantize_clipped_samples;
   sonare_free_engine_bounce_result(&result);
   Napi::Object out = Napi::Object::New(env);
   out.Set("interleaved", interleaved);
@@ -351,6 +353,8 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   out.Set("numChannels", Napi::Number::New(env, num_channels));
   out.Set("sampleRate", Napi::Number::New(env, sample_rate));
   out.Set("integratedLufs", Napi::Number::New(env, integrated_lufs));
+  sonare_node::SetOptionalCount(out, "quantizeClippedSamples", has_quantize_clipped_samples,
+                                quantize_clipped_samples);
   return out;
   SONARE_NODE_CATCH(env)
 }

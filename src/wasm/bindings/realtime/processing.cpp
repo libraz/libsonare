@@ -468,6 +468,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
                                             target_lufs);
   }
 
+  std::optional<std::size_t> quantize_clipped_samples;
   if (dither != 0) {
     mastering::final::DitherConfig config{};
     config.type = ditherTypeFromInt(dither);
@@ -478,6 +479,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
         static_cast<size_t>(num_channels), config, &quantize_report);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
+    quantize_clipped_samples = quantize_report.clipped_samples;
   }
 
   const auto loudness =
@@ -488,6 +490,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   out.set("numChannels", num_channels);
   out.set("sampleRate", target_sample_rate);
   out.set("integratedLufs", loudness.integrated_lufs);
+  setOptionalCount(out, "quantizeClippedSamples", quantize_clipped_samples);
   return out;
 }
 

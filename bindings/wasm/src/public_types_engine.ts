@@ -433,6 +433,12 @@ export interface EngineBounceResult {
    * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
    */
   integratedLufs: number;
+  /**
+   * Samples whose value before quantization and dither lies past full scale
+   * (|x| > 1), summed over the channels; 0 when none clipped. Absent when the bounce
+   * did not dither (`dither` omitted).
+   */
+  quantizeClippedSamples?: number;
 }
 
 /** Settings for {@link RealtimeEngine.freezeOffline}. */

@@ -317,6 +317,18 @@ inline void SetMeasured(Napi::Object& out, const char* key, double value) {
   if (!std::isnan(value)) out.Set(key, Napi::Number::New(out.Env(), value));
 }
 
+/// @brief Sets @p key to @p value only when a count was produced: a stage that did not run leaves
+///        the member absent, while a run that counted nothing sets 0.
+inline void SetOptionalCount(Napi::Object& out, const char* key,
+                             const std::optional<std::size_t>& value) {
+  if (value) out.Set(key, Napi::Number::New(out.Env(), static_cast<double>(*value)));
+}
+
+/// @brief The C-struct form of SetOptionalCount: @p present is the struct's @c has_ flag.
+inline void SetOptionalCount(Napi::Object& out, const char* key, int present, size_t value) {
+  if (present != 0) out.Set(key, Napi::Number::New(out.Env(), static_cast<double>(value)));
+}
+
 /// @brief The single-number counterpart of SetMeasured: NaN (not measured) is undefined.
 inline Napi::Value MeasuredNumber(Napi::Env env, double value) {
   return std::isnan(value) ? env.Undefined() : Napi::Number::New(env, value);
