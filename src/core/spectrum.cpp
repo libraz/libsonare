@@ -43,11 +43,7 @@ void fill_power_cache(const std::vector<std::complex<float>>& data, const std::v
                       std::vector<float>& power) {
   power.resize(data.size());
   // re² + im² without sqrt (auto-vectorized by the compiler, on par with Eigen).
-  for (size_t i = 0; i < data.size(); ++i) {
-    const float re = data[i].real();
-    const float im = data[i].imag();
-    power[i] = re * re + im * im;
-  }
+  for (size_t i = 0; i < data.size(); ++i) power[i] = power_of(data[i]);
 }
 
 }  // namespace detail
@@ -565,22 +561,28 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   int trim_start = center_ ? n_fft_ / 2 : 0;
   int trim_end = center_ ? full_length - n_fft_ / 2 : full_length;
 
+  // The trimmed signal is moved to the front of the output in place rather than copied out, so
+  // a full-track reconstruction never holds two signal-length buffers at once.
+  std::vector<float>().swap(window_sum);
   if (length > 0) {
-    std::vector<float> trimmed(static_cast<size_t>(length), 0.0f);
-    if (trim_start < full_length) {
-      int available = std::min(length, full_length - trim_start);
-      if (available > 0) {
-        std::copy(output.begin() + trim_start, output.begin() + trim_start + available,
-                  trimmed.begin());
-      }
+    const int available = trim_start < full_length ? std::min(length, full_length - trim_start) : 0;
+    if (available > 0 && trim_start > 0) {
+      std::copy(output.begin() + trim_start, output.begin() + trim_start + available,
+                output.begin());
     }
-    return Audio::from_vector(std::move(trimmed), sample_rate_);
+    output.resize(static_cast<size_t>(std::max(available, 0)));
+    output.resize(static_cast<size_t>(length), 0.0f);
+    // A length far below the reconstruction would otherwise keep the whole buffer alive.
+    if (output.capacity() > 2 * output.size()) output.shrink_to_fit();
+    return Audio::from_vector(std::move(output), sample_rate_);
   }
 
   if (trim_start < trim_end && trim_start < full_length) {
-    std::vector<float> trimmed(output.begin() + trim_start,
-                               output.begin() + std::min(trim_end, full_length));
-    return Audio::from_vector(std::move(trimmed), sample_rate_);
+    const int end = std::min(trim_end, full_length);
+    if (trim_start > 0)
+      std::copy(output.begin() + trim_start, output.begin() + end, output.begin());
+    output.resize(static_cast<size_t>(end - trim_start));
+    return Audio::from_vector(std::move(output), sample_rate_);
   }
 
   // Centered reconstruction whose valid region is empty (e.g. a single frame

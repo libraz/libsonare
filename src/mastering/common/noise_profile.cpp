@@ -130,7 +130,6 @@ LinkedSpectra LinkedSpectra::compute(const Audio* const* channels, std::size_t c
 
   LinkedSpectra linked;
   linked.spectra_.reserve(channel_count);
-  std::vector<float> channel_power;
   for (size_t c = 0; c < channel_count; ++c) {
     Spectrogram spectrum = Spectrogram::compute(*channels[c], config);
     if (c == 0) {
@@ -148,23 +147,14 @@ LinkedSpectra LinkedSpectra::compute(const Audio* const* channels, std::size_t c
       linked.window_ = spectrum.window();
     }
     linked.spectra_.push_back(std::move(spectrum).release_complex());
-    // The same power the spectrogram would cache, summed and dropped rather than kept per channel.
-    detail::fill_power_cache(linked.spectra_.back(), {}, channel_power);
-    if (c == 0) linked.summed_power_.assign(channel_power.size(), 0.0f);
-    for (size_t i = 0; i < channel_power.size(); ++i) linked.summed_power_[i] += channel_power[i];
+  }
+  // Summed once every spectrum exists, so no analysis runs beside it; channel order is kept, and
+  // each bin's power is added straight in rather than through a per-channel copy.
+  linked.summed_power_.assign(linked.spectra_.front().size(), 0.0f);
+  for (const std::vector<std::complex<float>>& added : linked.spectra_) {
+    for (size_t i = 0; i < added.size(); ++i) linked.summed_power_[i] += detail::power_of(added[i]);
   }
   return linked;
-}
-
-std::vector<std::vector<std::complex<float>>> LinkedSpectra::take_masked(const double* gains) {
-  if (empty() || gains == nullptr) return {};
-  for (std::vector<std::complex<float>>& channel : spectra_) {
-    for (size_t i = 0; i < channel.size(); ++i) {
-      channel[i] = {static_cast<float>(channel[i].real() * gains[i]),
-                    static_cast<float>(channel[i].imag() * gains[i])};
-    }
-  }
-  return std::move(spectra_);
 }
 
 std::vector<Audio> LinkedSpectra::resynthesize(

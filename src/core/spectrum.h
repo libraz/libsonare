@@ -33,6 +33,13 @@ namespace detail {
 void fill_magnitude_cache(const std::vector<std::complex<float>>& data, const std::vector<float>&,
                           std::vector<float>& magnitude);
 
+/// @brief re² + im² of one bin, the expression every power cache is built from.
+inline float power_of(const std::complex<float>& value) {
+  const float re = value.real();
+  const float im = value.imag();
+  return re * re + im * im;
+}
+
 /// @brief Fills @p power for the complex spectrum @p data as re² + im², unconditionally.
 /// @details Never derives from the (unnamed, ignored) magnitude parameter, for
 ///   the same reason as @ref fill_magnitude_cache.

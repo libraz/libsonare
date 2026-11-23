@@ -105,13 +105,27 @@ class LinkedSpectra {
   /// @brief Sum over channels of each channel's re^2 + im^2 power.
   const std::vector<float>& summed_power() const noexcept { return summed_power_; }
 
-  /// @brief Applies one real gain per (bin, frame) to every channel's spectrum and hands the
-  ///   spectra over.
-  /// @details Masks in place rather than copying, since a full-track spectrum is the largest
-  ///   buffer a repair holds; the set keeps its geometry and summed power but no spectra.
-  /// @param gains [bins x frames] bin-major, same layout as @ref summed_power.
+  /// @brief Masks every channel's spectrum in place and hands the spectra over, releasing the
+  ///   summed power.
+  /// @details Masks in place rather than copying, and takes each gain as it is applied rather
+  ///   than from a stored mask, since a full-track spectrum is the largest buffer a repair holds.
+  /// @param gain_at Called once per (bin, frame) cell in bin-major order with the cell's index
+  ///   into @ref summed_power, which stays valid and unchanged throughout; returns its gain.
   /// @return One masked complex spectrum per channel.
-  std::vector<std::vector<std::complex<float>>> take_masked(const double* gains);
+  template <typename GainAt>
+  std::vector<std::vector<std::complex<float>>> take_masked(GainAt&& gain_at) {
+    if (empty()) return {};
+    const std::size_t cells = summed_power_.size();
+    for (std::size_t i = 0; i < cells; ++i) {
+      const double gain = gain_at(i);
+      for (std::vector<std::complex<float>>& channel : spectra_) {
+        channel[i] = {static_cast<float>(channel[i].real() * gain),
+                      static_cast<float>(channel[i].imag() * gain)};
+      }
+    }
+    std::vector<float>().swap(summed_power_);
+    return std::move(spectra_);
+  }
 
   /// @brief Resynthesizes per-channel spectra back to @p out_length samples, consuming them.
   std::vector<Audio> resynthesize(std::vector<std::vector<std::complex<float>>>&& spectra,

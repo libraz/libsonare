@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <utility>
 #include <vector>
 
@@ -189,60 +192,72 @@ PredictorNorms fit_wpe(std::vector<std::vector<std::complex<float>>>& channels, 
   return norms;
 }
 
-/// @brief The late-reverb subtraction mask, one real gain per (bin, frame).
-std::vector<double> subtraction_gains(const float* power, int bins, int frames, int delay_frames,
-                                      double decay, const DereverbClassicalConfig& config,
-                                      size_t* suppressed_out) {
-  std::vector<double> gains(static_cast<size_t>(bins * frames), 1.0);
-  size_t suppressed = 0;
-
-  for (int b = 0; b < bins; ++b) {
-    for (int t = 0; t < frames; ++t) {
-      const size_t idx = static_cast<size_t>(b * frames + t);
-      const int late_frame = t - delay_frames;
-      const double late_psd =
-          late_frame >= 0
-              ? static_cast<double>(power[static_cast<size_t>(b * frames + late_frame)]) * decay
-              : 0.0;
-      bool cell_suppressed = false;
-      gains[idx] = detail::dereverb_subtraction_gain(static_cast<double>(power[idx]), late_psd,
-                                                     config, &cell_suppressed);
-      if (cell_suppressed) ++suppressed;
-    }
-  }
-  if (suppressed_out != nullptr) *suppressed_out = suppressed;
-  return gains;
+/// @brief The late-reverb subtraction gain of one (bin, frame) cell, indexed bin-major.
+double subtraction_gain_at(const float* power, int frames, int delay_frames, double decay,
+                           const DereverbClassicalConfig& config, size_t idx, bool* suppressed) {
+  const int late_frame = static_cast<int>(idx % static_cast<size_t>(frames)) - delay_frames;
+  const double late_psd =
+      late_frame >= 0 ? static_cast<double>(power[idx - static_cast<size_t>(delay_frames)]) * decay
+                      : 0.0;
+  return detail::dereverb_subtraction_gain(static_cast<double>(power[idx]), late_psd, config,
+                                           suppressed);
 }
 
-/// @brief Lower-quartile decay across the module's own late-reverb lag, in dB.
-float late_decay_ratio_db(const float* power, int bins, int frames, int delay_frames) {
-  if (frames <= delay_frames) return 0.0f;
-  // Rounding to float is monotonic, so the order statistic of the rounded ratios is the rounded
-  // order statistic, at half the memory of holding them as double.
-  std::vector<float> ratios;
-  ratios.reserve(static_cast<size_t>(bins) * static_cast<size_t>(frames - delay_frames));
+/// @brief Calls @p visit with each cell's decay across the late-reverb lag, in dB.
+template <typename Visit>
+void for_each_lag_ratio_db(const float* power, int bins, int frames, int delay_frames,
+                           Visit&& visit) {
   for (int b = 0; b < bins; ++b) {
     const float* row = power + static_cast<size_t>(b) * static_cast<size_t>(frames);
     for (int t = delay_frames; t < frames; ++t) {
       const double current = static_cast<double>(row[t]);
       const double lagged = static_cast<double>(row[t - delay_frames]);
       if (current <= kPowerFloor || lagged <= kPowerFloor) continue;
-      ratios.push_back(static_cast<float>(10.0 * std::log10(current / lagged)));
+      visit(static_cast<float>(10.0 * std::log10(current / lagged)));
     }
   }
-  if (ratios.empty()) return 0.0f;
-  const size_t rank =
-      std::min(ratios.size() - 1,
-               static_cast<size_t>(kLateDecayPercentile * static_cast<double>(ratios.size())));
-  std::nth_element(ratios.begin(), ratios.begin() + static_cast<ptrdiff_t>(rank), ratios.end());
-  return ratios[rank];
 }
 
-float mean_reduction_db(const std::vector<double>& gains) {
-  if (gains.empty()) return 0.0f;
-  double sum = 0.0;
-  for (const double gain : gains) sum += -20.0 * std::log10(std::max(gain, kPowerFloor));
-  return static_cast<float>(sum / static_cast<double>(gains.size()));
+/// @brief Unsigned key whose order is the order of finite floats.
+uint32_t float_order_key(float value) {
+  uint32_t bits = 0;
+  std::memcpy(&bits, &value, sizeof(bits));
+  return (bits & 0x80000000u) != 0 ? ~bits : (bits | 0x80000000u);
+}
+
+float float_from_order_key(uint32_t key) {
+  const uint32_t bits = (key & 0x80000000u) != 0 ? (key & 0x7fffffffu) : ~key;
+  float value = 0.0f;
+  std::memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+/// @brief Lower-quartile decay across the module's own late-reverb lag, in dB.
+/// @details The order statistic is selected by its key, high half then low half, over two counting
+///   passes, so no ratio is stored; the result is the element a full sort would put at the rank.
+float late_decay_ratio_db(const float* power, int bins, int frames, int delay_frames) {
+  if (frames <= delay_frames) return 0.0f;
+  constexpr size_t kHalfKeyValues = size_t{1} << 16;
+  std::vector<size_t> counts(kHalfKeyValues, 0);
+  size_t total = 0;
+  for_each_lag_ratio_db(power, bins, frames, delay_frames, [&](float ratio) {
+    ++counts[float_order_key(ratio) >> 16];
+    ++total;
+  });
+  if (total == 0) return 0.0f;
+  const size_t rank =
+      std::min(total - 1, static_cast<size_t>(kLateDecayPercentile * static_cast<double>(total)));
+  size_t below = 0;
+  uint32_t high = 0;
+  while (below + counts[high] <= rank) below += counts[high++];
+  counts.assign(kHalfKeyValues, 0);
+  for_each_lag_ratio_db(power, bins, frames, delay_frames, [&](float ratio) {
+    const uint32_t key = float_order_key(ratio);
+    if ((key >> 16) == high) ++counts[key & 0xffffu];
+  });
+  uint32_t low = 0;
+  while (below + counts[low] <= rank) below += counts[low++];
+  return float_from_order_key((high << 16) | low);
 }
 
 }  // namespace
@@ -332,87 +347,13 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
   return dereverb_classical(audio, config, nullptr);
 }
 
-Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& config,
-                         DereverbReport* report) {
-  if (report != nullptr) *report = DereverbReport{};
-  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  const auto validated = Validated<DereverbClassicalConfig>::make(config);
+namespace {
 
-  // A short block must use the same STFT dereverberation path as a full clip.
-  // Pad only the analysis input and trim reconstruction back to the caller's
-  // original length; do not silently switch to the former tail-attenuation DSP.
-  Spectrogram spec = [&] {
-    const Audio analysis = padded_for_analysis(audio, validated->n_fft);
-    return Spectrogram::compute(analysis, analysis_config(validated.get()));
-  }();
-  if (spec.empty()) return audio;
-
-  const int bins = spec.n_bins();
-  const int frames = spec.n_frames();
-  const int delay_frames = late_delay_frames(validated.get(), audio.sample_rate());
-  const double decay = late_decay(validated.get(), delay_frames, audio.sample_rate());
-  // Off the sample path entirely, so asking for it cannot move the output. The lag statistic is
-  // a second pass over the power, which is why it is skipped rather than computed and thrown away.
-  if (report != nullptr) {
-    report->detected.late_decay_ratio_db =
-        late_decay_ratio_db(spec.power().data(), bins, frames, delay_frames);
-  }
-  size_t suppressed = 0;
-  std::vector<double> gains =
-      subtraction_gains(spec.power().data(), bins, frames, delay_frames, decay, validated.get(),
-                        report != nullptr ? &suppressed : nullptr);
-  if (report != nullptr) {
-    report->mean_reduction_db = mean_reduction_db(gains);
-    report->suppressed_fraction = gains.empty()
-                                      ? 0.0f
-                                      : static_cast<float>(static_cast<double>(suppressed) /
-                                                           static_cast<double>(gains.size()));
-  }
-
-  // The spectrum is masked in place; only its geometry is kept for the resynthesis.
-  const int n_fft = spec.n_fft();
-  const int hop_length = spec.hop_length();
-  const int sample_rate = spec.sample_rate();
-  const WindowType window = spec.window();
-  const bool center = spec.center();
-  const int win_length = spec.win_length();
-  std::vector<std::vector<std::complex<float>>> channels(1);
-  channels[0] = std::move(spec).release_complex();
-  for (size_t i = 0; i < channels[0].size(); ++i) {
-    channels[0][i] = {static_cast<float>(channels[0][i].real() * gains[i]),
-                      static_cast<float>(channels[0][i].imag() * gains[i])};
-  }
-  std::vector<double>().swap(gains);
-
-  double before_cap = 0.0;
-  double after_cap = 0.0;
-  if (validated->wpe_enabled) {
-    for (int iteration = 0; iteration < validated->wpe_iterations; ++iteration) {
-      const PredictorNorms norms =
-          fit_wpe(channels, bins, frames, delay_frames, validated->wpe_taps,
-                  validated->wpe_strength, /*subtract=*/true);
-      before_cap += norms.before_cap;
-      after_cap += norms.after_cap;
-    }
-  }
-
-  if (report != nullptr) {
-    if (validated->wpe_enabled) {
-      const double passes = static_cast<double>(validated->wpe_iterations);
-      report->detected.late_predictability = static_cast<float>(before_cap / passes);
-      report->wpe_predictor_norm = static_cast<float>(after_cap / passes);
-    }
-  }
-
-  const Spectrogram clean =
-      Spectrogram::from_complex(std::move(channels[0]), bins, frames, n_fft, hop_length,
-                                sample_rate, window, center, win_length);
-  return clean.to_audio(static_cast<int>(audio.size()));
-}
-
-DereverbReport dereverb_classical_linked(const Audio* const* channels, std::size_t channel_count,
-                                         std::vector<Audio>* out,
-                                         const DereverbClassicalConfig& config) {
+/// @brief The linked dereverberation every entry point runs; @p report, when given, receives the
+///   measurements, which are off the sample path and skipped when it is null.
+void dereverb_linked(const Audio* const* channels, std::size_t channel_count,
+                     std::vector<Audio>* out, const DereverbClassicalConfig& config,
+                     DereverbReport* report) {
   const auto validated = Validated<DereverbClassicalConfig>::make(config);
   if (out == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "dereverb output must not be null");
@@ -436,11 +377,10 @@ DereverbReport dereverb_classical_linked(const Audio* const* channels, std::size
     return common::LinkedSpectra::compute(analysis_pointers.data(), channel_count,
                                           analysis_config(validated.get()));
   }();
-  DereverbReport report;
   if (linked.empty()) {
     out->clear();
     for (size_t c = 0; c < channel_count; ++c) out->push_back(*channels[c]);
-    return report;
+    return;
   }
 
   const int bins = linked.n_bins();
@@ -449,19 +389,30 @@ DereverbReport dereverb_classical_linked(const Audio* const* channels, std::size
   const int delay_frames = late_delay_frames(validated.get(), sample_rate);
   const double decay = late_decay(validated.get(), delay_frames, sample_rate);
 
-  // The lag statistic first, so its scratch is gone before the gains exist.
-  report.detected.late_decay_ratio_db =
-      late_decay_ratio_db(linked.summed_power().data(), bins, frames, delay_frames);
+  // Read from the summed power before masking releases it.
+  if (report != nullptr) {
+    report->detected.late_decay_ratio_db =
+        late_decay_ratio_db(linked.summed_power().data(), bins, frames, delay_frames);
+  }
+  // Each gain is applied as it is computed, so no mask is held beside the spectra.
+  const float* power = linked.summed_power().data();
   size_t suppressed = 0;
-  std::vector<double> gains = subtraction_gains(linked.summed_power().data(), bins, frames,
-                                                delay_frames, decay, validated.get(), &suppressed);
-  auto masked = linked.take_masked(gains.data());
-  report.mean_reduction_db = mean_reduction_db(gains);
-  report.suppressed_fraction =
-      gains.empty()
-          ? 0.0f
-          : static_cast<float>(static_cast<double>(suppressed) / static_cast<double>(gains.size()));
-  std::vector<double>().swap(gains);
+  double reduction_db_sum = 0.0;
+  auto masked = linked.take_masked([&](size_t idx) {
+    bool cell_suppressed = false;
+    const double gain = subtraction_gain_at(power, frames, delay_frames, decay, validated.get(),
+                                            idx, &cell_suppressed);
+    if (report != nullptr) {
+      if (cell_suppressed) ++suppressed;
+      reduction_db_sum += -20.0 * std::log10(std::max(gain, kPowerFloor));
+    }
+    return gain;
+  });
+  if (report != nullptr) {
+    const double cells = static_cast<double>(bins) * static_cast<double>(frames);
+    report->mean_reduction_db = static_cast<float>(reduction_db_sum / cells);
+    report->suppressed_fraction = static_cast<float>(static_cast<double>(suppressed) / cells);
+  }
 
   if (validated->wpe_enabled) {
     double before = 0.0;
@@ -473,12 +424,34 @@ DereverbReport dereverb_classical_linked(const Audio* const* channels, std::size
       before += norms.before_cap;
       after += norms.after_cap;
     }
-    const double passes = static_cast<double>(validated->wpe_iterations);
-    report.detected.late_predictability = static_cast<float>(before / passes);
-    report.wpe_predictor_norm = static_cast<float>(after / passes);
+    if (report != nullptr) {
+      const double passes = static_cast<double>(validated->wpe_iterations);
+      report->detected.late_predictability = static_cast<float>(before / passes);
+      report->wpe_predictor_norm = static_cast<float>(after / passes);
+    }
   }
 
   *out = linked.resynthesize(std::move(masked), static_cast<int>(channels[0]->size()));
+}
+
+}  // namespace
+
+Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& config,
+                         DereverbReport* report) {
+  if (report != nullptr) *report = DereverbReport{};
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  // One channel through the linked path is the mono result: its summed power is that channel's.
+  const Audio* channel = &audio;
+  std::vector<Audio> out;
+  dereverb_linked(&channel, 1, &out, config, report);
+  return std::move(out[0]);
+}
+
+DereverbReport dereverb_classical_linked(const Audio* const* channels, std::size_t channel_count,
+                                         std::vector<Audio>* out,
+                                         const DereverbClassicalConfig& config) {
+  DereverbReport report;
+  dereverb_linked(channels, channel_count, out, config, &report);
   return report;
 }
 
