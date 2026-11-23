@@ -430,13 +430,13 @@ TEST_CASE("Final-stage quantizers report the non-finite samples they replaced",
       poisoned_samples.data(), poisoned_samples.size(), static_cast<int>(kSampleRate));
 
   SECTION("bit_depth") {
-    std::size_t count = 12345;
-    const auto clean = bit_depth(clean_audio, {8, true}, &count);
-    REQUIRE(count == 0u);
+    sonare::QuantizeReport report{12345, 12345};
+    const auto clean = bit_depth(clean_audio, {8}, &report);
+    REQUIRE(report.non_finite_samples == 0u);
     REQUIRE(clean[0] != clean_samples[0]);  // the quantizer is not dormant
 
-    const auto poisoned = bit_depth(poisoned_audio, {8, true}, &count);
-    REQUIRE(count == 2u);
+    const auto poisoned = bit_depth(poisoned_audio, {8}, &report);
+    REQUIRE(report.non_finite_samples == 2u);
     REQUIRE(std::isfinite(poisoned[0]));
     REQUIRE(std::isfinite(poisoned[2]));
   }
@@ -444,23 +444,23 @@ TEST_CASE("Final-stage quantizers report the non-finite samples they replaced",
   SECTION("dither, every mode") {
     for (auto type :
          {DitherType::None, DitherType::Rpdf, DitherType::Tpdf, DitherType::NoiseShaped}) {
-      std::size_t count = 12345;
-      dither(clean_audio, {type, 8, 4321}, &count);
-      REQUIRE(count == 0u);
+      sonare::QuantizeReport report{12345, 12345};
+      dither(clean_audio, {type, 8, 4321}, &report);
+      REQUIRE(report.non_finite_samples == 0u);
 
-      dither(poisoned_audio, {type, 8, 4321}, &count);
-      REQUIRE(count == 2u);
+      dither(poisoned_audio, {type, 8, 4321}, &report);
+      REQUIRE(report.non_finite_samples == 2u);
     }
   }
 
   SECTION("output_chain") {
-    std::size_t count = 12345;
-    const auto clean = output_chain(clean_audio, {8, DitherType::None, true}, &count);
-    REQUIRE(count == 0u);
+    sonare::QuantizeReport report{12345, 12345};
+    const auto clean = output_chain(clean_audio, {8, DitherType::None}, &report);
+    REQUIRE(report.non_finite_samples == 0u);
     REQUIRE(clean[0] != clean_samples[0]);
 
-    const auto poisoned = output_chain(poisoned_audio, {8, DitherType::None, true}, &count);
-    REQUIRE(count == 2u);
+    const auto poisoned = output_chain(poisoned_audio, {8, DitherType::None}, &report);
+    REQUIRE(report.non_finite_samples == 2u);
     REQUIRE(std::isfinite(poisoned[0]));
     REQUIRE(std::isfinite(poisoned[2]));
   }

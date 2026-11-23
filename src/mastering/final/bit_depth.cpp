@@ -13,7 +13,7 @@
 
 namespace sonare::mastering::final {
 
-Audio bit_depth(const Audio& audio, const BitDepthConfig& config, size_t* non_finite_samples) {
+Audio bit_depth(const Audio& audio, const BitDepthConfig& config, QuantizeReport* report) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (config.target_bits < kMinDitherTargetBits || config.target_bits > kMaxDitherTargetBits) {
     throw SonareException(ErrorCode::InvalidParameter, "target_bits must be in [2, 32]");
@@ -23,16 +23,17 @@ Audio bit_depth(const Audio& audio, const BitDepthConfig& config, size_t* non_fi
   // Above 25 bits, scale - 1 rounds back to scale in binary32.
   const float max_code = std::min(scale - 1.0f, std::nextafter(1.0f, 0.0f) * scale);
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
-  size_t non_finite = 0;
+  QuantizeReport counted;
   for (auto& sample : samples) {
     // Last stage before the samples leave for a file or a device, so a
     // non-finite one is replaced here rather than propagated.
-    if (resolve_non_finite(SampleDestination::kIrreversibleOutput, sample)) ++non_finite;
-    if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);
+    if (resolve_non_finite(SampleDestination::kIrreversibleOutput, sample)) {
+      ++counted.non_finite_samples;
+    }
+    if (std::abs(sample) > 1.0f) ++counted.clipped_samples;
     sample = std::clamp(std::round(sample * scale), min_code, max_code) / scale;
-    if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);
   }
-  if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+  if (report != nullptr) *report = counted;
   return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 

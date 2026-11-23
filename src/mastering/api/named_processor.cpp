@@ -180,6 +180,14 @@ std::uint32_t narrow_substitutions(std::size_t count) noexcept {
   return static_cast<std::uint32_t>(count > kMax ? kMax : count);
 }
 
+// Adds one channel's quantizing-stage counts to @p outcome; the clipped count becomes present.
+void record_quantize(const QuantizeReport& report, ProcessorOutcome& outcome) {
+  accumulate_substitutions(outcome.non_finite_substitution_count,
+                           narrow_substitutions(report.non_finite_samples));
+  outcome.quantize_clipped_samples =
+      outcome.quantize_clipped_samples.value_or(0) + report.clipped_samples;
+}
+
 // Run a processor over the whole channel set with latency compensation. One
 // processor instance handles every channel, so a channel-linked detector stays
 // linked. The reported latency is the processor's own, captured into @p outcome
@@ -605,12 +613,10 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
   } else if (name == "final.bitDepth") {
     final::BitDepthConfig config;
     config.target_bits = i(params, "targetBits", config.target_bits);
-    config.clamp = b(params, "clamp", config.clamp);
     apply_per_channel(channels, sample_rate, [&](const Audio& audio, int) {
-      std::size_t non_finite = 0;
-      Audio out = final::bit_depth(audio, config, &non_finite);
-      accumulate_substitutions(outcome.non_finite_substitution_count,
-                               narrow_substitutions(non_finite));
+      QuantizeReport report;
+      Audio out = final::bit_depth(audio, config, &report);
+      record_quantize(report, outcome);
       return out;
     });
   } else if (name == "final.dither") {
@@ -624,10 +630,15 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
       // Decorrelate the dither noise across stereo channels (no-op for the left
       // channel, channel_index 0).
       config.seed = final::dither_channel_seed(base_seed, static_cast<size_t>(channel_index));
-      std::size_t non_finite = 0;
-      Audio out = final::dither(audio, config, &non_finite);
-      accumulate_substitutions(outcome.non_finite_substitution_count,
-                               narrow_substitutions(non_finite));
+      QuantizeReport report;
+      Audio out = final::dither(audio, config, &report);
+      // A None dither quantizes nothing, so it leaves the clipped count absent.
+      if (config.type == final::DitherType::None) {
+        accumulate_substitutions(outcome.non_finite_substitution_count,
+                                 narrow_substitutions(report.non_finite_samples));
+      } else {
+        record_quantize(report, outcome);
+      }
       return out;
     });
   } else if (name == "final.outputChain") {
@@ -637,7 +648,6 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
         i(params, "ditherType", static_cast<int>(dither_config.type)), "dither type");
     final::BitDepthConfig bit_depth_config;
     bit_depth_config.target_bits = dither_config.target_bits;
-    bit_depth_config.clamp = b(params, "clamp", bit_depth_config.clamp);
     const uint32_t base_seed = dither_config.seed;
     apply_per_channel(channels, sample_rate, [&](const Audio& audio, int channel_index) {
       // Decorrelate the dither noise across stereo channels (no-op for the left
@@ -646,15 +656,16 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
       // stages here with a per-channel seed instead of routing through it.
       dither_config.seed =
           final::dither_channel_seed(base_seed, static_cast<size_t>(channel_index));
-      // Both steps are counted: the dither step substitutes first, so the
-      // bit-depth step sees a finite input and contributes only where dither is
+      // Both steps are counted: the dither step substitutes and clamps first, so the
+      // bit-depth step sees a finite in-range input and contributes only where dither is
       // bypassed.
-      std::size_t dither_non_finite = 0;
-      std::size_t bit_depth_non_finite = 0;
-      Audio out = final::bit_depth(final::dither(audio, dither_config, &dither_non_finite),
-                                   bit_depth_config, &bit_depth_non_finite);
-      accumulate_substitutions(outcome.non_finite_substitution_count,
-                               narrow_substitutions(dither_non_finite + bit_depth_non_finite));
+      QuantizeReport dither_report;
+      QuantizeReport bit_depth_report;
+      Audio out = final::bit_depth(final::dither(audio, dither_config, &dither_report),
+                                   bit_depth_config, &bit_depth_report);
+      record_quantize({dither_report.non_finite_samples + bit_depth_report.non_finite_samples,
+                       dither_report.clipped_samples + bit_depth_report.clipped_samples},
+                      outcome);
       return out;
     });
   } else if (name == "utility.gain") {

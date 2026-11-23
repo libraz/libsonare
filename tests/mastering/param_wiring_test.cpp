@@ -343,9 +343,9 @@ TEST_CASE("final.outputChain decorrelates stereo channels", "[mastering][final][
   // seed must decorrelate L and R the same way final.dither does. Use a low-bit
   // target so the dither noise is large enough to survive quantization.
   const std::vector<float> silence(256, 0.0f);
-  const auto result = apply_named_processor_stereo(
-      "final.outputChain", silence.data(), silence.data(), silence.size(), 48000,
-      {{"ditherType", 2.0}, {"targetBits", 8.0}, {"clamp", 1.0}});
+  const auto result = apply_named_processor_stereo("final.outputChain", silence.data(),
+                                                   silence.data(), silence.size(), 48000,
+                                                   {{"ditherType", 2.0}, {"targetBits", 8.0}});
 
   REQUIRE(result.left.size() == silence.size());
   REQUIRE(result.right.size() == silence.size());
@@ -373,8 +373,60 @@ TEST_CASE("final.outputChain rejects an out-of-range dither type",
   const std::vector<float> silence(256, 0.0f);
   REQUIRE_THROWS_AS(sonare::mastering::api::apply_named_processor(
                         "final.outputChain", silence.data(), silence.size(), 48000,
-                        {{"ditherType", 4.0}, {"targetBits", 8.0}, {"clamp", 1.0}}),
+                        {{"ditherType", 4.0}, {"targetBits", 8.0}}),
                     sonare::SonareException);
+}
+
+TEST_CASE("the final quantizing processors take no clamp parameter",
+          "[mastering][final][param_wiring]") {
+  // The code range bounds the output on its own, so the key is undeclared like any other.
+  const std::vector<float> silence(256, 0.0f);
+  for (const char* name : {"final.bitDepth", "final.outputChain"}) {
+    CAPTURE(name);
+    try {
+      (void)sonare::mastering::api::apply_named_processor(name, silence.data(), silence.size(),
+                                                          48000, {{"clamp", 1.0}});
+      FAIL("clamp was accepted");
+    } catch (const sonare::SonareParameterRefusal& e) {
+      CHECK(e.form() == sonare::SonareParameterRefusal::Form::UnknownKey);
+      CHECK(e.shape_error());
+      CHECK(e.subject() == "clamp");
+      CHECK(std::string(e.expected()).find("targetBits") != std::string::npos);
+    }
+  }
+}
+
+TEST_CASE("the final quantizing processors count the samples past full scale they held",
+          "[mastering][final][param_wiring]") {
+  using sonare::mastering::api::apply_named_processor;
+  using sonare::mastering::api::apply_named_processor_stereo;
+  const std::vector<float> over = {0.5f, 1.0f, 1.5f, -2.0f, 0.0f, -1.0f, 0.25f, 0.0f};
+  const std::vector<float> quiet(over.size(), 0.25f);
+
+  for (const char* name : {"final.bitDepth", "final.outputChain"}) {
+    CAPTURE(name);
+    const auto mono = apply_named_processor(name, over.data(), over.size(), 48000, {});
+    REQUIRE(mono.quantize_clipped_samples.has_value());
+    CHECK(*mono.quantize_clipped_samples == 2);
+    // Summed over the channels: the left carries two, the right none.
+    const auto stereo =
+        apply_named_processor_stereo(name, over.data(), quiet.data(), over.size(), 48000, {});
+    REQUIRE(stereo.quantize_clipped_samples.has_value());
+    CHECK(*stereo.quantize_clipped_samples == 2);
+    const auto clean = apply_named_processor(name, quiet.data(), quiet.size(), 48000, {});
+    REQUIRE(clean.quantize_clipped_samples.has_value());
+    CHECK(*clean.quantize_clipped_samples == 0);
+  }
+  const auto dithered =
+      apply_named_processor("final.dither", over.data(), over.size(), 48000, {{"type", 2.0}});
+  REQUIRE(dithered.quantize_clipped_samples.has_value());
+  CHECK(*dithered.quantize_clipped_samples == 2);
+  // A None dither quantizes nothing, and a stage that does not quantize leaves the count absent.
+  const auto passed =
+      apply_named_processor("final.dither", over.data(), over.size(), 48000, {{"type", 0.0}});
+  CHECK_FALSE(passed.quantize_clipped_samples.has_value());
+  const auto gained = apply_named_processor("utility.gain", over.data(), over.size(), 48000, {});
+  CHECK_FALSE(gained.quantize_clipped_samples.has_value());
 }
 
 TEST_CASE("named-processor enum params reject a value past the enum's cardinality",

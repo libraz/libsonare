@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "core/channel_layout.h"
+#include "core/quantize_report.h"
 #include "util/resource_limits.h"
 
 namespace sonare {
@@ -149,28 +150,28 @@ InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data, size_t s
 /// @param samples Audio samples (mono, normalized to [-1,1])
 /// @param sample_rate Sample rate in Hz
 /// @param bits_per_sample Bit depth (16 or 24, default 16)
-/// @param[out] non_finite_samples Optional count of input samples that were not
-///        finite. Such a sample has no PCM image and is written as digital
-///        silence, so this count is the only thing that distinguishes it from a
-///        sample the caller meant to write. Set once the stream is packed; left
-///        untouched when the write is rejected before that point.
+/// @param[out] report Optional counts of the samples the PCM grid could not carry: a
+///        non-finite sample has no PCM image and is written as digital silence,
+///        and a finite one past full scale is held at the end of the code range
+///        (see @ref QuantizeReport for what is and is not counted). Set once the
+///        stream is packed; left untouched when the write is rejected before
+///        that point.
 /// @throws SonareException on write error, or InvalidParameter when the sample
 ///         count would overflow the uint32 RIFF size fields (the same bound
 ///         @ref save_wav_multichannel applies, checked before anything is packed
 ///         or written)
 void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
-              int bits_per_sample = 16, size_t* non_finite_samples = nullptr);
+              int bits_per_sample = 16, QuantizeReport* report = nullptr);
 
 /// @brief Saves audio samples to a WAV file.
 /// @param path Output file path
 /// @param samples Audio samples (mono, normalized to [-1,1])
 /// @param sample_rate Sample rate in Hz
 /// @param bits_per_sample Bit depth (16 or 24, default 16)
-/// @param[out] non_finite_samples Optional non-finite input count (see the
-///        pointer overload)
+/// @param[out] report Optional quantization counts (see the pointer overload)
 /// @throws SonareException on write error
 void save_wav(const std::string& path, const std::vector<float>& samples, int sample_rate,
-              int bits_per_sample = 16, size_t* non_finite_samples = nullptr);
+              int bits_per_sample = 16, QuantizeReport* report = nullptr);
 
 /// @brief Saves interleaved multichannel audio to a WAV file.
 /// @details Mono/stereo are written as plain WAVE_FORMAT_PCM (bit-identical to
@@ -187,11 +188,11 @@ void save_wav(const std::string& path, const std::vector<float>& samples, int sa
 /// @param layout Speaker layout (drives the EXTENSIBLE channel mask)
 /// @param sample_rate Sample rate in Hz
 /// @param bits_per_sample Bit depth (16 or 24, default 16)
-/// @param[out] non_finite_samples Optional non-finite input count (see
+/// @param[out] report Optional quantization counts, summed over the channels (see
 ///        @ref save_wav)
 /// @throws SonareException on invalid arguments or write error
 void save_wav_multichannel(const std::string& path, const float* interleaved, size_t n_frames,
                            int channel_count, ChannelLayout layout, int sample_rate,
-                           int bits_per_sample = 16, size_t* non_finite_samples = nullptr);
+                           int bits_per_sample = 16, QuantizeReport* report = nullptr);
 
 }  // namespace sonare

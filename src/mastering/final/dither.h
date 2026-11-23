@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "core/audio.h"
+#include "core/quantize_report.h"
 
 namespace sonare::mastering::final {
 
@@ -56,20 +57,18 @@ constexpr uint32_t dither_channel_seed(uint32_t base_seed, std::size_t channel_i
 /// @details Each channel gets its own RNG and noise-shaper history. Channel 0
 ///          uses @c config.seed unchanged, so a one-channel call is identical
 ///          to @ref dither.
+/// @param[out] report Optional counts summed over the channels, as @ref dither describes.
 Audio dither_interleaved(const Audio& audio, std::size_t channel_count,
-                         const DitherConfig& config = {},
-                         std::size_t* non_finite_samples = nullptr);
+                         const DitherConfig& config = {}, QuantizeReport* report = nullptr);
 
 /// @brief Dithers and quantizes @p audio to @c config.target_bits.
 /// @details A separate @ref bit_depth pass over the result is a no-op: the
 ///          samples are already on that grid. @ref output_chain therefore runs
 ///          this stage alone, and @ref bit_depth alone for a @c None dither.
-/// @param[out] non_finite_samples Optional count of input samples that were not
-///        finite. Each leaves as silence, which is in range and free of any
-///        error, so this count is the only thing that distinguishes such a
-///        sample from one the caller meant to deliver. Set on every mode; left
-///        untouched when the call throws.
-Audio dither(const Audio& audio, const DitherConfig& config = {},
-             size_t* non_finite_samples = nullptr);
+/// @param[out] report Optional counts of the non-finite input samples (each leaves as silence)
+///        and of the finite ones past full scale before the noise was added, which the code
+///        range held (see @ref QuantizeReport). @c None quantizes nothing and counts no clipped
+///        sample. Set on every mode; left untouched when the call throws.
+Audio dither(const Audio& audio, const DitherConfig& config = {}, QuantizeReport* report = nullptr);
 
 }  // namespace sonare::mastering::final

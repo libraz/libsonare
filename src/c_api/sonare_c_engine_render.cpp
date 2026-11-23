@@ -358,9 +358,10 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
     config.type = dither_type_from_int(options->dither);
     config.target_bits = options->dither_bits;
     config.seed = options->dither_seed;
+    QuantizeReport quantize_report;
     Audio dithered = mastering::final::dither_interleaved(
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
-        static_cast<size_t>(options->num_channels), config);
+        static_cast<size_t>(options->num_channels), config, &quantize_report);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
   }
 #endif

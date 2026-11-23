@@ -936,21 +936,22 @@ float pcm_tpdf_lsb(uint64_t channel_seed, uint64_t frame) noexcept {
 /// reference encoders round). The scale is a power of two, so the scaled sample
 /// is exact and the only rounding is the final one. The input is clamped to
 /// [-1, 1] and the code to [min_code, max_code], so +1.0 lands on the positive
-/// ceiling.
+/// ceiling; a finite sample past full scale is counted in @p report before the clamp.
 ///
 /// An exact zero is digital silence and stays code 0, undithered, so a muted
 /// passage is not filled with hiss. A non-finite sample has no PCM image, so it
-/// is written as digital silence and counted in @p non_finite. The clamp cannot stand in for that
+/// is written as digital silence and counted in @p report. The clamp cannot stand in for that
 /// check: a comparison against a non-finite value is false, so std::min returns its other argument
 /// and the sample would reach the file as positive full scale, indistinguishable from a peak the
 /// encoder meant to produce.
 long quantize_pcm(float sample, float scale, long min_code, long max_code, float dither_lsb,
-                  size_t& non_finite) {
+                  QuantizeReport& report) {
   if (!std::isfinite(sample)) {
-    ++non_finite;
+    ++report.non_finite_samples;
     return 0;
   }
   if (sample == 0.0f) return 0;
+  if (std::abs(sample) > 1.0f) ++report.clipped_samples;
   const float clamped = std::max(-1.0f, std::min(1.0f, sample));
   const long v = std::lroundf(clamped * scale + dither_lsb);
   return std::max(min_code, std::min(max_code, v));
@@ -1046,10 +1047,10 @@ namespace {
 /// 16-bit little-endian int16 or 24-bit tightly-packed 3-byte little-endian.
 /// A stream not already on the target grid is TPDF-dithered per channel before
 /// rounding, so a decaying tail fades into noise at the last bits instead of
-/// turning into truncation distortion and then hard silence. Non-finite samples
-/// are counted into @p non_finite by the quantizer.
+/// turning into truncation distortion and then hard silence. Non-finite and
+/// past-full-scale samples are counted into @p report by the quantizer.
 std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int channel_count,
-                                    int bits_per_sample, size_t& non_finite) {
+                                    int bits_per_sample, QuantizeReport& report) {
   const bool sixteen = bits_per_sample == 16;
   const float scale = sixteen ? kInt16Scale : 8388608.0f;
   const long min_code = sixteen ? -32768 : -8388608;
@@ -1061,7 +1062,7 @@ std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int 
   for (size_t i = 0; i < n_samples; ++i) {
     const uint64_t channel_seed = kPcmDitherSeed ^ (uint64_t{i % channels} * kSplitMix64Gamma);
     const float d = dither ? pcm_tpdf_lsb(channel_seed, i / channels) : 0.0f;
-    const long v = quantize_pcm(samples[i], scale, min_code, max_code, d, non_finite);
+    const long v = quantize_pcm(samples[i], scale, min_code, max_code, d, report);
     for (size_t b = 0; b < width; ++b) {
       bytes[i * width + b] =
           static_cast<uint8_t>((static_cast<unsigned long>(v) >> (8 * b)) & 0xFF);
@@ -1133,13 +1134,12 @@ void append_data_chunk(std::vector<uint8_t>& image, const std::vector<uint8_t>& 
 /// header, the samples, and the RIFF pad byte after an odd-sized data chunk.
 std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, int channel_count,
                                     int sample_rate, int bits_per_sample,
-                                    const WavFormatFields& format_fields,
-                                    size_t* non_finite_samples) {
-  size_t non_finite = 0;
+                                    const WavFormatFields& format_fields, QuantizeReport* report) {
+  QuantizeReport counted;
   const std::vector<uint8_t> pcm =
       pack_pcm_bytes(interleaved, n_frames * static_cast<size_t>(channel_count), channel_count,
-                     bits_per_sample, non_finite);
-  if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+                     bits_per_sample, counted);
+  if (report != nullptr) *report = counted;
 
   const auto data_size = static_cast<uint32_t>(pcm.size());
   const uint32_t pad = data_size % 2;
@@ -1170,12 +1170,12 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
                                            int channel_count, uint32_t channel_mask,
                                            int sample_rate, int bits_per_sample,
                                            const WavFormatFields& format_fields,
-                                           size_t* non_finite_samples) {
+                                           QuantizeReport* report) {
   const size_t n_samples = n_frames * static_cast<size_t>(channel_count);
-  size_t non_finite = 0;
+  QuantizeReport counted;
   const std::vector<uint8_t> pcm =
-      pack_pcm_bytes(interleaved, n_samples, channel_count, bits_per_sample, non_finite);
-  if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+      pack_pcm_bytes(interleaved, n_samples, channel_count, bits_per_sample, counted);
+  if (report != nullptr) *report = counted;
 
   const auto data_size = static_cast<uint32_t>(pcm.size());
   const uint32_t pad = data_size % 2;
@@ -1214,7 +1214,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
 }  // namespace
 
 void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
-              int bits_per_sample, size_t* non_finite_samples) {
+              int bits_per_sample, QuantizeReport* report) {
   SONARE_CHECK_MSG(samples != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
   SONARE_CHECK_MSG(n_samples > 0, ErrorCode::InvalidParameter, "No samples to save");
   SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
@@ -1223,17 +1223,17 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
   const WavFormatFields format_fields = make_wav_format_fields(sample_rate, 1, bits_per_sample);
   check_riff_size_fits(n_samples, format_fields.block_align);
   write_wav_image_atomic(path, encode_pcm_wav(samples, n_samples, 1, sample_rate, bits_per_sample,
-                                              format_fields, non_finite_samples));
+                                              format_fields, report));
 }
 
 void save_wav(const std::string& path, const std::vector<float>& samples, int sample_rate,
-              int bits_per_sample, size_t* non_finite_samples) {
-  save_wav(path, samples.data(), samples.size(), sample_rate, bits_per_sample, non_finite_samples);
+              int bits_per_sample, QuantizeReport* report) {
+  save_wav(path, samples.data(), samples.size(), sample_rate, bits_per_sample, report);
 }
 
 void save_wav_multichannel(const std::string& path, const float* interleaved, size_t n_frames,
                            int channel_count, ChannelLayout layout, int sample_rate,
-                           int bits_per_sample, size_t* non_finite_samples) {
+                           int bits_per_sample, QuantizeReport* report) {
   SONARE_CHECK_MSG(interleaved != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
   SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "No frames to save");
   SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
@@ -1249,12 +1249,11 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
   // Plain WAVE_FORMAT_PCM for mono/stereo (maximum compatibility, and
   // bit-identical to the mono writer); EXTENSIBLE with a channel mask above that.
   write_wav_image_atomic(
-      path,
-      channel_count <= 2
-          ? encode_pcm_wav(interleaved, n_frames, channel_count, sample_rate, bits_per_sample,
-                           format_fields, non_finite_samples)
-          : encode_extensible_wav(interleaved, n_frames, channel_count, wave_channel_mask(layout),
-                                  sample_rate, bits_per_sample, format_fields, non_finite_samples));
+      path, channel_count <= 2 ? encode_pcm_wav(interleaved, n_frames, channel_count, sample_rate,
+                                                bits_per_sample, format_fields, report)
+                               : encode_extensible_wav(interleaved, n_frames, channel_count,
+                                                       wave_channel_mask(layout), sample_rate,
+                                                       bits_per_sample, format_fields, report));
 }
 #endif  // !__EMSCRIPTEN__
 

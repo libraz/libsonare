@@ -55,6 +55,11 @@ struct MonoAudioResult {
   /// Clipped runs a declip stage left as they were (repair::DeclipReport::unreconstructed_runs),
   /// summed over the channels. Absent when no declip stage ran.
   std::optional<std::size_t> declip_unreconstructed_runs;
+  /// Samples past full scale a quantizing stage (bit depth, dither, output chain) held at the end
+  /// of its code range (QuantizeReport::clipped_samples), summed over the channels: 0 when none
+  /// clipped, absent when no stage quantized. The top code is one step under +1.0, so a sample of
+  /// exactly 1.0 is not counted; a non-zero count always means signal was lost.
+  std::optional<std::size_t> quantize_clipped_samples;
 };
 
 /// @brief Adds @p count to @p total, saturating instead of wrapping.
@@ -85,6 +90,8 @@ struct ProcessorOutcome {
   std::uint32_t non_finite_substitution_count = 0;
   /// @copydoc MonoAudioResult::declip_unreconstructed_runs
   std::optional<std::size_t> declip_unreconstructed_runs;
+  /// @copydoc MonoAudioResult::quantize_clipped_samples
+  std::optional<std::size_t> quantize_clipped_samples;
 };
 
 /// @brief Result of one mono named-processor call: the shared audio fields plus
@@ -101,6 +108,9 @@ struct MonoProcessorResult : MonoAudioResult {
     accumulate_substitutions(non_finite_substitution_count, outcome.non_finite_substitution_count);
     if (outcome.declip_unreconstructed_runs) {
       declip_unreconstructed_runs = outcome.declip_unreconstructed_runs;
+    }
+    if (outcome.quantize_clipped_samples) {
+      quantize_clipped_samples = outcome.quantize_clipped_samples;
     }
   }
 };
@@ -123,6 +133,8 @@ struct StereoAudioResult {
   /// Linked or not, each channel counts the runs its own report counts, so the sum equals the
   /// two reports of the stereo one-shot on the same input. Absent when no declip stage ran.
   std::optional<std::size_t> declip_unreconstructed_runs;
+  /// @copydoc MonoAudioResult::quantize_clipped_samples
+  std::optional<std::size_t> quantize_clipped_samples;
 };
 
 /// @brief Result of one stereo named-processor call: the shared audio fields
@@ -140,6 +152,9 @@ struct StereoProcessorResult : StereoAudioResult {
     accumulate_substitutions(non_finite_substitution_count, outcome.non_finite_substitution_count);
     if (outcome.declip_unreconstructed_runs) {
       declip_unreconstructed_runs = outcome.declip_unreconstructed_runs;
+    }
+    if (outcome.quantize_clipped_samples) {
+      quantize_clipped_samples = outcome.quantize_clipped_samples;
     }
   }
 };

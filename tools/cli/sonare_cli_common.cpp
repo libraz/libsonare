@@ -5,6 +5,8 @@
 #include <exception>
 #include <limits>
 #include <optional>
+#include <stdexcept>
+#include <string>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -304,6 +306,15 @@ const float* fitted(const float* samples, size_t count, const OutputFit& fit,
   return scaled.data();
 }
 
+// A fitted set peaks at exactly 1.0 (x * (1/x) never rounds above 1 in binary32), so the writer
+// holding a sample past full scale would be a defect in the fit, not a property of the audio.
+void require_fitted(const QuantizeReport& report) {
+  if (report.clipped_samples != 0) {
+    throw std::logic_error("the output fit left " + std::to_string(report.clipped_samples) +
+                           " samples past full scale");
+  }
+}
+
 void write_stereo_wav_impl(const std::string& path, const float* left, size_t left_size,
                            const float* right, size_t right_size, int sample_rate, int bits,
                            const OutputFit& fit) {
@@ -318,8 +329,10 @@ void write_stereo_wav_impl(const std::string& path, const float* left, size_t le
     interleaved[2 * frame] = left[frame] * fit.gain();
     interleaved[2 * frame + 1] = frame < right_size ? right[frame] * fit.gain() : 0.0f;
   }
+  QuantizeReport report;
   save_wav_multichannel(path, interleaved.data(), left_size, 2, ChannelLayout::Stereo, sample_rate,
-                        bits);
+                        bits, &report);
+  require_fitted(report);
 }
 
 }  // namespace
@@ -327,7 +340,9 @@ void write_stereo_wav_impl(const std::string& path, const float* left, size_t le
 void write_wav(const std::string& path, const float* samples, size_t count, int sample_rate,
                int bits, const OutputFit& fit) {
   std::vector<float> scaled;
-  save_wav(path, fitted(samples, count, fit, scaled), count, sample_rate, bits);
+  QuantizeReport report;
+  save_wav(path, fitted(samples, count, fit, scaled), count, sample_rate, bits, &report);
+  require_fitted(report);
 }
 
 void write_wav(const std::string& path, const Audio& audio, int bits, const OutputFit& fit) {
@@ -356,9 +371,11 @@ void write_wav_multichannel(const std::string& path, const float* interleaved, s
       channels > 0 && frames <= std::numeric_limits<size_t>::max() / static_cast<size_t>(channels),
       ErrorCode::InvalidParameter, "multichannel WAV is too large");
   std::vector<float> scaled;
+  QuantizeReport report;
   save_wav_multichannel(path,
                         fitted(interleaved, frames * static_cast<size_t>(channels), fit, scaled),
-                        frames, channels, layout, sample_rate, bits);
+                        frames, channels, layout, sample_rate, bits, &report);
+  require_fitted(report);
 }
 
 void note_output_fit(const CliArgs& args, const OutputFit& fit) {

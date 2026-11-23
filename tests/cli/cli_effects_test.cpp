@@ -121,6 +121,37 @@ TEST_CASE("CLI level writers refuse an unreachable target and fit a reachable on
     CHECK(pinned_share(out) < 0.01);
   }
 
+  SECTION("a stereo set fitted on one gain writes both channels with no held sample") {
+    // The left channel sets the set's peak and the right sits under it; a sample the writer had
+    // to hold past full scale would fail the write, so a clean exit is the count reading 0.
+    const std::string pair = unique_temp_path("_level_pair.wav");
+    std::vector<float> interleaved(2 * kRate);
+    const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+    for (size_t i = 0; i < static_cast<size_t>(kRate); ++i) {
+      const float phase = two_pi * 440.0f * static_cast<float>(i) / kRate;
+      interleaved[2 * i] = 0.5f * std::sin(phase) + 0.3f * std::sin(3.0f * phase);
+      interleaved[2 * i + 1] = 0.2f * std::sin(phase);
+    }
+    save_wav_multichannel(pair, interleaved.data(), kRate, 2, sonare::ChannelLayout::Stereo, kRate);
+    auto [code, output] = exec_command(CLI + " normalize " + pair +
+                                       " --mode rms --target-db 0 -o " + out + " --json -q");
+    std::remove(pair.c_str());
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    CHECK(payload["output_gain_db"].as_number() < 0.0);
+    const auto [written, rate, channels] = load_audio_interleaved(out);
+    (void)rate;
+    REQUIRE(channels == 2);
+    float left_peak = 0.0f;
+    float right_peak = 0.0f;
+    for (size_t i = 0; i + 1 < written.size(); i += 2) {
+      left_peak = std::max(left_peak, std::abs(written[i]));
+      right_peak = std::max(right_peak, std::abs(written[i + 1]));
+    }
+    CHECK(left_peak >= 0.999f);
+    CHECK(right_peak < left_peak);
+  }
+
 #ifdef SONARE_WITH_MASTERING
   SECTION("a gain past full scale is fitted and reported") {
     auto [code, output] =

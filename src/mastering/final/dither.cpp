@@ -27,7 +27,7 @@ float quantize_to_grid(float value, float lsb, float min_code, float max_code) n
 }  // namespace
 
 Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherConfig& config,
-                         size_t* non_finite_samples) {
+                         QuantizeReport* report) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (config.target_bits < kMinDitherTargetBits || config.target_bits > kMaxDitherTargetBits) {
     throw SonareException(ErrorCode::InvalidParameter, "target_bits must be in [2, 32]");
@@ -40,12 +40,18 @@ Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherC
   // This is the last stage before the samples leave for a file or a device, so
   // a non-finite one is replaced here rather than propagated.
   constexpr SampleDestination kDestination = SampleDestination::kIrreversibleOutput;
-  size_t non_finite = 0;
+  QuantizeReport counted;
   if (config.type == DitherType::None) {
-    non_finite = resolve_non_finite_run(kDestination, samples.data(), samples.size());
-    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+    counted.non_finite_samples =
+        resolve_non_finite_run(kDestination, samples.data(), samples.size());
+    if (report != nullptr) *report = counted;
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
+  // Resolves a non-finite input and counts a finite one past full scale, before any noise.
+  const auto admit = [&counted](float& sample) {
+    if (resolve_non_finite(kDestination, sample)) ++counted.non_finite_samples;
+    if (std::abs(sample) > 1.0f) ++counted.clipped_samples;
+  };
 
   const float lsb = 1.0f / static_cast<float>(int64_t{1} << (config.target_bits - 1));
   const float scale = 1.0f / lsb;
@@ -65,11 +71,11 @@ Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherC
     for (size_t index = 0; index < samples.size(); ++index) {
       auto& sample = samples[index];
       const size_t channel = index % channel_count;
-      if (resolve_non_finite(kDestination, sample)) ++non_finite;
+      admit(sample);
       const float dithered = sample + distributions[channel](rngs[channel]) * lsb;
       sample = quantize_to_grid(dithered, lsb, min_code, max_code);
     }
-    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+    if (report != nullptr) *report = counted;
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
 
@@ -77,13 +83,13 @@ Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherC
     for (size_t index = 0; index < samples.size(); ++index) {
       auto& sample = samples[index];
       const size_t channel = index % channel_count;
-      if (resolve_non_finite(kDestination, sample)) ++non_finite;
+      admit(sample);
       const float dithered =
           sample +
           (distributions[channel](rngs[channel]) + distributions[channel](rngs[channel])) * lsb;
       sample = quantize_to_grid(dithered, lsb, min_code, max_code);
     }
-    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+    if (report != nullptr) *report = counted;
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
 
@@ -95,25 +101,25 @@ Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherC
     const size_t channel = index % channel_count;
     const float feedback = noise_shaping_feedback(coeffs, error_history[channel]);
 
-    if (resolve_non_finite(kDestination, sample)) ++non_finite;
+    admit(sample);
     const float tpdf =
         distributions[channel](rngs[channel]) + distributions[channel](rngs[channel]);
     const float dithered = sample + tpdf * lsb + feedback * lsb;
     // Noise-shaping feedback can push the dithered value beyond full scale;
-    // clamp before quantizing so the output never leaves [-1, 1] regardless of
-    // the downstream clamp setting. The error feedback uses the clamped output
+    // clamp before quantizing so the output never leaves [-1, 1]. The error
+    // feedback uses the clamped output
     // so the shaper accounts for the clamping as part of the quantization step.
     const float clamped = std::clamp(dithered, -1.0f, 1.0f);
     const float quantized = quantize_to_grid(clamped, lsb, min_code, max_code);
     push_noise_shaping_error(error_history[channel], (clamped - quantized) / lsb - tpdf);
     sample = quantized;
   }
-  if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+  if (report != nullptr) *report = counted;
   return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 
-Audio dither(const Audio& audio, const DitherConfig& config, size_t* non_finite_samples) {
-  return dither_interleaved(audio, 1, config, non_finite_samples);
+Audio dither(const Audio& audio, const DitherConfig& config, QuantizeReport* report) {
+  return dither_interleaved(audio, 1, config, report);
 }
 
 }  // namespace sonare::mastering::final

@@ -463,9 +463,10 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     config.type = ditherTypeFromInt(dither);
     config.target_bits = dither_bits;
     config.seed = dither_seed;
+    QuantizeReport quantize_report;
     Audio dithered = mastering::final::dither_interleaved(
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
-        static_cast<size_t>(num_channels), config);
+        static_cast<size_t>(num_channels), config, &quantize_report);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
   }
 

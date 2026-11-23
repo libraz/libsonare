@@ -144,17 +144,18 @@ TEST_CASE("WAV byte rate is validated in its 32-bit header domain", "[audio_io][
       if (first_invalid_rate <= static_cast<uint64_t>(std::numeric_limits<int>::max())) {
         const auto new_path = directory / ("rejected_new_" + std::to_string(layout.channels) + "_" +
                                            std::to_string(bits_per_sample) + ".wav");
-        size_t non_finite_samples = 37;
+        sonare::QuantizeReport report{37, 38};
         const std::vector<float> non_finite_samples_data(static_cast<size_t>(layout.channels),
                                                          std::numeric_limits<float>::quiet_NaN());
         REQUIRE(capture_error_code([&] {
                   sonare::save_wav_multichannel(new_path.string(), non_finite_samples_data.data(),
                                                 1, layout.channels, layout.layout,
                                                 static_cast<int>(first_invalid_rate),
-                                                bits_per_sample, &non_finite_samples);
+                                                bits_per_sample, &report);
                 }) == ErrorCode::InvalidParameter);
         REQUIRE_FALSE(std::filesystem::exists(new_path));
-        REQUIRE(non_finite_samples == 37);
+        REQUIRE(report.non_finite_samples == 37);
+        REQUIRE(report.clipped_samples == 38);
 
         const auto sentinel_path = directory / ("sentinel_" + std::to_string(layout.channels) +
                                                 "_" + std::to_string(bits_per_sample) + ".wav");
@@ -166,15 +167,16 @@ TEST_CASE("WAV byte rate is validated in its 32-bit header domain", "[audio_io][
                        static_cast<std::streamsize>(sentinel.size()));
           REQUIRE(output.good());
         }
-        non_finite_samples = 41;
+        report = sonare::QuantizeReport{41, 42};
         REQUIRE(capture_error_code([&] {
                   sonare::save_wav_multichannel(sentinel_path.string(),
                                                 non_finite_samples_data.data(), 1, layout.channels,
                                                 layout.layout, static_cast<int>(first_invalid_rate),
-                                                bits_per_sample, &non_finite_samples);
+                                                bits_per_sample, &report);
                 }) == ErrorCode::InvalidParameter);
         REQUIRE(read_bytes(sentinel_path) == sentinel);
-        REQUIRE(non_finite_samples == 41);
+        REQUIRE(report.non_finite_samples == 41);
+        REQUIRE(report.clipped_samples == 42);
       }
     }
   }
@@ -194,13 +196,14 @@ TEST_CASE("WAV byte rate is validated in its 32-bit header domain", "[audio_io][
   const uint64_t mono_24_max_rate = std::numeric_limits<uint32_t>::max() / 3;
   const auto rejected_mono_path = directory / "mono_24_overflow.wav";
   const float non_finite_sample = std::numeric_limits<float>::quiet_NaN();
-  size_t non_finite_samples = 43;
+  sonare::QuantizeReport mono_report{43, 44};
   REQUIRE(capture_error_code([&] {
             sonare::save_wav(rejected_mono_path.string(), &non_finite_sample, 1,
-                             static_cast<int>(mono_24_max_rate + 1), 24, &non_finite_samples);
+                             static_cast<int>(mono_24_max_rate + 1), 24, &mono_report);
           }) == ErrorCode::InvalidParameter);
   REQUIRE_FALSE(std::filesystem::exists(rejected_mono_path));
-  REQUIRE(non_finite_samples == 43);
+  REQUIRE(mono_report.non_finite_samples == 43);
+  REQUIRE(mono_report.clipped_samples == 44);
 
   const auto rejected_mono_sentinel_path = directory / "mono_24_sentinel.wav";
   const std::vector<uint8_t> mono_sentinel = {0x4D, 0x4F, 0x4E, 0x4F};
@@ -211,13 +214,14 @@ TEST_CASE("WAV byte rate is validated in its 32-bit header domain", "[audio_io][
                  static_cast<std::streamsize>(mono_sentinel.size()));
     REQUIRE(output.good());
   }
-  non_finite_samples = 47;
+  mono_report = sonare::QuantizeReport{47, 48};
   REQUIRE(capture_error_code([&] {
             sonare::save_wav(rejected_mono_sentinel_path.string(), &non_finite_sample, 1,
-                             static_cast<int>(mono_24_max_rate + 1), 24, &non_finite_samples);
+                             static_cast<int>(mono_24_max_rate + 1), 24, &mono_report);
           }) == ErrorCode::InvalidParameter);
   REQUIRE(read_bytes(rejected_mono_sentinel_path) == mono_sentinel);
-  REQUIRE(non_finite_samples == 47);
+  REQUIRE(mono_report.non_finite_samples == 47);
+  REQUIRE(mono_report.clipped_samples == 48);
 }
 
 TEST_CASE("mono and multichannel mono WAV headers remain byte-identical", "[audio_io][domain]") {

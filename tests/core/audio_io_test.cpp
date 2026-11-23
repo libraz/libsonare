@@ -2158,8 +2158,8 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
 
   SECTION("16-bit") {
     const std::string path = "test_pcm16_non_finite.wav";
-    size_t non_finite = 0;
-    save_wav(path, samples, 48000, 16, &non_finite);
+    QuantizeReport report{99, 99};
+    save_wav(path, samples, 48000, 16, &report);
     auto [loaded, sr] = load_wav(path);
     std::remove(path.c_str());
 
@@ -2172,13 +2172,15 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
       CAPTURE(i);
       REQUIRE(std::lround(static_cast<double>(loaded[i]) * 32768.0) == expected[i]);
     }
-    REQUIRE(non_finite == 3);
+    REQUIRE(report.non_finite_samples == 3);
+    // 1.0 and -1.0 are the grid's ends, not samples past full scale.
+    REQUIRE(report.clipped_samples == 0);
   }
 
   SECTION("24-bit") {
     const std::string path = "test_pcm24_non_finite.wav";
-    size_t non_finite = 0;
-    save_wav(path, samples, 48000, 24, &non_finite);
+    QuantizeReport report{99, 99};
+    save_wav(path, samples, 48000, 24, &report);
     auto [loaded, sr] = load_wav(path);
     std::remove(path.c_str());
 
@@ -2189,7 +2191,9 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
       CAPTURE(i);
       REQUIRE(std::lround(static_cast<double>(loaded[i]) * 8388608.0) == expected[i]);
     }
-    REQUIRE(non_finite == 3);
+    REQUIRE(report.non_finite_samples == 3);
+    // 1.0 and -1.0 are the grid's ends, not samples past full scale.
+    REQUIRE(report.clipped_samples == 0);
   }
 
   SECTION("the multichannel writers pack the same way") {
@@ -2198,9 +2202,9 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
     // packer. The data chunk is read directly so the assertion is on the byte
     // the file carries.
     const std::string stereo_path = "test_stereo_non_finite.wav";
-    size_t stereo_non_finite = 0;
+    QuantizeReport stereo_report;
     save_wav_multichannel(stereo_path, samples.data(), samples.size() / 2, 2, ChannelLayout::Stereo,
-                          48000, 16, &stereo_non_finite);
+                          48000, 16, &stereo_report);
     std::remove(stereo_path.c_str());
 
     const std::string surround_path = "test_surround_non_finite.wav";
@@ -2208,9 +2212,9 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
     interleaved[0] = 1.0f;
     interleaved[1] = std::numeric_limits<float>::quiet_NaN();
     interleaved[2] = -std::numeric_limits<float>::infinity();
-    size_t surround_non_finite = 0;
+    QuantizeReport surround_report;
     save_wav_multichannel(surround_path, interleaved.data(), 2, 6, ChannelLayout::FivePointOne,
-                          48000, 16, &surround_non_finite);
+                          48000, 16, &surround_report);
     const std::vector<uint8_t> bytes = read_file_bytes(surround_path);
     std::remove(surround_path.c_str());
 
@@ -2218,8 +2222,10 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
     REQUIRE(static_cast<int16_t>(le16(bytes, data_off)) == 32767);
     REQUIRE(static_cast<int16_t>(le16(bytes, data_off + 2)) == 0);
     REQUIRE(static_cast<int16_t>(le16(bytes, data_off + 4)) == 0);
-    REQUIRE(stereo_non_finite == 3);
-    REQUIRE(surround_non_finite == 2);
+    REQUIRE(stereo_report.non_finite_samples == 3);
+    REQUIRE(surround_report.non_finite_samples == 2);
+    REQUIRE(stereo_report.clipped_samples == 0);
+    REQUIRE(surround_report.clipped_samples == 0);
   }
 }
 
