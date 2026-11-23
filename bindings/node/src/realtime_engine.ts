@@ -275,12 +275,15 @@ function eqBandJsonOf(band: EqBandInput): string {
   return stringifyWithinBudget(band, 'band');
 }
 
-function sceneStripJson(strip: MixSceneStripInput): string {
-  return stringifyWithinBudget({ strips: [mixSceneStripToNative(strip)] }, 'strip');
+function sceneStripJson(settings: MixSceneStripInput): string {
+  return stringifyWithinBudget(
+    { strips: [mixSceneStripToNative(settings, 'settings')] },
+    'settings',
+  );
 }
 
-function sceneBusJson(bus: MixSceneBusInput): string {
-  return stringifyWithinBudget({ buses: [mixSceneBusToNative(bus)] }, 'bus');
+function sceneBusJson(settings: MixSceneBusInput): string {
+  return stringifyWithinBudget({ buses: [mixSceneBusToNative(settings, 'settings')] }, 'settings');
 }
 
 function bypassState(

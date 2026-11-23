@@ -135,3 +135,45 @@ describe('detectChords chromaMethod', () => {
     expect(() => detectChords({ ...base, chromaMethod: 'x' as 'cqt' })).toThrow();
   });
 });
+
+describe('chordFunctions refuses a malformed request by the field the caller wrote', () => {
+  const key = { root: 0, mode: 'major' } as const;
+  const cases: ReadonlyArray<readonly [string, unknown, typeof TypeError, string]> = [
+    ['a non-object key', { chords: [], key: 0 }, TypeError, 'key must be an object'],
+    [
+      'a non-object chord list',
+      { chords: 0, key },
+      TypeError,
+      'chords must be an array or a chord analysis result',
+    ],
+    [
+      'a result whose chords are not a list',
+      { chords: { chords: 5 }, key },
+      TypeError,
+      'chords must be an array',
+    ],
+    ['a non-object chord', { chords: [5], key }, TypeError, 'chords[0] must be an object'],
+    [
+      'a chord root outside the pitch classes',
+      {
+        chords: [
+          { root: 0, quality: 'major' },
+          { root: 12, quality: 'major' },
+        ],
+        key,
+      },
+      RangeError,
+      'chords[1].root must be an integer in [0, 11]',
+    ],
+  ];
+  it.each(cases)('refuses %s', (_case, request, errorClass, text) => {
+    let caught: unknown;
+    try {
+      chordFunctions(request as never);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(errorClass);
+    expect((caught as Error).message).toBe(`chordFunctions: ${text}`);
+  });
+});

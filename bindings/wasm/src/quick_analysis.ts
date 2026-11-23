@@ -587,13 +587,28 @@ export function chordFunctions<T extends ChordFunctionsInput>(
 ): FunctionalChord<T>[] {
   return withEntry('chordFunctions', () => {
     requestObject('chordFunctions', request, 'request', true);
-    const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
-    requireListBudget(entries, 'chords' in request.chords ? 'chords.chords' : 'chords');
+    const { chords, key } = request;
+    if (typeof key !== 'object' || key === null) {
+      throw refuseType('key must be an object');
+    }
+    if (typeof chords !== 'object' || chords === null) {
+      throw refuseType('chords must be an array or a chord analysis result');
+    }
+    const entries = 'chords' in chords ? chords.chords : chords;
+    if (!Array.isArray(entries)) {
+      throw refuseType('chords must be an array');
+    }
+    requireListBudget(entries, 'chords');
     // The module reads each chord's quality as its native ordinal.
-    const nativeEntries = entries.map((chord) => ({
-      root: chord.root,
-      quality: chordQualityOrdinal(chord.quality, 'quality'),
-    }));
+    const nativeEntries = entries.map((chord, i) => {
+      if (typeof chord !== 'object' || chord === null) {
+        throw refuseType(`chords[${i}] must be an object`);
+      }
+      return {
+        root: pitchClassOrdinal(chord.root, `chords[${i}].root`),
+        quality: chordQualityOrdinal(chord.quality, `chords[${i}].quality`),
+      };
+    });
     const labels = getSonareModule().chordFunctions(
       nativeEntries,
       pitchClassOrdinal(request.key.root, 'key.root'),

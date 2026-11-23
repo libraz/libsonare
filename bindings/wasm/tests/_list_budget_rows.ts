@@ -54,22 +54,22 @@ export const REALTIME_ENGINE_ROWS: ReadonlyArray<ListBudgetRow<RealtimeEngine>> 
   },
   {
     method: 'setStrip',
-    text: overBudget('strip.sends'),
+    text: overBudget('settings.sends'),
     call: (e, l) => e.setStrip(1, { sends: l } as never),
   },
   {
     method: 'setStrip',
-    text: overBudget('strip'),
+    text: overBudget('settings'),
     call: (e, l) => e.setStrip(1, { inserts: l } as never),
   },
   {
     method: 'setStrip',
-    text: overBudget('strip'),
+    text: overBudget('settings'),
     call: (e, l) => e.setStrip(1, { eq: { bands: l } } as never),
   },
   {
     method: 'setBusStrip',
-    text: overBudget('bus'),
+    text: overBudget('settings'),
     call: (e, l) => e.setBusStrip(1, { inserts: l } as never),
   },
   {
@@ -144,22 +144,22 @@ export const SONARE_ENGINE_ROWS: ReadonlyArray<ListBudgetRow<SonareEngine>> = [
   },
   {
     method: 'setStrip',
-    text: overBudget('strip.sends'),
+    text: overBudget('settings.sends'),
     call: (e, l) => e.setStrip('master', { sends: l } as never),
   },
   {
     method: 'setStrip',
-    text: overBudget('strip'),
+    text: overBudget('settings'),
     call: (e, l) => e.setStrip('master', { inserts: l } as never),
   },
   {
     method: 'setStrip',
-    text: overBudget('strip'),
+    text: overBudget('settings'),
     call: (e, l) => e.setStrip('master', { eq: { bands: l } } as never),
   },
   {
     method: 'setBusStrip',
-    text: overBudget('bus'),
+    text: overBudget('settings'),
     call: (e, l) => e.setBusStrip(1, { inserts: l } as never),
   },
   { method: 'setTrackBuses', text: overBudget('buses'), call: (e, l) => e.setTrackBuses(l) },
@@ -825,7 +825,7 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   },
   {
     callable: 'chordFunctions',
-    message: `chordFunctions: ${overBudget('chords.chords')}`,
+    message: `chordFunctions: ${overBudget('chords')}`,
     run: (api, l) => api.chordFunctions({ chords: { chords: l }, key: { root: 0, mode: 'major' } }),
   },
   {

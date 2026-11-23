@@ -764,7 +764,10 @@ export class SonareEngine {
    * no lane yet.
    */
   setStrip(target: string | number, settings: MixSceneStripInput): void {
-    const sceneJson = stringifyWithinBudget({ strips: [mixSceneStripToNative(settings)] }, 'strip');
+    const sceneJson = stringifyWithinBudget(
+      { strips: [mixSceneStripToNative(settings, 'settings')] },
+      'settings',
+    );
     if (target === 'master') {
       mixer.setMasterStripJson(this.mixerContext, sceneJson);
       return;
@@ -785,7 +788,10 @@ export class SonareEngine {
 
   /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
   setBusStrip(busId: number, settings: MixSceneBusInput): void {
-    const sceneJson = stringifyWithinBudget({ buses: [mixSceneBusToNative(settings)] }, 'bus');
+    const sceneJson = stringifyWithinBudget(
+      { buses: [mixSceneBusToNative(settings, 'settings')] },
+      'settings',
+    );
     mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
   }
 
