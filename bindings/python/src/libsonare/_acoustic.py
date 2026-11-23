@@ -30,6 +30,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_diagnostics,
+    _measured,
     _optional_from_c_float_array,
     _to_c_float_array,
     _to_c_int,
@@ -384,7 +385,7 @@ def estimate_room(
             length_m=float(out.length_m),
             width_m=float(out.width_m),
             height_m=float(out.height_m),
-            drr_db=float(out.drr_db),
+            drr_db=_measured(out.drr_db),
             confidence=float(out.confidence),
             band_absorption=_optional_from_c_float_array(out.band_absorption, count),
             rt60_bands=_optional_from_c_float_array(out.rt60_bands, count),
@@ -438,7 +439,9 @@ def room_geometry_from_estimate(
         length_m=_float_data(estimate.length_m, "estimate.length_m"),
         width_m=_float_data(estimate.width_m, "estimate.width_m"),
         height_m=_float_data(estimate.height_m, "estimate.height_m"),
-        drr_db=_float_data(estimate.drr_db, "estimate.drr_db"),
+        drr_db=_float_data(
+            math.nan if estimate.drr_db is None else estimate.drr_db, "estimate.drr_db"
+        ),
         confidence=_float_data(estimate.confidence, "estimate.confidence"),
         band_absorption=bands_ptr,
         rt60_bands=None,

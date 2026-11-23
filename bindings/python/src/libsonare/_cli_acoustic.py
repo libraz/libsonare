@@ -175,7 +175,7 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
         print("  Room estimate:")
         print(f"    Volume:     {est.volume:.1f} m^3")
         print(f"    Dimensions: {est.length_m:.2f} x {est.width_m:.2f} x {est.height_m:.2f} m")
-        print(f"    DRR:        {est.drr_db:.2f} dB")
+        print(f"    DRR:        {_fmt_optional(est.drr_db, '.2f', ' dB')}")
         print(f"    Confidence: {est.confidence:.1%}")
     return 0
 

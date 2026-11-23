@@ -162,8 +162,9 @@ class RoomEstimate:
     """Estimated room width in metres; NaN when no broadband decay was measurable."""
     height_m: float
     """Estimated room height in metres; NaN when no broadband decay was measurable."""
-    drr_db: float
-    """Direct-to-reverberant ratio in dB."""
+    drr_db: float | None
+    """Direct-to-reverberant ratio in dB; None when the input is silent or empty, ``inf`` when
+    the direct sound leaves no energy outside its window."""
     confidence: float
     """Confidence of the estimate, in [0, 1]; 0 when nothing was measurable."""
     band_absorption: npt.NDArray[np.float32]

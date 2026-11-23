@@ -8438,6 +8438,14 @@ removed = "read rt60_bands"
 domain = "effects"
 rule = "aliases-removed"
 
+[[entry]]
+kind = "field"
+old = "RoomEstimate.drr_db"
+changed = "float | None; None on a silent or empty input, inf when the direct sound leaves no energy outside its window"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_unmeasured_estimate_leaves_the_dereverb_delay_as_given"
+
 # The repair analysis is a frozen dataclass and the stages it recommends are stage records.
 
 [[entry]]

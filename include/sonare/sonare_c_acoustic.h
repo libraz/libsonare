@@ -165,11 +165,13 @@ typedef struct {
 
 /// @brief Equivalent-room estimate. Free with sonare_free_room_estimate.
 typedef struct {
-  float volume;      ///< Equivalent interior volume in m^3; NaN when no decay is measurable.
-  float length_m;    ///< Representative room length in metres; NaN likewise.
-  float width_m;     ///< Representative room width in metres; NaN likewise.
-  float height_m;    ///< Representative room height in metres; NaN likewise.
-  float drr_db;      ///< Direct-to-reverberant ratio in dB.
+  float volume;    ///< Equivalent interior volume in m^3; NaN when no decay is measurable.
+  float length_m;  ///< Representative room length in metres; NaN likewise.
+  float width_m;   ///< Representative room width in metres; NaN likewise.
+  float height_m;  ///< Representative room height in metres; NaN likewise.
+  /// Direct-to-reverberant ratio in dB; NaN when the input is silent or empty, +inf when
+  /// the direct sound leaves no energy outside its window.
+  float drr_db;
   float confidence;  ///< Support for the estimate, in [0, 1].
   /// Per-octave-band mean absorption; heap-owned. Absorption and RT60 are independent
   /// estimates and either can fail to converge without the other: both arrays always have

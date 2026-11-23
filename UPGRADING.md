@@ -2220,6 +2220,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `AcousticResult.edt` | None when is_blind (was NaN) |
 | `ClipDetection.flat_level` | None when no flat run was found (was 0.0) |
 | `NoteObject.median_hz` | None for a note with no pitch (was 0.0); None is what a caller writes for no pitch, and 0 or a negative value raises SonareValueError |
+| `RoomEstimate.drr_db` | float \| None; None on a silent or empty input, inf when the direct sound leaves no energy outside its window |
 | `SpectralRegionOp.high_hz` | float \| None, default None: None is Nyquist, and 0 or a negative edge raises SonareValueError instead of reading as Nyquist |
 | `StreamingRetune.constructor(grain_size)` | `StreamingRetune.constructor(grain_size_samples)`: grain_size -> grain_size_samples; None derives the grain from the sample rate, an explicit 0 raises SonareValueError, and any other grain must be a multiple of 4 in [4, 8192] (it was rounded up before) |
 | `StreamingRetune.set_config(grain_size)` | `StreamingRetune.set_config(grain_size_samples)`: grain_size -> grain_size_samples; None derives the grain from the sample rate, an explicit 0 raises SonareValueError, and any other grain must be a multiple of 4 in [4, 8192] (it was rounded up before) |
@@ -12991,7 +12992,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `dynamic-range` (native CLI only) | a --window-sec or --hop-sec at or below 0, a percentile outside [0, 1] and a --low-percentile above --high-percentile are refused as usage errors (exit 2) before the input is read, rather than exit 3; a level nothing measured is absent rather than null |
 | `dynamics --hop-length` | a value below 1 is refused as a usage error (exit 2) naming --hop-length before the input is read, with one text on both front-ends |
 | `dynamics --window-sec` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `estimate-room` | the JSON absorption_bands key is band_absorption, as the library names it; a room dimension it could not estimate is absent rather than null, and rt60_bands and band_absorption list only the measured bands, beside their indices in rt60_band and band_absorption_band |
+| `estimate-room` | the JSON absorption_bands key is band_absorption, as the library names it; a room dimension it could not estimate is absent rather than null, and rt60_bands and band_absorption list only the measured bands, beside their indices in rt60_band and band_absorption_band; drr_db is absent on a silent or empty input and null when the direct sound leaves no energy outside its window |
 | `key --hop-length` | a value below 16 with --hpss is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `key --n-fft` | a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends |
 | `mel-to-audio --output` (native CLI only) | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |

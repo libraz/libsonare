@@ -58,6 +58,48 @@ def test_acoustic_omits_what_only_an_impulse_response_measures(
     assert payload["rt60"] == pytest.approx(0.4)
 
 
+@pytest.mark.parametrize(("drr_db", "written"), [(None, "absent"), (float("inf"), None)])
+def test_estimate_room_omits_an_unmeasured_drr_and_writes_an_infinite_one_as_null(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    drr_db: float | None,
+    written: object,
+) -> None:
+    monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.1], 48000))
+    result = SimpleNamespace(
+        volume=10.0,
+        length_m=3.0,
+        width_m=2.0,
+        height_m=1.7,
+        drr_db=drr_db,
+        confidence=0.5,
+        rt60_bands=[],
+        band_absorption=[],
+    )
+    monkeypatch.setattr(libsonare, "estimate_room", lambda _samples, **_kwargs: result)
+    args = argparse.Namespace(
+        file="in.wav",
+        json=True,
+        aspect_lw=1.0,
+        aspect_lh=1.0,
+        reference_absorption=0.15,
+        sabine=False,
+        n_octave_bands=None,
+    )
+
+    assert acoustic.cmd_estimate_room(args) == 0
+    payload = _json_out(capsys)
+    if written == "absent":
+        assert "drr_db" not in payload
+    else:
+        assert payload["drr_db"] is written
+
+    args.json = False
+    assert acoustic.cmd_estimate_room(args) == 0
+    text = capsys.readouterr().out
+    assert ("DRR:        -" in text) is (drr_db is None)
+
+
 def _vocal_note(*, pitched: bool) -> SimpleNamespace:
     return SimpleNamespace(
         id=1,

@@ -2477,7 +2477,7 @@ test = "tests/cli/cli_project_test.cpp::CLI project commands refuse synth, audio
 [[entry]]
 kind = "command"
 old = "estimate-room"
-changed = "the JSON absorption_bands key is band_absorption, as the library names it; a room dimension it could not estimate is absent rather than null, and rt60_bands and band_absorption list only the measured bands, beside their indices in rt60_band and band_absorption_band"
+changed = "the JSON absorption_bands key is band_absorption, as the library names it; a room dimension it could not estimate is absent rather than null, and rt60_bands and band_absorption list only the measured bands, beside their indices in rt60_band and band_absorption_band; drr_db is absent on a silent or empty input and null when the direct sound leaves no energy outside its window"
 domain = "analysis"
 rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_option_effects_v2.py::test_estimate_room_json_names_the_band_absorption_as_the_library_does"

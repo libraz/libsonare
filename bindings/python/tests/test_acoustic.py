@@ -820,6 +820,8 @@ def test_room_geometry_from_estimate_refuses_an_unmeasured_room() -> None:
 def test_an_unmeasured_estimate_leaves_the_dereverb_delay_as_given() -> None:
     silent = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
     assert math.isnan(silent.volume)
+    # A silent input has no direct sound to measure a ratio against.
+    assert silent.drr_db is None
     config = libsonare.mastering_repair_dereverb_config_for_room(silent, late_delay_ms=33.0)
     assert config["late_delay_ms"] == pytest.approx(33.0)
 

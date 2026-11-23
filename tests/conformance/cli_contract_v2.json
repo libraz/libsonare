@@ -18960,7 +18960,7 @@
             "length": "measured",
             "width": "measured",
             "height": "measured",
-            "drr_db": "number",
+            "drr_db": "measured:+inf",
             "confidence": "number",
             "rt60_bands": {
               "type": "measured_pairs",
