@@ -14193,3 +14193,27 @@ changed = "float | None: `-inf` on a silent window, None for empty input"
 domain = "mastering"
 rule = "silence-is-infinite"
 test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_metering_dynamic_range_reads_a_silent_low_end_as_infinite_and_silence_as_none"
+
+[[entry]]
+kind = "field"
+old = "PhaseScopeReport.correlation"
+changed = "float | None: None when either channel has zero energy, instead of NaN"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_stereo_and_spectrum.py::test_phase_scope_over_silence_reports_no_angle"
+
+[[entry]]
+kind = "field"
+old = "PhaseScopeReport.average_abs_angle_rad"
+changed = "float | None: the mean over the non-silent points, None when every point is silent"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_stereo_and_spectrum.py::test_phase_scope_over_silence_reports_no_angle"
+
+[[entry]]
+kind = "field"
+old = "PhaseScopeReport.angle_rad"
+changed = "NaN at a silent point, which has no angle, instead of 0; the array keeps one element per point"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_stereo_and_spectrum.py::test_phase_scope_over_silence_reports_no_angle"

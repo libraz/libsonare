@@ -5245,3 +5245,19 @@ changed = "db_ref and db_amin are 0 for the library default and otherwise finite
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_metering_extra_test.cpp::The spectrum entries refuse a non-finite dB reference or floor by name"
+
+[[entry]]
+kind = "field"
+old = "SonarePhaseScopePoint.angle_rad"
+changed = "NaN at a point where mid and side are both 0, which has no angle, instead of 0; points keeps one entry per point"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_features_metering_test.cpp::sonare_metering stereo wrappers"
+
+[[entry]]
+kind = "field"
+old = "SonarePhaseScopeResult.average_abs_angle_rad"
+changed = "the mean over the non-silent points; NaN (not measured) when every point is silent instead of 0"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_features_metering_test.cpp::sonare_metering stereo wrappers"

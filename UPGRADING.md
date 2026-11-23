@@ -689,6 +689,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonarePhaseScopePoint.angle_rad` | NaN at a point where mid and side are both 0, which has no angle, instead of 0; points keeps one entry per point |
+| `SonarePhaseScopeResult.average_abs_angle_rad` | the mean over the non-silent points; NaN (not measured) when every point is silent instead of 0 |
 | `SonareStreamingLoudnessGain.loudness_static_gain_db` | NaN for a silent or below-gate stage input instead of 0; sonare_streaming_mastering_chain_create reads a NaN static gain as no gain |
 | `SonareStreamingLoudnessGain.true_peak_db` | `SonareStreamingLoudnessGain.true_peak_dbtp`: -inf for digital silence instead of -120 |
 
@@ -2640,6 +2642,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MixMeterSnapshot.short_term_lufs` | float -> float \| None: -inf for silence, None until the window fills |
 | `MixMeterSnapshot.true_peak_db_l` | `MixMeterSnapshot.true_peak_dbtp_l`: true_peak_db_l -> true_peak_dbtp_l, float \| None: -inf for silence, None when true peak is switched off |
 | `MixMeterSnapshot.true_peak_db_r` | `MixMeterSnapshot.true_peak_dbtp_r`: true_peak_db_r -> true_peak_dbtp_r, float \| None: -inf for silence, None when true peak is switched off |
+| `PhaseScopeReport.angle_rad` | NaN at a silent point, which has no angle, instead of 0; the array keeps one element per point |
+| `PhaseScopeReport.average_abs_angle_rad` | float \| None: the mean over the non-silent points, None when every point is silent |
+| `PhaseScopeReport.correlation` | float \| None: None when either channel has zero energy, instead of NaN |
 | `StreamingLoudnessGain.integrated_lufs` | -inf for a silent or below-gate input, never None |
 | `StreamingLoudnessGain.loudness_static_gain_db` | float -> float \| None: None for a silent or below-gate stage input, which a StreamingMasteringChain given it applies as no gain |
 | `StreamingLoudnessGain.true_peak_db` | `StreamingLoudnessGain.true_peak_dbtp`: true_peak_db -> true_peak_dbtp: -inf for digital silence, never None |

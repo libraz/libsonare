@@ -118,7 +118,8 @@ void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result);
 // ============================================================================
 
 /// @brief Uncentered correlation (cosine similarity) in [-1, 1] between two
-///        equal-length mono channels. Returns 0.0 when both channels are silent.
+///        equal-length mono channels; NaN (not measured) when either channel has
+///        zero energy.
 SonareError sonare_metering_stereo_correlation(const float* left, const float* right, size_t length,
                                                int sample_rate, float* out_value);
 
@@ -126,8 +127,8 @@ SonareError sonare_metering_stereo_correlation(const float* left, const float* r
 ///        AMPLITUDE ratio, not the energy ratio. 0 = pure mono, ~1 = wide
 ///        stereo, larger = increasingly decorrelated / out of phase.
 /// @details The range is [0, +Infinity): +Infinity is returned when mid is
-///          silent but side is not (a fully out-of-phase signal), and 0 when
-///          both are silent. Converting to dB is 20*log10(value), since the
+///          silent but side is not (a fully out-of-phase signal), and NaN (not
+///          measured) when both are silent. Converting to dB is 20*log10(value), since the
 ///          value is an amplitude; 10*log10 would understate the true energy
 ///          ratio by half.
 SonareError sonare_metering_stereo_width(const float* left, const float* right, size_t length,
@@ -162,12 +163,14 @@ SonareError sonare_metering_vectorscope(const float* left, const float* right, s
 /// @brief Frees the points of a result. Safe on NULL.
 void sonare_free_vectorscope_result(SonareVectorscopeResult* result);
 
-/// @brief Single phase-scope point. @c angle_rad is atan2(side, mid).
+/// @brief Single phase-scope point. @c angle_rad is atan2(side, mid), NaN at a silent point.
 typedef struct {
   float mid;        ///< (left + right) / sqrt(2).
   float side;       ///< (left - right) / sqrt(2).
   float radius;     ///< sqrt(mid^2 + side^2).
-  float angle_rad;  ///< Angle in radians, in [-pi, pi].
+  float angle_rad;  ///< Angle in radians, in [-pi, pi]; NaN where mid and side are both 0, which
+                    ///< has no angle. points keeps full length: dropping the point would break
+                    ///< index alignment with the samples it was taken from.
 } SonarePhaseScopePoint;
 
 /// @brief Heap-allocated phase-scope result. @c points is freed via
@@ -175,8 +178,10 @@ typedef struct {
 typedef struct {
   SonarePhaseScopePoint* points;  ///< Heap-owned points in time order.
   size_t point_count;             ///< Number of entries in points.
-  float correlation;              ///< Stereo correlation in [-1, 1] over the full signal.
-  float average_abs_angle_rad;    ///< Mean of |angle_rad| over the full signal.
+  float correlation;              ///< Stereo correlation in [-1, 1] over the full signal;
+                                  ///< NaN (not measured) when either channel has zero energy.
+  float average_abs_angle_rad;    ///< Mean of |angle_rad| over the non-silent points of the
+                                  ///< full signal; NaN (not measured) when every point is silent.
   float max_radius;               ///< Largest point radius over the full signal.
 } SonarePhaseScopeResult;
 

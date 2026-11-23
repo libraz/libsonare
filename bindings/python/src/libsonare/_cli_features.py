@@ -278,7 +278,14 @@ def cmd_stereo(args: argparse.Namespace) -> int:
     correlation = metering_stereo_correlation(left, right, sr)
     width = metering_stereo_width(left, right, sr)
     if args.json:
-        print(_strict_json_dumps({"correlation": correlation, "stereo_width": width}))
+        print(
+            _strict_json_dumps(
+                {
+                    "correlation": _absent_if_none(correlation),
+                    "stereo_width": _absent_if_none(width),
+                }
+            )
+        )
     else:
         print("Stereo Image:")
         print(f"  Correlation:  {_fmt_optional(correlation, '.4f')}")
@@ -296,16 +303,16 @@ def cmd_phase(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "correlation": result.correlation,
-                    "average_abs_angle_rad": result.average_abs_angle_rad,
+                    "correlation": _absent_if_none(result.correlation),
+                    "average_abs_angle_rad": _absent_if_none(result.average_abs_angle_rad),
                     "max_radius": result.max_radius,
                 }
             )
         )
     else:
         print("Phase Scope:")
-        print(f"  Correlation:        {result.correlation:.4f}")
-        print(f"  Avg Abs Angle:      {result.average_abs_angle_rad:.4f} rad")
+        print(f"  Correlation:        {_fmt_optional(result.correlation, '.4f')}")
+        print(f"  Avg Abs Angle:      {_fmt_optional(result.average_abs_angle_rad, '.4f', ' rad')}")
         print(f"  Max Radius:         {result.max_radius:.4f}")
     return 0
 

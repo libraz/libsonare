@@ -475,11 +475,15 @@ class PhaseScopeReport:
     radius: NDArray[np.float32]
     """Distance of each point from the origin."""
     angle_rad: NDArray[np.float32]
-    """Angle of each point, ``atan2(side, mid)``, in radians."""
-    correlation: float
-    """Stereo correlation over the full-resolution signal."""
-    average_abs_angle_rad: float
-    """Mean absolute point angle over the full-resolution signal, in radians."""
+    """Angle of each point, ``atan2(side, mid)``, in radians; ``NaN`` at a silent point, which has
+    no angle. The array keeps full length: a typed array cannot hold absence, and dropping the
+    element would break index alignment with ``mid``, ``side`` and ``radius``."""
+    correlation: float | None
+    """Stereo correlation over the full-resolution signal; ``None`` when either channel has zero
+    energy."""
+    average_abs_angle_rad: float | None
+    """Mean absolute point angle over the non-silent points of the full-resolution signal, in
+    radians; ``None`` when every point is silent."""
     max_radius: float
     """Largest point radius over the full-resolution signal."""
 

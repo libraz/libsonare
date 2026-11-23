@@ -30,6 +30,7 @@ from ._runtime import (
     _check,
     _from_c_float_array,
     _get_lib,
+    _measured,
     _measured_level,
     _mode_value,
     _narrow_double,
@@ -654,8 +655,8 @@ def metering_phase_scope(
             side=columns["side"],
             radius=columns["radius"],
             angle_rad=columns["angle_rad"],
-            correlation=float(out.correlation),
-            average_abs_angle_rad=float(out.average_abs_angle_rad),
+            correlation=_measured(out.correlation),
+            average_abs_angle_rad=_measured(out.average_abs_angle_rad),
             max_radius=float(out.max_radius),
         )
     finally:

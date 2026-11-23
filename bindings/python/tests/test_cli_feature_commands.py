@@ -376,6 +376,18 @@ def test_phase_matches_library(source: Path, other: Path) -> None:
     assert payload["max_radius"] == pytest.approx(expected.max_radius)
 
 
+def test_stereo_and_phase_leave_unmeasured_values_out_over_silence(tmp_path: Path) -> None:
+    silence = _write(tmp_path / "silence.wav", [0.0] * FRAMES)
+    argv = [str(silence), "--reference", str(silence)]
+    assert _json(_run_cli(["stereo", *argv, "--json"])) == {}
+    assert _json(_run_cli(["phase", *argv, "--json"])) == {"max_radius": 0.0}
+    text = _run_cli(["phase", *argv])
+    assert text.returncode == 0, text.stderr
+    assert "Correlation:        -" in text.stdout
+    assert "Avg Abs Angle:      -" in text.stdout
+    assert "Correlation:  -" in _run_cli(["stereo", *argv]).stdout
+
+
 @pytest.mark.parametrize("command", ["stereo", "phase"])
 def test_reference_is_needed_after_the_input_is_read(command: str, source: Path) -> None:
     result = _run_cli([command, str(source)])

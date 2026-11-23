@@ -1028,6 +1028,27 @@ TEST_CASE("sonare_metering stereo wrappers", "[c_api]") {
     REQUIRE(result.point_count == 0);
   }
 
+  SECTION("silence leaves the stereo scalars and the phase angle not measured") {
+    const std::vector<float> silence(256, 0.0f);
+    float corr = 0.0f;
+    float width = 0.0f;
+    REQUIRE(sonare_metering_stereo_correlation(silence.data(), silence.data(), silence.size(), sr,
+                                               &corr) == SONARE_OK);
+    REQUIRE(sonare_metering_stereo_width(silence.data(), silence.data(), silence.size(), sr,
+                                         &width) == SONARE_OK);
+    REQUIRE(std::isnan(corr));
+    REQUIRE(std::isnan(width));
+    SonarePhaseScopeResult result = {};
+    REQUIRE(sonare_metering_phase_scope(silence.data(), silence.data(), silence.size(), sr, 0,
+                                        &result) == SONARE_OK);
+    REQUIRE(result.point_count == silence.size());
+    for (size_t i = 0; i < result.point_count; ++i) REQUIRE(std::isnan(result.points[i].angle_rad));
+    REQUIRE(std::isnan(result.correlation));
+    REQUIRE(std::isnan(result.average_abs_angle_rad));
+    REQUIRE(result.max_radius == 0.0f);
+    sonare_free_phase_scope_result(&result);
+  }
+
   SECTION("rejects null pair / null out") {
     float out_v = 0.0f;
     REQUIRE(sonare_metering_stereo_correlation(nullptr, right_in_phase.data(), left.size(), sr,

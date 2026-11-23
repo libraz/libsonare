@@ -162,10 +162,25 @@ def test_metering_scope_columns_come_from_one_shared_bulk_copy() -> None:
     # The phase-scope columns are the polar form of those two, which pins the
     # column ORDER rather than only the names.
     assert np.allclose(phase.radius, np.hypot(phase.mid, phase.side), atol=1e-5)
-    assert np.allclose(phase.angle_rad, np.arctan2(phase.side, phase.mid), atol=1e-5)
+    # Both sines start at zero, so the first point is silent and has no angle.
+    silent = (phase.mid == 0.0) & (phase.side == 0.0)
+    assert silent[0]
+    expected_angle = np.where(silent, np.nan, np.arctan2(phase.side, phase.mid))
+    assert np.allclose(phase.angle_rad, expected_angle, atol=1e-5, equal_nan=True)
 
     # The arrays outlive the C result, which is freed inside the call.
     assert float(np.max(np.abs(vector.mid))) > 0.0
+
+
+def test_phase_scope_over_silence_reports_no_angle() -> None:
+    silence = np.zeros(256, dtype=np.float32)
+    phase = libsonare.metering_phase_scope(silence, silence, SR)
+    # The angle array keeps one element per point, NaN where a point has no angle.
+    assert phase.angle_rad.shape == phase.mid.shape
+    assert bool(np.all(np.isnan(phase.angle_rad)))
+    assert phase.average_abs_angle_rad is None
+    assert phase.correlation is None
+    assert phase.max_radius == 0.0
 
 
 def test_metering_stereo_rejects_mismatched_lengths() -> None:

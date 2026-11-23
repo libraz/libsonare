@@ -27487,8 +27487,8 @@
       "payloads": {
         "success": {
           "keys": {
-            "correlation": "number",
-            "stereo_width": "number"
+            "correlation": "measured",
+            "stereo_width": "measured:+inf"
           }
         }
       },
@@ -27562,8 +27562,8 @@
       "payloads": {
         "success": {
           "keys": {
-            "correlation": "number",
-            "average_abs_angle_rad": "number",
+            "correlation": "measured",
+            "average_abs_angle_rad": "measured",
             "max_radius": "number"
           }
         }

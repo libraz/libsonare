@@ -782,13 +782,18 @@ def _present_count(value: int, has: int) -> int | None:
     return int(value) if has else None
 
 
+def _measured(value: float) -> float | None:
+    """A scalar result as a float, ``None`` where the core did not measure it (NaN)."""
+    value = float(value)
+    return None if math.isnan(value) else value
+
+
 def _measured_level(value: float) -> float | None:
     """A level as a float, ``None`` where the core did not measure it (NaN).
 
     Silence stays ``-inf``: it is a measurement, not an absence.
     """
-    value = float(value)
-    return None if math.isnan(value) else value
+    return _measured(value)
 
 
 def _from_c_float_array(array: object, count: int) -> np.ndarray:
