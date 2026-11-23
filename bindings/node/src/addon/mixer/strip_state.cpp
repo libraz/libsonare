@@ -18,14 +18,14 @@ SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi:
     const size_t index = node_narrow_uint32(env, ref, "strip");
     strip = sonare_mixer_strip_at(mixer_, index);
     if (strip == nullptr) {
-      Napi::RangeError::New(env, "mixer strip index out of range").ThrowAsJavaScriptException();
+      sonare_node::ThrowSonareError(env, sonare_last_error_code());
     }
   } else if (ref.IsString()) {
     const std::string id = node_narrow_string(env, ref, "strip");
     strip = sonare_mixer_strip_by_id(mixer_, id.c_str());
     if (strip == nullptr) {
       sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                                           std::string("mixer strip not found: ") + id);
+                                           "no strip with id '" + id + "'");
     }
   } else {
     Napi::TypeError::New(env, "strip reference must be a number (index) or string (id)")
@@ -48,7 +48,7 @@ Napi::Value MixerWrap::SetInputTrimDb(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_set_input_trim_db(strip, node_narrow_float(env, info[1], "db"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip input trim: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -68,7 +68,7 @@ Napi::Value MixerWrap::SetFaderDb(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_set_fader_db(strip, node_narrow_float(env, info[1], "db"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip fader: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -92,7 +92,7 @@ Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 2, "panMode", -1, &pan_mode)) return env.Undefined();
   SonareError err = sonare_strip_set_pan(strip, node_narrow_float(env, info[1], "pan"), pan_mode);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip pan: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -112,7 +112,7 @@ Napi::Value MixerWrap::SetWidth(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_set_width(strip, node_narrow_float(env, info[1], "width"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip width: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -132,7 +132,7 @@ Napi::Value MixerWrap::SetMuted(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_set_muted(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip muted: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -152,7 +152,7 @@ Napi::Value MixerWrap::SetSoloed(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_set_soloed(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip solo: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -172,7 +172,7 @@ Napi::Value MixerWrap::SetSoloSafe(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_set_solo_safe(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip solo-safe: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -198,7 +198,7 @@ Napi::Value MixerWrap::SetPolarityInvert(const Napi::CallbackInfo& info) {
       sonare_strip_set_polarity_invert(strip, info[1].As<Napi::Boolean>().Value() ? 1 : 0,
                                        info[2].As<Napi::Boolean>().Value() ? 1 : 0);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip polarity: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -219,7 +219,7 @@ Napi::Value MixerWrap::SetPanLaw(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_strip_set_pan_law(strip, sonare_node::node_narrow_int(env, info[1], "panLaw"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip pan law: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -241,7 +241,7 @@ Napi::Value MixerWrap::SetChannelDelaySamples(const Napi::CallbackInfo& info) {
       strip, sonare_node::node_domain_number<int>(info[1], "delaySamples",
                                                   sonare_c_detail::kEngineAlignmentDelayDomain));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip channel delay: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -262,7 +262,7 @@ Napi::Value MixerWrap::SetVcaOffsetDb(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_strip_set_vca_offset_db(strip, node_narrow_float(env, info[1], "offsetDb"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip VCA offset: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -287,7 +287,7 @@ Napi::Value MixerWrap::SetDualPan(const Napi::CallbackInfo& info) {
   SonareError err = sonare_strip_set_dual_pan(strip, node_narrow_float(env, info[1], "leftPan"),
                                               node_narrow_float(env, info[2], "rightPan"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip dual pan: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -326,7 +326,7 @@ Napi::Value MixerWrap::Settle(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_settle(strip);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to settle strip smoothers: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

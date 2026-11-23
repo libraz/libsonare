@@ -10,14 +10,14 @@
 
 // Sets the strip's input trim in dB.
 void MixerWasm::setInputTrimDb(const val& strip_index_val, const val& db_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float db = checkedFloatFromVal(db_val, "db");
   checkStripError(sonare_strip_set_input_trim_db(stripAt(strip_index), db));
 }
 
 // Sets the strip's fader level in dB.
 void MixerWasm::setFaderDb(const val& strip_index_val, const val& db_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float db = checkedFloatFromVal(db_val, "db");
   checkStripError(sonare_strip_set_fader_db(stripAt(strip_index), db));
 }
@@ -26,7 +26,7 @@ void MixerWasm::setFaderDb(const val& strip_index_val, const val& db_val) {
 // pass SONARE_PAN_MODE_KEEP (-1) to keep the strip's current pan mode (e.g. a
 // scene-defined mode) on a plain pan nudge.
 void MixerWasm::setPan(const val& strip_index_val, const val& pan_val, const val& pan_mode_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float pan = checkedFloatFromVal(pan_val, "pan");
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
   checkStripValueError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode));
@@ -34,7 +34,7 @@ void MixerWasm::setPan(const val& strip_index_val, const val& pan_val, const val
 
 // Sets the strip's stereo width.
 void MixerWasm::setWidth(const val& strip_index_val, const val& width_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float width = checkedFloatFromVal(width_val, "width");
   checkStripValueError(sonare_strip_set_width(stripAt(strip_index), width));
 }
@@ -43,33 +43,33 @@ void MixerWasm::setWidth(const val& strip_index_val, const val& width_val) {
 // already set on it, so the next processed block opens at those values instead
 // of gliding to them. Clears nothing.
 void MixerWasm::settle(const val& strip_index_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   checkStripError(sonare_strip_settle(stripAt(strip_index)));
 }
 
 // Sets the strip's mute state.
 void MixerWasm::setMuted(const val& strip_index_val, bool muted) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   checkStripError(sonare_strip_set_muted(stripAt(strip_index), muted ? 1 : 0));
 }
 
 // Sets the strip's solo state. Takes effect on the next process without a
 // graph recompile.
 void MixerWasm::setSoloed(const val& strip_index_val, bool soloed) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   checkStripError(sonare_strip_set_soloed(stripAt(strip_index), soloed ? 1 : 0));
 }
 
 // Marks a strip as solo-safe so it is never implied-muted by another strip's
 // solo. Takes effect on the next process without a graph recompile.
 void MixerWasm::setSoloSafe(const val& strip_index_val, bool solo_safe) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   checkStripError(sonare_strip_set_solo_safe(stripAt(strip_index), solo_safe ? 1 : 0));
 }
 
 // Inverts the polarity of the left and/or right channel.
 void MixerWasm::setPolarityInvert(const val& strip_index_val, bool invert_left, bool invert_right) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   checkStripError(sonare_strip_set_polarity_invert(stripAt(strip_index), invert_left ? 1 : 0,
                                                    invert_right ? 1 : 0));
 }
@@ -77,7 +77,7 @@ void MixerWasm::setPolarityInvert(const val& strip_index_val, bool invert_left, 
 // Sets the strip's pan law. pan_law: 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB,
 // 3 = linear (0 dB).
 void MixerWasm::setPanLaw(const val& strip_index_val, const val& pan_law_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const int pan_law = checkedIntFromVal(pan_law_val, "panLaw");
   checkStripError(sonare_strip_set_pan_law(stripAt(strip_index), pan_law));
 }
@@ -85,7 +85,7 @@ void MixerWasm::setPanLaw(const val& strip_index_val, const val& pan_law_val) {
 // Sets a per-strip channel delay in samples, moving the strip later relative to the
 // other strips; it is not latency, so compensation does not cancel it.
 void MixerWasm::setChannelDelaySamples(const val& strip_index_val, const val& delay_samples_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const int delay_samples = domainNumberFromVal<int>(delay_samples_val, "delaySamples",
                                                      sonare_c_detail::kEngineAlignmentDelayDomain);
   checkStripError(sonare_strip_set_channel_delay_samples(stripAt(strip_index), delay_samples));
@@ -93,7 +93,7 @@ void MixerWasm::setChannelDelaySamples(const val& strip_index_val, const val& de
 
 // Sets the strip's direct VCA trim in dB (persisted as the scene's vcaOffsetDb).
 void MixerWasm::setVcaOffsetDb(const val& strip_index_val, const val& offset_db_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float offset_db = checkedFloatFromVal(offset_db_val, "offsetDb");
   checkStripError(sonare_strip_set_vca_offset_db(stripAt(strip_index), offset_db));
 }
@@ -101,7 +101,7 @@ void MixerWasm::setVcaOffsetDb(const val& strip_index_val, const val& offset_db_
 // Sets independent left/right pan positions (dual-pan mode).
 void MixerWasm::setDualPan(const val& strip_index_val, const val& left_pan_val,
                            const val& right_pan_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float left_pan = checkedFloatFromVal(left_pan_val, "leftPan");
   const float right_pan = checkedFloatFromVal(right_pan_val, "rightPan");
   checkStripValueError(sonare_strip_set_dual_pan(stripAt(strip_index), left_pan, right_pan));
@@ -111,7 +111,7 @@ void MixerWasm::setDualPan(const val& strip_index_val, const val& left_pan_val,
 // absent (undefined/null) fields fall back to the centered point-source default
 // and a present wrong-typed field is refused.
 void MixerWasm::setSurroundPan(const val& strip_index_val, val pan) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   if (pan.isNull() || pan.typeOf().as<std::string>() != "object") {
     throw WasmTypeError("pan must be an object");
   }
@@ -130,7 +130,7 @@ void MixerWasm::setSurroundPan(const val& strip_index_val, val pan) {
 size_t MixerWasm::addSend(const val& strip_index_val, std::string id,
                           std::string destination_bus_id, const val& send_db_val,
                           const val& timing_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float send_db = checkedFloatFromVal(send_db_val, "sendDb");
   const int timing = checkedIntFromVal(timing_val, "timing");
   size_t index = 0;
@@ -143,7 +143,7 @@ size_t MixerWasm::addSend(const val& strip_index_val, std::string id,
 // Sets the send level (in dB) for an existing send by index.
 void MixerWasm::setSendDb(const val& strip_index_val, const val& send_index_val,
                           const val& send_db_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const size_t send_index = static_cast<size_t>(checkedUintFromVal(send_index_val, "sendIndex"));
   const float send_db = checkedFloatFromVal(send_db_val, "sendDb");
   checkStripError(sonare_strip_set_send_db(stripAt(strip_index), send_index, send_db));
@@ -152,7 +152,7 @@ void MixerWasm::setSendDb(const val& strip_index_val, const val& send_index_val,
 // Removes the send at send_index (in add order) from the strip. Higher send
 // indices shift down by one after removal; recompile before processing.
 void MixerWasm::removeSend(const val& strip_index_val, const val& send_index_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const size_t send_index = static_cast<size_t>(checkedUintFromVal(send_index_val, "sendIndex"));
   checkStripError(
       sonare_strip_remove_send(stripAt(strip_index), static_cast<unsigned int>(send_index)));

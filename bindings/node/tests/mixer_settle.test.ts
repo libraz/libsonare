@@ -121,7 +121,7 @@ describe('Mixer.settle', () => {
   it('accepts a strip index as well as an id and rejects an unknown strip', () => {
     const mixer = buildMixer();
     expect(() => mixer.settle(0)).not.toThrow();
-    expect(() => mixer.settle('does-not-exist')).toThrow(/mixer strip not found/);
-    expect(() => mixer.settle(7)).toThrow(/out of range/);
+    expect(() => mixer.settle('does-not-exist')).toThrow("no strip with id 'does-not-exist'");
+    expect(() => mixer.settle(7)).toThrow('Mixer.settle: strip must be an integer in [0, 0]');
   });
 });

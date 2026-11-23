@@ -317,7 +317,9 @@ export class Mixer {
       }
       return index;
     }
-    assertIntegerValue(strip, 'strip');
+    if (typeof strip !== 'number') {
+      throw refuseType('strip reference must be a number (index) or string (id)');
+    }
     return strip;
   }
 

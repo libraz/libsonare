@@ -46,7 +46,7 @@ Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
   SonareError err = sonare_strip_add_send(strip, send_id.c_str(), destination_bus_id.c_str(),
                                           send_db, timing, &index);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to add strip send: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(index));
@@ -73,7 +73,7 @@ Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_strip_set_send_db(strip, send_index, node_narrow_float(env, info[2], "sendDb"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip send level: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -94,7 +94,7 @@ Napi::Value MixerWrap::RemoveSend(const Napi::CallbackInfo& info) {
   const unsigned int send_index = sonare_node::node_narrow_uint32(env, info[1], "sendIndex");
   SonareError err = sonare_strip_remove_send(strip, send_index);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to remove strip send: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -119,7 +119,7 @@ Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
   SonareMixMeterSnapshot snapshot{};
   SonareError err = sonare_strip_meter(strip, tap, &snapshot);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to read strip meter: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return MixMeterSnapshotToObject(env, snapshot);
@@ -138,7 +138,7 @@ Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
   const std::string bus_id = node_narrow_string(env, info[0], "busId");
   const SonareError err = sonare_mixer_bus_meter(mixer_, bus_id.c_str(), &snapshot);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to read bus meter: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return MixMeterSnapshotToObject(env, snapshot);
@@ -168,7 +168,7 @@ Napi::Value MixerWrap::ConfigureMeter(const Napi::CallbackInfo& info) {
   config.measure_true_peak = measure_true_peak ? 1 : 0;
   const SonareError err = sonare_mixer_configure_master_meter(mixer_, &config);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to configure the master meter: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

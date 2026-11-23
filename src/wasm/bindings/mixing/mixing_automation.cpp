@@ -20,7 +20,7 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
                                          const val& param_id_val, const val& sample_pos_val,
                                          const val& value_val, const val& curve_val) {
   const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const unsigned int insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const unsigned int param_id = domainNumberFromVal<unsigned int>(
       param_id_val, "paramId", sonare_c_detail::kStripInsertAutomationParamIdDomain);
@@ -41,7 +41,7 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
 // Reads a strip's meter snapshot at the given tap point. tap: 0 = pre-fader,
 // 1 = post-fader (see SonareMeterTap). Returns the full snapshot.
 val MixerWasm::stripMeter(const val& strip_index_val, const val& tap_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const int tap = checkedIntFromVal(tap_val, "tap");
   SonareMixMeterSnapshot snapshot{};
   checkStripError(sonare_strip_meter(stripAt(strip_index), tap, &snapshot));
@@ -57,7 +57,7 @@ val MixerWasm::busMeter(std::string bus_id) {
 // Number of blocks in which the strip discarded recursive state because a
 // non-finite value had reached it. See sonare_strip_non_finite_discard_count.
 double MixerWasm::stripNonFiniteDiscardCount(const val& strip_index_val) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   size_t count = 0;
   checkStripError(sonare_strip_non_finite_discard_count(stripAt(strip_index), &count));
   return static_cast<double>(count);
@@ -79,7 +79,7 @@ double MixerWasm::busNonFiniteDiscardCount(std::string bus_id) {
 void MixerWasm::scheduleFaderAutomation(const val& strip_index_val, const val& sample_pos_val,
                                         const val& fader_db_val, const val& curve_val) {
   const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float fader_db = checkedFloatFromVal(fader_db_val, "faderDb");
   const int curve =
       domainNumberFromVal<int>(curve_val, "curve", sonare_c_detail::kStripAutomationCurveDomain);
@@ -90,7 +90,7 @@ void MixerWasm::scheduleFaderAutomation(const val& strip_index_val, const val& s
 void MixerWasm::schedulePanAutomation(const val& strip_index_val, const val& sample_pos_val,
                                       const val& pan_val, const val& curve_val) {
   const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float pan = checkedFloatFromVal(pan_val, "pan");
   const int curve =
       domainNumberFromVal<int>(curve_val, "curve", sonare_c_detail::kStripAutomationCurveDomain);
@@ -101,7 +101,7 @@ void MixerWasm::schedulePanAutomation(const val& strip_index_val, const val& sam
 void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, const val& sample_pos_val,
                                         const val& width_val, const val& curve_val) {
   const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const float width = checkedFloatFromVal(width_val, "width");
   const int curve =
       domainNumberFromVal<int>(curve_val, "curve", sonare_c_detail::kStripAutomationCurveDomain);
@@ -114,7 +114,7 @@ void MixerWasm::scheduleSendAutomation(const val& strip_index_val, const val& se
                                        const val& sample_pos_val, const val& db_val,
                                        const val& curve_val) {
   const int64_t sample_pos = checkedInt64FromVal(sample_pos_val, "samplePos");
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const std::size_t send_index =
       static_cast<std::size_t>(checkedUintFromVal(send_index_val, "sendIndex"));
   const float db = checkedFloatFromVal(db_val, "db");
@@ -137,7 +137,7 @@ void MixerWasm::scheduleSendAutomation(const val& strip_index_val, const val& se
 // count reached `std::vector(n)` directly, and in WASM that is not an
 // exception a caller can see: it is an out-of-memory abort of the whole module.
 val MixerWasm::readGoniometerLatest(const val& strip_index_val, double max_points) {
-  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "strip");
   const size_t requested = wasmCountArg(max_points, "maxPoints");
   SonareStrip* strip = stripAt(strip_index);
   val out = val::array();

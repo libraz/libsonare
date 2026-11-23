@@ -123,7 +123,7 @@ Napi::Value MixerWrap::Compile(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   SonareError err = sonare_mixer_compile(mixer_);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to compile mixer graph: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return env.Undefined();
@@ -208,7 +208,7 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
       count > 0 ? sonare_node::ElementData(right_ptrs) : nullptr, count,
       sonare_node::ElementData(left_out), sonare_node::ElementData(right_out), length);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "mixer process failed: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -227,7 +227,7 @@ Napi::Value MixerWrap::TailSamples(const Napi::CallbackInfo& info) {
   int tail = 0;
   SonareError err = sonare_mixer_tail_samples(mixer_, &tail);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to query mixer tail: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, tail);
@@ -241,7 +241,7 @@ Napi::Value MixerWrap::LatencySamples(const Napi::CallbackInfo& info) {
   int latency = 0;
   SonareError err = sonare_mixer_latency_samples(mixer_, &latency);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to query mixer latency: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, latency);
@@ -265,7 +265,7 @@ Napi::Value MixerWrap::FlushMeters(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   SonareError err = sonare_mixer_flush_meters(mixer_);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "mixer meter flush failed: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -298,7 +298,7 @@ Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
   SonareError err = sonare_mixer_drain_tail_stereo(
       mixer_, sonare_node::ElementData(left_out), sonare_node::ElementData(right_out), num_samples);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "mixer drain failed: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -335,7 +335,7 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "stripIndex must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "strip must be a number").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
@@ -355,7 +355,7 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
 
-  const size_t strip_index = sonare_node::node_narrow_uint32(env, info[0], "stripIndex");
+  const size_t strip_index = sonare_node::node_narrow_uint32(env, info[0], "strip");
   const unsigned int insert_index = sonare_node::node_narrow_uint32(env, info[1], "insertIndex");
   const unsigned int param_id = node_domain_number<unsigned int>(
       info[2], "paramId", sonare_c_detail::kStripInsertAutomationParamIdDomain);
@@ -368,14 +368,14 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
 
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, strip_index);
   if (strip == nullptr) {
-    Napi::RangeError::New(env, "mixer strip index out of range").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, sonare_last_error_code());
     return env.Undefined();
   }
 
   SonareError err = sonare_strip_schedule_insert_automation(strip, insert_index, param_id,
                                                             sample_pos, value, curve);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to schedule insert automation: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return env.Undefined();
@@ -389,7 +389,7 @@ Napi::Value MixerWrap::ToSceneJson(const Napi::CallbackInfo& info) {
   char* json = nullptr;
   SonareError err = sonare_mixer_to_scene_json(mixer_, &json);
   if (err != SONARE_OK || json == nullptr) {
-    sonare_node::ThrowSonareError(env, err, "failed to serialize mixer scene: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   std::string out(json);

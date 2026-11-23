@@ -262,7 +262,7 @@ describe('Mixer send index', () => {
       ).toThrow(
         expect.objectContaining({
           name: 'RangeError',
-          message: expect.stringMatching(/stripIndex/),
+          message: expect.stringMatching(/strip must be an integer in \[0, 4294967295\]/),
         }),
       );
       expect(() => mixer.setInputTrimDb(index, 0)).toThrow(

@@ -66,7 +66,7 @@ Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
   const std::string role = has_role ? node_narrow_string(env, info[1], "role") : std::string();
   SonareError err = sonare_mixer_add_bus(mixer_, id.c_str(), has_role ? role.c_str() : nullptr);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to add bus: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -106,7 +106,7 @@ Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
   const std::string id = node_narrow_string(env, info[0], "id");
   SonareError err = sonare_mixer_remove_bus(mixer_, id.c_str());
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to remove bus: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -119,7 +119,7 @@ Napi::Value MixerWrap::BusCount(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_mixer_bus_count(mixer_, &count);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to query bus count: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(count));
@@ -165,7 +165,7 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
                                                member_ptrs.empty() ? nullptr : member_ptrs.data(),
                                                member_ptrs.size());
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to add VCA group: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -182,7 +182,7 @@ Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
   const std::string id = node_narrow_string(env, info[0], "id");
   SonareError err = sonare_mixer_remove_vca_group(mixer_, id.c_str());
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to remove VCA group: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -204,7 +204,7 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
   const float gain_db = node_narrow_float(env, info[1], "gainDb");
   SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, id.c_str(), gain_db);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set VCA group gain: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -241,7 +241,7 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
   const SonareError err = sonare_mixer_set_vca_group_members(
       mixer_, id.c_str(), member_ptrs.empty() ? nullptr : member_ptrs.data(), member_ptrs.size());
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set VCA group members: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -254,7 +254,7 @@ Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to query VCA group count: ");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(count));
@@ -285,7 +285,7 @@ Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   SonareError err = sonare_strip_schedule_fader_automation(strip, sample_pos, fader_db, curve);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to schedule fader automation: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -315,7 +315,7 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   SonareError err = sonare_strip_schedule_pan_automation(strip, sample_pos, pan, curve);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to schedule pan automation: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -345,7 +345,7 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   SonareError err = sonare_strip_schedule_width_automation(strip, sample_pos, width, curve);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to schedule width automation: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -380,7 +380,7 @@ Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   SonareError err = sonare_strip_schedule_send_automation(strip, send_index, sample_pos, db, curve);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to schedule send automation: ");
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

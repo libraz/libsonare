@@ -23,7 +23,7 @@ namespace sonare_node {
 ///   const mixer = new sonare.Mixer(sceneJson, sampleRate, blockSize);
 ///   mixer.compile();
 ///   mixer.stripCount();  // number
-///   mixer.scheduleInsertAutomation(stripIndex, insertIndex, paramId,
+///   mixer.scheduleInsertAutomation(strip, insertIndex, paramId,
 ///                                  samplePos, value, curve);  // curve 0/1
 ///   const { left, right, sampleRate } = mixer.processStereo(l, r);
 ///   const json = mixer.toSceneJson();
