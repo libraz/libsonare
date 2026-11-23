@@ -596,6 +596,36 @@ describe('embedded NUL refusal, scan', () => {
       count: 1,
       reason: 'refusal name built from a literal list name and a channel index',
     },
+    {
+      file: 'common/common.cpp',
+      text: 'default_value : checkedFloatFromVal(value, name.c_str())',
+      count: 1,
+      reason: 'refusal name built from a literal key under an optional list-element path',
+    },
+    {
+      file: 'common/common.cpp',
+      text: 'default_value : checkedByteFromVal(value, name.c_str())',
+      count: 1,
+      reason: 'refusal name built from a literal key under an optional list-element path',
+    },
+    {
+      file: 'common/midi_cc_kind.h',
+      text: 'stringFromVal(value, name.c_str())',
+      count: 1,
+      reason: 'refusal name built from a literal key under an optional list-element path',
+    },
+    {
+      file: 'project/project_midi.cpp',
+      text: 'elementField(at, "ccNumber").c_str()',
+      count: 1,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'project/project_midi.cpp',
+      text: 'elementField(at, "paramId").c_str()',
+      count: 1,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
   ];
 
   /** Every `.c_str()` call outside comments, as file:line plus the source text. */

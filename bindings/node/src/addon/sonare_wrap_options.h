@@ -425,7 +425,7 @@ inline uint8_t MidiByteValue(Napi::Env env, const Napi::Value& value, const std:
 
 /// @brief @ref MidiByteValue over the property @p key, named by it under @p at.
 inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const char* key,
-                                uint8_t fallback, const std::string& at = {}) {
+                                uint8_t fallback, const std::string& at = std::string()) {
   return MidiByteValue(env, obj.Get(key), node_element_field(at, key), fallback);
 }
 
@@ -446,7 +446,7 @@ inline int IntInRangeOrAbsentValue(Napi::Env env, const Napi::Value& value, cons
 
 /// @brief @ref IntInRangeOrAbsentValue over the property @p key, named by it under @p at.
 inline int IntInRangeOrAbsentProperty(const Napi::Object& obj, const char* key, int lo, int hi,
-                                      int absent, const std::string& at = {}) {
+                                      int absent, const std::string& at = std::string()) {
   return IntInRangeOrAbsentValue(obj.Env(), obj.Get(key), node_element_field(at, key), lo, hi,
                                  absent);
 }
@@ -515,7 +515,7 @@ inline float FloatValue(Napi::Env env, const Napi::Value& value, const std::stri
 
 /// @brief @ref FloatValue over the property @p key, named by it under @p at.
 inline float FloatProperty(const Napi::Object& obj, const char* key, float fallback,
-                           const std::string& at = {}) {
+                           const std::string& at = std::string()) {
   return FloatValue(obj.Env(), obj.Get(key), node_element_field(at, key), fallback);
 }
 
@@ -728,7 +728,7 @@ inline int NamedSelectorValue(Napi::Env env, const Napi::Value& value, const std
 template <std::size_t N>
 inline int NamedSelectorProperty(const Napi::Object& obj, const char* key,
                                  const std::array<const char*, N>& names, int fallback,
-                                 const std::string& at = {}) {
+                                 const std::string& at = std::string()) {
   return NamedSelectorValue(obj.Env(), obj.Get(key), node_element_field(at, key), names, fallback);
 }
 

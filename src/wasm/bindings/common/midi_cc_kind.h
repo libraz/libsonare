@@ -15,7 +15,7 @@
 ///        a name the core does not write a RangeError, both naming the valid set.
 /// @param at The binding's place in a list, as @ref elementField takes it.
 inline sonare::midi::CcBindingKind ccBindingKindProperty(const emscripten::val& object,
-                                                         const std::string& at = {}) {
+                                                         const std::string& at = std::string()) {
   const emscripten::val value = object["kind"];
   if (value.isUndefined() || value.isNull()) return sonare::midi::CcBindingKind::kControlChange7;
   const std::string name = elementField(at, "kind");

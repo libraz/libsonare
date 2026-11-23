@@ -442,7 +442,8 @@ inline std::string elementField(const std::string& at, const char* key) {
 ///          "non-finite means unspecified". Every property reader below shares
 ///          this contract: absent is the only way to ask for the default.
 /// @throws WasmArgumentError naming @p key.
-float floatProperty(val object, const char* key, float default_value, const std::string& at = {});
+float floatProperty(val object, const char* key, float default_value,
+                    const std::string& at = std::string());
 
 /// @brief Type-only sibling of @ref floatProperty, for a field whose core check states its domain.
 /// @details NaN and the infinities pass, and a finite value past the float range saturates to an
@@ -518,7 +519,7 @@ int intProperty(val object, const char* key, int default_value);
 ///        null returns @p absent, and any other value outside the range, @p absent
 ///        included, is a WasmRangeError naming @p key.
 int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent,
-                               const std::string& at = {});
+                               const std::string& at = std::string());
 /// @brief Unsigned sibling of @ref checkedIntFromVal.
 /// @details val::as<uint32_t>() saturates at the top and clamps a negative to 0,
 ///          so -1 -- the sentinel several fields here spell "none" with -- lands
@@ -544,7 +545,7 @@ uint32_t wordProperty(val object, const char* key, uint32_t default_value);
 /// @throws WasmArgumentError naming @p key.
 uint8_t checkedByteFromVal(const val& value, const char* key);
 uint8_t byteProperty(val object, const char* key, uint8_t default_value,
-                     const std::string& at = {});
+                     const std::string& at = std::string());
 /// @brief 16-bit sibling of @ref checkedByteFromVal: 65536 would wrap to 0, inside the type.
 /// @throws WasmArgumentError naming @p key.
 uint16_t checkedUint16FromVal(const val& value, const char* key);

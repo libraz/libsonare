@@ -426,6 +426,10 @@ export const TYPE_GATE_HELPERS: Readonly<Record<'node' | 'wasm', readonly string
     'Int32Value',
     'SynthEnumValue',
     'FloatVectorFromValue',
+    'MidiByteValue',
+    'IntInRangeOrAbsentValue',
+    'FloatValue',
+    'NamedSelectorValue',
   ],
   wasm: ['typedPropertyValue', 'numberFromVal', 'enumFromVal', 'stringFromVal'],
 };
