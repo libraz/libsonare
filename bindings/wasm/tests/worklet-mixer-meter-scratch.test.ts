@@ -1,4 +1,5 @@
 import type { MeterScratchField } from '../dist/index.js';
+import type { WorkletMeterSnapshot } from '../dist/worklet.js';
 import {
   createMeterRingBuffer,
   describe,
@@ -10,7 +11,6 @@ import {
   SONARE_METER_RING_PROTOCOL_VERSION,
   SonareWorkletProcessor,
   setupWorklet,
-  type WorkletMeterSnapshot,
 } from './_worklet_helpers';
 
 // The SAB meter ring exists so the audio render callback allocates nothing. The
@@ -146,10 +146,10 @@ describe('SonareWorkletProcessor meter scratch', () => {
       calls.restore();
       const measured = (processor as unknown as { mixer: Mixer }).mixer.meterSnapshot();
       expect(read.meters[publishes - 1]).toMatchObject({
-        peakDb: [measured.peakDbL, measured.peakDbR],
-        rmsDb: [measured.rmsDbL, measured.rmsDbR],
+        peakDb: measured.peakDb,
+        rmsDb: measured.rmsDb,
         correlation: measured.correlation,
-        truePeakDbtp: [measured.truePeakDbtpL, measured.truePeakDbtpR],
+        truePeakDbtp: measured.truePeakDbtp,
       });
     } finally {
       calls.restore();

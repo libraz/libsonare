@@ -21,6 +21,13 @@ import {
   VQT,
 } from './harness';
 
+const TAGGED_WAV = sonare.encodeAudio({
+  channels: [SHORT],
+  sampleRate: SR,
+  format: 'wav',
+  tags: { title: 'request equivalence' },
+});
+
 export const ROWS: Row[] = [
   {
     name: 'tone',
@@ -737,5 +744,24 @@ export const ROWS: Row[] = [
     },
     invalid: { nComponents: -1 },
     inert: { sampleRate: 'the factorization runs in bins and frames' },
+  },
+  {
+    name: 'encodeAudio',
+    fn: sonare.encodeAudio,
+    params: 'channels sampleRate ...options?',
+    values: {
+      channels: [SHORT],
+      sampleRate: ALT_SR,
+      options: { format: 'wav', bitDepth: 24, tags: { title: 'request equivalence' } },
+    },
+    invalid: { sampleRate: 0 },
+    oneOf: [{ fields: ['format'], error: 'TypeError: encodeAudio: format is required' }],
+  },
+  {
+    name: 'readAudioTags',
+    fn: sonare.readAudioTags,
+    params: 'data',
+    values: { data: TAGGED_WAV },
+    invalid: { data: new Uint8Array([0, 1, 2, 3]) },
   },
 ];

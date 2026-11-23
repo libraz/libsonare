@@ -134,6 +134,14 @@ val numberArrayFromVector(const std::vector<float>& values) {
   return out;
 }
 
+val booleanArrayFromVector(const std::vector<uint8_t>& values) {
+  val out = val::array();
+  for (uint8_t value : values) {
+    out.call<void>("push", value != 0);
+  }
+  return out;
+}
+
 val numberArrayFromVector(const std::vector<int>& values) {
   val out = val::array();
   for (int value : values) {
@@ -208,15 +216,14 @@ val analysisResultToVal(const AnalysisResult& result) {
   out.set("downbeats", downbeats);
   out.set("downbeatPhase", result.downbeat_phase);
 
-  // Beat-level evidence the downbeat and meter decisions score, one value per
-  // entry of `beats`. An empty stream means the analysis could not produce it —
-  // lowFrequencyEnergy without audio, chordChange before chords are analyzed —
-  // which is not the same as every beat having scored zero.
+  // Beat-level evidence used by meter estimation.
   val beatObservations = val::object();
-  beatObservations.set("onsetStrength",
-                       numberArrayFromVector(result.beat_observations.onset_strength));
+  beatObservations.set("accent", numberArrayFromVector(result.beat_observations.accent));
+  beatObservations.set("hasAttack", booleanArrayFromVector(result.beat_observations.has_attack));
   beatObservations.set("lowFrequencyEnergy",
                        numberArrayFromVector(result.beat_observations.low_frequency_energy));
+  beatObservations.set("subdivisionAccent",
+                       numberArrayFromVector(result.beat_observations.subdivision_accent));
   beatObservations.set("chordChange", numberArrayFromVector(result.beat_observations.chord_change));
   out.set("beatObservations", beatObservations);
   // Beat-indexed like the streams above, and likewise empty rather than absent
@@ -762,12 +769,40 @@ val js_analyze(val samples, const val& sample_rate_val, val options, const val& 
   return analysisResultToVal(*result);
 }
 
-val js_estimate_meter(val beat_times, val beat_strengths, val options) {
-  // Budget both arrays before either one is copied. Their lengths are
-  // deliberately NOT compared here: estimate_meter_from_beats rejects a
-  // mismatch itself, so every surface reports it with the same message.
-  validateWasmFloat32ArrayPair(beat_times, "beatTimes", beat_strengths, "beatStrengths",
-                               /*require_matching_lengths=*/false);
+std::vector<uint8_t> meterAttackFlagsFromVal(const val& values, const char* subject) {
+  if (values.isUndefined()) return {};
+  if (!val::global("Array").call<bool>("isArray", values)) {
+    throw WasmTypeError(std::string(subject) + " must be an array of booleans");
+  }
+  const std::size_t length = wasmArrayLength(values, subject);
+  std::vector<uint8_t> result;
+  result.reserve(length);
+  for (std::size_t i = 0; i < length; ++i) {
+    const val value = values[static_cast<unsigned>(i)];
+    if (!value.isTrue() && !value.isFalse()) {
+      throw WasmTypeError(std::string(subject) + "[" + std::to_string(i) + "] must be a boolean");
+    }
+    result.push_back(value.as<bool>() ? 1 : 0);
+  }
+  return result;
+}
+
+val js_estimate_meter(val accent, val has_attack, val low_frequency_energy, val subdivision_accent,
+                      val options) {
+  std::size_t plain_count = 0;
+  accumulateWasmFloat32ArrayLength(accent, "accent", &plain_count);
+  if (!has_attack.isUndefined()) {
+    if (!val::global("Array").call<bool>("isArray", has_attack)) {
+      throw WasmTypeError("hasAttack must be an array of booleans");
+    }
+    accumulateWasmFloat32ArrayLength(has_attack, "hasAttack", &plain_count);
+  }
+  if (!low_frequency_energy.isUndefined()) {
+    accumulateWasmFloat32ArrayLength(low_frequency_energy, "lowFrequencyEnergy", &plain_count);
+  }
+  if (!subdivision_accent.isUndefined()) {
+    accumulateWasmFloat32ArrayLength(subdivision_accent, "subdivisionAccent", &plain_count);
+  }
 
   MeterConfig config;
   const val candidate_numerators = options["candidateNumerators"];
@@ -781,23 +816,31 @@ val js_estimate_meter(val beat_times, val beat_strengths, val options) {
   setNumberOption(options, "subdivisionWeight", &config.subdivision_weight);
   setNumberOption(options, "compoundSubdivisionThreshold", &config.compound_subdivision_threshold);
 
-  // validate_meter_config runs inside estimate_meter_from_beats, so the empty
-  // candidate list, the per-entry range, the denominator rule, and the weight
-  // finiteness are all rejected by the core rather than re-checked here.
-  // The request keys, as the Node addon reports them through the C entry.
+  // The core owns stream lengths, values, and meter configuration validation.
   const MeterResult result = sonare::util::check::with_camel_paths(
       [&] {
-        return estimate_meter_from_beats(float32ArrayToVector(beat_times, "beatTimes"),
-                                         float32ArrayToVector(beat_strengths, "beatStrengths"),
-                                         config);
+        MeterBeats beats;
+        beats.accent = float32ArrayToVector(accent, "accent");
+        beats.has_attack = meterAttackFlagsFromVal(has_attack, "hasAttack");
+        if (!low_frequency_energy.isUndefined()) {
+          beats.low_frequency_energy =
+              float32ArrayToVector(low_frequency_energy, "lowFrequencyEnergy");
+        }
+        if (!subdivision_accent.isUndefined()) {
+          beats.subdivision_accent = float32ArrayToVector(subdivision_accent, "subdivisionAccent");
+        }
+        return estimate_meter_from_observations(beats, config);
       },
-      std::array<sonare::util::check::MemberKey, 6>{
+      std::array<sonare::util::check::MemberKey, 9>{
           {{"candidate_numerators", "candidateNumerators"},
            {"denominator", "denominator"},
            {"downbeat_weight", "downbeatWeight"},
            {"measure_weight", "measureWeight"},
            {"subdivision_weight", "subdivisionWeight"},
-           {"compound_subdivision_threshold", "compoundSubdivisionThreshold"}}});
+           {"compound_subdivision_threshold", "compoundSubdivisionThreshold"},
+           {"has_attack", "hasAttack"},
+           {"low_frequency_energy", "lowFrequencyEnergy"},
+           {"subdivision_accent", "subdivisionAccent"}}});
 
   // Field names and order mirror meter_result_to_json.
   val out = val::object();
@@ -829,12 +872,16 @@ val js_analysis_result_schema_fixture() {
   result.time_signature = {4, 4, 0.7f};
   result.time_signature_candidates.push_back({4, 4, 0.7f});
   result.beats.push_back({0.25f, 0, 0.6f});
+  result.beats.push_back({0.5f, 1, 0.2f});
   result.downbeat_indices.push_back(0);
   result.downbeat_phase = 0;
-  result.beat_observations.onset_strength.push_back(0.6f);
-  result.beat_observations.low_frequency_energy.push_back(0.4f);
-  result.beat_observations.chord_change.push_back(0.2f);
+  result.beat_observations.accent = {0.6f, 0.2f};
+  result.beat_observations.has_attack = {1, 0};
+  result.beat_observations.low_frequency_energy = {0.4f, 0.3f};
+  result.beat_observations.subdivision_accent = {0.15f};
+  result.beat_observations.chord_change = {0.2f, 0.4f};
   result.beat_local_bpm.push_back(118.5f);
+  result.beat_local_bpm.push_back(117.0f);
   result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
   result.chord_roman_numerals.push_back("I");
   result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f, 0});

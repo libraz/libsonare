@@ -718,24 +718,23 @@ describe('Sonare WASM Project edit ops', () => {
   it('automation lane add / edit / remove round-trips', () => {
     const { project, trackId } = buildAudioProject();
     try {
-      const targetParamId = project.addAutomationLane(trackId, {
-        targetParamId: 1,
+      const laneId = project.addAutomationLane(trackId, {
+        targetParamId: 77,
         points: [
           { ppq: 0, value: 0.0, curveToNext: 'linear' },
           { ppq: 4, value: 1.0, curveToNext: 'exponential' },
         ],
       });
-      expect(targetParamId).toBe(1);
+      expect(laneId).not.toBe(77);
       expect(() =>
-        project.editAutomationLane(trackId, targetParamId, {
-          targetParamId: 1,
+        project.editAutomationLane(trackId, laneId, {
           points: [
             { ppq: 0, value: 0.5 },
             { ppq: 2, value: 0.25, curveToNext: 'hold' },
           ],
         }),
       ).not.toThrow();
-      expect(() => project.removeAutomationLane(trackId, targetParamId)).not.toThrow();
+      expect(() => project.removeAutomationLane(trackId, laneId)).not.toThrow();
     } finally {
       project.destroy();
     }
@@ -853,13 +852,11 @@ describe('Sonare WASM Project edit ops', () => {
   it('normalizes typed automation target kinds and round-trips them through the project JSON', () => {
     const { project, trackId } = buildAudioProject();
     try {
-      project.addAutomationLane(trackId, {
-        targetParamId: 20,
+      const faderLaneId = project.addAutomationLane(trackId, {
         targetKind: 'trackFaderDb',
         points: [{ ppq: 0, value: -3 }],
       });
-      project.addAutomationLane(trackId, {
-        targetParamId: 21,
+      const panLaneId = project.addAutomationLane(trackId, {
         targetKind: 'trackPan',
         points: [{ ppq: 0, value: 0 }],
       });
@@ -869,10 +866,13 @@ describe('Sonare WASM Project edit ops', () => {
       };
       expect(serialized.tracks[0].automationLanes).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ targetParamId: 20, targetKind: 'trackFaderDb' }),
-          expect.objectContaining({ targetParamId: 21, targetKind: 'trackPan' }),
+          expect.objectContaining({ targetKind: 'trackFaderDb' }),
+          expect.objectContaining({ targetKind: 'trackPan' }),
         ]),
       );
+      const lanes = project.automationLanes();
+      expect(lanes.find((lane) => lane.laneId === faderLaneId)).not.toHaveProperty('targetParamId');
+      expect(lanes.find((lane) => lane.laneId === panLaneId)).not.toHaveProperty('targetParamId');
 
       const restored = Project.fromJson(json);
       try {
@@ -885,16 +885,14 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
-  it('rejects typed target conflicts atomically and preserves typed lanes on legacy edit', () => {
+  it('rejects typed target conflicts atomically and preserves identity on a points-only edit', () => {
     const { project, trackId } = buildAudioProject();
     try {
-      project.addAutomationLane(trackId, {
-        targetParamId: 30,
+      const faderLaneId = project.addAutomationLane(trackId, {
         targetKind: 'trackFaderDb',
         points: [{ ppq: 0, value: -3 }],
       });
       project.addAutomationLane(trackId, {
-        targetParamId: 31,
         targetKind: 'trackPan',
         points: [{ ppq: 0, value: 0 }],
       });
@@ -902,7 +900,6 @@ describe('Sonare WASM Project edit ops', () => {
       const beforeConflict = project.toJson();
       expect(() =>
         project.addAutomationLane(trackId, {
-          targetParamId: 32,
           targetKind: 'trackFaderDb',
           points: [{ ppq: 0, value: 6 }],
         }),
@@ -910,26 +907,25 @@ describe('Sonare WASM Project edit ops', () => {
       expect(project.toJson()).toBe(beforeConflict);
 
       expect(() =>
-        project.editAutomationLane(trackId, 30, {
-          targetParamId: 30,
+        project.editAutomationLane(trackId, faderLaneId, {
           targetKind: 'trackPan',
           points: [{ ppq: 0, value: 0.5 }],
         }),
       ).toThrow();
       expect(project.toJson()).toBe(beforeConflict);
 
-      project.editAutomationLane(trackId, 30, {
-        targetParamId: 30,
+      project.editAutomationLane(trackId, faderLaneId, {
         points: [{ ppq: 0, value: -6 }],
       });
       const edited = JSON.parse(project.toJson()) as {
         tracks: Array<{ automationLanes: Array<Record<string, unknown>> }>;
       };
       expect(edited.tracks[0].automationLanes).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ targetParamId: 30, targetKind: 'trackFaderDb' }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ targetKind: 'trackFaderDb' })]),
       );
+      expect(
+        project.automationLanes().find((lane) => lane.targetKind === 'trackFaderDb')?.laneId,
+      ).toBe(faderLaneId);
     } finally {
       project.destroy();
     }
@@ -946,7 +942,6 @@ describe('Sonare WASM Project edit ops', () => {
         Number.POSITIVE_INFINITY,
         'unknown',
         true,
-        null,
       ];
       for (const invalidKind of invalidKinds) {
         const before = project.toJson();

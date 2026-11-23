@@ -20,9 +20,10 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the wasm facade binds under another name, sorted.
-inline constexpr std::array<Override, 80> kOverrides = {{
+inline constexpr std::array<Override, 81> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
+    {"encode_audio", "num_channels", "channels"},
     {"engine_apply_bus_strip_insert_param_by_name_now", "param_name", "param.name"},
     {"engine_apply_master_strip_insert_param_by_name_now", "param_name", "param.name"},
     {"engine_apply_track_strip_insert_param_by_name_now", "param_name", "param.name"},
@@ -104,7 +105,7 @@ inline constexpr std::array<Override, 80> kOverrides = {{
 }};
 
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
-inline constexpr std::array<Override, 62> kLengths = {{
+inline constexpr std::array<Override, 65> kLengths = {{
     {"align_take_to_reference", "reference_len", "reference"},
     {"align_take_to_reference", "take_len", "take"},
     {"chord_functions", "count", "chords"},
@@ -128,6 +129,8 @@ inline constexpr std::array<Override, 62> kLengths = {{
     {"mastering_ab_match_loudness_stereo", "source_length", "sourceLeft"},
     {"mastering_analyze_pair", "reference_length", "reference"},
     {"mastering_analyze_pair", "source_length", "source"},
+    {"mastering_analyze_pair_stereo", "reference_length", "reference"},
+    {"mastering_analyze_pair_stereo", "source_length", "source"},
     {"mastering_apply_pair_processor", "reference_length", "reference"},
     {"mastering_apply_pair_processor", "source_length", "source"},
     {"mastering_apply_pair_processor_stereo", "reference_length", "referenceLeft"},
@@ -142,6 +145,7 @@ inline constexpr std::array<Override, 62> kLengths = {{
     {"project_add_automation_lane", "point_count", "points"},
     {"project_annotate_chords", "count", "chords"},
     {"project_annotate_keys", "count", "keys"},
+    {"project_annotate_sections", "count", "sections"},
     {"project_apply_vocal_edit", "rendered_sample_count", "renderedMono"},
     {"project_bounce", "builtin_instrument_count", "builtinInstruments"},
     {"project_bounce", "instrument_count", "instruments"},
@@ -218,7 +222,9 @@ struct DocumentRoot {
 
 // (C entry key, document prefix, caller root): the facade puts the caller's object in the
 // document slot the prefix names, so a path under it is the caller's path under the root.
-inline constexpr std::array<DocumentRoot, 0> kDocumentRoots = {{}};
+inline constexpr std::array<DocumentRoot, 1> kDocumentRoots = {{
+    {"encode_audio", "tags.", "tags."},
+}};
 
 // @p subject re-rooted under the caller's root when it lies in entry @p entry's document slot.
 inline std::optional<std::string> DocumentRooted(std::string_view entry, std::string_view subject) {

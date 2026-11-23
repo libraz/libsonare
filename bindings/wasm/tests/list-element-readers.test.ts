@@ -322,6 +322,26 @@ describe('Project.addAutomationLane', () => {
       expect(error.message).toBe(`Project.addAutomationLane: ${text}`);
     });
   });
+
+  it('names undeclared descriptor keys when adding and editing a lane', () => {
+    withProject((project, track) => {
+      const addError = caught(() =>
+        project.addAutomationLane(track, { targetParamId: 7, unexpected: true } as never),
+      );
+      expect(addError).toBeInstanceOf(TypeError);
+      expect(addError.message).toBe(
+        'Project.addAutomationLane: unknown key unexpected (expected insertIndex, paramName, points, processor, sendId, targetKind, targetParamId)',
+      );
+
+      const editError = caught(() =>
+        project.editAutomationLane(track, 1, { unexpected: true } as never),
+      );
+      expect(editError).toBeInstanceOf(TypeError);
+      expect(editError.message).toBe(
+        'Project.editAutomationLane: unknown key unexpected (expected insertIndex, paramName, points, processor, sendId, targetKind, targetParamId)',
+      );
+    });
+  });
 });
 
 const anchorCases: ReadonlyArray<readonly [string, unknown[], typeof TypeError, string]> = [

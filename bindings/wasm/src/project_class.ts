@@ -1,4 +1,5 @@
 import type {
+  Articulation,
   BuiltinSynthConfig,
   ExternalInstrument,
   PartRigEntry,
@@ -8,12 +9,13 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types.js';
-import { PART_RIG_MODES } from './instrument_types.js';
+import { ARTICULATIONS, PART_RIG_MODES } from './instrument_types.js';
 import {
   assertDeclaredKeys,
   entryClass,
   invalidState,
   nameNativeError,
+  refusalOf,
   refuse,
   refuseType,
 } from './internal/entry.js';
@@ -22,10 +24,11 @@ import { requireListBudget } from './internal/list_budget.js';
 import { withMonoHeap } from './internal/memory_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
+import { respellRefusal, withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, UINT32_MAX } from './internal/value_guards.js';
+import { normalizeProjectDestinationInstrument } from './project_destination_instruments.js';
 import {
-  assertProjectMidiEvents,
   compSegmentsToNative,
   interleaveChannels,
   type NativeProjectBounce,
@@ -36,16 +39,20 @@ import {
   normalizeSynthInstrument,
   optionalName,
   partRigFromNative,
+  projectAutomationLaneFromNative,
   projectAutomationLaneValue,
   projectBounceResult,
+  projectChordQualityName,
   projectChordSymbolsToNative,
   projectCompileResultFromNative,
   projectFadeCurveValue,
+  projectKeyModeName,
   projectKeySegmentsToNative,
   projectLoopModeName,
   projectLoopModeValue,
   projectMarkerKindName,
   projectMarkerKindValue,
+  projectMidiEventsToNative,
   projectModule,
   projectOverlapPolicyName,
   projectOverlapPolicyValue,
@@ -66,10 +73,13 @@ import type {
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
   ProjectAnalyzeTempoRequest,
+  ProjectArticulationBinding,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
   ProjectAudioSourceMetadataInput,
+  ProjectAutomationLane,
   ProjectAutomationLaneDesc,
+  ProjectAutomationLaneEditDesc,
   ProjectAutoTempoOptions,
   ProjectAutoTempoRequest,
   ProjectBounceOptions,
@@ -84,7 +94,11 @@ import type {
   ProjectClipTakesOptions,
   ProjectCompileOptions,
   ProjectCompileResult,
+  ProjectControllerProfileBinding,
   ProjectDeserializeResult,
+  ProjectDestinationInstrumentBinding,
+  ProjectDestinationInstrumentOptions,
+  ProjectInstrument,
   ProjectKeySegment,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
@@ -98,7 +112,9 @@ import type {
   ProjectMoveClipOptions,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
+  ProjectPosition,
   ProjectProgramOptions,
+  ProjectSection,
   ProjectSource,
   ProjectSourceAudioInput,
   ProjectTempoCandidate,
@@ -112,6 +128,8 @@ import type {
   ProjectWarpMapDesc,
   ProjectWarpMode,
 } from './project_types.js';
+import type { EngineMetronomeConfig } from './public_types_engine.js';
+import type { MixSceneDocument } from './public_types_mixing.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
@@ -121,9 +139,14 @@ import type {
   ProjectVocalRehydrateOptions,
 } from './public_types_vocal_project.js';
 import {
+  assertBoundedInteger,
+  assertFiniteScalar,
+  assertNonNegativeFloatValue,
+  assertPositiveFloatValue,
   assertSampleRate,
   assertSamples,
   assertU7,
+  assertU32,
   C_INT_MAX,
   optionalBoolean,
   requestObject,
@@ -168,6 +191,166 @@ function validateAssistSidecarModuleId(value: unknown): string {
     throw refuseType('moduleId must be a non-empty string');
   }
   return value;
+}
+
+/** Reads text sent through the C UTF-8 interface without embedded NUL or replacement. */
+function requireProjectText(value: unknown, argName: string): string {
+  if (typeof value !== 'string') {
+    throw refuseType(`${argName} must be a string`);
+  }
+  if (value.includes('\0')) {
+    throw refuse(`${argName} must not contain NUL`);
+  }
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw refuse(`${argName} must contain well-formed Unicode`);
+      }
+      i++;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      throw refuse(`${argName} must contain well-formed Unicode`);
+    }
+  }
+  return value;
+}
+
+const PROJECT_BOUNCE_METRONOME_KEYS = [
+  'enabled',
+  'beatGain',
+  'accentGain',
+  'clickSamples',
+  'clickSec',
+];
+const PROJECT_CONTROLLER_PROFILE_KEYS = ['destinationId', 'presetName'];
+const PROJECT_ARTICULATION_KEYS = ['destinationId', 'channel', 'articulation'];
+const DESTINATION_INSTRUMENT_REFUSAL_ROOTS = [
+  ['instrument.synth', 'instrument.patch'],
+  ['instrument.builtin', 'instrument.config'],
+  ['instrument.sf2', 'instrument.config'],
+] as const;
+
+function respellDestinationInstrumentRefusal(error: unknown): unknown {
+  const refusal = refusalOf(error);
+  if (refusal === undefined) {
+    return error;
+  }
+  const subjects = refusal.renamedTo
+    ? [...refusal.subjects, refusal.renamedTo]
+    : [...refusal.subjects];
+  const respelled: Record<string, { name: string; scale: number }> = {};
+  for (const subject of subjects) {
+    for (const [nativeRoot, facadeRoot] of DESTINATION_INSTRUMENT_REFUSAL_ROOTS) {
+      if (subject === nativeRoot || subject.startsWith(`${nativeRoot}.`)) {
+        respelled[subject] = {
+          name: `${facadeRoot}${subject.slice(nativeRoot.length)}`,
+          scale: 1,
+        };
+        break;
+      }
+    }
+  }
+  return Object.keys(respelled).length === 0 ? error : respellRefusal(error, respelled);
+}
+
+function normalizeBounceMetronome(value: unknown): EngineMetronomeConfig | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  if (!isNonArrayObject(value)) {
+    throw refuseType('metronome must be an EngineMetronomeConfig object');
+  }
+  assertDeclaredKeys(value, PROJECT_BOUNCE_METRONOME_KEYS, 'metronome');
+  const record = value as Record<string, unknown>;
+  const config: EngineMetronomeConfig = {
+    enabled: requireBoolean(record.enabled, 'metronome.enabled'),
+  };
+  for (const [key, read, check] of [
+    ['beatGain', record.beatGain, assertNonNegativeFloatValue],
+    ['accentGain', record.accentGain, assertNonNegativeFloatValue],
+  ] as const) {
+    if (isAbsent(read)) {
+      continue;
+    }
+    check(read, `metronome.${key}`);
+    config[key] = read as number;
+  }
+  const clickSamples = record.clickSamples;
+  const clickSec = record.clickSec;
+  if (!isAbsent(clickSamples) && !isAbsent(clickSec)) {
+    throw refuse('give metronome.clickSamples or metronome.clickSec, not both');
+  }
+  if (!isAbsent(clickSamples)) {
+    assertBoundedInteger(clickSamples, 'metronome.clickSamples', 1, 384000);
+    config.clickSamples = clickSamples;
+  }
+  if (!isAbsent(clickSec)) {
+    assertPositiveFloatValue(clickSec, 'metronome.clickSec');
+    const clickSecValue = clickSec as number;
+    if (clickSecValue > 1) {
+      throw refuse('metronome.clickSec must be in (0, 1]');
+    }
+    config.clickSec = clickSecValue;
+  }
+  return config;
+}
+
+function normalizeControllerProfiles(
+  value: unknown,
+): ProjectControllerProfileBinding[] | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw refuseType('controllerProfiles must be an array');
+  }
+  requireListBudget(value, 'controllerProfiles');
+  return value.map((entry: unknown, index) => {
+    const where = `controllerProfiles[${index}]`;
+    if (!isNonArrayObject(entry)) {
+      throw refuseType(`${where} must be a { destinationId, presetName } object`);
+    }
+    assertDeclaredKeys(entry, PROJECT_CONTROLLER_PROFILE_KEYS, where);
+    const record = entry as Record<string, unknown>;
+    assertU32(record.destinationId as number, `${where}.destinationId`);
+    const presetName = requireProjectText(record.presetName, `${where}.presetName`);
+    return {
+      destinationId: record.destinationId as number,
+      presetName,
+    };
+  });
+}
+
+function normalizeArticulations(value: unknown): ProjectArticulationBinding[] | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw refuseType('articulations must be an array');
+  }
+  requireListBudget(value, 'articulations');
+  return value.map((entry: unknown, index) => {
+    const where = `articulations[${index}]`;
+    if (!isNonArrayObject(entry)) {
+      throw refuseType(`${where} must be a { destinationId, channel, articulation } object`);
+    }
+    assertDeclaredKeys(entry, PROJECT_ARTICULATION_KEYS, where);
+    const record = entry as Record<string, unknown>;
+    assertU32(record.destinationId as number, `${where}.destinationId`);
+    assertBoundedInteger(record.channel, `${where}.channel`, 0, 15);
+    if (typeof record.articulation !== 'string') {
+      throw refuseType(`${where}.articulation must be a string`);
+    }
+    if (!ARTICULATIONS.includes(record.articulation as Articulation)) {
+      throw refuse(`${where}.articulation must be one of ${ARTICULATIONS.join(', ')}`);
+    }
+    return {
+      destinationId: record.destinationId as number,
+      channel: record.channel,
+      articulation: record.articulation as Articulation,
+    };
+  });
 }
 
 /** The options bag of an entry point that takes an optional one: absent is `{}`, anything else must be an object. */
@@ -599,6 +782,30 @@ export class Project {
     this.native.setTrackMidiDestination(trackId, destinationId ?? 0);
   }
 
+  /** Set or clear the instrument and optional bank/program for a MIDI destination. */
+  setDestinationInstrument(
+    destinationId: number,
+    instrument?: ProjectInstrument | null,
+    options?: ProjectDestinationInstrumentOptions,
+  ): void {
+    assertU32(destinationId, 'destinationId');
+    const normalized = normalizeProjectDestinationInstrument(instrument, options);
+    try {
+      this.native.setDestinationInstrument(
+        destinationId,
+        normalized.instrument,
+        normalized.options,
+      );
+    } catch (error) {
+      throw respellDestinationInstrumentRefusal(error);
+    }
+  }
+
+  /** Every stored instrument binding, in destination-id order. */
+  destinationInstruments(): ProjectDestinationInstrumentBinding<ProjectInstrument>[] {
+    return this.native.destinationInstruments();
+  }
+
   /**
    * Set a track's linear playback gain (1.0 = unity; >= 0) via an undoable edit.
    *
@@ -707,23 +914,36 @@ export class Project {
   /**
    * Replace a MIDI clip's entire event list.
    *
-   * @remarks
-   * Drops the clip's SysEx, which {@link importSmf} and {@link exportSmf} both
-   * keep. A clip's SysEx payloads sit beside the event list and are reached by
-   * a handle {@link ProjectMidiEvent} does not carry, so replacing the list
-   * leaves nothing referring to them: a GS setup block that survives an import
-   * and an export byte for byte is gone after one call here. Nothing reads the
-   * handles back either, so a caller that must keep the setup edits the
-   * exported file rather than the event list.
+   * Each event is `{ ppq, word0, word1?, sysex? }`; SysEx bytes are copied into
+   * the project and can be read back with {@link midiEvents}.
    *
    * Only events inside the clip's half-open window `[0, lengthPpq)` (after the
    * source offset) are kept for export; a note still sounding at the clip end,
    * including one whose note-off sits at or past `lengthPpq`, is closed with a
    * note-off at the clip end.
+   * @throws {TypeError} when the event list or any field has the wrong type
+   * @throws {RangeError} when an event value is outside its domain
    */
   setMidiEvents(clipId: number, events: ReadonlyArray<ProjectMidiEvent>): void {
-    assertProjectMidiEvents(events);
-    this.native.setMidiEvents(clipId, events);
+    const detached = projectMidiEventsToNative(events);
+    const respelled: Record<string, { name: string; scale: number }> = {};
+    detached.forEach((event, index) => {
+      if (!isAbsent(event.sysex)) {
+        const path = `events[${index}]`;
+        respelled[`${path}.sysexSize`] = { name: `${path}.sysex`, scale: 1 };
+      }
+    });
+    withRespelled(respelled, () => this.native.setMidiEvents(clipId, detached));
+  }
+
+  /**
+   * Read MIDI events in stable PPQ order, including fresh bytes for each SysEx payload.
+   *
+   * @throws {RangeError} when `clipId` does not name a MIDI clip
+   * @throws {SonareError} when stored event data cannot be represented
+   */
+  midiEvents(clipId: number): ProjectMidiEvent[] {
+    return this.native.midiEvents(clipId);
   }
 
   /**
@@ -949,8 +1169,7 @@ export class Project {
   }
 
   /** The native options of one bounce, after the sentinel refusals. */
-  private bounceRequest(options: ProjectBounceOptions | undefined): NativeProjectBounceOptions {
-    const request = optionsObject('Project.bounce', options);
+  private bounceRequest(request: ProjectBounceOptions): NativeProjectBounceOptions {
     const native: NativeProjectBounceOptions = {};
     const totalFrames = optionalPositiveInt(
       'totalFrames',
@@ -974,6 +1193,21 @@ export class Project {
         throw refuseType('instrumentLatencySamples must be an integer');
       }
       native.instrumentLatencySamples = latency;
+    }
+    if (!isAbsent(request.countInBars)) {
+      native.countInBars = request.countInBars;
+    }
+    const metronome = normalizeBounceMetronome(request.metronome);
+    if (metronome !== undefined) {
+      native.metronome = metronome;
+    }
+    const controllerProfiles = normalizeControllerProfiles(request.controllerProfiles);
+    if (controllerProfiles !== undefined) {
+      native.controllerProfiles = controllerProfiles;
+    }
+    const articulations = normalizeArticulations(request.articulations);
+    if (articulations !== undefined) {
+      native.articulations = articulations;
     }
     return native;
   }
@@ -1014,6 +1248,8 @@ export class Project {
    * When `totalFrames` is omitted the render length is derived from the
    * arrangement (plus the instruments' release tail), so a project with content
    * renders without computing a frame count; an empty project yields no frames.
+   * `countInBars` prepends silent pre-roll at the initial tempo and meter. A click
+   * is mixed after the master only when `metronome.enabled` is `true`.
    * The result is at the project sample rate; a bounce is never resampled.
    *
    * @example
@@ -1071,17 +1307,44 @@ export class Project {
       sf2Instruments === undefined
         ? undefined
         : normalizeInstrumentBindings(sf2Instruments, (instrument) => instrument, 'sf2Instruments');
-    const native = this.bounceRequest(options);
+    const native = this.bounceRequest(request);
     const nativeProject = this.native;
+    const refusalNames: Record<string, { name: string; scale: number }> = {
+      'options.count_in_bars': { name: 'countInBars', scale: 1 },
+      'options.metronome.beat_gain': { name: 'metronome.beatGain', scale: 1 },
+      'options.metronome.accent_gain': { name: 'metronome.accentGain', scale: 1 },
+      'options.metronome.click_samples': { name: 'metronome.clickSamples', scale: 1 },
+      'options.metronome.click_sec': { name: 'metronome.clickSec', scale: 1 },
+    };
+    for (let index = 0; index < (native.controllerProfiles?.length ?? 0); index++) {
+      refusalNames[`options.controller_profiles[${index}].destination_id`] = {
+        name: `controllerProfiles[${index}].destinationId`,
+        scale: 1,
+      };
+      refusalNames[`options.controller_profiles[${index}].preset_name`] = {
+        name: `controllerProfiles[${index}].presetName`,
+        scale: 1,
+      };
+    }
+    for (let index = 0; index < (native.articulations?.length ?? 0); index++) {
+      refusalNames[`options.articulations[${index}].destination_id`] = {
+        name: `articulations[${index}].destinationId`,
+        scale: 1,
+      };
+      refusalNames[`options.articulations[${index}].channel`] = {
+        name: `articulations[${index}].channel`,
+        scale: 1,
+      };
+      refusalNames[`options.articulations[${index}].articulation`] = {
+        name: `articulations[${index}].articulation`,
+        scale: 1,
+      };
+    }
     this.instrumentBounceActive = externalBindings !== undefined;
     let result: ReturnType<WasmProject['bounce']>;
     try {
-      result = nativeProject.bounce(
-        native,
-        builtinBindings,
-        externalBindings,
-        synthBindings,
-        sf2Bindings,
+      result = withRespelled(refusalNames, () =>
+        nativeProject.bounce(native, builtinBindings, externalBindings, synthBindings, sf2Bindings),
       );
     } finally {
       this.instrumentBounceActive = false;
@@ -1162,6 +1425,19 @@ export class Project {
   /** Audio source ids that need decoded PCM after deserialization. */
   unresolvedAudioSourceIds(): number[] {
     return this.native.unresolvedAudioSourceIds();
+  }
+
+  /** Add an unresolved audio source and return its new stable id. */
+  addAudioSource(uri: string): number {
+    return this.native.addAudioSource(requireProjectText(uri, 'uri'));
+  }
+
+  /** Replace an audio source's URI while retaining and returning its stable id. */
+  relinkSource(sourceId: number, uri: string): number {
+    assertU32(sourceId, 'sourceId');
+    return withRespelled({ 'source.id': { name: 'sourceId', scale: 1 } }, () =>
+      this.native.relinkSource(sourceId, requireProjectText(uri, 'uri')),
+    );
   }
 
   /** Unresolved audio source descriptors, in the order of {@link unresolvedAudioSourceIds}; `nameOrUri` is the full URI. */
@@ -1278,23 +1554,33 @@ export class Project {
     this.native.setTrackRoute(trackId, channelStripRef ?? '', outputTarget ?? '');
   }
 
-  /** Append an automation lane; returns its stable target parameter id (undoable). */
+  /** Append an automation lane; returns its stable lane id (undoable). */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
-    return this.native.addAutomationLane(trackId, projectAutomationLaneValue(desc));
+    const targetKinds = projectModule().automationTargetKindNames();
+    return this.native.addAutomationLane(trackId, projectAutomationLaneValue(desc, targetKinds));
   }
 
-  /** Replace the lane identified by its stable target parameter id (undoable). */
-  editAutomationLane(
-    trackId: number,
-    targetParamId: number,
-    desc: ProjectAutomationLaneDesc,
-  ): void {
-    this.native.editAutomationLane(trackId, targetParamId, projectAutomationLaneValue(desc));
+  /** Replace the lane identified by its stable lane id (undoable). */
+  editAutomationLane(trackId: number, laneId: number, desc: ProjectAutomationLaneEditDesc): void {
+    const targetKinds = projectModule().automationTargetKindNames();
+    this.native.editAutomationLane(
+      trackId,
+      laneId,
+      projectAutomationLaneValue(desc, targetKinds, true),
+    );
   }
 
-  /** Remove the lane identified by its stable target parameter id (undoable). */
-  removeAutomationLane(trackId: number, targetParamId: number): void {
-    this.native.removeAutomationLane(trackId, targetParamId);
+  /** Remove the lane identified by its stable lane id (undoable). */
+  removeAutomationLane(trackId: number, laneId: number): void {
+    this.native.removeAutomationLane(trackId, laneId);
+  }
+
+  /** Stored automation lanes sorted by track and target identity. */
+  automationLanes(): ProjectAutomationLane[] {
+    const targetKinds = projectModule().automationTargetKindNames();
+    return this.native
+      .automationLanes()
+      .map((lane) => projectAutomationLaneFromNative(lane, targetKinds));
   }
 
   /** Replace the project's key annotation stream (undoable). */
@@ -1302,9 +1588,63 @@ export class Project {
     this.native.annotateKeys(projectKeySegmentsToNative(keys));
   }
 
+  /** Read stored key annotations in project order. */
+  keyAnnotations(): ProjectKeySegment[] {
+    return this.native.keyAnnotations().map((key) => ({
+      startPpq: key.startPpq,
+      endPpq: key.endPpq,
+      ...(key.tonicPc === undefined ? {} : { tonicPc: key.tonicPc }),
+      mode: projectKeyModeName(key.mode ?? 0),
+    }));
+  }
+
   /** Replace the project's chord-symbol annotation stream (undoable). */
   annotateChords(chords: ReadonlyArray<ProjectChordSymbol>): void {
     this.native.annotateChords(projectChordSymbolsToNative(chords));
+  }
+
+  /** Read stored chord annotations in project order. */
+  chordAnnotations(): ProjectChordSymbol[] {
+    return this.native.chordAnnotations().map((chord) => ({
+      startPpq: chord.startPpq,
+      endPpq: chord.endPpq,
+      ...(chord.rootPc === undefined ? {} : { rootPc: chord.rootPc }),
+      quality: projectChordQualityName(chord.quality ?? 0),
+      ...(chord.extensions === undefined ? {} : { extensions: chord.extensions }),
+      ...(chord.slashBassPc === undefined ? {} : { slashBassPc: chord.slashBassPc }),
+      ...(chord.romanNumeral === undefined ? {} : { romanNumeral: chord.romanNumeral }),
+      modulationBoundary: chord.modulationBoundary ?? false,
+    }));
+  }
+
+  /** Replace the project's labeled section annotations (undoable). Sections may overlap. */
+  annotateSections(sections: ReadonlyArray<ProjectSection>): void {
+    if (!Array.isArray(sections)) {
+      throw refuseType('sections must be an array');
+    }
+    requireListBudget(sections, 'sections');
+    const detached = sections.map((section: unknown, index) => {
+      const where = `sections[${index}]`;
+      if (!isNonArrayObject(section)) {
+        throw refuseType(`${where} must be a { startPpq, endPpq, label } object`);
+      }
+      assertDeclaredKeys(section, ['startPpq', 'endPpq', 'label'], where);
+      const record = section as Record<string, unknown>;
+      assertFiniteScalar(record.startPpq as number, `${where}.startPpq`);
+      assertFiniteScalar(record.endPpq as number, `${where}.endPpq`);
+      const label = requireProjectText(record.label, `${where}.label`);
+      return {
+        startPpq: record.startPpq as number,
+        endPpq: record.endPpq as number,
+        label,
+      };
+    });
+    this.native.annotateSections(detached);
+  }
+
+  /** Read the stored labeled section annotations in project order. */
+  sectionAnnotations(): ProjectSection[] {
+    return this.native.sectionAnnotations();
   }
 
   /** Add or update an opaque assist sidecar via an undoable edit. */
@@ -1342,6 +1682,11 @@ export class Project {
     return this.native.getSampleRate();
   }
 
+  /** Count pre-roll frames at the initial tempo and meter using the project rate. */
+  countInFrames(countInBars: number): number {
+    return this.native.countInFrames(countInBars);
+  }
+
   /**
    * Replace the project's mixer scene from a scene JSON string.
    *
@@ -1351,6 +1696,17 @@ export class Project {
    */
   setMixerSceneJson(document: string): void {
     this.native.setMixerSceneJson(document);
+  }
+
+  /** The typed mixer scene stored on the project, or `undefined` when none is set. */
+  mixerScene(): MixSceneDocument | undefined {
+    const document = this.native.mixerScene();
+    return document === null ? undefined : (JSON.parse(document) as MixSceneDocument);
+  }
+
+  /** Unresolved SoundFont URIs, copied from the project reader. */
+  unresolvedSoundFontUris(): string[] {
+    return this.native.unresolvedSoundFontUris();
   }
 
   /**
@@ -1434,6 +1790,49 @@ export class Project {
     return this.readAll(this.native.timeSignatureCount(), (index) =>
       this.native.timeSignatureByIndex(index),
     );
+  }
+
+  /**
+   * Convert a PPQ position in [0, 1e12] to seconds from PPQ zero.
+   * @throws {TypeError} when `ppq` is not a number
+   * @throws {RangeError} when `ppq` is not finite or outside [0, 1e12]
+   */
+  ppqToSec(ppq: number): number {
+    return this.native.ppqToSec(ppq);
+  }
+
+  /**
+   * Convert seconds from PPQ zero to PPQ in [0, 1e12].
+   * @throws {TypeError} when `sec` is not a number
+   * @throws {RangeError} when `sec` is outside the project's supported time range
+   */
+  secToPpq(sec: number): number {
+    return this.native.secToPpq(sec);
+  }
+
+  /**
+   * Read the effective tempo, meter, bar and beat at a PPQ position in [0, 1e12].
+   *
+   * @throws {TypeError} when `ppq` is not a number
+   * @throws {RangeError} when `ppq` is not finite or outside [0, 1e12]
+   * @throws {SonareError} when the native bar index cannot be represented exactly
+   */
+  positionAtPpq(ppq: number): ProjectPosition {
+    return this.native.positionAtPpq(ppq);
+  }
+
+  /**
+   * Read the PPQ start of a zero-based bar whose index is a safe integer.
+   * @throws {TypeError} when `barIndex` is not a number or is fractional
+   * @throws {RangeError} when `barIndex` is unsafe or does not name a supported bar
+   */
+  barStartPpq(barIndex: number): number {
+    return this.native.barStartPpq(barIndex);
+  }
+
+  /** Read the PPQ end of the last audible audio or MIDI clip, excluding render tails. Zero when none. */
+  endPpq(): number {
+    return this.native.endPpq();
   }
 
   private readAll<T>(count: number, read: (index: number) => T): T[] {

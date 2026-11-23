@@ -3,13 +3,14 @@
  * or MFCC representation, and the phase reconstruction they share.
  */
 
-import { refuse, withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import {
   resolveEffectFftOptions,
   resolveFftOptions,
   resolveResynthesisHop,
 } from './internal/fft_options.js';
 import { MAX_OFFLINE_AUDIO_SAMPLES, withHeapNeed } from './internal/memory_budget.js';
+import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -136,6 +137,20 @@ export interface GriffinLimRequest {
   momentum?: number;
 }
 
+/** Request for {@link istft}. */
+export interface IstftRequest {
+  /** Magnitude matrix from `stft`; rows are bins and cols are frames. */
+  magnitude: Matrix2D;
+  /** Phase matrix in radians, with the same shape as `magnitude`. */
+  phase: Matrix2D;
+  /** FFT size of the source transform. Omitted, it is inferred from the bin count. */
+  nFft?: number;
+  /** Hop length in samples. Omitted, it is one quarter of `nFft`, rounded down and at least 1. */
+  hopLength?: number;
+  /** Output length in samples, from 1 through 500,000,000. Omit for the natural length. */
+  lengthSamples?: number;
+}
+
 /**
  * Approximate inverse of a Mel filterbank: Mel power spectrogram -> STFT
  * magnitude spectrogram (not squared). Mirrors `feature::mel_to_stft`.
@@ -248,6 +263,66 @@ function assertGriffinLimFftSize(nBins: number, nFft: number): void {
   if (nFft % 2 === 0 && nFft !== (nBins - 1) * 2) {
     throw refuse(`nFft must equal (magnitude.rows - 1) * 2, which is ${(nBins - 1) * 2}`);
   }
+}
+
+/** Reconstruct audio from STFT magnitude and phase. */
+export function istft(request: IstftRequest): Float32Array;
+export function istft(...args: unknown[]): Float32Array {
+  return withEntry('istft', () => {
+    const r = requestOnly<IstftRequest>('istft', args);
+    if (isAbsent(r.magnitude)) {
+      throw refuseType('magnitude is required');
+    }
+    if (isAbsent(r.phase)) {
+      throw refuseType('phase is required');
+    }
+    const magnitude = assertMatrix2D(r.magnitude, 'magnitude', false);
+    const phase = assertMatrix2D(r.phase, 'phase', false);
+    if (magnitude.rows !== phase.rows || magnitude.cols !== phase.cols) {
+      throw refuse('magnitude and phase must have the same shape');
+    }
+    const nFft = r.nFft ?? (magnitude.rows - 1) * 2;
+    assertInt32(nFft, 'nFft');
+    const hopLength = r.hopLength ?? Math.max(1, Math.floor(nFft / 4));
+    assertIntegerValue(hopLength, 'hopLength');
+    const lengthSamples = r.lengthSamples ?? undefined;
+    if (lengthSamples !== undefined) {
+      assertIntegerValue(lengthSamples, 'lengthSamples');
+    }
+    const outputLength = lengthSamples ?? Math.max(0, (magnitude.cols - 1) * hopLength);
+    const call = () => {
+      const module = getSonareModule();
+      return module.istft(
+        magnitude.data,
+        magnitude.rows,
+        magnitude.cols,
+        phase.data,
+        phase.rows,
+        phase.cols,
+        nFft,
+        hopLength,
+        lengthSamples,
+      );
+    };
+    if (
+      nFft <= 0 ||
+      hopLength <= 0 ||
+      lengthSamples === 0 ||
+      !Number.isSafeInteger(outputLength) ||
+      outputLength < 0 ||
+      outputLength > MAX_OFFLINE_AUDIO_SAMPLES
+    ) {
+      return call();
+    }
+    return withHeapNeed(
+      {
+        subject: 'magnitude',
+        size: magnitude.data.length,
+        bytes: () => 16 * magnitude.data.length + 8 * outputLength,
+      },
+      call,
+    );
+  });
 }
 
 /** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */

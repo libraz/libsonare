@@ -450,10 +450,10 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
     if (!isAbsent(r.preset)) {
       assertString(r.preset, 'preset');
     }
-    assertAudioInput(r.samples, r.sampleRate, r);
     if (isAbsent(r.preset) && isAbsent(r.overrides)) {
       throw refuseType('give preset or overrides');
     }
+    assertAudioInput(r.samples, r.sampleRate, r);
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;
     const progress = r.onProgress ?? undefined;
@@ -492,14 +492,14 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     if (!isAbsent(r.preset)) {
       assertString(r.preset, 'preset');
     }
+    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
+      throw refuseType('give preset or overrides');
+    }
     assertSampleRate(r.sampleRate);
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
       throw refuse('left and right must have the same length');
-    }
-    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-      throw refuseType('give preset or overrides');
     }
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;

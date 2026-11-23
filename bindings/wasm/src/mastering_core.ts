@@ -185,10 +185,10 @@ export interface MasteringAbMatchLoudnessStereoRequest {
 export interface MasteringAnalyzePairRequest<A extends PairAnalysis = PairAnalysis> {
   /** Name of the pair analysis to run (see `masteringPairAnalysisNames`). */
   analysis: A;
-  /** The take being analyzed. */
-  source: Float32Array;
-  /** The take it is compared against. */
-  reference: Float32Array;
+  /** The take being analyzed, as mono samples or one or two planar channels. */
+  source: Float32Array | readonly Float32Array[];
+  /** The take it is compared against, as mono samples or one or two planar channels. */
+  reference: Float32Array | readonly Float32Array[];
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /**
@@ -665,6 +665,42 @@ function assertPairAudio(
   return referenceRate;
 }
 
+interface PairAudioChannels {
+  left: Float32Array;
+  right?: Float32Array;
+}
+
+/** Normalize a legacy mono buffer or a one/two-plane value to named channels. */
+function normalizePairAudio(
+  value: unknown,
+  sampleRate: number,
+  options: object,
+  subject: string,
+): PairAudioChannels {
+  if (value instanceof Float32Array) {
+    assertAudioInput(value, sampleRate, options, subject);
+    return { left: value };
+  }
+  if (!Array.isArray(value)) {
+    throw refuseType(`${subject} must be a Float32Array or an array of Float32Array`);
+  }
+  if (value.length === 0 || value.length > 2) {
+    throw refuse(`${subject} must hold 1 or 2 channels`);
+  }
+  for (let index = 0; index < value.length; index++) {
+    assertAudioInput(value[index], sampleRate, options, `${subject}[${index}]`);
+  }
+  const left = value[0] as Float32Array;
+  if (value.length === 1) {
+    return { left };
+  }
+  const right = value[1] as Float32Array;
+  if (left.length !== right.length) {
+    throw refuse(`${subject}[1] must have the same length as ${subject}[0]`);
+  }
+  return { left, right };
+}
+
 /**
  * Apply a two-input `match.*` processor. `source` and `reference` may have
  * independent lengths and rates: a reference at `referenceSampleRate` is
@@ -762,13 +798,14 @@ const ANALYSIS_FAMILIES: Readonly<Record<PairAnalysis | StereoAnalysis, ResultFa
 };
 
 /**
- * Analyze a `source` against a `reference` with a two-input analysis. The two
- * buffers may have independent lengths and rates; a delay estimate is in
- * samples at `sampleRate`. Takes a request object only; the result type follows
- * `analysis` through {@link PairAnalysisResultMap}.
+ * Analyze a `source` against a `reference` with a two-input analysis. Each input
+ * may be a flat mono buffer or one/two planar channels; source and reference
+ * may have independent lengths and rates. A delay estimate is in samples at
+ * `sampleRate`. Takes a request object only; the result type follows `analysis`
+ * through {@link PairAnalysisResultMap}.
  *
  * @throws {TypeError} when `sampleRate` or `analysis` is missing or a field has the wrong type
- * @throws {RangeError} on audio out of domain or an unknown analysis
+ * @throws {RangeError} on audio out of domain, channel mismatch or an unknown analysis
  */
 export function masteringAnalyzePair<A extends PairAnalysis>(
   request: MasteringAnalyzePairRequest<A>,
@@ -776,22 +813,57 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
   return withEntry('masteringAnalyzePair', () => {
     const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
     assertString(r.analysis, 'analysis');
-    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
-    return parseRecordJson(
-      withHeapNeed(
-        sampleNeed('source', r.source.length, r.sampleRate, (n) => 4 * (n + r.reference.length)),
+    const source = normalizePairAudio(r.source, r.sampleRate, r, 'source');
+    const referenceRate = r.referenceSampleRate ?? r.sampleRate;
+    assertSampleRate(referenceRate, 'referenceSampleRate');
+    const reference = normalizePairAudio(r.reference, referenceRate, r, 'reference');
+    if ((source.right === undefined) !== (reference.right === undefined)) {
+      throw refuse(`source and reference must have the same number of channels`);
+    }
+    const params = r.params ?? {};
+    let result: string;
+    if (source.right === undefined) {
+      result = withHeapNeed(
+        sampleNeed(
+          'source',
+          source.left.length,
+          r.sampleRate,
+          (n) => 4 * (n + reference.left.length),
+        ),
         () =>
           getSonareModule().masteringPairAnalyze(
             r.analysis,
-            r.source,
-            r.reference,
+            source.left,
+            reference.left,
             r.sampleRate,
             referenceRate,
-            r.params ?? {},
+            params,
           ),
-      ),
-      ANALYSIS_FAMILIES[r.analysis],
-    ) as PairAnalysisResultMap[A];
+      );
+    } else {
+      const sourceRight = source.right;
+      const referenceRight = reference.right as Float32Array;
+      result = withHeapNeed(
+        sampleNeed(
+          'source',
+          source.left.length,
+          r.sampleRate,
+          (n) => 8 * (n + reference.left.length),
+        ),
+        () =>
+          getSonareModule().masteringPairAnalyzeStereo(
+            r.analysis,
+            source.left,
+            sourceRight,
+            reference.left,
+            referenceRight,
+            r.sampleRate,
+            referenceRate,
+            params,
+          ),
+      );
+    }
+    return parseRecordJson(result, ANALYSIS_FAMILIES[r.analysis]) as PairAnalysisResultMap[A];
   });
 }
 
@@ -1048,8 +1120,8 @@ export function masteringAudioProfile(
 export function masteringAudioProfile(...args: unknown[]): MasteringAudioProfile {
   return withEntry('masteringAudioProfile', () => {
     const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
     const params = profileParams(r);
+    assertAudioInput(r.samples, r.sampleRate, r);
     return profileFromNative(
       withMonoHeap(r.samples, r.sampleRate, 1, () =>
         getSonareModule().masteringAudioProfile(r.samples, r.sampleRate, params),
@@ -1131,9 +1203,9 @@ export function masteringAudioProfileStereo(
     const r = requestOnly<MasteringAudioProfileStereoRequest>('masteringAudioProfileStereo', [
       request,
     ]);
+    const params = profileParams(r);
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
-    const params = profileParams(r);
     return profileFromNative(
       withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
         getSonareModule().masteringAudioProfileStereo(r.left, r.right, r.sampleRate, params),

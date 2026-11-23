@@ -3,6 +3,7 @@
  * types at compile time. `requestObject` refuses any other key by name.
  */
 
+import type { EncodeAudioRequest, ReadAudioTagsRequest } from './audio_codec.js';
 import type { ClipPageStreamerOptions } from './clip_page_streamer.js';
 import type {
   AssignNoteTargetsRequest,
@@ -75,6 +76,7 @@ import type {
 } from './feature_decompose.js';
 import type {
   GriffinLimRequest,
+  IstftRequest,
   MelToAudioRequest,
   MelToStftRequest,
   MfccToAudioRequest,
@@ -450,7 +452,30 @@ const SplitSilenceCommonWithReportRequestKeys = keysOf<SplitSilenceCommonWithRep
   'frameLength',
   'hopLength',
 ]);
-const StftRequestKeys = keysOf<StftRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength', 'db']);
+const StftRequestKeys = keysOf<StftRequest>()([
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'db',
+  'phase',
+]);
+const IstftRequestKeys = keysOf<IstftRequest>()([
+  'magnitude',
+  'phase',
+  'nFft',
+  'hopLength',
+  'lengthSamples',
+]);
+const ReadAudioTagsRequestKeys = keysOf<ReadAudioTagsRequest>()(['data']);
+const EncodeAudioRequestKeys = keysOf<EncodeAudioRequest>()([
+  'channels',
+  'sampleRate',
+  'format',
+  'tags',
+  'bitDepth',
+  'quality',
+]);
 const ChromaRequestKeys = keysOf<ChromaRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength']);
 const ChromaCensRequestKeys = keysOf<ChromaCensRequest>()([
   'samples',
@@ -559,7 +584,6 @@ const AnalyzeRequestKeys = keysOf<AnalyzeRequest>()([
 const AnalyzeBpmRequestKeys = keysOf<AnalyzeBpmRequest>()([
   'bpmMin',
   'bpmMax',
-  'startBpm',
   'nFft',
   'hopLength',
   'maxCandidates',
@@ -904,7 +928,7 @@ const Ebur128LoudnessRangeLuRequestKeys = keysOf<Ebur128LoudnessRangeLuRequest>(
   'sampleRate',
 ]);
 const EstimateMeterRequestKeys = keysOf<EstimateMeterRequest>()([
-  'beats',
+  'observations',
   'candidateNumerators',
   'denominator',
   'downbeatWeight',
@@ -2681,10 +2705,21 @@ const ProjectBounceRequestKeys = keysOf<ProjectBounceOptions>()([
   'blockSize',
   'numChannels',
   'instrumentLatencySamples',
+  'metronome',
+  'countInBars',
+  'controllerProfiles',
+  'articulations',
   'builtinInstruments',
   'synthInstruments',
   'sf2Instruments',
   'instruments',
+]);
+const EngineMetronomeConfigKeys = keysOf<EngineMetronomeConfig>()([
+  'enabled',
+  'beatGain',
+  'accentGain',
+  'clickSamples',
+  'clickSec',
 ]);
 const ProjectCompileRequestKeys = keysOf<ProjectCompileOptions>()(['withTimeline']);
 const ProjectAutoTempoRequestKeys = keysOf<ProjectAutoTempoRequest>()([
@@ -2873,7 +2908,10 @@ export const REQUEST_SHAPES = {
   'Project.setSourceAudio': { keys: ProjectSetSourceAudioRequestKeys },
   'Project.setAudioSourceMetadata': { keys: ProjectSetAudioSourceMetadataRequestKeys },
   'Project.setAssistSidecar': { keys: ProjectSetAssistSidecarRequestKeys },
-  'Project.bounce': { keys: ProjectBounceRequestKeys },
+  'Project.bounce': {
+    keys: ProjectBounceRequestKeys,
+    nested: { metronome: EngineMetronomeConfigKeys },
+  },
   'Project.compile': { keys: ProjectCompileRequestKeys },
   'Project.autoTempo': { keys: ProjectAutoTempoRequestKeys },
   'Project.analyzeTempo': { keys: ProjectAnalyzeTempoRequestKeys },
@@ -2939,6 +2977,7 @@ export const REQUEST_SHAPES = {
   fourierTempogram: { keys: FourierTempogramRequestKeys },
   frameSignal: { keys: FrameSignalRequestKeys },
   griffinLim: { keys: GriffinLimRequestKeys },
+  istft: { keys: IstftRequestKeys },
   harmonic: { keys: HarmonicRequestKeys },
   hpss: { keys: HpssRequestKeys },
   hybridCqt: { keys: HybridCqtRequestKeys },
@@ -3097,6 +3136,8 @@ export const REQUEST_SHAPES = {
   splitSilenceCommon: { keys: SplitSilenceCommonRequestKeys },
   splitSilenceCommonWithReport: { keys: SplitSilenceCommonWithReportRequestKeys },
   stft: { keys: StftRequestKeys },
+  readAudioTags: { keys: ReadAudioTagsRequestKeys },
+  encodeAudio: { keys: EncodeAudioRequestKeys },
   streamingLoudnessGain: { keys: StreamingLoudnessGainRequestKeys },
   streamingLoudnessGainStereo: { keys: StreamingLoudnessGainStereoRequestKeys },
   synthesizeRir: { keys: SynthesizeRirRequestKeys },

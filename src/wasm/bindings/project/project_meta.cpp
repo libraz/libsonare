@@ -5,6 +5,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+#include <array>
+
 #include "c_api/project_input_domains.h"
 #include "project_wasm.h"
 
@@ -26,6 +29,56 @@ struct HeapStringGuard {
   }
 };
 
+struct ProjectSectionListGuard {
+  SonareProjectSectionList value{};
+
+  ~ProjectSectionListGuard() { sonare_free_project_section_list(&value); }
+};
+
+struct ProjectKeyListGuard {
+  SonareProjectKeySegmentList value{};
+
+  ~ProjectKeyListGuard() { sonare_free_project_key_segment_list(&value); }
+};
+
+struct ProjectChordListGuard {
+  SonareProjectChordSymbolList value{};
+
+  ~ProjectChordListGuard() { sonare_free_project_chord_symbol_list(&value); }
+};
+
+struct ProjectStringListGuard {
+  SonareStringList value{};
+
+  ~ProjectStringListGuard() {
+    if (value.items != nullptr) sonare_free_string_list(&value);
+  }
+};
+
+template <size_t N>
+void refuseUnknownAnnotationKeys(const val& row, const char* array, size_t index,
+                                 const std::array<const char*, N>& allowed) {
+  if (row.isNull() || row.isUndefined()) return;
+  const val names = val::global("Object").call<val>("keys", row);
+  const uint32_t count = names["length"].as<uint32_t>();
+  for (uint32_t i = 0; i < count; ++i) {
+    const std::string key = names[i].as<std::string>();
+    const bool known = std::any_of(allowed.begin(), allowed.end(),
+                                   [&](const char* candidate) { return key == candidate; });
+    if (!known) {
+      std::string expected;
+      for (const char* candidate : allowed) {
+        if (!expected.empty()) expected += ", ";
+        expected += candidate;
+      }
+      const std::string subject = std::string(array) + "[" + std::to_string(index) + "]." + key;
+      throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, subject,
+                                                    "", expected)
+          .as_caller_spelled();
+    }
+  }
+}
+
 }  // namespace
 
 void ProjectWasm::annotateKeys(val keys) {
@@ -35,6 +88,9 @@ void ProjectWasm::annotateKeys(val keys) {
     segments.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       val entry = keys[i];
+      static constexpr std::array<const char*, 4> kAllowed = {"endPpq", "mode", "startPpq",
+                                                              "tonicPc"};
+      refuseUnknownAnnotationKeys(entry, "keys", i, kAllowed);
       SonareProjectKeySegment seg{};
       seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       seg.end_ppq = doubleProperty(entry, "endPpq", 0.0);
@@ -51,6 +107,33 @@ void ProjectWasm::annotateKeys(val keys) {
   }
 }
 
+val ProjectWasm::keyAnnotations() const {
+  ProjectKeyListGuard list;
+  const SonareError err = sonare_project_key_annotations(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    list.value.count = 0;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "keyAnnotations returned a missing key array");
+  }
+
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const SonareProjectKeySegment& key = list.value.items[i];
+    if (key.tonic_pc != 255 && key.tonic_pc > 11) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "keyAnnotations returned an invalid tonic pitch class");
+    }
+    val item = val::object();
+    item.set("startPpq", key.start_ppq);
+    item.set("endPpq", key.end_ppq);
+    if (key.tonic_pc != 255) item.set("tonicPc", static_cast<double>(key.tonic_pc));
+    item.set("mode", static_cast<double>(key.mode));
+    out.set(static_cast<unsigned>(i), item);
+  }
+  return out;
+}
+
 void ProjectWasm::annotateChords(val chords) {
   std::vector<SonareProjectChordSymbol> symbols;
   // Keep the per-chord extensions / roman-numeral storage alive until the C
@@ -64,6 +147,10 @@ void ProjectWasm::annotateChords(val chords) {
     roman_storage.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       val entry = chords[i];
+      static constexpr std::array<const char*, 8> kAllowed = {
+          "endPpq",       "extensions", "modulationBoundary", "quality",
+          "romanNumeral", "rootPc",     "slashBassPc",        "startPpq"};
+      refuseUnknownAnnotationKeys(entry, "chords", i, kAllowed);
       SonareProjectChordSymbol sym{};
       sym.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       sym.end_ppq = doubleProperty(entry, "endPpq", 0.0);
@@ -100,6 +187,104 @@ void ProjectWasm::annotateChords(val chords) {
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
+}
+
+val ProjectWasm::chordAnnotations() const {
+  ProjectChordListGuard list;
+  const SonareError err = sonare_project_chord_annotations(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    list.value.count = 0;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "chordAnnotations returned a missing chord array");
+  }
+
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const SonareProjectChordSymbol& chord = list.value.items[i];
+    if ((chord.root_pc != 255 && chord.root_pc > 11) ||
+        (chord.slash_bass_pc != 255 && chord.slash_bass_pc > 11)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "chordAnnotations returned an invalid pitch class");
+    }
+    if (chord.extension_count > 32 || (chord.extension_count != 0 && chord.extensions == nullptr)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "chordAnnotations returned invalid extension bytes");
+    }
+    if (chord.modulation_boundary != 0 && chord.modulation_boundary != 1) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "chordAnnotations returned an invalid modulation flag");
+    }
+
+    val item = val::object();
+    item.set("startPpq", chord.start_ppq);
+    item.set("endPpq", chord.end_ppq);
+    if (chord.root_pc != 255) item.set("rootPc", static_cast<double>(chord.root_pc));
+    item.set("quality", static_cast<double>(chord.quality));
+    val extensions = val::array();
+    for (size_t extension = 0; extension < chord.extension_count; ++extension) {
+      extensions.set(static_cast<unsigned>(extension),
+                     static_cast<double>(chord.extensions[extension]));
+    }
+    item.set("extensions", extensions);
+    if (chord.slash_bass_pc != 255) {
+      item.set("slashBassPc", static_cast<double>(chord.slash_bass_pc));
+    }
+    if (chord.roman_numeral != nullptr && chord.roman_numeral[0] != '\0') {
+      item.set("romanNumeral", std::string(chord.roman_numeral));
+    }
+    item.set("modulationBoundary", chord.modulation_boundary != 0);
+    out.set(static_cast<unsigned>(i), item);
+  }
+  return out;
+}
+
+void ProjectWasm::annotateSections(val sections) {
+  std::vector<SonareProjectSection> values;
+  std::vector<std::string> labels;
+  if (!sections.isUndefined() && !sections.isNull()) {
+    const size_t count = wasmArrayLength(sections, "sections");
+    values.reserve(count);
+    labels.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      val entry = sections[i];
+      SonareProjectSection section{};
+      section.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+      section.end_ppq = doubleProperty(entry, "endPpq", 0.0);
+      labels.push_back(stringProperty(entry, "label", std::string()));
+      section.label = wasmCString(labels.back(), "label");
+      values.push_back(section);
+    }
+  }
+  const SonareError err = sonare_project_annotate_sections(
+      project_.get(), values.empty() ? nullptr : values.data(), values.size());
+  if (err != SONARE_OK) throwCodedCError(err);
+}
+
+val ProjectWasm::sectionAnnotations() const {
+  ProjectSectionListGuard list;
+  const SonareError err = sonare_project_section_annotations(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    list.value.count = 0;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "sectionAnnotations returned a missing section array");
+  }
+
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const SonareProjectSection& section = list.value.items[i];
+    if (section.label == nullptr) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "sectionAnnotations returned a missing section label");
+    }
+    val item = val::object();
+    item.set("startPpq", section.start_ppq);
+    item.set("endPpq", section.end_ppq);
+    item.set("label", std::string(section.label));
+    out.set(static_cast<unsigned>(i), item);
+  }
+  return out;
 }
 
 void ProjectWasm::setAssistSidecar(const std::string& module_id, const val& schema_version_val,
@@ -167,12 +352,132 @@ double ProjectWasm::getSampleRate() const {
   return out;
 }
 
+double ProjectWasm::countInFrames(const val& count_in_bars_val) const {
+  const int32_t count_in_bars = checkedIntFromVal(count_in_bars_val, "countInBars");
+  int64_t frames = 0;
+  const SonareError err = sonare_project_count_in_frames(
+      project_.get(), count_in_bars, SONARE_PROJECT_SAMPLE_RATE_PROJECT, &frames);
+  if (err != SONARE_OK) throwCodedCError(err);
+  constexpr int64_t kMaxSafeJsInteger = 9007199254740991LL;
+  if (frames < 0 || frames > kMaxSafeJsInteger) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "countInFrames.frames is not exactly representable as a number");
+  }
+  return static_cast<double>(frames);
+}
+
+uint32_t ProjectWasm::addAudioSource(const std::string& uri) {
+  uint32_t source_id = 0;
+  const SonareError err =
+      sonare_project_add_audio_source(project_.get(), wasmCString(uri, "uri"), &source_id);
+  if (err != SONARE_OK) throwCodedCError(err);
+  return source_id;
+}
+
+uint32_t ProjectWasm::relinkSource(const val& source_id_val, const std::string& uri) {
+  const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
+  const SonareError err =
+      sonare_project_relink_source(project_.get(), source_id, wasmCString(uri, "uri"));
+  if (err != SONARE_OK) throwCodedCError(err);
+  return source_id;
+}
+
+double ProjectWasm::ppqToSec(const val& ppq_val) const {
+  const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
+  double out = 0.0;
+  const SonareError err = sonare_project_ppq_to_sec(project_.get(), ppq, &out);
+  if (err != SONARE_OK) throwCodedCError(err);
+  return out;
+}
+
+double ProjectWasm::secToPpq(const val& sec_val) const {
+  const double sec = checkedDoubleFromVal(sec_val, "sec");
+  double out = 0.0;
+  const SonareError err = sonare_project_sec_to_ppq(project_.get(), sec, &out);
+  if (err != SONARE_OK) throwCodedCError(err);
+  return out;
+}
+
+val ProjectWasm::positionAtPpq(const val& ppq_val) const {
+  const double ppq = checkedDoubleFromVal(ppq_val, "ppq");
+  SonareProjectPosition position{};
+  const SonareError err = sonare_project_position_at_ppq(project_.get(), ppq, &position);
+  if (err != SONARE_OK) throwCodedCError(err);
+
+  constexpr int64_t kMaxSafeJsInteger = 9007199254740991LL;
+  if (position.bar_index < -kMaxSafeJsInteger || position.bar_index > kMaxSafeJsInteger) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "position.barIndex is not exactly representable as a number");
+  }
+
+  val time_signature = val::object();
+  time_signature.set("startPpq", position.time_signature.start_ppq);
+  time_signature.set("numerator", position.time_signature.numerator);
+  time_signature.set("denominator", position.time_signature.denominator);
+
+  val out = val::object();
+  out.set("bpm", position.bpm);
+  out.set("timeSignature", time_signature);
+  out.set("barStartPpq", position.bar_start_ppq);
+  out.set("barIndex", static_cast<double>(position.bar_index));
+  out.set("beat", static_cast<double>(position.beat));
+  out.set("beatFraction", position.beat_fraction);
+  return out;
+}
+
+double ProjectWasm::barStartPpq(const val& bar_index_val) const {
+  const double requested_bar_index = numberFromVal(bar_index_val, "barIndex");
+  if (std::isfinite(requested_bar_index) &&
+      std::trunc(requested_bar_index) != requested_bar_index) {
+    throw WasmTypeError("barIndex must be an integer");
+  }
+  const int64_t bar_index = checkedInt64FromVal(bar_index_val, "barIndex");
+  double out = 0.0;
+  const SonareError err = sonare_project_bar_start_ppq(project_.get(), bar_index, &out);
+  if (err != SONARE_OK) throwCodedCError(err);
+  return out;
+}
+
+double ProjectWasm::endPpq() const {
+  double out = 0.0;
+  const SonareError err = sonare_project_end_ppq(project_.get(), &out);
+  if (err != SONARE_OK) throwCodedCError(err);
+  return out;
+}
+
 void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   const SonareError err =
       sonare_project_set_mixer_scene_json(project_.get(), wasmCString(scene_json, "document"));
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
+}
+
+val ProjectWasm::mixerScene() const {
+  HeapStringGuard document;
+  const SonareError err = sonare_project_mixer_scene_json(project_.get(), &document.value);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+  if (document.value == nullptr) return val::null();
+  return val(std::string(document.value));
+}
+
+val ProjectWasm::unresolvedSoundFontUris() const {
+  ProjectStringListGuard list;
+  const SonareError err = sonare_project_unresolved_sound_font_uris(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "unresolvedSoundFontUris returned a missing URI array");
+  }
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    if (list.value.items[i] == nullptr) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "unresolvedSoundFontUris returned a null URI");
+    }
+    out.set(static_cast<unsigned>(i), std::string(list.value.items[i]));
+  }
+  return out;
 }
 
 uint32_t ProjectWasm::setMarker(val marker) {
@@ -223,11 +528,16 @@ val ProjectWasm::trackByIndex(const val& index_val) const {
   SonareProjectTrack d{};
   const SonareError err =
       sonare_project_track_by_index(project_.get(), static_cast<size_t>(index), &d);
-  if (err != SONARE_OK) throwCodedCError(err);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   HeapStringGuard name;
   const SonareError name_err =
       sonare_project_track_name_by_index(project_.get(), static_cast<size_t>(index), &name.value);
-  if (name_err != SONARE_OK) throwCodedCError(name_err);
+  if (name_err != SONARE_OK) throwCodedCError(name_err, CErrorReasonMode::kCurrentEntry);
+  HeapStringGuard channel_strip_ref;
+  HeapStringGuard output_target;
+  const SonareError route_err = sonare_project_track_route_by_index(
+      project_.get(), static_cast<size_t>(index), &channel_strip_ref.value, &output_target.value);
+  if (route_err != SONARE_OK) throwCodedCError(route_err, CErrorReasonMode::kCurrentEntry);
   val out = val::object();
   out.set("id", d.id);
   out.set("kind", d.kind);
@@ -237,6 +547,10 @@ val ProjectWasm::trackByIndex(const val& index_val) const {
   out.set("mute", d.mute != 0);
   out.set("solo", d.solo != 0);
   out.set("name", std::string(name.value));
+  if (channel_strip_ref.value != nullptr) {
+    out.set("channelStripRef", std::string(channel_strip_ref.value));
+  }
+  if (output_target.value != nullptr) out.set("outputTarget", std::string(output_target.value));
   return out;
 }
 
@@ -453,13 +767,27 @@ val ProjectWasm::lastBounceCompileResult() const {
 void registerProjectMeta(class_<ProjectWasm>& cls) {
   cls.function("annotateKeys", &ProjectWasm::annotateKeys)
       .function("annotateChords", &ProjectWasm::annotateChords)
+      .function("annotateSections", &ProjectWasm::annotateSections)
+      .function("keyAnnotations", &ProjectWasm::keyAnnotations)
+      .function("chordAnnotations", &ProjectWasm::chordAnnotations)
+      .function("sectionAnnotations", &ProjectWasm::sectionAnnotations)
       .function("setAssistSidecar", &ProjectWasm::setAssistSidecar)
       .function("assistSidecarCount", &ProjectWasm::assistSidecarCount)
       .function("getAssistSidecar", &ProjectWasm::getAssistSidecar)
       .function("setOverlapPolicy", &ProjectWasm::setOverlapPolicy)
       .function("getOverlapPolicy", &ProjectWasm::getOverlapPolicy)
       .function("getSampleRate", &ProjectWasm::getSampleRate)
+      .function("countInFrames", &ProjectWasm::countInFrames)
+      .function("addAudioSource", &ProjectWasm::addAudioSource)
+      .function("relinkSource", &ProjectWasm::relinkSource)
+      .function("ppqToSec", &ProjectWasm::ppqToSec)
+      .function("secToPpq", &ProjectWasm::secToPpq)
+      .function("positionAtPpq", &ProjectWasm::positionAtPpq)
+      .function("barStartPpq", &ProjectWasm::barStartPpq)
+      .function("endPpq", &ProjectWasm::endPpq)
       .function("setMixerSceneJson", &ProjectWasm::setMixerSceneJson)
+      .function("mixerScene", &ProjectWasm::mixerScene)
+      .function("unresolvedSoundFontUris", &ProjectWasm::unresolvedSoundFontUris)
       .function("setMarker", &ProjectWasm::setMarker)
       .function("markerByIndex", &ProjectWasm::markerByIndex)
       .function("trackByIndex", &ProjectWasm::trackByIndex)
@@ -539,10 +867,18 @@ std::string js_synth_patch_param_info() {
   return takeCString(json);
 }
 
+val js_automation_target_kind_names() {
+  const std::vector<std::string> tokens = projectAutomationTargetKindTokens();
+  val out = val::array();
+  for (size_t i = 0; i < tokens.size(); ++i) out.set(static_cast<unsigned>(i), tokens[i]);
+  return out;
+}
+
 }  // namespace
 
 void registerProjectFreeFunctions() {
   function("projectAbiVersion", &js_project_abi_version);
+  function("automationTargetKindNames", &js_automation_target_kind_names);
   function("midiVelocityToMidi2", &js_midi_velocity_to_midi2);
   function("midiNoteOnVelocityToMidi2", &js_midi_note_on_velocity_to_midi2);
   function("midi2VelocityToMidi1", &js_midi2_velocity_to_midi1);

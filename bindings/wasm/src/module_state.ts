@@ -1,5 +1,5 @@
 import { EXPECTED_ABI_VERSION } from './abi.js';
-import { ErrorCode, type SonareError } from './errors.js';
+import { ErrorCode, type ErrorReason, type SonareError } from './errors.js';
 import {
   attachRefusal,
   codedError,
@@ -42,6 +42,8 @@ interface NativeExceptionInfo {
   code: number;
   codeName: string;
   message: string;
+  /** Present when the core assigned a stable reason to this coded failure. */
+  reason?: ErrorReason;
   /** Present when the binding refused an argument itself: the JS class to rebuild it as. */
   kind?: 'TypeError' | 'RangeError';
   /** Present for a core parameter refusal: its parts, for a facade to re-render. */
@@ -107,6 +109,7 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
   let code: number = ErrorCode.Unknown;
   let kind: NativeExceptionInfo['kind'];
   let message = `libsonare native exception (${thrown})`;
+  let reason: NativeExceptionInfo['reason'];
   let refusal: RefusalRecord | undefined;
   try {
     const info = (
@@ -115,6 +118,7 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
     if (info) {
       code = info.code ?? code;
       message = info.message || message;
+      reason = info.reason;
       kind = info.kind;
       refusal = info.refusal;
     }
@@ -133,7 +137,7 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
       ? refuseType(message)
       : kind === 'RangeError'
         ? refuse(message)
-        : codedError(code as ErrorCode, message);
+        : codedError(code as ErrorCode, message, reason === undefined ? undefined : { reason });
   return refusal === undefined ? error : attachRefusal(error, refusal);
 }
 
@@ -155,7 +159,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
     }
     // embind's use-after-delete is a plain BindingError; report it as object state.
     if (error instanceof Error && EMBIND_DELETED_PATTERN.test(error.message)) {
-      return invalidState(error.message);
+      return codedError(ErrorCode.InvalidState, error.message, { reason: 'releasedHandle' });
     }
     return error;
   };

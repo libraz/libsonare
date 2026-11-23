@@ -671,7 +671,7 @@ describe('Sonare WASM Module', () => {
       expect(result.left[1]).toBeCloseTo(1.0, 2);
       expect(Array.from(result.right)).toEqual([0, 0]);
       expect(result.meters).toHaveLength(1);
-      expect(Number.isFinite(result.meters[0].peakDbL)).toBe(true);
+      expect(Number.isFinite(result.meters[0].peakDb[0])).toBe(true);
       expect(typeof result.meters[0].likelyMonoCompatible).toBe('boolean');
     });
   });

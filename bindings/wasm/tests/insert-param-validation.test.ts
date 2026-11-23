@@ -182,6 +182,7 @@ describe('insert param validation (WASM)', () => {
     const catalog = masteringProcessorCatalog();
     const declared: Record<keyof MasteringProcessorCatalogEntry, true> = {
       id: true,
+      description: true,
       kind: true,
       forms: true,
       realtimeInsertable: true,

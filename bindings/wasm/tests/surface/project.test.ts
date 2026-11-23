@@ -98,20 +98,25 @@ describe('closed sets', () => {
         expect(() => project.setClipWarpMode(clipId, mode)).not.toThrow();
       }
       expect(() => project.setClipWarpMode(clipId, 'time-stretch' as never)).toThrow(RangeError);
-      for (const [index, targetKind] of (
-        ['opaque', 'trackFaderDb', 'trackPan'] as const
-      ).entries()) {
-        expect(() =>
-          project.addAutomationLane(trackId, {
-            targetParamId: 20 + index,
-            targetKind,
-            points: [{ ppq: 0, value: 0 }],
-          }),
-        ).not.toThrow();
-      }
       expect(() =>
-        project.editAutomationLane(trackId, 21, {
-          targetParamId: 21,
+        project.addAutomationLane(trackId, {
+          targetParamId: 20,
+          targetKind: 'opaque',
+          points: [{ ppq: 0, value: 0 }],
+        }),
+      ).not.toThrow();
+      const faderLaneId = project.addAutomationLane(trackId, {
+        targetKind: 'trackFaderDb',
+        points: [{ ppq: 0, value: -3 }],
+      });
+      expect(() =>
+        project.addAutomationLane(trackId, {
+          targetKind: 'trackPan',
+          points: [{ ppq: 0, value: 0 }],
+        }),
+      ).not.toThrow();
+      expect(() =>
+        project.editAutomationLane(trackId, faderLaneId, {
           targetKind: 'trackFaderDb',
           points: [{ ppq: 0, value: 0.5 }],
         }),
@@ -124,8 +129,7 @@ describe('closed sets', () => {
         }),
       ).toThrow(RangeError);
       expect(() =>
-        project.editAutomationLane(trackId, 21, {
-          targetParamId: 21,
+        project.editAutomationLane(trackId, faderLaneId, {
           targetKind: 'track-pan' as never,
           points: [{ ppq: 0, value: 0 }],
         }),

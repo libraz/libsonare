@@ -214,6 +214,7 @@ val RealtimeEngineWasm::process(val channels_val, const val& with_monitor_val) {
   if (optionalBool(with_monitor_val, "withMonitor").value_or(false)) {
     return processBlockWithMonitor(block);
   }
+  engine_.require_quiescent();
   engine_.process(block.pointers.data(), static_cast<int>(block.storage.size()), block.frames);
   return channelsToJs(block);
 }
@@ -275,6 +276,7 @@ void RealtimeEngineWasm::processPrepared(const val& num_frames_val, const val& w
   if (num_frames <= 0 || num_frames > prepared_capacity_) {
     throw WasmRangeError("out-of-range frame count");
   }
+  engine_.require_quiescent();
   engine_.process(prepared_ptrs_.data(), prepared_channels_, num_frames);
 }
 
@@ -335,6 +337,7 @@ void RealtimeEngineWasm::processPreparedWithMonitor(int num_frames) {
         "out-of-range frame "
         "count");
   }
+  engine_.require_quiescent();
   engine_.process_with_monitor(prepared_ptrs_.data(), monitor_ptrs_.data(), prepared_channels_,
                                num_frames);
 }
@@ -348,6 +351,7 @@ val RealtimeEngineWasm::processBlockWithMonitor(ChannelBlock& block) {
   for (auto& channel : monitor.storage) {
     monitor.pointers.push_back(channel.data());
   }
+  engine_.require_quiescent();
   engine_.process_with_monitor(block.pointers.data(), monitor.pointers.data(),
                                static_cast<int>(block.storage.size()), block.frames);
   val out = val::object();

@@ -195,9 +195,9 @@ describe('WASM cross-binding consistency', () => {
         const post = mixer.stripMeter(vocal);
         const postTap = mixer.stripMeter(vocal, 'postFader');
         const preTap = mixer.stripMeter(vocal, 'preFader');
-        expect(Number.isFinite(post.peakDbL)).toBe(true);
-        expect(Number.isFinite(postTap.peakDbL)).toBe(true);
-        expect(Number.isFinite(preTap.peakDbL)).toBe(true);
+        expect(Number.isFinite(post.peakDb[0])).toBe(true);
+        expect(Number.isFinite(postTap.peakDb[0])).toBe(true);
+        expect(Number.isFinite(preTap.peakDb[0])).toBe(true);
       } finally {
         mixer.destroy();
       }

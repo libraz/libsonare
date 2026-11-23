@@ -233,8 +233,6 @@ export interface AnalyzeBpmOptions {
    * the unconstrained estimate is preferred when it lies inside it.
    */
   bpmMax?: number;
-  /** Tempo prior the tracker is biased toward. Default 120. */
-  startBpm?: number;
   /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
   /** Hop length in samples of the input buffer. Default 512. */
@@ -252,7 +250,8 @@ export interface AnalyzeRhythmOptions {
    * the unconstrained estimate is preferred when it lies inside it.
    */
   bpmMax?: number;
-  /** Tempo prior the tracker is biased toward. Default 120. */
+  /** Finite, positive BPM prior that seeds beat tracking if tempo search finds none. `bpm` is
+   * absent when no tempo is measured. Default 120. */
   startBpm?: number;
   /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
@@ -314,9 +313,8 @@ export interface Beat {
    * @remarks
    * A single raw frame of the onset envelope, not a normalized or relative
    * salience: it is unbounded, its scale depends on the material, and it moves
-   * with any jitter in the beat position. For accent scoring use
-   * {@link BeatObservations.onsetStrength}, which is the windowed aggregate the
-   * library's own downbeat pass scores.
+   * with any jitter in the beat position. Meter scoring uses measured beat
+   * accents instead.
    */
   strength: number;
 }
@@ -328,26 +326,22 @@ export interface Beat {
  * These are inputs to the library's decision, not outputs of it, exposed so a
  * caller running its own meter work scores the same evidence instead of
  * reconstructing a weaker approximation from the frame-level onset envelope.
- * Each non-empty stream holds one value per entry of
- * {@link AnalysisResult.beats} and indexes in parallel with it. An empty stream
- * means the analysis could not produce it, which is not the same as every beat
- * having scored zero.
+ * Accent, attack, energy and chord-change streams index with
+ * {@link AnalysisResult.beats}; subdivision accents index the intervals and
+ * therefore hold one fewer value. An empty stream means it was not measured.
  */
 export interface BeatObservations {
-  /**
-   * Beat-local onset-strength window.
-   *
-   * @remarks
-   * Unlike {@link Beat.strength} this is aggregated over a window around the
-   * beat rather than sampled at a single frame, so it is the stream to score
-   * accents with.
-   */
-  onsetStrength: number[];
+  /** Beat-local 5 ms RMS at the strongest attack, in linear units. */
+  accent: number[];
+  /** Whether an attack occurs in each beat's evidence window. */
+  hasAttack: boolean[];
   /**
    * Beat-local low-frequency energy — the accent evidence a log-spectral
    * difference discards. Empty when the analysis ran without audio.
    */
   lowFrequencyEnergy: number[];
+  /** Midpoint 5 ms RMS for each interval, or empty when subdivision was not measured. */
+  subdivisionAccent: number[];
   /** Per-beat chord-change evidence. Empty until chords are analyzed. */
   chordChange: number[];
 }

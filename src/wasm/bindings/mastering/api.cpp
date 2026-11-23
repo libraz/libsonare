@@ -7,6 +7,7 @@
 #include <array>
 
 #include "c_api/sonare_c_internal.h"
+#include "core/audio_encode.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
@@ -148,6 +149,18 @@ std::string build_capability_catalog() {
   abi["project"] = static_cast<int>(SONARE_PROJECT_ABI_VERSION);
   abi["engine"] = static_cast<int>(sonare::rt::kEngineAbiVersion);
   catalog["abi"] = std::move(abi);
+  json::Object encode;
+  json::Array builtin_formats;
+  builtin_formats.emplace_back("wav");
+  encode["builtin"] = std::move(builtin_formats);
+  json::Array ffmpeg_formats;
+  for (const std::string_view format : sonare::kOptionalAudioEncodeFormats) {
+    if (sonare::audio_encode_format_available(format)) {
+      ffmpeg_formats.emplace_back(std::string(format));
+    }
+  }
+  encode["ffmpeg"] = std::move(ffmpeg_formats);
+  catalog["encode"] = std::move(encode);
   catalog["processors"] = json::parse_strict(mastering::api::processor_catalog_json());
   catalog["chain"] = json::parse_strict(mastering::api::chain_catalog_json());
 
@@ -444,6 +457,41 @@ std::string js_mastering_pair_analyze(std::string analysis_name, val source_samp
       reference_sample_rate, masteringParamsFromObject(params));
 }
 
+std::string js_mastering_pair_analyze_stereo(std::string analysis_name, val source_left_samples,
+                                             val source_right_samples, val reference_left_samples,
+                                             val reference_right_samples,
+                                             const val& sample_rate_val,
+                                             const val& reference_sample_rate_val, val params) {
+  wasmRefuseEmbeddedNul(analysis_name, "analysisName");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int reference_sample_rate =
+      checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
+  validateWasmFloat32ArrayPair(source_left_samples, "sourceLeft", source_right_samples,
+                               "sourceRight", true);
+  validateWasmFloat32ArrayPair(reference_left_samples, "referenceLeft", reference_right_samples,
+                               "referenceRight", true);
+  validatePlainElementBudget({{&source_left_samples, "sourceLeft"},
+                              {&source_right_samples, "sourceRight"},
+                              {&reference_left_samples, "referenceLeft"},
+                              {&reference_right_samples, "referenceRight"}});
+  std::vector<float> source_left = float32ArrayToVector(source_left_samples, "sourceLeft");
+  std::vector<float> source_right = float32ArrayToVector(source_right_samples, "sourceRight");
+  std::vector<float> reference_left = float32ArrayToVector(reference_left_samples, "referenceLeft");
+  std::vector<float> reference_right =
+      float32ArrayToVector(reference_right_samples, "referenceRight");
+  validate_offline_audio_input("sourceLeft", source_left.data(), source_left.size(), sample_rate);
+  validate_offline_audio_input("sourceRight", source_right.data(), source_right.size(),
+                               sample_rate);
+  validate_offline_audio_input("referenceLeft", reference_left.data(), reference_left.size(),
+                               reference_sample_rate);
+  validate_offline_audio_input("referenceRight", reference_right.data(), reference_right.size(),
+                               reference_sample_rate);
+  return mastering::api::analyze_named_pair(
+      analysis_name, source_left.data(), source_right.data(), source_left.size(),
+      reference_left.data(), reference_right.data(), reference_left.size(), sample_rate,
+      reference_sample_rate, masteringParamsFromObject(params));
+}
+
 // Gain-matches `source` to `reference`'s integrated loudness. The core takes the
 // reference first; the C ABI and every facade take (source, reference), so the
 // two arguments are swapped here rather than at the call site.
@@ -722,6 +770,7 @@ void registerMasteringApiBindings() {
   function("masteringPairProcess", &js_mastering_pair_process);
   function("masteringPairProcessStereo", &js_mastering_pair_process_stereo);
   function("masteringPairAnalyze", &js_mastering_pair_analyze);
+  function("masteringPairAnalyzeStereo", &js_mastering_pair_analyze_stereo);
   function("masteringAbMatchLoudness", &js_mastering_ab_match_loudness);
   function("masteringAbMatchLoudnessStereo", &js_mastering_ab_match_loudness_stereo);
   function("masteringStereoAnalyze", &js_mastering_stereo_analyze);

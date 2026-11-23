@@ -2,7 +2,7 @@
  * What a POSITIONAL `float` parameter is allowed to become on its way into the
  * detailed per-domain quick-analysis entry points
  * (`analyzeBpm` / `analyzeRhythm` / `analyzeDynamics` / `analyzeTimbre`,
- * `src/wasm/bindings/analysis/quick_detailed.cpp`), covering the 9 float fields
+ * `src/wasm/bindings/analysis/quick_detailed.cpp`), covering the 8 float fields
  * converted there. Same defect as `positional-float-guards.test.ts`: embind's
  * float glue SATURATES, so a caller-chosen finite number wider than `FLT_MAX`
  * (~3.4028235e38) used to arrive as an infinity with no exception raised
@@ -11,13 +11,9 @@
  *
  * Acceptance is asserted by reading a value back, never by "it did not
  * throw" — a function that ignored its argument entirely would satisfy every
- * refusal case below in exactly the same way. The BPM controls lean on an
- * invariant read from `BpmAnalyzer::analyze` (src/analysis/bpm_analyzer.cpp)
- * and confirmed against the built module: the returned `bpm` is either
- * exactly `startBpm` (every early-return and empty-candidate path assigns it
- * verbatim, reached when the buffer is too short for autocorrelation to run
- * at all) or strictly within `[bpmMin, bpmMax]` (every detection path filters
- * or bins candidates against that range before choosing one).
+ * refusal case below in exactly the same way. The BPM controls are checked
+ * against the measured-result contract: `bpm` is absent when no tempo is
+ * found, and otherwise lies within `[bpmMin, bpmMax]`.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -93,9 +89,7 @@ const bpmClickTrain = clickTrain(BPM_PERIOD_SAMPLES, 6);
 const BPM_NFFT = 256;
 const BPM_HOP = 64;
 
-// Too short (well under the default 2048-sample FFT) for autocorrelation to
-// ever run, so BpmAnalyzer::analyze returns config_.start_bpm verbatim
-// (src/analysis/bpm_analyzer.cpp:423/438) regardless of content.
+// Too short (well under the default 2048-sample FFT) for autocorrelation, so no BPM is measured.
 const UNDETECTABLE_AUDIO = new Float32Array(512);
 const UNDETECTABLE_SR = 22050;
 
@@ -110,17 +104,12 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'analyzeBpm',
     key: 'bpmMin',
-    run: (v) => analyzeBpm(REFUSAL_AUDIO, REFUSAL_SR, { bpmMin: v, bpmMax: 300, startBpm: 120 }),
+    run: (v) => analyzeBpm(REFUSAL_AUDIO, REFUSAL_SR, { bpmMin: v, bpmMax: 300 }),
   },
   {
     entry: 'analyzeBpm',
     key: 'bpmMax',
-    run: (v) => analyzeBpm(REFUSAL_AUDIO, REFUSAL_SR, { bpmMin: 30, bpmMax: v, startBpm: 120 }),
-  },
-  {
-    entry: 'analyzeBpm',
-    key: 'startBpm',
-    run: (v) => analyzeBpm(REFUSAL_AUDIO, REFUSAL_SR, { bpmMin: 30, bpmMax: 300, startBpm: v }),
+    run: (v) => analyzeBpm(REFUSAL_AUDIO, REFUSAL_SR, { bpmMin: 30, bpmMax: v }),
   },
   {
     entry: 'analyzeRhythm',
@@ -205,15 +194,10 @@ describe('every converted quick-detailed float parameter refuses a value the flo
   );
 });
 
-describe('analyzeBpm consumes bpmMin, bpmMax and startBpm it accepts', () => {
-  it('reports no tempo when detection cannot run, whatever startBpm says', () => {
-    // 512 samples is far too short for autocorrelation-based tempo tracking
-    // (well under the default 2048-sample FFT); startBpm only seeds the beat
-    // tracker and is never reported in place of a measurement.
-    const low = analyzeBpm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 96 });
-    const high = analyzeBpm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 180 });
-    expect('bpm' in low).toBe(false);
-    expect('bpm' in high).toBe(false);
+describe('analyzeBpm honors its tempo search range', () => {
+  it('omits bpm when autocorrelation cannot run', () => {
+    const result = analyzeBpm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR);
+    expect('bpm' in result).toBe(false);
   });
 
   it('reads bpmMin as switching between no tempo and real detection', () => {
@@ -224,14 +208,12 @@ describe('analyzeBpm consumes bpmMin, bpmMax and startBpm it accepts', () => {
     const forcedFallback = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 1e6,
       bpmMax: 2e6,
-      startBpm: 64,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
     const detected = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 30,
       bpmMax: 300,
-      startBpm: 64,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
@@ -245,14 +227,12 @@ describe('analyzeBpm consumes bpmMin, bpmMax and startBpm it accepts', () => {
     const narrow = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 30,
       bpmMax: 40,
-      startBpm: 1,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
     const wide = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 60,
       bpmMax: 300,
-      startBpm: 100,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });

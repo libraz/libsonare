@@ -420,6 +420,21 @@ export interface SynthParamInfo {
   activeWhen?: SynthParamCondition[][];
 }
 
+/** An enum-valued NativeSynth patch field in {@link synthPatchParamInfo}. */
+export interface SynthPatchEnumParamInfo {
+  /** The {@link SynthPatch} field name. */
+  name: string;
+  /** Closed token field. */
+  type: 'enum';
+  /** Accepted names in the library's ordinal order. */
+  values: string[];
+  /** The token used by the initialized patch. */
+  default: string;
+}
+
+/** Numeric, boolean, and enum rows in the NativeSynth wrapper-field catalog. */
+export type SynthPatchParamInfo = SynthParamInfo | SynthPatchEnumParamInfo;
+
 /**
  * Per-patch loop override for the sample engine (`'default'` keeps what the
  * bank recorded for the sample the zone names).

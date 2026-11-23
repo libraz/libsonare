@@ -297,12 +297,11 @@ function expectRangeRefusal(action: () => void): void {
 }
 
 /**
- * Asserts that @p action is refused by the core rather than by the binding. Both
- * arrive as a RangeError, so the wording says which answered: the core's guards
- * either carry no detail (`Invalid parameter`) or name the refused STFT field,
- * while the binding's own refusals name the entry point or the field.
+ * Asserts that @p action is refused by the core rather than by the binding, with a
+ * message containing @p wording. Core refusals name the entry point, the field and
+ * the predicate, so each call pins the field it means to refuse.
  */
-function expectCoreRefusal(action: () => void, wording: string | RegExp = 'Invalid parameter') {
+function expectCoreRefusal(action: () => void, wording: string | RegExp) {
   const error = expectRefusalOf(action);
   if (typeof wording === 'string') {
     expect(error.message).toContain(wording);
@@ -1028,14 +1027,29 @@ describe('renderPercussiveEvents', () => {
 
     // An empty span has nothing to lift, a reversed one is not a span, and
     // neither end may sit outside the audio.
-    expectCoreRefusal(() => render([edited(4410, 4410)]));
-    expectCoreRefusal(() => render([edited(15435, 4410)]));
+    expectCoreRefusal(
+      () => render([edited(4410, 4410)]),
+      'renderPercussiveEvents: events[0].offsetSample must be greater than events[0].onsetSample',
+    );
+    expectCoreRefusal(
+      () => render([edited(15435, 4410)]),
+      'renderPercussiveEvents: events[0].offsetSample must be greater than events[0].onsetSample',
+    );
     expectRangeRefusal(() => render([edited(-512, 4410)]));
-    expectCoreRefusal(() => render([edited(4410, length + 1)]));
-    expectCoreRefusal(() => render([edited(length, length + 4410)]));
+    expectCoreRefusal(
+      () => render([edited(4410, length + 1)]),
+      'renderPercussiveEvents: events[0].offsetSample must be at most the length of the input buffer',
+    );
+    expectCoreRefusal(
+      () => render([edited(length, length + 4410)]),
+      'renderPercussiveEvents: events[0].offsetSample must be at most the length of the input buffer',
+    );
 
     // Overlapping source spans are not a renderable set; touching ones are.
-    expectCoreRefusal(() => render([edited(0, 22050), edited(11025, 33075)]));
+    expectCoreRefusal(
+      () => render([edited(0, 22050), edited(11025, 33075)]),
+      'renderPercussiveEvents: events[1].onsetSample must be at least events[0].offsetSample',
+    );
     expect(() => render([edited(0, 22050), edited(22050, 33075)])).not.toThrow();
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
@@ -1109,14 +1123,29 @@ describe('renderPercussiveEvents', () => {
     const render = (events: readonly PercussiveEventInput[]): Float32Array =>
       renderPercussiveEvents({ samples: three, sampleRate, events });
 
-    expectCoreRefusal(() => render([span(4410, 4410)]));
-    expectCoreRefusal(() => render([span(15435, 4410)]));
+    expectCoreRefusal(
+      () => render([span(4410, 4410)]),
+      'renderPercussiveEvents: events[0].offsetSample must be greater than events[0].onsetSample',
+    );
+    expectCoreRefusal(
+      () => render([span(15435, 4410)]),
+      'renderPercussiveEvents: events[0].offsetSample must be greater than events[0].onsetSample',
+    );
     expectRangeRefusal(() => render([span(-512, 4410)]));
-    expectCoreRefusal(() => render([span(4410, three.length + 1)]));
-    expectCoreRefusal(() => render([span(0, 22050), span(11025, 33075)]));
+    expectCoreRefusal(
+      () => render([span(4410, three.length + 1)]),
+      'renderPercussiveEvents: events[0].offsetSample must be at most the length of the input buffer',
+    );
+    expectCoreRefusal(
+      () => render([span(0, 22050), span(11025, 33075)]),
+      'renderPercussiveEvents: events[1].onsetSample must be at least events[0].offsetSample',
+    );
     // One bad event poisons a set that is otherwise renderable and otherwise
     // entirely identity.
-    expectCoreRefusal(() => render([span(0, 11025), span(22050, 11025)]));
+    expectCoreRefusal(
+      () => render([span(0, 11025), span(22050, 11025)]),
+      'renderPercussiveEvents: events[1].offsetSample must be greater than events[1].onsetSample',
+    );
   });
 
   it('round-trips an extracted set through an edit and back', () => {

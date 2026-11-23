@@ -19,7 +19,8 @@ import type { Capabilities, InitOptions } from './public_types.js';
 
 bindModuleFlavour('analysis');
 
-export type { ErrorCodeName, SonareErrorOptions } from './errors.js';
+export * from './audio_codec.js';
+export type { ErrorCodeName, ErrorReason, SonareErrorOptions } from './errors.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export * from './feature_core.js';
 // Several modules here also hold functions the analysis-only embind source set
@@ -45,7 +46,14 @@ export {
   segmentSubsegment,
 } from './feature_decompose.js';
 export type * from './feature_inverse.js';
-export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse.js';
+export {
+  griffinLim,
+  istft,
+  melToAudio,
+  melToStft,
+  mfccToAudio,
+  mfccToMel,
+} from './feature_inverse.js';
 export type * from './feature_loudness.js';
 export {
   ebur128LoudnessRangeLu,

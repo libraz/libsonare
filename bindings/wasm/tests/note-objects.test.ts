@@ -229,15 +229,12 @@ function expectRangeRefusal(action: () => void): void {
 }
 
 /**
- * Asserts that @p action is refused by the core rather than by the binding. Both
- * are a RangeError, so the wording says which answered: the note model's guards
- * carry no detail (`Invalid parameter`) or one of its two fixed phrases, while
- * the binding's own refusals name the entry point and the field.
+ * Asserts that @p action is refused by the core rather than by the binding, with
+ * exactly @p expected as its message. Core refusals name the entry point, the field
+ * and the predicate; the binding's own refusals are asserted with expectRangeRefusal.
  */
-const CORE_NOTE_REFUSAL =
-  /^(renderNotes|splitNote|mergeNotes): (Invalid parameter|re-derived note has no positive sample span|terminal note repair would make a predecessor empty)$/;
-function expectCoreRefusal(action: () => void): void {
-  expect(expectRefusalOf(action).message).toMatch(CORE_NOTE_REFUSAL);
+function expectCoreRefusal(action: () => void, expected: string): void {
+  expect(expectRefusalOf(action).message).toBe(expected);
 }
 
 /** Asserts that @p action throws a TypeError: a wrong-typed argument. */
@@ -585,18 +582,22 @@ describe('renderNotes', () => {
         notes: [{ offsetSample: 8192 } as unknown as NoteObjectInput],
       }),
     );
-    expectCoreRefusal(() =>
-      renderNotes({ samples, sampleRate, notes: [{ onsetSample: 8192, offsetSample: 4096 }] }),
+    expectCoreRefusal(
+      () =>
+        renderNotes({ samples, sampleRate, notes: [{ onsetSample: 8192, offsetSample: 4096 }] }),
+      'renderNotes: notes[0].offsetSample must be greater than notes[0].onsetSample',
     );
-    expectCoreRefusal(() =>
-      renderNotes({
-        samples,
-        sampleRate,
-        notes: [
-          { onsetSample: 0, offsetSample: 8192, edit: { gainDb: -3 } },
-          { onsetSample: 4096, offsetSample: 12288 },
-        ],
-      }),
+    expectCoreRefusal(
+      () =>
+        renderNotes({
+          samples,
+          sampleRate,
+          notes: [
+            { onsetSample: 0, offsetSample: 8192, edit: { gainDb: -3 } },
+            { onsetSample: 4096, offsetSample: 12288 },
+          ],
+        }),
+      'renderNotes: notes[1].onsetSample must be at or after notes[0].offsetSample',
     );
     // A given fade is read literally, so 0 is refused beside a negative one.
     for (const fadeMs of [0, -1]) {
@@ -860,7 +861,10 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
       { frameStart: 1, frameEnd: 2 },
       { frameStart: 2, frameEnd: 3 },
     ];
-    expectCoreRefusal(() => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }));
+    expectCoreRefusal(
+      () => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }),
+      'mergeNotes: re-derived note has no positive sample span',
+    );
   });
 });
 
@@ -874,14 +878,20 @@ describe('note input validation', () => {
       onsetSample: 6399,
       offsetSample: 6401,
     };
-    expectCoreRefusal(() => renderNotes({ ...loudSource, notes: [outside] }));
+    expectCoreRefusal(
+      () => renderNotes({ ...loudSource, notes: [outside] }),
+      'renderNotes: notes[0].offsetSample must be an integer in [0, 6400]',
+    );
 
     const positiveExtreme: NoteObjectInput = {
       ...handNote(0, 6400),
       onsetSample: Number.MAX_SAFE_INTEGER - 1,
       offsetSample: Number.MAX_SAFE_INTEGER,
     };
-    expectCoreRefusal(() => renderNotes({ ...loudSource, notes: [positiveExtreme] }));
+    expectCoreRefusal(
+      () => renderNotes({ ...loudSource, notes: [positiveExtreme] }),
+      'renderNotes: notes[0].offsetSample must be an integer in [0, 6400]',
+    );
 
     const negativeExtreme: NoteObjectInput = {
       ...handNote(0, 6400),
@@ -901,26 +911,33 @@ describe('note input validation', () => {
     expectRangeRefusal(() => renderNotes({ ...loudSource, notes: [outsideInt64] }));
 
     // A bad pass-through row must be validated along with the selected row.
-    expectCoreRefusal(() => renderNotes({ ...loudSource, notes: [handNote(0, 3200), outside] }));
+    expectCoreRefusal(
+      () => renderNotes({ ...loudSource, notes: [handNote(0, 3200), outside] }),
+      'renderNotes: notes[1].offsetSample must be an integer in [0, 6400]',
+    );
   });
 
   it('rejects finite gain and envelope edits that would produce non-finite samples', () => {
-    expectCoreRefusal(() =>
-      renderNotes({
-        ...loudSource,
-        notes: [{ ...handNote(0, 6400), edit: { gainDb: 1000 } }],
-      }),
+    expectCoreRefusal(
+      () =>
+        renderNotes({
+          ...loudSource,
+          notes: [{ ...handNote(0, 6400), edit: { gainDb: 1000 } }],
+        }),
+      'renderNotes: notes[0].edit.gainDb must produce a finite linear gain',
     );
-    expectCoreRefusal(() =>
-      renderNotes({
-        ...loudSource,
-        notes: [
-          {
-            ...handNote(0, 6400),
-            edit: { amplitudeEnvelope: new Float32Array([3.0e38]) },
-          },
-        ],
-      }),
+    expectCoreRefusal(
+      () =>
+        renderNotes({
+          ...loudSource,
+          notes: [
+            {
+              ...handNote(0, 6400),
+              edit: { amplitudeEnvelope: new Float32Array([3.0e38]) },
+            },
+          ],
+        }),
+      'renderNotes: Invalid parameter',
     );
 
     const finiteGain = renderNotes({
@@ -1100,14 +1117,16 @@ describe('renderNotes amplitude envelope', () => {
 
   it('rejects an envelope value that is not a usable linear gain', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      expectCoreRefusal(() =>
-        renderNotes({
-          samples: source,
-          sampleRate: fixtureRate,
-          notes: [
-            { ...handNote(1920, 6080), edit: { amplitudeEnvelope: new Float32Array([1, bad]) } },
-          ],
-        }),
+      expectCoreRefusal(
+        () =>
+          renderNotes({
+            samples: source,
+            sampleRate: fixtureRate,
+            notes: [
+              { ...handNote(1920, 6080), edit: { amplitudeEnvelope: new Float32Array([1, bad]) } },
+            ],
+          }),
+        'renderNotes: notes[0].edit.amplitudeEnvelope must be finite and at least 0',
       );
     }
     // Positive control: the same note under a usable envelope renders.
@@ -2028,7 +2047,10 @@ describe('splitNote', () => {
     // Strictly inside the note's own span, so neither of its boundaries is a
     // legal cut and neither is a frame belonging to another note.
     for (const frame of [12, 25, 5, 30, -1, 100]) {
-      expectCoreRefusal(() => splitNote({ ...source, notes: before, index: 1, frame }));
+      expectCoreRefusal(
+        () => splitNote({ ...source, notes: before, index: 1, frame }),
+        'splitNote: frame must be greater than notes[1].frameStart and less than notes[1].frameEnd',
+      );
     }
 
     // A note the set cannot describe: an empty span, and one running past the
@@ -2036,11 +2058,17 @@ describe('splitNote', () => {
     const emptySpan = before.map((note, index) =>
       index === 1 ? { ...note, frameEnd: note.frameStart } : note,
     );
-    expectCoreRefusal(() => splitNote({ ...source, notes: emptySpan, index: 0, frame: 5 }));
+    expectCoreRefusal(
+      () => splitNote({ ...source, notes: emptySpan, index: 0, frame: 5 }),
+      'splitNote: frameStart must be less than frameEnd',
+    );
     const beyond = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
     );
-    expectCoreRefusal(() => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }));
+    expectCoreRefusal(
+      () => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }),
+      'splitNote: frameEnd must be an integer in [-2147483648, 40]',
+    );
 
     // The track arguments extraction itself rejects.
     expectTypeRefusal(() =>
@@ -2153,11 +2181,17 @@ describe('mergeNotes', () => {
     const emptySpan = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: note.frameStart } : note,
     );
-    expectCoreRefusal(() => mergeNotes({ ...source, notes: emptySpan, first: 0, last: 1 }));
+    expectCoreRefusal(
+      () => mergeNotes({ ...source, notes: emptySpan, first: 0, last: 1 }),
+      'mergeNotes: frameStart must be less than frameEnd',
+    );
     const beyond = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
     );
-    expectCoreRefusal(() => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }));
+    expectCoreRefusal(
+      () => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }),
+      'mergeNotes: frameEnd must be an integer in [-2147483648, 40]',
+    );
 
     // The track arguments extraction itself rejects.
     expectTypeRefusal(() =>

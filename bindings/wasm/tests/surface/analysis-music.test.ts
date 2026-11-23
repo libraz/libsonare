@@ -476,18 +476,21 @@ describe('2-D results are Matrix2D', () => {
 });
 
 describe('meter and chord function inputs', () => {
-  const beats = Array.from({ length: 16 }, (_, i) => ({
-    timeSec: i * 0.5,
-    strength: i % 4 === 0 ? 1 : 0.3,
-  }));
+  const observations = {
+    accent: Array.from({ length: 16 }, (_, i) => (i % 4 === 0 ? 1 : 0.3)),
+    hasAttack: Array.from({ length: 16 }, () => true),
+    lowFrequencyEnergy: [],
+    subdivisionAccent: [],
+    chordChange: [],
+  };
 
-  it('estimateMeter takes beats with timeSec and strength', () => {
-    const meter = estimateMeter({ beats });
+  it('estimateMeter takes beat observations', () => {
+    const meter = estimateMeter({ observations });
     expect(meter.timeSignature.numerator).toBeGreaterThan(0);
     expect(
       errorOf(() => estimateMeter({ beatTimes: [0, 1], beatStrengths: [1, 1] } as never)),
     ).toBeInstanceOf(TypeError);
-    expect(errorOf(() => estimateMeter({ beats: 3 } as never))).toBeInstanceOf(TypeError);
+    expect(errorOf(() => estimateMeter({ observations: 3 } as never))).toBeInstanceOf(TypeError);
   });
 
   it('chordFunctions labels with romanNumeral and reads quality tokens only', () => {

@@ -201,13 +201,14 @@ export function nnlsChroma(
 export function nnlsChroma(...args: unknown[]): Matrix2D {
   return withEntry('nnlsChroma', () => {
     const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
+    const enableStftBlend = optionalBoolean(request.enableStftBlend, 'enableStftBlend', true);
     assertAudioInput(request.samples, request.sampleRate, request);
     const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
     const call = () =>
       getSonareModule().nnlsChroma(
         request.samples,
         request.sampleRate,
-        optionalBoolean(request.enableStftBlend, 'enableStftBlend', true),
+        enableStftBlend,
         request.stftBlendWeight ?? 0.55,
         request.stftBlendNFft ?? 4096,
         hopLength,
@@ -603,11 +604,11 @@ export function analyzeMelody(
 export function analyzeMelody(...args: unknown[]): MelodyResult {
   return withEntry('analyzeMelody', () => {
     const request = sampleOneShot<AnalyzeMelodyRequest>('analyzeMelody', args);
+    const usePyin = optionalBoolean(request.usePyin, 'usePyin', false);
+    const center = optionalBoolean(request.center, 'center', true);
     assertAudioInput(request.samples, request.sampleRate, request);
     const frameLength = request.frameLength ?? 2048;
     const hopLength = request.hopLength ?? 256;
-    const usePyin = optionalBoolean(request.usePyin, 'usePyin', false);
-    const center = optionalBoolean(request.center, 'center', true);
     const call = () =>
       getSonareModule().analyzeMelody(
         request.samples,
@@ -759,6 +760,7 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
     if (!(r.onsetEnvelope instanceof Float32Array)) {
       throw refuseType('onsetEnvelope must be a Float32Array');
     }
+    const center = optionalBoolean(r.center, 'center', true);
     assertSampleRate(sampleRate);
     assertSamples(r.onsetEnvelope, true, 'onsetEnvelope');
     // Native takes a `norm` flag; the normalised form is the only one exposed.
@@ -769,7 +771,7 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
         sampleRate,
         hopLength,
         winLength,
-        optionalBoolean(r.center, 'center', true),
+        center,
         true,
       );
     // An out-of-domain window is the native reader's refusal, not a memory one.

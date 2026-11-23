@@ -32,16 +32,8 @@ export interface SurroundPan {
   lfe?: number;
 }
 
-/** Master-output meter reading for a mix. */
+/** Meter reading for a strip, bus, master output, or one-shot mix. */
 export interface MixMeterSnapshot {
-  /** Left-channel sample peak in dBFS. `-Infinity` for silence; absent before the meter has seen audio. */
-  peakDbL?: number;
-  /** Right-channel sample peak in dBFS. `-Infinity` for silence; absent before the meter has seen audio. */
-  peakDbR?: number;
-  /** Left-channel RMS level in dBFS. `-Infinity` for silence; absent before the meter has seen audio. */
-  rmsDbL?: number;
-  /** Right-channel RMS level in dBFS. `-Infinity` for silence; absent before the meter has seen audio. */
-  rmsDbR?: number;
   /** Inter-channel correlation in `[-1, 1]`. Absent when not measured (no audio yet, or a channel has zero energy). */
   correlation?: number;
   /** Stereo width measured by the mono-compatibility check. Absent when not measured; `+Infinity` when the mid signal is silent but the side is not. */
@@ -60,33 +52,23 @@ export interface MixMeterSnapshot {
   integratedLufs?: number;
   /** Gain reduction applied by the dynamics stages, in dB. */
   gainReductionDb: number;
-  /**
-   * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4
-   * polyphase reconstruction at 4x. A streaming measurement that runs one
-   * reconstruction-filter group delay (a few samples) behind the block, so every
-   * value has its whole stencil and the reading does not depend on the block
-   * size. Use `meteringTruePeakDbtp` over the whole signal for an exact dBTP number.
-   * `-Infinity` for silence; absent before the meter has seen audio.
-   */
-  truePeakDbtpL?: number;
-  /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
-  truePeakDbtpR?: number;
-  /** Maximum inter-sample peak across channels in dBTP. See {@link truePeakDbtpL}. */
+  /** Maximum inter-sample peak across channels in dBTP. `-Infinity` for silence; absent when not measured. */
   maxTruePeakDbtp?: number;
   /** Sequence counter; increments each time a new snapshot is published. */
   seq: number;
-  /** Number of valid surround planes (5.1/7.1); 0 before the meter sees audio. */
+  /** Number of measured planes; 0 before the meter sees audio. */
   numChannels: number;
-  /** Per-plane peak dB, length numChannels; [0]/[1] mirror peakDbL/peakDbR. `-Infinity` for a silent plane, NaN in a slot that was not measured. */
-  peakDb: number[];
-  /** Per-plane RMS dB, length numChannels; [0]/[1] mirror rmsDbL/rmsDbR. `-Infinity` for a silent plane, NaN in a slot that was not measured. */
-  rmsDb: number[];
+  /** Per-plane peak dB, length numChannels. `-Infinity` for a silent plane; undefined when not measured. */
+  peakDb: (number | undefined)[];
+  /** Per-plane RMS dB, length numChannels. `-Infinity` for a silent plane; undefined when not measured. */
+  rmsDb: (number | undefined)[];
   /**
-   * Per-plane true-peak dBTP, length numChannels; [0]/[1] mirror
-   * {@link truePeakDbtpL}/R and carry the same streaming caveat.
-   * `-Infinity` for a silent plane, NaN in a slot that was not measured.
+   * Per-plane inter-sample (true) peak in dBTP, length numChannels, from the
+   * ITU-R BS.1770-4 polyphase reconstruction at 4x. This streaming measurement
+   * runs one reconstruction-filter group delay behind the block. `-Infinity`
+   * for a silent plane; undefined when not measured.
    */
-  truePeakDbtp: number[];
+  truePeakDbtp: (number | undefined)[];
 }
 
 /** A mixed stereo master and its meter readings. */

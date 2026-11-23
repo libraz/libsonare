@@ -723,6 +723,8 @@ export interface StftResult {
   power: Matrix2D;
   /** Magnitude in decibels, rows are bins and cols are frames; present only when `db` was requested. */
   db?: Matrix2D;
+  /** Phase in radians, rows are bins and cols are frames; present only when `phase` was requested. */
+  phase?: Matrix2D;
 }
 
 /**

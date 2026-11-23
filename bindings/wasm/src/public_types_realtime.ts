@@ -1,5 +1,88 @@
 import type { FormantMode } from './effects_voice_change.js';
 
+/** One audio device returned by {@link LiveSession.audioDevices}. */
+export interface LiveAudioDevice {
+  /** Stable device UID used to select this device. */
+  readonly uid: string;
+  /** Display name. */
+  readonly name: string;
+  /** Available input channels. */
+  readonly inputChannels: number;
+  /** Available output channels. */
+  readonly outputChannels: number;
+  /** Whether this is the current default input device. */
+  readonly isDefaultInput: boolean;
+  /** Whether this is the current default output device. */
+  readonly isDefaultOutput: boolean;
+  /** Nominal device sample rate in Hz. */
+  readonly nominalSampleRate: number;
+}
+
+/** One MIDI source returned by {@link LiveSession.midiSources}. */
+export interface LiveMidiDevice {
+  /** Stable device UID used to select this source. */
+  readonly uid: string;
+  /** Display name. */
+  readonly name: string;
+}
+
+/** Settings for constructing a {@link LiveSession}. */
+export interface LiveSessionConfig {
+  /** Output device: `'default'`, a stable UID selector, or omitted to leave it disconnected. */
+  readonly audioOutput?:
+    | 'default'
+    | {
+        /** Stable device UID from enumeration. */
+        readonly uid: string;
+      };
+  /** Input device: `'default'`, a stable UID selector, or omitted to leave it disconnected. */
+  readonly audioInput?:
+    | 'default'
+    | {
+        /** Stable device UID from enumeration. */
+        readonly uid: string;
+      };
+  /** MIDI source selected by stable UID, or omitted to leave MIDI disconnected. */
+  readonly midiInput?: {
+    /** Stable device UID from enumeration. */
+    readonly uid: string;
+  };
+  /** Requested device sample rate in Hz. Omitted to use the device's nominal rate. */
+  readonly sampleRate?: number;
+  /** Requested audio block size in frames. Omitted to use the library default. */
+  readonly blockSize?: number;
+  /** Engine destination for received MIDI. Omitted to use destination `0`. */
+  readonly destinationId?: number;
+}
+
+/** Current state and counters of a {@link LiveSession}. */
+export interface LiveSessionStatus {
+  /** Whether a device is currently driving the engine. */
+  readonly running: boolean;
+  /** Whether a selected audio device disappeared. */
+  readonly deviceLost: boolean;
+  /** Whether a device's nominal sample rate changed after opening. */
+  readonly rateChanged: boolean;
+  /** Active engine sample rate in Hz. */
+  readonly sampleRate: number;
+  /** Active output block size in frames. */
+  readonly outputBlockSize: number;
+  /** Active input block size in frames. */
+  readonly inputBlockSize: number;
+  /** Output latency in milliseconds. */
+  readonly outputLatencyMs: number;
+  /** Input latency in milliseconds. */
+  readonly inputLatencyMs: number;
+  /** Number of audio device dropouts. */
+  readonly xrunCount: number;
+  /** Dropped input frames after priming, including high-water discards. */
+  readonly inputOverrunFrames: number;
+  /** Input frames repeated after priming because the ring ran low. */
+  readonly inputUnderrunFrames: number;
+  /** Captured MIDI events dropped because the capture list was full. */
+  readonly droppedMidiEvents: number;
+}
+
 /**
  * Realtime equalizer snapshot.
  *

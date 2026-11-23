@@ -9,6 +9,8 @@
 #include <malloc.h>
 #include <unistd.h>
 
+#include <array>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -18,6 +20,7 @@
 #include "c_api/sonare_c_last_refusal.h"
 #include "c_api/sonare_c_refusal_record.h"
 #include "c_entry_names.h"
+#include "core/audio_encode.h"
 #include "util/error_classification.h"
 #include "util/parameter_checks.h"
 
@@ -223,6 +226,7 @@ val js_capabilities() {
 #define SONARE_CAPABILITY_ROW(key, suffix, gate) features.set(key, capability_##suffix##_enabled());
   SONARE_CAPABILITY_FEATURES(SONARE_CAPABILITY_ROW)
 #undef SONARE_CAPABILITY_ROW
+  features.set("liveDevices", false);
   result.set("features", features);
 
   val decode = val::object();
@@ -233,6 +237,16 @@ val js_capabilities() {
   decode.set("ffmpeg", string_array({}));
 #endif
   result.set("decode", decode);
+  val encode = val::object();
+  encode.set("builtin", string_array({"wav"}));
+  val encode_ffmpeg = val::array();
+  for (const std::string_view format : sonare::kOptionalAudioEncodeFormats) {
+    if (sonare::audio_encode_format_available(format)) {
+      encode_ffmpeg.call<void>("push", std::string(format));
+    }
+  }
+  encode.set("ffmpeg", encode_ffmpeg);
+  result.set("encode", encode);
   result.set("simd", std::string(capability_simd()));
   result.set("hardwareConcurrency", capability_hardware_concurrency());
   return result;
@@ -341,6 +355,7 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   int code = 99;  // SONARE_ERROR_UNKNOWN
   const char* code_name = "Unknown";
   std::string message;
+  std::optional<std::string> reason_token;
   auto* base = reinterpret_cast<std::exception*>(exception_ptr);
   if (base != nullptr) {
     message = base->what();
@@ -441,6 +456,41 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
           code_name = "Unknown";
           break;
       }
+    }
+  }
+  if (base != nullptr) {
+    if (const auto* refusal = dynamic_cast<const CEntryRefusal*>(base)) {
+      reason_token = refusal->reason_override();
+    } else if (const auto* coded = dynamic_cast<const WasmCodedError*>(base)) {
+      reason_token = coded->reason_override();
+    } else if (const auto* error = dynamic_cast<const sonare::SonareException*>(base)) {
+      if (error->reason()) {
+        if (const char* token = sonare::error_reason_token(*error->reason())) {
+          reason_token = token;
+        }
+      }
+    }
+  }
+  if (reason_token) {
+    constexpr std::array<sonare::ErrorReason, 10> kKnownReasons = {
+        sonare::ErrorReason::MalformedJson,      sonare::ErrorReason::UnsupportedSchemaVersion,
+        sonare::ErrorReason::NotCompiledIn,      sonare::ErrorReason::NotPersistable,
+        sonare::ErrorReason::UnresolvedSource,   sonare::ErrorReason::UnresolvedSoundFont,
+        sonare::ErrorReason::DeviceUnavailable,  sonare::ErrorReason::DeviceFormatRefused,
+        sonare::ErrorReason::EngineDeviceDriven, sonare::ErrorReason::ReleasedHandle,
+    };
+    const bool known = std::any_of(kKnownReasons.begin(), kKnownReasons.end(), [&](auto reason) {
+      const char* token = sonare::error_reason_token(reason);
+      return token != nullptr && *reason_token == token;
+    });
+    if (known) {
+      if (code != 4) info.set("reason", *reason_token);
+    } else {
+      code = 2;
+      code_name = "InvalidFormat";
+      message = "unknown error reason token: " + *reason_token;
+      info.delete_("kind");
+      info.delete_("refusal");
     }
   }
   // Any other InvalidParameter (a library SonareException or a std::invalid_argument-class
@@ -549,6 +599,16 @@ struct CFloatBuffer {
   ~CFloatBuffer() { sonare_free_floats(data); }
 };
 
+struct CByteBuffer {
+  uint8_t* data = nullptr;
+  ~CByteBuffer() { sonare_free_bytes(data); }
+};
+
+struct CAudioTags {
+  SonareAudioTags value{};
+  ~CAudioTags() { sonare_free_audio_tags(&value); }
+};
+
 }  // namespace
 
 val js_decode_channels(val bytes) {
@@ -559,7 +619,7 @@ val js_decode_channels(val bytes) {
   int sample_rate = 0;
   const SonareError err = sonare_decode_channels(elementData(data), data.size(), &planar.data,
                                                  &frames, &channels, &sample_rate);
-  if (err != SONARE_OK) throwCodedCError(err);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   val planes = val::array();
   for (int channel = 0; channel < channels; ++channel) {
     planes.call<void>(
@@ -569,6 +629,135 @@ val js_decode_channels(val bytes) {
   out.set("sampleRate", sample_rate);
   out.set("channels", planes);
   return out;
+}
+
+val js_read_audio_tags(val bytes) {
+  std::vector<uint8_t> data = uint8ArrayToVector(bytes, "data");
+  CAudioTags tags;
+  const SonareError err = sonare_read_audio_tags(elementData(data), data.size(), &tags.value);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+
+  val out = val::object();
+  for (size_t index = 0; index < tags.value.count; ++index) {
+    val descriptor = val::object();
+    descriptor.set("value", std::string(tags.value.values[index]));
+    descriptor.set("enumerable", true);
+    descriptor.set("configurable", true);
+    descriptor.set("writable", true);
+    val::global("Object").call<void>("defineProperty", out, std::string(tags.value.keys[index]),
+                                     descriptor);
+  }
+  return out;
+}
+
+val js_encode_audio(val channels, const val& sample_rate_val, const val& options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  if (options.isNull() || options.isUndefined() || options.typeOf().as<std::string>() != "object" ||
+      options.isArray() || val::global("ArrayBuffer").call<bool>("isView", options)) {
+    throw WasmTypeError("options must be an object");
+  }
+
+  const val format_value = options["format"];
+  if (format_value.isUndefined() || format_value.isNull()) {
+    throw WasmTypeError("format is required");
+  }
+  const std::string format = stringFromVal(format_value, "format");
+  const char* format_c = wasmCString(format, "format");
+
+  SonareEncodeOptions encode_options;
+  sonare_encode_options_init(&encode_options);
+  encode_options.format = format_c;
+
+  const val bit_depth_value = options["bitDepth"];
+  if (!bit_depth_value.isUndefined() && !bit_depth_value.isNull()) {
+    const int bit_depth = checkedIntFromVal(bit_depth_value, "bitDepth");
+    if (bit_depth == 0) {
+      throw WasmRangeError("bitDepth must not be 0; omit it for the format default");
+    }
+    encode_options.bit_depth = bit_depth;
+  }
+
+  const val quality_value = options["quality"];
+  if (!quality_value.isUndefined() && !quality_value.isNull()) {
+    const double quality = checkedDoubleFromVal(quality_value, "quality");
+    if (quality < 0 || quality > 1) {
+      throw WasmRangeError("quality must be finite and in [0, 1]");
+    }
+    encode_options.quality = static_cast<float>(quality);
+  }
+
+  std::vector<std::string> tag_keys;
+  std::vector<std::string> tag_values;
+  std::vector<char*> tag_key_ptrs;
+  std::vector<char*> tag_value_ptrs;
+  SonareAudioTags tags{};
+  const val tags_value = options["tags"];
+  if (!tags_value.isUndefined() && !tags_value.isNull()) {
+    if (tags_value.typeOf().as<std::string>() != "object" || tags_value.isArray() ||
+        val::global("ArrayBuffer").call<bool>("isView", tags_value)) {
+      throw WasmTypeError("tags must be an object of string values");
+    }
+    const val keys = val::global("Object").call<val>("keys", tags_value);
+    const size_t count = wasmArrayLength(keys, "tags");
+    tag_keys.reserve(count);
+    tag_values.reserve(count);
+    for (size_t index = 0; index < count; ++index) {
+      const std::string key = keys[index].as<std::string>();
+      const std::string key_subject = "tags." + key;
+      wasmCString(key, key_subject.c_str());
+      const val value = tags_value[key];
+      if (!value.isString()) throw WasmTypeError(key_subject + " must be a string");
+      std::string text = value.as<std::string>();
+      wasmCString(text, key_subject.c_str());
+      tag_keys.push_back(key);
+      tag_values.push_back(std::move(text));
+    }
+    tag_key_ptrs.reserve(count);
+    tag_value_ptrs.reserve(count);
+    for (std::string& key : tag_keys) tag_key_ptrs.push_back(const_cast<char*>(key.c_str()));
+    for (std::string& value : tag_values) {
+      tag_value_ptrs.push_back(const_cast<char*>(value.c_str()));
+    }
+    tags.keys = tag_key_ptrs.empty() ? nullptr : tag_key_ptrs.data();
+    tags.values = tag_value_ptrs.empty() ? nullptr : tag_value_ptrs.data();
+    tags.count = count;
+    encode_options.tags = &tags;
+  }
+
+  const size_t channel_count = wasmPlaneListLength(channels, "channels");
+  if (channel_count > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw WasmRangeError("channels must fit in a signed 32-bit count");
+  }
+  std::vector<float> packed;
+  size_t frames = 0;
+  size_t total = 0;
+  if (channel_count != 0) {
+    for (size_t index = 0; index < channel_count; ++index) {
+      const std::string subject = "channels[" + std::to_string(index) + "]";
+      std::vector<float> plane = float32ArrayToVector(channels[index], subject.c_str());
+      if (index == 0) {
+        frames = plane.size();
+        const size_t capacity = wasmHeapElementCapacity(sizeof(float));
+        if (frames != 0 && channel_count > capacity / frames) {
+          throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                        "channels do not fit in the WASM heap");
+        }
+        total = channel_count * frames;
+        packed.reserve(total);
+      } else if (plane.size() != frames) {
+        throw WasmRangeError(subject + " must have the same length as channels[0]");
+      }
+      packed.insert(packed.end(), plane.begin(), plane.end());
+    }
+  }
+
+  CByteBuffer encoded;
+  size_t encoded_size = 0;
+  const SonareError err =
+      sonare_encode_audio(elementData(packed), frames, static_cast<int>(channel_count), sample_rate,
+                          &encode_options, &encoded.data, &encoded_size);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+  return vectorToUint8Array(encoded.data, encoded_size);
 }
 
 val js_downmix(val channels, val target_layout_value, val options) {
@@ -695,6 +884,8 @@ EMSCRIPTEN_BINDINGS(sonare) {
 #endif
   function("audioFromMemory", &js_audio_from_memory);
   function("decodeChannels", &js_decode_channels);
+  function("readAudioTags", &js_read_audio_tags);
+  function("encodeAudio", &js_encode_audio);
   function("downmix", &js_downmix);
 
   registerQuickAnalysisBindings();

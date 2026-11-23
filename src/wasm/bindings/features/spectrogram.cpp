@@ -58,13 +58,14 @@ std::vector<float> load_validated_matrix(val input, int rows, int frames, const 
 // Features - Spectrogram
 // ============================================================================
 
-// A true `db` also returns the magnitude in decibels as `db`; undefined/null (or false) omits it.
+// Optional planes are returned only when requested.
 val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
-            const val& hop_length_val, const val& db_val) {
+            const val& hop_length_val, const val& db_val, const val& phase_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const bool with_db = optionalBool(db_val, "db").value_or(false);
+  const bool with_phase = optionalBool(phase_val, "phase").value_or(false);
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   StftConfig config;
@@ -81,11 +82,54 @@ val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
   out.set("sampleRate", spec.sample_rate());
   out.set("magnitude", vectorToFloat32Array(spec.magnitude()));
   out.set("power", vectorToFloat32Array(spec.power()));
-  if (with_db) {
-    out.set("db", vectorToFloat32Array(spec.to_db()));
+  if (with_db) out.set("db", vectorToFloat32Array(spec.to_db()));
+  if (with_phase) {
+    const size_t count = static_cast<size_t>(spec.n_bins()) * spec.n_frames();
+    std::vector<float> phase(count);
+    spec.phase(phase.data());
+    out.set("phase", vectorToFloat32Array(phase));
   }
 
   return out;
+}
+
+val js_istft(val magnitude, const val& n_bins_val, const val& n_frames_val, val phase,
+             const val& phase_bins_val, const val& phase_frames_val, const val& n_fft_val,
+             const val& hop_length_val, const val& length_samples_val) {
+  const int n_bins = domainNumberFromVal<int>(n_bins_val, "nBins",
+                                              sonare_c_detail::kInverseSpectrogramExtentDomain);
+  const int n_frames = domainNumberFromVal<int>(n_frames_val, "nFrames",
+                                                sonare_c_detail::kInverseSpectrogramExtentDomain);
+  const int phase_bins = domainNumberFromVal<int>(phase_bins_val, "phase.rows",
+                                                  sonare_c_detail::kInverseSpectrogramExtentDomain);
+  const int phase_frames = domainNumberFromVal<int>(
+      phase_frames_val, "phase.cols", sonare_c_detail::kInverseSpectrogramExtentDomain);
+  if (n_bins != phase_bins || n_frames != phase_frames) {
+    throw WasmRangeError("magnitude and phase must have the same shape");
+  }
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const size_t hop_length = checkedSizeTFromVal(hop_length_val, "hopLength");
+  std::vector<float> magnitude_data =
+      load_validated_matrix(magnitude, n_bins, n_frames, "magnitude.data");
+  std::vector<float> phase_data =
+      load_validated_matrix(phase, phase_bins, phase_frames, "phase.data");
+
+  SonareIstftOptions options;
+  sonare_istft_options_init(&options);
+  if (!length_samples_val.isUndefined() && !length_samples_val.isNull()) {
+    options.length_samples = checkedSizeTFromVal(length_samples_val, "lengthSamples");
+    if (options.length_samples == 0) {
+      throw WasmRangeError("lengthSamples must not be 0; omit it for the natural length");
+    }
+  }
+
+  float* data = nullptr;
+  size_t length = 0;
+  const SonareError err = sonare_istft(magnitude_data.data(), phase_data.data(), n_bins, n_frames,
+                                       n_fft, hop_length, &options, &data, &length);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+  std::unique_ptr<float, decltype(&sonare_free_floats)> guard(data, sonare_free_floats);
+  return vectorToFloat32Array(guard.get(), length);
 }
 
 // ============================================================================
@@ -480,6 +524,7 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
 
 void registerFeatureSpectrogramBindings() {
   function("stft", &js_stft);
+  function("istft", &js_istft);
   function("melSpectrogram", &js_mel_spectrogram);
   function("mfcc", &js_mfcc);
   function("melDelta", &js_mel_delta);

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "c_api/midi_input_domains.h"
 #include "c_api/part_rig_json.h"
@@ -122,6 +123,7 @@ void RealtimeEngineWasm::bindMidiCc(val object) {
   binding.param_id = checkedUintFromVal(object["paramId"], "paramId");
   binding.min_value = floatProperty(object, "minValue", 0.0f);
   binding.max_value = floatProperty(object, "maxValue", 1.0f);
+  binding.consume = boolProperty(object, "consume", false);
   if (binding.cc_number > 127 || binding.param_id == 0 ||
       static_cast<uint8_t>(binding.kind) >
           static_cast<uint8_t>(sonare::midi::CcBindingKind::kNrpn) ||
@@ -155,6 +157,32 @@ size_t RealtimeEngineWasm::midiCcBindingCount() const {
   return engine_.midi_cc_binding_count();
 #else
   return 0;
+#endif
+}
+
+val RealtimeEngineWasm::midiCcBindings() const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const std::vector<sonare::midi::CcBinding> bindings = engine_.midi_cc_bindings();
+  val result = val::array();
+  for (const sonare::midi::CcBinding& binding : bindings) {
+    val item = val::object();
+    item.set("ccNumber", static_cast<double>(binding.cc_number));
+    if (binding.channel != sonare::midi::kCcAnyChannel) {
+      item.set("channel", static_cast<double>(binding.channel));
+    }
+    item.set("kind", val(ccBindingKindToken(static_cast<uint8_t>(binding.kind))));
+    item.set("ccLsbNumber", static_cast<double>(binding.cc_lsb_number));
+    item.set("selectorMsb", static_cast<double>(binding.selector_msb));
+    item.set("selectorLsb", static_cast<double>(binding.selector_lsb));
+    item.set("paramId", static_cast<double>(binding.param_id));
+    item.set("minValue", binding.min_value);
+    item.set("maxValue", binding.max_value);
+    item.set("consume", binding.consume);
+    result.call<void>("push", item);
+  }
+  return result;
+#else
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -480,6 +508,7 @@ void registerRealtimeEngineMidiControl(class_<RealtimeEngineWasm>& cls) {
   cls.function("bindMidiCc", &RealtimeEngineWasm::bindMidiCc)
       .function("clearMidiCcBindings", &RealtimeEngineWasm::clearMidiCcBindings)
       .function("midiCcBindingCount", &RealtimeEngineWasm::midiCcBindingCount)
+      .function("midiCcBindings", &RealtimeEngineWasm::midiCcBindings)
       // destinationId first, matching the C ABI's own argument order minus the
       // engine handle -- stated because embind argument order on this surface
       // has historically diverged from the siblings rather than followed them.

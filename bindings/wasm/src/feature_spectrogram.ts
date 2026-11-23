@@ -75,6 +75,8 @@ export interface StftRequest {
   hopLength?: number;
   /** When true the result also carries `db`, the magnitude in decibels. Default false. */
   db?: boolean;
+  /** When true the result also carries `phase` in radians. Default false. */
+  phase?: boolean;
 }
 
 /** STFT chromagram request. */
@@ -328,10 +330,10 @@ export function biquadFilter(request: BiquadFilterRequest): Float32Array {
   return withEntry('biquadFilter', () => {
     const r = requestOnly<BiquadFilterRequest>('biquadFilter', [request]);
     assertFloat32Array(r.samples, 'samples');
+    const zeroPhase = optionalBoolean(r.zeroPhase, 'zeroPhase', false);
     assertSampleRate(r.sampleRate);
     assertClosedToken(r.type, BIQUAD_FILTER_TYPES, 'type');
     const { samples, sampleRate } = r;
-    const zeroPhase = optionalBoolean(r.zeroPhase, 'zeroPhase', false);
     return withMonoHeap(samples, sampleRate, 3, () =>
       getSonareModule().biquadFilter(
         samples,
@@ -355,7 +357,7 @@ export function biquadFilter(request: BiquadFilterRequest): Float32Array {
  * Short-time Fourier transform.
  *
  * @returns Magnitude and power matrices whose rows are `nFft / 2 + 1` bins and cols are frames;
- *   `db` (the magnitude in decibels, same shape) is present only when requested.
+ *   `db` (magnitude in decibels) and `phase` (radians) are present only when requested.
  */
 export function stft(request: StftRequest): StftResult;
 export function stft(
@@ -366,10 +368,11 @@ export function stft(
 export function stft(...args: unknown[]): StftResult {
   return withEntry('stft', () => {
     const r = sampleOneShot<StftRequest>('stft', args);
+    const withDb = optionalBoolean(r.db, 'db', false);
+    const withPhase = optionalBoolean(r.phase, 'phase', false);
     assertAudioInput(r.samples, r.sampleRate, r);
     const fft = resolveFftOptions(r.nFft, r.hopLength);
     const { samples, sampleRate } = r;
-    const withDb = optionalBoolean(r.db, 'db', false) ? true : undefined;
     const bins = stftBins(fft.nFft, fft.hopLength);
     const native = withHeapNeedWhen(
       bins !== undefined,
@@ -377,9 +380,13 @@ export function stft(...args: unknown[]): StftResult {
         'samples',
         samples.length,
         sampleRate,
-        (n) => 4 * n + 8 * (bins as number) * stftFrames(n, fft.hopLength),
+        (n) =>
+          4 * n +
+          (8 + (withDb ? 4 : 0) + (withPhase ? 4 : 0)) *
+            (bins as number) *
+            stftFrames(n, fft.hopLength),
       ),
-      () => getSonareModule().stft(samples, sampleRate, fft.nFft, fft.hopLength, withDb),
+      () => getSonareModule().stft(samples, sampleRate, fft.nFft, fft.hopLength, withDb, withPhase),
     );
     const result: StftResult = {
       nFft: native.nFft,
@@ -390,6 +397,9 @@ export function stft(...args: unknown[]): StftResult {
     };
     if (native.db !== undefined) {
       result.db = toMatrix2D(native.db, native.nBins, native.nFrames);
+    }
+    if (native.phase !== undefined) {
+      result.phase = toMatrix2D(native.phase, native.nBins, native.nFrames);
     }
     return result;
   });
@@ -554,6 +564,7 @@ export function melFilterbank(request: MelFilterbankRequest): Matrix2D;
 export function melFilterbank(...args: unknown[]): Matrix2D {
   return withEntry('melFilterbank', () => {
     const r = requestOnly<MelFilterbankRequest>('melFilterbank', args);
+    const htk = optionalBoolean(r.htk, 'htk', false);
     // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
     if (!isAbsent(r.fmaxHz)) {
       assertFiniteScalar(r.fmaxHz, 'fmaxHz');
@@ -569,7 +580,7 @@ export function melFilterbank(...args: unknown[]): Matrix2D {
       r.nMels ?? 128,
       r.fminHz ?? 0,
       r.fmaxHz ?? 0,
-      optionalBoolean(r.htk, 'htk', false),
+      htk,
       MEL_NORMS.indexOf(norm),
     );
     return toMatrix2D(native.data, native.nMels, native.nBins);

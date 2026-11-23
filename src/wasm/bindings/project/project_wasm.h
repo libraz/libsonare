@@ -16,6 +16,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "c_api/sonare_c_error_mapping.h"
@@ -93,8 +94,46 @@ inline void checkCodedCError(SonareError err) {
 
 /// checkCodedCError for a call whose struct argument's refusal subjects carry a "<c_root>."
 /// prefix the caller never wrote (throwCodedCErrorFlattening).
-inline void checkCodedCErrorFlattening(SonareError err, const char* c_root) {
-  if (err != SONARE_OK) throwCodedCErrorFlattening(err, c_root);
+inline void checkCodedCErrorFlattening(SonareError err, const char* c_root,
+                                       CErrorReasonMode reason_mode = CErrorReasonMode::kNone) {
+  if (err == SONARE_OK) return;
+  if (std::optional<sonare::SonareParameterRefusal> shown =
+          sonare_field_spelling::wasm::SpelledLastRefusal(c_root)) {
+    std::optional<std::string> reason_override;
+    if (reason_mode == CErrorReasonMode::kCurrentEntry) {
+      if (const char* reason = sonare_last_error_reason()) reason_override = reason;
+    }
+    throwCEntryRefusal(*shown, std::move(reason_override));
+  }
+  throwCodedCError(err, reason_mode);
+}
+
+/// The closed automation target tokens, read once per call from the C ABI's ordinal-order table.
+inline std::vector<std::string> projectAutomationTargetKindTokens() {
+  const char* names = sonare_automation_target_kind_names();
+  if (names == nullptr) {
+    throwCodedCError(sonare_last_error_code(), CErrorReasonMode::kCurrentEntry);
+  }
+  const std::string_view joined(names);
+  std::vector<std::string> tokens;
+  size_t start = 0;
+  while (start <= joined.size()) {
+    const size_t end = joined.find('\n', start);
+    tokens.emplace_back(joined.substr(start, end == std::string_view::npos ? end : end - start));
+    if (end == std::string_view::npos) break;
+    start = end + 1;
+  }
+  if (tokens.empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "automation target names are empty");
+  }
+  for (const std::string& token : tokens) {
+    if (token.empty()) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "automation target names contain an empty token");
+    }
+  }
+  return tokens;
 }
 
 struct ProjectWasm {
@@ -139,6 +178,8 @@ struct ProjectWasm {
   void setWarpMap(val desc);
   void removeWarpMap(const val& warp_ref_id);
   void setTrackMidiDestination(const val& track_id, const val& destination_id);
+  void setDestinationInstrument(const val& destination_id, val instrument, val options);
+  val destinationInstruments() const;
   void setTrackGain(const val& track_id, const val& gain_val);
   void setTrackMute(const val& track_id, bool mute);
   void setTrackSolo(const val& track_id, bool solo);
@@ -153,6 +194,7 @@ struct ProjectWasm {
   void setMaxHistoryBytes(const val& bytes);
 
   void setMidiEvents(const val& clip_id, val events);
+  val midiEvents(const val& clip_id) const;
   uint32_t importSmf(val data);
   val exportSmf();
   uint32_t importClipFile(val data);
@@ -288,11 +330,13 @@ struct ProjectWasm {
   static std::vector<SonareAutomationPoint> automationPointsFromVal(val points);
 
   static SonareAutomationLaneDesc automationLaneDescFromVal(
-      val desc, std::vector<SonareAutomationPoint>* storage);
+      val desc, std::vector<SonareAutomationPoint>* storage,
+      std::vector<std::string>* string_storage, SonareAutomationTargetKind target_kind);
 
   double addAutomationLane(const val& track_id, val desc);
-  void editAutomationLane(const val& track_id, const val& target_param_id, val desc);
-  void removeAutomationLane(const val& track_id, const val& target_param_id);
+  void editAutomationLane(const val& track_id, const val& lane_id, val desc);
+  void removeAutomationLane(const val& track_id, const val& lane_id);
+  val automationLanes() const;
 
   // --------------------------------------------------------------------------
   // MIR annotation streams (undoable)
@@ -300,6 +344,10 @@ struct ProjectWasm {
 
   void annotateKeys(val keys);
   void annotateChords(val chords);
+  void annotateSections(val sections);
+  val keyAnnotations() const;
+  val chordAnnotations() const;
+  val sectionAnnotations() const;
 
   // --------------------------------------------------------------------------
   // Assist sidecars (opaque module state)
@@ -318,8 +366,18 @@ struct ProjectWasm {
   void setOverlapPolicy(const val& policy_val);
   uint32_t getOverlapPolicy() const;
   double getSampleRate() const;
+  double countInFrames(const val& count_in_bars) const;
+  uint32_t addAudioSource(const std::string& uri);
+  uint32_t relinkSource(const val& source_id, const std::string& uri);
   void setMixerSceneJson(const std::string& scene_json);
+  val mixerScene() const;
+  val unresolvedSoundFontUris() const;
   uint32_t setMarker(val marker);
+  double ppqToSec(const val& ppq) const;
+  double secToPpq(const val& sec) const;
+  val positionAtPpq(const val& ppq) const;
+  double barStartPpq(const val& bar_index) const;
+  double endPpq() const;
   val markerByIndex(const val& index_val) const;
   val trackByIndex(const val& index_val) const;
   val clipByIndex(const val& index_val) const;

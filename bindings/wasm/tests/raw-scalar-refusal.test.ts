@@ -8,7 +8,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init } from '../src/index';
 import { getSonareModule } from '../src/module_state';
-import { projectAutomationLaneValue } from '../src/project_internal';
 import type { SonareModule } from '../src/sonare.js';
 
 let mod: SonareModule;
@@ -16,8 +15,8 @@ let mod: SonareModule;
 /** The raw embind Project methods this file drives; the module declaration does not export the class. */
 interface RawProject {
   addMidiClip(startPpq: number, lengthPpq: number): { trackId: number };
-  addAutomationLane(trackId: number, lane: unknown): unknown;
-  editAutomationLane(trackId: number, laneIndex: number, lane: unknown): unknown;
+  addAutomationLane(trackId: number, lane: unknown): number;
+  editAutomationLane(trackId: number, laneId: number, lane: unknown): unknown;
   delete(): void;
 }
 
@@ -64,20 +63,20 @@ describe('raw scalar arguments refuse non-finite values by name', () => {
     }
   });
 
-  it('project addMidiClip: startPpq; editAutomationLane: targetParamId', () => {
+  it('project addMidiClip: startPpq; editAutomationLane: laneId', () => {
     const project = new (mod as unknown as { Project: new () => RawProject }).Project();
     try {
       expect(refusal(() => project.addMidiClip(Number.NaN, 4)).message).toContain('startPpq');
       const { trackId } = project.addMidiClip(0, 4);
-      const lane = projectAutomationLaneValue({
+      const lane = {
         targetParamId: 1,
         points: [{ ppq: 0, value: 0.5 }],
-      });
-      project.addAutomationLane(trackId, lane);
+      };
+      const laneId = project.addAutomationLane(trackId, lane);
       expect(
-        refusal(() => project.editAutomationLane(trackId, Number.NaN, lane)).message,
-      ).toContain('targetParamId');
-      expect(() => project.editAutomationLane(trackId, 1, lane)).not.toThrow();
+        refusal(() => project.editAutomationLane(trackId, Number.NaN, { points: [] })).message,
+      ).toContain('laneId');
+      expect(() => project.editAutomationLane(trackId, laneId, { points: [] })).not.toThrow();
     } finally {
       project.delete();
     }

@@ -32,6 +32,7 @@ export type {
   DownmixOptions,
 } from './audio.js';
 export { Audio, decodeChannels, decodeChannelsWithBrowserFallback, downmix } from './audio.js';
+export * from './audio_codec.js';
 export type { ChordSymbolFields } from './chord_annotation.js';
 export { chordSymbolFromAnalysis, keyModeFromAnalysis } from './chord_annotation.js';
 export type {
@@ -94,6 +95,7 @@ export type {
   MasteringRepairAnalyzeRequest,
   MasteringRepairApplyRequest,
   MasteringRepairApplyResult,
+  MasteringRepairChannelChange,
   MasteringRepairDeclickRequest,
   MasteringRepairDeclickStereoRequest,
   MasteringRepairDeclipRequest,
@@ -252,7 +254,7 @@ export type {
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
-export type { ErrorCodeName, SonareErrorOptions } from './errors.js';
+export type { ErrorCodeName, ErrorReason, SonareErrorOptions } from './errors.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export type {
   AmplitudeToDbRequest,
@@ -304,6 +306,7 @@ export type {
 } from './feature_decompose.js';
 export type {
   GriffinLimRequest,
+  IstftRequest,
   MelToAudioRequest,
   MelToStftRequest,
   MfccToAudioRequest,
@@ -409,6 +412,7 @@ export {
   hzToMel,
   hzToMidi,
   hzToNote,
+  istft,
   lufs,
   lufsMultichannel,
   lufsSeriesMultichannel,
@@ -483,9 +487,15 @@ export {
   zeroCrossingRate,
   zeroCrossings,
 } from './features.js';
-export type { SynthParamCondition, SynthParamInfo } from './instrument_types.js';
+export type {
+  SynthParamCondition,
+  SynthParamInfo,
+  SynthPatchEnumParamInfo,
+  SynthPatchParamInfo,
+} from './instrument_types.js';
 export type { BindMicrophoneInputOptions, MicrophoneInputBinding } from './live_audio.js';
 export { bindMicrophoneInput } from './live_audio.js';
+export { LiveSession } from './live_session.js';
 export type {
   MasterAudioRequest,
   MasterAudioStereoRequest,
@@ -660,11 +670,15 @@ export type {
   PartRigMode,
   PartRigRequest,
   ProjectAnalyzeTempoRequest,
+  ProjectArticulationBinding,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
   ProjectAudioSourceMetadataInput,
   ProjectAutomationCurve,
+  ProjectAutomationLane,
   ProjectAutomationLaneDesc,
+  ProjectAutomationLaneEditDesc,
+  ProjectAutomationLanePoints,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
   ProjectAutoTempoOptions,
@@ -682,9 +696,13 @@ export type {
   ProjectClipTakesOptions,
   ProjectCompileOptions,
   ProjectCompileResult,
+  ProjectControllerProfileBinding,
   ProjectDeserializeResult,
+  ProjectDestinationInstrumentBinding,
+  ProjectDestinationInstrumentOptions,
   ProjectDiagnosticCode,
   ProjectFadeCurve,
+  ProjectInstrument,
   ProjectInstrumentBinding,
   ProjectKeyMode,
   ProjectKeySegment,
@@ -707,7 +725,9 @@ export type {
   ProjectMoveClipOptions,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
+  ProjectPosition,
   ProjectProgramOptions,
+  ProjectSection,
   ProjectSource,
   ProjectSourceAudioInput,
   ProjectSourceKind,
@@ -779,7 +799,11 @@ export {
   synthPresetNames,
   synthPresetPatch,
 } from './project.js';
-export { synthEngineParamInfo, synthPatchParamInfo } from './project_synth.js';
+export {
+  automationTargetKindNames,
+  synthEngineParamInfo,
+  synthPatchParamInfo,
+} from './project_synth.js';
 export type {
   AcousticModeName,
   AcousticOptions,
@@ -796,6 +820,7 @@ export type {
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
   AssignNoteTargetsResult,
+  AudioFormatCapabilities,
   AutoGainOptions,
   AutomationCurve,
   AutoTuneKey,
@@ -861,6 +886,10 @@ export type {
   KeyDetectionOptions,
   KeyMode,
   KeyProfile,
+  LiveAudioDevice,
+  LiveMidiDevice,
+  LiveSessionConfig,
+  LiveSessionStatus,
   LoudnessMatchResult,
   LoudnessMatchStereoResult,
   LufsResult,

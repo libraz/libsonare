@@ -244,34 +244,63 @@ inline std::string cErrorMessage(SonareError err) {
 ///        (`cEntry` on the JS refusal record; a direct core refusal has none).
 class CEntryRefusal : public sonare::SonareParameterRefusal {
  public:
-  CEntryRefusal(const sonare::SonareParameterRefusal& refusal, std::string c_entry)
-      : sonare::SonareParameterRefusal(refusal), c_entry_(std::move(c_entry)) {}
+  CEntryRefusal(const sonare::SonareParameterRefusal& refusal, std::string c_entry,
+                std::optional<std::string> reason_override)
+      : sonare::SonareParameterRefusal(refusal),
+        c_entry_(std::move(c_entry)),
+        reason_override_(std::move(reason_override)) {}
   const std::string& c_entry() const noexcept { return c_entry_; }
+  const std::optional<std::string>& reason_override() const noexcept { return reason_override_; }
 
  private:
   std::string c_entry_;
+  std::optional<std::string> reason_override_;
+};
+
+/// @brief Whether a failing C call may contribute its current reason token.
+enum class CErrorReasonMode { kNone, kCurrentEntry };
+
+/// @brief A coded C-ABI failure with an explicit reason override.
+class WasmCodedError final : public sonare::SonareException {
+ public:
+  WasmCodedError(sonare::ErrorCode code, std::string message,
+                 std::optional<std::string> reason_override)
+      : sonare::SonareException(code, message), reason_override_(std::move(reason_override)) {}
+
+  const std::optional<std::string>& reason_override() const noexcept { return reason_override_; }
+
+ private:
+  std::optional<std::string> reason_override_;
 };
 
 /// @brief Throws @p shown as the refusal the last C-ABI call recorded.
-[[noreturn]] inline void throwCEntryRefusal(const sonare::SonareParameterRefusal& shown) {
+[[noreturn]] inline void throwCEntryRefusal(
+    const sonare::SonareParameterRefusal& shown,
+    std::optional<std::string> reason_override = std::nullopt) {
   const char* entry = sonare_last_refusal_entry();
-  throw CEntryRefusal(shown, entry != nullptr ? entry : "");
+  throw CEntryRefusal(shown, entry != nullptr ? entry : "", std::move(reason_override));
 }
 
 /// @brief Rethrows the parameter refusal the last C-ABI call recorded, spelled under the refused
 ///        entry's request keys, for the JS translation point to classify; returns when none was.
-inline void rethrowLastCRefusal() {
+inline void rethrowLastCRefusal(std::optional<std::string> reason_override = std::nullopt) {
   if (std::optional<sonare::SonareParameterRefusal> shown =
           sonare_field_spelling::wasm::SpelledLastRefusal()) {
-    throwCEntryRefusal(*shown);
+    throwCEntryRefusal(*shown, std::move(reason_override));
   }
 }
 
 /// @brief Throws the returned @p err as its recorded refusal, else as its SonareException with
 ///        cErrorMessage(@p err).
-[[noreturn]] inline void throwCodedCError(SonareError err) {
-  rethrowLastCRefusal();
-  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err), cErrorMessage(err));
+[[noreturn]] inline void throwCodedCError(SonareError err,
+                                          CErrorReasonMode reason_mode = CErrorReasonMode::kNone) {
+  std::optional<std::string> reason_override;
+  if (reason_mode == CErrorReasonMode::kCurrentEntry) {
+    if (const char* reason = sonare_last_error_reason()) reason_override = reason;
+  }
+  rethrowLastCRefusal(reason_override);
+  throw WasmCodedError(sonare_c_detail::error_code_from_c_error(err), cErrorMessage(err),
+                       std::move(reason_override));
 }
 
 /// @brief throwCodedCError for a call whose struct's refusal subjects carry a "<c_root>." prefix
@@ -308,7 +337,7 @@ inline std::vector<std::string> lastDiagnosticMessages() {
   if (code == SONARE_OK) code = fallback;
   const char* detail = sonare_last_error_message();
   const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(code);
-  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(code), text);
+  throw WasmCodedError(sonare_c_detail::error_code_from_c_error(code), text, std::nullopt);
 }
 
 /// @brief Throws NotSupported for an arrangement/MIDI entry point in a build without the engine.

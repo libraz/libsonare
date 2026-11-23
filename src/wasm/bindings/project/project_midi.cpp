@@ -13,15 +13,257 @@
 #include "analysis/music_analyzer.h"
 #include "c_api/midi_input_domains.h"
 #include "c_api/project_input_domains.h"
+#include "c_api/synth_patch_fields.h"
 #include "project_wasm.h"
 #include "wasm/bindings/common/midi_cc_kind.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
+namespace {
+
+// A non-NULL pointer to @p bytes, also when it is empty.
+const uint8_t* nonNullBytes(const std::vector<uint8_t>& bytes) {
+  static constexpr uint8_t kNoBytes = 0;
+  return bytes.empty() ? &kNoBytes : bytes.data();
+}
+
+struct MidiEventListGuard {
+  SonareMidiEventList value{};
+
+  ~MidiEventListGuard() { sonare_free_midi_event_list(&value); }
+};
+
+struct ProjectInstrumentListGuard {
+  SonareProjectInstrumentList value{};
+
+  ~ProjectInstrumentListGuard() {
+    if (value.items != nullptr) sonare_free_project_instrument_list(&value);
+  }
+};
+
+std::string projectInstrumentEnumName(const char* const* names, size_t count, int ordinal,
+                                      const char* noun) {
+  if (ordinal < 0 || static_cast<size_t>(ordinal) >= count) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidFormat,
+        std::string("unknown ") + noun + " ordinal: " + std::to_string(ordinal));
+  }
+  return names[ordinal];
+}
+
+val projectSynthPatchToSparseVal(const SonareSynthPatch& patch) {
+  val out = val::object();
+  if (patch.preset[0] != '\0') out.set("preset", std::string(patch.preset));
+  if (patch.engine_mode != SONARE_SYNTH_ENGINE_DEFAULT) {
+    out.set("engineMode", projectInstrumentEnumName(sonare_wasm_synth::kEngineModes,
+                                                    SONARE_SYNTH_ENGINE_MODE_COUNT,
+                                                    patch.engine_mode, "synth engine mode"));
+  }
+
+  for (const auto& field : sonare_c_detail::kSynthPatchEnumFields) {
+    const int ordinal = patch.*field.member;
+    if (ordinal == 0) continue;
+    out.set(field.name,
+            projectInstrumentEnumName(field.values.names, field.values.count, ordinal,
+                                      (std::string("synth patch ") + field.name).c_str()));
+  }
+
+  for (const auto& field : sonare_c_detail::kSynthPatchNumericFields) {
+    const double value = std::visit(
+        [&](const auto member) { return static_cast<double>(patch.*member); }, field.member);
+    const uint32_t present = field.presence_fields2 ? patch.present_fields2 : patch.present_fields;
+    if (value == 0.0 && (field.presence_bit == 0 || (present & field.presence_bit) == 0)) {
+      continue;
+    }
+    if (std::string(field.name) == "oneShot") {
+      out.set(field.name, value != 0.0);
+    } else {
+      out.set(field.name, value);
+    }
+  }
+
+  if (patch.engine_param_count != 0) {
+    if (patch.engine_params == nullptr) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "destination instrument has missing synth engine params");
+    }
+    val engine_params = val::object();
+    for (size_t i = 0; i < patch.engine_param_count; ++i) {
+      const SonareSynthEngineParam& param = patch.engine_params[i];
+      if (param.key == nullptr || param.key[0] == '\0') {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                      "destination instrument has an invalid synth engine key");
+      }
+      engine_params.set(std::string(param.key), param.value);
+    }
+    out.set("engineParams", engine_params);
+  }
+
+  if (patch.num_mod_routings < 0 || patch.num_mod_routings > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "destination instrument has an invalid mod routing count");
+  }
+  if (patch.num_mod_routings != 0 ||
+      (patch.present_fields & SONARE_SYNTH_FIELD_MOD_ROUTINGS) != 0) {
+    val routings = val::array();
+    for (int i = 0; i < patch.num_mod_routings; ++i) {
+      const SonareSynthModRouting& route = patch.mod_routings[i];
+      val row = val::object();
+      row.set("source", projectInstrumentEnumName(sonare_wasm_synth::kModSources,
+                                                  SONARE_SYNTH_MOD_SOURCE_COUNT, route.source,
+                                                  "synth modulation source"));
+      row.set("destination",
+              projectInstrumentEnumName(sonare_wasm_synth::kModDestinations,
+                                        SONARE_SYNTH_MOD_DESTINATION_COUNT, route.destination,
+                                        "synth modulation destination"));
+      row.set("depth", route.depth);
+      routings.set(static_cast<unsigned>(i), row);
+    }
+    out.set("modRoutings", routings);
+  }
+  return out;
+}
+
+val projectInstrumentToVal(const SonareProjectInstrument& source) {
+  if (source.struct_size != sizeof(SonareProjectInstrument)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "destination instrument has an invalid struct size");
+  }
+  val instrument = val::object();
+  switch (source.kind) {
+    case SONARE_PROJECT_INSTRUMENT_SYNTH: {
+      if (source.synth == nullptr || source.builtin != nullptr || source.sf2 != nullptr ||
+          source.sound_font_uri != nullptr) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                      "destination synth instrument has invalid config pointers");
+      }
+      instrument.set("kind", "synth");
+      instrument.set("patch", projectSynthPatchToSparseVal(*source.synth));
+      instrument.set("useGmPrograms", source.use_gm_programs != 0);
+      break;
+    }
+    case SONARE_PROJECT_INSTRUMENT_BUILTIN: {
+      if (source.builtin == nullptr || source.synth != nullptr || source.sf2 != nullptr ||
+          source.sound_font_uri != nullptr ||
+          source.builtin->struct_size != sizeof(SonareBuiltinSynthConfig)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                      "destination built-in instrument has invalid config data");
+      }
+      const SonareBuiltinSynthConfig& config = *source.builtin;
+      val fields = val::object();
+      if (config.waveform < 0 || config.waveform >= SONARE_SYNTH_WAVEFORM_COUNT) {
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidFormat,
+            "unknown built-in synth waveform ordinal: " + std::to_string(config.waveform));
+      }
+      constexpr size_t kWaveformNameIndices[] = {0, 1, 3, 4};
+      fields.set(
+          "waveform",
+          sonare_wasm_synth::synth_names::kBuiltinWaveforms[kWaveformNameIndices[config.waveform]]);
+      fields.set("gain", config.gain);
+      fields.set("attackMs", config.attack_ms);
+      fields.set("decayMs", config.decay_ms);
+      fields.set("sustain", config.sustain);
+      fields.set("releaseMs", config.release_ms);
+      fields.set("polyphony", config.polyphony);
+      instrument.set("kind", "builtin");
+      instrument.set("config", fields);
+      break;
+    }
+    case SONARE_PROJECT_INSTRUMENT_SF2: {
+      if (source.sf2 == nullptr || source.synth != nullptr || source.builtin != nullptr ||
+          source.sf2->struct_size != sizeof(SonareSf2InstrumentConfig)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                      "destination SoundFont instrument has invalid config data");
+      }
+      const SonareSf2InstrumentConfig& config = *source.sf2;
+      if (config.gs_efx_realization < 0 || config.gs_efx_realization > 1) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                      "unknown SoundFont EFX realization ordinal: " +
+                                          std::to_string(config.gs_efx_realization));
+      }
+      val fields = val::object();
+      fields.set("gain", config.gain);
+      fields.set("polyphony", config.polyphony);
+      fields.set("preferModelForModeledFamilies", config.prefer_model_for_modeled_families != 0);
+      fields.set("clearBankRig", config.clear_bank_rig != 0);
+      fields.set("gsEfxRealization",
+                 config.gs_efx_realization == 0 ? std::string("modern") : std::string("classic"));
+      instrument.set("kind", "sf2");
+      instrument.set("config", fields);
+      if (source.sound_font_uri != nullptr) {
+        instrument.set("soundFontUri", std::string(source.sound_font_uri));
+      }
+      break;
+    }
+    default:
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidFormat,
+          "unknown project instrument kind ordinal: " + std::to_string(source.kind));
+  }
+  return instrument;
+}
+
+void destinationInstrumentMidiOptions(val options, SonareProjectInstrument* instrument) {
+  if (options.isUndefined() || options.isNull()) return;
+  if (options.typeOf().as<std::string>() != "object" ||
+      val::global("Array").call<bool>("isArray", options)) {
+    throw WasmTypeError("options must be an object");
+  }
+  if (hasProperty(options, "bank")) {
+    val bank = options["bank"];
+    if (bank.typeOf().as<std::string>() != "object" || bank.isNull() ||
+        val::global("Array").call<bool>("isArray", bank)) {
+      throw WasmTypeError("options.bank must be an object");
+    }
+    instrument->bank_msb = domainNumberFromVal<uint8_t>(bank["msb"], "options.bank.msb",
+                                                        sonare_c_detail::kMidiDataByteDomain);
+    instrument->bank_lsb = domainNumberFromVal<uint8_t>(bank["lsb"], "options.bank.lsb",
+                                                        sonare_c_detail::kMidiDataByteDomain);
+  }
+  if (hasProperty(options, "program")) {
+    instrument->program = domainNumberFromVal<uint8_t>(options["program"], "options.program",
+                                                       sonare_c_detail::kMidiDataByteDomain);
+  }
+}
+
+val destinationInstrumentToVal(const SonareProjectInstrumentBinding& source) {
+  val binding = val::object();
+  binding.set("destinationId", static_cast<double>(source.destination_id));
+  binding.set("instrument", projectInstrumentToVal(source.instrument));
+  if ((source.instrument.bank_msb == SONARE_PROJECT_INSTRUMENT_FROM_CLIP) !=
+      (source.instrument.bank_lsb == SONARE_PROJECT_INSTRUMENT_FROM_CLIP)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "destination instrument has an incomplete bank override");
+  }
+  if (source.instrument.bank_msb != SONARE_PROJECT_INSTRUMENT_FROM_CLIP) {
+    if (source.instrument.bank_msb < 0 || source.instrument.bank_msb > 127 ||
+        source.instrument.bank_lsb < 0 || source.instrument.bank_lsb > 127) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "destination instrument has an invalid bank override");
+    }
+    val bank = val::object();
+    bank.set("msb", source.instrument.bank_msb);
+    bank.set("lsb", source.instrument.bank_lsb);
+    binding.set("bank", bank);
+  }
+  if (source.instrument.program != SONARE_PROJECT_INSTRUMENT_FROM_CLIP) {
+    if (source.instrument.program < 0 || source.instrument.program > 127) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "destination instrument has an invalid program override");
+    }
+    binding.set("program", source.instrument.program);
+  }
+  return binding;
+}
+
+}  // namespace
+
 void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const size_t count = wasmArrayLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
+  std::vector<std::vector<uint8_t>> sysex_storage(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
     if (val::global("Array").call<bool>("isArray", entry)) {
@@ -32,6 +274,12 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
       pods[i].ppq = numberFromVal(entry["ppq"], "ppq");
       pods[i].word0 = checkedWordFromVal(entry["word0"], "word0");
       pods[i].word1 = wordProperty(entry, "word1", pods[i].word1);
+      val sysex = entry["sysex"];
+      if (!sysex.isUndefined() && !sysex.isNull()) {
+        sysex_storage[i] = uint8ArrayToVector(sysex, "sysex");
+        pods[i].sysex = nonNullBytes(sysex_storage[i]);
+        pods[i].sysex_size = sysex_storage[i].size();
+      }
     }
   }
   const SonareError err = sonare_project_set_midi_events(
@@ -41,15 +289,145 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   }
 }
 
-namespace {
+val ProjectWasm::midiEvents(const val& clip_id_val) const {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
+  MidiEventListGuard list;
+  const SonareError err = sonare_project_midi_events(project_.get(), clip_id, &list.value);
+  if (err != SONARE_OK) throwCodedCError(err);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "midiEvents returned a missing event array");
+  }
 
-// A non-NULL pointer to @p bytes, also when it is empty.
-const uint8_t* nonNullBytes(const std::vector<uint8_t>& bytes) {
-  static constexpr uint8_t kNoBytes = 0;
-  return bytes.empty() ? &kNoBytes : bytes.data();
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const SonareMidiEventPod& source = list.value.items[i];
+    const bool has_sysex = source.sysex != nullptr;
+    if (has_sysex != (source.sysex_size != 0)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "midiEvents returned an invalid SysEx payload");
+    }
+    val event = val::object();
+    event.set("ppq", source.ppq);
+    event.set("word0", static_cast<double>(source.word0));
+    event.set("word1", static_cast<double>(source.word1));
+    if (has_sysex) {
+      event.set("sysex", vectorToUint8Array(source.sysex, source.sysex_size));
+    }
+    out.set(static_cast<unsigned>(i), event);
+  }
+  return out;
 }
 
-}  // namespace
+void ProjectWasm::setDestinationInstrument(const val& destination_id_val, val instrument,
+                                           val options) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const bool clear = instrument.isUndefined() || instrument.isNull();
+  if (clear && !options.isUndefined() && !options.isNull()) {
+    throw WasmTypeError("options require an instrument");
+  }
+
+  SonareProjectInstrument stored{};
+  sonare_wasm_synth::SynthPatchStorage synth_patch;
+  SonareBuiltinSynthConfig builtin{};
+  SonareSf2InstrumentBinding sf2{};
+  std::string sound_font_uri;
+  if (!clear) {
+    if (instrument.typeOf().as<std::string>() != "object" ||
+        val::global("Array").call<bool>("isArray", instrument)) {
+      throw WasmTypeError("instrument must be an object");
+    }
+    val kind_value = instrument["kind"];
+    if (kind_value.typeOf().as<std::string>() != "string") {
+      throw WasmTypeError("instrument.kind must be a string token");
+    }
+    const std::string kind = kind_value.as<std::string>();
+    sonare_project_instrument_init(&stored);
+    if (kind == "synth") {
+      val patch = instrument["patch"];
+      if (patch.isUndefined() || patch.isNull() || patch.typeOf().as<std::string>() != "object" ||
+          val::global("Array").call<bool>("isArray", patch)) {
+        throw WasmTypeError("instrument.patch must be an object");
+      }
+      if (hasProperty(patch, "sampleBank") && !patch["sampleBank"].isUndefined() &&
+          !patch["sampleBank"].isNull()) {
+        throw sonare::SonareException(
+            sonare::ErrorCode::NotSupported,
+            "sample-bank patches cannot be stored as destination instruments",
+            sonare::ErrorReason::NotPersistable);
+      }
+      synth_patch = sonare_wasm_synth::synthPatchFromVal(patch);
+      stored.kind = SONARE_PROJECT_INSTRUMENT_SYNTH;
+      stored.synth = &synth_patch.patch;
+      val patch_use_gm = patch["useGmPrograms"];
+      val instrument_use_gm = instrument["useGmPrograms"];
+      const bool has_patch_use_gm = !patch_use_gm.isUndefined() && !patch_use_gm.isNull();
+      const bool has_instrument_use_gm =
+          !instrument_use_gm.isUndefined() && !instrument_use_gm.isNull();
+      const bool patch_uses_gm =
+          has_patch_use_gm ? boolProperty(patch, "useGmPrograms", false) : false;
+      const bool instrument_uses_gm = has_instrument_use_gm ? instrument_use_gm.as<bool>() : false;
+      if (has_patch_use_gm && has_instrument_use_gm && patch_uses_gm != instrument_uses_gm) {
+        throw WasmRangeError(
+            "instrument.useGmPrograms conflicts with instrument.patch.useGmPrograms");
+      }
+      stored.use_gm_programs =
+          has_instrument_use_gm ? (instrument_uses_gm ? 1 : 0) : (patch_uses_gm ? 1 : 0);
+    } else if (kind == "builtin") {
+      val config = instrument["config"];
+      if (config.isUndefined() || config.isNull() ||
+          config.typeOf().as<std::string>() != "object" ||
+          val::global("Array").call<bool>("isArray", config)) {
+        throw WasmTypeError("instrument.config must be an object");
+      }
+      SonareBuiltinInstrumentBinding parsed = builtinBindingFromVal(config);
+      builtin = parsed.config;
+      stored.kind = SONARE_PROJECT_INSTRUMENT_BUILTIN;
+      stored.builtin = &builtin;
+    } else if (kind == "sf2") {
+      val config = instrument["config"];
+      if (config.isUndefined() || config.isNull() ||
+          config.typeOf().as<std::string>() != "object" ||
+          val::global("Array").call<bool>("isArray", config)) {
+        throw WasmTypeError("instrument.config must be an object");
+      }
+      sf2 = sf2BindingFromVal(config);
+      stored.kind = SONARE_PROJECT_INSTRUMENT_SF2;
+      stored.sf2 = &sf2.config;
+      if (hasProperty(instrument, "soundFontUri")) {
+        sound_font_uri = stringFromVal(instrument["soundFontUri"], "soundFontUri");
+        stored.sound_font_uri = wasmCString(sound_font_uri, "soundFontUri");
+      }
+    } else if (kind == "sample" || kind == "sampler" || kind == "callback") {
+      throw sonare::SonareException(
+          sonare::ErrorCode::NotSupported,
+          kind + " instruments cannot be stored as destination instruments",
+          sonare::ErrorReason::NotPersistable);
+    } else {
+      throw WasmRangeError("unknown instrument kind token: " + kind);
+    }
+    destinationInstrumentMidiOptions(options, &stored);
+  }
+
+  const SonareError err = sonare_project_set_destination_instrument(project_.get(), destination_id,
+                                                                    clear ? nullptr : &stored);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+}
+
+val ProjectWasm::destinationInstruments() const {
+  ProjectInstrumentListGuard list;
+  const SonareError err = sonare_project_destination_instruments(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "destinationInstruments returned a missing binding array");
+  }
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    out.set(static_cast<unsigned>(i), destinationInstrumentToVal(list.value.items[i]));
+  }
+  return out;
+}
 
 uint32_t ProjectWasm::importSmf(val data) {
   std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
@@ -535,11 +913,24 @@ val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, c
 val js_midi_route_events(val events, val config) {
   const size_t count = wasmArrayLength(events, "events");
   std::vector<SonareMidiEventPod> input(count);
+  std::vector<std::vector<uint8_t>> sysex_storage(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
     input[i].ppq = numberFromVal(entry["ppq"], "ppq");
     input[i].word0 = checkedWordFromVal(entry["word0"], "word0");
     input[i].word1 = wordProperty(entry, "word1", input[i].word1);
+    val sysex = entry["sysex"];
+    if (!sysex.isUndefined() && !sysex.isNull()) {
+      const std::string subject = "events[" + std::to_string(i) + "].sysex";
+      const bool is_uint8_array =
+          val::global("Uint8Array")["prototype"].call<bool>("isPrototypeOf", sysex);
+      if (!is_uint8_array) {
+        throw WasmTypeError(subject + " must be a Uint8Array");
+      }
+      sysex_storage[i] = uint8ArrayToVector(sysex, subject.c_str());
+      input[i].sysex = nonNullBytes(sysex_storage[i]);
+      input[i].sysex_size = sysex_storage[i].size();
+    }
   }
 
   SonareMidiRouteConfig route;
@@ -575,10 +966,18 @@ val js_midi_route_events(val events, val config) {
   val out = val::object();
   val routed = val::array();
   for (size_t i = 0; i < output_count; ++i) {
+    const bool has_sysex = output[i].sysex != nullptr;
+    if (has_sysex != (output[i].sysex_size != 0)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "midiRouteEvents returned an invalid SysEx payload");
+    }
     val event = val::object();
     event.set("ppq", output[i].ppq);
     event.set("word0", static_cast<double>(output[i].word0));
     event.set("word1", static_cast<double>(output[i].word1));
+    if (has_sysex) {
+      event.set("sysex", vectorToUint8Array(output[i].sysex, output[i].sysex_size));
+    }
     routed.set(static_cast<unsigned>(i), event);
   }
   out.set("events", routed);
@@ -589,6 +988,9 @@ val js_midi_route_events(val events, val config) {
 
 void registerProjectMidi(class_<ProjectWasm>& cls) {
   cls.function("setMidiEvents", &ProjectWasm::setMidiEvents)
+      .function("midiEvents", &ProjectWasm::midiEvents)
+      .function("setDestinationInstrument", &ProjectWasm::setDestinationInstrument)
+      .function("destinationInstruments", &ProjectWasm::destinationInstruments)
       .function("importSmf", &ProjectWasm::importSmf)
       .function("exportSmf", &ProjectWasm::exportSmf)
       .function("importClipFile", &ProjectWasm::importClipFile)

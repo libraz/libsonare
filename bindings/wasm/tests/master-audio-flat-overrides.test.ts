@@ -61,6 +61,29 @@ function expectSameRender(a: MasteringChainResult, b: MasteringChainResult): voi
 beforeAll(async () => init());
 
 describe('masterAudio overrides in nested, flat and mixed spelling', () => {
+  it('reports the same progress events in the request and positional forms', () => {
+    const requestProgress: [number, string][] = [];
+    const positionalProgress: [number, string][] = [];
+    const options = { preset: 'pop', overrides: nested } as const;
+    const request = masterAudio({
+      ...options,
+      samples,
+      sampleRate,
+      onProgress: (progress, stage) => {
+        requestProgress.push([progress, stage]);
+      },
+    });
+    const positional = masterAudio(samples, sampleRate, {
+      ...options,
+      onProgress: (progress, stage) => {
+        positionalProgress.push([progress, stage]);
+      },
+    });
+    expect(requestProgress.length).toBeGreaterThan(0);
+    expect(requestProgress).toEqual(positionalProgress);
+    expectSameRender(request, positional);
+  });
+
   it('renders the flat spelling exactly as the nested one, and a changed value differently', () => {
     const fromNested = masterAudio({ samples, sampleRate, preset: 'pop', overrides: nested });
     const fromFlat = masterAudio({ samples, sampleRate, preset: 'pop', overrides: flat });

@@ -9,6 +9,7 @@ import { entryClass, nameNativeError, refuse, refuseType } from './internal/entr
 import { assertHandleLive } from './internal/handle_guard.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
 import { measured } from './internal/metering_native.js';
+import { mixMeterSnapshotFromNative } from './internal/mix_meter_snapshot.js';
 import { assertStripMetering } from './internal/mix_scene.js';
 import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -466,9 +467,10 @@ export class Mixer {
    *
    * While on, every process and drain call meters the stereo master it just
    * produced, so a caller reads {@link meterSnapshot} instead of copying the
-   * output and measuring it again. `truePeakDbtp*` is an inter-sample
-   * peak taken after oversampling (ITU-R BS.1770-4 Annex 2 requires at least
-   * 4x), which is a different and higher quantity than the sample peak.
+   * output and measuring it again. The per-plane `truePeakDbtp` values are
+   * inter-sample peaks taken after oversampling (ITU-R BS.1770-4 Annex 2
+   * requires at least 4x), a different and usually higher quantity than the
+   * sample peak.
    *
    * Enabling resets the meter, so a reading never mixes in audio from a period
    * when metering was off; disabling keeps the last reading readable.
@@ -494,7 +496,7 @@ export class Mixer {
    * @throws When the meter has never been enabled.
    */
   meterSnapshot(): MixMeterSnapshot {
-    return this.mixer.meterSnapshot();
+    return mixMeterSnapshotFromNative(this.mixer.meterSnapshot());
   }
 
   /**
@@ -847,17 +849,19 @@ export class Mixer {
    */
   stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
     const index = this.stripIndex(strip);
-    return this.mixer.stripMeter(
-      index,
-      isAbsent(tap)
-        ? meterTapCode('postFader', 'tap')
-        : tokenArg(tap, (token) => meterTapCode(token as MeterTap, 'tap')),
+    return mixMeterSnapshotFromNative(
+      this.mixer.stripMeter(
+        index,
+        isAbsent(tap)
+          ? meterTapCode('postFader', 'tap')
+          : tokenArg(tap, (token) => meterTapCode(token as MeterTap, 'tap')),
+      ),
     );
   }
 
   /** Read the post-insert meter for a compiled bus, including master. */
   busMeter(busId: string): MixMeterSnapshot {
-    return this.mixer.busMeter(busId);
+    return mixMeterSnapshotFromNative(this.mixer.busMeter(busId));
   }
 
   /**

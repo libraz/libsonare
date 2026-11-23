@@ -699,7 +699,7 @@ export class Audio {
 
   // -- Features --
 
-  /** Short-time Fourier transform of the held audio; `db: true` adds the magnitude in decibels. */
+  /** Short-time Fourier transform of the held audio; `db` and `phase` request optional planes. */
   stft(options?: OptionsOf<StftRequest>): StftResult {
     return stft(audioRequest('stft', this.samples, this.sampleRate, options));
   }

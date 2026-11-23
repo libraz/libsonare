@@ -26,7 +26,7 @@ import type {
   AnalyzeDynamicsOptions,
   AnalyzeRhythmOptions,
   AnalyzeTimbreOptions,
-  Beat,
+  BeatObservations,
   BpmCandidate,
   Chord,
   ChordAnalysisResult,
@@ -743,7 +743,8 @@ export interface MusicAnalyzeOptions {
    * given, and the unconstrained estimate is preferred when it lies inside it.
    */
   bpmMax?: number;
-  /** Prior tempo estimate in BPM. Default `120`. */
+  /** Finite, positive BPM prior that seeds beat tracking if tempo search finds none. `bpm` is
+   * absent when no tempo is measured. Default `120`. */
   startBpm?: number;
   /** Detect triads only, with no seventh chords. Default `true`. */
   useTriadsOnly?: boolean;
@@ -888,27 +889,8 @@ export function analyze(...args: unknown[]): AnalysisResult {
  * than substituting one.
  */
 export interface EstimateMeterRequest {
-  /**
-   * Beats in time order: `timeSec` in seconds, non-decreasing, and the per-beat
-   * accent value `strength`.
-   *
-   * @remarks
-   * `AnalysisResult.beatObservations.onsetStrength` is the windowed value the
-   * library's own downbeat pass scores, and `beats[].strength` is a single
-   * unwindowed envelope frame; build the entries from whichever you mean to
-   * score. Neither needs pre-scaling: the series is divided by its own maximum
-   * before scoring, so only the accent contrast within it is read.
-   *
-   * A series assembled by hand from {@link onsetStrength} — one frame read at
-   * each beat time — carries a sample-rate dependence neither of those has: a
-   * hop counted in samples frames a different amount of time at each rate, so
-   * one waveform sampled at 32000, 44100 and 48000 Hz has produced three
-   * different winning numerators off beat times identical to the sample.
-   * Widening the read to a window around the beat does not remove it. A browser
-   * decodes at the output device's rate, so that is a different answer per
-   * visitor for the same clip.
-   */
-  beats: readonly Beat[];
+  /** Beat-level observations from an analysis result or assembled by the caller. */
+  observations: BeatObservations;
   /**
    * Meter numerators to score (default: `[3, 4, 6]`).
    *
@@ -922,10 +904,8 @@ export interface EstimateMeterRequest {
    * two in `[1, 32]`.
    *
    * @remarks
-   * Reported as requested: whether a beat divides into three is measured from
-   * energy *between* the beats, which per-beat accents do not carry, so a
-   * compound meter is not resolvable here. A six accented 3+3 comes back with
-   * this denominator and `grouping === [3, 3]`.
+   * Reported as requested when subdivision accents are unavailable. Measured
+   * subdivision accents can resolve compound meter to denominator 8.
    */
   denominator?: number;
   /** Weight of the downbeat accent term (default: 1). */
@@ -935,40 +915,64 @@ export interface EstimateMeterRequest {
   /** Weight of the subdivision term (default: 0.15). */
   subdivisionWeight?: number;
   /**
-   * Mean accent between the beats, as a fraction of the mean accent on them, at
-   * and above which a six (or a three) is read as compound (default: 0.5). Only
-   * a midpoint holding an attack contributes: an event counts where it rises at
-   * least the refiner's evidence margin above the local level, so a subdivision
-   * masked by a sustained bed does not count.
-   *
-   * @remarks
-   * Only consulted when there is a subdivision to measure, so it has no effect
-   * here — this entry point scores per-beat accents alone.
+   * Mean subdivision accent relative to beat accent at which a six is read as
+   * compound (default: 0.5).
    */
   compoundSubdivisionThreshold?: number;
 }
 
-/** The core refuses the beat lists under their own names; the caller wrote them as `beats`. */
-const BEAT_RESPELLED = {
-  beatTimes: { name: 'beats[].timeSec', scale: 1 },
-  beatStrengths: { name: 'beats[].strength', scale: 1 },
+const METER_RESPELLED = {
+  accent: { name: 'observations.accent', scale: 1 },
+  hasAttack: { name: 'observations.hasAttack', scale: 1 },
+  lowFrequencyEnergy: { name: 'observations.lowFrequencyEnergy', scale: 1 },
+  subdivisionAccent: { name: 'observations.subdivisionAccent', scale: 1 },
 };
 
+const METER_OBSERVATION_KEYS = [
+  'accent',
+  'hasAttack',
+  'lowFrequencyEnergy',
+  'subdivisionAccent',
+  'chordChange',
+] as const satisfies readonly (keyof BeatObservations)[];
+
+function meterNumberStream(value: unknown, path: string): number[] {
+  if (!Array.isArray(value)) {
+    throw refuseType(`${path} must be an array`);
+  }
+  requireListBudget(value, path);
+  for (let index = 0; index < value.length; index += 1) {
+    assertNumber(value[index], `${path}[${index}]`);
+  }
+  return value as number[];
+}
+
+function meterAttackStream(value: unknown, path: string): boolean[] {
+  if (!Array.isArray(value)) {
+    throw refuseType(`${path} must be an array of booleans`);
+  }
+  requireListBudget(value, path);
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (typeof entry !== 'boolean') {
+      throw refuseType(`${path}[${index}] must be a boolean`);
+    }
+  }
+  return value as boolean[];
+}
+
 /**
- * Estimate meter over a caller-supplied beat series.
+ * Estimate meter from beat-level observations.
  *
- * @param request - Beat series plus optional scoring configuration
+ * @param request - Beat observations plus optional scoring configuration
  * @returns The selected signature, its downbeat phase and grouping, and the
  *   scored candidates
- * @throws {TypeError} when `beats` is not an array of `{ timeSec, strength }`
- * @throws {RangeError} when `beats` is empty, a `timeSec` is negative, not finite or
- *   decreasing, or a `strength` is not finite
+ * @throws {TypeError} when `observations` or one of its streams has the wrong type
+ * @throws {RangeError} when a required stream is empty or stream values or lengths are invalid
  *
  * @remarks
- * Scores only the per-beat strengths, so no audio and no frame-level onset
- * envelope is needed: an arbitrary span of an existing analysis can be scored
- * without re-running it. Build the entries from `beatObservations.onsetStrength`
- * rather than `beats[].strength` — see {@link EstimateMeterRequest.beats}.
+ * Scores the same accent, attack, low-frequency and subdivision evidence used
+ * by full analysis. Chord-change observations are ignored.
  *
  * The result carries `grouping` alongside the numerator: how the bar divides
  * into accent groups of two and three beats, so a seven comes back as `[3, 2,
@@ -982,32 +986,38 @@ const BEAT_RESPELLED = {
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
   return withEntry('estimateMeter', () => {
     requestObject('estimateMeter', request, 'request', true);
-    const { beats, ...options } = request;
-    if (!Array.isArray(beats)) {
-      throw refuseType('beats must be an array of { timeSec, strength }');
+    const { observations, ...options } = request;
+    if (observations === null || typeof observations !== 'object' || Array.isArray(observations)) {
+      throw refuseType('observations must be an object');
     }
-    requireListBudget(beats, 'beats');
-    const times: number[] = [];
-    const strengths: number[] = [];
-    beats.forEach((beat, i) => {
-      if (typeof beat !== 'object' || beat === null) {
-        throw refuseType(`beats[${i}] must be an object`);
-      }
-      assertNumber(beat.timeSec, `beats[${i}].timeSec`);
-      assertNumber(beat.strength, `beats[${i}].strength`);
-      times.push(beat.timeSec);
-      strengths.push(beat.strength);
-    });
+    assertDeclaredKeys(observations, METER_OBSERVATION_KEYS, 'observations');
+    const accent = meterNumberStream(observations.accent, 'observations.accent');
+    const hasAttack = meterAttackStream(observations.hasAttack, 'observations.hasAttack');
+    const lowFrequencyEnergy = meterNumberStream(
+      observations.lowFrequencyEnergy,
+      'observations.lowFrequencyEnergy',
+    );
+    const subdivisionAccent = meterNumberStream(
+      observations.subdivisionAccent,
+      'observations.subdivisionAccent',
+    );
+    const totalLength =
+      accent.length + hasAttack.length + lowFrequencyEnergy.length + subdivisionAccent.length;
     return withHeapNeed(
       {
-        subject: 'beats',
-        size: times.length,
-        bytes: (n) => 8 * n,
-        monotone: true,
+        subject: 'observations',
+        size: totalLength,
+        bytes: (n) => 4 * n,
       },
       () =>
-        withRespelled(BEAT_RESPELLED, () =>
-          getSonareModule().estimateMeter(times, strengths, options),
+        withRespelled(METER_RESPELLED, () =>
+          getSonareModule().estimateMeter(
+            accent,
+            hasAttack.length === 0 ? undefined : hasAttack,
+            lowFrequencyEnergy.length === 0 ? undefined : lowFrequencyEnergy,
+            subdivisionAccent.length === 0 ? undefined : subdivisionAccent,
+            options,
+          ),
         ),
     );
   });
@@ -1254,14 +1264,14 @@ export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
       );
     }
     const request = requestOnly<RoomMorphStereoRequest>('roomMorphStereo', args);
+    const spacing = request.receiverSpacingM;
+    if (spacing !== undefined && typeof spacing !== 'number') {
+      throw refuseType('receiverSpacingM must be a number');
+    }
     assertAudioInput(request.left, request.sampleRate, request, 'left');
     assertAudioInput(request.right, request.sampleRate, request, 'right');
     if (request.left.length !== request.right.length) {
       throw refuse('left and right must have the same length');
-    }
-    const spacing = request.receiverSpacingM;
-    if (spacing !== undefined && typeof spacing !== 'number') {
-      throw refuseType('receiverSpacingM must be a number');
     }
     const native = withEntry('roomMorphStereo', () => nativeRoomOptions(request));
     const morphStereo = module.roomMorphStereo;
@@ -1318,7 +1328,6 @@ export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
         request.sampleRate,
         request.bpmMin,
         request.bpmMax,
-        request.startBpm,
         request.nFft ?? 2048,
         request.hopLength ?? 512,
         request.maxCandidates ?? 5,

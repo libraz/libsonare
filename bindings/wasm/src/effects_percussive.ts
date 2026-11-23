@@ -27,16 +27,10 @@ function asFloat32(samples: Float32Array | readonly number[]): Float32Array | re
   return Float32Array.from(samples);
 }
 
-// The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
 function percussiveRequest<
   R extends { samples: Float32Array | readonly number[]; sampleRate: number },
 >(requestName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
-  const first = args[0];
-  if (Array.isArray(first)) {
-    requireListBudget(first, 'samples');
-  }
-  const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
-  return sampleOneShot<R & { samples: Float32Array }>(requestName, widened);
+  return sampleOneShot<R & { samples: Float32Array }>(requestName, args);
 }
 
 /** Separation settings shared by percussive-event extraction and rendering; a render must repeat the ones the extraction used. */
@@ -264,13 +258,13 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
       'renderPercussiveEvents',
       args,
     );
+    if (!Array.isArray(request.events)) {
+      throw refuseType('events must be an array');
+    }
     const samples = asFloat32(request.samples);
     assertAudioInput(samples, request.sampleRate, request);
     assertPercussiveSeparation(request);
     refuseZeroDefaults(request, ['fadeMs']);
-    if (!Array.isArray(request.events)) {
-      throw refuseType('events must be an array');
-    }
     const { entries: events, respelled } = resolveEntryTimes(
       request.events,
       'events',

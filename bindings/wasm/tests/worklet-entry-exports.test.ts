@@ -24,6 +24,7 @@ const ROOT_CLASS_REALM: Record<string, 'worklet' | string> = {
   ClipPageProvider: 'fed from the main thread; the worklet reads pages through the clip page ring',
   ClipPageStreamer: 'streams pages from storage on the main thread',
   HrtfSet: 'load-time data handed to a renderer',
+  LiveSession: 'native device session; this build opens no devices',
   OfflineWorkerClient: 'starts a Worker',
   PlaybackLoudnessMeter: 'measures program loudness ahead of a render',
   PlaybackRenderer: 'copies planes per call; the worklet path is SonarePlaybackWorkletProcessor',

@@ -840,6 +840,11 @@ export class RealtimeEngine {
     return this.native.midiCcBindingCount();
   }
 
+  /** Returns a detached copy of the MIDI CC, RPN and NRPN bindings. Order is unspecified. */
+  midiCcBindings(): ProjectMidiCcBinding[] {
+    return this.native.midiCcBindings();
+  }
+
   /**
    * Replace a destination instrument's controller profile with a named preset
    * (see {@link controllerProfileNames}). Installing a profile drops every

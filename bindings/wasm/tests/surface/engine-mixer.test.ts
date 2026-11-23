@@ -208,12 +208,15 @@ describe('mixer strips', () => {
 
   it('stripMeter takes a tap token and refuses a number', () => {
     withPreset((mixer) => {
-      // A strip that has seen no audio reports no per-side levels.
-      expect('peakDbL' in mixer.stripMeter('vocal')).toBe(false);
+      const beforeAudio = mixer.stripMeter('vocal');
+      expect(beforeAudio.numChannels).toBe(0);
+      expect(beforeAudio.peakDb).toEqual([]);
+      expect(beforeAudio.rmsDb).toEqual([]);
+      expect(beforeAudio.truePeakDbtp).toEqual([]);
       feedTone(mixer);
-      expect(Number.isFinite(mixer.stripMeter('vocal').peakDbL)).toBe(true);
-      expect(Number.isFinite(mixer.stripMeter('vocal', 'preFader').peakDbL)).toBe(true);
-      expect(Number.isFinite(mixer.stripMeter('vocal', 'postFader').peakDbL)).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter('vocal').peakDb[0])).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter('vocal', 'preFader').peakDb[0])).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter('vocal', 'postFader').peakDb[0])).toBe(true);
       expect(thrown(() => mixer.stripMeter('vocal', 1 as never))).toBeInstanceOf(TypeError);
       expect(thrown(() => mixer.stripMeter('vocal', 'middle' as never))).toBeInstanceOf(RangeError);
     });

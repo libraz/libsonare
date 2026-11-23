@@ -7,6 +7,8 @@
  * rather than a stale artifact waiting on a rebuild.
  */
 
+import type { EncodeAudioRequest } from './audio_codec.js';
+import type { ErrorReason } from './errors.js';
 import type { SplitSilenceCommonWithReportResult } from './feature_core.js';
 import type { StripMeteringOptions } from './mixer.js';
 import type {
@@ -133,16 +135,18 @@ export interface WasmBeatResult {
   timeSec: number;
   /**
    * Onset-envelope value sampled at the beat's frame — a single raw frame, not
-   * a normalized or relative salience. Use
-   * `WasmBeatObservationsResult.onsetStrength` for accent scoring.
+   * a normalized or relative salience. Meter scoring uses the measured beat
+   * accents in `WasmBeatObservationsResult`.
    */
   strength: number;
 }
 
 /** Beat-level evidence behind the downbeat and meter decisions. */
 export interface WasmBeatObservationsResult {
-  onsetStrength: number[];
+  accent: number[];
+  hasAttack: boolean[];
   lowFrequencyEnergy: number[];
+  subdivisionAccent: number[];
   chordChange: number[];
 }
 
@@ -647,6 +651,8 @@ export interface WasmStftResult {
   power: Float32Array;
   /** Present only when the call asked for it. */
   db?: Float32Array;
+  /** Present only when the call asked for it. */
+  phase?: Float32Array;
 }
 
 export interface WasmMelResult {
@@ -1131,6 +1137,8 @@ export interface WasmProjectTrack {
   mute: boolean;
   solo: boolean;
   name: string;
+  channelStripRef?: string;
+  outputTarget?: string;
 }
 export interface WasmProjectClip {
   id: number;
@@ -1624,6 +1632,7 @@ export interface WasmRealtimeEngine {
   bindMidiCc: (binding: import('./project_types.js').ProjectMidiCcBinding) => void;
   clearMidiCcBindings: () => void;
   midiCcBindingCount: () => number;
+  midiCcBindings: () => import('./project_types.js').ProjectMidiCcBinding[];
   setControllerProfile: (destinationId: number, presetName: string) => void;
   bindController: (
     destinationId: number,
@@ -1900,6 +1909,23 @@ export interface SonareModule {
 
   audioFromMemory: (data: Uint8Array) => WasmAudioFromMemoryResult;
   decodeChannels: (data: Uint8Array) => { sampleRate: number; channels: Float32Array[] };
+  readAudioTags: (data: Uint8Array) => Record<string, string>;
+  istft: (
+    magnitude: Float32Array,
+    nBins: number,
+    nFrames: number,
+    phase: Float32Array,
+    phaseBins: number,
+    phaseFrames: number,
+    nFft: number,
+    hopLength: number,
+    lengthSamples: number | undefined,
+  ) => Float32Array;
+  encodeAudio: (
+    channels: Float32Array[],
+    sampleRate: number,
+    options: EncodeAudioRequest,
+  ) => Uint8Array;
   downmix: (
     channels: Float32Array[],
     targetLayout: number,
@@ -2000,8 +2026,10 @@ export interface SonareModule {
     cancelCallback?: (() => boolean) | null,
   ) => WasmAnalysisResult;
   estimateMeter: (
-    beatTimes: readonly number[],
-    beatStrengths: readonly number[],
+    accent: readonly number[],
+    hasAttack: readonly boolean[] | undefined,
+    lowFrequencyEnergy: readonly number[] | undefined,
+    subdivisionAccent: readonly number[] | undefined,
     options: object,
   ) => WasmMeterEstimateResult;
   _synthEnumTables: () => WasmSynthEnumTables;
@@ -2012,6 +2040,7 @@ export interface SonareModule {
   // than through the type. `unknown` marks the shapes the facade owns — this
   // file describes the raw module and does not depend on the facade's types.
   projectAbiVersion: () => number;
+  automationTargetKindNames: () => string[];
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => unknown;
   synthEngineParamInfo: (engineMode: number) => string;
@@ -2127,11 +2156,14 @@ export interface SonareModule {
     sampleRate: number,
     bpmMin: number | undefined,
     bpmMax: number | undefined,
-    startBpm: number | undefined,
     nFft: number,
     hopLength: number,
     maxCandidates: number,
   ) => WasmBpmAnalysisResult;
+  /**
+   * @param startBpm Finite, positive BPM prior that seeds beat tracking if tempo search finds none.
+   *   The result reports measured BPM or omits `bpm` when no tempo is measured. Default 120.
+   */
   analyzeRhythm: (
     samples: Float32Array,
     sampleRate: number,
@@ -2673,6 +2705,16 @@ export interface SonareModule {
     referenceSampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;
+  masteringPairAnalyzeStereo: (
+    analysisName: string,
+    sourceLeft: Float32Array,
+    sourceRight: Float32Array,
+    referenceLeft: Float32Array,
+    referenceRight: Float32Array,
+    sampleRate: number,
+    referenceSampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => string;
   masteringPairProcessStereo: (
     processorName: string,
     sourceLeft: Float32Array,
@@ -2994,13 +3036,14 @@ export interface SonareModule {
   ) => Float32Array;
 
   // Features - Spectrogram
-  /** `db` true also returns the magnitude in decibels as `db`; undefined omits it. */
+  /** `db` and `phase` select optional result planes. */
   stft: (
     samples: Float32Array,
     sampleRate: number,
     nFft: number,
     hopLength: number,
     db: boolean | undefined,
+    phase: boolean | undefined,
   ) => WasmStftResult;
 
   // Features - Mel Spectrogram
@@ -3713,7 +3756,13 @@ export interface SonareModule {
 
   // Decodes a thrown native exception-object pointer into a structured error.
   // Consumed by the module-error wrapper in module_state.ts.
-  sonareExceptionInfo: (ptr: number) => { code: number; codeName: string; message: string };
+  sonareExceptionInfo: (ptr: number) => {
+    code: number;
+    codeName: string;
+    message: string;
+    reason?: ErrorReason;
+    kind?: 'TypeError' | 'RangeError';
+  };
 
   // Drops the reference __cxa_throw took on the exception object. No C++ frame
   // catches a throw that reaches JS, so the module-error wrapper releases every

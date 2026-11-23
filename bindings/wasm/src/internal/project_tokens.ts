@@ -18,8 +18,6 @@ export const FADE_CURVES = { linear: 0, equalPower: 1, exponential: 2, logarithm
 export const LOOP_MODES = { off: 0, loop: 1 } as const;
 /** `SonareProjectWarpMode` ordinals. */
 export const WARP_MODES = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
-/** Automation lane target-kind ordinals. */
-export const AUTOMATION_TARGET_KINDS = { opaque: 0, trackFaderDb: 1, trackPan: 2 } as const;
 /** `SonareMarkerKind` ordinals. */
 export const MARKER_KINDS = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
 /** `SonareExternalStemLayout` ordinals. */

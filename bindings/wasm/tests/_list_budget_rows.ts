@@ -18,6 +18,14 @@ export interface ListBudgetRow<E> {
 /** The refusal text for a list named `subject` that is past the native list budget. */
 export const overBudget = (subject: string): string => `${subject} exceeds the input length budget`;
 
+const METER_OBSERVATIONS = {
+  accent: Array.from({ length: 8 }, () => 1),
+  hasAttack: Array.from({ length: 8 }, () => true),
+  lowFrequencyEnergy: [],
+  subdivisionAccent: [],
+  chordChange: [],
+};
+
 export const REALTIME_ENGINE_ROWS: ReadonlyArray<ListBudgetRow<RealtimeEngine>> = [
   { method: 'setMidiClips', text: overBudget('clips'), call: (e, l) => e.setMidiClips(l) },
   {
@@ -366,7 +374,8 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   {
     callable: 'estimateMeter',
     message: `estimateMeter: ${overBudget('candidateNumerators')}`,
-    run: (api, l) => api.estimateMeter({ beats: [], candidateNumerators: l }),
+    run: (api, l) =>
+      api.estimateMeter({ observations: METER_OBSERVATIONS, candidateNumerators: l }),
   },
   {
     callable: 'roomMorph',
@@ -462,8 +471,7 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   {
     callable: 'Project.editAutomationLane',
     message: `Project.editAutomationLane: ${overBudget('points')}`,
-    run: (api, l) =>
-      withProject(api, (p) => p.editAutomationLane(1, 1, { targetParamId: 1, points: l } as never)),
+    run: (api, l) => withProject(api, (p) => p.editAutomationLane(1, 1, { points: l } as never)),
   },
   {
     callable: 'Project.annotateKeys',
@@ -827,8 +835,8 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   },
   {
     callable: 'estimateMeter',
-    message: `estimateMeter: ${overBudget('beats')}`,
-    run: (api, l) => api.estimateMeter({ beats: l }),
+    message: `estimateMeter: ${overBudget('observations.accent')}`,
+    run: (api, l) => api.estimateMeter({ observations: { ...METER_OBSERVATIONS, accent: l } }),
   },
   {
     callable: 'roomGeometryFromEstimate',

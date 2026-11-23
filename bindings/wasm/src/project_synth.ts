@@ -5,11 +5,13 @@ import {
   type SynthEnumTables,
   type SynthParamInfo,
   type SynthPatch,
+  type SynthPatchParamInfo,
 } from './instrument_types.js';
 import { withEntry } from './internal/entry.js';
 import { refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { getSonareModule } from './module_state.js';
 import { type ProjectModule, projectModule } from './project_internal.js';
+import type { ProjectAutomationTargetKind } from './project_types.js';
 import { assertClosedToken } from './validation.js';
 
 /**
@@ -23,6 +25,14 @@ export function projectAbiVersion(): number | undefined {
     const version = typeof probe === 'function' ? probe() : 0;
     return version > 0 ? version : undefined;
   });
+}
+
+/** The automation target tokens accepted by {@link Project.addAutomationLane}. */
+export function automationTargetKindNames(): ProjectAutomationTargetKind[] {
+  return withEntry(
+    'automationTargetKindNames',
+    () => Array.from(projectModule().automationTargetKindNames()) as ProjectAutomationTargetKind[],
+  );
 }
 
 /**
@@ -160,13 +170,14 @@ export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInf
 }
 
 /**
- * Describe every numeric {@link SynthPatch} wrapper field: the range it is
- * accepted in (a value outside it is refused), unit and the init patch's default. Enum fields, the preset name and the
- * mod matrix are not listed.
+ * Describe every numeric, boolean, and enum {@link SynthPatch} wrapper field.
+ * Each numeric or boolean row follows {@link synthEngineParamInfo}.
+ * An enum row has `type` `"enum"`, `values` in ordinal order, and `default` set to
+ * the ordinal-0 token. The preset name and mod matrix are not described.
  */
-export function synthPatchParamInfo(): SynthParamInfo[] {
+export function synthPatchParamInfo(): SynthPatchParamInfo[] {
   return withEntry('synthPatchParamInfo', () => {
-    return JSON.parse(synthInfoModule().synthPatchParamInfo()) as SynthParamInfo[];
+    return JSON.parse(synthInfoModule().synthPatchParamInfo()) as SynthPatchParamInfo[];
   });
 }
 

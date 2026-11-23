@@ -14,7 +14,7 @@
  * through a native call carries the {@link FOREIGN} mark and is never renamed.
  */
 
-import { ErrorCode, SonareError } from '../errors.js';
+import { ErrorCode, SonareError, type SonareErrorOptions } from '../errors.js';
 
 const UNPREFIXED = Symbol('libsonare.unprefixedMessage');
 
@@ -24,7 +24,7 @@ const UNPREFIXED = Symbol('libsonare.unprefixedMessage');
  */
 const FOREIGN = Symbol.for('libsonare.foreignError');
 
-type NamedError = Error & { [UNPREFIXED]?: string; [FOREIGN]?: true };
+type NamedError = Error & { [UNPREFIXED]?: string; [FOREIGN]?: true; entry?: string };
 
 /** Mark `error` as the caller's own, so no entry renames it on the way out. */
 export function markForeign(error: unknown): unknown {
@@ -60,6 +60,12 @@ function mark<E extends Error>(error: E, text: string): E {
 }
 
 function setPrefix(error: NamedError, text: string, entry: string): void {
+  Object.defineProperty(error, 'entry', {
+    value: entry,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
   const before = `${error.name}: ${error.message}`;
   const message = `${entry}: ${text}`;
   error.message = message;
@@ -185,7 +191,7 @@ export function invalidState(text: string): SonareError {
 export function codedError(
   code: ErrorCode,
   text: string,
-  options?: { cause?: unknown },
+  options?: SonareErrorOptions,
 ): SonareError {
   return mark(new SonareError(code, text, options), text);
 }

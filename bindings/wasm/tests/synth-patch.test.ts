@@ -9,6 +9,7 @@ import type {
   SynthPatch as DistSynthPatch,
   ProjectBounceOptions,
   SynthEngineMode,
+  SynthParamInfo,
 } from '../dist/index.js';
 import {
   ARTICULATIONS,
@@ -439,8 +440,14 @@ describe('Sonare WASM NativeSynth', () => {
         }
         throw new Error('expected the bounce to be refused');
       };
-      const info = synthPatchParamInfo();
+      const info = synthPatchParamInfo().filter(
+        (field): field is SynthParamInfo => field.type !== 'enum',
+      );
       const cutoff = info.find((field) => field.name === 'cutoffHz');
+      expect(cutoff).toBeDefined();
+      if (cutoff === undefined) {
+        throw new Error('cutoffHz catalog row is missing');
+      }
       expect(cutoff?.max).toBe(22000);
       for (const [patch, key] of [
         [{ cutoffHz: 1e6 }, 'cutoffHz'],
@@ -456,7 +463,7 @@ describe('Sonare WASM NativeSynth', () => {
       }
       // The published ends are accepted.
       expect(() =>
-        bounceSynth(project, { cutoffHz: cutoff?.max }, { totalFrames: 128 }),
+        bounceSynth(project, { cutoffHz: cutoff.max }, { totalFrames: 128 }),
       ).not.toThrow();
     } finally {
       project.destroy();
@@ -598,11 +605,12 @@ describe('Sonare WASM NativeSynth', () => {
 
     const wrapper = synthPatchParamInfo();
     const names = wrapper.map((info) => info.name);
+    const numericWrapper = wrapper.filter((info): info is SynthParamInfo => info.type !== 'enum');
     for (const expected of ['cutoffHz', 'resonanceQ', 'ampAttackMs', 'gain', 'polyphony']) {
       expect(names).toContain(expected);
     }
-    expect(wrapper.find((info) => info.name === 'resonanceQ')?.unit).toBe('ratio');
-    expect(wrapper.find((info) => info.name === 'cutoffHz')?.unit).toBe('Hz');
+    expect(numericWrapper.find((info) => info.name === 'resonanceQ')?.unit).toBe('ratio');
+    expect(numericWrapper.find((info) => info.name === 'cutoffHz')?.unit).toBe('Hz');
     for (const expected of [
       'driftRateHz',
       'ampDelayMs',

@@ -6,8 +6,9 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { ProjectBounceResult } from '../dist/index.js';
+import type { ProjectBounceResult, ProjectChordSymbol, ProjectKeySegment } from '../dist/index.js';
 import {
+  controllerProfileNames,
   ErrorCode,
   gm2DrumName,
   gm2DrumSetName,
@@ -84,6 +85,345 @@ describe('Sonare WASM Project', () => {
     ]);
     return project;
   }
+
+  it('reads PPQ, seconds, bar and beat from the project time map', () => {
+    const project = new Project();
+    try {
+      project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+      project.setTimeSignatures([{ startPpq: 0, numerator: 4, denominator: 4 }]);
+
+      expect(project.ppqToSec(7.25)).toBeCloseTo(3.625, 12);
+      expect(project.secToPpq(3.625)).toBeCloseTo(7.25, 12);
+      expect(project.barStartPpq(1)).toBe(4);
+      expect(project.positionAtPpq(7.25)).toEqual({
+        bpm: 120,
+        timeSignature: { startPpq: 0, numerator: 4, denominator: 4 },
+        barStartPpq: 4,
+        barIndex: 1,
+        beat: 4,
+        beatFraction: 0.25,
+      });
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads the effective end PPQ of audible project content', () => {
+    const project = new Project();
+    try {
+      expect(project.endPpq()).toBe(0);
+
+      const first = project.addMidiClip(1.25, 2.5);
+      project.setMidiEvents(first.clipId, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 2.5, group: 0, channel: 0, note: 60, velocity: 0 }),
+      ]);
+      expect(project.endPpq()).toBe(3.75);
+
+      const later = project.addMidiClip(6, 2);
+      project.setMidiEvents(later.clipId, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 64, velocity: 100 }),
+        midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 64, velocity: 0 }),
+      ]);
+      expect(project.endPpq()).toBe(8);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses invalid time coordinates and unsafe bar indexes', () => {
+    const project = new Project();
+    try {
+      expect(expectRefusalOf(() => project.ppqToSec(-1), RangeError).message).toContain('ppq');
+      expect(expectRefusalOf(() => project.secToPpq(-1), RangeError).message).toContain('sec');
+      expect(expectRefusalOf(() => project.positionAtPpq(1e12 + 1), RangeError).message).toContain(
+        'ppq',
+      );
+      expect(expectRefusalOf(() => project.barStartPpq(1.5), TypeError).message).toContain(
+        'barIndex',
+      );
+      expect(expectRefusalOf(() => project.barStartPpq(-1), RangeError).message).toContain(
+        'barIndex',
+      );
+      expect(
+        expectRefusalOf(() => project.barStartPpq(Number.MAX_SAFE_INTEGER + 1), RangeError).message,
+      ).toContain('barIndex');
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a position whose bar index is lossy as a JavaScript number', () => {
+    const project = new Project();
+    try {
+      project.setTimeSignatures([
+        { startPpq: 0, numerator: 1, denominator: 1_073_741_824 },
+        { startPpq: 33_554_432, numerator: 4, denominator: 4 },
+      ]);
+      let caught: unknown;
+      try {
+        project.positionAtPpq(33_554_436);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      expect(caught).toMatchObject({ code: ErrorCode.InvalidFormat });
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('round-trips MIDI SysEx bytes in detached event arrays', () => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      const payload = Uint8Array.of(0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7);
+      const original = payload.slice();
+      const note = midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 });
+      project.setMidiEvents(clipId, [
+        { ppq: 1, word0: 0x30000000, word1: 0, sysex: original },
+        note,
+      ]);
+      original.fill(0);
+
+      const expected = [note, { ppq: 1, word0: 0x30000000, word1: 0, sysex: payload }];
+      const events = project.midiEvents(clipId);
+      expect(events).toStrictEqual(expected);
+      expect(events[0]).not.toHaveProperty('sysex');
+
+      project.setMidiEvents(clipId, events);
+      expect(project.midiEvents(clipId)).toStrictEqual(expected);
+
+      if (events[1]?.sysex === undefined) {
+        throw new Error('SysEx bytes were not returned');
+      }
+      events[1].sysex[0] = 0;
+      expect(project.midiEvents(clipId)).toStrictEqual(expected);
+
+      expect(
+        expectRefusalOf(
+          () =>
+            project.setMidiEvents(clipId, [{ ppq: 0, word0: 0x30000000, sysex: new Uint8Array() }]),
+          RangeError,
+        ).message,
+      ).toContain('events[0].sysex');
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads section annotations in stored order and restores them with undo', () => {
+    const project = new Project();
+    try {
+      const sections = [
+        { startPpq: 4, endPpq: 12, label: '東京' },
+        { startPpq: 0, endPpq: 8, label: 'Intro' },
+      ];
+      expect(project.sectionAnnotations()).toEqual([]);
+      project.annotateSections(sections);
+      expect(project.sectionAnnotations()).toEqual(sections);
+
+      project.undo();
+      expect(project.sectionAnnotations()).toEqual([]);
+      project.redo();
+      expect(project.sectionAnnotations()).toEqual(sections);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('names invalid section labels and spans', () => {
+    const project = new Project();
+    try {
+      expect(
+        expectRefusalOf(
+          () => project.annotateSections([{ startPpq: 4, endPpq: 4, label: 'Verse' }]),
+          RangeError,
+        ).message,
+      ).toContain('sections[0].endPpq');
+      expect(
+        expectRefusalOf(
+          () => project.annotateSections([{ startPpq: 0, endPpq: 4, label: '  \t' }]),
+          RangeError,
+        ).message,
+      ).toContain('sections[0].label');
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('names an undeclared section field by its indexed path', () => {
+    const project = new Project();
+    try {
+      const error = expectRefusalOf(
+        () =>
+          project.annotateSections([
+            { startPpq: 0, endPpq: 4, label: 'Verse', unexpected: true } as never,
+          ]),
+        TypeError,
+      );
+      expect(error.message).toContain('sections[0].unexpected');
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('round-trips key annotations in stored order', () => {
+    const project = new Project();
+    try {
+      const keys: ProjectKeySegment[] = [
+        { startPpq: 0, endPpq: 4, tonicPc: 7, mode: 'major' },
+        { startPpq: 4, endPpq: 8, mode: 'minor' },
+      ];
+      expect(project.keyAnnotations()).toEqual([]);
+      project.annotateKeys(keys);
+      expect(project.keyAnnotations()).toStrictEqual(keys);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('round-trips chord annotations and omits empty or absent Roman numerals', () => {
+    const project = new Project();
+    try {
+      const chords: ProjectChordSymbol[] = [
+        {
+          startPpq: 0,
+          endPpq: 4,
+          rootPc: 0,
+          quality: 'dominant',
+          extensions: [7, 9],
+          slashBassPc: 5,
+          modulationBoundary: true,
+        },
+        {
+          startPpq: 4,
+          endPpq: 8,
+          rootPc: 2,
+          quality: 'minor',
+          extensions: [],
+          romanNumeral: '',
+          modulationBoundary: false,
+        },
+        {
+          startPpq: 8,
+          endPpq: 12,
+          rootPc: 7,
+          quality: 'major',
+          extensions: [7],
+          romanNumeral: 'V',
+          modulationBoundary: false,
+        },
+      ];
+      const expected = chords.map(({ romanNumeral, ...chord }) =>
+        romanNumeral === undefined || romanNumeral === '' ? chord : { ...chord, romanNumeral },
+      );
+      expect(project.chordAnnotations()).toEqual([]);
+      project.annotateChords(chords);
+      const read = project.chordAnnotations();
+      expect(read).toStrictEqual(expected);
+      expect(read[0]).not.toHaveProperty('romanNumeral');
+      expect(read[1]).not.toHaveProperty('romanNumeral');
+      expect(read[2].romanNumeral).toBe('V');
+      expect(project.chordAnnotations()[0].extensions).not.toBe(read[0].extensions);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses undeclared key and chord annotation fields by indexed path', () => {
+    const project = new Project();
+    try {
+      const keys = [
+        { startPpq: 0, endPpq: 4, mode: 'major' },
+        { startPpq: 4, endPpq: 8, mode: 'minor', unexpected: true },
+      ] as never;
+      const keyError = expectRefusalOf(() => project.annotateKeys(keys), TypeError);
+      expect(keyError.message).toBe(
+        'Project.annotateKeys: unknown key keys[1].unexpected (expected endPpq, mode, startPpq, tonicPc)',
+      );
+
+      const functionRow = Object.assign(() => undefined, {
+        startPpq: 4,
+        endPpq: 8,
+        unexpected: true,
+      });
+      const functionKeys = [{ startPpq: 0, endPpq: 4 }, functionRow] as never;
+      const functionError = expectRefusalOf(() => project.annotateKeys(functionKeys), TypeError);
+      expect(functionError.message).toBe(
+        'Project.annotateKeys: unknown key keys[1].unexpected (expected endPpq, mode, startPpq, tonicPc)',
+      );
+
+      const chords = [
+        { startPpq: 0, endPpq: 4, quality: 'major' },
+        { startPpq: 4, endPpq: 8, quality: 'minor', unexpected: true },
+      ] as never;
+      const chordError = expectRefusalOf(() => project.annotateChords(chords), TypeError);
+      expect(chordError.message).toBe(
+        'Project.annotateChords: unknown key chords[1].unexpected (expected endPpq, extensions, modulationBoundary, quality, romanNumeral, rootPc, slashBassPc, startPpq)',
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses section reads after the project is destroyed', () => {
+    const project = new Project();
+    project.destroy();
+    let caught: unknown;
+    try {
+      project.sectionAnnotations();
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    expect(caught).toMatchObject({ code: ErrorCode.InvalidState });
+  });
+
+  it('adds unresolved audio sources and relinks by stable id', () => {
+    const project = new Project();
+    try {
+      const first = project.addAudioSource('same.wav');
+      const second = project.addAudioSource('same.wav');
+      expect(second).not.toBe(first);
+      expect(project.unresolvedAudioSourceIds()).toEqual([first, second]);
+      expect(project.relinkSource(first, 'replacement.wav')).toBe(first);
+      expect(project.sources().find((source) => source.id === first)?.nameOrUri).toBe(
+        'replacement.wav',
+      );
+      expect(project.unresolvedAudioSourceIds()).toEqual([first, second]);
+
+      project.undo();
+      expect(project.sources().find((source) => source.id === first)?.nameOrUri).toBe('same.wav');
+      expect(expectRefusalOf(() => project.relinkSource(first, ''), RangeError).message).toContain(
+        'uri',
+      );
+      expect(expectRefusalOf(() => project.addAudioSource(''), RangeError).message).toContain(
+        'uri',
+      );
+      expect(expectRefusalOf(() => project.addAudioSource('\ud800'), RangeError).message).toContain(
+        'uri',
+      );
+      expect(
+        expectRefusalOf(() => project.relinkSource(999, 'missing.wav'), RangeError).message,
+      ).toContain('sourceId');
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses to read MIDI events from an audio clip', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 1 });
+      expect(expectRefusalOf(() => project.midiEvents(clipId), RangeError).message).toContain(
+        'clipId',
+      );
+    } finally {
+      project.destroy();
+    }
+  });
 
   it('reads, edits, clears, undoes, redoes, and serializes audio source metadata', () => {
     const project = new Project();
@@ -700,6 +1040,224 @@ describe('Sonare WASM Project', () => {
     }
     return peak;
   }
+
+  function maxAbsDifference(left: Float32Array, right: Float32Array): number {
+    expect(left).toHaveLength(right.length);
+    let peak = 0;
+    for (let i = 0; i < left.length; i++) {
+      peak = Math.max(peak, Math.abs(left[i] - right[i]));
+    }
+    return peak;
+  }
+
+  it('counts and renders a pre-roll prefix at the initial tempo and meter', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+      project.setTimeSignatures([{ startPpq: 0, numerator: 4, denominator: 4 }]);
+      const countInFrames = project.countInFrames(1);
+      expect(countInFrames).toBe(96000);
+      expect(project.countInFrames(0)).toBe(0);
+
+      const instrument = [{ destinationId: 0, instrument: { waveform: 'sine' as const } }];
+      const base = interleaved(
+        project.bounce({ totalFrames: 12000, builtinInstruments: instrument }),
+      );
+      const noClick = project.bounce({
+        totalFrames: 108000,
+        countInBars: 1,
+        builtinInstruments: instrument,
+      });
+      const disabledClick = project.bounce({
+        totalFrames: 108000,
+        countInBars: 1,
+        metronome: { enabled: false },
+        builtinInstruments: instrument,
+      });
+      const withClick = project.bounce({
+        totalFrames: 108000,
+        countInBars: 1,
+        metronome: { enabled: true },
+        builtinInstruments: instrument,
+      });
+
+      const noClickSamples = interleaved(noClick);
+      expect(interleaved(disabledClick)).toEqual(noClickSamples);
+      expect(noClickSamples.slice(0, countInFrames * 2).every((sample) => sample === 0)).toBe(true);
+      expect(noClickSamples.slice(countInFrames * 2)).toEqual(base);
+      expect(maxAbs(interleaved(withClick).slice(0, countInFrames * 2))).toBeGreaterThan(0);
+
+      const noCountIn = project.bounce({
+        totalFrames: 12000,
+        builtinInstruments: instrument,
+      });
+      const disabledNoCountIn = project.bounce({
+        totalFrames: 12000,
+        countInBars: 0,
+        metronome: { enabled: false },
+        builtinInstruments: instrument,
+      });
+      expect(interleaved(disabledNoCountIn)).toEqual(interleaved(noCountIn));
+
+      expect(expectRefusalOf(() => project.countInFrames(-1), RangeError).message).toContain(
+        'countInBars',
+      );
+      expect(
+        expectRefusalOf(() => project.bounce({ totalFrames: 128, countInBars: 17 }), RangeError)
+          .message,
+      ).toContain('countInBars');
+      expect(
+        expectRefusalOf(
+          () => project.bounce({ totalFrames: 128, metronome: { enabled: false, beatGain: -1 } }),
+          RangeError,
+        ).message,
+      ).toContain('metronome.beatGain');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.bounce({
+              totalFrames: 128,
+              metronome: { enabled: false, clickSamples: 0 },
+            }),
+          RangeError,
+        ).message,
+      ).toContain('metronome.clickSamples');
+      expect(
+        expectRefusalOf(
+          () => project.bounce({ totalFrames: 128, metronome: { enabled: false, clickSec: 2 } }),
+          RangeError,
+        ).message,
+      ).toContain('metronome.clickSec');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.bounce({
+              totalFrames: 128,
+              metronome: { enabled: false, clickSamples: 64, clickSec: 0.01 },
+            }),
+          RangeError,
+        ).message,
+      ).toContain('metronome.clickSamples or metronome.clickSec');
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reports an unsafe count-in frame result as InvalidFormat', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      project.setTempoSegments([{ startPpq: 0, bpm: 1e-8 }]);
+      let caught: unknown;
+      try {
+        project.countInFrames(16);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      expect(caught).toMatchObject({ code: ErrorCode.InvalidFormat });
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('applies bounce controller profiles and articulations to a hosted synth', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const { clipId } = project.addMidiClip(0, 2);
+      project.setMidiEvents(clipId, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiCc({ ppq: 0.125, group: 0, channel: 0, controller: 2, value: 127 }),
+        midiNoteOn({ ppq: 0.25, group: 0, channel: 0, note: 69, velocity: 100 }),
+        midiCc({ ppq: 0.375, group: 0, channel: 0, controller: 2, value: 32 }),
+        midiNoteOff({ ppq: 0.75, group: 0, channel: 0, note: 60, velocity: 0 }),
+        midiNoteOff({ ppq: 0.875, group: 0, channel: 0, note: 69, velocity: 0 }),
+      ]);
+      expect(controllerProfileNames()).toContain('breath');
+      const synthInstruments = [{ destinationId: 0, instrument: { engineMode: 'reed' } as never }];
+      const plain = interleaved(project.bounce({ totalFrames: 48000, synthInstruments }));
+      const withProfile = interleaved(
+        project.bounce({
+          totalFrames: 48000,
+          synthInstruments,
+          controllerProfiles: [{ destinationId: 0, presetName: 'breath' }],
+        }),
+      );
+      const withArticulation = interleaved(
+        project.bounce({
+          totalFrames: 48000,
+          synthInstruments,
+          controllerProfiles: [{ destinationId: 0, presetName: 'breath' }],
+          articulations: [{ destinationId: 0, channel: 0, articulation: 'monoLegato' }],
+        }),
+      );
+      expect(maxAbsDifference(plain, withProfile)).toBeGreaterThan(1e-3);
+      expect(maxAbsDifference(withProfile, withArticulation)).toBeGreaterThan(1e-3);
+
+      expect(
+        expectRefusalOf(
+          () =>
+            project.bounce({
+              totalFrames: 128,
+              synthInstruments,
+              controllerProfiles: [
+                { destinationId: 0, presetName: 'breath' },
+                { destinationId: 0, presetName: 'breath' },
+              ],
+            }),
+          RangeError,
+        ).message,
+      ).toContain('controllerProfiles[1].destinationId');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.bounce({
+              totalFrames: 128,
+              synthInstruments,
+              articulations: [
+                { destinationId: 0, channel: 0, articulation: 'poly' },
+                { destinationId: 0, channel: 0, articulation: 'poly' },
+              ],
+            }),
+          RangeError,
+        ).message,
+      ).toContain('articulations[1]');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.bounce({
+              totalFrames: 128,
+              controllerProfiles: [{ destinationId: 0, presetName: 'not-a-profile' }],
+            }),
+          RangeError,
+        ).message,
+      ).toContain('controllerProfiles[0].presetName');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.bounce({
+              totalFrames: 128,
+              articulations: [{ destinationId: 99, channel: 16, articulation: 'poly' }],
+            }),
+          RangeError,
+        ).message,
+      ).toContain('articulations[0].channel');
+      expect(
+        expectRefusalOf(
+          () =>
+            project.bounce({
+              totalFrames: 128,
+              synthInstruments,
+              controllerProfiles: [{ destinationId: 99, presetName: 'breath' }],
+            }),
+          RangeError,
+        ).message,
+      ).toContain('controllerProfiles[0].destinationId');
+    } finally {
+      project.destroy();
+    }
+  });
 
   it('bounces at the width of the scene master when numChannels is omitted', () => {
     const cases: ReadonlyArray<[string | undefined, number]> = [
@@ -1561,6 +2119,44 @@ describe('Sonare WASM Project', () => {
       });
       expect(muted.events).toHaveLength(0);
       expect(muted.overflowed).toBe(false);
+    });
+
+    it('midiRouteEvents copies SysEx bytes and leaves absent payloads absent', () => {
+      const payload = Uint8Array.of(0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7);
+      const result = midiRouteEvents({
+        events: [
+          { ppq: 0, word0: 0x30000000, word1: 0, sysex: payload },
+          midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 100 }),
+        ],
+      });
+
+      expect(result.events).toStrictEqual([
+        { ppq: 0, word0: 0x30000000, word1: 0, sysex: payload },
+        midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 100 }),
+      ]);
+      expect(result.events[1]).not.toHaveProperty('sysex');
+      expect(result.events[0].sysex).not.toBe(payload);
+
+      payload.fill(0);
+      expect(Array.from(result.events[0].sysex ?? [])).toEqual([
+        0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7,
+      ]);
+      expect(
+        expectRefusalOf(
+          () =>
+            midiRouteEvents({
+              events: [{ ppq: 0, word0: 0x30000000, word1: 0, sysex: [0xf0, 0xf7] as never }],
+            }),
+          TypeError,
+        ).message,
+      ).toContain('events[0].sysex');
+      expect(
+        expectRefusalOf(
+          () =>
+            midiRouteEvents({ events: [{ ppq: 0, word0: 0x30000000, sysex: new Uint8Array() }] }),
+          RangeError,
+        ).message,
+      ).toContain('events[0].sysex');
     });
 
     it('takes the MIDI route, learn and breakpoint helpers as one request and refuses the positional form', () => {

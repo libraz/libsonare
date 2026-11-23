@@ -71,6 +71,7 @@ describe('Sonare WASM Module', () => {
           mixing: expect.any(Boolean),
           fx: expect.any(Boolean),
           ffmpeg: false,
+          liveDevices: false,
         },
         decode: {
           builtin: ['wav', 'mp3'],
@@ -97,6 +98,7 @@ describe('Sonare WASM Module', () => {
         'fx',
         'graph',
         'instrumentParamAutomation',
+        'liveDevices',
         'mastering',
         'mixing',
         'mixingAssistant',

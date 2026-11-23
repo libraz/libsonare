@@ -39,12 +39,12 @@ const SCENE = fixture.cases[0].scene;
 
 function expectReading(actual: MixMeterSnapshot, expected: Reading): void {
   const dB = {
-    peakDbL: actual.peakDbL,
-    peakDbR: actual.peakDbR,
-    rmsDbL: actual.rmsDbL,
-    rmsDbR: actual.rmsDbR,
-    truePeakDbL: actual.truePeakDbtpL,
-    truePeakDbR: actual.truePeakDbtpR,
+    peakDbL: actual.peakDb[0],
+    peakDbR: actual.peakDb[1],
+    rmsDbL: actual.rmsDb[0],
+    rmsDbR: actual.rmsDb[1],
+    truePeakDbL: actual.truePeakDbtp[0],
+    truePeakDbR: actual.truePeakDbtp[1],
   };
   for (const [field, value] of Object.entries(dB)) {
     expect(
@@ -148,7 +148,7 @@ describe('Mixer master meter', () => {
     // Switched off: the readings are absent, not a floor value.
     expect('momentaryLufs' in unmeasured).toBe(false);
     expect('maxTruePeakDbtp' in unmeasured).toBe(false);
-    expect(unmeasured.peakDbL).toBeCloseTo(present(measured.peakDbL, 'peakDbL'), 3);
+    expect(unmeasured.peakDb[0]).toBeCloseTo(present(measured.peakDb[0], 'peakDb[0]'), 3);
   });
 
   it('refuses a non-boolean measureLufs or measureTruePeak by name', () => {

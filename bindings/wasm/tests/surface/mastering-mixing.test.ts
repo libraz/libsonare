@@ -344,8 +344,6 @@ describe('mastering mixing surface', () => {
 
   describe('meters and profiles use the unit-bearing names', () => {
     const meterFields: Array<[string, string, string]> = [
-      ['MixMeterSnapshot.truePeakDbL', 'truePeakDbtpL', 'truePeakDbL'],
-      ['MixMeterSnapshot.truePeakDbR', 'truePeakDbtpR', 'truePeakDbR'],
       ['MixMeterSnapshot.maxTruePeakDb', 'maxTruePeakDbtp', 'maxTruePeakDb'],
       ['MixMeterSnapshot.channelCount', 'numChannels', 'channelCount'],
       ['MixMeterSnapshot.truePeakDb', 'truePeakDbtp', 'truePeakDb'],
@@ -381,9 +379,18 @@ describe('mastering mixing surface', () => {
     });
 
     it('MixMeterSnapshot names the fields in the type', () => {
-      expectTypeOf<MixMeterSnapshot>().toHaveProperty('truePeakDbtpL');
+      expectTypeOf<MixMeterSnapshot>().toHaveProperty('peakDb');
+      expectTypeOf<MixMeterSnapshot['peakDb']>().toEqualTypeOf<(number | undefined)[]>();
+      expectTypeOf<MixMeterSnapshot['rmsDb']>().toEqualTypeOf<(number | undefined)[]>();
+      expectTypeOf<MixMeterSnapshot['truePeakDbtp']>().toEqualTypeOf<(number | undefined)[]>();
+      expectTypeOf<MixMeterSnapshot>().toHaveProperty('truePeakDbtp');
       expectTypeOf<MixMeterSnapshot>().toHaveProperty('numChannels');
-      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('truePeakDbL');
+      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('peakDbL');
+      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('peakDbR');
+      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('rmsDbL');
+      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('rmsDbR');
+      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('truePeakDbtpL');
+      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('truePeakDbtpR');
     });
 
     const profileFields: Array<[string, string, string]> = [

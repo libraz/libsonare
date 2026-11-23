@@ -53,6 +53,8 @@ export interface Capabilities {
      * parameters (`RealtimeEngine.resolveInstrumentAutomationId`).
      */
     readonly instrumentParamAutomation: boolean;
+    /** True when this build can open native audio and MIDI devices. */
+    readonly liveDevices: boolean;
     /** True when the headless arrangement subsystem is compiled in. */
     readonly arrangement: boolean;
     /** True when `Project` documents can be built, edited and rendered in this build. */
@@ -77,10 +79,20 @@ export interface Capabilities {
     /** Formats read through FFmpeg; empty when `features.ffmpeg` is false. */
     readonly ffmpeg: readonly string[];
   };
+  /** Formats the encoder writes without, and through, FFmpeg. */
+  readonly encode: AudioFormatCapabilities;
   /** SIMD implementation selected for the target. */
   readonly simd: string;
   /** Hardware thread count reported by the runtime. */
   readonly hardwareConcurrency: number;
+}
+
+/** Formats available through the built-in implementation and FFmpeg. */
+export interface AudioFormatCapabilities {
+  /** Formats available through the built-in implementation. */
+  readonly builtin: readonly string[];
+  /** Formats available through FFmpeg; empty when `features.ffmpeg` is false. */
+  readonly ffmpeg: readonly string[];
 }
 
 /** Host facts from {@link systemInfo}; a fact the platform cannot report is absent. */
@@ -337,6 +349,8 @@ export type MasteringProcessorCategory =
 export interface MasteringProcessorCatalogEntry {
   /** Processor id (the name used for scene inserts / named processors). */
   readonly id: string;
+  /** One sentence saying what the processor does, for a processor picker. */
+  readonly description: string;
   /**
    * Primary classification, by precedence pair > realtime > offline: `pair` for
    * two-input `match.*` processors, `realtime` for ids that build as a realtime
@@ -470,6 +484,8 @@ export interface CapabilityCatalog {
   readonly version: string;
   /** ABI versions, as {@link Capabilities} reports them. */
   readonly abi: Capabilities['abi'];
+  /** Audio encoding formats available in this build. */
+  readonly encode: AudioFormatCapabilities;
   /** Every mastering processor in this build, realtime inserts and offline stages alike. */
   readonly processors: readonly MasteringProcessorCatalogEntry[];
   /** How the flat mastering chain keys map onto processors. */

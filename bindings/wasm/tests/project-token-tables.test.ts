@@ -9,10 +9,9 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Project } from '../dist/index.js';
+import { automationTargetKindNames, init, Project } from '../dist/index.js';
 import { AUTOMATION_CURVE_VALUES } from '../src/codes.js';
 import {
-  AUTOMATION_TARGET_KINDS,
   CHORD_QUALITY_CODES,
   FADE_CURVES,
   KEY_MODES,
@@ -32,7 +31,6 @@ function richDocument(): Record<string, unknown> {
     project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
     project.setMarker({ ppq: 1, kind: 'text', name: 'cue' });
     project.addAutomationLane(trackId, {
-      targetParamId: 1,
       targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3, curveToNext: 'hold' }],
     });
@@ -88,11 +86,6 @@ const TABLES: readonly [string, Readonly<Record<string, number>>, readonly (stri
     ['chord quality', CHORD_QUALITY_CODES, ['annotation', 'chords', 0, 'quality']],
     ['key mode', KEY_MODES, ['annotation', 'keys', 0, 'mode']],
     [
-      'automation target kind',
-      AUTOMATION_TARGET_KINDS,
-      ['tracks', 0, 'automationLanes', 0, 'targetKind'],
-    ],
-    [
       'automation curve',
       AUTOMATION_CURVE_VALUES,
       ['tracks', 0, 'automationLanes', 0, 'points', 0, 'curveToNext'],
@@ -108,5 +101,11 @@ describe('project token tables', () => {
 
   it.each(TABLES)('the %s list is the core table in order', (_name, map, path) => {
     expect(inOrdinalOrder(map)).toEqual(coreTokens(document, path));
+  });
+
+  it('reads automation target tokens from the C name table in order', () => {
+    expect(automationTargetKindNames()).toEqual(
+      coreTokens(document, ['tracks', 0, 'automationLanes', 0, 'targetKind']),
+    );
   });
 });

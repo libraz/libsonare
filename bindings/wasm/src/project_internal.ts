@@ -28,7 +28,6 @@ import { requireListBudget, stringifyWithinBudget } from './internal/list_budget
 import { optionalId } from './internal/optional_ints.js';
 import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import {
-  AUTOMATION_TARGET_KINDS,
   CHORD_QUALITY_CODES,
   FADE_CURVES,
   KEY_MODES,
@@ -49,7 +48,9 @@ import type {
   AlignTakeToReferenceRequest,
   AlignTakeToReferenceResult,
   ProjectAssistSidecar,
+  ProjectAutomationLane,
   ProjectAutomationLaneDesc,
+  ProjectAutomationLaneEditDesc,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
   ProjectBounceResult,
@@ -58,9 +59,11 @@ import type {
   ProjectClipCompSegment,
   ProjectClipTake,
   ProjectCompileResult,
+  ProjectDestinationInstrumentBinding,
   ProjectDiagnostic,
   ProjectDiagnosticCode,
   ProjectFadeCurve,
+  ProjectInstrument,
   ProjectKeyMode,
   ProjectKeySegment,
   ProjectLoopMode,
@@ -74,6 +77,8 @@ import type {
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
+  ProjectPosition,
+  ProjectSection,
   ProjectSource,
   ProjectSourceKind,
   ProjectTempoCandidate,
@@ -96,6 +101,7 @@ import { SampleBank } from './sample_bank.js';
 import {
   assertAudioChannels,
   assertBoundedInteger,
+  assertClosedToken,
   assertNibble,
   assertU7,
   assertU32,
@@ -186,6 +192,8 @@ export interface NativeProjectTrack {
   mute: boolean;
   solo: boolean;
   name: string;
+  channelStripRef?: string;
+  outputTarget?: string;
 }
 
 /** A stored clip as the embind layer returns it. */
@@ -239,6 +247,10 @@ export interface NativeProjectBounceOptions {
   blockSize?: number;
   numChannels?: number;
   instrumentLatencySamples?: number;
+  metronome?: import('./public_types_engine.js').EngineMetronomeConfig;
+  countInBars?: number;
+  controllerProfiles?: ReadonlyArray<import('./project_types.js').ProjectControllerProfileBinding>;
+  articulations?: ReadonlyArray<import('./project_types.js').ProjectArticulationBinding>;
 }
 
 /** A native bounce: the interleaved render and the width it was mixed at. */
@@ -440,6 +452,12 @@ export interface WasmProject {
   setWarpMap: (map: ProjectWarpMapDesc) => void;
   removeWarpMap: (warpRefId: number) => void;
   setTrackMidiDestination: (trackId: number, destinationId: number) => void;
+  setDestinationInstrument: (
+    destinationId: number,
+    instrument: object | undefined,
+    options: object | undefined,
+  ) => void;
+  destinationInstruments: () => ProjectDestinationInstrumentBinding<ProjectInstrument>[];
   setTrackGain: (trackId: number, gain: number) => void;
   setTrackMute: (trackId: number, mute: boolean) => void;
   setTrackSolo: (trackId: number, solo: boolean) => void;
@@ -461,6 +479,12 @@ export interface WasmProject {
   setMaxUndoDepth: (depth: number) => void;
   setMaxHistoryBytes: (bytes: number) => void;
   setMidiEvents: (clipId: number, events: ReadonlyArray<ProjectMidiEvent>) => void;
+  midiEvents: (clipId: number) => ProjectMidiEvent[];
+  ppqToSec: (ppq: number) => number;
+  secToPpq: (sec: number) => number;
+  positionAtPpq: (ppq: number) => ProjectPosition;
+  barStartPpq: (barIndex: number) => number;
+  endPpq: () => number;
   importSmf: (data: Uint8Array) => number;
   exportSmf: () => Uint8Array<ArrayBuffer>;
   importClipFile: (data: Uint8Array) => number;
@@ -512,6 +536,7 @@ export interface WasmProject {
     synthBindings: ReadonlyArray<NativeInstrumentBinding<NativeSynthBinding>> | undefined,
     sf2Bindings: ReadonlyArray<NativeInstrumentBinding<Sf2InstrumentConfig>> | undefined,
   ) => NativeProjectBounce | { instrumentFailure: unknown };
+  countInFrames: (countInBars: number) => number;
   loadSoundFont: (data: Uint8Array) => void;
   clearSoundFont: () => void;
   soundFontPresetCount: () => number;
@@ -525,6 +550,8 @@ export interface WasmProject {
   ) => void;
   unresolvedAudioSourceIds: () => number[];
   unresolvedAudioSources: () => NativeProjectSource[];
+  addAudioSource: (uri: string) => number;
+  relinkSource: (sourceId: number, uri: string) => number;
   setSourceAudio: (
     sourceId: number,
     audio: Float32Array,
@@ -550,14 +577,15 @@ export interface WasmProject {
   renameTrack: (trackId: number, name: string) => void;
   setTrackRoute: (trackId: number, channelStripRef: string, outputTarget: string) => void;
   addAutomationLane: (trackId: number, desc: NativeAutomationLaneDesc) => number;
-  editAutomationLane: (
-    trackId: number,
-    targetParamId: number,
-    desc: NativeAutomationLaneDesc,
-  ) => void;
-  removeAutomationLane: (trackId: number, targetParamId: number) => void;
+  editAutomationLane: (trackId: number, laneId: number, desc: NativeAutomationLaneDesc) => void;
+  removeAutomationLane: (trackId: number, laneId: number) => void;
+  automationLanes: () => NativeProjectAutomationLane[];
   annotateKeys: (keys: ReadonlyArray<NativeKeySegment>) => void;
   annotateChords: (chords: ReadonlyArray<NativeChordSymbol>) => void;
+  keyAnnotations: () => NativeKeySegment[];
+  chordAnnotations: () => NativeChordSymbol[];
+  annotateSections: (sections: ReadonlyArray<import('./project_types.js').ProjectSection>) => void;
+  sectionAnnotations: () => ProjectSection[];
   setAssistSidecar: (
     moduleId: string,
     schemaVersion: number,
@@ -572,6 +600,8 @@ export interface WasmProject {
   getOverlapPolicy: () => number;
   getSampleRate: () => number;
   setMixerSceneJson: (document: string) => void;
+  mixerScene: () => string | null;
+  unresolvedSoundFontUris: () => string[];
   setMarker: (marker: {
     id: number;
     ppq: number;
@@ -608,6 +638,7 @@ export interface ProjectModule {
   };
   SampleBank: { new (): WasmSampleBank };
   projectAbiVersion: () => number;
+  automationTargetKindNames: () => string[];
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => SynthPatch;
   synthGsDrumKitName: (program: number) => string | null;
@@ -725,33 +756,48 @@ export function projectMidi1Event(
   return { ppq, word0: word, word1: 0 };
 }
 
-export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>): void {
+export function projectMidiEventsToNative(
+  events: ReadonlyArray<ProjectMidiEvent>,
+): ProjectMidiEvent[] {
   if (!Array.isArray(events)) {
     throw refuseType(`events must be an array`);
   }
   requireListBudget(events, 'events');
-  events.forEach((event: unknown, index) => {
+  return events.map((event: unknown, index) => {
     const prefix = `events[${index}]`;
     if (event === null || typeof event !== 'object' || Array.isArray(event)) {
       throw refuseType(`${prefix} must be a { ppq, word0, word1? } object`);
     }
     const record = event as ProjectMidiEvent;
-    if (typeof record.ppq !== 'number') {
+    const ppq = record.ppq;
+    const word0 = record.word0;
+    const word1 = record.word1;
+    const sysex = record.sysex;
+    if (typeof ppq !== 'number') {
       throw refuseType(`${prefix}.ppq must be a number`);
     }
-    if (typeof record.word0 !== 'number') {
+    if (typeof word0 !== 'number') {
       throw refuseType(`${prefix}.word0 must be an integer`);
     }
-    if (record.word1 !== undefined && typeof record.word1 !== 'number') {
+    if (word1 !== undefined && typeof word1 !== 'number') {
       throw refuseType(`${prefix}.word1 must be an integer`);
     }
-    if (!(Number.isFinite(record.ppq) && record.ppq >= 0 && record.ppq <= MAX_PUBLIC_PPQ)) {
+    if (!isAbsent(sysex) && !(sysex instanceof Uint8Array)) {
+      throw refuseType(`${prefix}.sysex must be a Uint8Array`);
+    }
+    if (!(Number.isFinite(ppq) && ppq >= 0 && ppq <= MAX_PUBLIC_PPQ)) {
       throw refuse(`${prefix}.ppq must be finite and in [0, 1e12]`);
     }
-    assertU32(record.word0, `${prefix}.word0`);
-    if (record.word1 !== undefined) {
-      assertU32(record.word1, `${prefix}.word1`);
+    assertU32(word0, `${prefix}.word0`);
+    if (word1 !== undefined) {
+      assertU32(word1, `${prefix}.word1`);
     }
+    return {
+      ppq,
+      word0,
+      ...(word1 === undefined ? {} : { word1 }),
+      ...(isAbsent(sysex) ? {} : { sysex: new Uint8Array(sysex) }),
+    };
   });
 }
 
@@ -971,11 +1017,29 @@ export type NativeAutomationPoint = Omit<ProjectAutomationPoint, 'curveToNext'> 
   curveToNext: number;
 };
 
-/** An automation lane as embind reads it: target kind and curves as ordinals. */
-export type NativeAutomationLaneDesc = Omit<ProjectAutomationLaneDesc, 'targetKind' | 'points'> & {
-  targetKind?: number;
+/** An automation-lane descriptor passed to embind with C-derived target tokens. */
+export interface NativeAutomationLaneDesc {
+  targetParamId?: number;
+  targetKind?: ProjectAutomationTargetKind;
+  sendId?: string;
+  processor?: string;
+  paramName?: string;
+  insertIndex?: number;
   points: NativeAutomationPoint[];
-};
+}
+
+/** An automation lane read from embind before its point curves are named. */
+export interface NativeProjectAutomationLane {
+  trackId: number;
+  laneId: number;
+  targetKind: string;
+  targetParamId?: number;
+  sendId?: string;
+  processor?: string;
+  paramName?: string;
+  insertIndex?: number;
+  points: NativeAutomationPoint[];
+}
 
 /** A breakpoint the native layer produced, with its curve ordinal named. */
 export function projectAutomationPointFromNative(native: {
@@ -1011,14 +1075,60 @@ export function automationPointValue(
   return { ...point, curveToNext };
 }
 
-/** Resolve an automation lane's tokens to the ordinals embind reads. */
+/** Normalize an automation lane for embind, keeping target kinds as C-derived tokens. */
 export function projectAutomationLaneValue(
-  desc: ProjectAutomationLaneDesc,
+  desc: ProjectAutomationLaneDesc | ProjectAutomationLaneEditDesc,
+  targetKinds: readonly string[],
+  editing = false,
 ): NativeAutomationLaneDesc {
-  if (desc.targetParamId === 0) {
-    throw refuse('project automation lane targetParamId must be non-zero');
+  if (!isNonArrayObject(desc)) {
+    throw refuseType('desc must be an object');
   }
-  const { targetKind, points: given, ...rest } = desc;
+  assertDeclaredKeys(
+    desc,
+    ['targetKind', 'targetParamId', 'sendId', 'processor', 'paramName', 'insertIndex', 'points'],
+    '',
+  );
+  const targetKindValue = desc.targetKind;
+  const identityFields = ['sendId', 'processor', 'paramName', 'insertIndex'] as const;
+  let targetKind: ProjectAutomationTargetKind | undefined;
+  if (isAbsent(targetKindValue)) {
+    if (editing) {
+      for (const field of ['targetParamId', ...identityFields] as const) {
+        if (!isAbsent(desc[field])) {
+          throw refuse(`${field} requires an explicit targetKind when editing a lane`);
+        }
+      }
+    } else {
+      assertClosedToken('opaque', targetKinds, 'targetKind');
+      targetKind = 'opaque';
+    }
+  } else {
+    assertClosedToken(targetKindValue, targetKinds, 'targetKind');
+    targetKind = targetKindValue as ProjectAutomationTargetKind;
+  }
+  if (targetKind !== undefined && targetKind !== 'opaque' && !isAbsent(desc.targetParamId)) {
+    throw refuse('targetParamId must be omitted for a typed target');
+  }
+  if (targetKind === 'opaque' && isAbsent(desc.targetParamId)) {
+    throw refuseType('targetParamId must be given for an opaque target');
+  }
+  const requiredIdentity =
+    targetKind === 'trackSendDb'
+      ? ['sendId']
+      : targetKind === 'trackInsertParam'
+        ? ['processor', 'paramName', 'insertIndex']
+        : [];
+  for (const field of identityFields) {
+    if (requiredIdentity.includes(field)) {
+      if (isAbsent(desc[field])) {
+        throw refuseType(`${field} must be given for ${targetKind}`);
+      }
+    } else if (!isAbsent(desc[field])) {
+      throw refuse(`${field} must be omitted for ${targetKind}`);
+    }
+  }
+  const { targetKind: _targetKind, points: given, ...rest } = desc;
   const points: unknown = isAbsent(given) ? [] : given;
   if (!Array.isArray(points)) {
     throw refuseType('points must be an array');
@@ -1026,15 +1136,46 @@ export function projectAutomationLaneValue(
   requireListBudget(points, 'points');
   return {
     ...rest,
-    ...(targetKind === undefined
-      ? {}
-      : { targetKind: projectAutomationTargetKindValue(targetKind) }),
+    ...(targetKind === undefined ? {} : { targetKind }),
     points: points.map((point, index) => automationPointValue(point, index)),
   };
 }
 
-export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKind): number {
-  return resolveEnumOrdinal(kind, AUTOMATION_TARGET_KINDS, 'targetKind');
+/** Read a lane and reject a target token that is absent from the C-derived closed set. */
+export function projectAutomationLaneFromNative(
+  native: NativeProjectAutomationLane,
+  targetKinds: readonly string[],
+): ProjectAutomationLane {
+  if (typeof native.targetKind !== 'string' || !targetKinds.includes(native.targetKind)) {
+    throw codedError(
+      ErrorCode.InvalidFormat,
+      `unknown automation target kind token: ${String(native.targetKind)}`,
+    );
+  }
+  if (!Array.isArray(native.points)) {
+    throw codedError(ErrorCode.InvalidFormat, 'automation lane returned missing breakpoint data');
+  }
+  if (native.targetKind === 'opaque' && typeof native.targetParamId !== 'number') {
+    throw codedError(
+      ErrorCode.InvalidFormat,
+      'opaque automation lane returned no target parameter id',
+    );
+  }
+  if (
+    native.targetKind !== 'opaque' &&
+    // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
+    Object.prototype.hasOwnProperty.call(native, 'targetParamId')
+  ) {
+    throw codedError(
+      ErrorCode.InvalidFormat,
+      'typed automation lane returned a target parameter id',
+    );
+  }
+  return {
+    ...native,
+    targetKind: native.targetKind as ProjectAutomationTargetKind,
+    points: native.points.map(projectAutomationPointFromNative),
+  } as ProjectAutomationLane;
 }
 
 export function projectWarpModeValue(mode: ProjectWarpMode): number {

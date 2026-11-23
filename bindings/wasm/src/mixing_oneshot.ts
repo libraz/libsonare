@@ -1,16 +1,11 @@
 import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { sampleNeed, withHeapNeed } from './internal/memory_budget.js';
+import { mixMeterSnapshotFromNative } from './internal/mix_meter_snapshot.js';
 import { panModeToNative } from './internal/mix_scene.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
-import type {
-  MixMeterSnapshot,
-  MixResult,
-  MixSceneDocument,
-  MixScenePreset,
-  PanMode,
-} from './public_types.js';
+import type { MixResult, MixSceneDocument, MixScenePreset, PanMode } from './public_types.js';
 import {
   assertAudioInput,
   assertNumber,
@@ -110,10 +105,10 @@ export function mixStereo(...args: unknown[]): MixResult {
   return withEntry('mixStereo', () => {
     const fnName = 'mixStereo';
     const req = requestOnly<MixStereoRequest>(fnName, args);
-    assertSampleRate(req.sampleRate);
     if (!Array.isArray(req.strips)) {
       throw refuseType(`strips must be an array`);
     }
+    assertSampleRate(req.sampleRate);
     requireListBudget(req.strips, 'strips');
     if (req.strips.length === 0) {
       throw refuse(`strips must not be empty`);
@@ -127,13 +122,9 @@ export function mixStereo(...args: unknown[]): MixResult {
         throw refuseType(`${path} must be an object`);
       }
       assertDeclaredKeys(strip, STRIP_KEYS, path);
-      assertAudioInput(strip.left, req.sampleRate, req, `${path}.left`);
-      assertAudioInput(strip.right, req.sampleRate, req, `${path}.right`);
-      if (strip.left.length !== strip.right.length) {
-        throw refuse(`${path}.left and ${path}.right must have equal lengths`);
-      }
-      left.push(strip.left);
-      right.push(strip.right);
+      const muted = isAbsent(strip.muted)
+        ? undefined
+        : requireBoolean(strip.muted, `${path}.muted`);
       const given: Record<string, unknown> = {};
       for (const key of STRIP_NUMBER_KEYS) {
         if (!isAbsent(strip[key])) {
@@ -141,11 +132,18 @@ export function mixStereo(...args: unknown[]): MixResult {
           given[key] = strip[key];
         }
       }
+      assertAudioInput(strip.left, req.sampleRate, req, `${path}.left`);
+      assertAudioInput(strip.right, req.sampleRate, req, `${path}.right`);
+      if (strip.left.length !== strip.right.length) {
+        throw refuse(`${path}.left and ${path}.right must have equal lengths`);
+      }
+      left.push(strip.left);
+      right.push(strip.right);
       if (!isAbsent(strip.panMode)) {
         given.panMode = panModeToNative(strip.panMode, `${path}.panMode`);
       }
-      if (!isAbsent(strip.muted)) {
-        given.muted = requireBoolean(strip.muted, `${path}.muted`);
+      if (muted !== undefined) {
+        given.muted = muted;
       }
       for (const [key, value] of Object.entries(given)) {
         // A strip that leaves a field out stays at its default: the native array holds a hole.
@@ -167,7 +165,7 @@ export function mixStereo(...args: unknown[]): MixResult {
       left: native.left,
       right: native.right,
       sampleRate: native.sampleRate,
-      meters: native.meters as MixMeterSnapshot[],
+      meters: native.meters.map(mixMeterSnapshotFromNative),
     };
   });
 }

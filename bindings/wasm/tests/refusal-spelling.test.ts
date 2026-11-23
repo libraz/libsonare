@@ -20,6 +20,7 @@ import {
   detectKey,
   detectKeyCandidates,
   downmix,
+  encodeAudio,
   estimateMeter,
   init,
   lufsMultichannel,
@@ -393,9 +394,17 @@ const DRIVERS: Record<string, Driver> = {
   eq_process: (_spelling, value) => withEqualizer((eq) => eq.processMono(value as Float32Array)),
   eq_set_sidechain: (_spelling, value) =>
     withEqualizer((eq) => eq.setSidechainMono(value as Float32Array)),
+  encode_audio: (spelling, value) =>
+    encodeAudio({ channels: [TONE], sampleRate: RATE, format: 'wav', [spelling]: value } as never),
   estimate_meter_json: (spelling, value) =>
     estimateMeter({
-      beats: Array.from({ length: 8 }, (_, i) => ({ timeSec: i * 0.5, strength: 1 })),
+      observations: {
+        accent: Array.from({ length: 8 }, () => 1),
+        hasAttack: Array.from({ length: 8 }, () => true),
+        lowFrequencyEnergy: [],
+        subdivisionAccent: [],
+        chordChange: [],
+      },
       [spelling]: value,
     } as never),
   mastering_ab_match_loudness: (spelling, value) =>
@@ -407,6 +416,14 @@ const DRIVERS: Record<string, Driver> = {
       ...PAIR,
       analysis: 'match.referenceLoudness',
       [spelling]: value,
+    } as never),
+  mastering_analyze_pair_stereo: (spelling, value) =>
+    masteringAnalyzePair({
+      analysis: 'match.referenceLoudness',
+      source: [TONE, TONE],
+      reference: [TONE, TONE],
+      sampleRate: RATE,
+      [spelling]: [value, value],
     } as never),
   mastering_apply_pair_processor: (spelling, value) =>
     masteringApplyPairProcessor({
@@ -452,13 +469,22 @@ const DRIVERS: Record<string, Driver> = {
     withProject((project) => project.annotateChords(value as never)),
   project_annotate_keys: (_spelling, value) =>
     withProject((project) => project.annotateKeys(value as never)),
+  project_annotate_sections: (_spelling, value) =>
+    withProject((project) => project.annotateSections(value as never)),
   project_bounce: (spelling, value) =>
     withProject((project) => project.bounce({ [spelling]: value } as never)),
   project_edit_automation_lane: (_spelling, value) =>
     withProject((project) => {
       const track = project.addTrack({ kind: 'audio' });
-      project.addAutomationLane(track, { targetParamId: 1, points: [{ ppq: 0, value: 0 }] });
-      project.editAutomationLane(track, 1, { targetParamId: 1, points: value } as never);
+      const laneId = project.addAutomationLane(track, {
+        targetParamId: 1,
+        points: [{ ppq: 0, value: 0 }],
+      });
+      project.editAutomationLane(track, laneId, {
+        targetKind: 'opaque',
+        targetParamId: 1,
+        points: value,
+      } as never);
     }),
   project_import_external_stems: (_spelling, value) =>
     withProject((project) =>
@@ -568,6 +594,9 @@ const OUTSIDE: unknown[] = [
 /** Extra values for an entry whose count is refused only by a list longer than the budget. */
 const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   chord_functions: [new Array(64 * 1024 * 1024 + 1)],
+  encode_audio: [Array.from({ length: 9 }, () => TONE)],
+  mastering_analyze_pair_stereo: [new Float32Array(1 << 20)],
+  project_annotate_sections: [[{}]],
   playback_render_interleaved: [Float32Array.of(Number.NaN, 0)],
   polyphonic_set_note_edit: [Float32Array.of(-1)],
 };

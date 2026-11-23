@@ -483,8 +483,8 @@ export function remix(
 export function remix(...args: unknown[]): Float32Array {
   return withEntry('remix', () => {
     const r = sampleOneShot<RemixRequest>('remix', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
     const alignZeros = optionalBoolean(r.alignZeros, 'alignZeros', true);
+    assertAudioInput(r.samples, r.sampleRate, r);
     // Sample indices must reach the native side as exact 32-bit integers, and a
     // boundary the conversion changed would cut the slice somewhere the caller
     // never named.
@@ -533,8 +533,8 @@ export function remixAlignedIntervals(
 export function remixAlignedIntervals(...args: unknown[]): Int32Array {
   return withEntry('remixAlignedIntervals', () => {
     const r = sampleOneShot<RemixRequest>('remixAlignedIntervals', args);
-    assertAudioInput(r.samples, r.sampleRate, r);
     const alignZeros = optionalBoolean(r.alignZeros, 'alignZeros', true);
+    assertAudioInput(r.samples, r.sampleRate, r);
     const intervals = toInt32Array(r.intervals, 'intervals');
     const samples = r.samples;
     const call = () =>
@@ -607,8 +607,8 @@ export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest)
 export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceMatrix', () => {
     const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
-    const data = assertMatrix2D(r.data, 'data');
     const sym = optionalBoolean(r.sym, 'sym', false);
+    const data = assertMatrix2D(r.data, 'data');
     const call = () =>
       getSonareModule().segmentRecurrenceMatrix(
         data.data,
@@ -646,9 +646,9 @@ export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): 
 export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceToLag', () => {
     const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
+    const pad = optionalBoolean(r.pad, 'pad', true);
     const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
     assertSquare(recurrence, 'recurrence');
-    const pad = optionalBoolean(r.pad, 'pad', true);
     const native = withHeapNeed(
       {
         subject: 'recurrence.cols',

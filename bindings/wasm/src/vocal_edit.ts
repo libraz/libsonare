@@ -505,6 +505,9 @@ function validateCreate(request: VocalCreateRequest): void {
     if (typeof analysis !== 'object' || Array.isArray(analysis)) {
       throw refuseType('analysis must be an object');
     }
+    if (!(analysis.f0Hz instanceof Float32Array) || !(analysis.voiced instanceof Uint8Array)) {
+      throw refuseType('analysis arrays must be Float32Array and Uint8Array');
+    }
     if (analysis.algorithmId !== undefined) {
       if (typeof analysis.algorithmId !== 'string') {
         throw refuseType('analysis.algorithmId must be a string');
@@ -523,9 +526,6 @@ function validateCreate(request: VocalCreateRequest): void {
       throw refuse(
         `analysis.frameLengthSamples must be an integer in [1, ${Number.MAX_SAFE_INTEGER}]`,
       );
-    }
-    if (!(analysis.f0Hz instanceof Float32Array) || !(analysis.voiced instanceof Uint8Array)) {
-      throw refuseType('analysis arrays must be Float32Array and Uint8Array');
     }
     if (analysis.f0Hz.length !== analysis.voiced.length) {
       throw refuse('analysis arrays must have equal lengths');
@@ -617,10 +617,10 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
   return withEntry('restoreVocalEditSession', () => {
     requestObject('restoreVocalEditSession', request, 'request', true);
-    assertAudioInput(request.samples, request.sampleRate, request);
     if (!(request.state instanceof Uint8Array)) {
       throw refuseType('state must be a Uint8Array');
     }
+    assertAudioInput(request.samples, request.sampleRate, request);
     const limits = nativeSessionLimits(request.limits);
     if (!vocalEditAvailable()) {
       throw codedError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');

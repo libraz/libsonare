@@ -7,6 +7,7 @@ export const NATIVE_ENTRIES: Readonly<Record<string, string>> = {
   lufsInterleaved: 'lufsMultichannel',
   lufsSeriesInterleaved: 'lufsSeriesMultichannel',
   masteringPairAnalyze: 'masteringAnalyzePair',
+  masteringPairAnalyzeStereo: 'masteringAnalyzePair',
   masteringPairProcess: 'masteringApplyPairProcessor',
   masteringPairProcessStereo: 'masteringApplyPairProcessorStereo',
   masteringProcess: 'masteringApplyProcessor',

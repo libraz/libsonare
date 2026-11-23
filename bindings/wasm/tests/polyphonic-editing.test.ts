@@ -387,7 +387,7 @@ describe('PolyphonicAnalysis.render', () => {
     // the refusal.
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, -1]) });
     expect(expectRefusalOf(() => edited.render()).message).toBe(
-      'PolyphonicAnalysis.render: Invalid parameter',
+      'PolyphonicAnalysis.render: analysis.notes[0].edit.amplitudeEnvelope must be finite and at least 0',
     );
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, 0.25]) });
     expectEdited(edited.render(), identity);
@@ -427,7 +427,7 @@ describe('PolyphonicAnalysis config', () => {
     const error = expectRefusalOf(() =>
       analyzePolyphonic({ samples, sampleRate, maxPolyphony: 65 }),
     );
-    expect(error.message).toBe('analyzePolyphonic: Invalid parameter');
+    expect(error.message).toBe('analyzePolyphonic: maxPolyphony must be an integer in [1, 64]');
   });
 
   it('reads 0 on a floor field as the value 0 and refuses a negative', () => {

@@ -211,13 +211,15 @@ describe('Mixer runtime controls (WASM)', () => {
         for (const tap of ['preFader', 'postFader'] as const) {
           const meter = mixer.stripMeter(vocal, tap);
           expect(typeof meter).toBe('object');
-          for (const field of ['peakDbL', 'peakDbR', 'rmsDbL', 'rmsDbR', 'correlation'] as const) {
-            expect(Number.isFinite(meter[field])).toBe(true);
-          }
+          expect(Number.isFinite(meter.peakDb[0])).toBe(true);
+          expect(Number.isFinite(meter.peakDb[1])).toBe(true);
+          expect(Number.isFinite(meter.rmsDb[0])).toBe(true);
+          expect(Number.isFinite(meter.rmsDb[1])).toBe(true);
+          expect(Number.isFinite(meter.correlation)).toBe(true);
 
           const stripMeter = mixer.stripMeter(vocal, tap);
-          expect(Number.isFinite(stripMeter.peakDbL)).toBe(true);
-          expect(Number.isFinite(stripMeter.rmsDbL)).toBe(true);
+          expect(Number.isFinite(stripMeter.peakDb[0])).toBe(true);
+          expect(Number.isFinite(stripMeter.rmsDb[0])).toBe(true);
         }
 
         const goniometer = mixer.readGoniometerLatest(vocal, 8);
@@ -302,7 +304,7 @@ describe('Mixer runtime controls (WASM)', () => {
         );
         // 'const6Db' / 'postFader' resolved end-to-end and produced audio.
         expect(blockEnergy(out)).toBeGreaterThan(0);
-        expect(Number.isFinite(mixer.stripMeter(vocal, 'preFader').peakDbL)).toBe(true);
+        expect(Number.isFinite(mixer.stripMeter(vocal, 'preFader').peakDb[0])).toBe(true);
       } finally {
         mixer.destroy();
       }
@@ -615,7 +617,7 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.compile();
         // An explicit bus is not default-routed, so the master stays silent.
         expect(run(mixer)).toBe(0);
-        expect(mixer.busMeter('sub').peakDbL).toBeGreaterThan(-60);
+        expect(mixer.busMeter('sub').peakDb[0]).toBeGreaterThan(-60);
 
         mixer.setOutputBus('sub', 'master');
         mixer.compile();
@@ -787,8 +789,8 @@ describe('Mixer runtime controls (WASM)', () => {
     left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
     const right = new Float32Array(left);
     const result = mixStereo({ strips: [{ left, right }], sampleRate: 48000 });
-    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDbtp(left, 48000), 4);
-    expect(result.meters[0].truePeakDbtpL).toBeGreaterThan(-1);
+    expect(result.meters[0].truePeakDbtp[0]).toBeCloseTo(meteringTruePeakDbtp(left, 48000), 4);
+    expect(result.meters[0].truePeakDbtp[0]).toBeGreaterThan(-1);
   });
 
   it("flushes a streaming mixer's meters on request", () => {
@@ -822,13 +824,13 @@ describe('Mixer runtime controls (WASM)', () => {
       expect(offlineDb).toBeGreaterThan(-1);
 
       const before = mixer.meterSnapshot();
-      expect(before.truePeakDbtpL).toBeLessThan(offlineDb - 0.01);
+      expect(before.truePeakDbtp[0]).toBeLessThan(offlineDb - 0.01);
 
       mixer.flushMeters();
       const after = mixer.meterSnapshot();
-      const truePeak = present(after.truePeakDbtpL, 'truePeakDbtpL');
+      const truePeak = present(after.truePeakDbtp[0], 'truePeakDbtp[0]');
       expect(Math.abs(truePeak - offlineDb)).toBeLessThan(1e-3);
-      expect(truePeak).toBeGreaterThanOrEqual(present(after.peakDbL, 'peakDbL'));
+      expect(truePeak).toBeGreaterThanOrEqual(present(after.peakDb[0], 'peakDb[0]'));
     } finally {
       mixer.destroy();
     }

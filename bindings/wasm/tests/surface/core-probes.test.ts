@@ -71,6 +71,7 @@ const FEATURE_KEYS = [
   'fx',
   'graph',
   'instrumentParamAutomation',
+  'liveDevices',
   'mastering',
   'mixing',
   'mixingAssistant',
@@ -89,6 +90,7 @@ describe('capabilities().features', () => {
   it('carries exactly the closed set of feature keys, each a boolean', () => {
     const { features } = mod.capabilities();
     expect(Object.keys(features).sort()).toEqual([...FEATURE_KEYS]);
+    expect(features.liveDevices).toBe(false);
     for (const key of FEATURE_KEYS) {
       expect(typeof features[key], key).toBe('boolean');
     }

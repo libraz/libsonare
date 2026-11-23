@@ -52,6 +52,7 @@ export {
 } from './feature_decompose.js';
 export {
   griffinLim,
+  istft,
   melToAudio,
   melToStft,
   mfccToAudio,

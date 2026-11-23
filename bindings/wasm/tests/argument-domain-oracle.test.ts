@@ -29,7 +29,7 @@ import {
   vqt,
   vqtToAudio,
 } from '../src/index';
-import { expectRefusalOf } from './_helpers';
+import { expectRefusalOf, unknownKeyText } from './_helpers';
 
 const SR = 22050;
 
@@ -84,13 +84,22 @@ describe('detectOnsets delta', () => {
 describe('startBpm', () => {
   const samples = tone(1);
 
-  it('refuses a non-positive startBpm on analyzeBpm and analyzeRhythm', () => {
+  it('refuses a non-positive startBpm on analyzeRhythm', () => {
     for (const startBpm of [-1, 0]) {
-      expectRefusalOf(() => analyzeBpm(samples, SR, { startBpm }));
-      expectRefusalOf(() => analyzeBpm({ samples, sampleRate: SR, startBpm }));
       expectRefusalOf(() => analyzeRhythm(samples, SR, { startBpm }));
       expectRefusalOf(() => analyzeRhythm({ samples, sampleRate: SR, startBpm }));
     }
+  });
+
+  it('refuses startBpm as an undeclared analyzeBpm key on both entry forms', () => {
+    const options = { startBpm: 120 };
+    expect(
+      expectRefusalOf(() => analyzeBpm(samples, SR, options as never), TypeError).message,
+    ).toMatch(unknownKeyText('analyzeBpm: unknown key startBpm'));
+    const request = { samples, sampleRate: SR, ...options } as never;
+    expect(expectRefusalOf(() => analyzeBpm(request), TypeError).message).toMatch(
+      unknownKeyText('analyzeBpm: unknown key startBpm'),
+    );
   });
 });
 

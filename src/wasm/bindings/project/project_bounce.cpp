@@ -15,6 +15,7 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
+#include "c_api/metronome_c.h"
 #include "midi/controller_profile.h"
 
 // Runs one instrument callback behind a JS try/catch, because C++ cannot catch a
@@ -392,13 +393,12 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
       opts.num_channels = writtenInt(options["numChannels"], "numChannels",
                                      SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER);
     }
-    if (hasProperty(options, "sampleRate")) {
-      opts.sample_rate =
-          writtenInt(options["sampleRate"], "sampleRate", SONARE_PROJECT_SAMPLE_RATE_PROJECT);
-    }
     if (hasProperty(options, "instrumentLatencySamples")) {
       opts.instrument_latency_samples =
           checkedIntFromVal(options["instrumentLatencySamples"], "instrumentLatencySamples");
+    }
+    if (hasProperty(options, "countInBars")) {
+      opts.count_in_bars = checkedIntFromVal(options["countInBars"], "countInBars");
     }
   }
   return opts;
@@ -518,6 +518,67 @@ val ProjectWasm::bounce(val options, val builtin_bindings, val instrument_bindin
   }
 
   SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
+
+  SonareEngineMetronomeConfig metronome{};
+  std::vector<SonareProjectControllerProfileBinding> controller_profiles;
+  std::vector<std::string> controller_profile_names;
+  std::vector<SonareProjectArticulationBinding> articulations;
+  if (!options.isUndefined() && !options.isNull()) {
+    if (hasProperty(options, "metronome")) {
+      val config = options["metronome"];
+      if (!config.isUndefined() && !config.isNull()) {
+        metronome = sonare_c_detail::metronome_to_c(sonare::engine::MetronomeConfig{});
+        metronome.enabled = boolProperty(config, "enabled", metronome.enabled != 0) ? 1 : 0;
+        metronome.beat_gain = floatProperty(config, "beatGain", metronome.beat_gain);
+        metronome.accent_gain = floatProperty(config, "accentGain", metronome.accent_gain);
+        if (hasProperty(config, "clickSamples")) {
+          metronome.click_samples = checkedIntFromVal(config["clickSamples"], "clickSamples");
+        }
+        if (hasProperty(config, "clickSec")) {
+          metronome.click_sec = checkedDoubleFromVal(config["clickSec"], "clickSec");
+        }
+        opts.metronome = &metronome;
+      }
+    }
+    if (hasProperty(options, "controllerProfiles")) {
+      val descriptors = options["controllerProfiles"];
+      if (!descriptors.isUndefined() && !descriptors.isNull()) {
+        const size_t count = wasmArrayLength(descriptors, "controllerProfiles");
+        controller_profiles.reserve(count);
+        controller_profile_names.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+          val descriptor = descriptors[i];
+          SonareProjectControllerProfileBinding binding{};
+          binding.destination_id = uintProperty(descriptor, "destinationId", 0);
+          controller_profile_names.push_back(stringProperty(descriptor, "presetName", ""));
+          binding.preset_name = wasmCString(controller_profile_names.back(), "presetName");
+          controller_profiles.push_back(binding);
+        }
+      }
+    }
+    if (hasProperty(options, "articulations")) {
+      val descriptors = options["articulations"];
+      if (!descriptors.isUndefined() && !descriptors.isNull()) {
+        const size_t count = wasmArrayLength(descriptors, "articulations");
+        articulations.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+          val descriptor = descriptors[i];
+          SonareProjectArticulationBinding binding{};
+          binding.destination_id = uintProperty(descriptor, "destinationId", 0);
+          binding.channel = uintProperty(descriptor, "channel", 0);
+          binding.articulation = static_cast<SonareArticulation>(sonare_wasm_synth::enumFromVal(
+              descriptor["articulation"], sonare_wasm_synth::kArticulations,
+              SONARE_ARTICULATION_COUNT, "articulation"));
+          articulations.push_back(binding);
+        }
+      }
+    }
+  }
+  opts.controller_profiles = controller_profiles.empty() ? nullptr : controller_profiles.data();
+  opts.controller_profile_count = controller_profiles.size();
+  opts.articulations = articulations.empty() ? nullptr : articulations.data();
+  opts.articulation_count = articulations.size();
+
   opts.instruments = instruments.empty() ? nullptr : instruments.data();
   opts.instrument_count = instruments.size();
   opts.builtin_instruments = builtins.empty() ? nullptr : builtins.data();

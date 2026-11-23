@@ -151,6 +151,9 @@ describe('transport and counts', () => {
       }
       expect(engine.warpVoiceCapacity).toBe(8);
       expect(engine.clipCount).toBe(0);
+      expect(
+        Object.getOwnPropertyDescriptor(RealtimeEngine.prototype, 'midiCcBindings')?.value,
+      ).toBeTypeOf('function');
     });
   });
 
@@ -917,6 +920,68 @@ describe('instruments and MIDI', () => {
       engine.bindMidiCc({ ccNumber: 7, channel: 0, paramId: 5, minValue: 0, maxValue: 1 });
       expect(engine.midiCcBindingCount).toBe(1);
       expect('bindMidiCcBinding' in engine).toBe(false);
+    });
+  });
+
+  it('reads and rebinds detached MIDI CC descriptors with consume state', () => {
+    withEngine((engine) => {
+      engine.bindMidiCc({ ccNumber: 7, paramId: 5 });
+      engine.bindMidiCc({
+        ccNumber: 10,
+        channel: 2,
+        kind: 'rpn',
+        selectorMsb: 1,
+        selectorLsb: 3,
+        paramId: 6,
+        minValue: -2,
+        maxValue: 8,
+        consume: true,
+      });
+      const byCcNumber = (a: { ccNumber: number }, b: { ccNumber: number }) =>
+        a.ccNumber - b.ccNumber;
+      const bindings = engine.midiCcBindings().sort(byCcNumber);
+      expect(bindings).toEqual([
+        {
+          ccNumber: 7,
+          kind: 'controlChange7',
+          ccLsbNumber: 0,
+          selectorMsb: 0,
+          selectorLsb: 0,
+          paramId: 5,
+          minValue: 0,
+          maxValue: 1,
+          consume: false,
+        },
+        {
+          ccNumber: 10,
+          channel: 2,
+          kind: 'rpn',
+          ccLsbNumber: 0,
+          selectorMsb: 1,
+          selectorLsb: 3,
+          paramId: 6,
+          minValue: -2,
+          maxValue: 8,
+          consume: true,
+        },
+      ]);
+
+      for (const binding of bindings) {
+        engine.bindMidiCc(binding);
+      }
+      expect(engine.midiCcBindings().sort(byCcNumber)).toEqual(bindings);
+      bindings.length = 0;
+      expect(engine.midiCcBindingCount).toBe(2);
+      expect(engine.midiCcBindings()).toHaveLength(2);
+    });
+  });
+
+  it('requires consume to be a boolean when supplied', () => {
+    withEngine((engine) => {
+      expect(() => engine.bindMidiCc({ ccNumber: 7, paramId: 5, consume: 1 as never })).toThrow(
+        TypeError,
+      );
+      expect(engine.midiCcBindingCount).toBe(0);
     });
   });
 

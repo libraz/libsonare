@@ -437,8 +437,7 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
 
   it('refuses an inverted but finite ordering pair', () => {
     expect(
-      expectRefusalOf(() => m().analyzeBpm(tone, SR, 200, 100, 120, 2048, 512, 5), RangeError)
-        .message,
+      expectRefusalOf(() => m().analyzeBpm(tone, SR, 200, 100, 2048, 512, 5), RangeError).message,
     ).toBe('analyzeBpm: bpmMax must be finite and greater than bpmMin');
     expect(
       expectRefusalOf(() => m().analyzeRhythm(tone, SR, 200, 100, 120, 2048, 512), RangeError)
@@ -455,7 +454,7 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
   // Controls: the same entry points accept a finite configuration and return a
   // value, so a refusal above cannot be an entry point rejecting everything.
   it('analyzeBpm accepts a finite configuration', () => {
-    expect(Number.isFinite(m().analyzeBpm(tone, SR, 30, 300, 120, 2048, 512, 5).bpm)).toBe(true);
+    expect(Number.isFinite(m().analyzeBpm(tone, SR, 30, 300, 2048, 512, 5).bpm)).toBe(true);
   });
   it('analyzeRhythm accepts a finite configuration', () => {
     expect(Number.isFinite(m().analyzeRhythm(tone, SR, 60, 200, 120, 2048, 512).bpm)).toBe(true);

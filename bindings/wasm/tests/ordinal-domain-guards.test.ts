@@ -382,12 +382,18 @@ describe('the automation curve refuses an ordinal the embind path used to take',
     }
   });
 
-  it('states the curve and target-kind domains in the enum words', () => {
+  it('requires target kinds as string tokens', () => {
     // The facade's own native handle translates the C++ throw, so the message is readable here.
     const project = new Project();
     const native = (project as unknown as { native: RawProject }).native;
     try {
       const track = native.addTrack({ name: 't' });
+      expect(() =>
+        native.addAutomationLane(track, {
+          targetKind: 'trackWidth',
+          points: [{ ppq: 0, value: 1 }],
+        }),
+      ).not.toThrow();
       const lane = (extra: object) =>
         native.addAutomationLane(track, {
           targetParamId: 7,
@@ -398,7 +404,7 @@ describe('the automation curve refuses an ordinal the embind path used to take',
         expectRefusalOf(() => lane({ points: [{ ppq: 0, value: 0, curveToNext: 4 }] })).message,
       ).toBe('Project.addAutomationLane: automation curve must be a name or an ordinal in [0, 4)');
       expect(expectRefusalOf(() => lane({ targetKind: 3 })).message).toBe(
-        'Project.addAutomationLane: automation target kind must be a name or an ordinal in [0, 3)',
+        'Project.addAutomationLane: targetKind must be a string token',
       );
     } finally {
       project.destroy();

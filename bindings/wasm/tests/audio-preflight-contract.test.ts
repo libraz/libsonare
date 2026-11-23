@@ -137,6 +137,7 @@ const TABLE: Entry[] = [
     'percussive',
   ].map((name) => mono(name, name === 'phaseVocoder' ? { speedRatio: 1.1 } : {})),
   linked('lufsMultichannel'),
+  linked('encodeAudio', { format: 'wav' }),
   linked('lufsSeriesMultichannel'),
   mono('remix', { intervals: [0, 4096] }),
   mono('remixAlignedIntervals', { intervals: [0, 4096] }),
@@ -360,6 +361,7 @@ const NOT_AUDIO: string[] = [
   ...['chordSymbolFromAnalysis', 'keyModeFromAnalysis'],
   // Name, catalog, preset and enum lookups.
   ...[
+    'automationTargetKindNames',
     'controllerProfileNames',
     'masteringAmpPresetCatalog',
     'masteringChainConfigFromJson',
@@ -505,6 +507,7 @@ const NOT_AUDIO: string[] = [
     'cqtToAudio',
     'vqtToAudio',
     'griffinLim',
+    'istft',
     'melToAudio',
     'mfccToAudio',
     'melToStft',
@@ -528,6 +531,7 @@ const NOT_AUDIO: string[] = [
   // Container decoding, storage and host-device bindings.
   ...[
     'decodeChannels',
+    'readAudioTags',
     'decodeChannelsWithBrowserFallback',
     'attachOpfsClipStream',
     'createOpfsClipPageProvider',

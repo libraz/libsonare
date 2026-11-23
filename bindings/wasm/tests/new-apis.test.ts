@@ -990,8 +990,8 @@ describe('v1.2 feature additions (WASM)', () => {
       const out = mixer.processStereo([vocalL, returnL], [vocalR, returnR]);
       expect(blockEnergy(out)).toBeGreaterThan(0);
 
-      expect(Number.isFinite(mixer.stripMeter(vocal, 'preFader').peakDbL)).toBe(true);
-      expect(Number.isFinite(mixer.stripMeter(vocal, 'postFader').rmsDbL)).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter(vocal, 'preFader').peakDb[0])).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter(vocal, 'postFader').rmsDb[0])).toBe(true);
       expect(mixer.readGoniometerLatest(vocal, 8).length).toBeGreaterThan(0);
 
       mixer.destroy();

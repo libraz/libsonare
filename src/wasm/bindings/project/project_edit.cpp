@@ -208,6 +208,28 @@ void ProjectWasm::setTrackRoute(const val& track_id_val, const std::string& chan
 
 namespace {
 
+SonareAutomationTargetKind automationTargetKindFromVal(val desc,
+                                                       SonareAutomationTargetKind omitted) {
+  if (!hasProperty(desc, "targetKind")) return omitted;
+  const val target_kind = desc["targetKind"];
+  if (target_kind.typeOf().as<std::string>() != "string") {
+    throw WasmTypeError("targetKind must be a string token");
+  }
+  const std::string name = target_kind.as<std::string>();
+  const std::vector<std::string> tokens = projectAutomationTargetKindTokens();
+  const auto found = std::find(tokens.begin(), tokens.end(), name);
+  if (found == tokens.end()) {
+    throw WasmRangeError("unknown automation target kind token: " + name);
+  }
+  return static_cast<SonareAutomationTargetKind>(std::distance(tokens.begin(), found));
+}
+
+struct ProjectAutomationLaneListGuard {
+  SonareProjectAutomationLaneList value{};
+
+  ~ProjectAutomationLaneListGuard() { sonare_free_project_automation_lane_list(&value); }
+};
+
 /// Resolve one breakpoint curve ordinal, the form the TS facade hands embind.
 ///
 /// An out-of-range, fractional or non-finite ordinal is refused rather than
@@ -250,73 +272,134 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
 }
 
 SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
-    val desc, std::vector<SonareAutomationPoint>* storage) {
+    val desc, std::vector<SonareAutomationPoint>* storage, std::vector<std::string>* string_storage,
+    SonareAutomationTargetKind target_kind) {
   SonareAutomationLaneDesc d{};
   if (desc.isUndefined() || desc.isNull()) {
     throw WasmTypeError("desc must be given");
   }
-  d.target_param_id = domainNumberFromVal<uint32_t>(
-      requiredDomainIntProperty(desc, "targetParamId", ""), "targetParamId",
-      sonare_c_detail::kAutomationTargetParamIdDomain);
+  sonare_automation_lane_desc_init(&d);
+  d.target_kind = target_kind;
+  if (target_kind == SONARE_AUTOMATION_TARGET_UNCHANGED) {
+    for (const char* field : {"targetParamId", "sendId", "processor", "paramName", "insertIndex"}) {
+      if (hasProperty(desc, field)) {
+        throw WasmRangeError(std::string(field) +
+                             " requires an explicit targetKind when editing a lane");
+      }
+    }
+  } else if (target_kind == SONARE_AUTOMATION_TARGET_OPAQUE) {
+    d.target_param_id = domainNumberFromVal<uint32_t>(
+        requiredDomainIntProperty(desc, "targetParamId", ""), "targetParamId",
+        sonare_c_detail::kAutomationTargetParamIdDomain);
+  } else if (hasProperty(desc, "targetParamId")) {
+    throw WasmRangeError("targetParamId must be omitted for a typed target");
+  }
+  string_storage->reserve(4);
+  if (hasProperty(desc, "sendId")) {
+    string_storage->push_back(stringFromVal(desc["sendId"], "sendId"));
+    d.send_id = wasmCString(string_storage->back(), "sendId");
+  }
+  if (hasProperty(desc, "processor")) {
+    string_storage->push_back(stringFromVal(desc["processor"], "processor"));
+    d.processor = wasmCString(string_storage->back(), "processor");
+  }
+  if (hasProperty(desc, "paramName")) {
+    string_storage->push_back(stringFromVal(desc["paramName"], "paramName"));
+    d.param_name = wasmCString(string_storage->back(), "paramName");
+  }
+  if (hasProperty(desc, "insertIndex")) {
+    d.insert_index = checkedIntFromVal(desc["insertIndex"], "insertIndex");
+    if (d.insert_index < 0) throw WasmRangeError("insertIndex must be non-negative");
+  }
   *storage = automationPointsFromVal(hasProperty(desc, "points") ? desc["points"] : val::array());
   d.points = storage->empty() ? nullptr : storage->data();
   d.point_count = storage->size();
   return d;
 }
 
-namespace {
-
-SonareAutomationTargetKind automationTargetKindFromVal(val desc,
-                                                       SonareAutomationTargetKind omitted) {
-  if (!hasProperty(desc, "targetKind")) {
-    return omitted;
-  }
-
-  const val target_kind = desc["targetKind"];
-  const std::string type = target_kind.typeOf().as<std::string>();
-  if (type == "number") {
-    const int ordinal = checkedIntFromVal(target_kind, "automation target kind");
-    requireEnumOrdinal(ordinal, SONARE_AUTOMATION_TARGET_TRACK_PAN + 1, "automation target kind");
-    return static_cast<SonareAutomationTargetKind>(ordinal);
-  }
-  if (type == "string") {
-    const std::string name = target_kind.as<std::string>();
-    if (name == "opaque") return SONARE_AUTOMATION_TARGET_OPAQUE;
-    if (name == "track-fader-db") return SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
-    if (name == "track-pan") return SONARE_AUTOMATION_TARGET_TRACK_PAN;
-  }
-  throw WasmRangeError("invalid automation target kind");
-}
-
-}  // namespace
-
 double ProjectWasm::addAutomationLane(const val& track_id_val, val desc) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const SonareAutomationTargetKind target_kind =
+      automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_OPAQUE);
   std::vector<SonareAutomationPoint> storage;
-  SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
+  std::vector<std::string> string_storage;
+  SonareAutomationLaneDesc d =
+      automationLaneDescFromVal(desc, &storage, &string_storage, target_kind);
   uint32_t out = 0;
-  d.target_kind = automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_OPAQUE);
   checkCodedCErrorFlattening(sonare_project_add_automation_lane(project_.get(), track_id, &d, &out),
-                             "desc");
+                             "desc", CErrorReasonMode::kCurrentEntry);
   return static_cast<double>(out);
 }
 
-void ProjectWasm::editAutomationLane(const val& track_id_val, const val& target_param_id_val,
-                                     val desc) {
-  const uint32_t target_param_id = checkedUintFromVal(target_param_id_val, "targetParamId");
+void ProjectWasm::editAutomationLane(const val& track_id_val, const val& lane_id_val, val desc) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t lane_id = checkedUintFromVal(lane_id_val, "laneId");
+  const SonareAutomationTargetKind target_kind =
+      automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_UNCHANGED);
   std::vector<SonareAutomationPoint> storage;
-  SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
-  d.target_kind = automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_UNCHANGED);
-  checkCodedCError(
-      sonare_project_edit_automation_lane(project_.get(), track_id, target_param_id, &d));
+  std::vector<std::string> string_storage;
+  SonareAutomationLaneDesc d =
+      automationLaneDescFromVal(desc, &storage, &string_storage, target_kind);
+  checkCodedCErrorFlattening(
+      sonare_project_edit_automation_lane(project_.get(), track_id, lane_id, &d), "desc",
+      CErrorReasonMode::kCurrentEntry);
 }
 
-void ProjectWasm::removeAutomationLane(const val& track_id_val, const val& target_param_id_val) {
-  const uint32_t target_param_id = checkedUintFromVal(target_param_id_val, "targetParamId");
+void ProjectWasm::removeAutomationLane(const val& track_id_val, const val& lane_id_val) {
+  const uint32_t lane_id = checkedUintFromVal(lane_id_val, "laneId");
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
-  checkCodedCError(
-      sonare_project_remove_automation_lane(project_.get(), track_id, target_param_id));
+  const SonareError err = sonare_project_remove_automation_lane(project_.get(), track_id, lane_id);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+}
+
+val ProjectWasm::automationLanes() const {
+  ProjectAutomationLaneListGuard list;
+  const SonareError err = sonare_project_automation_lanes(project_.get(), &list.value);
+  if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "automationLanes returned a missing lane array");
+  }
+  const std::vector<std::string> tokens = projectAutomationTargetKindTokens();
+  val out = val::array();
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const SonareProjectAutomationLane& lane = list.value.items[i];
+    const int kind = static_cast<int>(lane.desc.target_kind);
+    if (kind < 0 || static_cast<size_t>(kind) >= tokens.size()) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidFormat,
+          "unknown automation target kind ordinal: " + std::to_string(kind));
+    }
+    if (lane.desc.point_count != 0 && lane.desc.points == nullptr) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "automationLanes returned missing breakpoint data");
+    }
+    val row = val::object();
+    row.set("trackId", lane.track_id);
+    row.set("laneId", lane.lane_id);
+    row.set("targetKind", tokens[static_cast<size_t>(kind)]);
+    if (kind == SONARE_AUTOMATION_TARGET_OPAQUE) {
+      row.set("targetParamId", lane.desc.target_param_id);
+    }
+    if (lane.desc.send_id != nullptr) row.set("sendId", std::string(lane.desc.send_id));
+    if (lane.desc.processor != nullptr) row.set("processor", std::string(lane.desc.processor));
+    if (lane.desc.param_name != nullptr) row.set("paramName", std::string(lane.desc.param_name));
+    if (lane.desc.insert_index != SONARE_AUTOMATION_INSERT_INDEX_NONE) {
+      row.set("insertIndex", lane.desc.insert_index);
+    }
+    val points = val::array();
+    for (size_t point_index = 0; point_index < lane.desc.point_count; ++point_index) {
+      const SonareAutomationPoint& point = lane.desc.points[point_index];
+      val output_point = val::object();
+      output_point.set("ppq", point.ppq);
+      output_point.set("value", point.value);
+      output_point.set("curveToNext", static_cast<int>(point.curve_to_next));
+      points.set(static_cast<unsigned>(point_index), output_point);
+    }
+    row.set("points", points);
+    out.set(static_cast<unsigned>(i), row);
+  }
+  return out;
 }
 
 void registerProjectEdit(class_<ProjectWasm>& cls) {
@@ -337,7 +420,8 @@ void registerProjectEdit(class_<ProjectWasm>& cls) {
       .function("setTrackRoute", &ProjectWasm::setTrackRoute)
       .function("addAutomationLane", &ProjectWasm::addAutomationLane)
       .function("editAutomationLane", &ProjectWasm::editAutomationLane)
-      .function("removeAutomationLane", &ProjectWasm::removeAutomationLane);
+      .function("removeAutomationLane", &ProjectWasm::removeAutomationLane)
+      .function("automationLanes", &ProjectWasm::automationLanes);
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

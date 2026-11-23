@@ -1,5 +1,5 @@
-import type { SonareError } from '../errors.js';
-import { invalidState } from './entry.js';
+import { ErrorCode, type SonareError } from '../errors.js';
+import { codedError } from './entry.js';
 
 /**
  * Builds the `InvalidState` error every handle, client and engine reports once
@@ -7,7 +7,9 @@ import { invalidState } from './entry.js';
  * pending at that point alike.
  */
 export function releasedHandleError(className: string): SonareError {
-  return invalidState(`${className} has been destroyed`);
+  return codedError(ErrorCode.InvalidState, `${className} has been destroyed`, {
+    reason: 'releasedHandle',
+  });
 }
 
 /** Throws `InvalidState` once `released` is set; a boolean test, safe on per-block paths. */
