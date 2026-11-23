@@ -8,6 +8,24 @@ const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
 
 const UNKNOWN_ID = 987654;
 
+/** A master strip with one limiter insert at index 0. */
+const LIMITER_MASTER = JSON.stringify({
+  version: 2,
+  strips: [
+    {
+      id: 'master',
+      inserts: [
+        {
+          slot: 'pre',
+          processor: 'dynamics.limiter',
+          params: { thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 },
+        },
+      ],
+    },
+  ],
+  buses: [],
+});
+
 /** Runs `body` against a fresh engine with one track lane and one bus, then destroys it. */
 function withEngine(body: (engine: RealtimeEngine) => void): void {
   const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
@@ -70,16 +88,25 @@ describe('RealtimeEngine value refusals are RangeError, not SonareError', () => 
 });
 
 describe('RealtimeEngine state refusals stay coded SonareError', () => {
-  it('master strip setters before any master strip is configured are InvalidState', () => {
+  it('edits the default master strip before any setStrip, refusing an insert it lacks as the argument', () => {
     withEngine((engine) => {
-      expect(() => engine.setStripInsertBypassed('master', 0, { bypassed: true })).toThrow(
-        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      expect(() =>
+        engine.setStripEqBand('master', 0, { type: 'peak', enabled: true }),
+      ).not.toThrow();
+      // The default master strip carries no insert, so index 0 is the argument at fault.
+      expectRefusal(
+        () => engine.setStripInsertBypassed('master', 0, { bypassed: true }),
+        RangeError,
       );
-      expect(() => engine.setStripEqBand('master', 0, { type: 'peak', enabled: true })).toThrow(
-        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      expectRefusal(
+        () => engine.resolveStripInsertAutomationId('master', 0, 'thresholdDb'),
+        RangeError,
       );
-      expect(() => engine.resolveStripInsertAutomationId('master', 0, 'thresholdDb')).toThrow(
-        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      engine.setStrip('master', sceneStrip(LIMITER_MASTER));
+      expect(() => engine.setStripInsertBypassed('master', 0, { bypassed: true })).not.toThrow();
+      expectRefusal(
+        () => engine.setStripInsertBypassed('master', 99, { bypassed: true }),
+        RangeError,
       );
     });
   });

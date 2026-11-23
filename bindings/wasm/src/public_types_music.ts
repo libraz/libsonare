@@ -587,10 +587,10 @@ export interface MelodyResult {
 export interface AnalysisDynamics {
   /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
-  /** Peak level in dB. `-Infinity` for silence; absent when not measured. */
-  peakDb?: number;
-  /** RMS level in dB. `-Infinity` for silence; absent when not measured. */
-  rmsDb?: number;
+  /** Peak level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
+  peakDb: number;
+  /** RMS level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
+  rmsDb: number;
   /**
    * Loudness range in LU (EBU R128). Absent for silence and when no 3 s block passes the gates:
    * a spread, not a level, so never `-Infinity`.

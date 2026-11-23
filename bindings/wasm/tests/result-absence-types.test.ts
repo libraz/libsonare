@@ -6,6 +6,7 @@ import type {
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   DecomposeNotePitchRequest,
+  DynamicsResult,
   ExtractNotesRequest,
   MasteringAssistantProfile,
   MasteringAudioProfileLoudness,
@@ -45,8 +46,6 @@ describe('result records type an unmeasured value as an absent field', () => {
   });
 
   it('a level silence leaves unmeasured, or an empty input never reaches, is absent', () => {
-    expectTypeOf<AnalysisDynamics['peakDb']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<AnalysisDynamics['rmsDb']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<MasteringAssistantProfile['loudnessRangeLu']>().toEqualTypeOf<
       number | undefined
     >();
@@ -69,6 +68,11 @@ describe('result records type an unmeasured value as an absent field', () => {
   });
 
   it('a level that is -Infinity for silence is never absent', () => {
+    // An empty input is refused before the dynamics analyzer runs, so it never leaves a level absent.
+    expectTypeOf<AnalysisDynamics['peakDb']>().toEqualTypeOf<number>();
+    expectTypeOf<AnalysisDynamics['rmsDb']>().toEqualTypeOf<number>();
+    expectTypeOf<DynamicsResult['peakDb']>().toEqualTypeOf<number>();
+    expectTypeOf<DynamicsResult['rmsDb']>().toEqualTypeOf<number>();
     expectTypeOf<MasteringAudioProfileLoudness['integratedLufs']>().toEqualTypeOf<number>();
     expectTypeOf<MasteringAssistantProfile['integratedLufs']>().toEqualTypeOf<number>();
     expectTypeOf<MasteringStreamingPreviewPlatform['integratedLufs']>().toEqualTypeOf<number>();

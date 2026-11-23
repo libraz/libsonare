@@ -180,10 +180,10 @@ export interface AnalysisChord extends Chord {
 export interface AnalysisDynamics {
   /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
-  /** Peak level in dB. `-Infinity` for silence; absent when not measured. */
-  peakDb?: number;
-  /** RMS level in dB. `-Infinity` for silence; absent when not measured. */
-  rmsDb?: number;
+  /** Peak level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
+  peakDb: number;
+  /** RMS level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
+  rmsDb: number;
   /** Peak-to-RMS ratio of the signal. Absent when not measured. */
   crestFactor?: number;
   /**
