@@ -189,6 +189,10 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
     'Reads a float array off a record and returns an empty vector when absent; there is no scalar fallback.',
   ],
   [
+    'FloatVectorProperty',
+    'Reads a Float32Array or number[] of floats and returns an empty vector when absent; there is no scalar fallback and truncation is not in play.',
+  ],
+  [
     'IntInRangeOrAbsentProperty',
     'Refuses a non-integer and any value outside its stated range, and absence maps to a marker outside that range, so nothing can truncate onto a fallback.',
   ],
