@@ -294,13 +294,22 @@ describe('enum names in per-processor params', () => {
     expect(timing({ aliasing: 'oversample4x' }).latencySamples).toBe(byName.latencySamples);
   });
 
-  it('refuse an unknown name', () => {
-    expect(() => apply({ aliasing: 'nope' })).toThrow(RangeError);
-    expect(() => timing({ aliasing: 'nope' })).toThrow(RangeError);
+  it('refuse an unknown name under params, as the caller wrote it', () => {
+    const choices = 'must be one of none, adaa1, adaa2, oversample4x';
+    expect(() => apply({ aliasing: 'nope' })).toThrow(
+      new RangeError(`masteringApplyProcessor: params.aliasing ${choices}`),
+    );
+    expect(() => timing({ aliasing: 'nope' })).toThrow(
+      new RangeError(`masteringInsertTiming: params.aliasing ${choices}`),
+    );
   });
 
-  it('keep a string for a number-valued key a TypeError', () => {
-    expect(() => apply({ ceiling: 'loud' })).toThrow(TypeError);
-    expect(() => timing({ ceiling: 'loud' })).toThrow(TypeError);
+  it('keep a string for a number-valued key a TypeError under params', () => {
+    expect(() => apply({ ceiling: 'loud' })).toThrow(
+      new TypeError('masteringApplyProcessor: params.ceiling must be a number or a boolean'),
+    );
+    expect(() => timing({ ceiling: 'loud' })).toThrow(
+      new TypeError('masteringInsertTiming: params.ceiling must be a number or a boolean'),
+    );
   });
 });

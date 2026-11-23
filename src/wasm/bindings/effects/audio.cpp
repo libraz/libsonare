@@ -85,7 +85,8 @@ val js_time_stretch(val samples, const val& sample_rate, const val& rate_val, co
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
   config.hop_length = resynthesisHopFromVal(hop_length);
   config.backend = StretchBackend::NativeSpectral;
-  Audio result = time_stretch(audio, rate, config);
+  Audio result = sonare::util::check::with_camel_paths(
+      [&] { return time_stretch(audio, rate, config); }, kTimeStretchRequestKeys);
   return vectorToFloat32Array(result.data(), result.size());
 }
 

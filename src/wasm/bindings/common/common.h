@@ -357,6 +357,9 @@ inline constexpr std::array<sonare::util::check::MemberKey, 3> kClicksRequestKey
 /// The HPSS core names for the two median kernels, as hpss() spells them.
 inline constexpr std::array<sonare::util::check::MemberKey, 2> kHpssRequestKeys{
     {{"kernel_size_harmonic", "kernelHarmonic"}, {"kernel_size_percussive", "kernelPercussive"}}};
+/// The time-stretch core names the speed ratio after its own parameter.
+inline constexpr std::array<sonare::util::check::MemberKey, 1> kTimeStretchRequestKeys{
+    {{"rate", "speedRatio"}}};
 /// The same kernels as the percussive-event requests spell them.
 inline constexpr std::array<sonare::util::check::MemberKey, 2> kPercussiveSeparationKeys{
     {{"kernel_size_harmonic", "hpssKernelHarmonic"},

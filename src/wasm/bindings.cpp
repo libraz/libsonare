@@ -517,7 +517,9 @@ val js_realtime_voice_changer_preset_config(const val& preset_val) {
 #endif
 
 val js_audio_from_memory(val bytes) {
-  std::vector<uint8_t> data = uint8ArrayToVector(bytes, "bytes");
+  std::vector<uint8_t> data = uint8ArrayToVector(bytes, "data");
+  // The core reads an empty buffer as a missing one; refuse it as the C entry does.
+  if (data.empty()) sonare::util::check::refuse("data", sonare::util::refusal::kNonEmptyPredicate);
   const Audio audio = Audio::from_memory(data.data(), data.size());
   val out = val::object();
   out.set("samples", vectorToFloat32Array(audio.data(), audio.size()));
@@ -535,7 +537,7 @@ struct CFloatBuffer {
 }  // namespace
 
 val js_decode_channels(val bytes) {
-  std::vector<uint8_t> data = uint8ArrayToVector(bytes, "bytes");
+  std::vector<uint8_t> data = uint8ArrayToVector(bytes, "data");
   CFloatBuffer planar;
   size_t frames = 0;
   int channels = 0;

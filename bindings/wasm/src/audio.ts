@@ -247,7 +247,7 @@ export interface DownmixOptions {
  * `L R C LFE Ls Rs`. Folding the planes with {@link downmix} is not normalised
  * and can exceed full scale.
  *
- * @param bytes - Encoded audio bytes such as WAV or MP3.
+ * @param data - Encoded audio bytes such as WAV or MP3.
  * @throws SonareError with `codeName: 'DecodeFailed'` for an empty decode or a
  *   non-finite sample and `'InvalidFormat'` for a declared rate outside the
  *   supported range.
@@ -260,9 +260,9 @@ export interface DownmixOptions {
  * const stereo = channels.length > 2 ? downmix(channels, 'stereo') : channels;
  * ```
  */
-export function decodeChannels(bytes: Uint8Array): DecodedChannels {
+export function decodeChannels(data: Uint8Array): DecodedChannels {
   return withEntry('decodeChannels', () => {
-    return getSonareModule().decodeChannels(bytes);
+    return getSonareModule().decodeChannels(data);
   });
 }
 
@@ -313,14 +313,14 @@ export function downmix(
  * browser returns is kept.
  */
 export async function decodeChannelsWithBrowserFallback(
-  bytes: Uint8Array,
+  data: Uint8Array,
   options: BrowserAudioDecodeOptions = {},
 ): Promise<DecodedChannels> {
   return withEntry('decodeChannelsWithBrowserFallback', async () => {
     try {
-      return decodeChannels(bytes);
+      return decodeChannels(data);
     } catch (nativeError) {
-      return decodeWithBrowserCodec(bytes, options, nativeError, 'decodeChannels');
+      return decodeWithBrowserCodec(data, options, nativeError, 'decodeChannels');
     }
   });
 }
@@ -458,10 +458,10 @@ export class Audio {
   /**
    * Create an Audio instance by decoding audio bytes in memory.
    *
-   * @param bytes - Encoded audio bytes such as WAV or MP3.
+   * @param data - Encoded audio bytes such as WAV or MP3.
    */
-  static fromMemory(bytes: Uint8Array): Audio {
-    const decoded = getSonareModule().audioFromMemory(bytes);
+  static fromMemory(data: Uint8Array): Audio {
+    const decoded = getSonareModule().audioFromMemory(data);
     return new Audio(AUDIO_FACTORY_KEY, decoded.samples, decoded.sampleRate);
   }
 
@@ -473,13 +473,13 @@ export class Audio {
    * a file folds to the same samples whichever decoder ran.
    */
   static async fromMemoryWithBrowserFallback(
-    bytes: Uint8Array,
+    data: Uint8Array,
     options: BrowserAudioDecodeOptions = {},
   ): Promise<Audio> {
     try {
-      return Audio.fromMemory(bytes);
+      return Audio.fromMemory(data);
     } catch (nativeError) {
-      const decoded = await decodeWithBrowserCodec(bytes, options, nativeError, 'Audio.fromMemory');
+      const decoded = await decodeWithBrowserCodec(data, options, nativeError, 'Audio.fromMemory');
       const length = decoded.channels[0]?.length ?? 0;
       return new Audio(AUDIO_FACTORY_KEY, foldToMono(decoded.channels, length), decoded.sampleRate);
     }

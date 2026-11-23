@@ -1880,8 +1880,8 @@ export interface SonareModule {
   vocalEditSessionExportState: VocalWasmExports['vocalEditSessionExportState'];
   vocalEditLastErrorDetail: VocalWasmExports['vocalEditLastErrorDetail'];
 
-  audioFromMemory: (bytes: Uint8Array) => WasmAudioFromMemoryResult;
-  decodeChannels: (bytes: Uint8Array) => { sampleRate: number; channels: Float32Array[] };
+  audioFromMemory: (data: Uint8Array) => WasmAudioFromMemoryResult;
+  decodeChannels: (data: Uint8Array) => { sampleRate: number; channels: Float32Array[] };
   downmix: (
     channels: Float32Array[],
     targetLayout: number,

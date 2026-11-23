@@ -2,6 +2,7 @@ import { addon } from '../native.js';
 import { assertFiniteScalar } from '../validation.js';
 import { refuseType } from './entry.js';
 import { requireListBudget } from './list_budget.js';
+import { withRespelled } from './respell.js';
 
 /** Params as the caller wrote them: values are checked against the processor's declared types here. */
 type LooseParams = Record<string, number | boolean | string | readonly number[]>;
@@ -22,9 +23,12 @@ export function resolveProcessorParams(
     if (typeof value !== 'string') {
       continue;
     }
-    const number = addon.masteringEnumValue(processor, key, value) as number | null;
+    const number = withRespelled(
+      { [key]: { name: `params.${key}`, scale: 1 } },
+      () => addon.masteringEnumValue(processor, key, value) as number | null,
+    );
     if (number === null) {
-      throw refuseType(`${key} must be a number or a boolean`);
+      throw refuseType(`params.${key} must be a number or a boolean`);
     }
     resolved ??= { ...params } as Record<string, number | boolean>;
     resolved[key] = number;

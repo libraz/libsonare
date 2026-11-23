@@ -1,5 +1,6 @@
 import { getSonareModule } from '../module_state.js';
 import { refuseType } from './entry.js';
+import { withRespelled } from './respell.js';
 
 /** Params as the caller wrote them: values are checked against the processor's declared types here. */
 type LooseParams = Record<string, number | boolean | string | readonly number[]>;
@@ -22,9 +23,11 @@ export function resolveProcessorParams(
     if (typeof value !== 'string') {
       continue;
     }
-    const number = getSonareModule().masteringEnumValue(processor, key, value);
+    const number = withRespelled({ [key]: { name: `params.${key}`, scale: 1 } }, () =>
+      getSonareModule().masteringEnumValue(processor, key, value),
+    );
     if (number === null) {
-      throw refuseType(`${key} must be a number or a boolean`);
+      throw refuseType(`params.${key} must be a number or a boolean`);
     }
     resolved ??= { ...params } as Record<string, number | boolean>;
     resolved[key] = number;

@@ -44,6 +44,9 @@ namespace {
 // The HPSS core names for the two median kernels, as hpss() spells them.
 constexpr std::array<sonare::util::check::MemberKey, 2> kHpssRequestKeys{
     {{"kernel_size_harmonic", "kernelHarmonic"}, {"kernel_size_percussive", "kernelPercussive"}}};
+// The time-stretch core names the speed ratio after its own parameter.
+constexpr std::array<sonare::util::check::MemberKey, 1> kTimeStretchRequestKeys{
+    {{"rate", "speedRatio"}}};
 }  // namespace
 
 Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
@@ -165,7 +168,8 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.backend = sonare::StretchBackend::NativeSpectral;
-  sonare::Audio result = sonare::time_stretch(audio, rate, config);
+  sonare::Audio result = sonare::util::check::with_camel_paths(
+      [&] { return sonare::time_stretch(audio, rate, config); }, kTimeStretchRequestKeys);
   return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }
