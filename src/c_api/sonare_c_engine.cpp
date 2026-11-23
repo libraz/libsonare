@@ -11,6 +11,7 @@
 #include "automation/parameter.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
+#include "c_api/metronome_c.h"
 #include "c_api/ppq_domains.h"
 #include "engine/realtime_engine.h"
 #include "rt/command.h"
@@ -97,16 +98,6 @@ void fill_c_marker(const transport::Marker& marker, SonareEngineMarker* out) {
   out->key_fifths = marker.key_fifths;
   out->key_minor = marker.key_minor ? 1 : 0;
   copy_text(out->name, sizeof(out->name), marker.name);
-}
-
-// The core spells the derived click length as 0.
-SonareEngineMetronomeConfig metronome_to_c(const engine::MetronomeConfig& config) {
-  return {sizeof(SonareEngineMetronomeConfig),
-          config.enabled ? 1 : 0,
-          config.beat_gain,
-          config.accent_gain,
-          config.click_samples == 0 ? SONARE_ENGINE_METRONOME_CLICK_FROM_SEC : config.click_samples,
-          config.click_seconds};
 }
 
 // The public bounds and the core's clamps are two spellings of one limit; keep
