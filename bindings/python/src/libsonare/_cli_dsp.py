@@ -8,11 +8,12 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from ._cli_common import (
-    _load_audio_from_facade as _load_audio,
-)
-from ._cli_common import (
+    _absent_if_none,
     _strict_json_dumps,
     _write_wav,
+)
+from ._cli_common import (
+    _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
 from ._cli_options import (
@@ -99,9 +100,10 @@ def cmd_filter(args: argparse.Namespace) -> int:
         {
             "type": args.type,
             "order": order,
-            "cutoff_hz": args.cutoff_hz,
-            "center_hz": args.center_hz,
-            "bandwidth_hz": args.bandwidth_hz,
+            # Only the frequencies the filter type reads are reported.
+            "cutoff_hz": _absent_if_none(args.cutoff_hz),
+            "center_hz": _absent_if_none(args.center_hz),
+            "bandwidth_hz": _absent_if_none(args.bandwidth_hz),
             "zero_phase": bool(args.zero_phase),
         },
     )

@@ -227,28 +227,55 @@ _SONARE_CODE_TO_EXIT = {
 }
 
 
+# A keyed value that is not there: the writer leaves its key out, the way a NaN is.
+_ABSENT = object()
+
+
+def _left_out(value: object) -> bool:
+    return value is _ABSENT or (isinstance(value, float) and math.isnan(value))
+
+
 def _sanitize_json_value(value: object) -> object:
-    """Recursively replace non-finite floats with JSON ``null`` values."""
+    """Apply the level convention the native writer holds.
+
+    A NaN (not measured) is never written: a keyed one drops its key and one in an
+    array is refused, since an array holding one goes through ``_measured_pairs``.
+    An infinity is written as null, the end its field's schema declares.
+    """
+    if _left_out(value):
+        raise ValueError("a JSON array cannot carry a not-measured value")
     if isinstance(value, float):
         return value if math.isfinite(value) else None
     if isinstance(value, dict):
-        return {key: _sanitize_json_value(item) for key, item in value.items()}
+        return {
+            key: _sanitize_json_value(item) for key, item in value.items() if not _left_out(item)
+        }
     if isinstance(value, (list, tuple)):
         return [_sanitize_json_value(item) for item in value]
     return value
 
 
+def _absent_if_none(value: object) -> object:
+    """A value the library returned as None leaves its key out of the document."""
+    return _ABSENT if value is None else value
+
+
+def _measured_pairs(values: Any, values_key: str, index_key: str) -> dict[str, list[Any]]:
+    """The measured entries of ``values`` beside their ascending indices, as two keyed lists."""
+    kept = [
+        (index, float(value))
+        for index, value in enumerate(values)
+        if value is not None and not math.isnan(float(value))
+    ]
+    return {
+        values_key: [value for _, value in kept],
+        index_key: [index for index, _ in kept],
+    }
+
+
 def _fmt_optional(value: float | None, spec: str, unit: str = "") -> str:
     """Format a measured value for text output, or "-" when nothing was measured."""
     return "-" if value is None else f"{format(value, spec)}{unit}"
-
-
-def _omit_absent(payload: dict[str, object], *keys: str) -> dict[str, object]:
-    """Drop each named key whose value is None: an unmeasured value is omitted, never null."""
-    for key in keys:
-        if payload.get(key, ...) is None:
-            del payload[key]
-    return payload
 
 
 def _strict_json_dumps(value: object, **kwargs: Any) -> str:

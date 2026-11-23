@@ -14,9 +14,10 @@ from typing import Any, cast
 
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
+    _absent_if_none,
     _fmt_optional,
     _load_channels_or_downmix,
-    _omit_absent,
+    _measured_pairs,
     _strict_json_dumps,
     _write_channel_output,
     _write_wav,
@@ -58,8 +59,9 @@ def _print_diagnostic_warnings(result: Any) -> None:
         print(f"warning: {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
 
 
-def _float_list(values: Any) -> list[float] | None:
-    return None if values is None else [float(value) for value in values]
+def _optional_pairs(values: Any, values_key: str, index_key: str) -> dict[str, list[Any]]:
+    """Pairs for a band list only an impulse response measures; a blind estimate has none."""
+    return {} if values is None else _measured_pairs(values, values_key, index_key)
 
 
 def _placement(args: argparse.Namespace) -> dict[str, Any]:
@@ -104,27 +106,19 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
     if args.json:
         print(
             _strict_json_dumps(
-                _omit_absent(
-                    {
-                        "rt60": result.rt60,
-                        "edt": result.edt,
-                        "c50": result.c50,
-                        "c80": result.c80,
-                        "d50": result.d50,
-                        "confidence": result.confidence,
-                        "rt60_bands": [float(value) for value in result.rt60_bands],
-                        "edt_bands": _float_list(result.edt_bands),
-                        "c50_bands": _float_list(result.c50_bands),
-                        "c80_bands": _float_list(result.c80_bands),
-                    },
-                    "edt",
-                    "c50",
-                    "c80",
-                    "d50",
-                    "edt_bands",
-                    "c50_bands",
-                    "c80_bands",
-                )
+                {
+                    "rt60": _absent_if_none(result.rt60),
+                    "edt": _absent_if_none(result.edt),
+                    "c50": _absent_if_none(result.c50),
+                    "c80": _absent_if_none(result.c80),
+                    "d50": _absent_if_none(result.d50),
+                    "confidence": result.confidence,
+                    # A band that could not be measured is left out; each list carries its bands.
+                    **_measured_pairs(result.rt60_bands, "rt60_bands", "rt60_band"),
+                    **_optional_pairs(result.edt_bands, "edt_bands", "edt_band"),
+                    **_optional_pairs(result.c50_bands, "c50_bands", "c50_band"),
+                    **_optional_pairs(result.c80_bands, "c80_bands", "c80_band"),
+                }
             )
         )
     else:
@@ -162,14 +156,16 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "volume": est.volume,
-                    "length": est.length_m,
-                    "width": est.width_m,
-                    "height": est.height_m,
-                    "drr_db": est.drr_db,
+                    "volume": _absent_if_none(est.volume),
+                    "length": _absent_if_none(est.length_m),
+                    "width": _absent_if_none(est.width_m),
+                    "height": _absent_if_none(est.height_m),
+                    "drr_db": _absent_if_none(est.drr_db),
                     "confidence": est.confidence,
-                    "rt60_bands": [float(value) for value in est.rt60_bands],
-                    "band_absorption": [float(value) for value in est.band_absorption],
+                    **_measured_pairs(est.rt60_bands, "rt60_bands", "rt60_band"),
+                    **_measured_pairs(
+                        est.band_absorption, "band_absorption", "band_absorption_band"
+                    ),
                 }
             )
         )

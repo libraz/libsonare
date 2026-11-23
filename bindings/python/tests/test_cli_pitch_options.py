@@ -210,6 +210,7 @@ def test_pitch_frames_flag_defaults_off_and_adds_the_contour_to_json(
     _cli_analysis.cmd_pitch(_pitch_args("--json", "--frames"))
     payload = json.loads(capsys.readouterr().out)
     assert payload["times"] == [0.0, 512 / 22050]
-    assert payload["f0"] == [440.0, None]
+    assert payload["f0"] == [440.0]
+    assert payload["f0_frame"] == [0]
     assert payload["voiced_flag"] == [True, False]
     assert payload["voiced_prob"] == [0.9, 0.0]

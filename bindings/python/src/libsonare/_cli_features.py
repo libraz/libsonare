@@ -12,10 +12,10 @@ from ._cli_common import (
     _BOLD,
     _CYAN,
     _YELLOW,
+    _absent_if_none,
     _array_stats,
     _decode_mono,
     _fmt_optional,
-    _omit_absent,
     _strict_json_dumps,
     _styled,
 )
@@ -242,17 +242,12 @@ def cmd_dynamic_range(args: argparse.Namespace) -> int:
     if args.json:
         print(
             _strict_json_dumps(
-                _omit_absent(
-                    {
-                        "dynamic_range_db": result.dynamic_range_db,
-                        "low_percentile_db": result.low_percentile_db,
-                        "high_percentile_db": result.high_percentile_db,
-                        "window_rms_db": result.window_rms_db.tolist(),
-                    },
-                    "dynamic_range_db",
-                    "low_percentile_db",
-                    "high_percentile_db",
-                )
+                {
+                    "dynamic_range_db": _absent_if_none(result.dynamic_range_db),
+                    "low_percentile_db": _absent_if_none(result.low_percentile_db),
+                    "high_percentile_db": _absent_if_none(result.high_percentile_db),
+                    "window_rms_db": result.window_rms_db.tolist(),
+                }
             )
         )
     else:

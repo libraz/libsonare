@@ -14,10 +14,10 @@ from typing import Any, cast
 from ._cli_common import (
     _MAX_PROJECT_OR_MIDI_BYTES,
     EXIT_INVALID_STATE,
+    _absent_if_none,
     _atomic_write_bytes,
     _catalog_token,
     _load_audio_channels,
-    _omit_absent,
     _read_bounded,
     _strict_json_dumps,
     _write_project_bounce_wav,
@@ -559,15 +559,12 @@ def cmd_project(args: argparse.Namespace) -> int:
                             "diagnostic_count": len(result.diagnostics),
                             "diagnostics": [
                                 # A project-wide diagnostic names no target.
-                                _omit_absent(
-                                    {
-                                        "code": diagnostic.code,
-                                        "severity": diagnostic.severity,
-                                        "target_id": diagnostic.target_id,
-                                        "message": diagnostic.message,
-                                    },
-                                    "target_id",
-                                )
+                                {
+                                    "code": diagnostic.code,
+                                    "severity": diagnostic.severity,
+                                    "target_id": _absent_if_none(diagnostic.target_id),
+                                    "message": diagnostic.message,
+                                }
                                 for diagnostic in result.diagnostics
                             ],
                             "messages": "\n".join(d.message for d in result.diagnostics),

@@ -920,12 +920,9 @@ def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
     lufs_result = _run_console("lufs", "--json", str(source))
     assert lufs_result.returncode == 0, lufs_result.stderr
     lufs = json.loads(lufs_result.stdout)
-    assert set(lufs) == {
-        "integrated_lufs",
-        "momentary_lufs",
-        "short_term_lufs",
-        "loudness_range_lu",
-    }
+    # 0.6 s fills neither the 3 s short-term window nor a loudness range, and an
+    # unmeasured level leaves its key out.
+    assert set(lufs) == {"integrated_lufs", "momentary_lufs"}
 
     analyze_result = _run_console("analyze", "--json", str(source))
     assert analyze_result.returncode == 0, analyze_result.stderr

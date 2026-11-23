@@ -15,8 +15,10 @@ from ._cli_common import (
     _MAGENTA,
     _RESET,
     PITCH_NAMES,
+    _absent_if_none,
     _color_enabled,
     _format_time,
+    _measured_pairs,
     _parse_key_profile,
     _parse_meter_candidates,
     _parse_mode,
@@ -401,8 +403,8 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                         "complexity": timbre.complexity,
                     },
                     "dynamics": {
-                        "dynamic_range_db": dynamics.dynamic_range_db,
-                        "loudness_range_lu": dynamics.loudness_range_lu,
+                        "dynamic_range_db": _absent_if_none(dynamics.dynamic_range_db),
+                        "loudness_range_lu": _absent_if_none(dynamics.loudness_range_lu),
                         "crest_factor": dynamics.crest_factor,
                         "is_compressed": dynamics.is_compressed,
                     },
@@ -597,11 +599,11 @@ def cmd_pitch(args: argparse.Namespace) -> int:
             "median_f0": result.median_f0,
             "mean_f0": result.mean_f0,
         }
-        # The contour is opt-in: one value per frame. An unvoiced frame's
-        # non-finite f0 serializes as null.
+        # The contour is opt-in: one value per frame. An unvoiced frame has no f0,
+        # so f0 lists the voiced frames' values beside their frame indices.
         if getattr(args, "frames", False):
             payload["times"] = [index * hop_length / sr for index in range(n_frames)]
-            payload["f0"] = result.f0.tolist()
+            payload.update(_measured_pairs(result.f0, "f0", "f0_frame"))
             payload["voiced_flag"] = result.voiced_flag.tolist()
             payload["voiced_prob"] = result.voiced_prob.tolist()
         print(_strict_json_dumps(payload))

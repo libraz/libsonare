@@ -9,8 +9,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
+    _absent_if_none,
     _atomic_write_bytes,
     _load_channels_or_downmix,
+    _measured_pairs,
     _params_entries,
     _params_grammar_refusal,
     _params_keys,
@@ -57,24 +59,28 @@ def _mastering_report_payload(report: Any) -> dict[str, object]:
     before = report.before
     after = report.after
     return {
-        "before": {
-            "integrated_lufs": before.integrated_lufs,
-            "max_momentary_lufs": before.max_momentary_lufs,
-            "max_short_term_lufs": before.max_short_term_lufs,
-            "true_peak_dbtp": before.true_peak_dbtp,
-            "loudness_range_lu": before.loudness_range_lu,
-        },
-        "after": {
-            "integrated_lufs": after.integrated_lufs,
-            "max_momentary_lufs": after.max_momentary_lufs,
-            "max_short_term_lufs": after.max_short_term_lufs,
-            "true_peak_dbtp": after.true_peak_dbtp,
-            "loudness_range_lu": after.loudness_range_lu,
-        },
+        "before": _loudness_summary_payload(before),
+        "after": _loudness_summary_payload(after),
         "applied_gain_db": report.applied_gain_db,
         "max_gain_reduction_db": report.max_gain_reduction_db,
         "loudness_target_limited": report.loudness_target_limited,
-        "band_energy_delta_db": report.band_energy_delta_db.tolist(),
+        "loudness_gain_db": _absent_if_none(report.loudness_gain_db),
+        **_measured_pairs(
+            report.band_energy_delta_db, "band_energy_delta_db", "band_energy_delta_band"
+        ),
+    }
+
+
+def _loudness_summary_payload(summary: Any) -> dict[str, object]:
+    return {
+        key: _absent_if_none(getattr(summary, key))
+        for key in (
+            "integrated_lufs",
+            "max_momentary_lufs",
+            "max_short_term_lufs",
+            "true_peak_dbtp",
+            "loudness_range_lu",
+        )
     }
 
 

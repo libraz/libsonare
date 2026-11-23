@@ -7,6 +7,7 @@ import statistics
 
 from ._cli_common import (
     PITCH_NAMES,
+    _absent_if_none,
     _array_stats,
     _fmt_optional,
     _strict_json_dumps,
@@ -95,11 +96,11 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "dynamic_range_db": r.dynamic_range_db,
+                    "dynamic_range_db": _absent_if_none(r.dynamic_range_db),
                     "peak_db": r.peak_db,
                     "rms_db": r.rms_db,
                     "crest_factor": r.crest_factor,
-                    "loudness_range_lu": r.loudness_range_lu,
+                    "loudness_range_lu": _absent_if_none(r.loudness_range_lu),
                     "is_compressed": r.is_compressed,
                     "loudness": _array_stats(r.loudness_rms_db.tolist()),
                 }
@@ -160,10 +161,10 @@ def cmd_lufs(args: argparse.Namespace) -> int:
     r = lufs_interleaved(samples, channels, sample_rate=sr)
 
     payload: dict[str, object] = {
-        "integrated_lufs": r.integrated_lufs,
-        "momentary_lufs": r.momentary_lufs,
-        "short_term_lufs": r.short_term_lufs,
-        "loudness_range_lu": r.loudness_range_lu,
+        "integrated_lufs": _absent_if_none(r.integrated_lufs),
+        "momentary_lufs": _absent_if_none(r.momentary_lufs),
+        "short_term_lufs": _absent_if_none(r.short_term_lufs),
+        "loudness_range_lu": _absent_if_none(r.loudness_range_lu),
     }
     series = lufs_series_interleaved(samples, channels, sample_rate=sr) if args.series else None
     if args.json:

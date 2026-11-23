@@ -217,3 +217,43 @@ def test_project_compile_reports_the_timeline_it_got_not_one_inferred_from_sever
     assert payload["diagnostic_count"] == 0
     assert code != 0
     assert closed == ["project"]
+
+
+def test_the_writer_holds_the_native_level_convention() -> None:
+    from libsonare._cli_common import _absent_if_none, _strict_json_dumps
+
+    payload = {
+        "measured": 1.5,
+        "nan": float("nan"),
+        "none": _absent_if_none(None),
+        "kept_none": None,
+        "floor": float("-inf"),
+        "nested": {"nan": float("nan"), "ceiling": float("inf")},
+        "levels": [float("-inf"), 2.0],
+    }
+    assert json.loads(_strict_json_dumps(payload)) == {
+        "measured": 1.5,
+        "kept_none": None,
+        "floor": None,
+        "nested": {"ceiling": None},
+        "levels": [None, 2.0],
+    }
+
+
+@pytest.mark.parametrize("entry", [float("nan"), "absent"])
+def test_an_array_cannot_carry_a_not_measured_value(entry: object) -> None:
+    from libsonare._cli_common import _absent_if_none, _strict_json_dumps
+
+    value = _absent_if_none(None) if entry == "absent" else entry
+    with pytest.raises(ValueError, match="not-measured"):
+        _strict_json_dumps({"levels": [1.0, value]})
+
+
+def test_measured_pairs_skip_only_unmeasured_entries() -> None:
+    from libsonare._cli_common import _measured_pairs, _strict_json_dumps
+
+    pairs = _measured_pairs([float("nan"), 3.0, None, float("-inf"), 5.0], "f0", "f0_frame")
+    assert json.loads(_strict_json_dumps(pairs)) == {
+        "f0": [3.0, None, 5.0],
+        "f0_frame": [1, 3, 4],
+    }

@@ -120,21 +120,21 @@ def test_filter_payload(
 ) -> None:
     out = tmp_path / "filter.wav"
     payload = _json(_run_cli(["filter", str(source), "-o", str(out), *argv, "--json"]))
-    assert set(payload) == {
-        "output",
-        "type",
-        "order",
-        "cutoff_hz",
-        "center_hz",
-        "bandwidth_hz",
-        "zero_phase",
-        "duration",
+    # Only the frequencies the filter type reads are reported.
+    frequencies = {
+        key: value
+        for key, value in (
+            ("cutoff_hz", cutoff),
+            ("center_hz", center),
+            ("bandwidth_hz", bandwidth),
+        )
+        if value is not None
     }
+    assert set(payload) == {"output", "type", "order", "zero_phase", "duration", *frequencies}
     assert payload["type"] == argv[1]
     assert payload["order"] == order
-    assert payload["cutoff_hz"] == cutoff
-    assert payload["center_hz"] == center
-    assert payload["bandwidth_hz"] == bandwidth
+    for key, value in frequencies.items():
+        assert payload[key] == value
     assert payload["zero_phase"] is False
 
 

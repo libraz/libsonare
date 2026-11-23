@@ -65,8 +65,10 @@ def test_rhythm_json_uses_native_fields_and_unrounded_numbers(monkeypatch, capsy
     assert stats["max"] == 0.4
 
 
-def test_pitch_json_reports_voicing_and_serializes_nonfinite_as_null(monkeypatch, capsys) -> None:
-    """Pitch JSON mirrors native voicing counts and strict JSON null behavior."""
+def test_pitch_json_omits_unmeasured_levels_and_writes_infinity_as_null(
+    monkeypatch, capsys
+) -> None:
+    """A NaN level leaves its key out and an infinite one is null, as the native writer does."""
     import libsonare
     from libsonare import _cli_analysis
 
@@ -86,19 +88,10 @@ def test_pitch_json_reports_voicing_and_serializes_nonfinite_as_null(monkeypatch
     assert _cli_analysis.cmd_pitch(args) == 0
     payload = _json_output(capsys)
 
-    assert set(payload) == {
-        "algorithm",
-        "n_frames",
-        "voiced_count",
-        "voiced_ratio",
-        "median_f0",
-        "mean_f0",
-    }
+    assert set(payload) == {"algorithm", "n_frames", "voiced_count", "mean_f0"}
     assert payload["algorithm"] == "pyin"
     assert payload["n_frames"] == 0
     assert payload["voiced_count"] == 0
-    assert payload["voiced_ratio"] is None
-    assert payload["median_f0"] is None
     assert payload["mean_f0"] is None
 
 

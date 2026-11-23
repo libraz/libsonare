@@ -649,7 +649,7 @@ def test_scale_quantize_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> N
     assert quantize("--mode-mask", "4096").returncode == 2
 
 
-def test_pitch_frames_cli_reports_the_contour_with_null_for_unvoiced_frames() -> None:
+def test_pitch_frames_cli_lists_voiced_f0_beside_their_frame_indices() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "tone_then_silence.wav")
         tone = [0.5 * s for s in _generate_sine(440.0, _RETUNE_SR, 1.0)]
@@ -664,18 +664,19 @@ def test_pitch_frames_cli_reports_the_contour_with_null_for_unvoiced_frames() ->
         payload = json.loads(result.stdout)
         n_frames = payload["n_frames"]
         assert n_frames > 0
-        for key in ("times", "f0", "voiced_flag", "voiced_prob"):
+        for key in ("times", "voiced_flag", "voiced_prob"):
             assert len(payload[key]) == n_frames, key
         assert payload["times"][1] == pytest.approx(512 / _RETUNE_SR)
         voiced = [i for i, flag in enumerate(payload["voiced_flag"]) if flag]
         assert len(voiced) == payload["voiced_count"] > 0
+        # An unvoiced frame has no f0, so f0 holds only the frames f0_frame names.
+        frames = payload["f0_frame"]
+        assert len(payload["f0"]) == len(frames) < n_frames
+        assert frames == sorted(set(frames))
+        assert set(voiced) <= set(frames)
+        by_frame = dict(zip(frames, payload["f0"], strict=True))
         for index in voiced:
-            assert payload["f0"][index] == pytest.approx(440.0, abs=5.0)
-        assert any(
-            value is None
-            for value, flag in zip(payload["f0"], payload["voiced_flag"], strict=True)
-            if not flag
-        )
+            assert by_frame[index] == pytest.approx(440.0, abs=5.0)
 
 
 def test_note_stretch_omitted_offset_resolves_to_the_input_length(

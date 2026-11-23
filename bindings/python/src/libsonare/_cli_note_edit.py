@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any, cast
 from ._cli_common import (
     _MAX_PROJECT_OR_MIDI_BYTES,
     PITCH_NAMES,
+    _absent_if_none,
     _audio_array,
     _emit_effect_result,
     _fmt_optional,
-    _omit_absent,
     _read_bounded,
     _strict_json_dumps,
     _window_length_at_rate,
@@ -374,22 +374,19 @@ def cmd_polyphonic_notes(args: argparse.Namespace) -> int:
         frame_count = analysis.frame_count
         polyphony = [int(count) for count in analysis.polyphony()]
         rows: list[dict[str, object]] = [
-            _omit_absent(
-                {
-                    "index": index,
-                    "onset_sample": note.onset_sample,
-                    "offset_sample": note.offset_sample,
-                    "frame_start": note.frame_start,
-                    "frame_end": note.frame_end,
-                    "median_hz": note.median_hz,
-                    "median_cents": note.median_cents,
-                    "f0_stability": note.f0_stability,
-                    "f0_hz": [float(value) for value in analysis.note_f0(index)],
-                    "amplitude": [float(value) for value in note.amplitude],
-                    "salience": [float(value) for value in analysis.note_salience(index)],
-                },
-                "median_hz",
-            )
+            {
+                "index": index,
+                "onset_sample": note.onset_sample,
+                "offset_sample": note.offset_sample,
+                "frame_start": note.frame_start,
+                "frame_end": note.frame_end,
+                "median_hz": _absent_if_none(note.median_hz),
+                "median_cents": note.median_cents,
+                "f0_stability": note.f0_stability,
+                "f0_hz": [float(value) for value in analysis.note_f0(index)],
+                "amplitude": [float(value) for value in note.amplitude],
+                "salience": [float(value) for value in analysis.note_salience(index)],
+            }
             for index, note in enumerate(analysis.notes())
         ]
 
