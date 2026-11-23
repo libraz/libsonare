@@ -157,7 +157,7 @@ inline std::vector<std::pair<int, int>> parse_split_silence_json(const std::stri
   // Named, because as_array() hands back a reference into the document.
   const sonare::util::json::Value document = sonare::util::json::parse_strict(text);
   std::vector<std::pair<int, int>> ranges;
-  for (const auto& entry : document.as_array()) {
+  for (const auto& entry : document["intervals"].as_array()) {
     ranges.emplace_back(entry["start_sample"].as_int(), entry["end_sample"].as_int());
   }
   return ranges;

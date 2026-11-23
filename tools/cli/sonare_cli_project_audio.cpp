@@ -377,12 +377,16 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   // validate_cli_arguments before this point; whether it also fits the
   // scene's own master is the C ABI's own check.
   const ChannelLayout layout = layout_from_channel_count(channels);
-  save_wav_multichannel(args.output_file, rendered.data(), frames, channels, layout, sample_rate);
+  const OutputFit fit = OutputFit().include(rendered);
+  write_wav_multichannel(args.output_file, rendered.data(), frames, channels, layout, sample_rate,
+                         16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("frames", frames)
         .kv("channels", channels)
         .kv("sample_rate", sample_rate)

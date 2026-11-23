@@ -14,7 +14,10 @@
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
+#include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/repair/declip.h"
 #include "util/constants.h"
 
 namespace {
@@ -301,3 +304,123 @@ TEST_CASE("repair.decrackle leaves the channels independent",
   // "independent" an observation rather than a coincidence of equal inputs.
   CHECK(edited_indices(left, stereo.left) != edited_indices(right, stereo.right));
 }
+
+// The declip count on the chain and named-processor results, held to the one-shot's own reports.
+namespace declip_count {
+namespace {
+
+namespace repair = sonare::mastering::repair;
+using sonare::Audio;
+
+constexpr float kThreshold = 0.98f;
+constexpr std::size_t kFrames = repair::kDeclipMaxLpcGapSamples * 3;
+constexpr std::size_t kLongStart = repair::kDeclipMaxLpcGapSamples / 2;
+constexpr std::size_t kLongLength = repair::kDeclipMaxLpcGapSamples + 64;
+
+std::vector<float> bed(double phase) {
+  std::vector<float> samples(kFrames);
+  for (std::size_t i = 0; i < kFrames; ++i) {
+    samples[i] = static_cast<float>(
+        0.5 * std::sin(sonare::constants::kTwoPiD * 4.0 * static_cast<double>(i) /
+                           static_cast<double>(kFrames) +
+                       phase));
+  }
+  return samples;
+}
+
+// One run past the solver's cap and one it fills.
+std::vector<float> left_channel() {
+  std::vector<float> samples = bed(0.0);
+  for (std::size_t i = 0; i < kLongLength; ++i) samples[kLongStart + i] = 0.99f;
+  for (std::size_t i = 0; i < 16; ++i) samples[kFrames - 200 + i] = -0.99f;
+  return samples;
+}
+
+// A short run inside the left channel's long one, so linking widens it past the cap.
+std::vector<float> right_channel() {
+  std::vector<float> samples = bed(0.7);
+  for (std::size_t i = 0; i < 24; ++i) samples[kLongStart + 100 + i] = 0.99f;
+  return samples;
+}
+
+Audio view(const std::vector<float>& samples) {
+  return Audio::from_buffer(samples.data(), samples.size(), kSampleRate);
+}
+
+api::MasteringChain declip_chain(bool link) {
+  api::MasteringChainConfig config;
+  config.repair.declip.enabled = true;
+  config.repair.declip.config.clip_threshold = kThreshold;
+  config.repair.declip.config.link_channels = link;
+  return api::MasteringChain(config);
+}
+
+std::vector<api::Param> declip_params(bool link) {
+  return {{"clipThresholdDb", 20.0 * std::log10(static_cast<double>(kThreshold))},
+          {"linkChannels", link ? 1.0 : 0.0}};
+}
+
+}  // namespace
+
+TEST_CASE("A mono declip stage reports the one-shot's unreconstructed runs",
+          "[mastering][repair][declip]") {
+  const std::vector<float> left = left_channel();
+  repair::DeclipConfig config;
+  config.clip_threshold = kThreshold;
+  repair::DeclipReport report;
+  repair::declip(view(left), config, &report);
+  REQUIRE(report.unreconstructed_runs == 1);
+
+  auto chain = declip_chain(false);
+  const auto chained = chain.process_mono(left.data(), left.size(), kSampleRate);
+  REQUIRE(chained.stages == std::vector<std::string>{"repair.declip"});
+  REQUIRE(chained.declip_unreconstructed_runs.has_value());
+  CHECK(*chained.declip_unreconstructed_runs == report.unreconstructed_runs);
+
+  const auto processed = api::apply_named_processor("repair.declip", left.data(), left.size(),
+                                                    kSampleRate, declip_params(false));
+  REQUIRE(processed.declip_unreconstructed_runs.has_value());
+  CHECK(*processed.declip_unreconstructed_runs == report.unreconstructed_runs);
+}
+
+TEST_CASE("A stereo declip stage reports the sum of the one-shot's two reports",
+          "[mastering][repair][declip]") {
+  const std::vector<float> left = left_channel();
+  const std::vector<float> right = right_channel();
+  std::size_t sums[2] = {0, 0};
+  for (const bool link : {false, true}) {
+    CAPTURE(link);
+    repair::DeclipConfig config;
+    config.clip_threshold = kThreshold;
+    config.link_channels = link;
+    const auto pair = repair::declip_stereo(view(left), view(right), config);
+    const std::size_t sum =
+        pair.left_report.unreconstructed_runs + pair.right_report.unreconstructed_runs;
+    sums[link ? 1 : 0] = sum;
+
+    auto chain = declip_chain(link);
+    const auto chained = chain.process_stereo(left.data(), right.data(), left.size(), kSampleRate);
+    REQUIRE(chained.declip_unreconstructed_runs.has_value());
+    CHECK(*chained.declip_unreconstructed_runs == sum);
+
+    const auto processed = api::apply_named_processor_stereo(
+        "repair.declip", left.data(), right.data(), left.size(), kSampleRate, declip_params(link));
+    REQUIRE(processed.declip_unreconstructed_runs.has_value());
+    CHECK(*processed.declip_unreconstructed_runs == sum);
+  }
+  // The link widens the right channel's short run past the cap, so the two modes count apart.
+  CHECK(sums[1] == sums[0] + 1);
+}
+
+TEST_CASE("A result with no declip stage carries no declip count", "[mastering][repair][declip]") {
+  const std::vector<float> left = left_channel();
+  api::MasteringChainConfig config;
+  config.repair.declick.enabled = true;
+  api::MasteringChain chain(config);
+  CHECK_FALSE(chain.process_mono(left.data(), left.size(), kSampleRate)
+                  .declip_unreconstructed_runs.has_value());
+  CHECK_FALSE(api::apply_named_processor("repair.declick", left.data(), left.size(), kSampleRate)
+                  .declip_unreconstructed_runs.has_value());
+}
+
+}  // namespace declip_count

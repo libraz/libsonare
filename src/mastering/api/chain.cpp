@@ -487,9 +487,11 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
 
   // 1. repair.declip
   if (config_.repair.declip.enabled) {
-    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
-      return mastering::repair::declip(in, config_.repair.declip.config);
+    mastering::repair::DeclipReport declip_report;
+    detail::apply_repair_in_place(data, sample_rate, [&](const Audio& in) {
+      return mastering::repair::declip(in, config_.repair.declip.config, &declip_report);
     });
+    result.declip_unreconstructed_runs = declip_report.unreconstructed_runs;
     if (!report("repair.declip")) return std::nullopt;
   }
 
@@ -741,9 +743,14 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
 
   // 1. repair.declip
   if (config_.repair.declip.enabled) {
-    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
-      return mastering::repair::declip_stereo(l, r, config_.repair.declip.config);
+    std::size_t unreconstructed = 0;
+    detail::apply_stereo_repair(left, right, sample_rate, [&](const Audio& l, const Audio& r) {
+      auto declipped = mastering::repair::declip_stereo(l, r, config_.repair.declip.config);
+      unreconstructed +=
+          declipped.left_report.unreconstructed_runs + declipped.right_report.unreconstructed_runs;
+      return declipped;
     });
+    result.declip_unreconstructed_runs = unreconstructed;
     if (!report("repair.declip")) return std::nullopt;
   }
 

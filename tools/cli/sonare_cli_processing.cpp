@@ -43,7 +43,9 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
   }
 
   Audio result = pitch_shift(audio, semitones, config);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (!args.quiet) {
     std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
@@ -53,6 +55,7 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("pitch_semitones", semitones)
         .kv("length", result.size())
         .kv("sample_rate", result.sample_rate())
@@ -75,7 +78,9 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
   }
 
   Audio result = time_stretch(audio, rate, config);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (!args.quiet) {
     std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
@@ -85,6 +90,7 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("rate", rate)
         .kv("length", result.size())
         .kv("sample_rate", result.sample_rate())
@@ -116,12 +122,15 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
   // (target_midi - current_midi) must be applied, unsmoothed and unclamped --
   // the same facade the Python CLI selects for the same command.
   Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("current_midi", current_midi)
         .kv("target_midi", target_midi)
         .kv("length", result.size())
@@ -222,7 +231,9 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
   const Audio result = to_scale ? corrector.correct_to_scale_timevarying(audio, track)
                                 : corrector.correct_to_midi_timevarying(
                                       audio, track, args.get_float("target-midi", 69.0f));
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
@@ -231,6 +242,7 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
         .kv("sample_rate", result.sample_rate())
         .kv("duration", result.duration())
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .end_object()
         .print();
   } else if (!args.quiet) {
@@ -267,7 +279,9 @@ int cmd_note_move(const CliArgs& args, const Audio& audio) {
 
   editing::pitch_editor::NoteEditor editor;
   Audio result = editor.move_note(audio, region, target_onset);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
@@ -276,6 +290,7 @@ int cmd_note_move(const CliArgs& args, const Audio& audio) {
         .kv("sample_rate", result.sample_rate())
         .kv("duration", result.duration())
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .end_object()
         .print();
   } else if (!args.quiet) {
@@ -294,12 +309,15 @@ int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
 
   editing::pitch_editor::NoteEditor editor;
   Audio result = editor.stretch_note(audio, region, ratio);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("onset_sample", region.onset_sample)
         .kv("offset_sample", region.offset_sample)
         .kv("ratio", ratio)
@@ -447,12 +465,15 @@ int cmd_polyphonic_render(const CliArgs& args, const Audio& audio) {
   }
 
   const Audio result = editing::polyphony::render_polyphonic(analysis);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("note_count", analysis.notes.size())
         .kv("edits", assignments.size())
         .kv("length", result.size())
@@ -694,12 +715,15 @@ int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
       editing::note_model::assign_note_targets(notes, audio.sample_rate(), targets, config);
 
   const Audio result = editing::note_model::render_notes(audio, notes);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         // Zero assigned is a legitimate answer -- a reference that does not line
         // up with the take -- so it is reported rather than raised.
         .kv("assigned_count", assigned)
@@ -825,12 +849,15 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     }
     result = Audio::from_vector(std::move(sized_result), audio.sample_rate());
   }
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder json;
     json.begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("length", result.size())
         .kv("duration", result.duration())
         .kv("sample_rate", result.sample_rate())
@@ -971,6 +998,9 @@ int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
     return static_cast<float>(total / static_cast<double>(component.size()));
   };
 
+  // The components sum to the input, so they share one gain and keep summing to it.
+  OutputFit fit;
+  for (const std::vector<float>& component : result.components) fit.include(component);
   std::vector<std::string> paths;
   std::vector<float> energies;
   paths.reserve(result.components.size());
@@ -978,15 +1008,17 @@ int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
   for (size_t index = 0; index < result.components.size(); ++index) {
     const std::vector<float>& component = result.components[index];
     std::string path = base + "_component" + std::to_string(index + 1) + ".wav";
-    save_wav(path, component.data(), component.size(), audio.sample_rate());
+    write_wav(path, component.data(), component.size(), audio.sample_rate(), 16, fit);
     paths.push_back(std::move(path));
-    energies.push_back(component_energy(component));
+    energies.push_back(component_energy(component) * fit.gain());
   }
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder builder;
     builder.begin_object()
         .kv("count", paths.size())
+        .kv("output_gain_db", fit.gain_db())
         .kv("length", result.components.empty() ? size_t{0} : result.components.front().size())
         .kv("sample_rate", audio.sample_rate())
         .key("energies")
@@ -1040,21 +1072,23 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
     if (suffix == ".wav") base = base.substr(0, base.size() - 4);
   }
 
-  auto save_audio = [](const std::string& path, const Audio& a) {
-    save_wav(path, a.data(), a.size(), a.sample_rate());
-  };
-  // Mean absolute amplitude, the level summary both CLIs publish per component.
-  auto component_energy = [](const Audio& a) {
+  // The components sum to the input, so the files one run writes share one gain.
+  OutputFit fit;
+  auto save_audio = [&](const std::string& path, const Audio& a) { write_wav(path, a, 16, fit); };
+  // Mean absolute amplitude of the component as written, the level summary both CLIs publish.
+  auto component_energy = [&](const Audio& a) {
     if (a.empty()) return 0.0f;
     double total = 0.0;
     for (float sample : a) total += std::fabs(sample);
-    return static_cast<float>(total / static_cast<double>(a.size()));
+    return static_cast<float>(total / static_cast<double>(a.size())) * fit.gain();
   };
 
   if (args.has("harmonic-only")) {
     std::string path = base + ".wav";
     const Audio result = harmonic(audio, config, stft);
+    fit.include(result);
     save_audio(path, result);
+    note_output_fit(args, fit);
     if (!args.quiet) {
       std::cerr << color::green << "Saved harmonic to " << path << color::reset << "\n";
     }
@@ -1062,6 +1096,7 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
       JsonBuilder()
           .begin_object()
           .kv("length", result.size())
+          .kv("output_gain_db", fit.gain_db())
           .kv("sample_rate", result.sample_rate())
           .kv("harmonic_mean_abs", component_energy(result))
           .kv("harmonic", path)
@@ -1070,7 +1105,9 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   } else if (args.has("percussive-only")) {
     std::string path = base + ".wav";
     const Audio result = percussive(audio, config, stft);
+    fit.include(result);
     save_audio(path, result);
+    note_output_fit(args, fit);
     if (!args.quiet) {
       std::cerr << color::green << "Saved percussive to " << path << color::reset << "\n";
     }
@@ -1078,6 +1115,7 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
       JsonBuilder()
           .begin_object()
           .kv("length", result.size())
+          .kv("output_gain_db", fit.gain_db())
           .kv("sample_rate", result.sample_rate())
           .kv("percussive_mean_abs", component_energy(result))
           .kv("percussive", path)
@@ -1087,9 +1125,11 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
     auto r = hpss_with_residual(audio, config, stft);
     std::string h = base + "_harmonic.wav", p = base + "_percussive.wav",
                 res = base + "_residual.wav";
+    fit.include(r.harmonic).include(r.percussive).include(r.residual);
     save_audio(h, r.harmonic);
     save_audio(p, r.percussive);
     save_audio(res, r.residual);
+    note_output_fit(args, fit);
     if (!args.quiet) {
       std::cerr << color::green << "Saved: " << h << ", " << p << ", " << res << color::reset
                 << "\n";
@@ -1098,6 +1138,7 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
       JsonBuilder()
           .begin_object()
           .kv("length", r.harmonic.size())
+          .kv("output_gain_db", fit.gain_db())
           .kv("sample_rate", r.harmonic.sample_rate())
           .kv("harmonic_mean_abs", component_energy(r.harmonic))
           .kv("percussive_mean_abs", component_energy(r.percussive))
@@ -1110,8 +1151,10 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   } else {
     auto r = hpss(audio, config, stft);
     std::string h = base + "_harmonic.wav", p = base + "_percussive.wav";
+    fit.include(r.harmonic).include(r.percussive);
     save_audio(h, r.harmonic);
     save_audio(p, r.percussive);
+    note_output_fit(args, fit);
     if (!args.quiet) {
       std::cerr << color::green << "Saved: " << h << ", " << p << color::reset << "\n";
     }
@@ -1119,6 +1162,7 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
       JsonBuilder()
           .begin_object()
           .kv("length", r.harmonic.size())
+          .kv("output_gain_db", fit.gain_db())
           .kv("sample_rate", r.harmonic.sample_rate())
           .kv("harmonic_mean_abs", component_energy(r.harmonic))
           .kv("percussive_mean_abs", component_energy(r.percussive))
@@ -1134,12 +1178,15 @@ int cmd_preemphasis(const CliArgs& args, const Audio& audio) {
   const float coef = args.get_float("coef", kDefaultEmphasisCoef);
   std::vector<float> input(audio.begin(), audio.end());
   std::vector<float> result = preemphasis(input, coef);
-  save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result.data(), result.size(), audio.sample_rate(), 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("coef", coef)
         .kv("samples", result.size())
         .end_object()
@@ -1154,12 +1201,15 @@ int cmd_deemphasis(const CliArgs& args, const Audio& audio) {
   const float coef = args.get_float("coef", kDefaultEmphasisCoef);
   std::vector<float> input(audio.begin(), audio.end());
   std::vector<float> result = deemphasis(input, coef);
-  save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result.data(), result.size(), audio.sample_rate(), 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("coef", coef)
         .kv("samples", result.size())
         .end_object()
@@ -1186,8 +1236,10 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
                                audio.sample_rate())
           : trim_absolute(audio, threshold_db, frame_length, hop_length);
 
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
   if (!args.output_file.empty()) {
-    save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
+    write_wav(args.output_file, result.data(), result.size(), audio.sample_rate(), 16, fit);
+    note_output_fit(args, fit);
   }
 
   if (args.json_output) {
@@ -1204,7 +1256,9 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
       json.kv("threshold_db", threshold_db);
     }
     json.kv("n_fft", frame_length).kv("hop_length", hop_length);
-    if (!args.output_file.empty()) json.kv("output", args.output_file);
+    if (!args.output_file.empty()) {
+      json.kv("output", args.output_file).kv("output_gain_db", fit.gain_db());
+    }
     json.end_object().print();
   } else {
     std::cout << "Silence Trim:\n";
@@ -1252,9 +1306,19 @@ std::string pad_index(size_t value, int width) {
 // silent there, which is the rule the union was built on, so its slice is padded
 // rather than shortened and every take's file for one interval is the same
 // length.
-void write_split_silence_takes(const std::string& prefix,
-                               const std::vector<std::vector<float>>& takes,
-                               const std::vector<std::pair<int, int>>& ranges, int sample_rate) {
+// The slices are parts of takes meant to be compared, so they share one gain.
+OutputFit write_split_silence_takes(const std::string& prefix,
+                                    const std::vector<std::vector<float>>& takes,
+                                    const std::vector<std::pair<int, int>>& ranges,
+                                    int sample_rate) {
+  OutputFit fit;
+  for (const auto& range : ranges) {
+    for (const std::vector<float>& take : takes) {
+      const size_t start = static_cast<size_t>(range.first);
+      const size_t end = std::min(static_cast<size_t>(range.second), take.size());
+      if (start < end) fit.include(take.data() + start, end - start);
+    }
+  }
   for (size_t take = 0; take < takes.size(); ++take) {
     for (size_t interval = 0; interval < ranges.size(); ++interval) {
       const size_t start = static_cast<size_t>(ranges[interval].first);
@@ -1268,10 +1332,11 @@ void write_split_silence_takes(const std::string& prefix,
         std::copy_n(takes[take].begin() + static_cast<std::ptrdiff_t>(start),
                     std::min(available, slice.size()), slice.begin());
       }
-      save_wav(prefix + pad_index(take + 1, 2) + "_" + pad_index(interval + 1, 3) + ".wav", slice,
-               sample_rate);
+      write_wav(prefix + pad_index(take + 1, 2) + "_" + pad_index(interval + 1, 3) + ".wav",
+                slice.data(), slice.size(), sample_rate, 16, fit);
     }
   }
+  return fit;
 }
 
 }  // namespace
@@ -1317,8 +1382,10 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
   sonare_free_ints(flat);
 
   const std::string write_takes = args.get_string("write-takes");
+  OutputFit fit;
   if (!write_takes.empty()) {
-    write_split_silence_takes(write_takes, takes, ranges, audio.sample_rate());
+    fit = write_split_silence_takes(write_takes, takes, ranges, audio.sample_rate());
+    note_output_fit(args, fit);
   }
 
   const bool with_report = args.has("report");
@@ -1333,21 +1400,20 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
     json.end_array();
   };
   if (args.json_output) {
+    // One object whatever the flags; the gain and the report are present when their flag is.
     JsonBuilder json;
+    json.begin_object().key("intervals");
+    append_intervals(json);
+    if (!write_takes.empty()) json.kv("output_gain_db", fit.gain_db());
     if (with_report) {
-      json.begin_object().key("intervals");
-      append_intervals(json);
       json.key("report")
           .begin_object()
           .kv("silence_ceiling_db", report.silence_ceiling_db)
           .kv("max_signal_intervals", report.max_signal_intervals)
           .kv("min_signal_intervals", report.min_signal_intervals)
-          .end_object()
           .end_object();
-    } else {
-      append_intervals(json);
     }
-    json.print();
+    json.end_object().print();
   } else {
     std::cout << "Non-silent intervals: " << ranges.size() << "\n";
     for (const auto& range : ranges) {

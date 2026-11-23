@@ -560,10 +560,22 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
         [&](const Audio& audio, int) { return repair::declick(audio, config); });
   } else if (name == "repair.declip") {
     const repair::DeclipConfig config = detail::declip_config(params);
+    std::size_t unreconstructed = 0;
     apply_linked_or_per_channel(
         channels, sample_rate,
-        [&](const Audio& l, const Audio& r) { return repair::declip_stereo(l, r, config); },
-        [&](const Audio& audio, int) { return repair::declip(audio, config); });
+        [&](const Audio& l, const Audio& r) {
+          auto result = repair::declip_stereo(l, r, config);
+          unreconstructed +=
+              result.left_report.unreconstructed_runs + result.right_report.unreconstructed_runs;
+          return result;
+        },
+        [&](const Audio& audio, int) {
+          repair::DeclipReport report;
+          Audio out = repair::declip(audio, config, &report);
+          unreconstructed += report.unreconstructed_runs;
+          return out;
+        });
+    outcome.declip_unreconstructed_runs = unreconstructed;
   } else if (name == "repair.decrackle") {
     const repair::DecrackleConfig config = detail::decrackle_config(params);
     apply_linked_or_per_channel(

@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -51,6 +52,9 @@ struct MonoAudioResult {
   /// (@ref MonoResult vs. @ref MonoChainResult), so what a zero means is
   /// stated on each of them rather than here.
   std::uint32_t non_finite_substitution_count = 0;
+  /// Clipped runs a declip stage left as they were (repair::DeclipReport::unreconstructed_runs),
+  /// summed over the channels. Absent when no declip stage ran.
+  std::optional<std::size_t> declip_unreconstructed_runs;
 };
 
 /// @brief Adds @p count to @p total, saturating instead of wrapping.
@@ -79,6 +83,8 @@ struct ProcessorOutcome {
   bool loudness_target_limited = false;
   /// @copydoc MonoAudioResult::non_finite_substitution_count
   std::uint32_t non_finite_substitution_count = 0;
+  /// @copydoc MonoAudioResult::declip_unreconstructed_runs
+  std::optional<std::size_t> declip_unreconstructed_runs;
 };
 
 /// @brief Result of one mono named-processor call: the shared audio fields plus
@@ -93,6 +99,9 @@ struct MonoProcessorResult : MonoAudioResult {
     applied_gain_db += outcome.applied_gain_db;
     loudness_target_limited = loudness_target_limited || outcome.loudness_target_limited;
     accumulate_substitutions(non_finite_substitution_count, outcome.non_finite_substitution_count);
+    if (outcome.declip_unreconstructed_runs) {
+      declip_unreconstructed_runs = outcome.declip_unreconstructed_runs;
+    }
   }
 };
 
@@ -110,6 +119,10 @@ struct StereoAudioResult {
   int latency_samples = 0;
   /// @copydoc MonoAudioResult::non_finite_substitution_count
   std::uint32_t non_finite_substitution_count = 0;
+  /// Clipped runs a declip stage left as they were, the left and right reports' counts summed.
+  /// Linked or not, each channel counts the runs its own report counts, so the sum equals the
+  /// two reports of the stereo one-shot on the same input. Absent when no declip stage ran.
+  std::optional<std::size_t> declip_unreconstructed_runs;
 };
 
 /// @brief Result of one stereo named-processor call: the shared audio fields
@@ -125,6 +138,9 @@ struct StereoProcessorResult : StereoAudioResult {
     applied_gain_db += outcome.applied_gain_db;
     loudness_target_limited = loudness_target_limited || outcome.loudness_target_limited;
     accumulate_substitutions(non_finite_substitution_count, outcome.non_finite_substitution_count);
+    if (outcome.declip_unreconstructed_runs) {
+      declip_unreconstructed_runs = outcome.declip_unreconstructed_runs;
+    }
   }
 };
 

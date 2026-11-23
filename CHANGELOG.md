@@ -26,6 +26,7 @@ This release gives the public interface one set of conventions on every surface 
 - In C++, `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>`: leave `tuning` unset to measure it.
 - On Node and WASM, `masteringAssistantSuggestChain` and `masteringAssistantSuggestChainStereo` are removed: the same flat chain configuration is `chainConfig` on the result of `masteringAssistantSuggest` and `masteringAssistantSuggestStereo`.
 - On Node and WASM, engine meter telemetry has one record shape: `drainMeterTelemetry` returns `EngineMeterTelemetry` records carrying every plane (`numChannels`, and per-plane `peakDb`, `rmsDb`, `truePeakDbtp` and `inputPeakDb` in place of the `L`/`R` fields), and `drainMeterTelemetryWide` and `EngineMeterTelemetryWide` are removed.
+- `split-silence --json` on the native command line prints an object: `intervals`, plus `output_gain_db` with `--write-takes` and `report` with `--report`; the bare interval array is gone.
 - On WASM, `SonareRealtimeEngineWorkletProcessor` takes every port message through `receiveMessage`; its per-kind receivers and `noteSyncSequence` are private, so an AudioWorklet entry of your own passes it every message it does not handle itself.
 
 #### Now refused
@@ -197,6 +198,9 @@ This release gives the public interface one set of conventions on every surface 
 
 - The Python command line resolves an omitted polyphonic `--reattack-ratio` to 2.0, so both front-ends write the same notes.
 - A refused `mastering-profile` or `mastering-streaming` call on the native command line exits with the library's code and message.
+- The native command line no longer clamps a written sample: an output whose peak passes full scale is lowered by one gain until it fits, reported as `output_gain_db` in `--json` and as a note on stderr. The files one command writes to be heard together (`decompose-stems`, the `hpss` components, `split-silence --write-takes` slices) share one gain, and every level reported about a written file (`output_lufs`, `output_db`, component energies, a mastering report's `after`) is that file's.
+- On the native command line, `normalize --mode rms` no longer hard-clips: crests past full scale are fitted as above. A peak target above 0 dBFS is refused because the output format cannot hold it.
+- `mastering`, `mastering-processor` and `repair` on the native command line report `unreconstructed_runs` whenever a declip stage ran: the clipped runs too long to rebuild, which are left as they were.
 - Both command lines write the playback renderer config with the camelCase keys the config document reads and report `--json` diagnostics in snake_case.
 - On WASM, every stock AudioWorklet registration reports a render quantum that throws as an `error` message with `request: 'process'`, renders silence and ends the processor, and a port message beyond the 1024 held before the module is ready fails the start with `InvalidState` instead of being dropped. The engine worklet answers a message type it does not know with a `syncError` carrying a `TypeError`, where it dropped any type not beginning with `sync`. The mixer, playback, voice-changer and stream-analyzer processors refuse a message type they do not take as an `error` message with `request: 'invalid'` and a `TypeError` naming the type, as the voice changer already did; the mixer and playback processors dropped it silently and the stream analyzer ignored it.
 

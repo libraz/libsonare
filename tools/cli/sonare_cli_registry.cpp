@@ -467,6 +467,16 @@ CliValidationError validate_fade_sides(const CliArgs& args) {
   return {"give --fade-in-sec or --fade-out-sec"};
 }
 
+// A peak target above full scale is out of reach for any input: the writer fits the peak back to
+// 0 dBFS. An RMS target depends on the signal's crest factor, so it is fitted and reported instead.
+CliValidationError validate_normalize_target(const CliArgs& args) {
+  if (args.get_string("mode", "peak") != "peak" || !args.has("target-db")) return {};
+  if (args.get_double("target-db", 0.0) <= 0.0) return {};
+  return {
+      "argument --target-db: must be at most 0 for a peak target: the output format cannot hold "
+      "a level above full scale"};
+}
+
 #ifdef SONARE_WITH_VOICE_CHANGER
 // A built-in preset is named by its library id in any letter case; the id table is the one
 // realtime_voice_changer_preset_from_id reads (voice_changer/realtime/voice_presets.cpp).
@@ -1243,7 +1253,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                                      stated_number(sonare::kDefaultPeakTargetDb) + " (peak) or " +
                                          stated_number(sonare::kDefaultRmsTargetDb) + " (rms)"),
                  required_output()},
-                {}, nullptr, 0, /*preserves_stereo_input=*/true);
+                {}, validate_normalize_target, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "fade", true,
                 {with_domain(number_value("fade-in-sec"), at_least(0.0)),
                  with_domain(number_value("fade-out-sec"), at_least(0.0)), required_output()},

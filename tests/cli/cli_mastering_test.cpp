@@ -1297,6 +1297,145 @@ TEST_CASE("CLI repair fits its output to full scale only when it must",
   }
 }
 
+namespace {
+
+/// Samples on the 16-bit top code: what a clamp pins and a fit leaves at the crest only.
+size_t samples_at_full_scale(const std::string& path) {
+  const auto [samples, rate, channels] = load_audio_interleaved(path);
+  (void)rate;
+  (void)channels;
+  return static_cast<size_t>(std::count_if(
+      samples.begin(), samples.end(), [](float sample) { return std::abs(sample) >= 0.9999f; }));
+}
+
+/// A mono tone at @p amplitude, long enough for every loudness gate.
+std::string write_level_tone(const std::string& suffix, float amplitude, float frequency) {
+  const std::string path = unique_temp_path(suffix);
+  constexpr int kRate = 22050;
+  std::vector<float> samples(static_cast<size_t>(kRate) * 2);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = amplitude * std::sin(two_pi * frequency * static_cast<float>(i) / kRate);
+  }
+  save_wav(path, samples, kRate);
+  return path;
+}
+
+}  // namespace
+
+TEST_CASE("CLI mastering writers fit an over instead of clamping it", "[cli][mastering][writer]") {
+  SECTION("mastering-processor repair.declip keeps the peaks it rebuilt") {
+    const std::string clipped = unique_temp_path("_processor_overdriven.wav");
+    create_overdriven_wav(clipped);
+    const std::string out = unique_temp_path("_processor_declipped.wav");
+    auto [code, output] = exec_command(CLI + " mastering-processor " + clipped +
+                                       " --processor repair.declip -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["output_gain_db"].as_number() < 0.0);
+    REQUIRE(payload.contains("unreconstructed_runs"));
+    const size_t before = samples_at_full_scale(clipped);
+    REQUIRE(before > 0);
+    REQUIRE(samples_at_full_scale(out) * 10 < before);
+    std::remove(clipped.c_str());
+    std::remove(out.c_str());
+  }
+
+  SECTION("an eq output gain past full scale reports the written file's level") {
+    const std::string tone = write_level_tone("_eq_over_in.wav", 0.5f, 440.0f);
+    const std::string out = unique_temp_path("_eq_over_out.wav");
+    const std::string eq = CLI + " eq " + tone + " --output-gain-db 12";
+    auto [measure_code, measure_output] = exec_command(eq + " --json -q");
+    auto [code, output] = exec_command(eq + " -o " + out + " --json -q");
+    REQUIRE(measure_code == 0);
+    REQUIRE(code == 0);
+    const auto measured = sonare::util::json::parse_strict(measure_output);
+    const auto written = sonare::util::json::parse_strict(output);
+    // No file, no fit: the key belongs to a written output.
+    CHECK_FALSE(measured.contains("output_gain_db"));
+    const double gain_db = written["output_gain_db"].as_number();
+    // 0.5 raised by 12 dB peaks near 1.99, so the fit is about -6 dB.
+    CHECK(gain_db < -5.5);
+    CHECK(gain_db > -6.5);
+    CHECK(std::abs(written["output_lufs"].as_number() -
+                   (measured["output_lufs"].as_number() + gain_db)) < 1e-3);
+    // A clamped sine at 1.99 would pin about two thirds of its samples.
+    const auto [samples, rate, channels] = load_audio_interleaved(out);
+    (void)rate;
+    (void)channels;
+    CHECK(samples_at_full_scale(out) * 100 < samples.size());
+    std::remove(tone.c_str());
+    std::remove(out.c_str());
+  }
+
+  SECTION("a chain with no limiter reports the written file's level and a fitted report") {
+    const std::string tone = write_level_tone("_chain_over_in.wav", 0.9f, 4000.0f);
+    const std::string out = unique_temp_path("_chain_over_out.wav");
+    const std::string report = unique_temp_path("_chain_over_report.json");
+    const std::string config = unique_temp_path("_chain_over.json");
+    {
+      std::ofstream file(config);
+      file << R"({"version":2,"params":{"loudness.enabled":false,"eq.tilt.enabled":true,)"
+           << R"("eq.tilt.tiltDb":6}})";
+    }
+    const std::string chain = CLI + " mastering " + tone + " --chain-config " + config;
+    auto [measure_code, measure_output] = exec_command(chain + " --json -q");
+    auto [code, output] = exec_command(chain + " -o " + out + " --report " + report + " --json -q");
+    REQUIRE(measure_code == 0);
+    REQUIRE(code == 0);
+    const auto measured = sonare::util::json::parse_strict(measure_output);
+    const auto written = sonare::util::json::parse_strict(output);
+    const double gain_db = written["output_gain_db"].as_number();
+    REQUIRE(gain_db < 0.0);
+    CHECK(std::abs(written["output_lufs"].as_number() -
+                   (measured["output_lufs"].as_number() + gain_db)) < 1e-3);
+    std::ifstream report_file(report);
+    std::stringstream report_text;
+    report_text << report_file.rdbuf();
+    const auto report_doc = sonare::util::json::parse_strict(report_text.str());
+    CHECK(std::abs(report_doc["after"]["integrated_lufs"].as_number() -
+                   written["output_lufs"].as_number()) < 1e-3);
+    std::remove(tone.c_str());
+    std::remove(out.c_str());
+    std::remove(report.c_str());
+    std::remove(config.c_str());
+  }
+}
+
+TEST_CASE("CLI declip writers count the runs they leave clipped", "[cli][mastering][repair]") {
+  // create_clipped_wav holds one flat run of sample_rate / 20 = 1102 samples, past the 512-sample
+  // reconstruction limit; the under-full-scale fixture's runs are all short enough to rebuild.
+  const std::string long_run = unique_temp_path("_long_run.wav");
+  const std::string short_runs = unique_temp_path("_short_runs.wav");
+  create_clipped_wav(long_run);
+  create_clipped_under_full_scale_wav(short_runs);
+  const auto runs = [](const std::string& command) {
+    auto [code, output] = exec_command(command + " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    return payload.contains("unreconstructed_runs")
+               ? static_cast<long>(payload["unreconstructed_runs"].as_number())
+               : -1L;
+  };
+  const std::string via_stages = " --stages declip";
+  const std::string via_processor = " --processor repair.declip";
+
+  CHECK(runs(CLI + " repair " + long_run + via_stages) == 1);
+  CHECK(runs(CLI + " mastering-processor " + long_run + via_processor) == 1);
+  CHECK(runs(CLI + " repair " + short_runs + via_stages) == 0);
+  CHECK(runs(CLI + " mastering-processor " + short_runs + via_processor) == 0);
+  // No declip stage, no count: absent, not 0.
+  CHECK(runs(CLI + " repair " + long_run + " --stages declick") == -1);
+  CHECK(runs(CLI + " mastering-processor " + long_run + " --processor repair.declick") == -1);
+
+  auto [text_code, text] =
+      exec_command(CLI + " repair " + long_run + via_stages + " -o " + TEST_OUT);
+  REQUIRE(text_code == 0);
+  CHECK_THAT(text, ContainsSubstring("1 runs longer than 512 samples"));
+  std::remove(long_run.c_str());
+  std::remove(short_runs.c_str());
+}
+
 TEST_CASE("CLI repair --detect and the options it refuses", "[cli][mastering][repair]") {
   create_noisy_wav(TEST_WAV, 1.0f);
 

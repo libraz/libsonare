@@ -232,6 +232,7 @@ int cmd_mix(const CliArgs& args, const Audio&) {
 
   const std::vector<std::string> entries = args.get_string_list("input");
   size_t rendered_samples = 0;
+  OutputFit fit;
   if (!entries.empty()) {
     // The ids come from the scene text and the buffers go to the compiled
     // mixer, so a disagreement between the two would misalign every strip.
@@ -273,14 +274,18 @@ int cmd_mix(const CliArgs& args, const Audio&) {
       remaining -= count;
     }
     rendered_samples = out_left.size();
-    save_stereo_wav(args.output_file, out_left, out_right, sample_rate);
+    fit.include(out_left).include(out_right);
+    write_stereo_wav(args.output_file, out_left, out_right, sample_rate, 16, fit);
+    note_output_fit(args, fit);
   }
 
   if (args.json_output) {
     JsonBuilder json;
     json.begin_object().kv("strip_count", strip_count).kv("sample_rate", sample_rate);
     if (!entries.empty()) {
-      json.kv("rendered_samples", rendered_samples).kv("output", args.output_file);
+      json.kv("rendered_samples", rendered_samples)
+          .kv("output", args.output_file)
+          .kv("output_gain_db", fit.gain_db());
     }
     json.end_object().print();
   } else if (!args.quiet) {
@@ -336,17 +341,18 @@ int cmd_mix_strip(const CliArgs& args, const Audio& audio) {
   float* channels[] = {left.data(), right.data()};
   strip.process(channels, 2, frames);
 
+  const OutputFit fit = OutputFit().include(left).include(right);
   if (!args.output_file.empty()) {
-    save_stereo_wav(args.output_file, left, right, audio.sample_rate());
+    write_stereo_wav(args.output_file, left, right, audio.sample_rate(), 16, fit);
+    note_output_fit(args, fit);
   }
 
   const auto meter = strip.meter_snapshot();
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("sample_rate", audio.sample_rate())
-        .kv("length", audio.size())
-        .key("meter")
+    JsonBuilder json;
+    json.begin_object().kv("sample_rate", audio.sample_rate()).kv("length", audio.size());
+    if (!args.output_file.empty()) json.kv("output_gain_db", fit.gain_db());
+    json.key("meter")
         .begin_object()
         .kv("peak_db_l", meter.peak_db[0])
         .kv("peak_db_r", meter.peak_db[1])

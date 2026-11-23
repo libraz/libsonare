@@ -8,8 +8,12 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
   const float target_db =
       args.get_float("target-db", rms ? sonare::kDefaultRmsTargetDb : sonare::kDefaultPeakTargetDb);
 
+  // The library's clip is off: a level past full scale reaches the writer's fit, which lowers the
+  // whole file instead of flattening the peaks the target pushed over.
+  constexpr bool kClip = false;
   size_t length = 0;
   double duration = 0.0;
+  OutputFit fit;
   if (args.source_channels == 2) {
     // The planes bypass the offline-input policy Audio::from_file applied to the
     // mono decode; a non-finite sample in either channel reaches the downmix as
@@ -20,17 +24,22 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
     const Audio right = Audio::from_vector(std::move(planes.right), sample_rate);
     // One gain for the pair: a per-channel gain would raise the quieter side
     // further and collapse the image toward centre.
-    const NormalizeStereoResult result = rms ? normalize_rms_stereo(left, right, target_db)
-                                             : normalize_stereo(left, right, target_db);
-    save_stereo_wav(args.output_file, result.left, result.right, result.left.sample_rate());
+    const NormalizeStereoResult result = rms ? normalize_rms_stereo(left, right, target_db, kClip)
+                                             : normalize_stereo(left, right, target_db, kClip);
+    fit.include(result.left).include(result.right);
+    write_stereo_wav(args.output_file, result.left, result.right, result.left.sample_rate(), 16,
+                     fit);
     length = result.left.size();
     duration = result.left.duration();
   } else {
-    const Audio result = rms ? normalize_rms(audio, target_db) : normalize(audio, target_db);
-    save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+    const Audio result =
+        rms ? normalize_rms(audio, target_db, kClip) : normalize(audio, target_db, kClip);
+    fit.include(result);
+    write_wav(args.output_file, result, 16, fit);
     length = result.size();
     duration = result.duration();
   }
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     // `length` is per channel and no channel count is published: the payload is a
@@ -39,8 +48,11 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("mode", mode)
         .kv("target_db", target_db)
+        // The level of the file as written: the target, less whatever the fit took off.
+        .kv("output_db", target_db + fit.gain_db())
         .kv("length", length)
         .kv("sample_rate", audio.sample_rate())
         .kv("duration", duration)
@@ -74,12 +86,16 @@ int cmd_gain(const CliArgs& args, const Audio& audio) {
   const float gain_db = args.get_float("gain-db", 0.0f);
   const auto result = mastering::api::apply_named_processor(
       "utility.gain", audio.data(), audio.size(), audio.sample_rate(), {{"levelDb", gain_db}});
-  save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate);
+  const OutputFit fit = OutputFit().include(result.samples.data(), result.samples.size());
+  write_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate, 16,
+            fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("gain_db", gain_db)
         .kv("duration",
             static_cast<float>(result.samples.size()) / static_cast<float>(result.sample_rate))
@@ -101,12 +117,15 @@ int cmd_fade(const CliArgs& args, const Audio& audio) {
                                       fade_out_sec, &out, &out_length);
   if (err != SONARE_OK) throw_c_failure(err, nullptr);
   const Audio result = take_c_samples(out, out_length, audio.sample_rate());
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("fade_in_sec", fade_in_sec)
         .kv("fade_out_sec", fade_out_sec)
         .kv("duration", result.duration())
@@ -136,11 +155,17 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
                                                &config, &out, &out_length);
   if (err != SONARE_OK) throw_c_failure(err, "config");
   const Audio result = take_c_samples(out, out_length, audio.sample_rate());
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder json;
-    json.begin_object().kv("output", args.output_file).kv("type", type).kv("order", config.order);
+    json.begin_object()
+        .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
+        .kv("type", type)
+        .kv("order", config.order);
     // A frequency the type does not read is absent, as every record field without a value is.
     const auto frequency = [&](const char* key, const char* option, float value) {
       if (args.has(option)) json.kv(key, value);
@@ -165,7 +190,9 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
   const int source_sr = audio.sample_rate();
   const int target_sr = args.get_int("target-sample-rate", source_sr);
   Audio result = resample(audio, target_sr);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder json;
@@ -174,6 +201,7 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
         .kv("source_sample_rate", source_sr)
         .kv("target_sample_rate", target_sr);
     if (!args.output_file.empty()) json.kv("output", args.output_file);
+    json.kv("output_gain_db", fit.gain_db());
     json.end_object().print();
   } else if (!args.quiet) {
     std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
@@ -189,12 +217,15 @@ int cmd_tone(const CliArgs& args, const Audio&) {
   const float amplitude = args.get_float("amplitude", kDefaultToneAmplitude);
 
   Audio result = tone(frequency, sr, duration, phase, amplitude);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("frequency_hz", frequency)
         .kv("sample_rate", sr)
         .kv("duration", result.duration())
@@ -214,12 +245,15 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
   const float duration = args.get_float("duration-sec", kDefaultSynthesisDurationSec);
 
   Audio result = chirp(fmin, fmax, sr, duration, linear);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("fmin_hz", fmin)
         .kv("fmax_hz", fmax)
         .kv("sample_rate", sr)
@@ -241,12 +275,15 @@ int cmd_clicks(const CliArgs& args, const Audio&) {
   const float click_duration = args.get_float("click-duration-sec", kDefaultClickDurationSec);
 
   Audio result = clicks(times, sr, length, frequency, click_duration);
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  const OutputFit fit = OutputFit().include(result.data(), result.size());
+  write_wav(args.output_file, result, 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("n_clicks", times.size())
         .kv("sample_rate", sr)
         .kv("duration", result.duration())

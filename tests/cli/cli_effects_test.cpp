@@ -1,6 +1,8 @@
 /// @file cli_effects_test.cpp
 /// @brief Tests for the sonare CLI effect, acoustic and transform commands.
 
+#include <catch2/catch_approx.hpp>
+
 #include "analysis/analysis_rate.h"
 #include "cli/cli_test_helpers.h"
 #include "editing/pitch_editor/f0_provider.h"
@@ -71,6 +73,73 @@ TEST_CASE("CLI normalize keeps stereo source order and validates mode first", "[
   std::remove(input.c_str());
   std::remove(output.c_str());
   std::remove(invalid_output.c_str());
+}
+
+TEST_CASE("CLI level writers refuse an unreachable target and fit a reachable one",
+          "[cli][writer]") {
+  constexpr int kRate = 22050;
+  const std::string tone = unique_temp_path("_level_tone.wav");
+  {
+    std::vector<float> samples(kRate);
+    const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+    for (size_t i = 0; i < samples.size(); ++i) {
+      samples[i] = 0.5f * std::sin(two_pi * 440.0f * static_cast<float>(i) / kRate);
+    }
+    save_wav(tone, samples, kRate);
+  }
+  const std::string out = unique_temp_path("_level_out.wav");
+  // A clamped sine pins a large share of its samples at the top code; a fitted one only its crests.
+  const auto pinned_share = [](const std::string& path) {
+    const auto [samples, rate, channels] = load_audio_interleaved(path);
+    (void)rate;
+    (void)channels;
+    const auto pinned = std::count_if(samples.begin(), samples.end(),
+                                      [](float sample) { return std::abs(sample) >= 0.9999f; });
+    return static_cast<double>(pinned) / static_cast<double>(samples.size());
+  };
+
+  SECTION("a peak target above 0 dBFS is refused before anything is written") {
+    std::remove(out.c_str());
+    auto [code, output] =
+        exec_command(CLI + " normalize " + tone + " --mode peak --target-db 3 -o " + out + " -q");
+    CHECK(code == 2);
+    CHECK_THAT(output, ContainsSubstring("argument --target-db: must be at most 0 for a peak "
+                                         "target: the output format cannot hold a level above "
+                                         "full scale"));
+    CHECK_FALSE(std::ifstream(out).good());
+  }
+
+  SECTION("an RMS target whose crests pass full scale is fitted and reported") {
+    // A sine's crest sits 3.01 dB above its RMS, so an RMS of 0 dBFS needs a peak of +3.01 dBFS.
+    auto [code, output] = exec_command(CLI + " normalize " + tone +
+                                       " --mode rms --target-db 0 -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    CHECK(payload["output_gain_db"].as_number() == Catch::Approx(-3.01).margin(0.05));
+    CHECK(payload["output_db"].as_number() ==
+          Catch::Approx(payload["output_gain_db"].as_number()).margin(1e-4));
+    CHECK(pinned_share(out) < 0.01);
+  }
+
+#ifdef SONARE_WITH_MASTERING
+  SECTION("a gain past full scale is fitted and reported") {
+    auto [code, output] =
+        exec_command(CLI + " gain " + tone + " --gain-db 12 -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    CHECK(payload["output_gain_db"].as_number() == Catch::Approx(-5.98).margin(0.05));
+    CHECK(pinned_share(out) < 0.01);
+  }
+#endif
+
+  SECTION("a gain that fits is written with no fit") {
+    auto [code, output] = exec_command(CLI + " normalize " + tone +
+                                       " --mode peak --target-db -1 -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    CHECK(sonare::util::json::parse_strict(output)["output_gain_db"].as_number() == 0.0);
+  }
+  std::remove(tone.c_str());
+  std::remove(out.c_str());
 }
 
 #ifdef SONARE_WITH_FFMPEG
@@ -180,6 +249,8 @@ TEST_CASE("CLI split-silence with one take reports what split() reports", "[cli]
 
   auto [code, output] = exec_command(CLI + " split-silence " + take + " --json -q");
   REQUIRE(code == 0);
+  // Nothing written, so no fit to report.
+  CHECK_FALSE(sonare::util::json::parse_strict(output).contains("output_gain_db"));
   const auto samples = std::get<0>(load_wav(take));
   REQUIRE(parse_split_silence_json(output) == sonare::split(samples, 60.0f, 2048, 512));
 }
@@ -213,6 +284,8 @@ TEST_CASE("CLI split-silence --write-takes slices every take at every interval",
   REQUIRE(code == 0);
   const auto ranges = parse_split_silence_json(output);
   REQUIRE(ranges.size() >= 2);
+  // The slices of every take share one fit, and these stay inside full scale.
+  CHECK(sonare::util::json::parse_strict(output)["output_gain_db"].as_number() == 0.0);
 
   for (size_t interval = 0; interval < ranges.size(); ++interval) {
     std::vector<std::vector<float>> slices;
@@ -354,8 +427,10 @@ TEST_CASE("CLI synthesize-rir reports its warning diagnostics and keeps the tail
   // the payload both CLIs publish.
   const std::string stdout_only = output.substr(output.find('{'));
   const auto payload = sonare::util::json::parse_strict(stdout_only);
-  REQUIRE(payload.size() == 3);
-  for (const char* key : {"output", "samples", "sample_rate"}) REQUIRE(payload.contains(key));
+  REQUIRE(payload.size() == 4);
+  for (const char* key : {"output", "output_gain_db", "samples", "sample_rate"}) {
+    REQUIRE(payload.contains(key));
+  }
 
   // A RIR carries its physical 1/(4*pi*d) attenuation, so its peak sits far
   // below full scale; 16-bit PCM spends roughly 36 dB of the headroom the tail

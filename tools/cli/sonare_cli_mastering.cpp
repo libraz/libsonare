@@ -10,6 +10,38 @@
 
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/assistant/config_from_params.h"
+#include "mastering/repair/declip.h"
+
+OutputFit write_mastering_output(const CliArgs& args, const mastering::api::MonoAudioResult& result,
+                                 int bits) {
+  OutputFit fit;
+  if (args.output_file.empty()) return fit;
+  fit.include(result.samples);
+  write_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+            bits, fit);
+  note_output_fit(args, fit);
+  return fit;
+}
+
+OutputFit write_mastering_output(const CliArgs& args,
+                                 const mastering::api::StereoAudioResult& result, int bits) {
+  OutputFit fit;
+  if (args.output_file.empty()) return fit;
+  fit.include(result.left).include(result.right);
+  write_stereo_wav(args.output_file, result.left, result.right, result.sample_rate, bits, fit);
+  note_output_fit(args, fit);
+  return fit;
+}
+
+void append_unreconstructed_runs_json(JsonBuilder& json, const std::optional<std::size_t>& runs) {
+  if (runs) json.kv("unreconstructed_runs", *runs);
+}
+
+void print_unreconstructed_runs_text(const std::optional<std::size_t>& runs) {
+  if (!runs) return;
+  std::cout << "  Left clipped:    " << *runs << " runs longer than "
+            << mastering::repair::kDeclipMaxLpcGapSamples << " samples\n";
+}
 
 /// Rewrite one camelCase JSON key as snake_case ("gainToMatchDb" ->
 /// "gain_to_match_db"). The analysis keys carry no acronym runs, so a plain
@@ -156,6 +188,18 @@ std::string mastering_report_json(const mastering::api::MasteringReport& report)
   return json.build();
 }
 
+/// @p report as measured on the written file: the writer's fit is one linear gain, so every
+/// level in `after` and every band delta moves by exactly @p gain_db and the range does not.
+mastering::api::MasteringReport report_after_fit(mastering::api::MasteringReport report,
+                                                 float gain_db) {
+  report.after.integrated_lufs += gain_db;
+  report.after.max_momentary_lufs += gain_db;
+  report.after.max_short_term_lufs += gain_db;
+  report.after.true_peak_dbtp += gain_db;
+  for (float& delta : report.band_energy_delta_db) delta += gain_db;
+  return report;
+}
+
 void write_mastering_report(const std::string& path,
                             const mastering::api::MasteringReport& report) {
   const std::string payload = mastering_report_json(report) + '\n';
@@ -168,17 +212,20 @@ void write_mastering_report(const std::string& path,
 // carries the same ChainMetrics and the same three loudness scalars, so one
 // writer keeps the two payloads identical by construction.
 template <typename ChainResult>
-void print_chain_result_json(const ChainResult& result, const std::string& mode,
-                             const std::string& output, const std::string& preset,
+void print_chain_result_json(const ChainResult& result, const OutputFit& fit,
+                             const std::string& mode, const std::string& output,
+                             const std::string& preset,
                              const std::vector<std::string>& explanation = {},
                              bool include_report_latency = false) {
   JsonBuilder json;
   json.begin_object()
       .kv("mode", mode)
       .kv("input_lufs", result.input_lufs)
-      .kv("output_lufs", result.output_lufs)
+      .kv("output_lufs", result.output_lufs + fit.gain_db())
       .kv("applied_gain_db", result.applied_gain_db)
       .kv("output", output);
+  if (!output.empty()) json.kv("output_gain_db", fit.gain_db());
+  append_unreconstructed_runs_json(json, result.declip_unreconstructed_runs);
   if (!preset.empty()) json.kv("preset", preset);
   json.key("stages").begin_array();
   for (const auto& stage : result.stages) json.value(stage);
@@ -196,13 +243,13 @@ void print_chain_result_json(const ChainResult& result, const std::string& mode,
 // loudness-only chain's. `latency_samples` comes from the result on both: the
 // facade documents it as always 0 and the chain never moves it off 0.
 template <typename LoudnessResult>
-void print_loudness_result_json(const LoudnessResult& result,
+void print_loudness_result_json(const LoudnessResult& result, const OutputFit& fit,
                                 const mastering::maximizer::LoudnessOptimizeConfig& config,
                                 int sample_rate, const std::string& output) {
-  JsonBuilder()
-      .begin_object()
+  JsonBuilder json;
+  json.begin_object()
       .kv("input_lufs", result.input_lufs)
-      .kv("output_lufs", result.output_lufs)
+      .kv("output_lufs", result.output_lufs + fit.gain_db())
       .kv("applied_gain_db", result.applied_gain_db)
       .kv("target_lufs", config.target_lufs)
       .kv("ceiling_dbtp", config.ceiling_dbtp)
@@ -210,20 +257,20 @@ void print_loudness_result_json(const LoudnessResult& result,
       .kv("latency_samples", result.latency_samples)
       .kv("loudness_target_limited", result.loudness_target_limited)
       .kv("sample_rate", sample_rate)
-      .kv("output", output)
-      .end_object()
-      .print();
+      .kv("output", output);
+  if (!output.empty()) json.kv("output_gain_db", fit.gain_db());
+  json.end_object().print();
 }
 
 /// The same values as text. `report` is empty when no report was written.
 template <typename LoudnessResult>
-void print_loudness_result_text(const LoudnessResult& result, const std::string& report,
-                                const std::string& output) {
+void print_loudness_result_text(const LoudnessResult& result, const OutputFit& fit,
+                                const std::string& report, const std::string& output) {
   std::cout << "\n"
             << color::cyan << color::bold << "Mastering" << color::reset << "\n"
             << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
             << "\n"
-            << "  Output LUFS:     " << result.output_lufs << "\n"
+            << "  Output LUFS:     " << result.output_lufs + fit.gain_db() << "\n"
             << "  Applied Gain:    " << result.applied_gain_db << " dB\n";
   if (!report.empty()) std::cout << "  Report:          " << report << "\n";
   if (!output.empty()) std::cout << "  Output:          " << output << "\n";
@@ -340,12 +387,13 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   mastering::api::MasteringChain chain(std::move(chain_config));
   // One reporter for both channel counts, so the payload cannot drift between
   // them: the two results differ only in which buffers were just written.
-  const auto report_chain_result = [&](const auto& result) {
+  const auto report_chain_result = [&](const auto& result, const OutputFit& fit) {
     if (args.has("report")) {
-      write_mastering_report(args.get_string("report"), result.report);
+      write_mastering_report(args.get_string("report"),
+                             report_after_fit(result.report, fit.gain_db()));
     }
     if (args.json_output) {
-      print_chain_result_json(result, mode, args.output_file, preset_name,
+      print_chain_result_json(result, fit, mode, args.output_file, preset_name,
                               args.has("explain") ? explanation : std::vector<std::string>{},
                               args.has("report"));
     } else {
@@ -355,9 +403,10 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
       std::cout << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
                 << "\n"
-                << "  Output LUFS:     " << result.output_lufs << "\n"
+                << "  Output LUFS:     " << result.output_lufs + fit.gain_db() << "\n"
                 << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
                 << "  Stages:          " << result.stages.size() << "\n";
+      print_unreconstructed_runs_text(result.declip_unreconstructed_runs);
       if (args.has("explain") && !explanation.empty()) {
         std::cout << "  Explanation:\n";
         for (const auto& item : explanation) std::cout << "    - " << item << "\n";
@@ -373,18 +422,10 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     const auto planes = load_stereo_planes(args, audio);
     const auto result = chain.process_stereo(planes.left.data(), planes.right.data(),
                                              planes.left.size(), audio.sample_rate());
-    if (!args.output_file.empty()) {
-      save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
-                      args.get_int("bits", 16));
-    }
-    report_chain_result(result);
+    report_chain_result(result, write_mastering_output(args, result, args.get_int("bits", 16)));
   } else {
     const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
-    if (!args.output_file.empty()) {
-      save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-               args.get_int("bits", 16));
-    }
-    report_chain_result(result);
+    report_chain_result(result, write_mastering_output(args, result, args.get_int("bits", 16)));
   }
   return 0;
 }
@@ -412,12 +453,14 @@ int cmd_mastering_normalize_loudness(const CliArgs& args, const Audio& audio) {
     chain_config.loudness.true_peak_oversample = config.true_peak_oversample;
     mastering::api::MasteringChain chain(std::move(chain_config));
     const std::string report_path = args.has("report") ? args.get_string("report") : std::string{};
-    const auto report_loudness_result = [&](const auto& result) {
-      if (!report_path.empty()) write_mastering_report(report_path, result.report);
+    const auto report_loudness_result = [&](const auto& result, const OutputFit& fit) {
+      if (!report_path.empty()) {
+        write_mastering_report(report_path, report_after_fit(result.report, fit.gain_db()));
+      }
       if (args.json_output) {
-        print_loudness_result_json(result, config, result.sample_rate, args.output_file);
+        print_loudness_result_json(result, fit, config, result.sample_rate, args.output_file);
       } else {
-        print_loudness_result_text(result, report_path, args.output_file);
+        print_loudness_result_text(result, fit, report_path, args.output_file);
       }
     };
 
@@ -425,32 +468,28 @@ int cmd_mastering_normalize_loudness(const CliArgs& args, const Audio& audio) {
       const auto planes = load_stereo_planes(args, audio);
       const auto result = chain.process_stereo(planes.left.data(), planes.right.data(),
                                                planes.left.size(), audio.sample_rate());
-      if (!args.output_file.empty()) {
-        save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
-                        args.get_int("bits", 16));
-      }
-      report_loudness_result(result);
+      report_loudness_result(result,
+                             write_mastering_output(args, result, args.get_int("bits", 16)));
     } else {
       const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
-      if (!args.output_file.empty()) {
-        save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-                 args.get_int("bits", 16));
-      }
-      report_loudness_result(result);
+      report_loudness_result(result,
+                             write_mastering_output(args, result, args.get_int("bits", 16)));
     }
     return 0;
   }
 
   const auto result = mastering::maximizer::loudness_optimize(audio, config);
+  OutputFit fit;
   if (!args.output_file.empty()) {
-    save_wav(args.output_file, result.audio.data(), result.audio.size(), result.audio.sample_rate(),
-             args.get_int("bits", 16));
+    fit.include(result.audio);
+    write_wav(args.output_file, result.audio, args.get_int("bits", 16), fit);
+    note_output_fit(args, fit);
   }
 
   if (args.json_output) {
-    print_loudness_result_json(result, config, result.audio.sample_rate(), args.output_file);
+    print_loudness_result_json(result, fit, config, result.audio.sample_rate(), args.output_file);
   } else {
-    print_loudness_result_text(result, std::string{}, args.output_file);
+    print_loudness_result_text(result, fit, std::string{}, args.output_file);
   }
   return 0;
 }
@@ -487,24 +526,22 @@ int run_mastering_processor_stereo(const CliArgs& args, const Audio& audio,
   }
   const auto result = mastering::api::apply_named_processor_stereo(
       processor, left.data(), right.data(), left.size(), audio.sample_rate(), params);
-  if (!args.output_file.empty()) {
-    save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
-                    args.get_int("bits", 16));
-  }
+  const OutputFit fit = write_mastering_output(args, result, args.get_int("bits", 16));
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("processor", processor)
         .kv("stereo", true)
         .kv("input_lufs", result.input_lufs)
-        .kv("output_lufs", result.output_lufs)
+        .kv("output_lufs", result.output_lufs + fit.gain_db())
         .kv("applied_gain_db", result.applied_gain_db)
         .kv("latency_samples", result.latency_samples)
         .kv("sample_rate", result.sample_rate)
-        .kv("output", args.output_file)
-        .end_object()
-        .print();
+        .kv("output", args.output_file);
+    if (!args.output_file.empty()) json.kv("output_gain_db", fit.gain_db());
+    append_unreconstructed_runs_json(json, result.declip_unreconstructed_runs);
+    json.end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << "Mastering Processor (stereo)" << color::reset
@@ -512,9 +549,10 @@ int run_mastering_processor_stereo(const CliArgs& args, const Audio& audio,
               << "  Processor:       " << processor << "\n"
               << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
               << "\n"
-              << "  Output LUFS:     " << result.output_lufs << "\n"
+              << "  Output LUFS:     " << result.output_lufs + fit.gain_db() << "\n"
               << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
               << "  Latency:         " << result.latency_samples << " samples\n";
+    print_unreconstructed_runs_text(result.declip_unreconstructed_runs);
     if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
     std::cout << "\n";
   }
@@ -542,33 +580,32 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
   }
   const auto result = mastering::api::apply_named_processor(processor, audio.data(), audio.size(),
                                                             audio.sample_rate(), params);
-  if (!args.output_file.empty()) {
-    save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-             args.get_int("bits", 16));
-  }
+  const OutputFit fit = write_mastering_output(args, result, args.get_int("bits", 16));
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("processor", processor)
         .kv("stereo", false)
         .kv("input_lufs", result.input_lufs)
-        .kv("output_lufs", result.output_lufs)
+        .kv("output_lufs", result.output_lufs + fit.gain_db())
         .kv("applied_gain_db", result.applied_gain_db)
         .kv("latency_samples", result.latency_samples)
         .kv("sample_rate", result.sample_rate)
-        .kv("output", args.output_file)
-        .end_object()
-        .print();
+        .kv("output", args.output_file);
+    if (!args.output_file.empty()) json.kv("output_gain_db", fit.gain_db());
+    append_unreconstructed_runs_json(json, result.declip_unreconstructed_runs);
+    json.end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << "Mastering Processor" << color::reset << "\n"
               << "  Processor:       " << processor << "\n"
               << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
               << "\n"
-              << "  Output LUFS:     " << result.output_lufs << "\n"
+              << "  Output LUFS:     " << result.output_lufs + fit.gain_db() << "\n"
               << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
               << "  Latency:         " << result.latency_samples << " samples\n";
+    print_unreconstructed_runs_text(result.declip_unreconstructed_runs);
     if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
     std::cout << "\n";
   }
@@ -609,26 +646,25 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
   // so --placement and --output-pan act on the image the file carries.
   const bool stereo = args.source_channels == 2;
   const int bits = args.get_int("bits", 16);
-  const auto report = [&](const auto& result) {
+  const auto report = [&](const auto& result, const OutputFit& fit) {
     if (args.json_output) {
-      JsonBuilder()
-          .begin_object()
+      JsonBuilder json;
+      json.begin_object()
           .kv("processor", "eq.equalizer")
           .kv("input_lufs", result.input_lufs)
-          .kv("output_lufs", result.output_lufs)
+          .kv("output_lufs", result.output_lufs + fit.gain_db())
           .kv("applied_gain_db", result.applied_gain_db)
           .kv("latency_samples", result.latency_samples)
           .kv("sample_rate", result.sample_rate)
-          .kv("output", args.output_file)
-          .kv("stereo", stereo)
-          .end_object()
-          .print();
+          .kv("output", args.output_file);
+      if (!args.output_file.empty()) json.kv("output_gain_db", fit.gain_db());
+      json.kv("stereo", stereo).end_object().print();
     } else {
       std::cout << "\n"
                 << color::cyan << color::bold << "Equalizer" << color::reset << "\n"
                 << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
                 << "\n"
-                << "  Output LUFS:     " << result.output_lufs << "\n"
+                << "  Output LUFS:     " << result.output_lufs + fit.gain_db() << "\n"
                 << "  Applied Gain:    " << result.applied_gain_db << " dB\n";
       if (!args.output_file.empty()) {
         std::cout << "  Output:          " << args.output_file << "\n";
@@ -641,19 +677,12 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     const auto result = mastering::api::apply_named_processor_stereo(
         "eq.equalizer", planes.left.data(), planes.right.data(), planes.left.size(),
         audio.sample_rate(), params);
-    if (!args.output_file.empty()) {
-      save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate, bits);
-    }
-    report(result);
+    report(result, write_mastering_output(args, result, bits));
     return 0;
   }
   const auto result = mastering::api::apply_named_processor(
       "eq.equalizer", audio.data(), audio.size(), audio.sample_rate(), params);
-  if (!args.output_file.empty()) {
-    save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-             bits);
-  }
-  report(result);
+  report(result, write_mastering_output(args, result, bits));
   return 0;
 }
 
@@ -747,31 +776,30 @@ int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
   const auto result = mastering::api::apply_named_pair_processor(
       processor, audio.data(), reference.data(), audio.size(), reference.size(),
       audio.sample_rate(), reference.sample_rate(), params);
-  if (!args.output_file.empty()) {
-    save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-             args.get_int("bits", 16));
-  }
+  const OutputFit fit = write_mastering_output(args, result, args.get_int("bits", 16));
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("processor", processor)
         .kv("input_lufs", result.input_lufs)
-        .kv("output_lufs", result.output_lufs)
+        .kv("output_lufs", result.output_lufs + fit.gain_db())
         .kv("applied_gain_db", result.applied_gain_db)
         .kv("latency_samples", result.latency_samples)
-        .kv("output", args.output_file)
-        .end_object()
-        .print();
+        .kv("output", args.output_file);
+    if (!args.output_file.empty()) json.kv("output_gain_db", fit.gain_db());
+    append_unreconstructed_runs_json(json, result.declip_unreconstructed_runs);
+    json.end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << "Mastering Pair Processor" << color::reset << "\n"
               << "  Processor:       " << processor << "\n"
               << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
               << "\n"
-              << "  Output LUFS:     " << result.output_lufs << "\n"
+              << "  Output LUFS:     " << result.output_lufs + fit.gain_db() << "\n"
               << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
               << "  Latency:         " << result.latency_samples << " samples\n";
+    print_unreconstructed_runs_text(result.declip_unreconstructed_runs);
     if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
     std::cout << "\n";
   }

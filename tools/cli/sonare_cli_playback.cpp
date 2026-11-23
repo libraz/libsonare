@@ -90,13 +90,15 @@ Value playback_config_document(const CliArgs& args) {
 /// The renderer's diagnostics with their field names in snake_case, as CLI stdout
 /// is. Only the top level is re-keyed: the keys under `latency.stages` are stage
 /// tokens, the same values `inactive_stages` lists, so they keep their spelling.
-std::string diagnostics_json_for_cli(const std::string& core_json) {
+/// `output_gain_db` is the gain the writer applied to fit the file's peak.
+std::string diagnostics_json_for_cli(const std::string& core_json, float output_gain_db) {
   namespace json = sonare::util::json;
   const json::Value parsed = json::parse(core_json);
   json::Object out;
   for (const auto& [key, child] : parsed.as_object()) {
     out.emplace(json_key_to_snake_case(key), child);
   }
+  out.emplace("output_gain_db", json::Value(static_cast<double>(output_gain_db)));
   return json::dump(json::Value(std::move(out)));
 }
 
@@ -208,8 +210,10 @@ int cmd_playback(const CliArgs& args, const Audio&) {
   }
 
   const ChannelLayout out_layout = layout_from_channel_count(out_channels);
-  save_wav_multichannel(args.output_file, rendered.data(), frames, out_channels, out_layout,
-                        sample_rate);
+  const OutputFit fit = OutputFit().include(rendered);
+  write_wav_multichannel(args.output_file, rendered.data(), frames, out_channels, out_layout,
+                         sample_rate, 16, fit);
+  note_output_fit(args, fit);
 
   std::string diagnostics_text = "{}";
   if (args.json_output) {
@@ -224,7 +228,7 @@ int cmd_playback(const CliArgs& args, const Audio&) {
   if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);
 
   if (args.json_output) {
-    std::cout << diagnostics_json_for_cli(diagnostics_text) << "\n";
+    std::cout << diagnostics_json_for_cli(diagnostics_text, fit.gain_db()) << "\n";
   } else if (!args.quiet) {
     std::cout << color::green << "Rendered " << frames << " frames (" << out_channels << " ch @ "
               << sample_rate << " Hz) to " << args.output_file << color::reset << "\n";

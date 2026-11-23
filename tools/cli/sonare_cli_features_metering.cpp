@@ -426,12 +426,15 @@ int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
   Audio out = mel_to_audio(mel.power_data(), mel.n_mels(), mel.n_frames(), config, n_iter,
                            audio.sample_rate());
-  save_wav(args.output_file, out.data(), out.size(), audio.sample_rate());
+  const OutputFit fit = OutputFit().include(out.data(), out.size());
+  write_wav(args.output_file, out.data(), out.size(), audio.sample_rate(), 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("n_mels", mel.n_mels())
         .kv("n_frames", mel.n_frames())
         .kv("n_iter", n_iter)
@@ -458,12 +461,15 @@ int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
   std::vector<float> mfcc = mel.mfcc(n_mfcc);
   Audio out =
       mfcc_to_audio(mfcc.data(), n_mfcc, mel.n_frames(), config, n_iter, audio.sample_rate());
-  save_wav(args.output_file, out.data(), out.size(), audio.sample_rate());
+  const OutputFit fit = OutputFit().include(out.data(), out.size());
+  write_wav(args.output_file, out.data(), out.size(), audio.sample_rate(), 16, fit);
+  note_output_fit(args, fit);
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("n_mfcc", n_mfcc)
         .kv("n_frames", mel.n_frames())
         .kv("n_iter", n_iter)
@@ -600,15 +606,18 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
     std::cerr << color::yellow << "warning: " << diagnostic.code << ": " << diagnostic.message
               << color::reset << "\n";
   }
-  // 24-bit, not the save_wav default. A synthesized RIR carries its physical
+  // 24-bit, not the write_wav default. A synthesized RIR carries its physical
   // 1/(4*pi*d) attenuation, so its peak sits far below full scale and 16-bit
   // quantization would cost the tail roughly 36 dB of the headroom it needs;
   // half the reported samples came back exactly zero.
-  save_wav(args.output_file, result.rir.data(), result.rir.size(), result.rir.sample_rate(), 24);
+  const OutputFit fit = OutputFit().include(result.rir.data(), result.rir.size());
+  write_wav(args.output_file, result.rir, 24, fit);
+  note_output_fit(args, fit);
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("samples", result.rir.size())
         .kv("sample_rate", result.rir.sample_rate())
         .end_object()
@@ -711,20 +720,25 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
               << color::reset << "\n";
   }
   size_t out_samples = 0;
+  OutputFit fit;
   if (stereo) {
     const Audio& left = stereo_morph.left;
     const Audio& right = stereo_morph.right;
     out_samples = left.size();
-    save_stereo_wav(args.output_file, left, right, left.sample_rate());
+    fit.include(left).include(right);
+    write_stereo_wav(args.output_file, left, right, left.sample_rate(), 16, fit);
   } else {
     const Audio& result = mono_morph.audio;
     out_samples = result.size();
-    save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+    fit.include(result);
+    write_wav(args.output_file, result, 16, fit);
   }
+  note_output_fit(args, fit);
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
+        .kv("output_gain_db", fit.gain_db())
         .kv("samples", out_samples)
         .kv("stereo", stereo)
         .end_object()

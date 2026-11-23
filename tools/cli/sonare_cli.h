@@ -15,6 +15,7 @@
 #include <locale>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -188,11 +189,57 @@ StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio);
 /// The cache is borrowed from CliArgs and is valid only during the handler.
 const std::vector<float>& cached_interleaved_audio(const CliArgs& args);
 
-/// Writes a processed pair as an interleaved stereo WAV.
-void save_stereo_wav(const std::string& path, const std::vector<float>& left,
-                     const std::vector<float>& right, int sample_rate, int bits = 16);
-void save_stereo_wav(const std::string& path, const Audio& left, const Audio& right,
-                     int sample_rate, int bits = 16);
+/// The one gain an integer write applies to a set of buffers so none of them is clamped.
+/// @details A set is everything one command writes to be heard together: a single output, or the
+///   parts of one output that are summed or compared (stems, components, split slices), which
+///   share one gain so their relation survives. A finite peak past 1.0 sets the gain to 1/peak;
+///   a peak of exactly 1.0 is not fitted and lands on the writer's top code. Every value a
+///   command reports about the written files (levels, energies) is taken after this gain.
+class OutputFit {
+ public:
+  OutputFit& include(const float* samples, size_t count) noexcept;
+  OutputFit& include(const std::vector<float>& samples) noexcept {
+    return include(samples.data(), samples.size());
+  }
+  OutputFit& include(const Audio& audio) noexcept { return include(audio.data(), audio.size()); }
+  /// 1 when the set already fits, else 1/peak.
+  float gain() const noexcept { return peak_ > 1.0f ? 1.0f / peak_ : 1.0f; }
+  /// 0 when the set already fits, else the negative gain in dB; reported as output_gain_db.
+  float gain_db() const noexcept { return peak_ > 1.0f ? -20.0f * std::log10(peak_) : 0.0f; }
+
+ private:
+  float peak_ = 0.0f;
+};
+
+/// Writes a mono WAV under @p fit.
+void write_wav(const std::string& path, const float* samples, size_t count, int sample_rate,
+               int bits, const OutputFit& fit);
+void write_wav(const std::string& path, const Audio& audio, int bits, const OutputFit& fit);
+/// Writes a processed pair as an interleaved stereo WAV under @p fit.
+void write_stereo_wav(const std::string& path, const std::vector<float>& left,
+                      const std::vector<float>& right, int sample_rate, int bits,
+                      const OutputFit& fit);
+void write_stereo_wav(const std::string& path, const Audio& left, const Audio& right,
+                      int sample_rate, int bits, const OutputFit& fit);
+/// Writes interleaved multichannel audio under @p fit.
+void write_wav_multichannel(const std::string& path, const float* interleaved, size_t frames,
+                            int channels, ChannelLayout layout, int sample_rate, int bits,
+                            const OutputFit& fit);
+/// Says on stderr, unless --quiet, that @p fit lowered the output; silent when it did not.
+void note_output_fit(const CliArgs& args, const OutputFit& fit);
+
+#ifdef SONARE_WITH_MASTERING
+/// Writes a mastering result to the command's output under its own fit, and notes the fit.
+/// @return The identity fit, with nothing written, when no output path was given.
+OutputFit write_mastering_output(const CliArgs& args, const mastering::api::MonoAudioResult& result,
+                                 int bits);
+OutputFit write_mastering_output(const CliArgs& args,
+                                 const mastering::api::StereoAudioResult& result, int bits);
+/// Adds `unreconstructed_runs` when a declip stage ran; absent otherwise.
+void append_unreconstructed_runs_json(JsonBuilder& json, const std::optional<std::size_t>& runs);
+/// The same count as a text line; nothing when no declip stage ran.
+void print_unreconstructed_runs_text(const std::optional<std::size_t>& runs);
+#endif
 
 int cmd_version(const CliArgs& args);
 int cmd_doctor(const CliArgs& args);

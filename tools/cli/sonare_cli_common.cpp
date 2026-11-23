@@ -283,10 +283,29 @@ const std::vector<float>& cached_interleaved_audio(const CliArgs& args) {
   return args.decoded_input->interleaved;
 }
 
+OutputFit& OutputFit::include(const float* samples, size_t count) noexcept {
+  for (size_t i = 0; i < count; ++i) {
+    // A non-finite sample is the writer's to count; it would turn the gain into NaN.
+    if (std::isfinite(samples[i])) peak_ = std::max(peak_, std::abs(samples[i]));
+  }
+  return *this;
+}
+
 namespace {
 
-void save_stereo_wav_impl(const std::string& path, const float* left, size_t left_size,
-                          const float* right, size_t right_size, int sample_rate, int bits) {
+// The samples a write hands the encoder: @p samples itself when the fit is unity, else a scaled
+// copy in @p scaled.
+const float* fitted(const float* samples, size_t count, const OutputFit& fit,
+                    std::vector<float>& scaled) {
+  if (fit.gain() == 1.0f) return samples;
+  scaled.assign(samples, samples + count);
+  for (float& sample : scaled) sample *= fit.gain();
+  return scaled.data();
+}
+
+void write_stereo_wav_impl(const std::string& path, const float* left, size_t left_size,
+                           const float* right, size_t right_size, int sample_rate, int bits,
+                           const OutputFit& fit) {
   SONARE_CHECK_MSG(left != nullptr || left_size == 0, ErrorCode::InvalidParameter,
                    "stereo WAV left channel is null");
   SONARE_CHECK_MSG(right != nullptr || right_size == 0, ErrorCode::InvalidParameter,
@@ -295,8 +314,8 @@ void save_stereo_wav_impl(const std::string& path, const float* left, size_t lef
                    "stereo WAV is too large");
   std::vector<float> interleaved(left_size * 2);
   for (size_t frame = 0; frame < left_size; ++frame) {
-    interleaved[2 * frame] = left[frame];
-    interleaved[2 * frame + 1] = frame < right_size ? right[frame] : 0.0f;
+    interleaved[2 * frame] = left[frame] * fit.gain();
+    interleaved[2 * frame + 1] = frame < right_size ? right[frame] * fit.gain() : 0.0f;
   }
   save_wav_multichannel(path, interleaved.data(), left_size, 2, ChannelLayout::Stereo, sample_rate,
                         bits);
@@ -304,18 +323,48 @@ void save_stereo_wav_impl(const std::string& path, const float* left, size_t lef
 
 }  // namespace
 
-void save_stereo_wav(const std::string& path, const std::vector<float>& left,
-                     const std::vector<float>& right, int sample_rate, int bits) {
-  save_stereo_wav_impl(path, left.data(), left.size(), right.data(), right.size(), sample_rate,
-                       bits);
+void write_wav(const std::string& path, const float* samples, size_t count, int sample_rate,
+               int bits, const OutputFit& fit) {
+  std::vector<float> scaled;
+  save_wav(path, fitted(samples, count, fit, scaled), count, sample_rate, bits);
 }
 
-void save_stereo_wav(const std::string& path, const Audio& left, const Audio& right,
-                     int sample_rate, int bits) {
+void write_wav(const std::string& path, const Audio& audio, int bits, const OutputFit& fit) {
+  write_wav(path, audio.data(), audio.size(), audio.sample_rate(), bits, fit);
+}
+
+void write_stereo_wav(const std::string& path, const std::vector<float>& left,
+                      const std::vector<float>& right, int sample_rate, int bits,
+                      const OutputFit& fit) {
+  write_stereo_wav_impl(path, left.data(), left.size(), right.data(), right.size(), sample_rate,
+                        bits, fit);
+}
+
+void write_stereo_wav(const std::string& path, const Audio& left, const Audio& right,
+                      int sample_rate, int bits, const OutputFit& fit) {
   SONARE_CHECK_MSG(left.sample_rate() == sample_rate && right.sample_rate() == sample_rate,
                    ErrorCode::InvalidParameter, "stereo WAV sample rates do not match");
-  save_stereo_wav_impl(path, left.data(), left.size(), right.data(), right.size(), sample_rate,
-                       bits);
+  write_stereo_wav_impl(path, left.data(), left.size(), right.data(), right.size(), sample_rate,
+                        bits, fit);
+}
+
+void write_wav_multichannel(const std::string& path, const float* interleaved, size_t frames,
+                            int channels, ChannelLayout layout, int sample_rate, int bits,
+                            const OutputFit& fit) {
+  SONARE_CHECK_MSG(
+      channels > 0 && frames <= std::numeric_limits<size_t>::max() / static_cast<size_t>(channels),
+      ErrorCode::InvalidParameter, "multichannel WAV is too large");
+  std::vector<float> scaled;
+  save_wav_multichannel(path,
+                        fitted(interleaved, frames * static_cast<size_t>(channels), fit, scaled),
+                        frames, channels, layout, sample_rate, bits);
+}
+
+void note_output_fit(const CliArgs& args, const OutputFit& fit) {
+  if (args.quiet || fit.gain() == 1.0f) return;
+  std::cerr << color::yellow << "Output lowered by " << std::fixed << std::setprecision(2)
+            << -fit.gain_db() << std::defaultfloat
+            << " dB so its peak fits full scale instead of clipping" << color::reset << "\n";
 }
 
 sonare::util::json::Value parse_cli_json_scalar(const std::string& raw) {
