@@ -875,7 +875,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
   bool set_master_strip(const mixing::api::Strip& strip);
   /// True while the engine owns its master strip, which it does from construction.
-  bool has_master_strip() const noexcept { return owned_master_strip_ != nullptr; }
   /// Why the most recent mixer configuration call refused; see MixerEditStatus.
   MixerEditStatus last_mixer_edit_status() const noexcept {
     return last_mixer_edit_status_.load(std::memory_order_relaxed);

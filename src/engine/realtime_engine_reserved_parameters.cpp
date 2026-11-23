@@ -76,9 +76,7 @@ const rt::ProcessorBase* RealtimeEngine::current_insert_processor(
     case InsertStripKind::kBus:
       return track_mixer_runtime_.bus_insert_processor(target.owner_id, target.insert_index);
     case InsertStripKind::kMaster:
-      return owned_master_strip_ != nullptr
-                 ? owned_master_strip_->insert_processor(target.insert_index)
-                 : nullptr;
+      return owned_master_strip_->insert_processor(target.insert_index);
     case InsertStripKind::kTrackLane:
     case InsertStripKind::kBusLane:
       return nullptr;
@@ -121,10 +119,8 @@ void RealtimeEngine::sync_insert_automation_targets() noexcept {
     (void)insert_automation_targets_.ensure({InsertStripKind::kBusLane, bus.bus_id, 0, {}});
     mint(InsertStripKind::kBus, bus.bus_id, track_mixer_runtime_.bus_insert_count(bus.bus_id));
   }
-  if (owned_master_strip_ != nullptr) {
-    mint(InsertStripKind::kMaster, 0,
-         owned_master_strip_->num_pre_inserts() + owned_master_strip_->num_post_inserts());
-  }
+  mint(InsertStripKind::kMaster, 0,
+       owned_master_strip_->num_pre_inserts() + owned_master_strip_->num_post_inserts());
   if (retired == 0) return;
   // Edits and bases under a retired id can never apply again.
   InsertPurge purge;
@@ -191,7 +187,6 @@ int64_t RealtimeEngine::resolve_track_insert_automation_id(uint32_t track_id,
 
 int64_t RealtimeEngine::resolve_master_insert_automation_id(unsigned int insert_index,
                                                             const std::string& key) noexcept {
-  if (owned_master_strip_ == nullptr) return -1;
   const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
   if (id < 0) return -1;
   InsertAutomationTarget target{InsertStripKind::kMaster, 0, insert_index, {}};
@@ -313,7 +308,7 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
     if (target->strip == InsertStripKind::kMaster) {
       // The retained spec describes the owned strip only; a strip bound since
       // through bind_mixing_strip has none.
-      if (owned_master_strip_ == nullptr || mixing_runtime_.strip() != owned_master_strip_.get()) {
+      if (mixing_runtime_.strip() != owned_master_strip_.get()) {
         return false;
       }
       const std::string* name = strip_insert_processor_name_at(master_strip_spec_, insert_index);
@@ -420,9 +415,8 @@ const InsertAutomationTarget* RealtimeEngine::live_insert_target(
 bool RealtimeEngine::insert_target_holds(const InsertAutomationTarget& target) const noexcept {
   switch (target.strip) {
     case InsertStripKind::kMaster:
-      return owned_master_strip_ != nullptr &&
-             insert_processor_layout(owned_master_strip_->insert_processor(target.insert_index)) ==
-                 target.processor;
+      return insert_processor_layout(owned_master_strip_->insert_processor(target.insert_index)) ==
+             target.processor;
     case InsertStripKind::kBus:
       return track_mixer_runtime_.bus_insert_holds(target.owner_id, target.insert_index,
                                                    target.processor);

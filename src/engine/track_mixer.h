@@ -190,8 +190,6 @@ enum class MixerEditCause : uint8_t {
   kBusImageBlocksWiderLayout,
   /// A lane output or send retains a bus the new list drops.
   kLaneRoutingBlocksBusRemoval,
-  /// The engine has no master strip, which the master edit addresses.
-  kNoMasterStrip,
   /// An unexpected exception, or an impossible binding, while staging; nothing was applied.
   kStagingFailed,
 

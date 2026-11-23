@@ -270,9 +270,6 @@ SonareError insert_param_result_to_error(engine::InsertParamSetResult result, Di
   return refuse_out_of_memory("the realtime command queue is full");
 }
 
-constexpr const char* kNoMasterStripText =
-    "no master strip is configured; set one with sonare_engine_set_master_strip_json";
-
 // The call a refused mixer edit came from; it decides how its causes name the arguments.
 enum class EditScope : uint8_t {
   kLanes,       // sonare_engine_set_track_lanes
@@ -438,8 +435,6 @@ SonareError mixer_edit_error(engine::RealtimeEngine& realtime, const EditContext
                           " cannot be wider than stereo while the bus keeps a pan or width");
     case Cause::kLaneRoutingBlocksBusRemoval:
       return refuse_state("a lane output or send still routes to a bus the new bus list drops");
-    case Cause::kNoMasterStrip:
-      return refuse_state(kNoMasterStripText);
     case Cause::kStagingFailed:
       return refuse_state("the mixer failed while staging the change; nothing was applied");
     case Cause::kOutOfMemory:
@@ -468,7 +463,6 @@ SonareError sidechain_refusal_to_error(engine::RealtimeEngine& realtime,
                                        const SidechainWording& wording, bool target_exists,
                                        int source_kind) {
   const auto refuse_target = [&] {
-    if (wording.target_subject == nullptr) return refuse_state(kNoMasterStripText);
     return run_validation([&] {
       util::check::refuse_unknown_id(wording.target_subject, wording.target_thing, "engine");
     });

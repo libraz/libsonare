@@ -468,8 +468,7 @@ bool RealtimeEngine::set_track_insert_bypassed(uint32_t track_id, unsigned int i
 
 bool RealtimeEngine::set_master_insert_bypassed(unsigned int insert_index, bool bypassed,
                                                 bool reset_on_bypass) noexcept {
-  return owned_master_strip_ != nullptr &&
-         owned_master_strip_->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
+  return owned_master_strip_->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
 }
 
 bool RealtimeEngine::set_bus_insert_bypassed(uint32_t bus_id, unsigned int insert_index,
@@ -549,7 +548,7 @@ bool RealtimeEngine::set_master_insert_param(unsigned int insert_index, const st
 bool RealtimeEngine::apply_master_insert_param_by_name_now(unsigned int insert_index,
                                                            const std::string& key,
                                                            float value) noexcept {
-  if (owned_master_strip_ == nullptr || !insert_param_value_acceptable(value)) return false;
+  if (!insert_param_value_acceptable(value)) return false;
   const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
   if (id < 0) return false;
   const int64_t automation_id = resolve_master_insert_automation_id(insert_index, key);
@@ -563,7 +562,7 @@ bool RealtimeEngine::apply_master_insert_param_by_name_now(unsigned int insert_i
 bool RealtimeEngine::restore_master_insert_param_by_name(unsigned int insert_index,
                                                          const std::string& key,
                                                          float value) noexcept {
-  if (owned_master_strip_ == nullptr || !insert_param_value_acceptable(value)) return false;
+  if (!insert_param_value_acceptable(value)) return false;
   const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
   if (id < 0) return false;
   const unsigned int param_id = static_cast<unsigned int>(id);
@@ -709,7 +708,6 @@ bool RealtimeEngine::set_track_channel_delay_samples(uint32_t track_id,
 
 bool RealtimeEngine::set_master_eq_band(size_t band_index,
                                         const mastering::eq::EqBand& band) noexcept {
-  if (owned_master_strip_ == nullptr) return report_mixer_fault(MixerEditCause::kNoMasterStrip);
   if (band_index >= mastering::eq::ParametricEq::kMaxBands) {
     return report_mixer_fault(MixerEditCause::kEqBandIndexInvalid);
   }
@@ -748,22 +746,17 @@ bool RealtimeEngine::set_master_eq_band(size_t band_index,
 }
 
 size_t RealtimeEngine::master_insert_count() const noexcept {
-  return owned_master_strip_ == nullptr
-             ? 0
-             : owned_master_strip_->num_pre_inserts() + owned_master_strip_->num_post_inserts();
+  return owned_master_strip_->num_pre_inserts() + owned_master_strip_->num_post_inserts();
 }
 
 const rt::ProcessorBase* RealtimeEngine::master_insert_processor(
     unsigned int insert_index) const noexcept {
-  return owned_master_strip_ == nullptr ? nullptr
-                                        : owned_master_strip_->insert_processor(insert_index);
+  return owned_master_strip_->insert_processor(insert_index);
 }
 
 int RealtimeEngine::master_insert_parameter_id(unsigned int insert_index,
                                                const std::string& key) const noexcept {
-  return owned_master_strip_ == nullptr
-             ? -1
-             : owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
+  return owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
 }
 
 void RealtimeEngine::record_insert_base(int64_t automation_id, float value) noexcept {
@@ -806,7 +799,6 @@ uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames, uint32_t
 
 bool RealtimeEngine::master_insert_target_resolves(unsigned int insert_index,
                                                    unsigned int param_id) const noexcept {
-  if (owned_master_strip_ == nullptr) return false;
   const rt::ProcessorBase* processor = owned_master_strip_->insert_processor(insert_index);
   return processor != nullptr && processor->parameter_is_realtime_safe(param_id);
 }
@@ -872,7 +864,7 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
 }
 
 void RealtimeEngine::advance_master_insert_automations(int num_steps) noexcept {
-  if (num_steps <= 0 || owned_master_strip_ == nullptr) return;
+  if (num_steps <= 0) return;
   for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
     if (!slot.active) continue;
     const float value = slot.smoother.advance(num_steps);
@@ -889,9 +881,7 @@ void RealtimeEngine::settle_master_insert_automations() noexcept {
     if (!slot.active) continue;
     const float target = slot.smoother.target();
     slot.smoother.reset(target);
-    if (owned_master_strip_ != nullptr) {
-      owned_master_strip_->apply_insert_parameter(slot.insert_index, slot.param_id, target);
-    }
+    owned_master_strip_->apply_insert_parameter(slot.insert_index, slot.param_id, target);
     slot.active = false;
   }
 }
