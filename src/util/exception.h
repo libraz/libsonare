@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "util/error_reason.h"
 #include "util/number_format.h"
 #include "util/types.h"
 
@@ -28,11 +29,19 @@ class SonareException : public std::runtime_error {
   SonareException(ErrorCode code, const std::string& message)
       : std::runtime_error(message), code_(code) {}
 
+  /// @brief Constructs an exception with an error code, message and reason.
+  SonareException(ErrorCode code, const std::string& message, std::optional<ErrorReason> reason)
+      : std::runtime_error(message), code_(code), reason_(reason) {}
+
   /// @brief Returns the error code.
   ErrorCode code() const { return code_; }
 
+  /// @brief Returns the machine-readable cause, when one is assigned.
+  const std::optional<ErrorReason>& reason() const { return reason_; }
+
  private:
   ErrorCode code_;
+  std::optional<ErrorReason> reason_;
 };
 
 /// @brief The numeric domain a value refusal states, kept beside its text so a binding that
@@ -111,6 +120,14 @@ class SonareParameterRefusal : public SonareException {
                                   std::string(), false);
   }
 
+  /// @brief A refusal reading "<subject> <predicate>" with a machine-readable reason.
+  static SonareParameterRefusal predicate_with_reason(ErrorCode code, const std::string& subject,
+                                                      const std::string& predicate,
+                                                      ErrorReason reason) {
+    return SonareParameterRefusal(code, Form::Predicate, {subject}, predicate, std::string(),
+                                  std::string(), false, reason);
+  }
+
   /// @brief A refusal reading "<subject> <predicate>" where @p predicate states @p domain.
   static SonareParameterRefusal predicate(ErrorCode code, const std::string& subject,
                                           const std::string& predicate,
@@ -186,7 +203,8 @@ class SonareParameterRefusal : public SonareException {
     for (const std::string& subject : subjects_) subjects.push_back(spell(subject));
     SonareParameterRefusal refusal(code, form_, std::move(subjects), predicate_,
                                    renamed_to_.empty() ? std::string() : spell(renamed_to_),
-                                   expected_, caller_spelled_ || caller_spelled);
+                                   expected_, caller_spelled_ || caller_spelled,
+                                   code == this->code() ? reason() : std::nullopt);
     refusal.domain_ = domain_;
     return refusal;
   }
@@ -194,9 +212,10 @@ class SonareParameterRefusal : public SonareException {
  private:
   SonareParameterRefusal(ErrorCode code, Form form, std::vector<std::string> subjects,
                          std::string predicate, std::string renamed_to, std::string expected,
-                         bool caller_spelled)
+                         bool caller_spelled, std::optional<ErrorReason> reason = std::nullopt)
       : SonareException(
-            code, compose(form, subjects, predicate, renamed_to, expected, PresenceSpelling::kC)),
+            code, compose(form, subjects, predicate, renamed_to, expected, PresenceSpelling::kC),
+            reason),
         form_(form),
         subjects_(std::move(subjects)),
         predicate_(std::move(predicate)),

@@ -959,7 +959,10 @@ Scene scene_from_value(const JsonValue& root, const std::string& root_path) {
   Scene scene;
   scene.version = int_or(root, root_path, "version", kSceneFormatVersion);
   if (scene.version != kSceneFormatVersion) {
-    refuse_at(schema::child_path(root_path, "version"), "must be 2");
+    throw SonareParameterRefusal::predicate_with_reason(
+        ErrorCode::InvalidFormat, schema::child_path(root_path, "version"), "must be 2",
+        ErrorReason::UnsupportedSchemaVersion)
+        .as_caller_spelled();
   }
   if (const auto* strips = root.find("strips")) {
     scene.strips = strips_from_value(*strips, schema::child_path(root_path, "strips"));
@@ -980,7 +983,13 @@ Scene scene_from_value(const JsonValue& root, const std::string& root_path) {
 
 // Budgeted like every caller-supplied document; a repeated key is refused.
 Scene scene_from_json(const std::string& json) {
-  return scene_from_value(sonare::util::json::admit_strict(json), std::string());
+  try {
+    return scene_from_value(sonare::util::json::admit_strict(json), std::string());
+  } catch (const sonare::util::json::JsonResourceError&) {
+    throw;
+  } catch (const sonare::util::json::JsonError& error) {
+    throw SonareException(ErrorCode::InvalidFormat, error.what(), ErrorReason::MalformedJson);
+  }
 }
 
 namespace {

@@ -1,6 +1,7 @@
 /// @file chain_json.cpp
 /// @brief JSON serialization for MasteringChainConfig.
 
+#include <cmath>
 #include <optional>
 #include <set>
 #include <string>
@@ -357,7 +358,12 @@ std::vector<ChainFlatParam> read_chain_document(const std::string& text,
     }
     if (const JsonValue* version = root.find("version")) {
       if (!version->is_number() || version->as_number() != kChainDocumentVersion) {
-        throw_invalid_json(schema::refusal("version", "must be 2, or left out"));
+        const std::string refusal = schema::refusal("version", "must be 2, or left out");
+        if (version->is_number() && std::floor(version->as_number()) == version->as_number()) {
+          throw SonareException(ErrorCode::InvalidFormat, refusal,
+                                ErrorReason::UnsupportedSchemaVersion);
+        }
+        throw_invalid_json(refusal);
       }
     }
     const JsonValue* params = root.find("params");
@@ -366,8 +372,10 @@ std::vector<ChainFlatParam> read_chain_document(const std::string& text,
       throw_invalid_json(schema::must_be(kParamsKey, schema::Kind::Object));
     }
     return ParamsWalker{}.walk(*params);
-  } catch (const sonare::util::json::JsonError& e) {
+  } catch (const sonare::util::json::JsonResourceError& e) {
     throw SonareException(ErrorCode::InvalidFormat, e.what());
+  } catch (const sonare::util::json::JsonError& e) {
+    throw SonareException(ErrorCode::InvalidFormat, e.what(), ErrorReason::MalformedJson);
   } catch (const SonareParameterRefusal& e) {
     refuse_from(origin, e);
   } catch (const SonareException& e) {
