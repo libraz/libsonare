@@ -56,8 +56,8 @@ void fill_chord_result(const std::vector<Chord>& chords, float tuning,
 /// @throws SonareException(InvalidParameter) unless @p cents is finite and in [-50, 50).
 inline float tuning_from_cents(float cents) {
   constexpr float kMaxTuningCents = 50.0f;
-  SONARE_CHECK_MSG(std::isfinite(cents) && cents >= -kMaxTuningCents && cents < kMaxTuningCents,
-                   ErrorCode::InvalidParameter, "tuning_cents must be finite and in [-50, 50)");
+  util::check::in_interval(cents, -kMaxTuningCents, true, kMaxTuningCents, false,
+                           "options.tuning_cents");
   return cents / constants::kCentsPerSemitone;
 }
 

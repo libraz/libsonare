@@ -425,6 +425,12 @@ TEST_CASE("the chord entries refuse an option member and a chord element by its 
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "options.hop_length must be an integer in [1, 16384]");
   options.hop_length = 512;
+  options.tuning_auto = 0;
+  options.tuning_cents = 50.0f;
+  CHECK(sonare_detect_chords(samples.data(), samples.size(), 22050, &options, &result) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "options.tuning_cents must be finite and in [-50, 50)");
+  options.tuning_cents = 0.0f;
 
   SonareStringArray roman{};
   SonareStringArray functions{};

@@ -165,7 +165,7 @@ void check_pitch_track(const float* f0_hz, const float* voiced_prob, const int32
     const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
     if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
       util::check::refuse(
-          "f0_hz", "must be finite and in [0, sample_rate / 2], or NaN on an unvoiced frame");
+          "f0_hz", "must be finite and in [0, half the sample rate], or NaN on an unvoiced frame");
     }
     if (!voiced && voiced_prob) util::check::in_range(voiced_prob[i], 0.0, 1.0, "voiced_prob");
   }
@@ -427,7 +427,7 @@ SonareError to_core_edit_checked(const SonareNoteEdit& edit, const std::string& 
   if (editing::note_model::is_valid_note_edit(out)) return SONARE_OK;
   return run_validation([&] {
     util::check::refuse(edit_subject.substr(0, edit_subject.size() - 1).c_str(),
-                        "must hold finite values, a positive time_stretch_ratio and a "
+                        "must hold finite values, a positive time-stretch ratio and a "
                         "non-negative envelope whose product with the gain stays finite");
   });
 }

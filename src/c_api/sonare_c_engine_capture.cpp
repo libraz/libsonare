@@ -96,7 +96,7 @@ SonareError graph_swap_error(const engine::GraphSwapFault& fault) {
           [&] { util::check::integer_within(0, kEngineParameterIdDomain, id_subject.c_str()); });
     case Cause::kBindingIdRepeated:
       return run_validation([&] {
-        util::check::refuse(id_subject.c_str(), "must be unique among spec.parameter_bindings");
+        util::check::refuse(id_subject.c_str(), "must be unique among the parameter bindings");
       });
     case Cause::kBindingNodeUnknown:
       return run_validation([&] {

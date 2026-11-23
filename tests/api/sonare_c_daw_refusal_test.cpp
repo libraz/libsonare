@@ -217,7 +217,7 @@ TEST_CASE("the time-varying correction entries refuse the track arguments by nam
                                                  prob.data(), nullptr, kFrames, 512, 60.0f, &out,
                                                  &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "f0_hz must be finite and in [0, sample_rate / 2], or NaN on an unvoiced frame");
+        "f0_hz must be finite and in [0, half the sample rate], or NaN on an unvoiced frame");
 
   std::vector<float> bad_prob(kFrames, 2.0f);
   CHECK(sonare_pitch_correct_to_midi_timevarying(
@@ -526,7 +526,7 @@ TEST_CASE("split and merge refuse their indices, notes and edits by name",
   invalid.edit.gain_db = std::numeric_limits<float>::quiet_NaN();
   CHECK(split(&invalid, 1, nullptr, 0, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "notes[0].edit must hold finite values, a positive time_stretch_ratio and a non-negative "
+        "notes[0].edit must hold finite values, a positive time-stretch ratio and a non-negative "
         "envelope whose product with the gain stays finite");
 }
 

@@ -222,8 +222,7 @@ TEST_CASE("engine graph refuses its spec by name", "[c_api][engine_refusal]") {
   bad.parameter_binding_count = 2;
   CHECK(sonare_engine_set_graph(engine, &bad) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "spec.parameter_bindings[1].param_id must be unique among "
-        "spec.parameter_bindings");
+        "spec.parameter_bindings[1].param_id must be unique among the parameter bindings");
 
   bindings[1].param_id = 6;
   std::snprintf(bindings[1].node_id, sizeof(bindings[1].node_id), "zz");
@@ -545,7 +544,7 @@ TEST_CASE("track sends name the send the mixer refused", "[c_api][engine_refusal
 
   SonareEngineTrackSend repeated[2] = {{1, 0.0f, 1, 0}, {1, -6.0f, 1, 0}};
   CHECK(sonare_engine_set_track_sends(engine, 10, repeated, 2) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "sends[1].bus_id must not repeat the bus_id of an earlier send");
+  CHECK(last_message() == "sends[1].bus_id must not repeat an earlier send");
 
   SonareEngineTrackSend many[9] = {};
   for (SonareEngineTrackSend& send : many) send = SonareEngineTrackSend{1, 0.0f, 1, 0};

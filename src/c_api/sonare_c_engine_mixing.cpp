@@ -378,7 +378,7 @@ SonareError mixer_edit_error(engine::RealtimeEngine& realtime, const EditContext
       return refuse_unknown_bus_in(fault_send_subject(context, fault, "bus_id", "sends"), "engine");
     case Cause::kSendBusDuplicate:
       return refuse_with(fault_send_subject(context, fault, "bus_id", "sends"),
-                         "must not repeat the bus_id of an earlier send");
+                         "must not repeat an earlier send");
     case Cause::kTooManyBuses:
       return refuse_with("bus_count", count_limit(engine::TrackMixerRuntime::kMaxBusLanes));
     case Cause::kBusIdZero:

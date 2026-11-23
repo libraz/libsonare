@@ -422,9 +422,9 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareEngine* engine,
       return refuse_unknown_instrument_destination();
     }
     return run_validation([&] {
-      util::check::refuse(
-          "param_name",
-          "must be the name of a parameter of the instrument bound to destination_id");
+      util::check::refuse_relation({"param_name", "destination_id"},
+                                   "{0} must be the name of a parameter of the instrument bound "
+                                   "to {1}");
     });
   }
   *out_id = static_cast<uint32_t>(id);

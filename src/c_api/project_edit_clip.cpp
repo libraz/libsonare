@@ -754,8 +754,10 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
       static_cast<double>(loop_project_samples) *
       (static_cast<double>(desc->audio_sample_rate) / project->history.project().sample_rate());
   if (!(loop_audio_frames_f > 0.0) || !std::isfinite(loop_audio_frames_f)) {
-    return refuse_subject("desc.loop_length_ppq",
-                          "does not give a finite frame count at desc.audio_sample_rate");
+    return run_validation([] {
+      util::check::refuse_relation({"desc.loop_length_ppq", "desc.audio_sample_rate"},
+                                   "{0} does not give a finite frame count at {1}");
+    });
   }
   const int64_t loop_audio_frames = std::max<int64_t>(1, std::llround(loop_audio_frames_f));
   const int64_t full_loops = desc->audio_frames / loop_audio_frames;

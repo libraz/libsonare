@@ -184,7 +184,7 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     };
     check::non_null(desc.name, member("name").c_str());
     if (!names.insert(desc.name).second) {
-      check::refuse(member("name").c_str(), "must not repeat the name of another stem");
+      check::refuse(member("name").c_str(), "must not repeat another stem");
     }
     check::integer_within(desc.start_frame, kExternalStemStartFrameDomain,
                           member("start_frame").c_str());

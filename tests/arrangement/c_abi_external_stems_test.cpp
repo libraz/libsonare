@@ -257,9 +257,8 @@ TEST_CASE("C ABI external stem import names the stem field it refuses",
       {"same", nullptr, SONARE_EXTERNAL_STEM_STEREO, a.planes.data(), 8, 0},
       {"same", nullptr, SONARE_EXTERNAL_STEM_STEREO, b.planes.data(), 8, 0},
   };
-  CHECK_THAT(refused(twice, 2, 48000),
-             Catch::Matchers::ContainsSubstring(
-                 "request.stems[1].name must not repeat the name of another stem"));
+  CHECK_THAT(refused(twice, 2, 48000), Catch::Matchers::ContainsSubstring(
+                                           "request.stems[1].name must not repeat another stem"));
 
   const SonareExternalStemDesc early = {"early",         nullptr, SONARE_EXTERNAL_STEM_STEREO,
                                         a.planes.data(), 8,       -1};

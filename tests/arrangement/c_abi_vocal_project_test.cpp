@@ -1224,7 +1224,7 @@ TEST_CASE("vocal project entries refuse an argument by its header name",
   originals[0].mono = pcm.data();
   REQUIRE(sonare_project_rehydrate_vocal_edits(project, originals, 2, nullptr, nullptr,
                                                &rehydrated) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "originals[1].source_id must not repeat the source_id of an earlier original");
+  CHECK(message() == "originals[1].source_id must not repeat an earlier original");
 
   sonare_project_destroy(project);
 }

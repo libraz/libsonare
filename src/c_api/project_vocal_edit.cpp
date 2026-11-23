@@ -749,7 +749,7 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
       sonare::util::check::refuse(
           sonare::util::check::indexed_subject("originals", static_cast<size_t>(i), "source_id")
               .c_str(),
-          "must not repeat the source_id of an earlier original");
+          "must not repeat an earlier original");
     }
     source_inputs.push_back(input);
   }
