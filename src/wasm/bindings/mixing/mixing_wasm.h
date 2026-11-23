@@ -35,7 +35,7 @@ void registerMixingAssistantBindings();
 // ---------------------------------------------------------------------------
 class MixerWasm {
  public:
-  MixerWasm(SonareMixer* mixer, int sample_rate, int block_size);
+  MixerWasm(SonareMixer* mixer, int sample_rate);
 
   ~MixerWasm();
 

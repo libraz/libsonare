@@ -3,8 +3,10 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/mixing_input_domains.h"
 #include "mixing/api/scene.h"
 #include "mixing_wasm.h"
+#include "util/parameter_checks.h"
 
 val js_mixing_scene_preset_names() { return stringVectorToVal(mixing::api::scene_preset_names()); }
 
@@ -33,11 +35,8 @@ void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
 }
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
-MixerWasm::MixerWasm(SonareMixer* mixer, int sample_rate, int block_size)
-    : mixer_(mixer), sample_rate_(sample_rate), block_size_(block_size) {
-  if (block_size_ <= 0) {
-    throw WasmRangeError("mixer block size must be an integer of at least 1");
-  }
+MixerWasm::MixerWasm(SonareMixer* mixer, int sample_rate)
+    : mixer_(mixer), sample_rate_(sample_rate), block_size_(maxBlockSize()) {
   out_scratch_left_.resize(static_cast<size_t>(block_size_));
   out_scratch_right_.resize(static_cast<size_t>(block_size_));
   ensureScratchBuffers();
@@ -82,7 +81,7 @@ MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block
   // Capture the load's warnings (e.g. insert params no processor read) before
   // any later C-ABI call can overwrite the thread-local list.
   std::vector<std::string> warnings = lastDiagnosticMessages();
-  auto* wrapped = new MixerWasm(mixer, sample_rate, block_size);
+  auto* wrapped = new MixerWasm(mixer, sample_rate);
   wrapped->scene_warnings_ = std::move(warnings);
   return wrapped;
 }
@@ -174,9 +173,15 @@ val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
 
 MixerWasm* createMixerFromSceneJson(std::string json, const val& sample_rate,
                                     const val& block_size) {
-  const int resolved_block = block_size.isUndefined() || block_size.isNull()
-                                 ? sonare::mixing::api::kMixerDefaultMaxBlock
-                                 : checkedIntFromVal(block_size, "blockSize");
+  // An omitted size reaches the C entry as its "use the default" 0; a given one is checked
+  // against the same domain without that sentinel, since a caller's 0 is refused, not defaulted.
+  int resolved_block = 0;
+  if (!block_size.isUndefined() && !block_size.isNull()) {
+    sonare::util::check::NumericDomain given = sonare_c_detail::kMixerMaxBlockSizeDomain;
+    given.sentinel.reset();
+    resolved_block = checkedIntFromVal(block_size, "maxBlockSize");
+    sonare::util::check::integer_within(resolved_block, given, "maxBlockSize");
+  }
   return MixerWasm::fromSceneJson(std::move(json), checkedIntFromVal(sample_rate, "sampleRate"),
                                   resolved_block);
 }

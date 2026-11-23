@@ -93,3 +93,32 @@ describe('raw scalar arguments refuse non-finite values by name', () => {
     }
   });
 });
+
+describe('the raw mixer factory reads maxBlockSize as the facade does', () => {
+  const scene = JSON.stringify({
+    version: 2,
+    strips: [],
+    buses: [{ id: 'master', role: 'master' }],
+  });
+
+  it.each([0, -1, 2 ** 20 + 1])('refuses a given block size of %d with the C domain', (block) => {
+    const error = refusal(() => mod.createMixerFromSceneJson(scene, 48000, block));
+    expect(error).toBeInstanceOf(RangeError);
+    expect(error.message).toBe(
+      'createMixerFromSceneJson: maxBlockSize must be an integer in [1, 1048576]',
+    );
+  });
+
+  it('takes the library default when omitted, read back from the mixer', () => {
+    const omitted = mod.createMixerFromSceneJson(scene, 48000, undefined);
+    const given = mod.createMixerFromSceneJson(scene, 48000, 256);
+    try {
+      expect(omitted.maxBlockSize()).toBeGreaterThan(0);
+      expect(given.maxBlockSize()).toBe(256);
+      expect(omitted.outputLeftView().length).toBe(omitted.maxBlockSize());
+    } finally {
+      omitted.delete();
+      given.delete();
+    }
+  });
+});
