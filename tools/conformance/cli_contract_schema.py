@@ -156,9 +156,9 @@ _PITCH_PAYLOAD_SCHEMA = {
         "algorithm": "string",
         "n_frames": "integer",
         "voiced_count": "integer",
-        "voiced_ratio": "number|null",
-        "median_f0": "number|null",
-        "mean_f0": "number|null",
+        "voiced_ratio": "measured",
+        "median_f0": "measured",
+        "mean_f0": "measured",
     }
 }
 _EQ_PAYLOAD_SCHEMA = {

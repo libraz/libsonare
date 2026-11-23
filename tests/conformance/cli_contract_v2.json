@@ -10062,8 +10062,8 @@
             },
             "dynamics": {
               "keys": {
-                "dynamic_range_db": "number",
-                "loudness_range_lu": "number",
+                "dynamic_range_db": "measured:+inf",
+                "loudness_range_lu": "measured",
                 "crest_factor": "number",
                 "is_compressed": "boolean"
               }
@@ -12553,9 +12553,9 @@
             "algorithm": "string",
             "n_frames": "integer",
             "voiced_count": "integer",
-            "voiced_ratio": "number|null",
-            "median_f0": "number|null",
-            "mean_f0": "number|null"
+            "voiced_ratio": "measured",
+            "median_f0": "measured",
+            "mean_f0": "measured"
           }
         },
         "frames": {
@@ -12563,16 +12563,16 @@
             "algorithm": "string",
             "n_frames": "integer",
             "voiced_count": "integer",
-            "voiced_ratio": "number|null",
-            "median_f0": "number|null",
-            "mean_f0": "number|null",
+            "voiced_ratio": "measured",
+            "median_f0": "measured",
+            "mean_f0": "measured",
             "times": {
               "type": "array",
               "items": "number"
             },
             "f0": {
-              "type": "array",
-              "items": "number|null"
+              "type": "measured_pairs",
+              "index": "f0_frame"
             },
             "voiced_flag": {
               "type": "array",
@@ -15916,9 +15916,9 @@
           "keys": {
             "peak_db": "number",
             "rms_db": "number",
-            "dynamic_range_db": "number",
+            "dynamic_range_db": "measured:+inf",
             "crest_factor": "number",
-            "loudness_range_lu": "number",
+            "loudness_range_lu": "measured",
             "is_compressed": "boolean",
             "loudness": {
               "keys": {
@@ -16095,16 +16095,16 @@
           "keys": {
             "integrated_lufs": "number",
             "momentary_lufs": "number",
-            "short_term_lufs": "number|null",
-            "loudness_range_lu": "number"
+            "short_term_lufs": "measured:-inf",
+            "loudness_range_lu": "measured"
           }
         },
         "series": {
           "keys": {
             "integrated_lufs": "number",
             "momentary_lufs": "number",
-            "short_term_lufs": "number|null",
-            "loudness_range_lu": "number",
+            "short_term_lufs": "measured:-inf",
+            "loudness_range_lu": "measured",
             "momentary_series": {
               "type": "array",
               "items": "number"
@@ -16214,11 +16214,11 @@
       "payloads": {
         "success": {
           "keys": {
-            "rt60": "number|null",
+            "rt60": "measured",
             "confidence": "number",
             "rt60_bands": {
-              "type": "array",
-              "items": "number|null"
+              "type": "measured_pairs",
+              "index": "rt60_band"
             }
           }
         }
@@ -17295,11 +17295,11 @@
               "type": "array",
               "items": {
                 "keys": {
-                  "deviation_db": "number",
+                  "deviation_db": "measured:-inf",
                   "high_hz": "number",
                   "low_hz": "number",
-                  "reference_db": "number",
-                  "source_db": "number"
+                  "reference_db": "measured:-inf",
+                  "source_db": "measured:-inf"
                 }
               }
             }
@@ -17311,11 +17311,11 @@
               "type": "array",
               "items": {
                 "keys": {
-                  "deviation_db": "number",
+                  "deviation_db": "measured:-inf",
                   "high_hz": "number",
                   "low_hz": "number",
-                  "reference_db": "number",
-                  "source_db": "number"
+                  "reference_db": "measured:-inf",
+                  "source_db": "measured:-inf"
                 }
               }
             }
@@ -18875,19 +18875,19 @@
       "payloads": {
         "success": {
           "keys": {
-            "volume": "number|null",
-            "length": "number|null",
-            "width": "number|null",
-            "height": "number|null",
+            "volume": "measured",
+            "length": "measured",
+            "width": "measured",
+            "height": "measured",
             "drr_db": "number",
             "confidence": "number",
             "rt60_bands": {
-              "type": "array",
-              "items": "number|null"
+              "type": "measured_pairs",
+              "index": "rt60_band"
             },
             "band_absorption": {
-              "type": "array",
-              "items": "number|null"
+              "type": "measured_pairs",
+              "index": "band_absorption_band"
             }
           }
         }
@@ -19419,8 +19419,8 @@
                   "keys": {
                     "floor_dbfs": "number",
                     "band_floor_dbfs": {
-                      "type": "array",
-                      "items": "number"
+                      "type": "measured_pairs",
+                      "index": "band_floor_band"
                     }
                   }
                 },
@@ -19483,8 +19483,8 @@
                   "keys": {
                     "floor_dbfs": "number",
                     "band_floor_dbfs": {
-                      "type": "array",
-                      "items": "number"
+                      "type": "measured_pairs",
+                      "index": "band_floor_band"
                     }
                   }
                 },
@@ -19546,8 +19546,8 @@
                   "keys": {
                     "floor_dbfs": "number",
                     "band_floor_dbfs": {
-                      "type": "array",
-                      "items": "number"
+                      "type": "measured_pairs",
+                      "index": "band_floor_band"
                     }
                   }
                 },
@@ -21346,7 +21346,7 @@
                 "crest_factor_db": "number",
                 "duration_sec": "number",
                 "integrated_lufs": "number",
-                "loudness_range_lu": "number",
+                "loudness_range_lu": "measured",
                 "spectral_centroid_hz": "number",
                 "spectral_flatness": "number",
                 "sustain_ratio": "number",
@@ -24025,14 +24025,23 @@
         }
       ],
       "payloads": {
-        "success": {
+        "corner": {
           "keys": {
             "output": "path",
             "type": "string",
             "order": "integer",
-            "cutoff_hz": "number|null",
-            "center_hz": "number|null",
-            "bandwidth_hz": "number|null",
+            "cutoff_hz": "number",
+            "zero_phase": "boolean",
+            "duration": "number"
+          }
+        },
+        "band": {
+          "keys": {
+            "output": "path",
+            "type": "string",
+            "order": "integer",
+            "center_hz": "number",
+            "bandwidth_hz": "number",
             "zero_phase": "boolean",
             "duration": "number"
           }
@@ -24053,7 +24062,7 @@
             "--json"
           ],
           "exit": 0,
-          "payload": "success",
+          "payload": "corner",
           "artifact": "none",
           "stdout": "json"
         },
@@ -24073,7 +24082,7 @@
             "--json"
           ],
           "exit": 0,
-          "payload": "success",
+          "payload": "band",
           "artifact": "none",
           "stdout": "json"
         },
