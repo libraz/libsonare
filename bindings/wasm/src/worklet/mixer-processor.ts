@@ -2,7 +2,7 @@ import { ErrorCode } from '../errors.js';
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
-import { errorText, failurePayload } from '../internal/failure_payload.js';
+import { WorkletProcessorLifecycle } from '../internal/worklet_lifecycle.js';
 import type { SonareWorkletMessage, TypedWorkletTransport } from '../internal/worklet_messages.js';
 import type {
   SonareWorkletProcessorConstructorOptions,
@@ -11,7 +11,6 @@ import type {
 } from '../public_types_worklet.js';
 import { assertBoundedInteger } from '../validation.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
-import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {
   assertKnownProcessorOptions,
   isWorkletMessage,
@@ -476,8 +475,7 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareWorkletProcessor extends Base {
-      private bridge?: SonareWorkletProcessor;
-      private readonly pendingMessages: SonareWorkletMessage[] = [];
+      private readonly lifecycle: WorkletProcessorLifecycle<SonareWorkletProcessor>;
       readonly port?: WorkletPort;
 
       constructor(options?: { processorOptions?: SonareWorkletProcessorOptions }) {
@@ -485,72 +483,26 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
         const port = this.port;
         const processorOptions = options?.processorOptions ?? { sceneJson: '' };
         assertKnownProcessorOptions('mixerProcessor', processorOptions);
-        // A refused message leaves the processor as it was and is reported, not dropped.
-        const deliver = (bridge: SonareWorkletProcessor, message: SonareWorkletMessage) => {
-          try {
-            bridge.receiveMessage(message);
-          } catch (error) {
-            port?.postMessage?.({
-              type: 'error',
-              message: errorText(error),
-              failure: failurePayload(error),
-            });
-          }
-        };
-        const start = () => {
-          this.bridge = new SonareWorkletProcessor({
-            ...processorOptions,
-            transport: { postMessage: (message) => port?.postMessage?.(message) },
-          });
-          for (const message of this.pendingMessages.splice(0)) {
-            deliver(this.bridge, message);
-          }
-        };
-        if (isEmbindReady()) {
-          start();
-          port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-        } else {
-          // The module is not initialized in this realm: build it the way the
-          // realtime engine processor does, then construct the mixer.
-          initializeEmbindInWorklet(processorOptions.wasmBinary)
-            .then(() => {
-              start();
-              port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-            })
-            .catch((error: unknown) => {
-              port?.postMessage?.({
-                type: 'error',
-                message: errorText(error),
-                failure: failurePayload(error),
-              });
-            });
-        }
-        const onMessage = (event: { data: unknown }) => {
-          if (!isWorkletMessage(event.data)) {
-            return;
-          }
-          if (this.bridge) {
-            deliver(this.bridge, event.data);
-          } else if (this.pendingMessages.length < 1024) {
-            this.pendingMessages.push(event.data);
-          }
-        };
-        if (port?.addEventListener) {
-          port.addEventListener('message', onMessage);
-          port.start?.();
-        } else if (port) {
-          port.onmessage = onMessage;
-        }
+        this.lifecycle = new WorkletProcessorLifecycle({
+          port,
+          usesModule: true,
+          wasmBinary: processorOptions.wasmBinary,
+          create: () =>
+            new SonareWorkletProcessor({
+              ...processorOptions,
+              transport: { postMessage: (message) => port?.postMessage?.(message) },
+            }),
+          ready: () => ({ type: 'ready', runtimeTarget: 'embind' }),
+          deliver: (bridge, data) => {
+            if (isWorkletMessage(data)) {
+              bridge.receiveMessage(data);
+            }
+          },
+        });
       }
 
       process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-        if (this.bridge) {
-          return this.bridge.process(inputs, outputs);
-        }
-        for (const channel of outputs[0] ?? []) {
-          channel.fill(0);
-        }
-        return true;
+        return this.lifecycle.process(inputs, outputs);
       }
     }
     scope.registerProcessor(name, RegisteredSonareWorkletProcessor);

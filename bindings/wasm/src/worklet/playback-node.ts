@@ -1,6 +1,7 @@
-import { ErrorCode, type SonareError } from '../errors.js';
+import { ErrorCode } from '../errors.js';
 import { init, isInitialized } from '../index.js';
 import { codedError, entryClass, refuseType, withEntry } from '../internal/entry.js';
+import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
 import { stringifyWithinBudget } from '../internal/list_budget.js';
 import { isNonArrayObject } from '../internal/value_guards.js';
@@ -58,7 +59,7 @@ export class SonarePlaybackNode {
   readonly node: AudioWorkletNode;
   /** Resolves once the processor has started; rejects if the worklet could not start it. */
   readonly ready: Promise<void>;
-  private readonly errorListeners = new Set<(error: SonareError) => void>();
+  private readonly errorListeners = new Set<(error: Error) => void>();
   private readonly pendingDiagnostics: {
     resolve: (diagnostics: SonarePlaybackWorkletProcessorDiagnostics) => void;
     reject: (reason: unknown) => void;
@@ -178,7 +179,7 @@ export class SonarePlaybackNode {
    * Subscribes to control messages the processor refused (a configuration it
    * could not apply, for one). Returns the unsubscribe function.
    */
-  onError(callback: (error: SonareError) => void): () => void {
+  onError(callback: (error: Error) => void): () => void {
     this.errorListeners.add(callback);
     return () => {
       this.errorListeners.delete(callback);
@@ -208,7 +209,9 @@ export class SonarePlaybackNode {
   }
 
   private refused(message: SonarePlaybackErrorMessage): void {
-    const error = codedError(ErrorCode.Unknown, String(message.message ?? 'AudioWorklet error'));
+    const error = isFailurePayload(message.failure)
+      ? failureFromPayload(message.failure)
+      : codedError(ErrorCode.Unknown, String(message.message ?? 'AudioWorklet error'));
     if (message.request === 'init') {
       this.rejectReady(error);
     } else if (message.request === 'diagnostics') {

@@ -1,12 +1,11 @@
 import { ErrorCode } from '../errors.js';
 import { RealtimeVoiceChanger } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
-import { errorText, failurePayload } from '../internal/failure_payload.js';
 import type {
-  SonareRealtimeVoiceChangerErrorMessage,
   SonareRealtimeVoiceChangerNodeStatusReplyMessage,
   SonareRealtimeVoiceChangerReadyMessage,
 } from '../internal/voice_changer_messages.js';
+import { WorkletProcessorLifecycle } from '../internal/worklet_lifecycle.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type {
   SonareRealtimeVoiceChangerNodeStatus,
@@ -22,7 +21,6 @@ import {
   type WorkletInput,
   type WorkletOutput,
 } from './audio_types.js';
-import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {
   assertKnownProcessorOptions,
   isRealtimeVoiceChangerMessage,
@@ -282,8 +280,7 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareRealtimeVoiceChangerWorkletProcessor extends Base {
-      private bridge?: SonareRealtimeVoiceChangerWorkletProcessor;
-      private readonly pendingMessages: unknown[] = [];
+      private readonly lifecycle: WorkletProcessorLifecycle<SonareRealtimeVoiceChangerWorkletProcessor>;
       readonly port?: WorkletPort;
 
       constructor(options?: {
@@ -294,85 +291,37 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
         const processorOptions: Partial<SonareRealtimeVoiceChangerWorkletProcessorOptions> =
           options?.processorOptions ?? {};
         assertKnownProcessorOptions('voiceChangerProcessor', processorOptions);
-        const reportError = (
-          request: SonareRealtimeVoiceChangerErrorMessage['request'],
-          error: unknown,
-        ) => {
-          port?.postMessage?.({
-            type: 'error',
-            request,
-            message: errorText(error),
-            failure: failurePayload(error),
-          } satisfies SonareRealtimeVoiceChangerErrorMessage);
-        };
-        // A refused message leaves the processor as it was and is reported, not dropped.
-        const deliver = (bridge: SonareRealtimeVoiceChangerWorkletProcessor, data: unknown) => {
-          if (!isRealtimeVoiceChangerMessage(data)) {
-            const type = (data as { type?: unknown } | null)?.type;
-            reportError(
-              'invalid',
-              refuseType(`Unrecognized voice changer message: ${String(type)}`),
+        this.lifecycle = new WorkletProcessorLifecycle({
+          port,
+          usesModule: true,
+          wasmBinary: processorOptions.wasmBinary,
+          create: () => {
+            // Options cross from the main thread unchecked; the constructor refuses a missing field.
+            const bridge = new SonareRealtimeVoiceChangerWorkletProcessor(
+              processorOptions as SonareRealtimeVoiceChangerWorkletProcessorOptions,
             );
-            return;
-          }
-          try {
+            bridge.reply = (message) => port?.postMessage?.(message);
+            return bridge;
+          },
+          ready: (bridge) =>
+            ({
+              type: 'ready',
+              runtimeTarget: 'embind',
+              latencySamples: bridge.status().latencySamples,
+            }) satisfies SonareRealtimeVoiceChangerReadyMessage,
+          deliver: (bridge, data) => {
+            if (!isRealtimeVoiceChangerMessage(data)) {
+              const type = (data as { type?: unknown } | null)?.type;
+              throw refuseType(`Unrecognized voice changer message: ${String(type)}`);
+            }
             bridge.receiveMessage(data);
-          } catch (error) {
-            reportError(data.type, error);
-          }
-        };
-        const start = () => {
-          // Options cross from the main thread unchecked; the constructor refuses a missing field.
-          const bridge = new SonareRealtimeVoiceChangerWorkletProcessor(
-            processorOptions as SonareRealtimeVoiceChangerWorkletProcessorOptions,
-          );
-          bridge.reply = (message) => port?.postMessage?.(message);
-          this.bridge = bridge;
-          port?.postMessage?.({
-            type: 'ready',
-            runtimeTarget: 'embind',
-            latencySamples: bridge.status().latencySamples,
-          } satisfies SonareRealtimeVoiceChangerReadyMessage);
-          for (const message of this.pendingMessages.splice(0)) {
-            deliver(this.bridge, message);
-          }
-        };
-        if (isEmbindReady()) {
-          try {
-            start();
-          } catch (error) {
-            reportError('init', error);
-          }
-        } else {
-          // The module is not initialized in this realm: build it the way the
-          // realtime engine processor does, then construct the changer.
-          initializeEmbindInWorklet(processorOptions.wasmBinary)
-            .then(start)
-            .catch((error: unknown) => reportError('init', error));
-        }
-        const onMessage = (event: { data: unknown }) => {
-          if (this.bridge) {
-            deliver(this.bridge, event.data);
-          } else if (this.pendingMessages.length < 1024) {
-            this.pendingMessages.push(event.data);
-          }
-        };
-        if (port?.addEventListener) {
-          port.addEventListener('message', onMessage);
-          port.start?.();
-        } else if (port) {
-          port.onmessage = onMessage;
-        }
+          },
+          requestOf: (data) => (isRealtimeVoiceChangerMessage(data) ? data.type : 'invalid'),
+        });
       }
 
       process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-        if (this.bridge) {
-          return this.bridge.process(inputs, outputs);
-        }
-        for (const channel of outputs[0] ?? []) {
-          channel.fill(0);
-        }
-        return true;
+        return this.lifecycle.process(inputs, outputs);
       }
     }
     scope.registerProcessor(name, RegisteredSonareRealtimeVoiceChangerWorkletProcessor);

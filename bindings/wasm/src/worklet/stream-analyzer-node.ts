@@ -2,6 +2,7 @@ import { ErrorCode } from '../errors.js';
 import type { StreamFrames, StreamStats } from '../index.js';
 import { init, isInitialized, StreamAnalyzer } from '../index.js';
 import { codedError, entryClass, withEntry } from '../internal/entry.js';
+import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
 import type {
   SonareStreamAnalyzerNodeOptions,
@@ -46,6 +47,7 @@ export class SonareStreamAnalyzerNode {
   private readonly analyzer: StreamAnalyzer;
   private readonly frameListeners = new Set<(frames: StreamFrames) => void>();
   private readonly statsListeners = new Set<(stats: StreamStats) => void>();
+  private readonly errorListeners = new Set<(error: Error) => void>();
   private expectedSample = 0;
   private lastFrameCount = 0;
   private resolveReady!: () => void;
@@ -65,6 +67,12 @@ export class SonareStreamAnalyzerNode {
           this.rejectReady = reject;
         }),
     );
+    // A caller that never awaits `ready` must not see an unhandled rejection.
+    this.ready.catch(() => undefined);
+    // A processor constructor that throws surfaces only as this event.
+    this.node.addEventListener?.('processorerror', () => {
+      this.rejectReady(codedError(ErrorCode.Unknown, 'the processor failed to start'));
+    });
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
       if (this.destroyed) {
         return;
@@ -74,9 +82,13 @@ export class SonareStreamAnalyzerNode {
       } else if (isRecord(event.data) && event.data.type === 'ready') {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
-        this.rejectReady(
-          codedError(ErrorCode.Unknown, String(event.data.message ?? 'AudioWorklet error')),
-        );
+        const error = isFailurePayload(event.data.failure)
+          ? failureFromPayload(event.data.failure)
+          : codedError(ErrorCode.Unknown, String(event.data.message ?? 'AudioWorklet error'));
+        this.rejectReady(error);
+        for (const listener of this.errorListeners) {
+          listener(error);
+        }
       }
     };
   }
@@ -146,6 +158,18 @@ export class SonareStreamAnalyzerNode {
   }
 
   /**
+   * Subscribes to failures the processor reports: a port message it refused, or a render quantum
+   * that threw, after which it stops. A refused value arrives as `TypeError` / `RangeError`,
+   * anything else as a coded `SonareError`. Returns the unsubscribe function.
+   */
+  onError(callback: (error: Error) => void): () => void {
+    this.errorListeners.add(callback);
+    return () => {
+      this.errorListeners.delete(callback);
+    };
+  }
+
+  /**
    * Stops the node and releases its resources; pending requests reject with
    * `InvalidState`. Resolves once the node can no longer deliver a message to
    * the caller. A second call returns the same promise.
@@ -174,6 +198,7 @@ export class SonareStreamAnalyzerNode {
     this.node.disconnect();
     this.frameListeners.clear();
     this.statsListeners.clear();
+    this.errorListeners.clear();
     // A chunk already in flight must not reach the released analyzer.
     this.node.port.onmessage = null;
     this.analyzer.destroy();

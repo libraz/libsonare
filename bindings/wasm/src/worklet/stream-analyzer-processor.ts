@@ -1,6 +1,7 @@
 import { ErrorCode } from '../errors.js';
 import { codedError, withEntry } from '../internal/entry.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
+import { WorkletProcessorLifecycle } from '../internal/worklet_lifecycle.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type {
   SonareStreamAnalyzerWorkletProcessorConstructorOptions,
@@ -188,7 +189,7 @@ export function registerSonareStreamAnalyzerWorkletProcessor(
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareStreamAnalyzerWorkletProcessor extends Base {
-      private bridge: SonareStreamAnalyzerWorkletProcessor;
+      private readonly lifecycle: WorkletProcessorLifecycle<SonareStreamAnalyzerWorkletProcessor>;
       readonly port?: WorkletPort;
 
       constructor(options?: { processorOptions?: SonareStreamAnalyzerWorkletProcessorOptions }) {
@@ -196,22 +197,22 @@ export function registerSonareStreamAnalyzerWorkletProcessor(
         const port = this.port;
         const processorOptions = options?.processorOptions ?? {};
         assertKnownProcessorOptions('streamAnalyzerProcessor', processorOptions);
-        this.bridge = new SonareStreamAnalyzerWorkletProcessor({ ...processorOptions, port });
-        const onMessage = (event: { data: unknown }) => {
-          if (isStreamAnalyzerMessage(event.data)) {
-            this.bridge.receiveMessage(event.data);
-          }
-        };
-        if (port?.addEventListener) {
-          port.addEventListener('message', onMessage);
-          port.start?.();
-        } else if (port) {
-          port.onmessage = onMessage;
-        }
+        this.lifecycle = new WorkletProcessorLifecycle({
+          port,
+          usesModule: false,
+          // The processor posts its own ready from its constructor.
+          create: () => new SonareStreamAnalyzerWorkletProcessor({ ...processorOptions, port }),
+          ready: () => undefined,
+          deliver: (bridge, data) => {
+            if (isStreamAnalyzerMessage(data)) {
+              bridge.receiveMessage(data);
+            }
+          },
+        });
       }
 
       process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-        return this.bridge.process(inputs, outputs);
+        return this.lifecycle.process(inputs, outputs);
       }
     }
     scope.registerProcessor(name, RegisteredSonareStreamAnalyzerWorkletProcessor);

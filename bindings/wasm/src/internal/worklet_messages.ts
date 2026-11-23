@@ -94,11 +94,21 @@ export interface SonarePlaybackDiagnosticsReplyMessage {
   diagnostics: SonarePlaybackWorkletProcessorDiagnostics;
 }
 
+/** What a stock worklet registration posts for a failed start, a refused message or a failed render quantum. */
+export interface WorkletErrorMessage {
+  type: 'error';
+  /** `'init'`, `'process'`, or the type of the refused message (`'invalid'` when it has none). */
+  request: string;
+  message: string;
+  failure: SonareFailurePayload;
+}
+
 /** Posted when a control message is refused (e.g. a changed prepare key). */
 export interface SonarePlaybackErrorMessage {
   type: 'error';
-  request: SonarePlaybackMessage['type'] | 'init';
+  request: SonarePlaybackMessage['type'] | 'init' | 'process';
   message: string;
+  failure: SonareFailurePayload;
 }
 
 export interface SonareWorkletScheduleInsertAutomationMessage {

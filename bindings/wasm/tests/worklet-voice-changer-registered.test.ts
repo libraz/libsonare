@@ -75,14 +75,14 @@ describe('registered voice changer worklet processor', () => {
     send({ type: 'destroy' });
   });
 
-  it('reports a refused construction as an error reply and renders silence', () => {
+  it('reports a refused construction as an error reply, renders silence and ends', () => {
     const { ctor, posted } = register();
     const instance = new ctor({
       processorOptions: { config: 'neutralMonitor', sampleRate: 48000, numChannels: 0 },
     });
     expect(posted.map((message) => [message.type, message.request])).toEqual([['error', 'init']]);
     const out = [new Float32Array(128).fill(1)];
-    expect(instance.process([[new Float32Array(128)]], [out])).toBe(true);
+    expect(instance.process([[new Float32Array(128)]], [out])).toBe(false);
     expect(out[0].every((sample) => sample === 0)).toBe(true);
   });
 });

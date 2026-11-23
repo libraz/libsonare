@@ -26,6 +26,7 @@ This release gives the public interface one set of conventions on every surface 
 - In C++, `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>`: leave `tuning` unset to measure it.
 - On Node and WASM, `masteringAssistantSuggestChain` and `masteringAssistantSuggestChainStereo` are removed: the same flat chain configuration is `chainConfig` on the result of `masteringAssistantSuggest` and `masteringAssistantSuggestStereo`.
 - On Node and WASM, engine meter telemetry has one record shape: `drainMeterTelemetry` returns `EngineMeterTelemetry` records carrying every plane (`numChannels`, and per-plane `peakDb`, `rmsDb`, `truePeakDbtp` and `inputPeakDb` in place of the `L`/`R` fields), and `drainMeterTelemetryWide` and `EngineMeterTelemetryWide` are removed.
+- On WASM, `SonareRealtimeEngineWorkletProcessor` takes every port message through `receiveMessage`; its per-kind receivers and `noteSyncSequence` are private, so an AudioWorklet entry of your own passes it every message it does not handle itself.
 
 #### Now refused
 
@@ -81,6 +82,7 @@ This release gives the public interface one set of conventions on every surface 
 - `SONARE_AUTOMATION_TARGET_UNCHANGED` lets `sonare_project_edit_automation_lane` keep a lane's current kind.
 - `RealtimeEngine.setMarkers` on Node and WASM takes entries without an `id` and assigns each the lowest id above every id the engine has stored or assigned.
 - Node names the `EngineProcessWithMonitorResult` record `RealtimeEngine.process(channels, { withMonitor: true })` returns, matching WASM and Python.
+- On WASM, `SonareRealtimeEngineNode` and `SonareStreamAnalyzerNode` have `onError` for failures their processor reports, and `ready` rejects when the processor constructor throws, as on the playback and voice-changer nodes.
 
 #### Playback renderer
 
@@ -194,6 +196,7 @@ This release gives the public interface one set of conventions on every surface 
 - The Python command line resolves an omitted polyphonic `--reattack-ratio` to 2.0, so both front-ends write the same notes.
 - A refused `mastering-profile` or `mastering-streaming` call on the native command line exits with the library's code and message.
 - Both command lines write the playback renderer config with the camelCase keys the config document reads and report `--json` diagnostics in snake_case.
+- On WASM, every stock AudioWorklet registration reports a render quantum that throws as an `error` message with `request: 'process'`, renders silence and ends the processor, and a port message beyond the 1024 held before the module is ready fails the start with `InvalidState` instead of being dropped. The engine worklet answers a message type it does not know with a `syncError` carrying a `TypeError`, where it dropped any type not beginning with `sync`.
 
 ### Fixes
 
@@ -253,6 +256,7 @@ This release gives the public interface one set of conventions on every surface 
 
 - Python `mix-strip` refuses an out-of-range trim, fader, pan or width with exit 3, as the native command line does.
 - Native `lufs` measures every channel.
+- On WASM, AudioWorklet processors constructed while another one in the same realm is still building the module share that build instead of failing with `InvalidState`, although each carries its own copy of `wasmBinary`, and a mixer processor constructed after the realm's module is ready posts `ready`.
 
 ### Performance
 

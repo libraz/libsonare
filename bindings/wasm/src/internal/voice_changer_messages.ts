@@ -57,7 +57,7 @@ export interface SonareRealtimeVoiceChangerReadyMessage {
 /** Posted when a control message or the processor's construction is refused. */
 export interface SonareRealtimeVoiceChangerErrorMessage {
   type: 'error';
-  request: SonareRealtimeVoiceChangerMessage['type'] | 'init' | 'invalid';
+  request: SonareRealtimeVoiceChangerMessage['type'] | 'init' | 'invalid' | 'process';
   message: string;
   failure: SonareFailurePayload;
 }

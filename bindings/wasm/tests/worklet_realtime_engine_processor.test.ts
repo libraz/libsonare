@@ -3260,18 +3260,20 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         }
         const workletEngine = (
           instance as unknown as {
-            bridge: {
-              engine: {
-                pushMidiUmp: (
-                  destinationId: number,
-                  words: Uint32Array | number[],
-                  renderFrame: number,
-                ) => void;
-                pushMidiInputUmp: (words: Uint32Array, offsetInBlockSamples: number) => void;
+            lifecycle: {
+              current: {
+                engine: {
+                  pushMidiUmp: (
+                    destinationId: number,
+                    words: Uint32Array | number[],
+                    renderFrame: number,
+                  ) => void;
+                  pushMidiInputUmp: (words: Uint32Array, offsetInBlockSamples: number) => void;
+                };
               };
             };
           }
-        ).bridge.engine;
+        ).lifecycle.current.engine;
         const destinationUmp = vi
           .spyOn(workletEngine, 'pushMidiUmp')
           .mockImplementation(() => undefined);

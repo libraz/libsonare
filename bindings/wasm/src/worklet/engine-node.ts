@@ -219,6 +219,7 @@ export class SonareRealtimeEngineNode {
   private midiOutListeners = new Set<(events: ExternalMidiEvent[]) => void>();
   private clipPageRequestListeners = new Set<(message: EngineClipPageRequestMessage) => void>();
   private syncErrorListeners = new Set<(message: EngineSyncErrorMessage) => void>();
+  private errorListeners = new Set<(error: Error) => void>();
   private captureRequestId = 1;
   private readonly captureRequests = new Map<
     number,
@@ -292,6 +293,10 @@ export class SonareRealtimeEngineNode {
     // Destroy settles a pending ready wait; rejecting an already settled
     // promise is a no-op, so a node that became ready stays resolved.
     this.ready.catch(() => undefined);
+    // A processor constructor that throws surfaces only as this event.
+    this.node.addEventListener?.('processorerror', () => {
+      this.rejectReady(codedError(ErrorCode.Unknown, 'the processor failed to start'));
+    });
     this.epoch.onClose(() =>
       this.rejectReady(
         invalidState('SonareRealtimeEngineNode was destroyed before it became ready'),
@@ -390,7 +395,11 @@ export class SonareRealtimeEngineNode {
       } else if (isRecord(event.data) && event.data.type === 'ready') {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
-        this.rejectReady(workletFailure(event.data, 'AudioWorklet error', 'message'));
+        const error = workletFailure(event.data, 'AudioWorklet error', 'message');
+        this.rejectReady(error);
+        for (const listener of this.errorListeners) {
+          listener(error);
+        }
       }
     };
   }
@@ -399,6 +408,17 @@ export class SonareRealtimeEngineNode {
   onSyncError(listener: (message: EngineSyncErrorMessage) => void): () => void {
     this.syncErrorListeners.add(listener);
     return () => this.syncErrorListeners.delete(listener);
+  }
+
+  /**
+   * Subscribes to failures the processor reports: a start it could not complete, a port message it
+   * refused outside the sync protocol, or a render quantum that threw, after which it renders
+   * silence and stops. A refused value arrives as `TypeError` / `RangeError`, anything else as a
+   * coded `SonareError`. Returns the unsubscribe function.
+   */
+  onError(listener: (error: Error) => void): () => void {
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
   }
 
   /**
@@ -1040,6 +1060,7 @@ export class SonareRealtimeEngineNode {
     this.midiOutListeners.clear();
     this.clipPageRequestListeners.clear();
     this.syncErrorListeners.clear();
+    this.errorListeners.clear();
     // The port outlives destroy(): the worklet tears itself down asynchronously
     // after the 'destroy' message above, so a syncError already in flight would
     // still be dispatched here. Detaching the handler is what makes the

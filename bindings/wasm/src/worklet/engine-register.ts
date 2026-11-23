@@ -1,10 +1,9 @@
 import { ErrorCode } from '../errors.js';
-import { codedError, invalidState, withEntry } from '../internal/entry.js';
-import { errorText, failurePayload } from '../internal/failure_payload.js';
+import { codedError, withEntry } from '../internal/entry.js';
+import { WorkletProcessorLifecycle } from '../internal/worklet_lifecycle.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_types_worklet.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
-import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
 import { assertKnownProcessorOptions } from './guards.js';
 
@@ -31,9 +30,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareRealtimeEngineWorkletProcessor extends Base {
-      private bridge?: SonareRealtimeEngineWorkletProcessor;
-      private readonly pendingMessages: unknown[] = [];
-      private pendingMessagesOverflowed = false;
+      private readonly lifecycle: WorkletProcessorLifecycle<SonareRealtimeEngineWorkletProcessor>;
       readonly port?: WorkletPort;
 
       constructor(options?: { processorOptions?: SonareRealtimeEngineWorkletProcessorOptions }) {
@@ -43,77 +40,33 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         const processorOptions =
           options?.processorOptions ?? ({} as SonareRealtimeEngineWorkletProcessorOptions);
         assertKnownProcessorOptions('engineProcessor', processorOptions);
-        void this.initializeEmbind(processorOptions, port);
-        const onMessage = (event: { data: unknown }) => {
-          if (!this.bridge) {
-            if (this.pendingMessages.length < 1024) {
-              this.pendingMessages.push(event.data);
-            } else {
-              // A long sync before embind initialization must fail visibly rather
-              // than drop a provider/page/commit message and leave silent audio.
-              this.pendingMessagesOverflowed = true;
+        this.lifecycle = new WorkletProcessorLifecycle({
+          port,
+          usesModule: true,
+          wasmBinary: processorOptions.wasmBinary,
+          create: () => {
+            const bridge = new SonareRealtimeEngineWorkletProcessor({
+              ...processorOptions,
+              transport: {
+                postMessage: (message, transfer) => port?.postMessage?.(message, transfer),
+                onMeter: (meter) => port?.postMessage?.(meter),
+              },
+            });
+            for (const message of processorOptions.initialSyncMessages ?? []) {
+              bridge.receiveMessage(message);
             }
-            return;
-          }
-          this.bridge.receiveMessage(event.data);
-        };
-        if (port?.addEventListener) {
-          port.addEventListener('message', onMessage);
-          port.start?.();
-        } else if (port) {
-          port.onmessage = onMessage;
-        }
+            for (const command of processorOptions.initialCommands ?? []) {
+              bridge.receiveMessage(command);
+            }
+            return bridge;
+          },
+          ready: () => ({ type: 'ready', runtimeTarget: 'embind' }),
+          deliver: (bridge, data) => bridge.receiveMessage(data),
+        });
       }
 
       process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-        if (this.bridge) {
-          return this.bridge.process(inputs, outputs);
-        }
-        const output = outputs[0];
-        for (const channel of output ?? []) {
-          channel.fill(0);
-        }
-        return true;
-      }
-
-      private replayPendingMessages(): void {
-        const messages = this.pendingMessages.splice(0);
-        for (const data of messages) {
-          this.bridge?.receiveMessage(data);
-        }
-      }
-
-      private async initializeEmbind(
-        options: SonareRealtimeEngineWorkletProcessorOptions,
-        port?: WorkletPort,
-      ): Promise<void> {
-        try {
-          await initializeEmbindInWorklet(options.wasmBinary);
-          if (this.pendingMessagesOverflowed) {
-            throw invalidState('AudioWorklet initialization message buffer overflowed.');
-          }
-          this.bridge = new SonareRealtimeEngineWorkletProcessor({
-            ...options,
-            transport: {
-              postMessage: (message, transfer) => port?.postMessage?.(message, transfer),
-              onMeter: (meter) => port?.postMessage?.(meter),
-            },
-          });
-          for (const message of options.initialSyncMessages ?? []) {
-            this.bridge.receiveMessage(message);
-          }
-          for (const command of options.initialCommands ?? []) {
-            this.bridge.receiveMessage(command);
-          }
-          this.replayPendingMessages();
-          port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
-        } catch (error) {
-          port?.postMessage?.({
-            type: 'error',
-            message: errorText(error),
-            failure: failurePayload(error),
-          });
-        }
+        return this.lifecycle.process(inputs, outputs);
       }
     }
     scope.registerProcessor(name, RegisteredSonareRealtimeEngineWorkletProcessor);
