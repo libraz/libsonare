@@ -753,6 +753,97 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
       {"engine_set_external_midi_clock_enabled.enabled", {nullptr}},
       // A flag: every int is accepted.
       {"engine_set_midi_destination_external.external", {nullptr}},
+      {"engine_apply_track_strip_insert_param_by_name_now.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         int applied = 0;
+         sonare_engine_apply_track_strip_insert_param_by_name_now(engine.get(), 0, 0, "gain", 0.0f,
+                                                                  &applied);
+       }}},
+      // A query: the answer comes back through out_refusal, so no track id is refused.
+      {"engine_can_set_lane_sidechain.track_id", {nullptr}},
+      {"engine_clear_track_insert_parameter_bases.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_clear_track_insert_parameter_bases(engine.get(), 99);
+       }}},
+      {"engine_resolve_track_insert_automation_id.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         uint32_t id = 0;
+         sonare_engine_resolve_track_insert_automation_id(engine.get(), 0, 0, "gain", &id);
+       }}},
+      {"engine_resolve_track_lane_automation_id.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         uint32_t id = 0;
+         sonare_engine_resolve_track_lane_automation_id(engine.get(), 0, "volume", &id);
+       }}},
+      {"engine_restore_track_strip_insert_param_by_name.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_restore_track_strip_insert_param_by_name(engine.get(), 0, 0, "gain", 0.0f);
+       }}},
+      {"engine_set_lane_sidechain.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_lane_sidechain(engine.get(), 0, 0, 98);
+       }}},
+      {"engine_set_track_strip_channel_delay_samples.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_channel_delay_samples(engine.get(), 0, 0);
+       }}},
+      {"engine_set_track_strip_dual_pan.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_dual_pan(engine.get(), 0, 0.0f, 0.0f);
+       }}},
+      {"engine_set_track_strip_eq_band_json.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_eq_band_json(engine.get(), 0, 0, "{}");
+       }}},
+      {"engine_set_track_strip_insert_bypassed.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_insert_bypassed(engine.get(), 0, 0, 1, 0);
+       }}},
+      {"engine_set_track_strip_insert_param_by_name.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_insert_param_by_name(engine.get(), 0, 0, "gain", 0.0f);
+       }}},
+      {"engine_set_track_strip_json.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_json(engine.get(), 0, "{\"strips\":[{\"id\":\"a\"}]}");
+       }}},
+      {"engine_set_track_strip_pan.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_pan(engine.get(), 0, 0.0f);
+       }}},
+      {"engine_set_track_strip_pan_law.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_pan_law(engine.get(), 0, 0);
+       }}},
+      {"engine_set_track_strip_pan_mode.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_pan_mode(engine.get(), 0, 0);
+       }}},
+      {"engine_set_track_strip_surround_pan.track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         SonareSurroundPan pan{};
+         sonare_engine_set_track_strip_surround_pan(engine.get(), 0, &pan);
+       }}},
+      {"engine_set_bus_strip_json.scene_json", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_bus_strip_json(engine.get(), 1, nullptr);
+       }}},
+      {"engine_set_master_strip_json.scene_json", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_master_strip_json(engine.get(), nullptr);
+       }}},
+      {"engine_set_part_rig.inserts_json", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_part_rig(engine.get(), 1, 0, SONARE_PART_RIG_CHAIN, nullptr);
+       }}},
+      {"engine_set_track_strip_json.scene_json", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_json(engine.get(), 1, nullptr);
+       }}},
+      {"project_set_part_rig.inserts_json", {[] {
+         const ProjectPtr project = new_project();
+         sonare_project_set_part_rig(project.get(), 1, 0, SONARE_PART_RIG_CHAIN, nullptr);
+       }}},
       {"engine_set_track_output_bus.output_bus_id", {[] {
          const EnginePtr engine = prepared_engine();
          const SonareEngineTrackLane lane[] = {{1, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
