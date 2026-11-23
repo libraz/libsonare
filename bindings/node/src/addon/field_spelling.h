@@ -20,18 +20,36 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the node facade binds under another name, sorted.
-inline constexpr std::array<Override, 37> kOverrides = {{
+inline constexpr std::array<Override, 56> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
-    {"downmix", "num_channels", "channels"},
+    {"engine_apply_track_strip_insert_param_by_name_now", "track_id", "ref"},
+    {"engine_can_set_lane_sidechain", "track_id", "ref"},
+    {"engine_clear_track_insert_parameter_bases", "track_id", "ref"},
     {"engine_drain_external_midi", "max_events", "maxRecords"},
-    {"engine_process", "num_channels", "channels"},
     {"engine_resolve_master_automation_id", "param_name", "kind"},
+    {"engine_resolve_track_insert_automation_id", "track_id", "ref"},
     {"engine_resolve_track_lane_automation_id", "param_name", "kind"},
+    {"engine_resolve_track_lane_automation_id", "track_id", "ref"},
+    {"engine_restore_track_strip_insert_param_by_name", "track_id", "ref"},
+    {"engine_set_bus_strip_json", "scene_json", "settings"},
     {"engine_set_controller_velocity_meaningful", "meaningful", "controllerVelocityMeaningful"},
     {"engine_set_external_midi_clock_enabled", "enabled", "externalMidiClockEnabled"},
+    {"engine_set_lane_sidechain", "track_id", "ref"},
+    {"engine_set_master_strip_json", "scene_json", "settings"},
     {"engine_set_midi_destination_external", "external", "midiDestinationExternal"},
     {"engine_set_track_output_bus", "output_bus_id", "busId"},
+    {"engine_set_track_strip_channel_delay_samples", "track_id", "ref"},
+    {"engine_set_track_strip_dual_pan", "track_id", "ref"},
+    {"engine_set_track_strip_eq_band_json", "track_id", "ref"},
+    {"engine_set_track_strip_insert_bypassed", "track_id", "ref"},
+    {"engine_set_track_strip_insert_param_by_name", "track_id", "ref"},
+    {"engine_set_track_strip_json", "scene_json", "settings"},
+    {"engine_set_track_strip_json", "track_id", "ref"},
+    {"engine_set_track_strip_pan", "track_id", "ref"},
+    {"engine_set_track_strip_pan_law", "track_id", "ref"},
+    {"engine_set_track_strip_pan_mode", "track_id", "ref"},
+    {"engine_set_track_strip_surround_pan", "track_id", "ref"},
     {"mel_to_audio", "mel", "power"},
     {"mel_to_stft", "mel", "power"},
     {"metering_spectrum_frame", "frame_offset", "startSample"},
@@ -51,6 +69,7 @@ inline constexpr std::array<Override, 37> kOverrides = {{
     {"project_import_smf", "bytes", "data"},
     {"project_move_clip", "new_track_id", "trackId"},
     {"project_set_overlap_policy", "overlap_policy", "policy"},
+    {"project_set_part_rig", "inserts_json", "inserts"},
     {"realtime_voice_changer_process_mono", "input", "samples"},
     {"stream_analyzer_process", "sample_offset", "startSample"},
     {"stream_analyzer_reset", "base_sample_offset", "startSample"},
@@ -61,8 +80,30 @@ inline constexpr std::array<Override, 37> kOverrides = {{
 }};
 
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
-inline constexpr std::array<Override, 1> kLengths = {{
+inline constexpr std::array<Override, 23> kLengths = {{
+    {"decompose_note_pitch", "n_frames", "f0Hz"},
+    {"downmix", "num_channels", "channels"},
+    {"engine_process", "num_channels", "channels"},
+    {"engine_push_midi_sysex", "size", "data"},
+    {"engine_set_track_lanes", "lane_count", "lanes"},
+    {"merge_notes", "n_frames", "f0Hz"},
+    {"merge_notes", "note_count", "notes"},
+    {"pitch_correct_timevarying", "n_frames", "f0Hz"},
     {"project_apply_vocal_edit", "rendered_sample_count", "renderedMono"},
+    {"project_set_warp_map", "anchor_count", "anchors"},
+    {"render_notes", "n_frames", "f0Hz"},
+    {"render_notes", "note_count", "notes"},
+    {"room_morph", "band_absorption_count", "bandAbsorption"},
+    {"room_morph", "band_scattering_count", "bandScattering"},
+    {"room_morph_stereo", "band_absorption_count", "bandAbsorption"},
+    {"room_morph_stereo", "band_scattering_count", "bandScattering"},
+    {"sample_bank_add_sample", "n_frames", "data"},
+    {"split_note", "n_frames", "f0Hz"},
+    {"split_note", "note_count", "notes"},
+    {"streaming_mastering_chain_process_mono", "num_samples", "samples"},
+    {"streaming_retune_process_mono", "num_samples", "samples"},
+    {"synthesize_rir", "band_absorption_count", "bandAbsorption"},
+    {"synthesize_rir", "band_scattering_count", "bandScattering"},
 }};
 
 template <std::size_t N>
@@ -79,7 +120,7 @@ inline const Override* Find(const std::array<Override, N>& table, std::string_vi
 // The node caller's spelling of @p subject on C entry @p entry (no sonare_ prefix).
 inline std::string SurfaceSpelling(std::string_view entry, std::string_view subject) {
   if (const Override* length = Find(kLengths, entry, subject)) {
-    return std::string(length->spelling) + " length";
+    return std::string(length->spelling) + ".length";
   }
   if (const Override* row = Find(kOverrides, entry, subject)) {
     return std::string(row->spelling);

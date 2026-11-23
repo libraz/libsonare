@@ -10,9 +10,11 @@ and WASM the fields of the entry's object-typed parameters (``ts_request_fields.
 by canonical name and then, on every surface, by the per-surface ruled renames in
 ``field_spelling_renames.toml``, which bind only where the entry carries the renamed
 spelling. A ``[<surface>.length_of]`` row binds an entry's count subject to the array
-keyword whose length it is, and the refusal names it as "<keyword> length"; it also
+keyword whose length it is, and outranks a rename ruled for that subject; the refusal
+names it as "<keyword> length" in Python and "<keyword>.length" on Node and WASM. It also
 binds a count the parity extractors fold into its array, which carries no pairing,
-when the C declaration takes it and the facade takes the array. A name another C subject already pairs with counts: a second form folded
+when the C declaration takes it (a struct parameter's fields included) and the facade
+takes the array. A name another C subject already pairs with counts: a second form folded
 into the entry (an ``_ex``) can name the same argument differently. A subject still unbound is reported, not tabled, and a
 ruled rename that binds nowhere fails the run. Every unbound parameter carries a
 reason in ``field_spelling_unbound.toml``; unbound record fields are output records
@@ -145,12 +147,13 @@ def derive(
         array = lengths[b.surface].get(f"{b.c_key}.{b.c_subject}")
         if b.c_subject in by_canonical:
             bind(b.surface, b.c_key, b.c_subject, by_canonical[b.c_subject])
+        elif array is not None and array in known:
+            # An entry's own length_of row outranks a rename ruled for the subject on every entry.
+            rows[b.surface].add(Row(b.c_key, b.c_subject, array, True))
+            used.add((b.surface, f"length_of.{b.c_key}.{b.c_subject}", array))
         elif len(renamed) == 1:
             bind(b.surface, b.c_key, b.c_subject, renamed[0])
             used.add((b.surface, b.c_subject, renamed[0]))
-        elif array is not None and array in known:
-            rows[b.surface].add(Row(b.c_key, b.c_subject, array, True))
-            used.add((b.surface, f"length_of.{b.c_key}.{b.c_subject}", array))
         else:
             unbound.append(Unbound(b.surface, b.c_key, b.c_subject, b.kind, f"{b.file}:{b.line}"))
     paired = {(b.surface, b.c_key, b.c_subject) for b in bindings if b.c_subject is not None}
@@ -235,7 +238,7 @@ inline const Override* Find(const std::array<Override, N>& table, std::string_vi
 // The {surface} caller's spelling of @p subject on C entry @p entry (no sonare_ prefix).
 inline std::string SurfaceSpelling(std::string_view entry, std::string_view subject) {{
   if (const Override* length = Find(kLengths, entry, subject)) {{
-    return std::string(length->spelling) + " length";
+    return std::string(length->spelling) + ".length";
   }}
   if (const Override* row = Find(kOverrides, entry, subject)) {{
     return std::string(row->spelling);
@@ -367,13 +370,22 @@ def load_bindings() -> Callable[[Path], list]:
 
 
 def load_c_params(root: Path) -> dict[str, set[str]]:
-    """Entry key -> the parameter names its C declaration takes, folded counts included."""
+    """Entry key -> the parameter names its C declaration takes, folded counts included.
+
+    A struct parameter contributes its fields too, since a facade that takes the struct as
+    an object or as keywords is refused under the field's name.
+    """
     import check_parity
     from facts import entry_key as facts_entry_key
 
+    facts = check_parity._EXTRACTORS["c"](root)
+    fields = {r.raw_name: [f.raw_name for f in r.fields] for r in facts.records}
     params: dict[str, set[str]] = defaultdict(set)
-    for function in check_parity._EXTRACTORS["c"](root).functions:
-        params[facts_entry_key(function.key)].update(p.raw_name for p in function.params)
+    for function in facts.functions:
+        names = params[facts_entry_key(function.key)]
+        for p in function.params:
+            names.add(p.raw_name)
+            names.update(fields.get(p.type.replace("const ", "").rstrip("*").strip(), ()))
     return params
 
 

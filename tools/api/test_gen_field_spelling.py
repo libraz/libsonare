@@ -215,6 +215,21 @@ class RenderTest(unittest.TestCase):
         text = gen.render_cpp("node", [gen.Row("apply", "rendered_count", "renderedMono", True)])
         self.assertIn('kLengths = {{\n    {"apply", "rendered_count", "renderedMono"},', text)
         self.assertIn("std::array<Override, 0> kOverrides", text)
+        self.assertIn('return std::string(length->spelling) + ".length";', text)
+
+    def test_an_entrys_length_of_row_outranks_a_rename_for_the_subject(self) -> None:
+        facts = [
+            Fact("mix", "channels", "param", "node", "channels"),
+            Fact("mix", "num_channels", "param", "node", None),
+        ]
+        rule = {"node": {"num_channels": "channels", "length_of": {"mix.num_channels": "channels"}}}
+        rows, _, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(rows["node"], [gen.Row("mix", "num_channels", "channels", True)])
+        self.assertEqual(idle, [("node", "num_channels", "channels")])
+
+    def test_a_struct_parameter_declares_its_fields(self) -> None:
+        params = gen.load_c_params(gen.ROOT)["project_set_warp_map"]
+        self.assertTrue({"desc", "anchors", "anchor_count"} <= params)
 
     def test_a_length_of_row_needs_the_array_on_that_entry(self) -> None:
         facts = [Fact("apply", "rendered_count", "param", "python", None)]
