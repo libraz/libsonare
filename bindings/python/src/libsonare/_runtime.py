@@ -1292,6 +1292,18 @@ def _section_type_token(ordinal: int) -> SectionType:
     return cast(SectionType, _ordinal_token(ordinal, _SECTION_TYPES, "section type"))
 
 
+def _pitch_class(ordinal: int) -> PitchClass:
+    """Convert a pitch class the library wrote; one outside the twelve is refused."""
+    if not 0 <= ordinal < len(PitchClass):
+        raise _malformed_output(f"unknown pitch class ordinal: {ordinal}")
+    return PitchClass(ordinal)
+
+
+def _pitch_class_or_unknown(ordinal: int) -> PitchClass | None:
+    """As :func:`_pitch_class`, reading the C ``-1`` (unknown) as ``None``."""
+    return None if ordinal == -1 else _pitch_class(ordinal)
+
+
 def _optional_from_c_float_array(out: object, count: int) -> np.ndarray:
     # A null pointer means the array was not computed; it reads as an empty array.
     if not out:

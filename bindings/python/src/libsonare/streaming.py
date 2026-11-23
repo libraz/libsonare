@@ -14,7 +14,6 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _WINDOW_TYPES,
     Key,
-    PitchClass,
     StreamBarChord,
     StreamChordChange,
     StreamFrames,
@@ -28,6 +27,8 @@ from ._runtime import (
     _from_c_float_array,
     _from_c_int_array,
     _get_lib,
+    _pitch_class,
+    _pitch_class_or_unknown,
     _to_c_float,
     _to_c_float_array,
     _to_c_size_t,
@@ -453,11 +454,12 @@ def _chord_quality_token(quality: int) -> str:
 def _chord_change(
     root: int, quality: int, start_sec: float, confidence: float
 ) -> StreamChordChange:
+    pitch_class = _pitch_class(root)
     token = _chord_quality_token(quality)
     return StreamChordChange(
-        root=PitchClass(root),
+        root=pitch_class,
         quality=token,
-        name=_chord_symbol(PitchClass(root), token),
+        name=_chord_symbol(pitch_class, token),
         start_sec=start_sec,
         confidence=confidence,
     )
@@ -479,8 +481,8 @@ def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
 
 
 def _bar_chord(raw: Any) -> StreamBarChord:
+    root = _pitch_class(int(raw.root))
     token = _chord_quality_token(int(raw.quality))
-    root = PitchClass(int(raw.root))
     return StreamBarChord(
         bar_index=int(raw.bar_index),
         root=root,
@@ -503,7 +505,7 @@ def _voted_pattern(ptr: object, count: int) -> list[StreamBarChord | None]:
     if not ptr or count <= 0:
         return []
     raw_ptr = cast(Any, ptr)
-    return [None if int(raw_ptr[i].root) < 0 else _bar_chord(raw_ptr[i]) for i in range(count)]
+    return [None if int(raw_ptr[i].root) == -1 else _bar_chord(raw_ptr[i]) for i in range(count)]
 
 
 def _pattern_scores(ptr: object, count: int) -> list[StreamPatternScore]:
@@ -564,8 +566,7 @@ def _stream_frames_i16_from_c(raw: _ffi_streaming.SonareStreamFramesI16) -> Stre
 
 def _estimate_from_c(raw: _ffi_streaming.SonareStreamStats) -> StreamProgressiveEstimate:
     has_bpm = float(raw.bpm) > 0
-    key_root = int(raw.key)
-    has_key = 0 <= key_root < len(PitchClass)
+    key_root = _pitch_class_or_unknown(int(raw.key))
     chord_root = int(raw.chord_root)
     has_bar = int(raw.current_bar) >= 0
     pattern = bytes(raw.detected_pattern_name).split(b"\0", 1)[0].decode("utf-8")
@@ -574,11 +575,11 @@ def _estimate_from_c(raw: _ffi_streaming.SonareStreamStats) -> StreamProgressive
         bpm_confidence=float(raw.bpm_confidence) if has_bpm else None,
         bpm_candidate_count=int(raw.bpm_candidate_count),
         key=Key(
-            root=PitchClass(key_root),
+            root=key_root,
             mode="minor" if raw.key_minor else "major",
             confidence=float(raw.key_confidence),
         )
-        if has_key
+        if key_root is not None
         else None,
         chord=_chord_change(
             chord_root,
@@ -586,7 +587,7 @@ def _estimate_from_c(raw: _ffi_streaming.SonareStreamStats) -> StreamProgressive
             float(raw.chord_start_sec),
             float(raw.chord_confidence),
         )
-        if 0 <= chord_root < len(PitchClass)
+        if chord_root != -1
         else None,
         chord_progression=_chord_changes(raw.chord_progression, int(raw.chord_progression_count)),
         bar_chord_progression=_bar_chords(

@@ -26,6 +26,7 @@ from ._runtime import (
     _measured,
     _mode_values,
     _out_float_array,
+    _pitch_class,
     _profile_value,
     _section_type_token,
     _to_c_float,
@@ -58,7 +59,6 @@ from .types import (
     KeyProfile,
     MelodyPoint,
     MelodyResult,
-    PitchClass,
     Section,
     SectionType,
     TimbreFrame,
@@ -235,7 +235,7 @@ def detect_key(
     )
     _check(rc, flattened="options")
     return KeyDetection(
-        root=PitchClass(out_key.root),
+        root=_pitch_class(out_key.root),
         mode=_key_mode_token(out_key.mode),
         confidence=float(out_key.confidence),
         tuning_cents=float(out_tuning.value),
@@ -291,7 +291,7 @@ def detect_key_candidates(
         return [
             KeyCandidate(
                 key=Key(
-                    root=PitchClass(out_candidates[i].key.root),
+                    root=_pitch_class(out_candidates[i].key.root),
                     mode=_key_mode_token(out_candidates[i].key.mode),
                     confidence=float(out_candidates[i].key.confidence),
                 ),
@@ -472,7 +472,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     # Key
     key_d = data["key"]
     key = Key(
-        root=PitchClass(int(key_d["root"])),
+        root=_pitch_class(int(key_d["root"])),
         mode=_key_mode_token(int(key_d["mode"])),
         confidence=float(key_d["confidence"]),
     )
@@ -535,8 +535,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         if not 0 <= q_raw < len(CHORD_QUALITIES):
             raise _malformed_output(f"unknown chord quality ordinal: {q_raw}")
         quality_str = CHORD_QUALITIES[q_raw]
-        root = PitchClass(int(c["root"]))
-        bass = PitchClass(int(c["bass"]))
+        root = _pitch_class(int(c["root"]))
+        bass = _pitch_class(int(c["bass"]))
         chords.append(
             AnalysisChord(
                 root=root,

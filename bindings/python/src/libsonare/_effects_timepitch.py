@@ -35,6 +35,7 @@ from ._runtime import (
     _mode_value,
     _narrow_int,
     _out_float_array,
+    _pitch_class,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -371,5 +372,5 @@ def auto_tune(
         )
         return AutoTuneResult(
             samples=_from_c_float_array(out, out_length.value),
-            key=Key(PitchClass(used.root), _key_mode_token(used.mode), float(used.confidence)),
+            key=Key(_pitch_class(used.root), _key_mode_token(used.mode), float(used.confidence)),
         )

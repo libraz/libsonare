@@ -29,6 +29,7 @@ from ._runtime import (
     _mapping_keys,
     _measured,
     _mode_value,
+    _pitch_class,
     _section_type_token,
     _to_c_float,
     _to_c_float_array,
@@ -69,8 +70,8 @@ def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
     for i in range(out.chord_count):
         ordinal = int(out.chords[i].quality)
         quality = CHORD_QUALITIES[ordinal] if 0 <= ordinal < len(CHORD_QUALITIES) else "unknown"
-        root = PitchClass(out.chords[i].root)
-        bass = PitchClass(out.chords[i].bass)
+        root = _pitch_class(out.chords[i].root)
+        bass = _pitch_class(out.chords[i].bass)
         chords.append(
             Chord(
                 root=root,

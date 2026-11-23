@@ -456,6 +456,44 @@ def test_a_streamed_chord_quality_outside_the_mirror_is_refused() -> None:
         _chord_change(0, 99, 0.0, 0.5)
 
 
+def test_a_library_pitch_class_outside_the_twelve_is_malformed_output() -> None:
+    from libsonare import _ffi_types_streaming as ffi
+    from libsonare._runtime import _pitch_class, _pitch_class_or_unknown
+    from libsonare.streaming import _bar_chord, _chord_change, _estimate_from_c, _voted_pattern
+    from libsonare.types import PitchClass
+
+    assert _pitch_class(11) == PitchClass.B
+    assert _pitch_class_or_unknown(-1) is None
+    with _raises_malformed("unknown pitch class ordinal: 12$"):
+        _pitch_class(12)
+    with _raises_malformed("unknown pitch class ordinal: -2$"):
+        _pitch_class_or_unknown(-2)
+    with _raises_malformed("unknown pitch class ordinal: 13$"):
+        _chord_change(13, 0, 0.0, 1.0)
+    bar = ffi.SonareStreamBarChord()
+    bar.root, bar.quality = 12, 0
+    with _raises_malformed("unknown pitch class ordinal: 12$"):
+        _bar_chord(bar)
+    pattern = (ffi.SonareStreamBarChord * 2)()
+    pattern[0].root, pattern[0].quality = -1, -1
+    pattern[1].root, pattern[1].quality = -2, 0
+    with _raises_malformed("unknown pitch class ordinal: -2$"):
+        _voted_pattern(pattern, 2)
+    assert _voted_pattern(pattern, 1) == [None]
+
+    stats = ffi.SonareStreamStats()
+    stats.key, stats.chord_root, stats.chord_quality, stats.current_bar = -1, -1, -1, -1
+    estimate = _estimate_from_c(stats)
+    assert estimate.key is None
+    assert estimate.chord is None
+    stats.key = 13
+    with _raises_malformed("unknown pitch class ordinal: 13$"):
+        _estimate_from_c(stats)
+    stats.key, stats.chord_root, stats.chord_quality = 0, 13, 0
+    with _raises_malformed("unknown pitch class ordinal: 13$"):
+        _estimate_from_c(stats)
+
+
 def test_every_ordinal_reader_refuses_a_drifted_mirror_as_malformed_output() -> None:
     from libsonare._effects_voice import _enum_name
     from libsonare._engine_mixing import _sidechain_check
