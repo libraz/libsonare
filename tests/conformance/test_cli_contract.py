@@ -24,6 +24,9 @@ SPEC = importlib.util.spec_from_file_location("libsonare_cli_contract_checker", 
 assert SPEC is not None and SPEC.loader is not None
 CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
+sys.path.insert(0, str(ROOT / "tools" / "conformance"))
+
+from comparison_gate import not_compared
 
 
 class CliContractSelfTest(unittest.TestCase):
@@ -508,7 +511,10 @@ class CliContractSelfTest(unittest.TestCase):
         """
         uncompiled = CHECKER._uncompiled_source_dirs()
         if not uncompiled:
-            self.skipTest("no compilation database to derive target membership from")
+            not_compared(
+                "no compilation database to derive target membership from",
+                "cmake -S . -B build",
+            )
         wasm = ROOT / "src/wasm/bindings/common/common.cpp"
         core = ROOT / "src/c_api/core_quick.cpp"
         self.assertIn(wasm.parent, uncompiled)
@@ -553,8 +559,7 @@ class CliContractSelfTest(unittest.TestCase):
 
         Every difference the comparison could then report belongs to the build,
         so running it emits findings indistinguishable from contract defects.
-        One stale artifact produced four of them against one real cause. The
-        skew itself is a comparison not performed, so it does not fail the run.
+        One stale artifact produced four of them against one real cause.
         """
         report: list[tuple[str, str]] = []
         with (
@@ -582,11 +587,16 @@ class CliContractSelfTest(unittest.TestCase):
             self.assertFalse(CHECKER._check_artifact_skew("cli", "python", 1.0, matched))
         self.assertEqual(matched, [])
 
-    def test_a_skewed_pair_is_not_compared_and_does_not_fail(self) -> None:
-        """The skew is printed where the comparison would have run, and nothing runs."""
+    def _run_skewed(self, environment: dict[str, str]) -> tuple[int, str]:
+        """Run ``main`` over a skewed pair under ``environment``; the comparison must not start."""
         stdout = StringIO()
         with (
-            mock.patch.object(CHECKER, "_resolved_python_library", return_value="lib.dylib"),
+            mock.patch.dict(CHECKER.os.environ, environment),
+            mock.patch.object(
+                CHECKER,
+                "_resolved_python_library",
+                return_value="build-python-shared/lib/libsonare.dylib",
+            ),
             mock.patch.object(CHECKER.os.path, "getmtime", side_effect=[100.0, 200.0]),
             mock.patch.object(CHECKER, "_count_sources_after", return_value=0),
             mock.patch.object(
@@ -596,13 +606,31 @@ class CliContractSelfTest(unittest.TestCase):
             redirect_stdout(stdout),
         ):
             result = CHECKER.main(
-                ["--manifest", str(CHECKER.DEFAULT_MANIFEST), "--native", "cli", "--python", "py"]
+                [
+                    "--manifest",
+                    str(CHECKER.DEFAULT_MANIFEST),
+                    "--native",
+                    "build/bin/sonare-cli",
+                    "--python",
+                    "py",
+                ]
             )
+        return result, stdout.getvalue()
+
+    def test_a_skewed_pair_is_not_compared_and_fails_with_the_rebuild(self) -> None:
+        """A comparison that did not run reads as agreement unless it fails the run."""
+        result, stdout = self._run_skewed({CHECKER.REPORT_ONLY_ENV: ""})
+        self.assertEqual(result, 1)
+        self.assertIn("cli contract v2: not compared: binary older than sources: ", stdout)
+        self.assertIn("cmake --build", stdout)
+        self.assertIn("build --target sonare && ", stdout)
+        self.assertIn("build-python-shared --target sonare_shared", stdout)
+
+    def test_a_skewed_pair_is_only_reported_under_report_only(self) -> None:
+        result, stdout = self._run_skewed({CHECKER.REPORT_ONLY_ENV: "1"})
         self.assertEqual(result, 0)
-        self.assertIn(
-            "cli contract v2: not compared: binary older than sources: ", stdout.getvalue()
-        )
-        self.assertNotIn("FAIL", stdout.getvalue())
+        self.assertIn("cli contract v2: not compared: binary older than sources: ", stdout)
+        self.assertNotIn("FAIL", stdout)
 
     def test_pending_payload_with_active_options_still_checks_inventory(self) -> None:
         """Payload promotion and option promotion are independent gates."""

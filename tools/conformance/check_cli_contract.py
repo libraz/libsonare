@@ -60,6 +60,7 @@ from cli_contract_schema import (
     _validate_option,  # noqa: F401
 )
 from cli_contract_stated import compare_stated_defaults
+from comparison_gate import REPORT_ONLY_ENV, report_only
 
 DEFAULT_MANIFEST = REPO_ROOT / "tests" / "conformance" / "cli_contract_v2.json"
 
@@ -246,8 +247,9 @@ def _check_artifact_skew(
     the argument below, every difference the comparison could then report
     belongs to the build rather than to either surface, so the findings would be
     real failures of nothing and indistinguishable from contract defects. The
-    skew is reported as a comparison not performed, not as a failure, since it
-    says nothing about either surface.
+    skew says nothing about either surface, but a comparison that did not run
+    still fails the run (``comparison_gate``) with the commands that rebuild
+    both, unless the run is report-only.
 
     Every run prints which two artifacts were compared. Whether the Python
     surface loads the build tree, a ``SONARE_LIB_PATH`` override, or the
@@ -289,11 +291,24 @@ def _check_artifact_skew(
             "not-compared",
             (
                 f"binary older than sources: {straddling.relative_to(REPO_ROOT)} changed after "
-                f"{behind} was linked and before {ahead} was -- rebuild both to compare"
+                f"{behind} was linked and before {ahead} was -- rebuild both to compare: "
+                f"{_build_command(native_executable, 'sonare')} && "
+                f"{_build_command(library, 'sonare_shared')}"
             ),
         )
     )
     return True
+
+
+def _build_command(artifact: str, target: str) -> str:
+    """The command that relinks ``artifact``, read off its ``<build dir>/{bin,lib}/`` location."""
+    path = Path(artifact)
+    if path.parent.name in ("bin", "lib"):
+        build = path.parent.parent
+        if build.is_relative_to(REPO_ROOT):
+            build = build.relative_to(REPO_ROOT)
+        return f"cmake --build {build} --target {target}"
+    return f"cmake --build <the build dir holding {artifact}> --target {target}"
 
 
 def _emit(report: list[tuple[str, str]]) -> int:
@@ -853,7 +868,13 @@ def main(argv: list[str] | None = None) -> int:
     if _check_artifact_skew(native_executable, python_executable, args.timeout, report):
         for _, message in report:
             print(f"cli contract v2: not compared: {message}")
-        return 0
+        if report_only():
+            print(f"cli contract v2: reported only ({REPORT_ONLY_ENV}=1)")
+            return 0
+        print(
+            f"cli contract v2: a comparison that did not run fails; set {REPORT_ONLY_ENV}=1 to report it"
+        )
+        return 1
     # Each surface is asked about its own library. The inventory half only ever
     # relaxes the native front-end -- the Python parser is built
     # unconditionally, so a feature-off library changes what its commands DO

@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -31,6 +32,9 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
+sys.path.insert(0, str(ROOT / "tools" / "conformance"))
+
+from comparison_gate import not_compared
 
 REAL_BUILD = ROOT / "bindings" / "wasm" / "build-wasm"
 REAL_ANALYSIS_BUILD = ROOT / "bindings" / "wasm" / "build-wasm-analysis"
@@ -371,10 +375,6 @@ class SyntheticBuildTest(unittest.TestCase):
             self.assertNotIn("module_unit.cpp", err)
 
 
-@unittest.skipUnless(
-    (REAL_BUILD / "compile_commands.json").is_file(),
-    "no WASM build tree; run (cd bindings/wasm && yarn build:wasm)",
-)
 class RealBuildTest(unittest.TestCase):
     """Non-vacuity against the shipped build, phrased to survive the CMake fix.
 
@@ -385,6 +385,8 @@ class RealBuildTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        if not (REAL_BUILD / "compile_commands.json").is_file():
+            not_compared("no WASM build tree", "(cd bindings/wasm && yarn build:wasm)")
         cls.result = CHECKER.audit(REAL_BUILD)
         cls.unanalysable = cls.result.unanalysable
         cls.linked = cls.result.linked
@@ -408,10 +410,6 @@ class RealBuildTest(unittest.TestCase):
         self.assertEqual(self.result.idle, [])
 
 
-@unittest.skipUnless(
-    (REAL_ANALYSIS_BUILD / "compile_commands.json").is_file(),
-    "no analysis-only WASM build tree; run (cd bindings/wasm && yarn build:wasm:analysis)",
-)
 class RealAnalysisBuildTest(unittest.TestCase):
     """The configuration that makes the union rule necessary.
 
@@ -423,6 +421,10 @@ class RealAnalysisBuildTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        if not (REAL_ANALYSIS_BUILD / "compile_commands.json").is_file():
+            not_compared(
+                "no analysis-only WASM build tree", "(cd bindings/wasm && yarn build:wasm:analysis)"
+            )
         cls.result = CHECKER.audit(REAL_ANALYSIS_BUILD)
 
     def test_the_gated_units_carry_an_idle_flag_here(self) -> None:

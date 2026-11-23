@@ -16,6 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_binding_warning_flags as checker
 
+sys.path.insert(0, str(checker.ROOT / "tools" / "conformance"))
+
+from comparison_gate import not_compared
+
 
 def _database(tmp: Path, layer: checker.Layer, entries: list[tuple[str, str]]) -> Path:
     """Write a compilation database for `layer` under a scratch root.
@@ -73,9 +77,7 @@ class BindingWarningFlagsTest(unittest.TestCase):
     def test_a_layer_entirely_at_the_bar_reports_nothing(self) -> None:
         # The control. Without it the case above passes against a check that
         # reports every unit.
-        _database(
-            self.root, self.LAYER, self._entries(self.LAYER.floor, self.AT_BAR)
-        )
+        _database(self.root, self.LAYER, self._entries(self.LAYER.floor, self.AT_BAR))
         covered, uncovered = checker.audit(self.LAYER, self.root)
         self.assertEqual(uncovered, [])
         self.assertEqual(checker.evaluate(self.LAYER, covered, uncovered), [])
@@ -119,7 +121,7 @@ class RealTreeTest(unittest.TestCase):
         for layer in checker.LAYERS:
             with self.subTest(layer=layer.name):
                 if not (checker.ROOT / layer.build_dir / "compile_commands.json").is_file():
-                    self.skipTest(f"{layer.name} is not built in this tree")
+                    not_compared(f"{layer.name} is not built in this tree", layer.rebuild)
                 covered, uncovered = checker.audit(layer)
                 self.assertEqual(uncovered, [])
                 self.assertGreaterEqual(len(covered), layer.floor)

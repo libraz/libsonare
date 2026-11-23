@@ -977,6 +977,10 @@ gs-efx-coverage: gs-efx-archive-set
 # in three files at once; widening one and not the others leaves the gate that
 # runs on a push as narrow as it was, and green. It also holds every workflow
 # install to the uv.lock dependency groups, so no tool version is hand-copied.
+#
+# A comparison that cannot run because its build is missing or stale fails with
+# the command that produces it (tools/conformance/comparison_gate.py); a
+# build-free run passes SONARE_CONFORMANCE_REPORT_ONLY=1 to report it instead.
 conformance: conformance-checks
 	$(CHECK_REPORT)
 
@@ -1087,8 +1091,11 @@ conformance-checks:
 			--native "$(BUILD_DIR)/bin/sonare-cli" \
 			--python "bindings/python/.venv/bin/python" \
 			|| echo "python3 tools/conformance/check_cli_contract.py --native --python" >> $(CHECK_FAILURES); \
+	elif test "$$SONARE_CONFORMANCE_REPORT_ONLY" = 1; then \
+		echo "conformance: live CLI check not compared ($(BUILD_DIR)/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable; SONARE_CONFORMANCE_REPORT_ONLY=1)"; \
 	else \
-		echo "conformance: live CLI check skipped (build/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable)"; \
+		echo "conformance: live CLI check not compared: $(BUILD_DIR)/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable; build with: cmake --build $(BUILD_DIR) --target sonare && uv sync --locked --project bindings/python (or set SONARE_CONFORMANCE_REPORT_ONLY=1 to report it)"; \
+		echo "live CLI check: not compared" >> $(CHECK_FAILURES); \
 	fi
 
 # C-ABI contract scans, kept as named targets for running one on its own;

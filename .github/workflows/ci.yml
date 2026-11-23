@@ -118,8 +118,9 @@ jobs:
         # C headers, and a desync there segfaults the Python binding rather than
         # failing a test.
         #
-        # `parity` depends on `conformance`, whose closing live-CLI comparison
-        # skips itself when no built CLI is present, as it is here.
+        # `parity` depends on `conformance`, whose comparisons against a built CLI,
+        # shared library or binding tree fail when that build is absent; this job
+        # builds nothing, so it runs them report-only.
         #
         # `surface-check` reads the Node and WASM facades through each package's
         # own TypeScript, so both packages' node_modules are installed; nothing
@@ -139,7 +140,7 @@ jobs:
           make abi-layout-check
           make check-abi-version
           make processor-types-check
-          make parity
+          make parity SONARE_CONFORMANCE_REPORT_ONLY=1
           make surface-check
 
   voicematch:

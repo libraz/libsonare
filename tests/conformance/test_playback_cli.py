@@ -28,9 +28,17 @@ import wave
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "conformance"))
+
+from comparison_gate import not_compared
+
 _SAMPLE_RATE = 22050
 _FRAMES = 4410  # 0.2 s, matching the fixture length other CLI contract tests use
 _WAVE_FORMAT_EXTENSIBLE = 0xFFFE
+
+
+_NATIVE_CLI_MISSING = "native sonare-cli binary not found; set SONARE_NATIVE_CLI"
+_NATIVE_CLI_BUILD = "cmake --build build --target sonare"
 
 
 def _native_cli() -> Path | None:
@@ -94,15 +102,17 @@ def _python_library_error() -> str | None:
     return None if probe.returncode == 0 else (probe.stderr.strip().splitlines() or ["failed"])[-1]
 
 
-def _python_cli_or_skip(test: unittest.TestCase) -> list[str]:
-    """The Python CLI invocation, skipping the test when no library is built.
+def _python_cli_or_not_compared(test: unittest.TestCase) -> list[str]:
+    """The Python CLI invocation; with no loadable library the test is not compared.
 
-    The build-free CI gate has neither front end; the native half skips on a
-    missing binary, and this is the same rule for the Python half.
+    The native half treats a missing binary the same way (``comparison_gate``).
     """
     error = _python_library_error()
     if error is not None:
-        test.skipTest(f"libsonare shared library not loadable: {error}")
+        not_compared(
+            f"libsonare shared library not loadable: {error}",
+            "cmake --build build-python-shared --target sonare_shared",
+        )
     return _python_cli_argv()
 
 
@@ -191,14 +201,14 @@ class PlaybackCliDiagnosticsTest(unittest.TestCase):
     def test_native_json_diagnostics_reflect_the_render(self) -> None:
         native = _native_cli()
         if native is None:
-            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+            not_compared(_NATIVE_CLI_MISSING, _NATIVE_CLI_BUILD)
         self._assert_diagnostics_reflect_the_render(
             [str(native)], Path(self._tmp.name) / "native-loud.wav"
         )
 
     def test_python_json_diagnostics_reflect_the_render(self) -> None:
         self._assert_diagnostics_reflect_the_render(
-            _python_cli_or_skip(self), Path(self._tmp.name) / "python-loud.wav"
+            _python_cli_or_not_compared(self), Path(self._tmp.name) / "python-loud.wav"
         )
 
 
@@ -241,7 +251,7 @@ class PlaybackCliConfigRefusalTest(unittest.TestCase):
     def test_native_refuses_missing_config_file(self) -> None:
         native = _native_cli()
         if native is None:
-            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+            not_compared(_NATIVE_CLI_MISSING, _NATIVE_CLI_BUILD)
         self._assert_refused(
             [str(native)], self.missing_config, Path(self._tmp.name) / "native-missing.wav"
         )
@@ -249,21 +259,21 @@ class PlaybackCliConfigRefusalTest(unittest.TestCase):
     def test_native_refuses_non_object_config_root(self) -> None:
         native = _native_cli()
         if native is None:
-            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+            not_compared(_NATIVE_CLI_MISSING, _NATIVE_CLI_BUILD)
         self._assert_refused(
             [str(native)], self.non_object_config, Path(self._tmp.name) / "native-non-object.wav"
         )
 
     def test_python_refuses_missing_config_file(self) -> None:
         self._assert_refused(
-            _python_cli_or_skip(self),
+            _python_cli_or_not_compared(self),
             self.missing_config,
             Path(self._tmp.name) / "python-missing.wav",
         )
 
     def test_python_refuses_non_object_config_root(self) -> None:
         self._assert_refused(
-            _python_cli_or_skip(self),
+            _python_cli_or_not_compared(self),
             self.non_object_config,
             Path(self._tmp.name) / "python-non-object.wav",
         )
@@ -294,7 +304,7 @@ class PlaybackCliTest(unittest.TestCase):
     def test_native_headphones_output_is_stereo(self) -> None:
         native = _native_cli()
         if native is None:
-            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+            not_compared(_NATIVE_CLI_MISSING, _NATIVE_CLI_BUILD)
         self._assert_target_writes(
             [str(native)], "headphones", 2, Path(self._tmp.name) / "native-headphones.wav"
         )
@@ -302,12 +312,12 @@ class PlaybackCliTest(unittest.TestCase):
     def test_native_seven_one_output_is_extensible(self) -> None:
         native = _native_cli()
         if native is None:
-            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+            not_compared(_NATIVE_CLI_MISSING, _NATIVE_CLI_BUILD)
         self._assert_target_writes([str(native)], "7.1", 8, Path(self._tmp.name) / "native-71.wav")
 
     def test_python_headphones_output_is_stereo(self) -> None:
         self._assert_target_writes(
-            _python_cli_or_skip(self),
+            _python_cli_or_not_compared(self),
             "headphones",
             2,
             Path(self._tmp.name) / "python-headphones.wav",
@@ -315,7 +325,7 @@ class PlaybackCliTest(unittest.TestCase):
 
     def test_python_seven_one_output_is_extensible(self) -> None:
         self._assert_target_writes(
-            _python_cli_or_skip(self), "7.1", 8, Path(self._tmp.name) / "python-71.wav"
+            _python_cli_or_not_compared(self), "7.1", 8, Path(self._tmp.name) / "python-71.wav"
         )
 
 
