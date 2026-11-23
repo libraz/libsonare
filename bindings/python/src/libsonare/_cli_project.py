@@ -64,7 +64,7 @@ def _project_from_document(document: bytes) -> object:
     from . import Project
 
     try:
-        return Project.from_json_with_diagnostics(document)
+        return Project._deserialize_with_diagnostics(document, coded_refusal=True)
     except SonareError:
         # Carries the C ABI's own code, so the exit status matches the native CLI.
         raise

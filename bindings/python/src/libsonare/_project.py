@@ -64,6 +64,7 @@ from ._project_render import _compile_diagnostics, _ProjectRenderMixin
 from ._runtime import (
     SonareProjectCompileResult,
     _check,
+    _coded_error,
     _get_lib,
     _utf8_arg,
 )
@@ -287,6 +288,17 @@ class Project(
     @_entry("Project.from_json_with_diagnostics")
     def from_json_with_diagnostics(cls, json: str | bytes) -> ProjectDeserializeResult:
         """Deserialize project JSON and return warnings from successful loads."""
+        return cls._deserialize_with_diagnostics(json, coded_refusal=False)
+
+    @classmethod
+    def _deserialize_with_diagnostics(
+        cls, json: str | bytes, *, coded_refusal: bool
+    ) -> ProjectDeserializeResult:
+        """Load a document; with ``coded_refusal`` a refusal carries its coded diagnostic lines.
+
+        The command line prints a refused document's ``<code>: <message>`` lines as the native
+        command does; the library API raises the uncoded last error instead.
+        """
         lib = _get_lib()
         _check_project_abi(lib)
         data = _utf8_arg(json, "json") if isinstance(json, str) else bytes(json)
@@ -300,6 +312,8 @@ class Project(
         finally:
             if diag:
                 lib.sonare_free_string(diag)
+        if coded_refusal and rc != 0 and diagnostics:
+            raise _coded_error(rc, diagnostics)
         _check(rc)
         obj = cls.__new__(cls)
         obj._handle = handle
