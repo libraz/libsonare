@@ -116,9 +116,9 @@ Napi::Value ClipPageProviderWrap::Supply(const Napi::CallbackInfo& info) {
                          sonare_node::ElementData(channel) + channel.ElementLength());
     ptrs.push_back(storage.back().data());
   }
-  ThrowIfError(env, sonare_clip_page_provider_supply(provider_, page_index, ptrs.data(),
-                                                     static_cast<int>(ptrs.size()),
-                                                     static_cast<int64_t>(frames)));
+  ThrowIfError(env, sonare_clip_page_provider_supply(
+                        provider_, page_index, sonare_node::ElementData(ptrs),
+                        static_cast<int>(ptrs.size()), static_cast<int64_t>(frames)));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

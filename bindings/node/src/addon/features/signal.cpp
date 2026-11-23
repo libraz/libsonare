@@ -212,8 +212,8 @@ Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
   size_t out_count = 0;
   SonareSilenceCommonReport report{};
   const SonareError err = sonare_split_silence_common(
-      signal_ptrs.data(), signal_ptrs.size(), lengths.data(), top_db, frame_length, hop_length,
-      &out, &out_count, with_report ? &report : nullptr);
+      sonare_node::ElementData(signal_ptrs), signal_ptrs.size(), sonare_node::ElementData(lengths),
+      top_db, frame_length, hop_length, &out, &out_count, with_report ? &report : nullptr);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Value intervals = TakeCInts(env, out, out_count);
   if (!with_report) return intervals;
@@ -325,8 +325,8 @@ Napi::Value SonareWrap::FixFrames(const Napi::CallbackInfo& info) {
   }
   int* out = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_fix_frames(frames.data(), frames.size(), x_min, x_max, pad ? 1 : 0, &out, &count);
+  SonareError err = sonare_fix_frames(sonare_node::ElementData(frames), frames.size(), x_min, x_max,
+                                      pad ? 1 : 0, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCInts(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -340,9 +340,9 @@ Napi::Value SonareWrap::OnsetBacktrack(const Napi::CallbackInfo& info) {
   const auto energy = info[1].As<Napi::Float32Array>();
   int* out = nullptr;
   size_t count = 0;
-  const SonareError err =
-      sonare_onset_backtrack(events.data(), events.size(), sonare_node::ElementData(energy),
-                             energy.ElementLength(), &out, &count);
+  const SonareError err = sonare_onset_backtrack(sonare_node::ElementData(events), events.size(),
+                                                 sonare_node::ElementData(energy),
+                                                 energy.ElementLength(), &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCInts(env, out, count);
   SONARE_NODE_CATCH(env)

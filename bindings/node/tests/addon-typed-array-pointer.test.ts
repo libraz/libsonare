@@ -1,7 +1,8 @@
 /**
  * A zero-length typed array is a given argument. Its view carries a null element pointer, which a
  * C entry reads as an omitted argument, so every typed-array pointer the addon reads goes through
- * the one accessor that never returns null, as does an optional pointer into a copy of one.
+ * the one accessor that never returns null, as does every pointer into a copy the addon hands the C
+ * ABI.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -31,9 +32,20 @@ describe('typed-array element pointers', () => {
           offenders.push(`${source.file}: ${line.trim()}`);
         }
       }
-      // An optional pointer taken from a copy carries no count, so an empty copy must not read as null.
-      for (const match of text.matchAll(/\w+_ptr = [\w>.-]+\.data\(\);/g)) {
-        offenders.push(`${source.file}: ${match[0]}`);
+      // A pointer into a copy reaches the C ABI as a call argument or a struct field; one set to
+      // null for an empty list on purpose spells out its empty() test.
+      for (const call of text.matchAll(/\bsonare_\w+\s*\(/g)) {
+        const start = (call.index ?? 0) + call[0].length;
+        const segment = text.slice(start, text.indexOf(';', start));
+        for (const read of segment.matchAll(/[\w\][>.-]+?\.data\(\)/g)) {
+          const before = segment.slice(Math.max(0, (read.index ?? 0) - 60), read.index);
+          if (!/empty\(\)\s*\?\s*nullptr\s*:\s*$/.test(before)) {
+            offenders.push(`${source.file}: ${call[0]}${read[0]}`);
+          }
+        }
+      }
+      for (const field of text.matchAll(/\b\w+(?:\.|->)\w+\s*=\s*[\w\][>.-]+?\.data\(\);/g)) {
+        offenders.push(`${source.file}: ${field[0]}`);
       }
     }
     // A floor, so a scan that stops seeing the accessor cannot pass as clean.

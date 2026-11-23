@@ -38,10 +38,12 @@ T* ElementData(Napi::TypedArrayOf<T> array) {
   return data != nullptr ? data : &empty;
 }
 
-/// @brief The element pointer of a copy taken from a typed array, never null, for the same reason.
-template <typename T>
-T* ElementData(std::vector<T>& copy) {
-  static T empty{};
+/// @brief The element pointer of a copy, never null, for the same reason: every pointer into a
+///        copy the addon hands the C ABI, as a call argument or a struct field, goes through here.
+template <typename Container>
+auto ElementData(Container& copy) -> decltype(copy.data()) {
+  using Element = std::remove_pointer_t<decltype(copy.data())>;
+  static Element empty{};
   return copy.empty() ? &empty : copy.data();
 }
 

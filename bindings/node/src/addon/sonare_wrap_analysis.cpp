@@ -467,8 +467,9 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 
   void Execute() override {
     char* json_ptr = nullptr;
-    SonareError err = sonare_analyze_json(samples_.data(), samples_.size(), sample_rate_,
-                                          has_options_ ? &options_ : nullptr, &json_ptr);
+    SonareError err =
+        sonare_analyze_json(sonare_node::ElementData(samples_), samples_.size(), sample_rate_,
+                            has_options_ ? &options_ : nullptr, &json_ptr);
     if (err != SONARE_OK) {
       error_code_ = err;
       shape_refusal_ = LastRefusalIsShape();

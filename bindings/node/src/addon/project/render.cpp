@@ -695,7 +695,8 @@ Napi::Value ProjectWrap::SoundFontManifest(const Napi::CallbackInfo& info) {
   if (env.IsExceptionPending()) return env.Undefined();
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
-    ThrowIfError(env, sonare_project_soundfont_manifest(project_, entries.data(), total, &total));
+    ThrowIfError(env, sonare_project_soundfont_manifest(project_, sonare_node::ElementData(entries),
+                                                        total, &total));
     if (env.IsExceptionPending()) return env.Undefined();
   }
   Napi::Array out = Napi::Array::New(env, entries.size());

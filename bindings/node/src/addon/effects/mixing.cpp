@@ -271,8 +271,9 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     }
   }
 
-  SonareError err = sonare_mixer_process_stereo(mixer, left_ptrs.data(), right_ptrs.data(), count,
-                                                out_left.data(), out_right.data(), length);
+  SonareError err = sonare_mixer_process_stereo(
+      mixer, sonare_node::ElementData(left_ptrs), sonare_node::ElementData(right_ptrs), count,
+      sonare_node::ElementData(out_left), sonare_node::ElementData(out_right), length);
   if (err != SONARE_OK)
     throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
   // The whole signal was one block: fold the meters' pending group delay in.

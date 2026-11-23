@@ -179,11 +179,11 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
   }
 
   SonareEngineGraphSpec spec{};
-  spec.nodes = nodes.data();
+  spec.nodes = sonare_node::ElementData(nodes);
   spec.node_count = nodes.size();
-  spec.connections = connections.data();
+  spec.connections = sonare_node::ElementData(connections);
   spec.connection_count = connections.size();
-  spec.parameter_bindings = parameter_bindings.data();
+  spec.parameter_bindings = sonare_node::ElementData(parameter_bindings);
   spec.parameter_binding_count = parameter_bindings.size();
   if (!RequiredStringProperty(env, spec_obj, "inputNode", &text)) return env.Undefined();
   if (!CopyString(env, spec.input_node, sizeof(spec.input_node), text, "graph spec inputNode")) {
@@ -247,10 +247,10 @@ Napi::Value RealtimeEngineWrap::Process(const Napi::CallbackInfo& info) {
   // Audio-thread entry point: its failure carries no detail message of its own,
   // so it must not be reported through the thread-local one (see
   // ThrowIfRealtimeError).
-  ThrowIfRealtimeError(
-      env, sonare_engine_process(engine_, block.pointers.data(),
-                                 with_monitor ? monitor.pointers.data() : nullptr,
-                                 static_cast<int>(block.pointers.size()), block.frames));
+  ThrowIfRealtimeError(env, sonare_engine_process(
+                                engine_, sonare_node::ElementData(block.pointers),
+                                with_monitor ? sonare_node::ElementData(monitor.pointers) : nullptr,
+                                static_cast<int>(block.pointers.size()), block.frames));
   if (env.IsExceptionPending()) return env.Undefined();
   if (!with_monitor) return sonare_node::Float32ArraysFrom(env, block.storage);
 
@@ -277,7 +277,7 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
   SonareEngineRenderOfflineOptions render_options;
   sonare_engine_render_offline_options_init(&render_options);
   render_options.finalize = finalize ? 1 : 0;
-  ThrowIfError(env, sonare_engine_render_offline(engine_, block.pointers.data(),
+  ThrowIfError(env, sonare_engine_render_offline(engine_, sonare_node::ElementData(block.pointers),
                                                  static_cast<int>(block.pointers.size()),
                                                  block.frames, block_size, &render_options));
   if (env.IsExceptionPending()) return env.Undefined();

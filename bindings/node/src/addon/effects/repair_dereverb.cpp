@@ -239,7 +239,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalLinked(const Napi::Callb
   }
   SonareDereverbLinkedResult result{};
   SonareError err = sonare_mastering_repair_dereverb_classical_linked(
-      inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &result);
+      sonare_node::ElementData(inputs.ptrs), inputs.ptrs.size(), inputs.length, sr, &config,
+      &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

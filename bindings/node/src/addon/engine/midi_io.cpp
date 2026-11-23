@@ -412,8 +412,8 @@ Napi::Value RealtimeEngineWrap::PushMidiUmp(const Napi::CallbackInfo& info) {
                             : sonare::midi::kLivePushUmpShapeError)) {
     return env.Undefined();
   }
-  ThrowIfError(env,
-               sonare_engine_push_midi_ump(engine_, destination_id, words.data(), count, deadline));
+  ThrowIfError(env, sonare_engine_push_midi_ump(engine_, destination_id,
+                                                sonare_node::ElementData(words), count, deadline));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -435,7 +435,8 @@ Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info)
                             : sonare::midi::kLivePushUmpShapeError)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_push_midi_input_ump(engine_, words.data(), count, port_time));
+  ThrowIfError(env, sonare_engine_push_midi_input_ump(engine_, sonare_node::ElementData(words),
+                                                      count, port_time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -581,8 +582,8 @@ Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info
   while (out_index + kMaxLoweredMessages <= max_records) {
     const size_t want = std::min(records.size(), max_records - out_index);
     size_t written = 0;
-    const SonareError err =
-        sonare_engine_drain_external_midi(engine_, records.data(), want, &written);
+    const SonareError err = sonare_engine_drain_external_midi(
+        engine_, sonare_node::ElementData(records), want, &written);
     ThrowIfError(env, err);
     if (env.IsExceptionPending()) return env.Undefined();
     if (written == 0) break;

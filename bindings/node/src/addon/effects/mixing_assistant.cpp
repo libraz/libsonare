@@ -194,10 +194,12 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info) {
 
   char* json = nullptr;
   const SonareError err = sonare_mixing_assistant_suggest(
-      tracks.left.data(), tracks.any_right ? tracks.right.data() : nullptr,
-      tracks.id_pointers.data(), tracks.any_name ? tracks.name_pointers.data() : nullptr,
-      tracks.lengths.data(), tracks.sample_rates.empty() ? nullptr : tracks.sample_rates.data(),
-      tracks.left.size(),
+      sonare_node::ElementData(tracks.left),
+      tracks.any_right ? sonare_node::ElementData(tracks.right) : nullptr,
+      sonare_node::ElementData(tracks.id_pointers),
+      tracks.any_name ? sonare_node::ElementData(tracks.name_pointers) : nullptr,
+      sonare_node::ElementData(tracks.lengths),
+      tracks.sample_rates.empty() ? nullptr : tracks.sample_rates.data(), tracks.left.size(),
       node_domain_number<int>(info[5], "sampleRate",
                               sonare_c_detail::kMixingAssistantSampleRateDomain),
       c_params.empty() ? nullptr : c_params.data(), c_params.size(), &json);

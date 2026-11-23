@@ -196,9 +196,9 @@ Napi::Value ProjectWrap::BakeMidiFx(const Napi::CallbackInfo& info) {
   if (env.IsExceptionPending()) return env.Undefined();
   std::vector<int32_t> source_index(expected, -1);
   size_t written = 0;
-  ThrowIfError(env,
-               sonare_project_bake_midi_fx(project_, clip_id, config.c_str(), source_index.data(),
-                                           source_index.size(), &written));
+  ThrowIfError(env, sonare_project_bake_midi_fx(project_, clip_id, config.c_str(),
+                                                sonare_node::ElementData(source_index),
+                                                source_index.size(), &written));
   if (env.IsExceptionPending()) return env.Undefined();
   const size_t count = std::min(written, source_index.size());
   Napi::Int32Array out = Napi::Int32Array::New(env, count);

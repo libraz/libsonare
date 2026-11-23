@@ -166,7 +166,7 @@ bool ReadVocalNoteEdit(Napi::Env env, const Napi::Value& value, SonareVocalNoteE
           .ThrowAsJavaScriptException();
       return false;
     }
-    out->target_points = storage->points.data();
+    out->target_points = sonare_node::ElementData(storage->points);
     out->target_point_count = storage->points.size();
   }
 
@@ -326,7 +326,7 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
         if (!ReadNoteId(env, ids.Get(j), "operation.noteIds[]", &id)) return false;
         item.note_ids.push_back(id);
       }
-      item.operation.note_ids = item.note_ids.data();
+      item.operation.note_ids = sonare_node::ElementData(item.note_ids);
       item.operation.note_id_count = item.note_ids.size();
       const Napi::Value policy = object.Get("policy");
       if (policy.IsUndefined() || policy.IsNull()) {
@@ -364,7 +364,7 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
         if (!ReadNoteId(env, ids.Get(j), "operation.noteIds[]", &id)) return false;
         item.note_ids.push_back(id);
       }
-      item.operation.note_ids = item.note_ids.data();
+      item.operation.note_ids = sonare_node::ElementData(item.note_ids);
       item.operation.note_id_count = item.note_ids.size();
     } else {
       Napi::RangeError::New(env, "operation.kind has an unsupported value")

@@ -168,7 +168,7 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
     clip.num_channels = 0;
     clip.num_samples = 0;
   } else {
-    clip.channels = clip_ptrs.data();
+    clip.channels = sonare_node::ElementData(clip_ptrs);
     clip.num_channels = static_cast<int>(clip_ptrs.size());
     clip.num_samples = static_cast<int64_t>(num_samples);
   }
@@ -210,7 +210,7 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
       }
       clip_warp_anchors.push_back(out);
     }
-    clip.warp_anchors = clip_warp_anchors.data();
+    clip.warp_anchors = sonare_node::ElementData(clip_warp_anchors);
     clip.warp_anchor_count = clip_warp_anchors.size();
   }
   return true;
@@ -235,7 +235,8 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
   }
-  ThrowIfError(env, sonare_engine_set_clips(engine_, clips.data(), clips.size()));
+  ThrowIfError(env,
+               sonare_engine_set_clips(engine_, sonare_node::ElementData(clips), clips.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -327,7 +328,8 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
     }
     lanes.push_back(lane);
   }
-  ThrowIfError(env, sonare_engine_set_track_lanes(engine_, lanes.data(), lanes.size()));
+  ThrowIfError(
+      env, sonare_engine_set_track_lanes(engine_, sonare_node::ElementData(lanes), lanes.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -344,8 +346,8 @@ Napi::Value RealtimeEngineWrap::SetTrackSends(const Napi::CallbackInfo& info) {
   }
   std::vector<SonareEngineTrackSend> sends;
   if (!ReadSends(env, info[1].As<Napi::Array>(), &sends)) return env.Undefined();
-  const SonareError err =
-      sonare_engine_set_track_sends(engine_, track_id, sends.data(), sends.size());
+  const SonareError err = sonare_engine_set_track_sends(
+      engine_, track_id, sonare_node::ElementData(sends), sends.size());
   if (err != SONARE_OK) {
     sonare_node::ThrowLastSonareError(env, "", err);
   }
@@ -453,7 +455,8 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
     }
     buses.push_back(bus);
   }
-  ThrowIfError(env, sonare_engine_set_track_buses(engine_, buses.data(), buses.size()));
+  ThrowIfError(
+      env, sonare_engine_set_track_buses(engine_, sonare_node::ElementData(buses), buses.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -637,7 +640,7 @@ void RealtimeEngineWrap::InstallCaptureBuffers(Napi::Env env,
   for (auto& buffer : capture_buffers_) capture_ptrs_.push_back(buffer.data());
 
   SonareEngineCaptureBuffer buffer{};
-  buffer.channels = capture_ptrs_.data();
+  buffer.channels = sonare_node::ElementData(capture_ptrs_);
   buffer.num_channels = static_cast<int>(capture_ptrs_.size());
   buffer.capacity_frames = frames;
   ThrowIfError(env, sonare_engine_set_capture_buffer(engine_, &buffer));

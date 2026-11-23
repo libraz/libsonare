@@ -262,7 +262,8 @@ Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info)
     if (env.IsExceptionPending()) return env.Undefined();
     segments.push_back(segment);
   }
-  ThrowIfError(env, sonare_engine_set_tempo_segments(engine_, segments.data(), segments.size()));
+  ThrowIfError(env, sonare_engine_set_tempo_segments(engine_, sonare_node::ElementData(segments),
+                                                     segments.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -293,8 +294,8 @@ Napi::Value RealtimeEngineWrap::SetTimeSignatureSegments(const Napi::CallbackInf
     }
     segments.push_back(segment);
   }
-  ThrowIfError(
-      env, sonare_engine_set_time_signature_segments(engine_, segments.data(), segments.size()));
+  ThrowIfError(env, sonare_engine_set_time_signature_segments(
+                        engine_, sonare_node::ElementData(segments), segments.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

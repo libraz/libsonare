@@ -103,7 +103,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     desc.name = names.back().c_str();
     desc.role = role.IsUndefined() || role.IsNull() ? nullptr : roles.back().c_str();
     desc.layout = layout;
-    desc.planar_samples = stem_planes.data();
+    desc.planar_samples = sonare_node::ElementData(stem_planes);
     desc.frame_count = frame_count;
     desc.start_frame = sonare_node::DomainProperty<int64_t>(
         stem, "startFrame", desc.start_frame, sonare_c_detail::kExternalStemStartFrameDomain);
@@ -115,7 +115,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
   request_desc.sample_rate =
       sonare_node::DomainProperty<int>(request, "sampleRate", request_desc.sample_rate,
                                        sonare_c_detail::kExternalStemSampleRateDomain);
-  request_desc.stems = descriptors.data();
+  request_desc.stems = sonare_node::ElementData(descriptors);
   request_desc.stem_count = descriptors.size();
   SonareExternalStemImportResult result{};
   ThrowIfError(env, sonare_project_import_external_stems(project_, &request_desc, &result));

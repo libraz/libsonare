@@ -264,7 +264,8 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   std::string json = sonare_node::node_narrow_string(env, info[0], "json");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
-  const SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);
+  const SonareError err =
+      sonare_project_deserialize(sonare_node::ElementData(json), json.size(), &handle, &diag);
   std::string diagnostics = diag != nullptr ? diag : "";
   if (diag != nullptr) sonare_free_string(diag);
   if (err != SONARE_OK) {

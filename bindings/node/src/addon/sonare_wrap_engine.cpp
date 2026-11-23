@@ -473,8 +473,8 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
     if (env.IsExceptionPending()) return env.Undefined();
     points.push_back(point);
   }
-  ThrowIfError(env,
-               sonare_engine_set_automation_lane(engine_, param_id, points.data(), points.size()));
+  ThrowIfError(env, sonare_engine_set_automation_lane(
+                        engine_, param_id, sonare_node::ElementData(points), points.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -525,7 +525,8 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
     if (env.IsExceptionPending()) return env.Undefined();
     markers.push_back(marker);
   }
-  ThrowIfError(env, sonare_engine_set_markers(engine_, markers.data(), markers.size()));
+  ThrowIfError(
+      env, sonare_engine_set_markers(engine_, sonare_node::ElementData(markers), markers.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

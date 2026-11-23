@@ -189,9 +189,9 @@ Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
   int n_segments{};
   if (!OptionalIntArg(env, info, 4, "nSegments", 4, &n_segments)) return env.Undefined();
   SonareSegmentIndices result{};
-  const SonareError err =
-      sonare_segment_subsegment(sonare_node::ElementData(data), rows, cols, boundaries.data(),
-                                boundaries.size(), n_segments, &result);
+  const SonareError err = sonare_segment_subsegment(sonare_node::ElementData(data), rows, cols,
+                                                    sonare_node::ElementData(boundaries),
+                                                    boundaries.size(), n_segments, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentIndicesResult(env, &result);
   SONARE_NODE_CATCH(env)

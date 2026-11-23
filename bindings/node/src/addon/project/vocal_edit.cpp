@@ -196,9 +196,9 @@ bool ReadApplyRequest(Napi::Env env, const Napi::Value& value, ApplyStorage* sto
       !CopyBytes(env, request.Get("sve1"), "sve1", &storage->sve1)) {
     return false;
   }
-  storage->desc.rendered_mono = storage->rendered.data();
+  storage->desc.rendered_mono = sonare_node::ElementData(storage->rendered);
   storage->desc.rendered_sample_count = storage->rendered.size();
-  storage->desc.sve1 = storage->sve1.data();
+  storage->desc.sve1 = sonare_node::ElementData(storage->sve1);
   storage->desc.sve1_size = storage->sve1.size();
   return true;
 }

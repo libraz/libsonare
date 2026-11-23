@@ -830,7 +830,8 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
   fold.include_lfe = include_lfe ? 1 : 0;
   fold.normalize = normalize ? 1 : 0;
   float* out = nullptr;
-  SonareError err = sonare_downmix(packed.data(), frames, inputs.ptrs.size(), target, &fold, &out);
+  SonareError err = sonare_downmix(sonare_node::ElementData(packed), frames, inputs.ptrs.size(),
+                                   target, &fold, &out);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

@@ -369,7 +369,8 @@ bool PolyphonicAnalysisWrap::ReadEnvelopeCount(Napi::Env env, size_t note, size_
 
   std::vector<SonareNoteObject> notes(spans_.size());
   size_t written = 0;
-  const SonareError err = sonare_polyphonic_notes(analysis_, notes.data(), notes.size(), &written);
+  const SonareError err =
+      sonare_polyphonic_notes(analysis_, sonare_node::ElementData(notes), notes.size(), &written);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);
     return false;

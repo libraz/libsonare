@@ -115,11 +115,12 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
     clip.fade_in_samples = Int64Property(obj, "fadeInSamples", clip.fade_in_samples);
     clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", clip.fade_out_samples);
     if (env.IsExceptionPending()) return env.Undefined();
-    clip.events = event_storage[i].data();
+    clip.events = sonare_node::ElementData(event_storage[i]);
     clip.event_count = event_storage[i].size();
     clips[i] = clip;
   }
-  ThrowIfError(env, sonare_engine_set_midi_clips(engine_, clips.data(), clips.size()));
+  ThrowIfError(
+      env, sonare_engine_set_midi_clips(engine_, sonare_node::ElementData(clips), clips.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

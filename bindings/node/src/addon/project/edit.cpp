@@ -306,7 +306,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
     }
     audio.assign(sonare_node::ElementData(array),
                  sonare_node::ElementData(array) + array.ElementLength());
-    desc.audio_interleaved = audio.data();
+    desc.audio_interleaved = sonare_node::ElementData(audio);
     desc.audio_frames = static_cast<int64_t>(audio.size()) / desc.audio_channels;
   }
 
@@ -363,7 +363,7 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
     }
     audio.assign(sonare_node::ElementData(array),
                  sonare_node::ElementData(array) + array.ElementLength());
-    desc.audio_interleaved = audio.data();
+    desc.audio_interleaved = sonare_node::ElementData(audio);
     desc.audio_frames = static_cast<int64_t>(audio.size()) / desc.audio_channels;
   }
 

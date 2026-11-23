@@ -132,9 +132,9 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
 
   // Realtime entry: see the note in sonare_wrap_playback.h.
   sonare_node::ThrowIfRealtimeError(
-      env, sonare_playback_renderer_process_planar(renderer_, in_pointers.data(),
-                                                   static_cast<int>(in_channels),
-                                                   out_pointers.data(), out_channels, frames));
+      env, sonare_playback_renderer_process_planar(
+               renderer_, sonare_node::ElementData(in_pointers), static_cast<int>(in_channels),
+               sonare_node::ElementData(out_pointers), out_channels, frames));
   if (env.IsExceptionPending()) return env.Undefined();
   return outputs;
   SONARE_NODE_CATCH(env)
@@ -169,8 +169,9 @@ Napi::Value PlaybackRendererWrap::ProcessSilence(const Napi::CallbackInfo& info)
     outputs.Set(static_cast<uint32_t>(ch), plane);
   }
   // Realtime entry: see the note in sonare_wrap_playback.h.
-  sonare_node::ThrowIfRealtimeError(env, sonare_playback_renderer_process_silence(
-                                             renderer_, out_pointers.data(), out_channels, frames));
+  sonare_node::ThrowIfRealtimeError(
+      env, sonare_playback_renderer_process_silence(
+               renderer_, sonare_node::ElementData(out_pointers), out_channels, frames));
   if (env.IsExceptionPending()) return env.Undefined();
   return outputs;
   SONARE_NODE_CATCH(env)

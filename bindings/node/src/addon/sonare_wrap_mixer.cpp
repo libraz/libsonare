@@ -204,8 +204,9 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Float32Array left_out = Napi::Float32Array::New(env, length);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, length);
   SonareError err = sonare_mixer_process_stereo(
-      mixer_, count > 0 ? left_ptrs.data() : nullptr, count > 0 ? right_ptrs.data() : nullptr,
-      count, sonare_node::ElementData(left_out), sonare_node::ElementData(right_out), length);
+      mixer_, count > 0 ? sonare_node::ElementData(left_ptrs) : nullptr,
+      count > 0 ? sonare_node::ElementData(right_ptrs) : nullptr, count,
+      sonare_node::ElementData(left_out), sonare_node::ElementData(right_out), length);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "mixer process failed: ");
     return env.Undefined();

@@ -305,7 +305,7 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SynthPatchSto
     storage->keys.back().push_back('\0');
     storage->params.push_back({storage->keys.back().data(), value});
   }
-  storage->patch.engine_params = storage->params.data();
+  storage->patch.engine_params = sonare_node::ElementData(storage->params);
   storage->patch.engine_param_count = storage->params.size();
   return true;
 }

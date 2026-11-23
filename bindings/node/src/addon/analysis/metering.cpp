@@ -1064,8 +1064,9 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   }
   SonareWaveformPeakPyramidResult result{};
   const size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
-  SonareError err = sonare_waveform_peak_pyramid(sonare_node::ElementData(typed), frames, channels,
-                                                 levels.data(), levels.size(), &result);
+  SonareError err =
+      sonare_waveform_peak_pyramid(sonare_node::ElementData(typed), frames, channels,
+                                   sonare_node::ElementData(levels), levels.size(), &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
