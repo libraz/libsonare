@@ -111,7 +111,7 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
     });
   });
 
-  it('an unknown strip key is a document content defect, coded InvalidFormat', () => {
+  it('an unknown strip key is a refused argument named under settings, a TypeError', () => {
     withEngine((engine) => {
       expect(() =>
         engine.setStrip(
@@ -120,7 +120,15 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
             '{"version":2,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
           ),
         ),
-      ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+      ).toThrow(TypeError);
+      expect(() =>
+        engine.setStrip(
+          10,
+          sceneStrip(
+            '{"version":2,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
+          ),
+        ),
+      ).toThrow(/^RealtimeEngine\.setStrip: unknown key settings\.faderDB\b/);
     });
   });
 

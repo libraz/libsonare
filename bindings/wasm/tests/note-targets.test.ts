@@ -312,14 +312,39 @@ describe('WASM note targets', () => {
     });
 
     it('refuses a non-positive sample rate', () => {
-      for (const rate of [0, -48000]) {
-        expectRefusalOf(() =>
-          assignNoteTargets({
-            notes: [note(0, 1)],
-            sampleRate: rate,
-            targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
-          }),
-        );
+      for (const rate of [0, -48000, 0.5]) {
+        expect(
+          expectRefusalOf(() =>
+            assignNoteTargets({
+              notes: [note(0, 1)],
+              sampleRate: rate,
+              targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
+            }),
+          ).message,
+        ).toBe('assignNoteTargets: sampleRate must be an integer in [1, 2147483647]');
+      }
+      expect(
+        expectRefusalOf(
+          () =>
+            assignNoteTargets({
+              notes: [note(0, 1)],
+              sampleRate: undefined as unknown as number,
+              targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
+            }),
+          TypeError,
+        ).message,
+      ).toBe('assignNoteTargets: sampleRate must be an integer');
+    });
+
+    it('accepts any positive integer sample rate, as the C ABI does', () => {
+      // Only the conversion of a span to seconds reads the rate, so no audio range bounds it.
+      for (const rate of [4000, 768000]) {
+        const result = assignNoteTargets({
+          notes: [note(0, 1)],
+          sampleRate: rate,
+          targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
+        });
+        expect(result.notes).toHaveLength(1);
       }
     });
 

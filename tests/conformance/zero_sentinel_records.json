@@ -16,9 +16,9 @@
     "past it means lowering it deliberately in the same change."
   ],
   "floor": {
-    "sites": 14,
-    "comparisons": 160,
-    "helper_calls": 6
+    "sites": 10,
+    "comparisons": 159,
+    "helper_calls": 2
   },
   "sites": [
     {
@@ -62,18 +62,6 @@
       "value": "db_amin",
       "measured": "yes",
       "reason": "Metering spectrum dB floor; guarded by the same test as db_ref."
-    },
-    {
-      "file": "src/wasm/bindings/editing/polyphony.cpp",
-      "value": "fade_ms",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_polyphony.cpp fade; moves with it."
-    },
-    {
-      "file": "src/wasm/bindings/editing/polyphony.cpp",
-      "value": "vibrato_cutoff_hz",
-      "measured": "no",
-      "reason": "WASM twin of the sonare_c_daw.cpp cutoff; moves with it."
     },
     {
       "file": "src/wasm/bindings/effects/notes.cpp",

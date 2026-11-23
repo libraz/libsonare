@@ -8,10 +8,12 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types.js';
+import { PART_RIG_MODES } from './instrument_types.js';
 import {
   assertDeclaredKeys,
   entryClass,
   invalidState,
+  nameNativeError,
   refuse,
   refuseType,
 } from './internal/entry.js';
@@ -121,7 +123,6 @@ import {
   assertSampleRate,
   assertSamples,
   assertU7,
-  assertU32,
   C_INT_MAX,
   optionalBoolean,
   requestObject,
@@ -326,7 +327,7 @@ export class Project {
   private assertNotBusy(): void {
     if (this.instrumentBounceActive) {
       throw invalidState(
-        'Project is busy: it cannot be used from inside a bounce instruments callback',
+        'Project is busy: it cannot be used from inside a bounce instrument callback',
       );
     }
   }
@@ -631,7 +632,7 @@ export class Project {
   setPartRig(request: PartRigRequest): void {
     requestObject('setPartRig', request, 'request', true);
     if (typeof request.mode === 'number') {
-      throw refuseType('mode must be a string token, not an ordinal');
+      throw refuseType(`mode must be one of ${PART_RIG_MODES.join(', ')}`);
     }
     const rig = normalizePartRig(request);
     this.native.setPartRig(rig.destinationId, rig.part, rig.mode as never, rig.insertsJson);
@@ -694,15 +695,11 @@ export class Project {
 
   /** Cap the undo history depth (clamped to >= 1); evicts oldest entries beyond the cap. */
   setMaxUndoDepth(depth: number): void {
-    if (!Number.isInteger(depth) || depth < 1 || depth > C_INT_MAX) {
-      throw refuse(`depth must be an integer in [1, ${C_INT_MAX}]`);
-    }
     this.native.setMaxUndoDepth(depth);
   }
 
   /** Set the combined undo/redo history byte cap. Zero disables retention. */
   setMaxHistoryBytes(bytes: number): void {
-    assertU32(bytes, 'bytes');
     this.native.setMaxHistoryBytes(bytes);
   }
 
@@ -1088,8 +1085,9 @@ export class Project {
     }
     // The adapter reports a throwing callback as data instead of throwing
     // through C++ frames, whose destructors a JS exception would skip.
+    // A caller's own throw is marked foreign and passes unnamed; the adapter's refusal is named.
     if ('instrumentFailure' in result) {
-      throw result.instrumentFailure;
+      throw nameNativeError(result.instrumentFailure, 'Project.bounce');
     }
     return this.bounceResult(result);
   }

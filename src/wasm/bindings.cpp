@@ -560,7 +560,7 @@ val js_downmix(val channels, val target_layout_value, val options) {
   const int target_layout = checkedIntFromVal(target_layout_value, "targetLayout");
   const size_t count = wasmPlaneListLength(channels, "channels");
   if (count == 0) {
-    throw WasmRangeError("channels must hold at least one channel");
+    throw WasmRangeError("channels must not be empty");
   }
   // The C entry takes one planar block, so the planes are packed back to back.
   std::vector<float> packed;

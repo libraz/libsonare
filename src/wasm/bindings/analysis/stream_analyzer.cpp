@@ -253,8 +253,7 @@ class StreamAnalyzerWrapper {
   }
 
   void reset(const val& base_sample_offset) {
-    analyzer_->reset(
-        static_cast<std::size_t>(checkedUintFromVal(base_sample_offset, "startSample")));
+    analyzer_->reset(checkedSizeTFromVal(base_sample_offset, "startSample"));
   }
 
   val stats() {

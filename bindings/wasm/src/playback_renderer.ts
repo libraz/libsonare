@@ -14,7 +14,7 @@ import type {
 import type { WasmHrtfSet, WasmPlaybackLoudnessMeter, WasmPlaybackRenderer } from './sonare.js';
 import {
   assertAudioInput,
-  assertFiniteScalar,
+  assertFloatValue,
   assertPositiveInteger,
   assertSampleRate,
   requestObject,
@@ -25,18 +25,6 @@ function configJsonText(config: PlaybackRendererConfig): string {
     throw refuseType(`config must be a configuration object`);
   }
   return stringifyWithinBudget(config, 'config');
-}
-
-const FLOAT32_MAX = 3.4028234663852886e38;
-
-function assertHeadOrientationAngle(value: unknown, argName: string): asserts value is number {
-  if (typeof value !== 'number') {
-    throw refuseType(`${argName} must be a number`);
-  }
-  assertFiniteScalar(value, argName);
-  if (Math.abs(value) > FLOAT32_MAX) {
-    throw refuse(`${argName} must be finite and in [-3.4028235e38, 3.4028235e38]`);
-  }
 }
 
 function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
@@ -198,9 +186,9 @@ export class PlaybackRenderer {
    * a finite number representable by a 32-bit float.
    */
   setHeadOrientation(yawDeg: number, pitchDeg = 0, rollDeg = 0): void {
-    assertHeadOrientationAngle(yawDeg, 'yawDeg');
-    assertHeadOrientationAngle(pitchDeg, 'pitchDeg');
-    assertHeadOrientationAngle(rollDeg, 'rollDeg');
+    assertFloatValue(yawDeg, 'yawDeg');
+    assertFloatValue(pitchDeg, 'pitchDeg');
+    assertFloatValue(rollDeg, 'rollDeg');
     this.native.setHeadOrientation(yawDeg, pitchDeg, rollDeg);
   }
 

@@ -577,14 +577,16 @@ Napi::Value RealtimeVoiceChangerWrap::NoteOn(const Napi::CallbackInfo& info) {
   int note{};
   if (!RequiredIntArg(env, info, 0, "note", &note)) return env.Undefined();
   float velocity{};
-  if (!RequiredFloatArg(env, info, 1, "velocity", &velocity)) return env.Undefined();
+  if (!sonare_node::RequiredDomainFloatValue(env, info[1], "velocity", &velocity)) {
+    return env.Undefined();
+  }
   using Changer = sonare::editing::voice_changer::RealtimeVoiceChanger;
   if (!Changer::is_valid_note(note)) {
-    Napi::RangeError::New(env, "note must be within [0, 127]").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "note must be an integer in [0, 127]").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!Changer::is_valid_velocity(velocity)) {
-    Napi::RangeError::New(env, "velocity must be within (0, 1]; release a note with noteOff")
+    Napi::RangeError::New(env, "velocity must be in (0, 1]; release a note with noteOff")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -602,7 +604,7 @@ Napi::Value RealtimeVoiceChangerWrap::NoteOff(const Napi::CallbackInfo& info) {
   int note{};
   if (!RequiredIntArg(env, info, 0, "note", &note)) return env.Undefined();
   if (!sonare::editing::voice_changer::RealtimeVoiceChanger::is_valid_note(note)) {
-    Napi::RangeError::New(env, "note must be within [0, 127]").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "note must be an integer in [0, 127]").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!prepared_ || !changer_->note_off(note)) {

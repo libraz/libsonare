@@ -1277,13 +1277,6 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, v, 3).centerHz,
   },
   {
-    name: 'decomposeNotePitch vibratoCutoffHz',
-    site: 'effects/note_editing.cpp DecomposeNotePitch vibratoCutoffHz',
-    control: [3, 0.5],
-    call: (v) =>
-      magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, 441, v).vibratoCents),
-  },
-  {
     name: 'splitNote frameRate',
     site: 'effects/note_editing.cpp SplitNote frameRate',
     control: [NOTE_RATE, NOTE_RATE * 2],
@@ -1422,6 +1415,19 @@ describe('a required float argument is refused rather than saturated', () => {
       }
     },
   );
+});
+
+describe('decomposeNotePitch vibratoCutoffHz meets the core domain', () => {
+  const decomposed = (v: number) =>
+    magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, 441, v).vibratoCents);
+  it('refuses a non-finite, a negative and a past-float value in the core words', () => {
+    expect(decomposed(3)).not.toBe(decomposed(0.5));
+    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE, -1]) {
+      expect(() => decomposed(value), `vibratoCutoffHz ${value}`).toThrow(
+        /vibratoCutoffHz must be finite and at least 0/,
+      );
+    }
+  });
 });
 
 describe('the clipping threshold is given or absent', () => {

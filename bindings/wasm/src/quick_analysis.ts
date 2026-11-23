@@ -76,11 +76,8 @@ function nativeTuning(cents: number | 'auto' | undefined | null): number | 'auto
   if (isAbsent(cents) || cents === 'auto') {
     return 'auto';
   }
-  if (typeof cents === 'string') {
-    throw refuse('tuningCents must be a number of cents or auto');
-  }
   if (typeof cents !== 'number') {
-    throw refuseType('tuningCents must be a number of cents or auto');
+    throw refuseType("tuningCents must be a number or 'auto'");
   }
   return cents;
 }
@@ -153,6 +150,12 @@ function nativeRoomOptions<T extends object>(options: T): NamedSelectors<T> {
   const seed = optionalRoomNumber(options, 'seed');
   if (seed !== undefined) {
     assertU32(seed, 'seed');
+  }
+  for (const field of ['bandAbsorption', 'bandScattering'] as const) {
+    const bands = (options as Record<string, unknown>)[field];
+    if (!isAbsent(bands) && !(bands instanceof Float32Array) && !Array.isArray(bands)) {
+      throw refuseType(`${field} must be a Float32Array or number[]`);
+    }
   }
   for (const name of ['source', 'listener'] as const) {
     const placement = checkedPlacement(name, (options as Record<string, unknown>)[name]);

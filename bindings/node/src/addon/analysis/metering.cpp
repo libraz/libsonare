@@ -661,8 +661,8 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
     n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
-    db_ref = FloatProperty(opts, "dbRef", 0.0f);
-    db_amin = FloatProperty(opts, "dbAmin", 0.0f);
+    db_ref = DomainFloatProperty(opts, "dbRef", 0.0f);
+    db_amin = DomainFloatProperty(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err = sonare_metering_spectrum(sonare_node::ElementData(typed), typed.ElementLength(),
@@ -696,8 +696,8 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
     n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
-    db_ref = FloatProperty(opts, "dbRef", 0.0f);
-    db_amin = FloatProperty(opts, "dbAmin", 0.0f);
+    db_ref = DomainFloatProperty(opts, "dbRef", 0.0f);
+    db_amin = DomainFloatProperty(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err =
@@ -936,8 +936,8 @@ Napi::Value SonareWrap::SpectrumInstance(const Napi::CallbackInfo& info) {
     n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
-    db_ref = FloatProperty(opts, "dbRef", 0.0f);
-    db_amin = FloatProperty(opts, "dbAmin", 0.0f);
+    db_ref = DomainFloatProperty(opts, "dbRef", 0.0f);
+    db_amin = DomainFloatProperty(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err = sonare_audio_spectrum(audio_, n_fft, smooth, octave, db_ref, db_amin, &result);
@@ -969,8 +969,8 @@ Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
     n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
-    db_ref = FloatProperty(opts, "dbRef", 0.0f);
-    db_amin = FloatProperty(opts, "dbAmin", 0.0f);
+    db_ref = DomainFloatProperty(opts, "dbRef", 0.0f);
+    db_amin = DomainFloatProperty(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err = sonare_audio_spectrum_frame(audio_, frame_offset, n_fft, smooth, octave, db_ref,

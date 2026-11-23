@@ -104,8 +104,17 @@ import type {
   UmpWords,
 } from './types.js';
 import {
+  ARTICULATIONS,
+  CONTROLLER_AXES,
+  CONTROLLER_INPUTS,
+  MPE_DIMENSIONS,
+  NOTE_TRACKINGS,
+  PART_RIG_MODES,
+} from './types_instrument.js';
+import {
   assertClosedToken,
   assertFiniteSamples,
+  assertFloatValue,
   requestObject,
   requireBoolean,
   resolveRenderFrame,
@@ -160,6 +169,20 @@ function optionalNonZeroInteger(value: unknown, argName: string): number | undef
   return number;
 }
 
+/** Most words one UMP message carries. */
+const UMP_MAX_WORDS = 4;
+
+/** Refuses a word list of the wrong length before the addon walks it. */
+function requireUmpWordCount(words: UmpWords): void {
+  if (!Array.isArray(words)) {
+    return;
+  }
+  requireListBudget(words, 'words');
+  if (words.length < 1 || words.length > UMP_MAX_WORDS) {
+    throw refuse(`words must hold 1 to ${UMP_MAX_WORDS} words`);
+  }
+}
+
 const SIDECHAIN_SOURCE_KIND = { track: 0, bus: 1 } as const;
 const TRACK_MONITOR_MODE = { off: 0, pfl: 1, afl: 2 } as const;
 /** The C ABI tags clock and transport bytes with this destination; the facade omits the field. */
@@ -182,10 +205,11 @@ function resolveEngineConfig(
   config: RealtimeEngineConfig,
 ): ResolvedEngineConfig {
   const request = requestObject(requestName, config, 'config', true);
-  if (isAbsent(request.sampleRate)) {
+  const sampleRate = request.sampleRate;
+  if (typeof sampleRate !== 'number') {
     throw refuseType(`sampleRate must be a number`);
   }
-  const sampleRate = requireFinite(request.sampleRate, 'sampleRate');
+  // The engine refuses a rate outside its supported integer range in its own text.
   return {
     sampleRate,
     maxBlockSize: optionalInteger(request.maxBlockSize, 'maxBlockSize'),
@@ -383,9 +407,9 @@ function nameFromNative(value: unknown): string {
 }
 
 /** Refuses a numeric ordinal where a closed-set name is the only spelling. */
-function requireName(value: unknown, argName: string): string {
+function requireName(value: unknown, argName: string, tokens: readonly string[]): string {
   if (typeof value !== 'string') {
-    throw refuseType(`${argName} must be a name`);
+    throw refuseType(`${argName} must be one of ${tokens.join(', ')}`);
   }
   return value;
 }
@@ -1468,11 +1492,11 @@ export class RealtimeEngine {
       if (!isPlainRecord(inputMonitor)) {
         throw refuseType(`inputMonitor must be an object`);
       }
+      const gain = isAbsent(inputMonitor.gain) ? 1 : inputMonitor.gain;
+      assertFloatValue(gain, 'inputMonitor.gain');
       monitor = {
         enabled: requireBoolean(inputMonitor.enabled, 'inputMonitor.enabled'),
-        gain: isAbsent(inputMonitor.gain)
-          ? 1
-          : requireFinite(inputMonitor.gain, 'inputMonitor.gain'),
+        gain,
       };
     }
     const punch = isAbsent(request.punch) ? undefined : this.resolvePunch(request.punch);
@@ -1985,11 +2009,8 @@ export class RealtimeEngine {
    * is not finite, and an `InvalidState` `SonareError` when the table is full.
    */
   bindController(destinationId: number, binding: ControllerBinding): void {
-    for (const key of ['input', 'axis'] as const) {
-      if (typeof binding?.[key] !== 'string') {
-        throw refuseType(`binding.${key} must be a name`);
-      }
-    }
+    requireName(binding?.input, 'binding.input', CONTROLLER_INPUTS);
+    requireName(binding?.axis, 'binding.axis', CONTROLLER_AXES);
     this.native.bindController(destinationId, binding);
   }
 
@@ -2052,8 +2073,8 @@ export class RealtimeEngine {
   ): void {
     this.native.setControllerNoteTracking(
       destinationId,
-      requireName(dimension, 'dimension'),
-      requireName(tracking, 'tracking'),
+      requireName(dimension, 'dimension', MPE_DIMENSIONS),
+      requireName(tracking, 'tracking', NOTE_TRACKINGS),
     );
   }
 
@@ -2063,7 +2084,10 @@ export class RealtimeEngine {
    */
   controllerNoteTracking(destinationId: number, dimension: MpeDimension): NoteTracking {
     return nameFromNative(
-      this.native.controllerNoteTracking(destinationId, requireName(dimension, 'dimension')),
+      this.native.controllerNoteTracking(
+        destinationId,
+        requireName(dimension, 'dimension', MPE_DIMENSIONS),
+      ),
     ) as NoteTracking;
   }
 
@@ -2086,7 +2110,11 @@ export class RealtimeEngine {
    * and starts {@link legatoFallbackCount} from zero.
    */
   setArticulation(destinationId: number, channel: number, articulation: Articulation): void {
-    this.native.setArticulation(destinationId, channel, requireName(articulation, 'articulation'));
+    this.native.setArticulation(
+      destinationId,
+      channel,
+      requireName(articulation, 'articulation', ARTICULATIONS),
+    );
   }
 
   /**
@@ -2102,7 +2130,7 @@ export class RealtimeEngine {
     this.native.setPartRig(
       record.destinationId,
       isAbsent(record.part) ? PART_RIG_EVERY_PART : record.part,
-      requireName(record.mode, 'mode') as PartRigMode,
+      requireName(record.mode, 'mode', PART_RIG_MODES) as PartRigMode,
       partRigInsertsJson(record.inserts as PartRigInsert[] | undefined),
     );
   }
@@ -2492,9 +2520,7 @@ export class RealtimeEngine {
    * apply (omit for immediate).
    */
   pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
-    if (Array.isArray(words)) {
-      requireListBudget(words, 'words');
-    }
+    requireUmpWordCount(words);
     this.native.pushMidiUmp(destinationId, words, resolveRenderFrame(renderFrame));
   }
 
@@ -2570,9 +2596,7 @@ export class RealtimeEngine {
    * an absolute clock position; exact here, because the caller drives the block.
    */
   pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
-    if (Array.isArray(words)) {
-      requireListBudget(words, 'words');
-    }
+    requireUmpWordCount(words);
     this.native.pushMidiInputUmp(words, offsetInBlockSamples);
   }
 

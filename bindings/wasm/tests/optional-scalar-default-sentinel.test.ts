@@ -92,30 +92,28 @@ describe('meteringSpectrum optional scalars', () => {
   const spectrum = (options: Record<string, number> = {}) =>
     meteringSpectrum({ samples, sampleRate: SR, ...options } as never).db;
 
-  it.each(['nFft', 'octaveFraction', 'dbRef', 'dbAmin'])(
-    'refuses a negative %s instead of using the default',
-    (field) => {
-      // The integer and float halves of this bag word the refusal differently --
-      // the floats state the sentinel as well -- so the shared part is matched.
-      expect(() => spectrum({ [field]: -5 })).toThrow(
-        field === 'nFft' || field === 'octaveFraction'
-          ? `meteringSpectrum: ${field} must be an integer in [0, 2147483647]`
-          : new RegExp(`^meteringSpectrum: ${field} must be .*non-negative`),
-      );
-    },
-  );
+  it.each([
+    ['nFft', 'nFft must be a power of two in [1, 1073741824]'],
+    ['octaveFraction', 'octaveFraction must be an integer in [1, 2147483647]'],
+    ['dbRef', 'dbRef must be finite and at least 0'],
+    ['dbAmin', 'dbAmin must be finite and at least 0'],
+  ])('refuses a negative %s instead of using the default', (field, text) => {
+    expect(() => spectrum({ [field]: -5 })).toThrow(new RangeError(`meteringSpectrum: ${text}`));
+  });
 
   it.each(['nFft', 'octaveFraction'])('refuses a non-finite %s', (field) => {
-    expect(() => spectrum({ [field]: Number.NaN })).toThrow(/finite number/);
-    expect(() => spectrum({ [field]: Number.POSITIVE_INFINITY })).toThrow(/finite number/);
+    const text = `meteringSpectrum: ${field} must be an integer in [-2147483648, 2147483647]`;
+    expect(() => spectrum({ [field]: Number.NaN })).toThrow(new RangeError(text));
+    expect(() => spectrum({ [field]: Number.POSITIVE_INFINITY })).toThrow(new RangeError(text));
   });
 
   it.each(['dbRef', 'dbAmin'])('refuses a non-finite %s', (field) => {
     // The discriminating pair for the float half: NaN fails both a `< 0` refusal
     // and a `> 0` substitution, so it used to resolve to the library default,
     // and an infinity passed the substitution and was applied as a real level.
-    expect(() => spectrum({ [field]: Number.NaN })).toThrow(/finite non-negative/);
-    expect(() => spectrum({ [field]: Number.POSITIVE_INFINITY })).toThrow(/finite non-negative/);
+    const text = `meteringSpectrum: ${field} must be finite and at least 0`;
+    expect(() => spectrum({ [field]: Number.NaN })).toThrow(new RangeError(text));
+    expect(() => spectrum({ [field]: Number.POSITIVE_INFINITY })).toThrow(new RangeError(text));
   });
 
   it.each(['nFft', 'octaveFraction', 'dbRef', 'dbAmin'])(

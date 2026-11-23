@@ -490,8 +490,7 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
     payload.assign(sonare_node::ElementData(buf),
                    sonare_node::ElementData(buf) + buf.ElementLength());
   } else if (!payload_value.IsUndefined() && !payload_value.IsNull()) {
-    Napi::TypeError::New(env, "payload must be a Uint8Array or Buffer")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "payload must be a Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   ThrowIfError(env,

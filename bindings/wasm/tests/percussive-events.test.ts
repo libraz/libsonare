@@ -343,7 +343,7 @@ function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: 
   if (framing.nFft < 0 || framing.hopLength < 0) {
     expectRefusalOf(run);
     expect(() => run()).toThrow(
-      /^(extractPercussiveEvents|renderPercussiveEvents): (nFft must be an integer in \[4, 524288\]|hopLength must be an integer in \[1, 2147483647\])$/,
+      /^(extractPercussiveEvents|renderPercussiveEvents): (nFft must be an even integer in \[4, 524288\]|hopLength must be an integer in \[1, 2147483647\])$/,
     );
   } else {
     expectCoreRefusal(
@@ -372,6 +372,24 @@ beforeAll(async () => {
 });
 
 describe('extractPercussiveEvents', () => {
+  it('names an odd or out-of-range nFft and a negative onsetWait in the C ABI words', () => {
+    for (const nFft of [2047, 2, -2048]) {
+      expect(
+        expectRefusalOf(() => extractPercussiveEvents({ samples: three, sampleRate, nFft }))
+          .message,
+      ).toBe('extractPercussiveEvents: nFft must be an even integer in [4, 524288]');
+      expect(
+        expectRefusalOf(() =>
+          renderPercussiveEvents({ samples: three, sampleRate, events: threeEvents, nFft }),
+        ).message,
+      ).toBe('renderPercussiveEvents: nFft must be an even integer in [4, 524288]');
+    }
+    expect(
+      expectRefusalOf(() => extractPercussiveEvents({ samples: three, sampleRate, onsetWait: -1 }))
+        .message,
+    ).toBe('extractPercussiveEvents: onsetWait must be an integer in [0, 2147483647]');
+  });
+
   it('finds every hit, in order, with an identity edit', () => {
     expect(threeEvents).toHaveLength(3);
     expectWellFormed(threeEvents, three);
@@ -1028,14 +1046,14 @@ describe('renderPercussiveEvents', () => {
     }
     expectRangeRefusal(() => render([edited(4410, 15435)], { fadeMs: -1 }));
     for (const [options, domain] of [
-      [{ nFft: -2048 }, '[4, 524288]'],
-      [{ hopLength: -512 }, '[1, 2147483647]'],
-      [{ hpssKernelHarmonic: -1 }, '[1, 2147483647]'],
-      [{ hpssKernelPercussive: -1 }, '[1, 2147483647]'],
+      [{ nFft: -2048 }, 'an even integer in [4, 524288]'],
+      [{ hopLength: -512 }, 'an integer in [1, 2147483647]'],
+      [{ hpssKernelHarmonic: -1 }, 'an integer in [1, 2147483647]'],
+      [{ hpssKernelPercussive: -1 }, 'an integer in [1, 2147483647]'],
     ] as const) {
       expectRangeRefusal(() => render([edited(4410, 15435)], options));
       expect(() => render([edited(4410, 15435)], options)).toThrow(
-        `renderPercussiveEvents: ${Object.keys(options)[0]} must be an integer in ${domain}`,
+        `renderPercussiveEvents: ${Object.keys(options)[0]} must be ${domain}`,
       );
     }
     for (const options of [{ hpssKernelHarmonic: 4 }, { hpssKernelPercussive: 4 }]) {

@@ -3,13 +3,15 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <array>
 #include <cmath>
 #include <limits>
 #include <string>
 
+#include "c_api/editing_input_domains.h"
 #include "metering/clipping.h"
 #include "metering/waveform.h"
-#include "util/zero_is_default.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -156,11 +158,12 @@ float js_metering_true_peak_db(val samples, const val& sample_rate_val,
                                const val& oversample_factor_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int oversample_factor = checkedIntFromVal(oversample_factor_val, "oversampleFactor");
+  if (oversample_factor != 0) {
+    sonare::util::check::one_of(oversample_factor, std::array<int, 5>{1, 2, 4, 8, 16},
+                                "oversampleFactor");
+  }
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   const int factor = oversample_factor == 0 ? 4 : oversample_factor;
-  if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
-    throw WasmRangeError("oversample must be 0 or a power of two from 1 to 16");
-  }
   return metering::true_peak_db(audio, factor);
 }
 
@@ -320,40 +323,41 @@ val js_metering_phase_scope(val left, val right, const val& sample_rate_val,
   return phaseScopeToVal(result);
 }
 
+// Spectrum-meter options, checked in the C ABI's order and words; 0 on any field is its default.
+void readSpectrumOptions(val options, metering::SpectrumConfig* cfg) {
+  namespace check = sonare::util::check;
+  if (hasProperty(options, "nFft")) {
+    const int n = checkedIntFromVal(options["nFft"], "nFft");
+    if (n != 0) check::power_of_two_within(n, sonare_c_detail::kSpectrumNFftDomain, "nFft");
+    if (n > 0) cfg->n_fft = n;
+  }
+  cfg->apply_octave_smoothing =
+      boolProperty(options, "applyOctaveSmoothing", cfg->apply_octave_smoothing);
+  if (hasProperty(options, "octaveFraction")) {
+    const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
+    if (f != 0) {
+      check::integer_within(f, sonare_c_detail::kSpectrumOctaveFractionDomain, "octaveFraction");
+    }
+    if (f > 0) cfg->octave_fraction = f;
+  }
+  if (hasProperty(options, "dbRef")) {
+    const float db_ref = domainFloatFromVal(options["dbRef"], "dbRef");
+    check::at_least(db_ref, 0.0, "dbRef");
+    if (db_ref != 0.0f) cfg->db_ref = db_ref;
+  }
+  if (hasProperty(options, "dbAmin")) {
+    const float db_amin = domainFloatFromVal(options["dbAmin"], "dbAmin");
+    check::at_least(db_amin, 0.0, "dbAmin");
+    if (db_amin != 0.0f) cfg->db_amin = db_amin;
+  }
+}
+
 val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (hasProperty(options, "nFft")) {
-      const int n = checkedIntFromVal(options["nFft"], "nFft");
-      if (n < 0) {
-        throw WasmRangeError("nFft must be an integer in [0, 2147483647]");
-      }
-      if (n > 0) cfg.n_fft = n;
-    }
-    cfg.apply_octave_smoothing =
-        boolProperty(options, "applyOctaveSmoothing", cfg.apply_octave_smoothing);
-    if (hasProperty(options, "octaveFraction")) {
-      const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
-      if (f < 0) {
-        throw WasmRangeError("octaveFraction must be an integer in [0, 2147483647]");
-      }
-      if (f > 0) cfg.octave_fraction = f;
-    }
-    if (hasProperty(options, "dbRef")) {
-      cfg.db_ref =
-          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbRef"], "dbRef")))
-              .checked_non_negative(cfg.db_ref, "dbRef");
-    }
-    if (hasProperty(options, "dbAmin")) {
-      cfg.db_amin =
-          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbAmin"], "dbAmin")))
-              .checked_non_negative(cfg.db_amin, "dbAmin");
-    }
-  }
-  if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw WasmRangeError("nFft must be a power of two");
+    readSpectrumOptions(options, &cfg);
   }
   metering::SpectrumResult result = metering::spectrum(audio, cfg);
   val out = val::object();
@@ -387,35 +391,7 @@ val js_metering_spectrum_frame(val samples, const val& sample_rate_val, double f
   // frame is the only span this call reads or holds the caller to.
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (hasProperty(options, "nFft")) {
-      const int n = checkedIntFromVal(options["nFft"], "nFft");
-      if (n < 0) {
-        throw WasmRangeError("nFft must be an integer in [0, 2147483647]");
-      }
-      if (n > 0) cfg.n_fft = n;
-    }
-    cfg.apply_octave_smoothing =
-        boolProperty(options, "applyOctaveSmoothing", cfg.apply_octave_smoothing);
-    if (hasProperty(options, "octaveFraction")) {
-      const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
-      if (f < 0) {
-        throw WasmRangeError("octaveFraction must be an integer in [0, 2147483647]");
-      }
-      if (f > 0) cfg.octave_fraction = f;
-    }
-    if (hasProperty(options, "dbRef")) {
-      cfg.db_ref =
-          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbRef"], "dbRef")))
-              .checked_non_negative(cfg.db_ref, "dbRef");
-    }
-    if (hasProperty(options, "dbAmin")) {
-      cfg.db_amin =
-          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbAmin"], "dbAmin")))
-              .checked_non_negative(cfg.db_amin, "dbAmin");
-    }
-  }
-  if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw WasmRangeError("nFft must be a power of two");
+    readSpectrumOptions(options, &cfg);
   }
   // The loader hands back the frame alone, clamped, so the frame starts at 0 of
   // what it returned -- the same shape the C ABI passes to its prevalidated call.

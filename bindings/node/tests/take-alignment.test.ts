@@ -130,10 +130,10 @@ describe('alignTakeToReference', () => {
     // Named per buffer, not as one `samples`: the two are refused by the argument
     // the caller actually spelled.
     expect(() => alignTakeToReference(request({ reference: new Float32Array(0) }))).toThrowError(
-      /reference must not be empty/,
+      /reference must be a non-empty buffer/,
     );
     expect(() => alignTakeToReference(request({ take: new Float32Array(0) }))).toThrowError(
-      /take must not be empty/,
+      /take must be a non-empty buffer/,
     );
     const withNan = Float32Array.from(reference);
     withNan[100] = Number.NaN;

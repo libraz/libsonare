@@ -105,12 +105,12 @@ describe('geometric room acoustics', () => {
     expectRefusal(
       () => synthesizeRir({ ...base, seed: 2 ** 32 }),
       RangeError,
-      /^synthesizeRir: seed must be a finite number within \[0, 4294967295\]$/,
+      /^synthesizeRir: seed must be an integer in \[0, 4294967295\]$/,
     );
     expectRefusal(
       () => synthesizeRir({ ...base, seed: 2 ** 40 }),
       RangeError,
-      /^synthesizeRir: seed must be a finite number within \[0, 4294967295\]$/,
+      /^synthesizeRir: seed must be an integer in \[0, 4294967295\]$/,
     );
   });
 
@@ -220,7 +220,7 @@ describe('geometric room acoustics', () => {
     expectRefusal(
       () => estimateRoom(new Float32Array(0), 48000),
       RangeError,
-      /^estimateRoom: samples must not be empty$/,
+      /^estimateRoom: samples must be a non-empty buffer$/,
     );
     const bad = new Float32Array(1000);
     bad[10] = Number.NaN;
@@ -690,7 +690,7 @@ describe('named selectors and estimate-to-geometry', () => {
       TypeError,
     );
     expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 2 as never })).toThrow(
-      /'none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'/,
+      /must be one of none, concrete, wood, curtain, carpet, glass$/,
     );
     expect(() => roomMorph(new Float32Array(100), 48000, { materialPreset: 1 as never })).toThrow(
       TypeError,
@@ -708,7 +708,7 @@ describe('named selectors and estimate-to-geometry', () => {
       RangeError,
     );
     expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 'marble' as never })).toThrow(
-      /'none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'/,
+      /must be one of none, concrete, wood, curtain, carpet, glass$/,
     );
     expect(() =>
       roomMorph(new Float32Array(100), 48000, { materialPreset: 'Concrete' as never }),

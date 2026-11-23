@@ -5,6 +5,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { decomposeStems, decomposeStemsLinked, init } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 const SAMPLE_RATE = 22050;
 const FRAMES = 8192;
@@ -109,6 +110,51 @@ describe('decomposeStemsLinked', () => {
         sampleRate: SAMPLE_RATE,
       }),
     ).toThrow();
+  });
+
+  it('refuses a missing channel set by type and an empty one by domain', () => {
+    expect(
+      expectRefusalOf(
+        () =>
+          decomposeStemsLinked({
+            channels: undefined as unknown as Float32Array[],
+            sampleRate: SAMPLE_RATE,
+          }),
+        TypeError,
+      ).message,
+    ).toBe('decomposeStemsLinked: channels must be an array of Float32Array');
+    expect(
+      expectRefusalOf(() => decomposeStemsLinked({ channels: [], sampleRate: SAMPLE_RATE }))
+        .message,
+    ).toBe('decomposeStemsLinked: channels must not be empty');
+  });
+
+  it('refuses an nFft no COLA geometry has, on both entry points', () => {
+    const samples = tone(440);
+    for (const nFft of [2047, 2, 1 << 20]) {
+      expect(
+        expectRefusalOf(() => decomposeStems({ samples, sampleRate: SAMPLE_RATE, nFft })).message,
+      ).toBe('decomposeStems: nFft must be an even integer in [4, 524288]');
+      expect(
+        expectRefusalOf(() =>
+          decomposeStemsLinked({ channels: [samples], sampleRate: SAMPLE_RATE, nFft }),
+        ).message,
+      ).toBe('decomposeStemsLinked: nFft must be an even integer in [4, 524288]');
+    }
+  });
+
+  it('refuses an iteration count below 1, on both entry points', () => {
+    const samples = tone(440);
+    for (const nIter of [0, -1]) {
+      expect(
+        expectRefusalOf(() => decomposeStems({ samples, sampleRate: SAMPLE_RATE, nIter })).message,
+      ).toBe('decomposeStems: nIter must be an integer in [1, 2147483647]');
+      expect(
+        expectRefusalOf(() =>
+          decomposeStemsLinked({ channels: [samples], sampleRate: SAMPLE_RATE, nIter }),
+        ).message,
+      ).toBe('decomposeStemsLinked: nIter must be an integer in [1, 2147483647]');
+    }
   });
 
   it('rejects an invalid option the same way decomposeStems does', () => {

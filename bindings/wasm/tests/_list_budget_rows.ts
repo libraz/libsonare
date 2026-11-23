@@ -16,10 +16,7 @@ export interface ListBudgetRow<E> {
 }
 
 /** The refusal text for a list named `subject` that is past the native list budget. */
-export const overBudget = (subject: string): string =>
-  `${subject} exceeds the WASM Float32 input budget`;
-
-const UMP_WORD_COUNT = 'words must hold 1 to 4 words';
+export const overBudget = (subject: string): string => `${subject} exceeds the input length budget`;
 
 export const REALTIME_ENGINE_ROWS: ReadonlyArray<ListBudgetRow<RealtimeEngine>> = [
   { method: 'setMidiClips', text: overBudget('clips'), call: (e, l) => e.setMidiClips(l) },
@@ -109,8 +106,8 @@ export const REALTIME_ENGINE_ROWS: ReadonlyArray<ListBudgetRow<RealtimeEngine>> 
     call: (e, l) => e.setTimeSignatureSegments(l),
   },
   { method: 'setMarkers', text: overBudget('markers'), call: (e, l) => e.setMarkers(l) },
-  { method: 'pushMidiUmp', text: UMP_WORD_COUNT, call: (e, l) => e.pushMidiUmp(1, l) },
-  { method: 'pushMidiInputUmp', text: UMP_WORD_COUNT, call: (e, l) => e.pushMidiInputUmp(l) },
+  { method: 'pushMidiUmp', text: overBudget('words'), call: (e, l) => e.pushMidiUmp(1, l) },
+  { method: 'pushMidiInputUmp', text: overBudget('words'), call: (e, l) => e.pushMidiInputUmp(l) },
 ];
 
 export const SONARE_ENGINE_ROWS: ReadonlyArray<ListBudgetRow<SonareEngine>> = [
@@ -184,8 +181,8 @@ export const SONARE_ENGINE_ROWS: ReadonlyArray<ListBudgetRow<SonareEngine>> = [
     call: (e, l) => e.addClip(1, { id: 1, channels: l } as never),
   },
   { method: 'setMarkers', text: overBudget('markers'), call: (e, l) => e.setMarkers(l) },
-  { method: 'pushMidiUmp', text: UMP_WORD_COUNT, call: (e, l) => e.pushMidiUmp(1, l) },
-  { method: 'pushMidiInputUmp', text: UMP_WORD_COUNT, call: (e, l) => e.pushMidiInputUmp(l) },
+  { method: 'pushMidiUmp', text: overBudget('words'), call: (e, l) => e.pushMidiUmp(1, l) },
+  { method: 'pushMidiInputUmp', text: overBudget('words'), call: (e, l) => e.pushMidiInputUmp(l) },
 ];
 
 /** The public API namespace the facade rows call. */

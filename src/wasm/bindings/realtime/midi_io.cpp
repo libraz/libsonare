@@ -130,23 +130,23 @@ size_t RealtimeEngineWasm::externalMidiPendingCount() const {
 val RealtimeEngineWasm::drainExternalMidi(const val& max_records_val) {
   val out = val::array();
 #if defined(SONARE_WITH_ARRANGEMENT)
-  const int max_records =
-      max_records_val.isUndefined()
-          ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
-          : checkedIntFromVal(max_records_val, "maxRecords");
+  const std::size_t max_records =
+      max_records_val.isUndefined() || max_records_val.isNull()
+          ? static_cast<std::size_t>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
+          : checkedSizeTFromVal(max_records_val, "maxRecords");
   // One queue record lowers to at most this many MIDI-1 messages, so a smaller
   // budget can never consume a record and the drain would report nothing while
   // the queue keeps growing. The bound is read from the shared lowering type so
   // it cannot drift from the lowering rules or from the C ABI's identical guard.
-  constexpr int kMaxLoweredMessages =
-      static_cast<int>(std::extent<decltype(sonare::host::ExternalMidi1Lowered::messages)>::value);
+  constexpr std::size_t kMaxLoweredMessages =
+      std::extent<decltype(sonare::host::ExternalMidi1Lowered::messages)>::value;
   if (max_records > 0 && max_records < kMaxLoweredMessages) {
-    throw WasmRangeError("maxRecords must be at least " + std::to_string(kMaxLoweredMessages) +
+    throw WasmRangeError("maxRecords must be 0 or at least " + std::to_string(kMaxLoweredMessages) +
                          " to guarantee forward progress");
   }
-  if (max_records <= 0 || engine_.external_midi_pending_count() == 0) return out;
+  if (max_records == 0 || engine_.external_midi_pending_count() == 0) return out;
   sonare::host::ExternalMidiRecord record{};
-  int out_count = 0;
+  std::size_t out_count = 0;
   while (out_count + kMaxLoweredMessages <= max_records) {
     if (engine_.drain_external_midi(&record, 1) == 0) break;
     // Shared lowering: identical MIDI-1 rules across every host surface. With a
@@ -386,7 +386,7 @@ namespace {
 size_t umpWordsFromVal(const val& words_val, uint32_t (&words)[4]) {
   const size_t count = wasmArrayLength(words_val, "words");
   if (count < 1 || count > 4) {
-    throw WasmRangeError("words must contain 1..4 UMP words");
+    throw WasmRangeError("words must hold 1 to 4 words");
   }
   for (size_t i = 0; i < count; ++i) {
     words[i] = checkedWordFromVal(words_val[i], "words[]");

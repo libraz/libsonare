@@ -263,10 +263,10 @@ describe('masteringRepairTrimSilenceStereo (WASM)', () => {
     // Matched by message, not merely by throwing: an absent export throws too,
     // and a bare `toThrow()` would be satisfied by that.
     expect(() => masteringRepairTrimSilenceStereo({ ...base, paddingSamples: -1 })).toThrow(
-      /paddingSamples must be at least 0$/,
+      /paddingSamples must be an integer in \[0, 960000\]$/,
     );
     expect(() => masteringRepairTrimSilenceStereo({ ...base, paddingSamples: -100000 })).toThrow(
-      /paddingSamples must be at least 0$/,
+      /paddingSamples must be an integer in \[0, 960000\]$/,
     );
 
     // The other end: a count past the 32-bit range is refused before the

@@ -70,7 +70,7 @@ describe('mixer construction', () => {
     expect(thrown(() => new Mixer({ sampleRate: 100 }))).toBeInstanceOf(RangeError);
     const zero = thrown(() => new Mixer({ sampleRate: SR, maxBlockSize: 0 }));
     expect(zero).toBeInstanceOf(RangeError);
-    expect((zero as Error).message).toContain('omit it');
+    expect((zero as Error).message).toContain('maxBlockSize must be an integer in [1, 1048576]');
     expect(thrown(() => new Mixer(null as never))).toBeInstanceOf(TypeError);
   });
 

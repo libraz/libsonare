@@ -214,7 +214,7 @@ describe('spectralEdit (Node)', () => {
 
   it.each([
     ['nFft', 'nFft must be a power of two in [4, 262144]'],
-    ['hopLength', 'hopLength must be an integer in [1, 2147483647], or omitted'],
+    ['hopLength', 'hopLength must be an integer in [1, 2147483647]'],
     ['healRadiusFrames', 'healRadiusFrames must be an integer in [1, 2147483647]'],
   ] as const)('refuses %s 0 instead of reading it as the default', (field, text) => {
     expect(() => spectralEdit(sine(440, 0.1), SR, { ops: [], [field]: 0 })).toThrow(

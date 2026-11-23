@@ -153,7 +153,7 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
   it('still refuses an empty buffer whatever the frame asks for', () => {
     expect(() =>
       meteringSpectrumFrame(new Float32Array(0), SR, { startSample: 99999, nFft: N_FFT }),
-    ).toThrow(/must not be empty/);
+    ).toThrow(/must be a non-empty buffer/);
   });
 
   it('scans the span the library actually reads when nFft is omitted', () => {

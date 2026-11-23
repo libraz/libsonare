@@ -2,6 +2,7 @@ import type { ProjectMidiEvent } from '../project_types.js';
 import { assertBoundedInteger, assertNibble } from '../validation.js';
 import { SONARE_MAX_PUBLIC_PPQ as MAX_PUBLIC_PPQ } from '../worklet/engine-rings.js';
 import { refuse } from './entry.js';
+import { requireListBudget } from './list_budget.js';
 import { UINT32_MAX } from './value_guards.js';
 
 const MIDI2_U16_MAX = 0xffff;
@@ -11,6 +12,7 @@ export const UMP_MAX_WORDS = 4;
 
 /** Refuses a word list that holds no word or more than one packet's worth. */
 export function assertUmpWordCount(words: ArrayLike<number>): void {
+  requireListBudget(words, 'words');
   if (words.length < 1 || words.length > UMP_MAX_WORDS) {
     throw refuse(`words must hold 1 to ${UMP_MAX_WORDS} words`);
   }

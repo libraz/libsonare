@@ -237,9 +237,14 @@ describe('Sonare WASM Project edit ops', () => {
       project.clearHistory();
       expect(() => project.undo()).toThrow();
 
-      // Guard rail: depth must be an integer in [1, 2147483647].
-      expect(() => project.setMaxUndoDepth(0)).toThrow();
-      expect(() => project.setMaxUndoDepth(1.5)).toThrow();
+      // The depth is a size_t: 0 is clamped to 1 as the C ABI does, a fraction is refused.
+      expect(() => project.setMaxUndoDepth(0)).not.toThrow();
+      expect(() => project.setMaxUndoDepth(1.5)).toThrow(
+        new RangeError(
+          'Project.setMaxUndoDepth: depth must be a finite non-negative integer no greater than ' +
+            'Number.MAX_SAFE_INTEGER or the native size_t maximum',
+        ),
+      );
     } finally {
       project.destroy();
     }

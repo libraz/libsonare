@@ -5,6 +5,7 @@
 
 #include <limits>
 
+#include "core/spectrum.h"
 #include "effects/decompose.h"
 #include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
@@ -26,9 +27,9 @@ DecomposeStemsConfig readDecomposeStemsConfig(val options) {
   config.beta = floatProperty(options, "beta", config.beta);
   config.init = stringProperty(options, "init", config.init);
   config.mask_power = floatProperty(options, "maskPower", config.mask_power);
-  check::integer_at_least(config.n_components, 1, "nComponents");
-  check::integer_at_least(config.n_fft, 1, "nFft");
-  check::integer_at_least(config.n_iter, 1, "nIter");
+  check::integer_within(config.n_components, sonare::kDecomposeNComponentsDomain, "nComponents");
+  check::even_within(config.n_fft, sonare::kColaNFftDomain, "nFft");
+  check::integer_within(config.n_iter, sonare::kDecomposeStemsIterDomain, "nIter");
   check::finite_float(config.beta, "beta");
   check::at_least(config.mask_power, 1.0, "maskPower");
   return config;

@@ -372,7 +372,7 @@ describe('RealtimeEngine native binding', () => {
     expectRefusal(
       () => engine.setStripSurroundPan(10, { azimuth: Number.NaN }),
       RangeError,
-      /^RealtimeEngine\.setStripSurroundPan: azimuth must be finite and in \[-3\.4028235e38, 3\.4028235e38\]$/,
+      /^RealtimeEngine\.setStripSurroundPan: azimuth must be finite and in \[-180, 180\]$/,
     );
     expectRefusal(
       () => engine.setStripSurroundPan(999, { azimuth: 0 }),

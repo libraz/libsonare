@@ -21,7 +21,8 @@ using editing::event_model::PercussiveEvent;
 editing::event_model::PercussiveSeparationConfig percussiveSeparationFromVal(val options) {
   editing::event_model::PercussiveSeparationConfig separation;
   if (hasProperty(options, "nFft")) {
-    separation.n_fft = domainNumberFromVal<int>(options["nFft"], "nFft", sonare::kColaNFftDomain);
+    separation.n_fft = intProperty(options, "nFft", separation.n_fft);
+    sonare::util::check::even_within(separation.n_fft, sonare::kColaNFftDomain, "nFft");
   }
   if (hasProperty(options, "hopLength")) {
     separation.hop_length =
@@ -91,7 +92,9 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
   // a span that opened after its own transient would report the next hit's peak
   // and leave its attack behind when muted. Only the two peak-picking knobs the
   // C ABI exposes are read.
-  config.onset.wait = intProperty(options, "onsetWait", config.onset.wait);
+  config.onset.wait = optionalDomainValue<int>(objectProperty(options, "onsetWait"), "onsetWait",
+                                               editing::event_model::kPercussiveOnsetWaitDomain)
+                          .value_or(config.onset.wait);
   config.onset.delta = floatProperty(options, "onsetDelta", config.onset.delta);
   config.max_event_ms = floatProperty(options, "maxEventMs", config.max_event_ms);
   config.min_percussive_ratio =

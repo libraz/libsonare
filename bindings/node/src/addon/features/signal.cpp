@@ -164,13 +164,14 @@ Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "signals must be an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "signals must be an array of Float32Array")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Array signals_input = info[0].As<Napi::Array>();
   const size_t count = node_list_length(signals_input, "signals");
   if (count == 0) {
-    Napi::TypeError::New(env, "signals must not be empty").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "signals must not be empty").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
@@ -258,23 +259,15 @@ Napi::Value SonareWrap::PadCenter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "values must be a Float32Array")) return env.Undefined();
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "size must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  size_t target_size = 0;
+  if (!NonNegativeSizeTArg(env, info, 1, "targetSize", &target_size)) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   float pad_value{};
   if (!OptionalFloatArg(env, info, 2, "padValue", 0.0f, &pad_value)) return env.Undefined();
-  const int64_t target_size = node_narrow_int64(env, info[1], "targetSize");
-  if (target_size < 0) {
-    Napi::RangeError::New(env, "size must be an integer of at least 0")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   float* out = nullptr;
   size_t count = 0;
   SonareError err = sonare_pad_center(sonare_node::ElementData(arr), arr.ElementLength(),
-                                      static_cast<size_t>(target_size), pad_value, &out, &count);
+                                      target_size, pad_value, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -284,23 +277,15 @@ Napi::Value SonareWrap::FixLength(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "values must be a Float32Array")) return env.Undefined();
-  if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "size must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  size_t target_size = 0;
+  if (!NonNegativeSizeTArg(env, info, 1, "targetSize", &target_size)) return env.Undefined();
   auto arr = info[0].As<Napi::Float32Array>();
   float pad_value{};
   if (!OptionalFloatArg(env, info, 2, "padValue", 0.0f, &pad_value)) return env.Undefined();
-  const int64_t target_size = node_narrow_int64(env, info[1], "targetSize");
-  if (target_size < 0) {
-    Napi::RangeError::New(env, "size must be an integer of at least 0")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   float* out = nullptr;
   size_t count = 0;
   SonareError err = sonare_fix_length(sonare_node::ElementData(arr), arr.ElementLength(),
-                                      static_cast<size_t>(target_size), pad_value, &out, &count);
+                                      target_size, pad_value, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)

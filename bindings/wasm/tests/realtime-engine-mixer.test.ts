@@ -4,7 +4,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
+import { init, isSonareError, RealtimeEngine } from '../dist/index.js';
 import { sidechainCheckFromCode } from '../src/codes';
 import { expectRefusalOf } from './_helpers';
 
@@ -843,18 +843,18 @@ describe('Sonare WASM Module', () => {
       try {
         engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
         engine.setTrackLanes([{ trackId: 10 }]);
-        // A bad slot name is a content defect of the document, coded InvalidFormat.
-        expect(
-          codeOf(() => engine.setBusStrip(1, JSON.parse(scene('buses', '1', 'sideways')).buses[0])),
-        ).toBe(ErrorCode.InvalidFormat);
-        expect(
-          codeOf(() => engine.setStrip(10, JSON.parse(scene('strips', 't', 'sideways')).strips[0])),
-        ).toBe(ErrorCode.InvalidFormat);
+        // A bad slot name inside the settings object is a refused argument, not a document error.
+        expect(() =>
+          engine.setBusStrip(1, JSON.parse(scene('buses', '1', 'sideways')).buses[0]),
+        ).toThrow(RangeError);
+        expect(() =>
+          engine.setStrip(10, JSON.parse(scene('strips', 't', 'sideways')).strips[0]),
+        ).toThrow(/^RealtimeEngine\.setStrip: settings\.inserts\[0\]\.slot /);
         expect(
           codeOf(() =>
             engine.setStrip('master', JSON.parse(scene('strips', 'm', 'sideways')).strips[0]),
           ),
-        ).toBe(ErrorCode.InvalidFormat);
+        ).toBe(-1);
         // A non-object strip is an argument of the wrong type.
         expect(() => engine.setStrip('master', 7 as never)).toThrow(TypeError);
       } finally {

@@ -1141,7 +1141,7 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => engine.setParamSmoothingMs(0)).not.toThrow();
       expect(() => engine.setParamSmoothingMs(75)).not.toThrow();
       expect(expectRefusalOf(() => engine.setParamSmoothingMs(-1), RangeError).message).toBe(
-        'RealtimeEngine.setParamSmoothingMs: smoothingMs must be at least 0',
+        'RealtimeEngine.setParamSmoothingMs: smoothingMs must be finite and at least 0',
       );
       expect(
         expectRefusalOf(() => engine.setParamSmoothingMs(Number.NaN), RangeError).message,
@@ -1474,15 +1474,13 @@ describe('v1.2 feature additions (WASM)', () => {
       const oversized: [] = [];
       (oversized as unknown[]).length = 500_000_001;
       expect(expectRefusalOf(() => engine.setTempoSegments(oversized), RangeError).message).toBe(
-        'RealtimeEngine.setTempoSegments: segments exceeds the WASM Float32 input budget',
+        'RealtimeEngine.setTempoSegments: segments exceeds the input length budget',
       );
       expect(
         expectRefusalOf(() => engine.setTimeSignatureSegments(oversized), RangeError).message,
-      ).toBe(
-        'RealtimeEngine.setTimeSignatureSegments: segments exceeds the WASM Float32 input budget',
-      );
+      ).toBe('RealtimeEngine.setTimeSignatureSegments: segments exceeds the input length budget');
       expect(expectRefusalOf(() => engine.setMarkers(oversized), RangeError).message).toBe(
-        'RealtimeEngine.setMarkers: markers exceeds the WASM Float32 input budget',
+        'RealtimeEngine.setMarkers: markers exceeds the input length budget',
       );
       engine.destroy();
     });
@@ -1511,11 +1509,11 @@ describe('v1.2 feature additions (WASM)', () => {
       const over = listOf(budget + 1);
       // The native setter draws the same line at the same length.
       expect(expectRefusalOf(() => engine.setTempoSegments(over.list), RangeError).message).toBe(
-        'RealtimeEngine.setTempoSegments: segments exceeds the WASM Float32 input budget',
+        'RealtimeEngine.setTempoSegments: segments exceeds the input length budget',
       );
       over.reads.count = 0;
       expect(expectRefusalOf(() => engine.setMarkers(over.list), RangeError).message).toBe(
-        'RealtimeEngine.setMarkers: markers exceeds the WASM Float32 input budget',
+        'RealtimeEngine.setMarkers: markers exceeds the input length budget',
       );
       expect(over.reads.count).toBe(0);
       // At the budget the list is walked, which the first entry read shows.

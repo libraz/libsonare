@@ -109,7 +109,7 @@ describe('masteringDynamicsCompressor (WASM)', () => {
 
   it('rejects empty input with a clear RangeError', () => {
     expect(() => masteringDynamicsCompressor(new Float32Array(0), SR)).toThrow(
-      /masteringDynamicsCompressor: samples must not be empty/,
+      /masteringDynamicsCompressor: samples must be a non-empty buffer/,
     );
   });
 });
@@ -159,7 +159,7 @@ describe('masteringDynamicsGate (WASM)', () => {
 
   it('rejects empty input with a clear RangeError', () => {
     expect(() => masteringDynamicsGate(new Float32Array(0), SR)).toThrow(
-      /masteringDynamicsGate: samples must not be empty/,
+      /masteringDynamicsGate: samples must be a non-empty buffer/,
     );
   });
 });
@@ -216,7 +216,7 @@ describe('masteringDynamicsTransientShaper (WASM)', () => {
 
   it('rejects empty input with a clear RangeError', () => {
     expect(() => masteringDynamicsTransientShaper(new Float32Array(0), SR)).toThrow(
-      /masteringDynamicsTransientShaper: samples must not be empty/,
+      /masteringDynamicsTransientShaper: samples must be a non-empty buffer/,
     );
   });
 });

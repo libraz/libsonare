@@ -153,7 +153,7 @@ static std::size_t budgetedLength(const val& arr, const char* subject, const cha
                          " length must be an integer in [0, 9007199254740991]");
   }
   if (length > static_cast<double>(kMaxWasmFloat32Elements)) {
-    throw WasmRangeError(std::string(subject) + " exceeds the WASM Float32 input budget");
+    throw WasmRangeError(std::string(subject) + " exceeds the input length budget");
   }
   return static_cast<std::size_t>(length);
 }
@@ -199,7 +199,7 @@ void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts)
   std::size_t total = 0;
   for (const std::size_t count : counts) {
     if (!sonare::numeric::checked_add(total, count, &total) || total > kMaxWasmFloat32Elements) {
-      throw WasmRangeError("input exceeds the WASM Float32 input budget");
+      throw WasmRangeError("input exceeds the input length budget");
     }
   }
 }
@@ -212,7 +212,7 @@ std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_s
   const std::size_t count = wasmFloat32ArrayLength(arr, array_subject);
   if (!sonare::numeric::checked_add(*cumulative_count, count, cumulative_count) ||
       *cumulative_count > kMaxWasmFloat32Elements) {
-    throw WasmRangeError("input exceeds the WASM Float32 input budget");
+    throw WasmRangeError("input exceeds the input length budget");
   }
   return count;
 }
@@ -507,11 +507,10 @@ namespace {
 // the whole body and pass their own bound.
 double checkedUnsignedNumber(const val& value, const char* key, double max) {
   const double number = numberFromVal(value, key);
-  if (!std::isfinite(number) || number < 0.0 || number > max) {
-    throw WasmRangeError(std::string(key) + " must be a finite number within [0, " +
+  if (!std::isfinite(number) || number != std::trunc(number) || number < 0.0 || number > max) {
+    throw WasmRangeError(std::string(key) + " must be an integer in [0, " +
                          std::to_string(static_cast<long long>(max)) + "]");
   }
-  requireIntegral(number, key);
   return number;
 }
 
@@ -527,15 +526,12 @@ int checkedIntFromVal(const val& value, const char* key) {
   // agree; widening the positional path to match the saturating one would look
   // consistent and remove the only range check this surface has.
   const double number = numberFromVal(value, key);
-  // Truncated before the range, so an in-range fraction is refused as a fraction (the Node
-  // wording).
-  const double truncated = std::trunc(number);
-  if (!std::isfinite(number) || truncated < static_cast<double>(std::numeric_limits<int>::min()) ||
-      truncated > static_cast<double>(std::numeric_limits<int>::max())) {
-    throw WasmRangeError(std::string(key) +
-                         " must be a finite number within [-2147483648, 2147483647]");
+  // One text for a non-finite, fractional or out-of-range value, as the Node integer reader.
+  if (!std::isfinite(number) || number != std::trunc(number) ||
+      number < static_cast<double>(std::numeric_limits<int>::min()) ||
+      number > static_cast<double>(std::numeric_limits<int>::max())) {
+    throw WasmRangeError(std::string(key) + " must be an integer in [-2147483648, 2147483647]");
   }
-  requireIntegral(number, key);
   return static_cast<int>(number);
 }
 
@@ -605,6 +601,25 @@ uint32_t checkedUintFromVal(const val& value, const char* key) {
       checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint32_t>::max())));
 }
 
+std::size_t checkedSizeTFromVal(const val& value, const char* key) {
+  if (!value.isNumber()) {
+    throw WasmTypeError(std::string(key) + " must be a number");
+  }
+  return sizeTFromNumber(value.as<double>(), key);
+}
+
+std::size_t sizeTFromNumber(double number, const char* key) {
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
+  const double max_size_t = static_cast<double>(std::numeric_limits<std::size_t>::max());
+  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 ||
+      number > kMaxSafeInteger || number > max_size_t) {
+    throw WasmRangeError(std::string(key) +
+                         " must be a finite non-negative integer no greater than "
+                         "Number.MAX_SAFE_INTEGER or the native size_t maximum");
+  }
+  return static_cast<std::size_t>(number);
+}
+
 uint32_t uintProperty(val object, const char* key, uint32_t default_value) {
   val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedUintFromVal(value, key);
@@ -614,10 +629,10 @@ uint32_t checkedWordFromVal(const val& value, const char* key) {
   static constexpr double kSignedMin = -2147483648.0;   // -2^31
   static constexpr double kUnsignedMax = 4294967295.0;  // 2^32 - 1
   const double number = numberFromVal(value, key);
-  if (!std::isfinite(number) || number < kSignedMin || number > kUnsignedMax) {
-    throw WasmRangeError(std::string(key) + " must be a finite 32-bit word value");
+  if (!std::isfinite(number) || number < kSignedMin || number > kUnsignedMax ||
+      std::floor(number) != number) {
+    throw WasmRangeError(std::string(key) + " must be an integer in [-2147483648, 4294967295]");
   }
-  requireIntegral(number, key);
   return number < 0.0 ? static_cast<uint32_t>(static_cast<int64_t>(number))
                       : static_cast<uint32_t>(number);
 }
@@ -644,16 +659,14 @@ uint8_t byteProperty(val object, const char* key, uint8_t default_value, const s
 }
 
 int64_t checkedInt64FromVal(const val& value, const char* key) {
-  // Written as a power of two rather than as numeric_limits: INT64_MAX is not
-  // representable as a double, and converting it rounds the bound up past the
-  // values it is meant to exclude.
-  static constexpr double kUpperBound = 9223372036854775808.0;  // 2^63
+  // The safe-integer range: past it a JS number no longer names one integer.
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
   const double number = numberFromVal(value, key);
-  if (!std::isfinite(number) || number < -kUpperBound || number >= kUpperBound) {
+  if (!std::isfinite(number) || number != std::trunc(number) || number < -kMaxSafeInteger ||
+      number > kMaxSafeInteger) {
     throw WasmRangeError(std::string(key) +
-                         " must be a finite number within the 64-bit integer range");
+                         " must be an integer in [-9007199254740991, 9007199254740991]");
   }
-  requireIntegral(number, key);
   return static_cast<int64_t>(number);
 }
 

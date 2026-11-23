@@ -543,7 +543,9 @@ describe('repair detection (WASM)', () => {
       const samples = burstChannel(5000, 7000);
       expect(() =>
         masteringRepairDetectTrimRange(samples, TRIM_SR, { paddingSamples: -1 }),
-      ).toThrow(/masteringRepairDetectTrimRange: paddingSamples must be at least 0$/);
+      ).toThrow(
+        /masteringRepairDetectTrimRange: paddingSamples must be an integer in \[0, 960000\]$/,
+      );
       // The control: 0 is accepted, so the refusal is of the value.
       expect(masteringRepairDetectTrimRange(samples, TRIM_SR, { paddingSamples: 0 }).first).toBe(
         5000,

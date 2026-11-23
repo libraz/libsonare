@@ -28,6 +28,13 @@ void requireInputCountWithinStrips(size_t input_count, size_t strip_count) {
   throw sonare::SonareException(sonare::ErrorCode::InvalidState, message);
 }
 
+// A strip plane is a Float32Array, as the input list's own refusal states.
+void requireFloat32Plane(const val& plane, const std::string& subject) {
+  if (plane.isNull() || plane.isUndefined() || !plane.instanceof (val::global("Float32Array"))) {
+    throw WasmTypeError(subject + " must be a Float32Array");
+  }
+}
+
 }  // namespace
 
 val MixerWasm::processStereo(val left_channels, val right_channels) {
@@ -50,6 +57,8 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
     const std::string at = "[" + std::to_string(index) + "]";
     const std::string left_subject = "leftInputs" + at;
     const std::string right_subject = "rightInputs" + at;
+    requireFloat32Plane(left_channels[index], left_subject);
+    requireFloat32Plane(right_channels[index], right_subject);
     const size_t left_length = accumulateWasmFloat32ArrayLength(
         left_channels[index], left_subject.c_str(), &cumulative_count);
     const size_t right_length = accumulateWasmFloat32ArrayLength(

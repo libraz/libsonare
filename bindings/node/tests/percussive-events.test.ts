@@ -5,6 +5,7 @@ import type {
   PercussiveSeparationOptions,
 } from '../src/index.js';
 import { extractPercussiveEvents, isSonareError, renderPercussiveEvents } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 /** The default framing, which every fixture position below is reasoned in. */
@@ -471,7 +472,10 @@ describe('extractPercussiveEvents', () => {
       }
       // The addon's own reader answers: it names the field, which the core's plain
       // refusal would not.
-      return error instanceof RangeError && /onsetWait must be an integer/.test(error.message)
+      return error instanceof RangeError &&
+        /^extractPercussiveEvents: onsetWait must be an integer in \[0, 2147483647\]$/.test(
+          error.message,
+        )
         ? 'refused:RangeError'
         : 'threw other';
     });
@@ -572,6 +576,26 @@ describe('extractPercussiveEvents', () => {
     expect(shortHarmonic).not.toEqual(measuredSet(layeredEvents));
     expect(shortPercussive).not.toEqual(measuredSet(layeredEvents));
     expect(shortHarmonic).not.toEqual(shortPercussive);
+  });
+
+  it('names an odd or out-of-range nFft and a negative onsetWait in the C ABI words', () => {
+    for (const nFft of [2047, 2, -2048]) {
+      expectRefusal(
+        () => extractPercussiveEvents({ samples: two, sampleRate: SR, nFft }),
+        RangeError,
+        /^extractPercussiveEvents: nFft must be an even integer in \[4, 524288\]$/,
+      );
+      expectRefusal(
+        () => renderPercussiveEvents({ samples: three, sampleRate: SR, events: threeEvents, nFft }),
+        RangeError,
+        /^renderPercussiveEvents: nFft must be an even integer in \[4, 524288\]$/,
+      );
+    }
+    expectRefusal(
+      () => extractPercussiveEvents({ samples: two, sampleRate: SR, onsetWait: -1 }),
+      RangeError,
+      /^extractPercussiveEvents: onsetWait must be an integer in \[0, 2147483647\]$/,
+    );
   });
 
   it('rejects malformed audio and config', () => {

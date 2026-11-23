@@ -128,7 +128,7 @@ Napi::Value RealtimeEngineWrap::SeekPpq(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   double ppq = 0.0;
   int64_t deadline = -1;
-  if (!RequiredDoubleArg(env, info, 0, "ppq", &ppq) ||
+  if (!RequiredDomainDoubleValue(env, info[0], "ppq", &ppq) ||
       !OptionalInt64Arg(env, info, 1, "renderFrame", -1, &deadline)) {
     return env.Undefined();
   }
@@ -304,7 +304,7 @@ Napi::Value RealtimeEngineWrap::SampleAtPpq(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   double ppq = 0.0;
-  if (!RequiredDoubleArg(env, info, 0, "ppq", &ppq)) return env.Undefined();
+  if (!RequiredDomainDoubleValue(env, info[0], "ppq", &ppq)) return env.Undefined();
   int64_t sample = 0;
   ThrowIfError(env, sonare_engine_sample_at_ppq(engine_, ppq, &sample));
   return Napi::Number::New(env, static_cast<double>(sample));

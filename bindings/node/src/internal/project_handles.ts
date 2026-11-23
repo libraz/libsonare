@@ -18,7 +18,7 @@ export function timelineHandle(timeline: unknown): unknown {
   const native =
     typeof timeline === 'object' && timeline !== null ? timelineHandles.get(timeline) : undefined;
   if (native === undefined) {
-    throw refuseType('timeline must be a ProjectTimeline');
+    throw refuseType('timeline must be a ProjectTimeline instance');
   }
   return native;
 }

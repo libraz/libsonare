@@ -47,9 +47,9 @@ function refusalFor(fn: () => unknown): Error {
   return expectRefusalOf(fn);
 }
 
-/** The two refusals the shared checked reader can produce, verbatim. */
-const READER_RANGE = 'must be a finite number within [-2147483648, 2147483647]';
-const READER_FRACTIONAL = 'must be an integer';
+/** The refusal the shared checked reader produces, verbatim, for a range or a fraction alike. */
+const READER_RANGE = 'must be an integer in [-2147483648, 2147483647]';
+const READER_FRACTIONAL = READER_RANGE;
 
 /**
  * The value shapes, with the legal value ToInt32 folded each one onto at a
@@ -297,8 +297,8 @@ describe('a narrowed constructor position refuses what a wrap made legal', () =>
         expect(error.message).toBe(`StreamAnalyzer: ${slot.domainRefusal}`);
       }
       expect(error.message).not.toContain(READER_RANGE);
-      // The core states an integer domain too, so only the reader's bare ending is its own.
-      expect(error.message).not.toMatch(new RegExp(`${READER_FRACTIONAL}$`));
+      // The core states an integer domain too, so only the reader's full int range is its own.
+      expect(error.message.endsWith(READER_FRACTIONAL)).toBe(false);
     });
 
     it(`${slot.entry} still constructs for a legal ${slot.field}`, () => {

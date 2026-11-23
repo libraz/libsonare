@@ -164,16 +164,18 @@ describe('meteringTruePeakDbtp oversample-factor guard', () => {
     expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 0 })).toThrow(RangeError);
   });
   it('rejects a non-power-of-two factor', () => {
-    expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 3 })).toThrow(/power of two/);
+    expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 3 })).toThrow(
+      new RangeError('meteringTruePeakDbtp: oversampleFactor must be one of 1, 2, 4, 8, 16'),
+    );
   });
   it('rejects a fractional factor', () => {
     expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 2.5 })).toThrow(
-      /power of two/,
+      new RangeError('meteringTruePeakDbtp: oversampleFactor must be one of 1, 2, 4, 8, 16'),
     );
   });
   it('rejects a factor above 16', () => {
     expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 32 })).toThrow(
-      /power of two/,
+      new RangeError('meteringTruePeakDbtp: oversampleFactor must be one of 1, 2, 4, 8, 16'),
     );
   });
 });

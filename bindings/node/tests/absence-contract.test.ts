@@ -370,9 +370,14 @@ describe('a MIDI clip length is absent for open-ended or a positive whole number
             ),
           );
         }
-        expect(() => engine.setMidiClips([looping({ [field]: 1.5 })] as never)).toThrow(
-          new RegExp(`${field} must be an integer$`),
-        );
+        // A sample position or length past 2^53 - 1 was never an exact JS number.
+        for (const inexact of [1.5, 2 ** 53]) {
+          expect(() => engine.setMidiClips([looping({ [field]: inexact })] as never)).toThrow(
+            new RangeError(
+              `RealtimeEngine.setMidiClips: ${field} must be an integer in [-9007199254740991, 9007199254740991]`,
+            ),
+          );
+        }
       }
       for (const absent of [undefined, null]) {
         engine.setMidiClips([clip({ lengthSamples: absent })] as never);

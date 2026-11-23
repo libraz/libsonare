@@ -21,15 +21,15 @@ inline sonare::midi::CcBindingKind ccBindingKindProperty(const emscripten::val& 
   const std::string name = elementField(at, "kind");
   std::string valid;
   for (const sonare::midi::CcBindingKind kind : sonare::midi::kCcBindingKinds) {
-    valid += (valid.empty() ? "'" : ", '") + std::string(sonare::midi::to_string(kind)) + "'";
+    valid += (valid.empty() ? "" : ", ") + std::string(sonare::midi::to_string(kind));
   }
   if (!value.isString()) {
-    throw WasmTypeError(name + " must be one of " + valid + " (a name, not a number)");
+    throw WasmTypeError(name + " must be one of " + valid);
   }
   const std::string token = stringFromVal(value, name.c_str());
   sonare::midi::CcBindingKind kind{};
   if (!sonare::midi::cc_binding_kind_from_string(token, &kind)) {
-    throw WasmRangeError(name + " must be one of " + valid + ", got '" + token + "'");
+    throw WasmRangeError(name + " must be one of " + valid);
   }
   return kind;
 }

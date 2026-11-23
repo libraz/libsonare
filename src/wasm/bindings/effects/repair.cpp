@@ -11,6 +11,7 @@
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
 #include "mastering/repair/trim_silence.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -282,7 +283,7 @@ mastering::repair::DereverbClassicalConfig validatedDereverbConfig(const val& op
     cfg = readDereverbConfig(options, cfg);
   }
   if (cfg.hop_length <= 0) {
-    throw WasmRangeError("hopLength must be an integer in [1, nFft / 2]");
+    throw WasmRangeError("hopLength must be an integer in [1, 2147483647]");
   }
   return cfg;
 }
@@ -844,9 +845,7 @@ val js_mastering_repair_detect_noise_floor(val samples, const val& sample_rate, 
 // layer, which this surface does not go through.
 val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_rate_val) {
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  if (n_fft <= 0 || (n_fft & (n_fft - 1)) != 0) {
-    throw WasmRangeError("nFft must be a power of two");
-  }
+  sonare::util::check::power_of_two_within(n_fft, sonare_c_detail::kNoiseBandFftSizeDomain, "nFft");
   const int sample_rate = domainNumberFromVal<int>(sample_rate_val, "sampleRate",
                                                    sonare_c_detail::kNoiseBandSampleRateDomain);
   std::vector<int> bins(mastering::common::kRepairNoiseBandCount + 1);

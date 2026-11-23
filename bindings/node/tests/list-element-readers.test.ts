@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { Project, RealtimeEngine } from '../dist/index.js';
 
-const UINT32 = 'must be a finite number within [0, 4294967295]';
+const UINT32 = 'must be an integer in [0, 4294967295]';
 const FLOAT32 = 'must be finite and in [-3.4028235e38, 3.4028235e38]';
 
 const caught = (run: () => unknown): Error => {
@@ -74,7 +74,7 @@ const graphCases: ReadonlyArray<
     'a source port outside the integer range at the second element',
     { connections: [link, { ...link, sourcePort: 2 ** 31 }] },
     RangeError,
-    'connections[1].sourcePort must be a finite number within [-2147483648, 2147483647]',
+    'connections[1].sourcePort must be an integer in [-2147483648, 2147483647]',
   ],
   [
     'a non-object parameter binding',

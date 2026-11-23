@@ -287,16 +287,6 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     reason: 'A +1-biased synth enum, as engine_mode.',
   },
   {
-    file: 'src/wasm/bindings/editing/polyphony.cpp',
-    field: 'fade_ms',
-    reason: 'The WASM door onto the same note-render config; same sentinel, same refusal.',
-  },
-  {
-    file: 'src/wasm/bindings/editing/polyphony.cpp',
-    field: 'vibrato_cutoff_hz',
-    reason: 'The WASM door onto the same note-render config.',
-  },
-  {
     file: 'src/wasm/bindings/effects/notes.cpp',
     field: 'vibrato_cutoff_hz',
     reason: 'WASM pitch-decomposition cutoff; 0 keeps the core default, negative refused.',
@@ -415,7 +405,7 @@ describe('a `> 0` sentinel filter is removed or answered', () => {
     // RED WHEN: the scan's regexes stop matching (a clang-format change that
     // wraps these comparisons, a rename of the shapes). Without this, a dead
     // regex would report an empty population and read as a clean tree.
-    expect(filterSites().length).toBeGreaterThan(35);
+    expect(filterSites().length).toBeGreaterThan(30);
     expect(new Set(filterSites().map((site) => site.file)).size).toBeGreaterThan(10);
   });
 

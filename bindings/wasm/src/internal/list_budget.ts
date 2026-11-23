@@ -9,7 +9,7 @@ const WASM_LIST_BUDGET = 64 * 1024 * 1024;
  */
 export function requireListBudget(list: ArrayLike<unknown>, subject: string): void {
   if (list.length > WASM_LIST_BUDGET) {
-    throw refuse(`${subject} exceeds the WASM Float32 input budget`);
+    throw refuse(`${subject} exceeds the input length budget`);
   }
 }
 
@@ -28,7 +28,7 @@ export function stringifyWithinBudget(value: unknown, subject: string): string {
     });
   } catch (error) {
     if (error instanceof RangeError) {
-      throw refuse(`${subject} exceeds the WASM Float32 input budget`);
+      throw refuse(`${subject} exceeds the input length budget`);
     }
     throw error;
   }

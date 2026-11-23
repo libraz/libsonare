@@ -87,11 +87,13 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
       expect(isSonareError(patch)).toBe(false);
       expect((patch as Error).message).toContain('noSuchKey');
       const typo = '{"version":2,"strips":[{"id":"s","faderDB":-3}],"buses":[]}';
-      // A document content defect is the loader's InvalidFormat, a coded SonareError.
+      // A key refused inside the settings object is a refused argument, not a document error.
       const strip = thrown(() => engine.setStrip(10, JSON.parse(typo).strips[0]));
-      expect(isSonareError(strip)).toBe(true);
-      expect((strip as { code: number }).code).toBe(ErrorCode.InvalidFormat);
-      expect((strip as Error).message).toContain('unknown key strips[0].faderDB');
+      expect(strip).toBeInstanceOf(TypeError);
+      expect(isSonareError(strip)).toBe(false);
+      expect((strip as Error).message).toMatch(
+        /^RealtimeEngine\.setStrip: unknown key settings\.faderDB\b/,
+      );
     });
   });
 

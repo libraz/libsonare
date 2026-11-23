@@ -719,7 +719,7 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
     [
       'offsetSample NaN',
       { onsetSample: 4096, offsetSample: Number.NaN },
-      'offsetSample must be a finite number within the 64-bit integer range',
+      'offsetSample must be an integer in [-9007199254740991, 9007199254740991]',
     ],
     // renderableNoteFromVal (notes.cpp) reads these through requireInt64Property,
     // not a raw static_cast<int64_t> of a double: a fraction must be refused
@@ -734,7 +734,7 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
     [
       'offsetSample out of int64 range',
       { onsetSample: 4096, offsetSample: 1e300 },
-      'offsetSample must be a finite number within the 64-bit integer range',
+      'offsetSample must be an integer in [-9007199254740991, 9007199254740991]',
     ],
   ];
 

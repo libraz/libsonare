@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 
+#include "c_api/daw_config_domains.h"
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/note_model/note_split_merge.h"
@@ -110,9 +111,7 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
     // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
     // negative or non-finite -- pitchPyin leaves NaN there unless asked to fill
     // it -- and every consumer reads all three as contributing no measurement.
-    if (has_prob && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
-      throw WasmRangeError("voicedProb values must be in [0, 1]");
-    }
+    if (has_prob) sonare::util::check::in_range(prob_vec[i], 0.0, 1.0, "voicedProb");
   }
 
   editing::pitch_editor::F0Track track;
@@ -289,9 +288,9 @@ val js_extract_notes(val samples, const val& sample_rate_val, val f0_hz, val voi
 val js_render_notes(val samples, const val& sample_rate, val notes, val options) {
   const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   editing::note_model::NoteRenderConfig config;
-  config.fade_ms = floatProperty(options, "fadeMs", config.fade_ms);
+  config.fade_ms = domainFloatProperty(options, "fadeMs", config.fade_ms);
   config.decomposition.vibrato_cutoff_hz =
-      floatProperty(options, "vibratoCutoffHz", config.decomposition.vibrato_cutoff_hz);
+      domainFloatProperty(options, "vibratoCutoffHz", config.decomposition.vibrato_cutoff_hz);
   sonare::util::check::greater_than(config.fade_ms, 0.0, "fadeMs");
   sonare::util::check::greater_than(config.decomposition.vibrato_cutoff_hz, 0.0, "vibratoCutoffHz");
 
@@ -332,20 +331,14 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
 
 val js_decompose_note_pitch(val f0_hz, const val& voiced, const val& frame_rate_val,
                             const val& median_hz_val, const val& vibrato_cutoff_hz_val) {
-  const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
-  const float median_hz = checkedFloatFromVal(median_hz_val, "medianHz");
-  const float vibrato_cutoff_hz = checkedFloatFromVal(vibrato_cutoff_hz_val, "vibratoCutoffHz");
+  const float frame_rate = domainFloatFromVal(frame_rate_val, "frameRate");
+  const float median_hz = domainFloatFromVal(median_hz_val, "medianHz");
+  const float vibrato_cutoff_hz = domainFloatFromVal(vibrato_cutoff_hz_val, "vibratoCutoffHz");
   // A note with no pitch is spelled 0, so only a value that cannot be a centre
-  // or a cutoff at all is rejected.
-  if (median_hz < 0.0f) {
-    throw WasmRangeError("medianHz must be at least 0");
-  }
-  if (vibrato_cutoff_hz < 0.0f) {
-    throw WasmRangeError("vibratoCutoffHz must be at least 0");
-  }
-  if (frame_rate <= 0.0f) {
-    throw WasmRangeError("frameRate must be greater than 0");
-  }
+  // or a cutoff at all is rejected; checked in the C ABI's order and words.
+  sonare::util::check::greater_than(frame_rate, 0.0, "frameRate");
+  sonare::util::check::at_least(median_hz, 0.0, "medianHz");
+  sonare::util::check::at_least(vibrato_cutoff_hz, 0.0, "vibratoCutoffHz");
   std::size_t cumulative_count = 0;
   std::vector<float> f0 = normalizedF0FromVal(f0_hz, voiced, &cumulative_count);
 
@@ -380,7 +373,7 @@ val js_split_note(val samples, const val& sample_rate_val, val f0_hz, val voiced
                        config.voiced_threshold, &cumulative_count);
   std::vector<NoteSetEntry> entries = noteSetFromVal(notes, &cumulative_count);
   if (note_index >= entries.size()) {
-    throw WasmRangeError("index is outside the note set");
+    throw WasmRangeError("index must be less than notes.length");
   }
 
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
@@ -402,8 +395,11 @@ val js_merge_notes(val samples, const val& sample_rate_val, val f0_hz, val voice
       noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
                        config.voiced_threshold, &cumulative_count);
   std::vector<NoteSetEntry> entries = noteSetFromVal(notes, &cumulative_count);
-  if (!(first_index < last_index) || last_index >= entries.size()) {
-    throw WasmRangeError("first and last must be an ascending run inside the set");
+  if (!(first_index < last_index)) {
+    throw WasmRangeError("first must be less than last");
+  }
+  if (last_index >= entries.size()) {
+    throw WasmRangeError("last must be less than notes.length");
   }
 
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
@@ -523,10 +519,8 @@ val assignedNoteToVal(const val& row, const editing::note_model::NoteEdit& edit)
 // validation sonare_assign_note_targets performs is reproduced above -- without
 // it WASM would be the one surface where a non-finite target reaches the edit.
 val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, val request) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  if (sample_rate <= 0) {
-    throw WasmRangeError("sampleRate must be an integer in [1, 2147483647]");
-  }
+  const int sample_rate = domainNumberFromVal<int>(sample_rate_val, "sampleRate",
+                                                   sonare_c_detail::kNoteTargetSampleRateDomain);
   const NoteTargetAssignConfig config = noteTargetAssignConfigFromVal(request);
   const std::vector<NoteTarget> core_targets = noteTargetsFromVal(targets);
 

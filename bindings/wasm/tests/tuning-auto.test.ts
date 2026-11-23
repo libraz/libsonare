@@ -108,7 +108,7 @@ describe("tuningCents: 'auto'", () => {
 
   it('refuses a tuning that is neither a number nor auto, by name', () => {
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 'other' as never })).toThrow(
-      'detectKey: tuningCents must be a number of cents or auto',
+      new TypeError("detectKey: tuningCents must be a number or 'auto'"),
     );
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow();
   });
@@ -182,6 +182,6 @@ describe("transcribe referenceHz: 'auto'", () => {
   it('refuses a reference that is neither a number nor auto', () => {
     expect(() =>
       transcribe({ samples: tones(1), sampleRate, referenceHz: 'other' as never }),
-    ).toThrow(/^transcribe: referenceHz must be finite and greater than 0, or 'auto'$/);
+    ).toThrow(new TypeError("transcribe: referenceHz must be a number or 'auto'"));
   });
 });

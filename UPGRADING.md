@@ -4794,7 +4794,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `fixLength(padValue)` | removed: pass padValue as a field of FixLengthRequest |
 | `fixLength(targetSize)` | removed: pass targetSize as a field of FixLengthRequest |
 | `fixLength(values)` | removed: pass values as a field of FixLengthRequest |
-| `fixLength` | request-only: fixLength(request: FixLengthRequest) |
+| `fixLength` | request-only: fixLength(request: FixLengthRequest); a targetSize above 2^53 - 1 is refused with a RangeError |
 | `fourierTempogram(hopLength)` | removed: pass hopLength as a field of FourierTempogramRequest |
 | `fourierTempogram(onsetEnvelope)` | removed: pass onsetEnvelope as a field of FourierTempogramRequest |
 | `fourierTempogram(sampleRate)` | removed: pass sampleRate as a field of FourierTempogramRequest |
@@ -4884,7 +4884,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `padCenter(padValue)` | removed: pass padValue as a field of PadCenterRequest |
 | `padCenter(targetSize)` | removed: pass targetSize as a field of PadCenterRequest |
 | `padCenter(values)` | removed: pass values as a field of PadCenterRequest |
-| `padCenter` | request-only: padCenter(request: PadCenterRequest) |
+| `padCenter` | request-only: padCenter(request: PadCenterRequest); a targetSize above 2^53 - 1 is refused with a RangeError |
 | `pcen(nBins)` | removed: the Matrix2D input carries it as rows / cols |
 | `pcen(nFrames)` | removed: the Matrix2D input carries it as rows / cols |
 | `pcen(options)` | removed: pass the option fields in PcenRequest |
@@ -5165,7 +5165,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `estimateMeter` | request type is EstimateMeterRequest |
 | `segmentAgglomerative` | request type is SegmentAgglomerativeRequest |
 | `segmentSubsegment` | request type is SegmentSubsegmentRequest |
-| `splitSilenceCommon` | request type is SplitSilenceCommonRequest |
+| `splitSilenceCommon` | request type is SplitSilenceCommonRequest; an empty signals array is a RangeError instead of a TypeError |
 
 #### Input-only types are named <Name>Input
 
@@ -5545,6 +5545,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `voiceChangeRealtime(samples)` | removed: pass planar channels as channels in RealtimeVoiceChangerRenderRequest |
 | `voiceChangeRealtime` | `realtimeVoiceChangerRender`: request-only: realtimeVoiceChangerRender(request: RealtimeVoiceChangerRenderRequest): Float32Array[] |
 | `voiceChange` | one positional form (voiceChange(samples, sampleRate, options?: VoiceChangeOptions)); request form takes VoiceChangeRequest; returns Float32Array |
+
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `decomposeStemsLinked` | a missing channels argument is a TypeError instead of a RangeError |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -6394,6 +6400,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent is -14 LUFS; any finite value, 0 included, is a literal target; a non-finite value is a RangeError |
+| `RealtimeEngine.pushMidiInputUmp` | a fractional word in words is refused with a RangeError instead of truncated |
+| `RealtimeEngine.pushMidiUmp` | a fractional word in words is refused with a RangeError instead of truncated |
+| `RealtimeEngine.setMidiClips` | a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number) |
 
 #### String values are lowerCamelCase tokens
 
@@ -6513,15 +6522,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `Mixer.toSceneJson` | `Mixer.toJson` |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
-| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip` |
+| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path> |
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
-| `RealtimeEngine.setMasterStripJson` | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
+| `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref. |
-| `RealtimeEngine.setTrackStripJson` | removed: Call setStrip(ref, settings) with a track id and a MixSceneStripInput object; no JSON string. |
+| `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
 
 #### One-shot JavaScript calls take a request object
 
@@ -7988,6 +7997,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PitchResult.meanF0` | optional; absent when no frame is voiced (was a required number) |
 | `PitchResult.medianF0` (`./analysis`) | optional; absent when no frame is voiced (was a required number) |
 | `PitchResult.medianF0` | optional; absent when no frame is voiced (was a required number) |
+| `PolyphonicAnalysis.render` | an explicit 0 for fadeMs or vibratoCutoffHz is refused with a RangeError instead of selecting the default |
 | `PolyphonicAnalysisOptions.minFramePeakRatio` (`./analysis`) | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.minFramePeakRatio` | explicit 0 now means 0; negative refused (RangeError); absent = library default |
 | `PolyphonicAnalysisOptions.minRidgeDurationMs` (`./analysis`) | explicit 0 now means 0; negative refused (RangeError); absent = library default |
@@ -8822,8 +8832,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `detectDownbeats` | one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'\|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300) |
 | `detectKeyCandidates` (`./analysis`) | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest |
 | `detectKeyCandidates` | one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyCandidatesRequest |
-| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest |
-| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest |
+| `detectKey` (`./analysis`) | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError |
+| `detectKey` | one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'\|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError |
 | `detectOnsets` (`./analysis`) | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
 | `detectOnsets` | one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'\|'sampleRate'>)); request form takes DetectOnsetsRequest |
 | `estimateTuning(binsPerOctave)` (`./analysis`) | removed: pass binsPerOctave as a field of EstimateTuningRequest |
@@ -9338,6 +9348,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `zeroCrossings(threshold)` | removed: pass threshold as a field of ZeroCrossingsRequest |
 | `zeroCrossings` (`./analysis`) | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
 | `zeroCrossings` | one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'\|'sampleRate'>)); request form takes ZeroCrossingsRequest; 1.x took no sampleRate, so the second positional argument is sampleRate and a 1.x call such as splitSilence(samples, 60) passes 60 as the rate |
+
+#### Errors are coded by cause on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `transcribe` | a referenceHz that is neither a number nor 'auto' is a TypeError instead of a RangeError |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -9943,6 +9959,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `StreamingRetune.prepare` | a NaN, infinite or out-of-range sampleRate is refused with RangeError naming it (1.x passed it through) |
+| `decomposeStemsLinked` (`./analysis`) | an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
+| `decomposeStemsLinked` | an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
 
 #### String values are lowerCamelCase tokens
 
@@ -10033,8 +10051,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `decompose(nIter)` | removed: pass nIter as a field of DecomposeRequest |
 | `decompose(s)` (`./analysis`) | removed: pass s as a field of DecomposeRequest |
 | `decompose(s)` | removed: pass s as a field of DecomposeRequest |
-| `decomposeStems` (`./analysis`) | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult |
-| `decomposeStems` | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult |
+| `decomposeStems` (`./analysis`) | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
+| `decomposeStems` | one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'\|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError |
 | `decompose` (`./analysis`) | request-only: decompose(request: DecomposeRequest): DecomposeResult |
 | `decompose` | request-only: decompose(request: DecomposeRequest): DecomposeResult |
 | `estimateRoom` | one positional form (estimateRoom(samples, sampleRate, options?: RoomEstimateOptions)); request form takes EstimateRoomRequest; returns RoomEstimateResult |
@@ -11514,7 +11532,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RealtimeEngine.popClipPageRequest` | returns undefined (was null) when no request is queued |
 | `RealtimeEngine.primeOfflineParameters` | blockSize is optional: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.setAutomationLane` | a point that is not an object is refused with TypeError 'points[i] must be an object' (1.x read it as a point with every field absent) |
-| `RealtimeEngine.setMidiClips` | a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent) |
+| `RealtimeEngine.setMidiClips` | a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent); a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number) |
 | `RealtimeEngine.setTrackOutputBus` | setTrackOutputBus(trackId, busId: number \| null): null routes to the master mix and 0 is a RangeError |
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
@@ -11527,6 +11545,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
 | `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError |
+| `Mixer.processStereo` | a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted |
 | `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
 | `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
@@ -11658,15 +11677,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `Mixer.toSceneJson` | `Mixer.toJson` |
 | `RealtimeEngine.setBusStripEqBandJson` | removed: Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string. |
-| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip` |
+| `RealtimeEngine.setBusStripJson` | `RealtimeEngine.setBusStrip`: setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path> |
 | `RealtimeEngine.setMasterStripEqBandJson` | removed: Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setMasterStripEqBand` | removed: Call setStripEqBand('master', bandIndex, band). |
-| `RealtimeEngine.setMasterStripJson` | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
+| `RealtimeEngine.setMasterStripJson` | `RealtimeEngine.setStrip`: setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
 | `RealtimeEngine.setMidiFx(configJson)` | removed: pass it as config in MidiFxConfig |
 | `RealtimeEngine.setMidiFx` | takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and an unknown key (a 1.x snake_case key among them) or a wrong-typed field is a TypeError and an out-of-domain value a RangeError, each naming its place under config ('config.velocityGamma must be > 0') |
 | `RealtimeEngine.setTrackStripEqBandJson` | removed: Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string. |
 | `RealtimeEngine.setTrackStripEqBand` | `RealtimeEngine.setStripEqBand` |
-| `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip` |
+| `RealtimeEngine.setTrackStripJson` | `RealtimeEngine.setStrip`: setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path> |
 | `SonareEngine.setBusStripJson` (`./worklet`) | `SonareEngine.setBusStrip` |
 | `SonareEngine.setMasterStripJson` (`./worklet`) | removed: Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string. |
 | `SonareEngine.setMidiFx(configJson)` (`./worklet`) | removed: pass it as config in MidiFxConfig |
@@ -12574,6 +12593,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Project.importClipFile` | empty data is a RangeError ('data must not be empty') instead of a TypeError |
+| `Project.importSmf` | empty data is a RangeError ('data must not be empty') instead of a TypeError |
 | `Project.setTempoSegments` | a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `ProjectAutomationLaneDesc.targetParamId` | an absent targetParamId is a TypeError 'targetParamId must be an integer', as on Node (1.x read it as 0 and refused it with RangeError 'targetParamId must be an integer in [1, 4294967295]') |
 | `ProjectTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |

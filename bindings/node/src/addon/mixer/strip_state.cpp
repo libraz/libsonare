@@ -307,13 +307,11 @@ Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
   }
   const Napi::Object obj = info[1].As<Napi::Object>();
   SonareSurroundPan pan{};
-  pan.azimuth = FloatProperty(obj, "azimuth", pan.azimuth);
-  pan.divergence = FloatProperty(obj, "divergence", pan.divergence);
-  pan.lfe = FloatProperty(obj, "lfe", pan.lfe);
-  SonareError err = sonare_strip_set_surround_pan(strip, &pan);
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip surround pan: ");
-  }
+  pan.azimuth = DomainFloatProperty(obj, "azimuth", pan.azimuth);
+  pan.divergence = DomainFloatProperty(obj, "divergence", pan.divergence);
+  pan.lfe = DomainFloatProperty(obj, "lfe", pan.lfe);
+  if (env.IsExceptionPending()) return env.Undefined();
+  sonare_node::ThrowIfErrorFlattening(env, sonare_strip_set_surround_pan(strip, &pan), "pan");
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

@@ -112,8 +112,8 @@ function expectSentinelRefused<T>(
   expect(read(call(control))).not.toBe(omitted);
   // Matched on the message, so an unrelated throw from further down the call
   // cannot stand in for the refusal this asserts.
-  expect(() => call(0.5)).toThrow(/must be an integer/);
-  expect(() => call(1.5)).toThrow(/must be an integer/);
+  expect(() => call(0.5)).toThrow(/must be an integer in \[-?\d+, \d+\]/);
+  expect(() => call(1.5)).toThrow(/must be an integer in \[-?\d+, \d+\]/);
 }
 
 describe('decomposeStems counts', () => {
@@ -498,7 +498,7 @@ describe('bounce fields whose value the render cannot report', () => {
     // leaves the caller no way to learn the value was not the one they asked for.
     const call = () => onProject(({ project }) => project.bounce({ blockSize: 0.5 }));
     expect(call).toThrow(RangeError);
-    expect(call).toThrow(/blockSize must be an integer/);
+    expect(call).toThrow('Project.bounce: blockSize must be an integer in [1, 2147483647]');
   });
 
   it('takes no sample rate option and reports the project rate', () => {

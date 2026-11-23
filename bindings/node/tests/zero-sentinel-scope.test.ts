@@ -172,6 +172,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
   ['FloatDataProperty', 'Reads a float; truncation is not in play.'],
   ['DomainFloatProperty', 'Reads a float; truncation is not in play.'],
+  ['DomainDoubleProperty', 'Reads a double; truncation is not in play.'],
   [
     'DomainProperty',
     "Checks the number against the core's domain before narrowing, so a fraction is refused in the domain text instead of truncating onto a zero.",

@@ -98,7 +98,7 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   if (partial_tail == "drop") {
     d.flags = SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL;
   } else if (partial_tail != "keep") {
-    throw WasmRangeError("partialTail must be 'keep' or 'drop'");
+    throw WasmRangeError("partialTail must be one of keep, drop");
   }
   if (hasProperty(desc, "audio")) {
     audio = float32ArrayToVector(desc["audio"], "audio");
@@ -376,12 +376,12 @@ void ProjectWasm::redo() {
 void ProjectWasm::clearHistory() { checkCodedCError(sonare_project_clear_history(project_.get())); }
 
 void ProjectWasm::setMaxUndoDepth(const val& depth_val) {
-  const std::size_t depth = static_cast<std::size_t>(checkedUintFromVal(depth_val, "depth"));
+  const std::size_t depth = checkedSizeTFromVal(depth_val, "depth");
   checkCodedCError(sonare_project_set_max_undo_depth(project_.get(), depth));
 }
 
 void ProjectWasm::setMaxHistoryBytes(const val& bytes_val) {
-  const std::size_t bytes = static_cast<std::size_t>(checkedUintFromVal(bytes_val, "bytes"));
+  const std::size_t bytes = checkedSizeTFromVal(bytes_val, "bytes");
   checkCodedCError(sonare_project_set_max_history_bytes(project_.get(), bytes));
 }
 

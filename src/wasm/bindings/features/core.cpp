@@ -280,25 +280,19 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val,
 }
 
 val js_pad_center(val values, const val& size_val, const val& pad_value_val) {
-  const int size = checkedIntFromVal(size_val, "size");
+  const size_t size = checkedSizeTFromVal(size_val, "targetSize");
   const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
   std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
-  if (size < 0) {
-    throw WasmRangeError("size must be an integer in [0, 2147483647]");
-  }
-  return vectorToFloat32Array(pad_center(data, static_cast<size_t>(size), pad_value));
+  return vectorToFloat32Array(pad_center(data, size, pad_value));
 }
 
 val js_fix_length(val values, const val& size_val, const val& pad_value_val) {
-  const int size = checkedIntFromVal(size_val, "size");
+  const size_t size = checkedSizeTFromVal(size_val, "targetSize");
   const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
   std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
-  if (size < 0) {
-    throw WasmRangeError("size must be an integer in [0, 2147483647]");
-  }
-  return vectorToFloat32Array(fix_length(data, static_cast<size_t>(size), pad_value));
+  return vectorToFloat32Array(fix_length(data, size, pad_value));
 }
 
 std::vector<int> intArrayToVector(val arr, const char* subject) {

@@ -348,7 +348,7 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
   if (partial_tail == "drop") {
     desc.flags = SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL;
   } else if (partial_tail != "keep") {
-    Napi::RangeError::New(env, "partialTail must be 'keep' or 'drop', got '" + partial_tail + "'")
+    Napi::RangeError::New(env, "partialTail must be one of keep, drop")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

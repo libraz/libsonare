@@ -3,6 +3,9 @@
 #include <string>
 #include <vector>
 
+#include "c_api/daw_config_domains.h"
+#include "core/spectrum.h"
+#include "editing/event_model/event_extractor.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_note_objects.h"
 #include "sonare_wrap_options.h"
@@ -260,8 +263,8 @@ bool ReadUnmatchedTargetPolicy(Napi::Env env, const Napi::Object& opts, int32_t*
 void ReadPercussiveSeparation(const Napi::Object& opts, int32_t* n_fft, size_t* hop_length,
                               int32_t* kernel_harmonic, int32_t* kernel_percussive) {
   *n_fft = IntProperty(opts, "nFft", *n_fft);
-  *hop_length = static_cast<size_t>(IntInRangeOrAbsentProperty(
-      opts, "hopLength", 1, std::numeric_limits<int>::max(), static_cast<int>(*hop_length)));
+  *hop_length = static_cast<size_t>(DomainProperty<int>(
+      opts, "hopLength", static_cast<int>(*hop_length), sonare::kStftHopDomain));
   *kernel_harmonic = IntProperty(opts, "hpssKernelHarmonic", *kernel_harmonic);
   *kernel_percussive = IntProperty(opts, "hpssKernelPercussive", *kernel_percussive);
 }
@@ -279,7 +282,8 @@ void ReadPercussiveEventConfig(const Napi::Value& value, SonarePercussiveEventCo
   // refused by name rather than silently taking it.
   ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
                            &out->hpss_kernel_percussive);
-  out->onset_wait = IntProperty(opts, "onsetWait", out->onset_wait);
+  out->onset_wait = DomainProperty<int>(opts, "onsetWait", out->onset_wait,
+                                        sonare::editing::event_model::kPercussiveOnsetWaitDomain);
   out->onset_delta = FloatProperty(opts, "onsetDelta", out->onset_delta);
   out->max_event_ms = FloatProperty(opts, "maxEventMs", out->max_event_ms);
   out->min_percussive_ratio = FloatProperty(opts, "minPercussiveRatio", out->min_percussive_ratio);
@@ -503,7 +507,11 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
   auto f0 = info[0].As<Napi::Float32Array>();
   const float frame_rate = node_narrow_float(env, info[1], "frameRate");
   const float median_hz = node_narrow_float(env, info[2], "medianHz");
-  const float vibrato_cutoff_hz = node_narrow_float(env, info[3], "vibratoCutoffHz");
+  // Type-only: the C ABI refuses NaN, infinities and negatives in its own words.
+  float vibrato_cutoff_hz = 0.0f;
+  if (!RequiredDomainFloatArg(env, info, 3, "vibratoCutoffHz", &vibrato_cutoff_hz)) {
+    return env.Undefined();
+  }
   Napi::Int32Array voiced;
   const int32_t* voiced_data = nullptr;
   const Napi::Value voiced_value = info.Length() > 4 ? info[4] : env.Undefined();
@@ -697,7 +705,7 @@ Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!info[1].IsNumber()) {
-    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "sampleRate must be an integer").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (!info[2].IsArray()) {
@@ -706,7 +714,8 @@ Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  const int sr =
+      node_domain_number<int>(info[1], "sampleRate", sonare_c_detail::kNoteTargetSampleRateDomain);
 
   // Seeded from the library rather than from literals here: 0 is a legal value on
   // both floats, so it cannot spell "unset" and an omitted key has to keep

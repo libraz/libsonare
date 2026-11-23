@@ -155,6 +155,10 @@ describe('keyModeFromAnalysis', () => {
       expect(() => keyModeFromAnalysis(bad as never)).toThrow(TypeError);
     }
     expect(() => keyModeFromAnalysis('unknown')).toThrow(RangeError);
-    expect(() => keyModeFromAnalysis('Major')).toThrow(/mode is not a key mode name/);
+    expect(() => keyModeFromAnalysis('Major')).toThrow(
+      new RangeError(
+        'keyModeFromAnalysis: mode must be one of major, minor, dorian, phrygian, lydian, mixolydian, locrian',
+      ),
+    );
   });
 });

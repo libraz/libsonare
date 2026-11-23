@@ -166,10 +166,10 @@ describe('WASM alignTakeToReference', () => {
   it('refuses a buffer or a rate it cannot use', () => {
     const empty = new Float32Array(0);
     expect(() => alignTakeToReference({ reference: empty, take, sampleRate })).toThrow(
-      /reference must not be empty/,
+      /reference must be a non-empty buffer/,
     );
     expect(() => alignTakeToReference({ reference, take: empty, sampleRate })).toThrow(
-      /take must not be empty/,
+      /take must be a non-empty buffer/,
     );
 
     // Named per buffer, so a scan that only ever reads the first argument shows up

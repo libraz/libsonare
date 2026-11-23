@@ -87,7 +87,7 @@ describe('a one-shot meter cannot be handed no samples, so its result is always 
     ['meteringTruePeakDbtp', () => meteringTruePeakDbtp({ samples: empty, sampleRate })],
     ['ebur128LoudnessRangeLu', () => ebur128LoudnessRangeLu({ samples: empty, sampleRate })],
   ] as const)('%s refuses empty input', (entry, run) => {
-    expect(run).toThrow(new RangeError(`${entry}: samples must not be empty`));
+    expect(run).toThrow(new RangeError(`${entry}: samples must be a non-empty buffer`));
   });
 
   it('reads silence as measured', () => {

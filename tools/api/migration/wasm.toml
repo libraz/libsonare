@@ -613,10 +613,34 @@ rule = "teardown"
 
 [[entry]]
 kind = "method"
+old = "PolyphonicAnalysis.render"
+changed = "an explicit 0 for fadeMs or vibratoCutoffHz is refused with a RangeError instead of selecting the default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/polyphonic-editing.test.ts::rejects a non-positive or non-finite fade or vibrato cutoff as out of range"
+
+[[entry]]
+kind = "method"
 old = "Project.delete"
 removed = "call destroy()"
 domain = "project"
 rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "Project.importSmf"
+changed = "empty data is a RangeError ('data must not be empty') instead of a TypeError"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/runtime-refusal-parity.test.ts::refuses empty MIDI file bytes as an empty value, not a missing one"
+
+[[entry]]
+kind = "method"
+old = "Project.importClipFile"
+changed = "empty data is a RangeError ('data must not be empty') instead of a TypeError"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/runtime-refusal-parity.test.ts::refuses empty MIDI file bytes as an empty value, not a missing one"
 
 [[entry]]
 kind = "method"
@@ -9407,7 +9431,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectKey"
-changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest"
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
@@ -9415,11 +9439,19 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectKey"
-changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest"
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest; a tuningCents that is neither a number nor 'auto' is a TypeError instead of a RangeError"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
+
+[[entry]]
+kind = "function"
+old = "transcribe"
+changed = "a referenceHz that is neither a number nor 'auto' is a TypeError instead of a RangeError"
+domain = "analysis"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/tuning-auto.test.ts::refuses a reference that is neither a number nor auto"
 
 [[entry]]
 kind = "function"
@@ -15245,23 +15277,29 @@ rule = "strip-ref"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripJson"
-new = "RealtimeEngine.setStrip"
+to = "RealtimeEngine.setStrip"
+changed = "setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>"
 domain = "engine"
 rule = "typed-results"
+test = "bindings/wasm/tests/scene-warnings.test.ts::engine strip setters refuse an unknown key by name"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripJson"
-removed = "Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string."
+to = "RealtimeEngine.setStrip"
+changed = "setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>"
 domain = "engine"
 rule = "typed-results"
+test = "bindings/wasm/tests/scene-warnings.test.ts::engine strip setters refuse an unknown key by name"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBusStripJson"
-new = "RealtimeEngine.setBusStrip"
+to = "RealtimeEngine.setBusStrip"
+changed = "setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>"
 domain = "engine"
 rule = "typed-results"
+test = "bindings/wasm/tests/scene-warnings.test.ts::the bus strip setter refuses an unknown key as an argument"
 
 [[entry]]
 kind = "method"
@@ -17937,19 +17975,36 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::decompose takes a Matri
 [[entry]]
 kind = "function"
 old = "decomposeStems"
-changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult"
+changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError"
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "function"
+old = "decomposeStemsLinked"
+changed = "an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError"
+domain = "effects"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/decompose-stems-linked.test.ts::refuses an nFft no COLA geometry has, on both entry points"
+
+[[entry]]
+kind = "function"
 old = "decomposeStems"
-changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult"
+changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult; an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError"
 domain = "effects"
 rule = "one-positional-form"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "decomposeStemsLinked"
+changed = "an odd nFft, one below 4 or above 524288, and an nIter outside the core domain are refused with a RangeError"
+domain = "effects"
+rule = "finite-or-refused"
+entry = "./analysis"
+test = "bindings/wasm/tests/decompose-stems-linked.test.ts::refuses an nFft no COLA geometry has, on both entry points"
 
 [[entry]]
 kind = "function"
@@ -35612,6 +35667,14 @@ entry = "./worklet"
 
 [[entry]]
 kind = "method"
+old = "Mixer.processStereo"
+changed = "a plain-array plane is refused with a TypeError ('<side>[i] must be a Float32Array'); it was accepted"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/wasm/tests/runtime-refusal-parity.test.ts::refuses a mixer input plane that is not a Float32Array"
+
+[[entry]]
+kind = "method"
 old = "Mixer.processStereoInto"
 changed = "an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError"
 domain = "engine"
@@ -36276,10 +36339,10 @@ test = "bindings/wasm/tests/list-element-readers.test.ts::an absent target"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMidiClips"
-changed = "a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent)"
+changed = "a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent); a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number)"
 domain = "engine"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/list-element-readers.test.ts::refuses a non-object clip by its index"
+test = "bindings/wasm/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"
 
 [[entry]]
 kind = "method"

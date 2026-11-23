@@ -430,9 +430,6 @@ export function decomposeStemsLinked(
 ): DecomposeStemsLinkedResult {
   return withEntry('decomposeStemsLinked', () => {
     requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
-    if (!Array.isArray(request.channels) || request.channels.length === 0) {
-      throw refuse('channels must be a non-empty array');
-    }
     assertAudioChannels(request.channels, request.sampleRate, request);
     const [first, ...rest] = request.channels;
     for (const channel of rest) {

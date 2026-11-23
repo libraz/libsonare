@@ -148,6 +148,6 @@ describe('masteringRepairNoiseBandBins', () => {
   it('refuses a sampleRate that is not a number rather than substituting its default', () => {
     expect(() =>
       masteringRepairNoiseBandBins({ sampleRate: 'not-a-number' as unknown as number }),
-    ).toThrow(new TypeError('masteringRepairNoiseBandBins: sampleRate must be a number'));
+    ).toThrow(new TypeError('masteringRepairNoiseBandBins: sampleRate must be an integer'));
   });
 });

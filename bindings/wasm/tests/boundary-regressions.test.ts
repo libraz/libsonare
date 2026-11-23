@@ -85,7 +85,7 @@ describe('boundary regressions (WASM)', () => {
   it('rejects an oversized array-like length before allocation and keeps the module usable', () => {
     const module = getSonareModule();
     const oversized = new Array(64 * 1024 * 1024 + 1) as unknown as Float32Array;
-    expect(() => module.meteringPeakDb(oversized, SR)).toThrow(/WASM Float32 input budget/);
+    expect(() => module.meteringPeakDb(oversized, SR)).toThrow(/input length budget/);
 
     // Each plane is individually below the limit. The pair exceeds it by one;
     // sparse plain arrays (a typed buffer's only other accepted form) ensure a vector copy would be observable as a JS
@@ -94,7 +94,7 @@ describe('boundary regressions (WASM)', () => {
     const second = new Array(32 * 1024 * 1024 + 1) as unknown as Float32Array;
     expect(() =>
       module.masterAudioStereo('pop', first, second, SR, null, undefined, undefined),
-    ).toThrow(/WASM Float32 input budget/);
+    ).toThrow(/input length budget/);
     expect(module.meteringPeakDb(new Float32Array([0.5]), SR)).toBeCloseTo(-6.0206, 3);
   });
 

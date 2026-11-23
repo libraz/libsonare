@@ -891,7 +891,10 @@ export function padCenter(...args: unknown[]): Float32Array {
   return withEntry('padCenter', () => {
     const r = requestOnly<PadCenterRequest>('padCenter', args);
     assertFloat32Array(r.values, 'values');
-    assertIntegerValue(r.targetSize, 'targetSize');
+    // The native size_t reader states the domain; only the type is checked here.
+    if (typeof r.targetSize !== 'number') {
+      throw refuseType('targetSize must be an integer');
+    }
     return getSonareModule().padCenter(r.values, r.targetSize, r.padValue ?? 0.0);
   });
 }
@@ -902,7 +905,10 @@ export function fixLength(...args: unknown[]): Float32Array {
   return withEntry('fixLength', () => {
     const r = requestOnly<FixLengthRequest>('fixLength', args);
     assertFloat32Array(r.values, 'values');
-    assertIntegerValue(r.targetSize, 'targetSize');
+    // The native size_t reader states the domain; only the type is checked here.
+    if (typeof r.targetSize !== 'number') {
+      throw refuseType('targetSize must be an integer');
+    }
     return getSonareModule().fixLength(r.values, r.targetSize, r.padValue ?? 0.0);
   });
 }

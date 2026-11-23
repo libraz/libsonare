@@ -16,7 +16,7 @@ export type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 function assertNonEmptySamples(samples: ArrayLike<number>, argName = 'samples'): void {
   if (samples.length === 0) {
-    throw refuse(`${argName} must not be empty`);
+    throw refuse(`${argName} must be a non-empty buffer`);
   }
 }
 
@@ -506,7 +506,12 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
       throw refuseType(`${prefix} must be a { ppq, word0, word1? } object`);
     }
     const record = event as ProjectMidiEvent;
-    assertNonNegativeScalar(record.ppq, `${prefix}.ppq`);
+    if (typeof record.ppq !== 'number') {
+      throw refuseType(`${prefix}.ppq must be a number`);
+    }
+    if (!(Number.isFinite(record.ppq) && record.ppq >= 0 && record.ppq <= MAX_PUBLIC_PPQ)) {
+      throw refuse(`${prefix}.ppq must be finite and in [0, 1e12]`);
+    }
     assertU32(record.word0, `${prefix}.word0`);
     if (record.word1 !== undefined) {
       assertU32(record.word1, `${prefix}.word1`);

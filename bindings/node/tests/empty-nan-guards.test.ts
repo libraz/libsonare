@@ -52,52 +52,52 @@ function sine(n = 1024): Float32Array {
 
 describe('empty-sample guards (Node)', () => {
   it('lufs rejects empty', () => {
-    expect(() => lufs(new Float32Array(0), SR)).toThrow(/lufs: samples must not be empty/);
+    expect(() => lufs(new Float32Array(0), SR)).toThrow(/lufs: samples must be a non-empty buffer/);
   });
   it('meteringPeakDb rejects empty', () => {
     expect(() => meteringPeakDb(new Float32Array(0), SR)).toThrow(
-      /meteringPeakDb: samples must not be empty/,
+      /meteringPeakDb: samples must be a non-empty buffer/,
     );
   });
   it('meteringRmsDb rejects empty', () => {
     expect(() => meteringRmsDb(new Float32Array(0), SR)).toThrow(
-      /meteringRmsDb: samples must not be empty/,
+      /meteringRmsDb: samples must be a non-empty buffer/,
     );
   });
   it('meteringTruePeakDbtp rejects empty', () => {
     expect(() => meteringTruePeakDbtp(new Float32Array(0), SR)).toThrow(
-      /meteringTruePeakDbtp: samples must not be empty/,
+      /meteringTruePeakDbtp: samples must be a non-empty buffer/,
     );
   });
   it('meteringStereoCorrelation rejects empty left', () => {
     expect(() =>
       meteringStereoCorrelation({ left: new Float32Array(0), right: sine(), sampleRate: SR }),
-    ).toThrow(/meteringStereoCorrelation: left must not be empty/);
+    ).toThrow(/meteringStereoCorrelation: left must be a non-empty buffer/);
   });
   it('masteringDynamicsCompressor rejects empty', () => {
     expect(() => masteringDynamicsCompressor(new Float32Array(0), SR)).toThrow(
-      /masteringDynamicsCompressor: samples must not be empty/,
+      /masteringDynamicsCompressor: samples must be a non-empty buffer/,
     );
   });
   it('masteringDynamicsGate rejects empty', () => {
     expect(() => masteringDynamicsGate(new Float32Array(0), SR)).toThrow(
-      /masteringDynamicsGate: samples must not be empty/,
+      /masteringDynamicsGate: samples must be a non-empty buffer/,
     );
   });
   it('masteringDynamicsTransientShaper rejects empty', () => {
     expect(() => masteringDynamicsTransientShaper(new Float32Array(0), SR)).toThrow(
-      /masteringDynamicsTransientShaper: samples must not be empty/,
+      /masteringDynamicsTransientShaper: samples must be a non-empty buffer/,
     );
   });
   it('voiceChange rejects empty', () => {
     expect(() => voiceChange(new Float32Array(0), SR)).toThrow(
-      /voiceChange: samples must not be empty/,
+      /voiceChange: samples must be a non-empty buffer/,
     );
   });
   it('realtimeVoiceChangerRender rejects empty', () => {
     expect(() =>
       realtimeVoiceChangerRender({ channels: [new Float32Array(0)], sampleRate: SR }),
-    ).toThrow(/realtimeVoiceChangerRender: channels\[0\] must not be empty/);
+    ).toThrow(/realtimeVoiceChangerRender: channels\[0\] must be a non-empty buffer/);
   });
 });
 

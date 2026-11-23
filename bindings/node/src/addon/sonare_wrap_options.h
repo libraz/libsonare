@@ -113,16 +113,10 @@ inline uint32_t node_list_length(const Napi::Array& array, const std::string& su
 inline double node_narrow_number(Napi::Env env, const Napi::Value& value, const char* name,
                                  double low, double high) {
   const double number = value.As<Napi::Number>().DoubleValue();
-  const double truncated = std::trunc(number);
-  if (!std::isfinite(number) || truncated < low || truncated > high) {
-    throw Napi::RangeError::New(env, std::string(name) + " must be a finite number within [" +
+  if (!std::isfinite(number) || std::trunc(number) != number || number < low || number > high) {
+    throw Napi::RangeError::New(env, std::string(name) + " must be an integer in [" +
                                          std::to_string(static_cast<long long>(low)) + ", " +
                                          std::to_string(static_cast<long long>(high)) + "]");
-  }
-  // After the range, so an out-of-range fraction is reported by the property it
-  // is furthest outside rather than by whichever check runs first.
-  if (truncated != number) {
-    throw Napi::RangeError::New(env, std::string(name) + " must be an integer");
   }
   return number;
 }
@@ -151,20 +145,21 @@ inline uint32_t node_narrow_uint32(Napi::Env env, const Napi::Value& value, cons
 inline uint32_t node_narrow_word(Napi::Env env, const Napi::Value& value, const char* name) {
   static constexpr double kSignedMin = -2147483648.0;   // -2^31
   static constexpr double kUnsignedMax = 4294967295.0;  // 2^32 - 1
-  const double number = node_narrow_number(env, value, name, kSignedMin, kUnsignedMax);
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || number < kSignedMin || number > kUnsignedMax ||
+      std::trunc(number) != number) {
+    throw Napi::RangeError::New(
+        env, std::string(name) + " must be an integer in [-2147483648, 4294967295]");
+  }
   return number < 0.0 ? static_cast<uint32_t>(static_cast<int64_t>(number))
                       : static_cast<uint32_t>(number);
 }
 
 /// @brief int64 sibling of @ref node_narrow_number.
-/// @details The bounds are written as powers of two rather than as
-///   numeric_limits: INT64_MAX is not representable as a double, and converting
-///   it rounds the bound up past the values it is meant to exclude. 2^63 - 1024
-///   is the largest double below 2^63, so it is the inclusive bound.
+/// @details The domain is the JS safe-integer range, the same on every surface.
 inline int64_t node_narrow_int64(Napi::Env env, const Napi::Value& value, const char* name) {
-  static constexpr double kBound = 9223372036854775808.0;  // 2^63
-  static constexpr double kMax = 9223372036854774784.0;    // 2^63 - 1024
-  return static_cast<int64_t>(node_narrow_number(env, value, name, -kBound, kMax));
+  static constexpr double kSafeMax = 9007199254740991.0;  // 2^53 - 1
+  return static_cast<int64_t>(node_narrow_number(env, value, name, -kSafeMax, kSafeMax));
 }
 
 /// @brief Reads a canonical decimal string as a uint64.
@@ -747,17 +742,16 @@ inline int NamedSelectorValue(Napi::Env env, const Napi::Value& value, const std
   if (value.IsUndefined() || value.IsNull()) return fallback;
   std::string valid;
   for (std::size_t i = 0; i < N; ++i) {
-    valid += (i == 0 ? "'" : ", '") + std::string(names[i]) + "'";
+    valid += (i == 0 ? "" : ", ") + std::string(names[i]);
   }
   if (!value.IsString()) {
-    throw Napi::TypeError::New(env,
-                               subject + " must be one of " + valid + " (a name, not a number)");
+    throw Napi::TypeError::New(env, subject + " must be one of " + valid);
   }
   const std::string name = node_narrow_string(env, value, subject);
   for (std::size_t i = 0; i < N; ++i) {
     if (name == names[i]) return static_cast<int>(i);
   }
-  throw Napi::RangeError::New(env, subject + " must be one of " + valid + ", got '" + name + "'");
+  throw Napi::RangeError::New(env, subject + " must be one of " + valid);
 }
 
 /// @brief @ref NamedSelectorValue over the property @p key, named by it under @p at.
@@ -1188,26 +1182,11 @@ inline bool Int32Value(Napi::Env env, const Napi::Value& value, const char* name
   const double number = value.As<Napi::Number>().DoubleValue();
   constexpr double kMinInt = static_cast<double>(std::numeric_limits<int>::min());
   constexpr double kMaxInt = static_cast<double>(std::numeric_limits<int>::max());
-  // Three refusals rather than one, so each names the property the value
-  // actually lacks: a fraction and a magnitude are different mistakes, and a
-  // caller can only act on the one they made.
-  if (!std::isfinite(number)) {
-    Napi::RangeError::New(env, std::string(name) + " must be a finite integer")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  const double truncated = std::trunc(number);
-  if (truncated < kMinInt || truncated > kMaxInt) {
+  if (!std::isfinite(number) || std::trunc(number) != number || number < kMinInt ||
+      number > kMaxInt) {
     Napi::RangeError::New(env, std::string(name) + " must be an integer in [" +
                                    std::to_string(std::numeric_limits<int>::min()) + ", " +
                                    std::to_string(std::numeric_limits<int>::max()) + "]")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  // After the range, so an out-of-range fraction is reported by the property it
-  // is furthest outside rather than by whichever check runs first.
-  if (truncated != number) {
-    Napi::RangeError::New(env, std::string(name) + " must be an integer")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -1272,7 +1251,7 @@ inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* ou
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
       number > static_cast<double>(std::numeric_limits<int>::max())) {
-    Napi::RangeError::New(env, "waveform must be a finite number within [-2147483648, 2147483647]")
+    Napi::RangeError::New(env, "waveform must be an integer in [-2147483648, 2147483647]")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -1719,8 +1698,8 @@ inline bool OptionalSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, size
   return NonNegativeSizeTArg(env, info, index, name, out);
 }
 
-/// @brief Read a required Buffer or Uint8Array argument as its bytes: a missing or other-typed
-///        argument is a TypeError reading "<label> must be a Buffer or Uint8Array". @p data and
+/// @brief Read a required Uint8Array argument (a Buffer is one) as its bytes: a missing or
+///        other-typed argument is a TypeError reading "<label> must be a Uint8Array". @p data and
 ///        @p len alias the JS buffer, so they are valid only for the duration of the call.
 inline bool RequiredBytesArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                              const char* label, const uint8_t** data, size_t* len) {
@@ -1734,7 +1713,7 @@ inline bool RequiredBytesArg(Napi::Env env, const Napi::CallbackInfo& info, size
     *data = sonare_node::ElementData(array);
     *len = array.ByteLength();
   } else {
-    Napi::TypeError::New(env, std::string(label) + " must be a Buffer or Uint8Array")
+    Napi::TypeError::New(env, std::string(label) + " must be a Uint8Array")
         .ThrowAsJavaScriptException();
     return false;
   }

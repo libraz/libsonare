@@ -677,7 +677,9 @@ describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
         paramId: 1,
       } as unknown as CcBindingDescriptor),
     );
-    expect(unknownKind.message).toMatch(/'controlChange7', 'controlChange14', 'rpn', 'nrpn'/);
+    expect(unknownKind.message).toBe(
+      'RealtimeEngine.bindMidiCc: kind must be one of controlChange7, controlChange14, rpn, nrpn',
+    );
     // 0xffffffff lies in the insert-parameter namespace the engine reserves.
     const reserved = expectRefusalOf(() => engine.bindMidiCc({ ccNumber: 7, paramId: 0xffffffff }));
     expect(reserved.message).toMatch(/paramId 4294967295 is reserved/);
@@ -812,6 +814,18 @@ describe('offline boundary validation always scans the samples', () => {
     const values = new Float32Array([1, 2]);
     expect(() => padCenter({ values, targetSize: -1 })).toThrow();
     expect(() => fixLength({ values, targetSize: -1 })).toThrow();
+  });
+
+  it('states the size_t domain of targetSize by the field the caller wrote', () => {
+    const values = new Float32Array([1, 2]);
+    for (const targetSize of [-1, 2 ** 53]) {
+      expect(expectRefusalOf(() => padCenter({ values, targetSize })).message).toBe(
+        `padCenter: targetSize must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER or the native size_t maximum`,
+      );
+      expect(expectRefusalOf(() => fixLength({ values, targetSize })).message).toBe(
+        `fixLength: targetSize must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER or the native size_t maximum`,
+      );
+    }
   });
 
   it('rejects invalid time-varying pitch tracks and configuration', () => {

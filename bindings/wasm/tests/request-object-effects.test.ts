@@ -263,7 +263,7 @@ describe('metering true peak validation', () => {
       meteringTruePeakDbtp(new Float32Array([0.5]), 22050, { oversampleFactor: 3 }),
     );
     expect(error.message).toBe(
-      'meteringTruePeakDbtp: oversampleFactor must be a power of two from 1 to 16',
+      'meteringTruePeakDbtp: oversampleFactor must be one of 1, 2, 4, 8, 16',
     );
   });
 });

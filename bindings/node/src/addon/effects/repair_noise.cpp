@@ -332,10 +332,10 @@ Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& i
   Napi::Object request = info.Length() >= 1 && info[0].IsObject() ? info[0].As<Napi::Object>()
                                                                   : Napi::Object::New(env);
   const int n_fft = IntProperty(request, "nFft", DefaultDenoiseConfig().n_fft);
-  int sample_rate{};
-  if (!RequiredIntProperty(env, request, "sampleRate", &sample_rate)) return env.Undefined();
-  sample_rate = node_domain_number<int>(request.Get("sampleRate"), "sampleRate",
-                                        sonare_c_detail::kNoiseBandSampleRateDomain);
+  const Napi::Value rate = request.Get("sampleRate");
+  node_require_property_type(env, rate.IsNumber(), "sampleRate", "an integer");
+  const int sample_rate =
+      node_domain_number<int>(rate, "sampleRate", sonare_c_detail::kNoiseBandSampleRateDomain);
   // The C entry writes into the array's own storage; no intermediate buffer.
   auto bins = Napi::Int32Array::New(env, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT);
   SonareError err =

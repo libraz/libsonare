@@ -63,8 +63,7 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   } else if (monophonic_model == "singing") {
     out->monophonic_model = 1;
   } else {
-    throw Napi::RangeError::New(
-        env, "monophonicModel must be 'segments' or 'singing', got '" + monophonic_model + "'");
+    throw Napi::RangeError::New(env, "monophonicModel must be one of segments, singing");
   }
   out->group = IntProperty(request, "group", out->group);
   out->channel = IntProperty(request, "channel", out->channel);

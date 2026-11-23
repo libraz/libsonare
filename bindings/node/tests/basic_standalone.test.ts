@@ -490,12 +490,19 @@ describe('standalone functions', () => {
     expect(
       Array.from(fixLength({ values: new Float32Array([1, 2]), targetSize: 4, padValue: -1 })),
     ).toEqual([1, 2, -1, -1]);
-    expect(() => padCenter({ values: new Float32Array([1, 2]), targetSize: -1 })).toThrow(
-      RangeError,
-    );
-    expect(() => fixLength({ values: new Float32Array([1, 2]), targetSize: -1 })).toThrow(
-      RangeError,
-    );
+    for (const targetSize of [-1, 2 ** 53]) {
+      const values = new Float32Array([1, 2]);
+      expect(() => padCenter({ values, targetSize })).toThrow(
+        new RangeError(
+          `padCenter: targetSize must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER or the native size_t maximum`,
+        ),
+      );
+      expect(() => fixLength({ values, targetSize })).toThrow(
+        new RangeError(
+          `fixLength: targetSize must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER or the native size_t maximum`,
+        ),
+      );
+    }
     expect(
       Array.from(fixFrames({ frames: new Int32Array([2, 4]), xMin: 0, xMax: 5, pad: true })),
     ).toEqual([0, 2, 4, 5]);

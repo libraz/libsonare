@@ -10,6 +10,14 @@ import {
   trackMonitorModeCode,
 } from './codes.js';
 import { ErrorCode } from './errors.js';
+import {
+  ARTICULATIONS,
+  CONTROLLER_AXES,
+  CONTROLLER_INPUTS,
+  MPE_DIMENSIONS,
+  NOTE_TRACKINGS,
+  PART_RIG_MODES,
+} from './instrument_types.js';
 import { capturePunchBound } from './internal/capture_punch.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import { bindNativeClipPageProvider } from './internal/clip_page_native.js';
@@ -212,13 +220,11 @@ function assertUmpWords(words: UmpWords): UmpWords {
   assertUmpWordCount(words);
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
-    if (
-      typeof word !== 'number' ||
-      !Number.isInteger(word) ||
-      word < UMP_WORD_MIN ||
-      word > UINT32_MAX
-    ) {
-      throw refuse(`words[${i}] must be an integer 32-bit word`);
+    if (typeof word !== 'number') {
+      throw refuseType(`words[${i}] must be a number`);
+    }
+    if (!Number.isInteger(word) || word < UMP_WORD_MIN || word > UINT32_MAX) {
+      throw refuse(`words[${i}] must be an integer in [${UMP_WORD_MIN}, ${UINT32_MAX}]`);
     }
   }
   return words;
@@ -232,9 +238,9 @@ const GRAPH_MIXES = { replace: 0, add: 1 } as const;
 const CAPTURE_SOURCES = { output: 0, input: 1 } as const;
 
 /** Runs an existing token resolver after refusing an ordinal, which is never a public spelling. */
-function noOrdinal(argName: string, value: unknown): void {
+function noOrdinal(argName: string, value: unknown, tokens: readonly string[]): void {
   if (typeof value === 'number') {
-    throw refuseType(`${argName} must be a string token, not an ordinal`);
+    throw refuseType(`${argName} must be one of ${tokens.join(', ')}`);
   }
 }
 
@@ -277,9 +283,7 @@ function normalizeEngineConfig(
   if (typeof sampleRate !== 'number') {
     throw refuseType(`sampleRate must be a number`);
   }
-  if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
-    throw refuse(`sampleRate must be finite and greater than 0`);
-  }
+  // The engine refuses a rate outside its supported integer range in its own text.
   return {
     sampleRate,
     maxBlockSize: request.maxBlockSize,
@@ -824,8 +828,8 @@ export class RealtimeEngine {
 
   /** Add one {@link ControllerBinding} on top of the destination's current profile; `input` and `axis` are strings. */
   bindController(destinationId: number, binding: ControllerBinding): void {
-    noOrdinal('input', binding?.input);
-    noOrdinal('axis', binding?.axis);
+    noOrdinal('binding.input', binding?.input, CONTROLLER_INPUTS);
+    noOrdinal('binding.axis', binding?.axis, CONTROLLER_AXES);
     this.native.bindController(destinationId, binding);
   }
 
@@ -891,14 +895,14 @@ export class RealtimeEngine {
     dimension: MpeDimension,
     tracking: NoteTracking,
   ): void {
-    noOrdinal('dimension', dimension);
-    noOrdinal('tracking', tracking);
+    noOrdinal('dimension', dimension, MPE_DIMENSIONS);
+    noOrdinal('tracking', tracking, NOTE_TRACKINGS);
     this.native.setControllerNoteTracking(destinationId, dimension, tracking);
   }
 
   /** Read back {@link setControllerNoteTracking} for one dimension. */
   controllerNoteTracking(destinationId: number, dimension: MpeDimension): NoteTracking {
-    noOrdinal('dimension', dimension);
+    noOrdinal('dimension', dimension, MPE_DIMENSIONS);
     return this.native.controllerNoteTracking(destinationId, dimension) as NoteTracking;
   }
 
@@ -923,7 +927,7 @@ export class RealtimeEngine {
    * and starts {@link legatoFallbackCount} from zero.
    */
   setArticulation(destinationId: number, channel: number, articulation: Articulation): void {
-    noOrdinal('articulation', articulation);
+    noOrdinal('articulation', articulation, ARTICULATIONS);
     this.native.setArticulation(destinationId, channel, articulation);
   }
 
@@ -937,7 +941,7 @@ export class RealtimeEngine {
    */
   setPartRig(request: PartRigRequest): void {
     requestObject('setPartRig', request, 'request', true);
-    noOrdinal('mode', request.mode);
+    noOrdinal('mode', request.mode, PART_RIG_MODES);
     // Absent part addresses the destination's default rig (the C ABI's 0xff).
     const rig = normalizePartRig({ ...request, part: request.part ?? 0xff });
     this.native.setPartRig(rig.destinationId, rig.part, rig.mode as never, rig.insertsJson);
@@ -1965,7 +1969,7 @@ export class RealtimeEngine {
       return;
     }
     if (key.kind !== 0) {
-      throw refuse("a track strip accepts only a 'track' source");
+      throw refuse("a track strip accepts only a source of kind 'track'");
     }
     this.native.setLaneSidechain(target.trackId, insertIndex, key.id);
   }
@@ -2063,7 +2067,7 @@ export class RealtimeEngine {
       );
     }
     if (key.kind !== 0) {
-      throw refuse("a track strip accepts only a 'track' source");
+      throw refuse("a track strip accepts only a source of kind 'track'");
     }
     return sidechainCheckFromCode(
       this.native.canSetLaneSidechain(target.trackId, insertIndex, key.id),
@@ -2524,7 +2528,7 @@ export class RealtimeEngine {
       current.numChannels !== numChannels ||
       current.capacityFrames !== options.capacityFrames;
     if (resize && current !== undefined && native.captureStatus().armed) {
-      throw invalidState('the capture buffer cannot change while capture is armed');
+      throw invalidState('the capture buffer cannot be resized while armed');
     }
     // The one step the engine can still refuse, applied whole or not at all, so a refused
     // setup leaves the engine as it was.
@@ -2699,9 +2703,9 @@ export class RealtimeEngine {
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     requestObject('bounceOffline', options, 'options', true);
-    noOrdinal('dither', options.dither);
-    if (typeof options.targetLufs === 'number' && !Number.isFinite(options.targetLufs)) {
-      throw refuse('targetLufs must be finite');
+    noOrdinal('dither', options.dither, Object.keys(DITHERS));
+    if (typeof options.targetLufs === 'number') {
+      assertFloatValue(options.targetLufs, 'targetLufs');
     }
     const { dither, ...rest } = options;
     const ditherCode =

@@ -335,8 +335,11 @@ describe('analysis records', () => {
 
   it('analyzeMelody reports seconds and Hz, and leaves an unvoiced frequency absent', () => {
     const result = analyzeMelody(new Float32Array(sampleRate / 2), sampleRate);
-    expect(result).toHaveProperty('meanFrequencyHz');
-    expect(result).toHaveProperty('vibratoRateHz');
+    // Silence has no voiced frame, so the mean frequency is unmeasured and absent.
+    expect(result).not.toHaveProperty('meanFrequencyHz');
+    if ('vibratoRateHz' in result) {
+      expect(Number.isFinite(result.vibratoRateHz)).toBe(true);
+    }
     expect(result.points.length).toBeGreaterThan(0);
     for (const point of result.points) {
       expect(typeof point.timeSec).toBe('number');

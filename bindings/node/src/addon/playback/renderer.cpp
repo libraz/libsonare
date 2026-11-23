@@ -88,14 +88,16 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!info[0].IsArray()) {
-    Napi::TypeError::New(env, "planes must be an array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "planes must be an array of Float32Array")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   Napi::Array planes = info[0].As<Napi::Array>();
   const uint32_t in_channels = sonare_node::node_list_length(planes, "planes");
   if (in_channels == 0) {
-    Napi::RangeError::New(env, "planes must not be empty").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "planes must hold at least one channel")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   std::vector<const float*> in_pointers(in_channels);
@@ -103,14 +105,16 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
   for (uint32_t ch = 0; ch < in_channels; ++ch) {
     Napi::Value value = planes.Get(ch);
     if (!sonare_node::IsFloat32Array(value)) {
-      Napi::TypeError::New(env, "each plane must be a Float32Array").ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "planes[" + std::to_string(ch) + "] must be a Float32Array")
+          .ThrowAsJavaScriptException();
       return env.Undefined();
     }
     Napi::Float32Array plane = value.As<Napi::Float32Array>();
     if (frames < 0) {
       frames = static_cast<int>(plane.ElementLength());
     } else if (static_cast<int>(plane.ElementLength()) != frames) {
-      Napi::RangeError::New(env, "every plane must have the same length")
+      Napi::RangeError::New(
+          env, "planes[" + std::to_string(ch) + "] must have the same length as planes[0]")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }

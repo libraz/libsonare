@@ -102,7 +102,7 @@ describe('Sonare WASM part rig', () => {
       );
       expect(() =>
         project.setPartRig({ destinationId: 0, part: 0, mode: 2 as never, inserts: [LIMITER] }),
-      ).toThrow(/string token/);
+      ).toThrow(new TypeError('Project.setPartRig: mode must be one of bank, none, chain'));
       // Inserts belong to the chain mode only, and the chain needs them.
       expect(
         expectRefusalOf(

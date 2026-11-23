@@ -33,7 +33,6 @@ import {
   assertFiniteScalar,
   assertFloatValue,
   assertIntegerValue,
-  assertSampleRate,
   requestObject,
   requireSampleBound,
   resolveSampleBound,
@@ -822,7 +821,6 @@ export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNote
   return withEntry('assignNoteTargets', () => {
     requestObject('assignNoteTargets', request, 'request', true);
     const { notes, sampleRate, targets, ...options } = request;
-    assertSampleRate(sampleRate);
     if (!Array.isArray(notes)) {
       throw refuseType('notes must be an array');
     }

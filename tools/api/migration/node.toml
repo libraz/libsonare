@@ -382,7 +382,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request a
 [[entry]]
 kind = "function"
 old = "fixLength"
-changed = "request-only: fixLength(request: FixLengthRequest)"
+changed = "request-only: fixLength(request: FixLengthRequest); a targetSize above 2^53 - 1 is refused with a RangeError"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
@@ -549,7 +549,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D 
 [[entry]]
 kind = "function"
 old = "padCenter"
-changed = "request-only: padCenter(request: PadCenterRequest)"
+changed = "request-only: padCenter(request: PadCenterRequest); a targetSize above 2^53 - 1 is refused with a RangeError"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
@@ -789,7 +789,7 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sa
 [[entry]]
 kind = "function"
 old = "splitSilenceCommon"
-changed = "request type is SplitSilenceCommonRequest"
+changed = "request type is SplitSilenceCommonRequest; an empty signals array is a RangeError instead of a TypeError"
 domain = "analysis"
 rule = "type-names"
 test = "bindings/node/tests/surface/analysis-features.test.ts::splitSilenceCommon and its report variant take a request only"
@@ -7953,24 +7953,54 @@ test = "bindings/node/tests/surface/engine.test.ts::refuses a bad capture reques
 
 [[entry]]
 kind = "method"
+old = "RealtimeEngine.pushMidiUmp"
+changed = "a fractional word in words is refused with a RangeError instead of truncated"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/node/tests/runtime-refusal-parity.test.ts::refuses a fractional UMP word"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.pushMidiInputUmp"
+changed = "a fractional word in words is refused with a RangeError instead of truncated"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/node/tests/runtime-refusal-parity.test.ts::refuses a fractional UMP word"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMidiClips"
+changed = "a sample position or length outside ±(2^53 - 1) is refused with a RangeError here and on every entry taking one (no larger value was ever an exact JS number)"
+domain = "engine"
+rule = "finite-or-refused"
+test = "bindings/node/tests/absence-contract.test.ts::refuses 0, a negative and a fraction by name"
+
+[[entry]]
+kind = "method"
 old = "RealtimeEngine.setTrackStripJson"
-removed = "Call setStrip(ref, settings) with a track id and a MixSceneStripInput object; no JSON string."
+to = "RealtimeEngine.setStrip"
+changed = "setStrip(ref, settings) with ref a track id takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>"
 domain = "engine"
 rule = "typed-results"
+test = "bindings/node/tests/scene-warnings.test.ts::engine strip setters refuse an unknown key by name"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripJson"
-removed = "Call setStrip('master', strip) with a MixSceneStripInput object; no JSON string."
+to = "RealtimeEngine.setStrip"
+changed = "setStrip('master', settings) takes one MixSceneStripInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming strips[0].<path>"
 domain = "engine"
 rule = "typed-results"
+test = "bindings/node/tests/scene-warnings.test.ts::engine strip setters refuse an unknown key by name"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBusStripJson"
-new = "RealtimeEngine.setBusStrip"
+to = "RealtimeEngine.setBusStrip"
+changed = "setBusStrip(busId, settings) takes one MixSceneBusInput object instead of a whole scene JSON document; a key or value refused inside settings is a TypeError (unknown key or wrong type) or a RangeError (value out of domain) naming settings.<path>, where 1.x threw SonareError InvalidFormat naming buses[0].<path>"
 domain = "engine"
 rule = "typed-results"
+test = "bindings/node/tests/scene-warnings.test.ts::the bus strip setter refuses an unknown key as an argument"
 
 [[entry]]
 kind = "method"
@@ -9001,6 +9031,14 @@ changed = "one positional form (decomposeStems(samples, sampleRate, options?: Om
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "decomposeStemsLinked"
+changed = "a missing channels argument is a TypeError instead of a RangeError"
+domain = "effects"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/decompose-stems-linked.test.ts::refuses a missing channel set by type and an empty one by domain"
 
 [[entry]]
 kind = "function"

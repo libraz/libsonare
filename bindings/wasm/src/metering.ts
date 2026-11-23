@@ -28,12 +28,12 @@ const DEFAULT_SPECTRUM_N_FFT = 2048;
 
 // The linear clip threshold the library applies when none is given, as dBFS (about -0.0087).
 
-/** True-peak oversampling factors the library accepts: a power of two from 1 to 16. */
+/** True-peak oversampling factors the library accepts: 1, 2, 4, 8 or 16. */
 function assertOversampleFactor(factor: unknown): void {
   assertNumber(factor, 'oversampleFactor');
   const value = factor as number;
   if (!Number.isInteger(value) || value < 1 || value > 16 || (value & (value - 1)) !== 0) {
-    throw refuse(`oversampleFactor must be a power of two from 1 to 16`);
+    throw refuse('oversampleFactor must be one of 1, 2, 4, 8, 16');
   }
 }
 

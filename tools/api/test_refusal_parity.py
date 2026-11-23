@@ -64,7 +64,10 @@ class CompareTest(unittest.TestCase):
         small = [{"room": [5], "x": 6}]
         large = [{"room": [7], "x": 6}]
         node = [row("f", "f: x must be in [0, 5]", small)]
-        wasm = [row("f", "f: x must be in [0, 5]", small), row("f", "f: x must be in [0, 7]", large)]
+        wasm = [
+            row("f", "f: x must be in [0, 5]", small),
+            row("f", "f: x must be in [0, 7]", large),
+        ]
         result = rp.compare(node, wasm, [])
         self.assertEqual((result["compared"], result["differing"], result["refined"]), (1, [], 1))
 

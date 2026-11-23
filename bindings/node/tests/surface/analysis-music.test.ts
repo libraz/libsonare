@@ -228,7 +228,7 @@ describe('renamed result fields', () => {
     const melody = analyzeMelody({ samples: new Float32Array(sampleRate / 2), sampleRate });
     expect(melody.points.length).toBeGreaterThan(0);
     expect(melody.points.every((p) => p.frequencyHz === undefined)).toBe(true);
-    expect(typeof melody.meanFrequencyHz).toBe('number');
+    expect('meanFrequencyHz' in melody).toBe(false);
     expect('meanFrequency' in melody).toBe(false);
   });
 

@@ -10,7 +10,13 @@ import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
 import type { OptionsOf } from './validation.js';
-import { assertAudioInput, assertInt32, sampleOneShot } from './validation.js';
+import {
+  assertAudioInput,
+  assertBoundedInteger,
+  assertInt32,
+  C_INT_MAX,
+  sampleOneShot,
+} from './validation.js';
 
 // The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
 function percussiveRequest<
@@ -222,7 +228,7 @@ export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
     if (options.onsetWait !== undefined) {
       // Checked here with its four bag-siblings, and for the same reason: 0 is
       // this field's default, and the addon's narrowing truncates onto it.
-      assertInt32(options.onsetWait, 'onsetWait');
+      assertBoundedInteger(options.onsetWait, 'onsetWait', 0, C_INT_MAX);
     }
     refuseZeroDefaults(options, ['onsetWait', 'onsetDelta', 'maxEventMs']);
     return addon.extractPercussiveEvents(samples, sampleRate, options);

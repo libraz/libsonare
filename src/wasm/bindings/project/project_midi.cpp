@@ -5,6 +5,11 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <string>
+
 #include "analysis/music_analyzer.h"
 #include "c_api/midi_input_domains.h"
 #include "c_api/project_input_domains.h"
@@ -36,11 +41,22 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   }
 }
 
+namespace {
+
+// A non-NULL pointer to @p bytes, also when it is empty.
+const uint8_t* nonNullBytes(const std::vector<uint8_t>& bytes) {
+  static constexpr uint8_t kNoBytes = 0;
+  return bytes.empty() ? &kNoBytes : bytes.data();
+}
+
+}  // namespace
+
 uint32_t ProjectWasm::importSmf(val data) {
   std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   uint32_t first_clip = 0;
-  const SonareError err = sonare_project_import_smf(
-      project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
+  // An empty buffer reaches the C entry as one, which refuses it as empty rather than as NULL.
+  const SonareError err =
+      sonare_project_import_smf(project_.get(), nonNullBytes(bytes), bytes.size(), &first_clip);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
@@ -63,8 +79,9 @@ val ProjectWasm::exportSmf() {
 uint32_t ProjectWasm::importClipFile(val data) {
   std::vector<uint8_t> bytes = uint8ArrayToVector(data, "data");
   uint32_t first_clip = 0;
-  const SonareError err = sonare_project_import_clip_file(
-      project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
+  // An empty buffer reaches the C entry as one, which refuses it as empty rather than as NULL.
+  const SonareError err = sonare_project_import_clip_file(project_.get(), nonNullBytes(bytes),
+                                                          bytes.size(), &first_clip);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
@@ -254,9 +271,21 @@ val js_nullable_string(const char* value) {
   return value != nullptr ? val(std::string(value)) : val::null();
 }
 
-// The MIDI 1.0 <-> 2.0 value scalers: each argument is read by the shared reader of its C
-// parameter's width (the template refuses a mismatch), and the C call owns the MIDI range.
+// The MIDI 1.0 <-> 2.0 value scalers: each argument is read at its C parameter's width, refusing a
+// value the narrowing cast would wrap, and the C call owns the MIDI range.
 namespace {
+
+// Reads a scaler input at the width of @p In, refusing what the narrowing cast would wrap.
+template <typename In>
+In scaleInput(const val& value, const char* key) {
+  const double number = numberFromVal(value, key);
+  constexpr double kMax = static_cast<double>(std::numeric_limits<In>::max());
+  if (!(number >= 0.0) || number > kMax || std::floor(number) != number) {
+    throw WasmRangeError(std::string(key) + " must be an integer in [0, " +
+                         std::to_string(static_cast<unsigned long long>(kMax)) + "]");
+  }
+  return static_cast<In>(number);
+}
 
 template <typename In, typename Out>
 double midiScale(In input, SonareError (*scale)(In, Out*)) {
@@ -269,22 +298,22 @@ double midiScale(In input, SonareError (*scale)(In, Out*)) {
 }  // namespace
 
 double js_midi_velocity_to_midi2(const val& v) {
-  return midiScale(checkedByteFromVal(v, "velocity"), sonare_midi_velocity_to_midi2);
+  return midiScale(scaleInput<uint8_t>(v, "velocity"), sonare_midi_velocity_to_midi2);
 }
 double js_midi_note_on_velocity_to_midi2(const val& v) {
-  return midiScale(checkedByteFromVal(v, "velocity"), sonare_midi_note_on_velocity_to_midi2);
+  return midiScale(scaleInput<uint8_t>(v, "velocity"), sonare_midi_note_on_velocity_to_midi2);
 }
 double js_midi2_velocity_to_midi1(const val& v) {
-  return midiScale(checkedUint16FromVal(v, "velocity16"), sonare_midi2_velocity_to_midi1);
+  return midiScale(scaleInput<uint16_t>(v, "velocity16"), sonare_midi2_velocity_to_midi1);
 }
 double js_midi2_note_on_velocity_to_midi1(const val& v) {
-  return midiScale(checkedUint16FromVal(v, "velocity16"), sonare_midi2_note_on_velocity_to_midi1);
+  return midiScale(scaleInput<uint16_t>(v, "velocity16"), sonare_midi2_note_on_velocity_to_midi1);
 }
 double js_midi_control_to_midi2(const val& v) {
-  return midiScale(checkedByteFromVal(v, "value"), sonare_midi_control_to_midi2);
+  return midiScale(scaleInput<uint8_t>(v, "value"), sonare_midi_control_to_midi2);
 }
 double js_midi_control14_to_midi2(const val& v) {
-  return midiScale(checkedUint16FromVal(v, "value14"), sonare_midi_control14_to_midi2);
+  return midiScale(scaleInput<uint16_t>(v, "value14"), sonare_midi_control14_to_midi2);
 }
 double js_midi2_control_to_midi1(const val& v) {
   return midiScale(checkedUintFromVal(v, "value32"), sonare_midi2_control_to_midi1);
@@ -293,7 +322,7 @@ double js_midi2_control_to_midi1_control14(const val& v) {
   return midiScale(checkedUintFromVal(v, "value32"), sonare_midi2_control_to_midi1_control14);
 }
 double js_midi_pitch_bend_to_midi2(const val& v) {
-  return midiScale(checkedUint16FromVal(v, "bend14"), sonare_midi_pitch_bend_to_midi2);
+  return midiScale(scaleInput<uint16_t>(v, "bend14"), sonare_midi_pitch_bend_to_midi2);
 }
 double js_midi2_pitch_bend_to_midi1(const val& v) {
   return midiScale(checkedUintFromVal(v, "bend32"), sonare_midi2_pitch_bend_to_midi1);

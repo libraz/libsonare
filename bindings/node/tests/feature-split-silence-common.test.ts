@@ -156,7 +156,7 @@ describe('splitSilenceCommon', () => {
         frameLength: FRAME_LENGTH,
         hopLength: HOP_LENGTH,
       }),
-    ).toThrow(/signals/);
+    ).toThrow(new RangeError('splitSilenceCommon: signals must not be empty'));
   });
 
   it('rejects a non-Float32Array element, naming the field', () => {

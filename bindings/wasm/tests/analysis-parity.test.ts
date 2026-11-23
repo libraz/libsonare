@@ -91,7 +91,10 @@ describe('WASM wave3 analysis parity', () => {
       expect(typeof result.dynamics.isCompressed).toBe('boolean');
 
       // Rhythm: tempoStability + timeSignature were previously omitted.
-      expect(Number.isFinite(result.rhythm.tempoStability)).toBe(true);
+      // A steady tone has no beat-to-beat intervals, so the stability may be unmeasured (absent).
+      if ('tempoStability' in result.rhythm) {
+        expect(Number.isFinite(result.rhythm.tempoStability)).toBe(true);
+      }
       expect(typeof result.rhythm.grooveType).toBe('string');
       expect(result.rhythm.timeSignature).toBeDefined();
       expect(Number.isFinite(result.rhythm.timeSignature.numerator)).toBe(true);
@@ -100,10 +103,15 @@ describe('WASM wave3 analysis parity', () => {
 
       // Melody: a whole new sub-object for parity with the other bindings.
       expect(result.melody).toBeDefined();
-      expect(Number.isFinite(result.melody.pitchRangeOctaves)).toBe(true);
-      expect(Number.isFinite(result.melody.pitchStability)).toBe(true);
-      expect(Number.isFinite(result.melody.meanFrequencyHz)).toBe(true);
-      expect(Number.isFinite(result.melody.vibratoRateHz)).toBe(true);
+      // A melody measure the analysis could not take is absent, never a placeholder number.
+      for (const key of [
+        'pitchRangeOctaves',
+        'pitchStability',
+        'meanFrequencyHz',
+        'vibratoRateHz',
+      ] as const) {
+        expect(key in result.melody ? Number.isFinite(result.melody[key]) : true, key).toBe(true);
+      }
       expect(Array.isArray(result.melody.pitches)).toBe(true);
       for (const p of result.melody.pitches) {
         expect(Number.isFinite(p.timeSec)).toBe(true);

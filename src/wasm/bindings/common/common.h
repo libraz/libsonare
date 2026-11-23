@@ -593,6 +593,12 @@ int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int 
 /// @throws WasmArgumentError naming @p key.
 uint32_t checkedUintFromVal(const val& value, const char* key);
 uint32_t uintProperty(val object, const char* key, uint32_t default_value);
+/// @brief Reads a size_t count or position.
+/// @throws WasmTypeError unless a number; WasmRangeError unless a finite non-negative integer
+///         within both Number.MAX_SAFE_INTEGER and the native size_t maximum, both naming @p key.
+std::size_t checkedSizeTFromVal(const val& value, const char* key);
+/// @brief The domain half of @ref checkedSizeTFromVal, for a value embind already read as a number.
+std::size_t sizeTFromNumber(double value, const char* key);
 /// @brief Reads a raw 32-bit word (a UMP word, a packed MIDI 1.0 message).
 /// @details Deliberately NOT @ref uintProperty: the whole 32-bit range is legal
 ///          here, and the idiomatic JS spelling `(0x4 << 28) | …` is a SIGNED

@@ -99,7 +99,7 @@ void RealtimeEngineWasm::seekSample(int64_t timeline_sample, const val& render_f
 
 void RealtimeEngineWasm::seekPpq(double ppq, const val& render_frame_val) {
   if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
-    throw WasmRangeError("ppq is outside the public timeline range");
+    throw WasmRangeError("ppq must be finite and in [0, 1e12]");
   }
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportSeekPpq;
@@ -177,7 +177,7 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
 }
 int64_t RealtimeEngineWasm::sampleAtPpq(double ppq) {
   if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
-    throw WasmRangeError("ppq is outside the public timeline range");
+    throw WasmRangeError("ppq must be finite and in [0, 1e12]");
   }
   return engine_.sample_at_ppq(ppq);
 }

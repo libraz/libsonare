@@ -363,6 +363,6 @@ describe('masteringRepairTrimSilence (WASM)', () => {
         () => masteringRepairTrimSilence(samples, SR, { paddingSamples: -1 }),
         RangeError,
       ).message,
-    ).toBe('masteringRepairTrimSilence: paddingSamples must be at least 0');
+    ).toBe('masteringRepairTrimSilence: paddingSamples must be an integer in [0, 960000]');
   });
 });

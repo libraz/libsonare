@@ -344,7 +344,7 @@ class RealtimeVoiceChangerWrapper {
     }
     const double velocity = velocity_val.as<double>();
     if (!(velocity > 0.0 && velocity <= 1.0)) {
-      throw WasmRangeError("velocity must be in (0, 1]");
+      throw WasmRangeError("velocity must be in (0, 1]; release a note with noteOff");
     }
     require_note_accepted(changer_.note_on(note, static_cast<float>(velocity)));
   }
@@ -471,7 +471,8 @@ class RealtimeVoiceChangerWrapper {
     if (!accepted) {
       throw sonare::SonareException(
           sonare::ErrorCode::InvalidState,
-          "the event was not accepted (grain engine, unprepared chain or full event queue)");
+          "the note was not accepted: the changer is unprepared, uses the grain engine, or its "
+          "note queue is full");
     }
   }
 

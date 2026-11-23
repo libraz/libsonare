@@ -25,6 +25,7 @@ import {
   Project,
   renderNotes,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 48000;
 const HALF_SECOND = SR / 2;
@@ -426,9 +427,31 @@ describe('assignNoteTargets refuses what it cannot act on', () => {
   });
 
   it('refuses a sample rate that cannot convert a span to seconds', () => {
-    expect(() => assignNoteTargets({ notes: notes(), sampleRate: 0, targets: targets() })).toThrow(
-      RangeError,
+    for (const rate of [0, -48000, 0.5]) {
+      expectRefusal(
+        () => assignNoteTargets({ notes: notes(), sampleRate: rate, targets: targets() }),
+        RangeError,
+        /^assignNoteTargets: sampleRate must be an integer in \[1, 2147483647\]$/,
+      );
+    }
+    expectRefusal(
+      () =>
+        assignNoteTargets({
+          notes: notes(),
+          sampleRate: undefined as unknown as number,
+          targets: targets(),
+        }),
+      TypeError,
+      /^assignNoteTargets: sampleRate must be an integer$/,
     );
+  });
+
+  it('accepts any positive integer sample rate, as the C ABI does', () => {
+    // Only the conversion of a span to seconds reads the rate, so no audio range bounds it.
+    for (const rate of [4000, 768000]) {
+      const result = assignNoteTargets({ notes: notes(), sampleRate: rate, targets: targets() });
+      expect(result.notes).toHaveLength(1);
+    }
   });
 });
 

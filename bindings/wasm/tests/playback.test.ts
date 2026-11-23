@@ -386,7 +386,7 @@ describe('playback renderer (WASM)', () => {
         sampleRate: SR,
         config: SPEAKERS_5_1,
       }),
-    ).toThrow(/must not be empty/);
+    ).toThrow(/must be a non-empty buffer/);
   });
 
   it('refuses non-finite samples in an offline render, unlike the block path', () => {

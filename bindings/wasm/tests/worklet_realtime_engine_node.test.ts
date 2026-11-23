@@ -3527,7 +3527,7 @@ describe('SonareRealtimeEngineNode', () => {
       expect(() => engine.setMarkers(oversized)).toThrow(
         expect.objectContaining({
           name: 'RangeError',
-          message: 'SonareEngine.setMarkers: markers exceeds the WASM Float32 input budget',
+          message: 'SonareEngine.setMarkers: markers exceeds the input length budget',
         }),
       );
       expect(reads).toBe(0);

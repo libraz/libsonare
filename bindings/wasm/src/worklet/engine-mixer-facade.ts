@@ -785,7 +785,7 @@ export function setStripSidechain(
     return;
   }
   if (key.kind !== 0) {
-    throw refuse("a track strip accepts only a 'track' source");
+    throw refuse("a track strip accepts only a source of kind 'track'");
   }
   const laneIndex = ctx.ensureTrackLane(target);
   const trackId = ctx.trackLaneIds[laneIndex];

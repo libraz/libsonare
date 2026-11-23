@@ -190,7 +190,7 @@ void RealtimeEngineWasm::setParameter(double param_id_number, const val& value_v
 void RealtimeEngineWasm::setParamSmoothingMs(const val& smoothing_ms_val) {
   const float smoothing_ms = checkedFloatFromVal(smoothing_ms_val, "smoothingMs");
   if (smoothing_ms < 0.0f) {
-    throw WasmRangeError("smoothingMs must be at least 0");
+    throw WasmRangeError("smoothingMs must be finite and at least 0");
   }
   engine_.set_param_smoothing_ms(smoothing_ms);
 }

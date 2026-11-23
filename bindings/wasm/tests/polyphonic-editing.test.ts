@@ -394,14 +394,17 @@ describe('PolyphonicAnalysis.render', () => {
     edited.setNoteEdit(lower, {});
   });
 
-  it('rejects a render option that cannot be one', () => {
-    for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expectRefusalOf(() => edited.render({ fadeMs: bad }));
-      expectRefusalOf(() => edited.render({ vibratoCutoffHz: bad }));
+  it('rejects a non-positive or non-finite fade or vibrato cutoff as out of range', () => {
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(expectRefusalOf(() => edited.render({ fadeMs: bad })).message).toBe(
+        'PolyphonicAnalysis.render: fadeMs must be finite and greater than 0',
+      );
+      expect(expectRefusalOf(() => edited.render({ vibratoCutoffHz: bad })).message).toBe(
+        'PolyphonicAnalysis.render: vibratoCutoffHz must be finite and greater than 0',
+      );
     }
-    // Positive control: 0 is the default on both, so the rejections above are
-    // about the values rather than about the fields being read at all.
-    expect(edited.render({ fadeMs: 0, vibratoCutoffHz: 0 })).toEqual(identity);
+    // Positive control: small positive values on both are accepted.
+    expect(edited.render({ fadeMs: 5, vibratoCutoffHz: 3 })).toHaveLength(identity.length);
   });
 });
 

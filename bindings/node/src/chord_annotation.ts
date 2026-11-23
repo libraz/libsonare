@@ -1,8 +1,10 @@
 import { withEntry } from './internal/entry.js';
+import { KEY_MODES } from './internal/key_modes.js';
 import { CHORD_QUALITY, KEY_MODE, tokenName } from './internal/project_tokens.js';
 import { addon } from './native.js';
 import type { AnalysisChord, Chord } from './types_analysis.js';
 import type { ProjectChordSymbol, ProjectKeyMode } from './types_project.js';
+import { assertClosedToken } from './validation.js';
 
 /** The native layer's "bass is the root" value, which the result spells as an absent key. */
 const NO_SLASH_BASS = 255;
@@ -57,6 +59,7 @@ export function chordSymbolFromAnalysis(chord: Chord | AnalysisChord): ChordSymb
  */
 export function keyModeFromAnalysis(mode: string): ProjectKeyMode {
   return withEntry('keyModeFromAnalysis', () => {
+    assertClosedToken(mode, KEY_MODES, 'mode');
     return tokenName(KEY_MODE, addon.keyModeFromAnalysis(mode), 'key mode');
   });
 }

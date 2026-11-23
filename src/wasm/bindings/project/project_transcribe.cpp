@@ -44,7 +44,7 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   const val reference = config["referenceHz"];
   if (reference.isString()) {
     if (reference.as<std::string>() != "auto") {
-      throw WasmRangeError("referenceHz must be finite and greater than 0, or 'auto'");
+      throw WasmTypeError("referenceHz must be a number or 'auto'");
     }
     out.reference_auto = 1;
   } else {
@@ -88,7 +88,7 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   if (model == "singing") {
     out.monophonic_model = 1;
   } else if (model != "segments") {
-    throw WasmRangeError("monophonicModel must be 'segments' or 'singing'");
+    throw WasmRangeError("monophonicModel must be one of segments, singing");
   }
   // Not the same family: 0 is IN domain on these two -- group 0 and channel 0
   // are values a caller can mean -- so there is no sentinel to separate.

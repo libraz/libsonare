@@ -216,14 +216,12 @@ class PolyphonicAnalysisWasm {
     // Resolved the way renderNotes resolves the same two fields, so one config
     // means one thing whichever door applies it.
     editing::note_model::NoteRenderConfig config;
-    const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
-    const float vibrato_cutoff_hz = floatProperty(options, "vibratoCutoffHz", 0.0f);
-    if (!std::isfinite(fade_ms) || fade_ms < 0.0f || !std::isfinite(vibrato_cutoff_hz) ||
-        vibrato_cutoff_hz < 0.0f) {
-      throw WasmRangeError("fadeMs and vibratoCutoffHz must be finite and at least 0");
-    }
-    if (fade_ms > 0.0f) config.fade_ms = fade_ms;
-    if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;
+    config.fade_ms = domainFloatProperty(options, "fadeMs", config.fade_ms);
+    config.decomposition.vibrato_cutoff_hz =
+        domainFloatProperty(options, "vibratoCutoffHz", config.decomposition.vibrato_cutoff_hz);
+    sonare::util::check::greater_than(config.fade_ms, 0.0, "fadeMs");
+    sonare::util::check::greater_than(config.decomposition.vibrato_cutoff_hz, 0.0,
+                                      "vibratoCutoffHz");
 
     const Audio rendered = editing::polyphony::render_polyphonic(analysis_, config);
     return vectorToFloat32Array(rendered.data(), rendered.size());
@@ -234,9 +232,9 @@ class PolyphonicAnalysisWasm {
   // anything: embind casts a JS number to size_t, which wraps a negative one into
   // a huge in-range-looking value.
   std::size_t noteIndex(double note) const {
-    const std::size_t index = wasmIndexArg(note, "note index");
+    const std::size_t index = sizeTFromNumber(note, "note");
     if (index >= analysis_.notes.size()) {
-      throw WasmRangeError("note index is out of range");
+      throw WasmRangeError("note must be less than the number of notes");
     }
     return index;
   }

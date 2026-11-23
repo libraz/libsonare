@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { decomposeStems, decomposeStemsLinked } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 
@@ -141,6 +142,36 @@ describe('decomposeStemsLinked', () => {
 
   it('rejects an empty channels array', () => {
     expect(() => decomposeStemsLinked({ channels: [], sampleRate: SR })).toThrow();
+  });
+
+  it('refuses a missing channel set by type and an empty one by domain', () => {
+    expectRefusal(
+      () =>
+        decomposeStemsLinked({ channels: undefined as unknown as Float32Array[], sampleRate: SR }),
+      TypeError,
+      /^decomposeStemsLinked: channels must be an array of Float32Array$/,
+    );
+    expectRefusal(
+      () => decomposeStemsLinked({ channels: [], sampleRate: SR }),
+      RangeError,
+      /^decomposeStemsLinked: channels must not be empty$/,
+    );
+  });
+
+  it('refuses an nFft no COLA geometry has, on both entry points', () => {
+    const x = toneAt(4096, 440, 0.5, 0, 4096);
+    for (const nFft of [2047, 2, 1 << 20]) {
+      expectRefusal(
+        () => decomposeStems({ samples: x, sampleRate: SR, nFft }),
+        RangeError,
+        /^decomposeStems: nFft must be an even integer in \[4, 524288\]$/,
+      );
+      expectRefusal(
+        () => decomposeStemsLinked({ channels: [x], sampleRate: SR, nFft }),
+        RangeError,
+        /^decomposeStemsLinked: nFft must be an even integer in \[4, 524288\]$/,
+      );
+    }
   });
 
   it('rejects channels of mismatched length', () => {

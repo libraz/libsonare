@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include "core/spectrum.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -82,8 +83,8 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   if (info.Length() >= 4 && info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
     config.n_fft = IntProperty(opts, "nFft", config.n_fft);
-    config.hop_length = IntInRangeOrAbsentProperty(
-        opts, "hopLength", 1, std::numeric_limits<int>::max(), config.hop_length);
+    config.hop_length = static_cast<size_t>(DomainProperty<int>(
+        opts, "hopLength", static_cast<int>(config.hop_length), sonare::kStftHopDomain));
     config.heal_radius_frames = IntProperty(opts, "healRadiusFrames", config.heal_radius_frames);
 
     // Optional window, by name or by ordinal.

@@ -15,7 +15,6 @@ import {
   assertClosedToken,
   assertFiniteScalar,
   assertFloat32Array,
-  assertIntegerValue,
   requestOnly,
   requireBoolean,
   resolveOptionalNonNegative,
@@ -352,8 +351,9 @@ export function splitSilence(...args: unknown[]): Int32Array {
  *
  * @param request - The signals to compare and the shared threshold/framing,
  *   matching {@link splitSilence}'s field names and defaults.
- * @throws {TypeError} `request.signals` is empty, or one of its elements is
- *   not a `Float32Array`.
+ * @throws {TypeError} `request.signals` is not an array, or one of its
+ *   elements is not a `Float32Array`.
+ * @throws {RangeError} `request.signals` is empty.
  */
 export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array;
 export function splitSilenceCommon(...args: unknown[]): Int32Array {
@@ -381,8 +381,9 @@ export function splitSilenceCommon(...args: unknown[]): Int32Array {
  * {@link SilenceCommonReport.silenceCeilingDb} against the `topDb` passed in.
  *
  * @param request - As {@link splitSilenceCommon}.
- * @throws {TypeError} `request.signals` is empty, or one of its elements is
- *   not a `Float32Array`.
+ * @throws {TypeError} `request.signals` is not an array, or one of its
+ *   elements is not a `Float32Array`.
+ * @throws {RangeError} `request.signals` is empty.
  * @example
  * ```ts
  * const topDb = 60;
@@ -455,7 +456,10 @@ export function padCenter(...args: unknown[]): Float32Array {
   return withEntry('padCenter', () => {
     const r = requestOnly<PadCenterRequest>('padCenter', args);
     assertFloat32Array(r.values, 'values');
-    assertIntegerValue(r.targetSize, 'targetSize');
+    // The native size_t reader states the domain; only the type is checked here.
+    if (typeof r.targetSize !== 'number') {
+      throw refuseType('targetSize must be an integer');
+    }
     return addon.padCenter(r.values, r.targetSize, r.padValue ?? 0);
   });
 }
@@ -480,7 +484,10 @@ export function fixLength(...args: unknown[]): Float32Array {
   return withEntry('fixLength', () => {
     const r = requestOnly<FixLengthRequest>('fixLength', args);
     assertFloat32Array(r.values, 'values');
-    assertIntegerValue(r.targetSize, 'targetSize');
+    // The native size_t reader states the domain; only the type is checked here.
+    if (typeof r.targetSize !== 'number') {
+      throw refuseType('targetSize must be an integer');
+    }
     return addon.fixLength(r.values, r.targetSize, r.padValue ?? 0);
   });
 }

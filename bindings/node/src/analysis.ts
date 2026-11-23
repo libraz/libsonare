@@ -66,8 +66,8 @@ import {
   assertFloatFields,
   assertFloatValue,
   assertInt32,
-  assertInt64,
   assertPitchClass,
+  assertU32,
   requestObject,
   requestOnly,
   sampleOneShot,
@@ -135,7 +135,7 @@ function nativeRoomOptions(options: object): Record<string, unknown> {
   }
   const seed = read('seed');
   if (seed !== undefined) {
-    assertInt64(seed, 'seed');
+    assertU32(seed, 'seed');
   }
   const nOctaveBands = read('nOctaveBands');
   if (nOctaveBands !== undefined) {
@@ -665,8 +665,12 @@ function nativeKeyOptions(request: KeyDetectionOptions): Record<string, unknown>
     modes.forEach((mode, i) => {
       assertClosedToken(mode, KEY_MODES, `modes[${i}]`);
     });
+  } else if (typeof modes === 'string') {
+    if (modes !== 'all' && modes !== 'modal') {
+      throw refuse('modes must be majorMinor, all, modal or an array of mode names');
+    }
   } else if (!isAbsent(modes)) {
-    assertClosedToken(modes, ['all', 'modal'] as const, 'modes');
+    throw refuseType('modes must be an array or mode-set string');
   }
   if (!isAbsent(request.chromaHighPassHz)) {
     assertFloatValue(request.chromaHighPassHz, 'chromaHighPassHz');

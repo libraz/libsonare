@@ -25,7 +25,7 @@ export const MAX_AUDIO_SAMPLE_RATE = 384000;
 
 function assertNonEmptySamples(samples: ArrayLike<number>, argName = 'samples'): void {
   if (samples.length === 0) {
-    throw refuse(`${argName} must not be empty`);
+    throw refuse(`${argName} must be a non-empty buffer`);
   }
 }
 

@@ -179,8 +179,7 @@ MixerWasm* createMixerFromSceneJson(std::string json, const val& sample_rate,
   if (!block_size.isUndefined() && !block_size.isNull()) {
     sonare::util::check::NumericDomain given = sonare_c_detail::kMixerMaxBlockSizeDomain;
     given.sentinel.reset();
-    resolved_block = checkedIntFromVal(block_size, "maxBlockSize");
-    sonare::util::check::integer_within(resolved_block, given, "maxBlockSize");
+    resolved_block = domainNumberFromVal<int>(block_size, "maxBlockSize", given);
   }
   return MixerWasm::fromSceneJson(std::move(json), checkedIntFromVal(sample_rate, "sampleRate"),
                                   resolved_block);
@@ -350,11 +349,11 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       throw WasmRangeError("all strips must have the same length");
     }
     if (left_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw WasmRangeError("inputs exceed the WASM Float32 input budget");
+      throw WasmRangeError("inputs exceed the input length budget");
     }
     total_input_elements += left_length;
     if (right_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw WasmRangeError("inputs exceed the WASM Float32 input budget");
+      throw WasmRangeError("inputs exceed the input length budget");
     }
     total_input_elements += right_length;
   }

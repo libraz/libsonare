@@ -298,7 +298,8 @@ describe('reported repros', () => {
   });
 
   it('positional calls are not request objects and keep their forms', () => {
-    expect(typeof sonare.detectBpm(samples, 22050)).toBe('number');
+    // Silence measures no tempo, so the positional call answers absent rather than a number.
+    expect(sonare.detectBpm(samples, 22050)).toBeUndefined();
   });
 });
 
