@@ -121,7 +121,7 @@ void print_defect_profile_text(const mastering::assistant::DefectProfile& defect
     if (std::isnan(band_floor[band])) continue;
     if (loudest_band < 0 || band_floor[band] > band_floor[loudest_band]) loudest_band = band;
   }
-  std::cout << "  Noise floor:     " << defects.noise.floor_dbfs << " dBFS";
+  std::cout << "  Noise floor:     " << measured_text(defects.noise.floor_dbfs, 2, "dBFS");
   if (loudest_band >= 0) {
     std::cout << ", loudest band " << band_floor[loudest_band] << " dBFS (band " << loudest_band
               << ")";

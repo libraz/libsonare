@@ -1424,7 +1424,8 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
       // under it means the threshold was too loose for the quiet these takes
       // have, and one at or over it means the quiet is there and they do not
       // share it.
-      printf("  silence ceiling %.2f dB at --top-db %.2f\n", report.silence_ceiling_db,
+      printf("  silence ceiling %s at --top-db %.2f\n",
+             measured_text(report.silence_ceiling_db, 2, "dB").c_str(),
              static_cast<double>(top_db));
       printf("  intervals per signal: %d..%d\n", report.min_signal_intervals,
              report.max_signal_intervals);

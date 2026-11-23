@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -255,7 +256,9 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   } else {
     std::cout << "Pitch Tracking (" << algo << "):\n";
     printf("  Frames:    %d\n", n_frames);
-    printf("  Voiced:    %d (%.1f%%)\n", voiced, ratio * 100.0f);
+    const std::string voiced_text =
+        std::isnan(ratio) ? "-" : measured_text(ratio * 100.0f, 1) + "%";
+    printf("  Voiced:    %d (%s)\n", voiced, voiced_text.c_str());
     printf("  Median F0: %s\n", measured_text(result.median_f0(), 1, "Hz").c_str());
     printf("  Mean F0:   %s\n", measured_text(result.mean_f0(), 1, "Hz").c_str());
   }
@@ -521,21 +524,21 @@ int cmd_acoustic(const CliArgs& args, const Audio& audio) {
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::blue << "> Acoustic Analysis ("
               << (p.is_blind ? "blind" : "impulse response") << "):" << color::reset << "\n";
-    printf("    RT60:       %.3f s\n", p.rt60);
+    printf("    RT60:       %s\n", measured_text(p.rt60, 3, "s").c_str());
     if (p.is_blind) {
       std::cout << "    EDT:        -\n    C50:        -\n    C80:        -\n    D50:        -\n";
     } else {
-      printf("    EDT:        %.3f s\n", p.edt);
-      printf("    C50:        %.2f dB\n", p.c50);
-      printf("    C80:        %.2f dB\n", p.c80);
-      printf("    D50:        %.3f\n", p.d50);
+      printf("    EDT:        %s\n", measured_text(p.edt, 3, "s").c_str());
+      printf("    C50:        %s\n", measured_text(p.c50, 2, "dB").c_str());
+      printf("    C80:        %s\n", measured_text(p.c80, 2, "dB").c_str());
+      printf("    D50:        %s\n", measured_text(p.d50, 3).c_str());
     }
     printf("    Confidence: %.2f\n", p.confidence);
     if (!p.rt60_bands.empty()) {
       std::cout << "    RT60 bands: ";
       for (size_t i = 0; i < p.rt60_bands.size(); ++i) {
         if (i > 0) std::cout << ", ";
-        printf("%.3f", p.rt60_bands[i]);
+        std::cout << measured_text(p.rt60_bands[i], 3);
       }
       std::cout << "\n";
     }
@@ -661,10 +664,14 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::blue << "> Room Estimate:" << color::reset << "\n";
-    printf("    Volume:     %.1f m^3\n", est.volume);
-    printf("    Dimensions: %.2f x %.2f x %.2f m\n", est.dims.length, est.dims.width,
-           est.dims.height);
-    printf("    DRR:        %.2f dB\n", est.drr_db);
+    printf("    Volume:     %s\n", measured_text(est.volume, 1, "m^3").c_str());
+    if (std::isnan(est.dims.length) || std::isnan(est.dims.width) || std::isnan(est.dims.height)) {
+      std::cout << "    Dimensions: -\n";
+    } else {
+      printf("    Dimensions: %.2f x %.2f x %.2f m\n", est.dims.length, est.dims.width,
+             est.dims.height);
+    }
+    printf("    DRR:        %s\n", measured_text(est.drr_db, 2, "dB").c_str());
     printf("    Confidence: %.2f\n", est.confidence);
     std::cout << "\n";
   }
@@ -930,10 +937,10 @@ int cmd_lufs(const CliArgs& args, const Audio&) {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::yellow << "> Loudness (LUFS):" << color::reset << "\n";
-    printf("    Integrated:    %.2f LUFS\n", result.integrated_lufs);
-    printf("    Momentary:     %.2f LUFS\n", result.momentary_lufs);
-    printf("    Short-term:    %.2f LUFS\n", result.short_term_lufs);
-    printf("    Loudness Range: %.2f LU\n", result.loudness_range_lu);
+    printf("    Integrated:    %s\n", measured_text(result.integrated_lufs, 2, "LUFS").c_str());
+    printf("    Momentary:     %s\n", measured_text(result.momentary_lufs, 2, "LUFS").c_str());
+    printf("    Short-term:    %s\n", measured_text(result.short_term_lufs, 2, "LUFS").c_str());
+    printf("    Loudness Range: %s\n", measured_text(result.loudness_range_lu, 2, "LU").c_str());
     std::cout << "\n";
   }
   return 0;
@@ -968,13 +975,13 @@ int cmd_meter(const CliArgs& args, const Audio& audio) {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::yellow << "> Meters:" << color::reset << "\n";
-    printf("    Peak:           %.2f dB\n", peak);
-    printf("    RMS:            %.2f dB\n", rms);
-    printf("    Crest Factor:   %.2f dB\n", crest);
-    printf("    True Peak:      %.2f dBTP\n", tp);
-    printf("    Clipping Ratio: %.6f\n", clip_ratio);
-    printf("    Silence Ratio:  %.6f\n", silence);
-    printf("    DC Offset:      %.6f\n", dc);
+    printf("    Peak:           %s\n", measured_text(peak, 2, "dB").c_str());
+    printf("    RMS:            %s\n", measured_text(rms, 2, "dB").c_str());
+    printf("    Crest Factor:   %s\n", measured_text(crest, 2, "dB").c_str());
+    printf("    True Peak:      %s\n", measured_text(tp, 2, "dBTP").c_str());
+    printf("    Clipping Ratio: %s\n", measured_text(clip_ratio, 6).c_str());
+    printf("    Silence Ratio:  %s\n", measured_text(silence, 6).c_str());
+    printf("    DC Offset:      %s\n", measured_text(dc, 6).c_str());
     std::cout << "\n";
   }
   return 0;
@@ -1008,7 +1015,7 @@ int cmd_clipping(const CliArgs& args, const Audio& audio) {
   } else {
     std::cout << "Clipping Detection:\n";
     printf("  Clipped Samples: %zu\n", result.clipped_samples);
-    printf("  Clipping Ratio:  %.6f\n", result.clipping_ratio);
+    printf("  Clipping Ratio:  %s\n", measured_text(result.clipping_ratio, 6).c_str());
     printf("  Max Peak:        %.4f\n", result.max_clipped_peak);
     printf("  Regions:         %zu\n", result.regions.size());
     const size_t shown = std::min<size_t>(result.regions.size(), 20);
@@ -1045,9 +1052,9 @@ int cmd_dynamic_range(const CliArgs& args, const Audio& audio) {
         .print();
   } else {
     std::cout << "Dynamic Range:\n";
-    printf("  Dynamic Range:   %.2f dB\n", result.dynamic_range_db);
-    printf("  Low Percentile:  %.2f dB\n", result.low_percentile_db);
-    printf("  High Percentile: %.2f dB\n", result.high_percentile_db);
+    printf("  Dynamic Range:   %s\n", measured_text(result.dynamic_range_db, 2, "dB").c_str());
+    printf("  Low Percentile:  %s\n", measured_text(result.low_percentile_db, 2, "dB").c_str());
+    printf("  High Percentile: %s\n", measured_text(result.high_percentile_db, 2, "dB").c_str());
   }
   return 0;
 }
@@ -1066,8 +1073,8 @@ int cmd_stereo(const CliArgs& args, const Audio& audio) {
         .print();
   } else {
     std::cout << "Stereo Image:\n";
-    printf("  Correlation:  %.4f\n", corr);
-    printf("  Stereo Width: %.4f\n", width);
+    printf("  Correlation:  %s\n", measured_text(corr, 4).c_str());
+    printf("  Stereo Width: %s\n", measured_text(width, 4).c_str());
   }
   return 0;
 }
@@ -1087,8 +1094,9 @@ int cmd_phase(const CliArgs& args, const Audio& audio) {
         .print();
   } else {
     std::cout << "Phase Scope:\n";
-    printf("  Correlation:        %.4f\n", result.correlation);
-    printf("  Avg Abs Angle:      %.4f rad\n", result.average_abs_angle_rad);
+    printf("  Correlation:        %s\n", measured_text(result.correlation, 4).c_str());
+    printf("  Avg Abs Angle:      %s\n",
+           measured_text(result.average_abs_angle_rad, 4, "rad").c_str());
     printf("  Max Radius:         %.4f\n", result.max_radius);
   }
   return 0;

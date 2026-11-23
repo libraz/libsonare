@@ -46,8 +46,8 @@ void progress_callback(float progress, const char* stage);
 void clear_progress();
 /// Names the third of [0, 1] a value falls in; "-" when the value was not measured (NaN).
 std::string describe_level(float value, const char* low, const char* mid, const char* high);
-/// Text form of a measurement: "-" when not measured (NaN), "inf" / "-inf" for an infinite end
-/// ("inf dB" when @p unit is "dB"), otherwise the value to @p precision decimals followed by
-/// " <unit>" when @p unit is non-empty.
+/// Text form of a measurement: "-" when not measured (NaN), "inf" / "-inf" for an infinite end,
+/// otherwise the value to @p precision decimals; either is followed by " <unit>" when @p unit is
+/// non-empty.
 std::string measured_text(float value, int precision, const char* unit = "");
 std::string basename(const std::string& path);

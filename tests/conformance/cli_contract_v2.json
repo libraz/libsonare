@@ -16105,6 +16105,23 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent_text",
+          "argv": [
+            "dynamics",
+            "{audio_silent}"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "-inf dB"
+          ],
+          "stdout_excludes": [
+            "nan"
+          ]
         }
       ],
       "artifacts": {}
@@ -16338,6 +16355,23 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent_text",
+          "argv": [
+            "lufs",
+            "{audio_silent}"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "-inf LUFS"
+          ],
+          "stdout_excludes": [
+            "nan"
+          ]
         }
       ],
       "artifacts": {}
@@ -16444,6 +16478,23 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent_text",
+          "argv": [
+            "acoustic",
+            "{audio_silent}"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "RT60:       -"
+          ],
+          "stdout_excludes": [
+            "nan"
+          ]
         }
       ],
       "artifacts": {}
@@ -19221,6 +19272,24 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent_text",
+          "argv": [
+            "estimate-room",
+            "{audio_silent}"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "Volume:     -",
+            "Dimensions: -"
+          ],
+          "stdout_excludes": [
+            "nan"
+          ]
         }
       ],
       "artifacts": {}
@@ -27473,6 +27542,23 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "silent_text",
+          "argv": [
+            "meter",
+            "{audio_silent}"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "-inf dBTP"
+          ],
+          "stdout_excludes": [
+            "nan"
+          ]
         }
       ],
       "artifacts": {}
@@ -27753,6 +27839,23 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "silent_text",
+          "argv": [
+            "dynamic-range",
+            "{audio_silent}"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "Low Percentile:  -inf dB"
+          ],
+          "stdout_excludes": [
+            "nan"
+          ]
         }
       ],
       "artifacts": {}

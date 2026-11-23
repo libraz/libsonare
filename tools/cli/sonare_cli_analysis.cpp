@@ -409,11 +409,11 @@ int cmd_dynamics(const CliArgs& args, const Audio& audio) {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::yellow << "> Dynamics Analysis:" << color::reset << "\n";
-    printf("    Peak Level:     %.1f dB\n", d.peak_db);
-    printf("    RMS Level:      %.1f dB\n", d.rms_db);
-    printf("    Dynamic Range:  %.1f dB\n", d.dynamic_range_db);
-    printf("    Crest Factor:   %.1f dB\n", d.crest_factor);
-    printf("    Loudness Range: %.1f LU\n", d.loudness_range_lu);
+    printf("    Peak Level:     %s\n", measured_text(d.peak_db, 1, "dB").c_str());
+    printf("    RMS Level:      %s\n", measured_text(d.rms_db, 1, "dB").c_str());
+    printf("    Dynamic Range:  %s\n", measured_text(d.dynamic_range_db, 1, "dB").c_str());
+    printf("    Crest Factor:   %s\n", measured_text(d.crest_factor, 1, "dB").c_str());
+    printf("    Loudness Range: %s\n", measured_text(d.loudness_range_lu, 1, "LU").c_str());
     std::cout << "    Compression:    " << (d.is_compressed ? "Yes (compressed)" : "No (natural)")
               << "\n\n";
   }
@@ -511,10 +511,11 @@ int cmd_melody(const CliArgs& args, const Audio& audio) {
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::cyan << "> Melody Analysis:" << color::reset << "\n";
     if (voiced) {
-      printf("    Pitch Range:     %.2f octaves\n", c.pitch_range_octaves);
-      printf("    Mean Frequency:  %.1f Hz\n", c.mean_frequency);
-      printf("    Pitch Stability: %.2f\n", c.pitch_stability);
-      printf("    Vibrato Rate:    %.1f Hz\n", c.vibrato_rate);
+      printf("    Pitch Range:     %s\n",
+             measured_text(c.pitch_range_octaves, 2, "octaves").c_str());
+      printf("    Mean Frequency:  %s\n", measured_text(c.mean_frequency, 1, "Hz").c_str());
+      printf("    Pitch Stability: %s\n", measured_text(c.pitch_stability, 2).c_str());
+      printf("    Vibrato Rate:    %s\n", measured_text(c.vibrato_rate, 1, "Hz").c_str());
     } else {
       std::cout << "    no melody\n";
     }
@@ -735,8 +736,12 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
               << measured_text(r.timbre.warmth, 1) << color::reset << "\n";
 
     // Dynamics
-    std::cout << "  " << color::yellow << "> Dynamics: " << std::fixed << std::setprecision(1)
-              << r.dynamics.dynamic_range_db << "dB range" << color::reset << "\n";
+    const float range_db = r.dynamics.dynamic_range_db;
+    // The finite form keeps the unit unspaced ("12.3dB range").
+    const std::string range_text = std::isfinite(range_db) ? measured_text(range_db, 1) + "dB"
+                                                           : measured_text(range_db, 1, "dB");
+    std::cout << "  " << color::yellow << "> Dynamics: " << range_text << " range" << color::reset
+              << "\n";
 
     // Final BPM and Key results
     std::cout << "  " << color::green << color::bold

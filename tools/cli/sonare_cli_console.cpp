@@ -113,7 +113,7 @@ std::string measured_text(float value, int precision, const char* unit) {
   const std::string suffix = unit != nullptr ? unit : "";
   if (std::isinf(value)) {
     const std::string infinity = value < 0.0f ? "-inf" : "inf";
-    return suffix == "dB" ? infinity + " dB" : infinity;
+    return suffix.empty() ? infinity : infinity + " " + suffix;
   }
   char buffer[64];
   std::snprintf(buffer, sizeof(buffer), "%.*f", precision, static_cast<double>(value));
