@@ -125,10 +125,12 @@ bool ParseWindowOption(const Napi::Object& options, Napi::Env env, sonare::Windo
   if (value.IsUndefined()) return true;
 
   int ordinal = 0;
+  constexpr int kWindowCount = SONARE_WINDOW_RECTANGULAR + 1;
   if (!value.IsNumber() ||
       !sonare::numeric::checked_integral_cast(value.As<Napi::Number>().DoubleValue(), &ordinal) ||
-      ordinal < 0 || ordinal > 3) {
-    Napi::RangeError::New(env, "window must be an integer ordinal in the range [0, 3]")
+      ordinal < 0 || ordinal >= kWindowCount) {
+    Napi::RangeError::New(
+        env, "window must be a name or an ordinal in [0, " + std::to_string(kWindowCount) + ")")
         .ThrowAsJavaScriptException();
     return false;
   }

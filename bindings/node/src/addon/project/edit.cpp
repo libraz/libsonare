@@ -166,8 +166,10 @@ bool ParseAutomationTargetKind(Napi::Env env, const Napi::Value& value,
   // target kind is this field's.
   int ordinal = 0;
   if (!Int32Value(env, value, "automation target kind", &ordinal)) return false;
-  if (ordinal < SONARE_AUTOMATION_TARGET_OPAQUE || ordinal > SONARE_AUTOMATION_TARGET_TRACK_PAN) {
-    Napi::RangeError::New(env, "Invalid automation target kind: " + std::to_string(ordinal))
+  constexpr int kTargetKindCount = SONARE_AUTOMATION_TARGET_TRACK_PAN + 1;
+  if (ordinal < SONARE_AUTOMATION_TARGET_OPAQUE || ordinal >= kTargetKindCount) {
+    Napi::RangeError::New(env, "automation target kind must be a name or an ordinal in [0, " +
+                                   std::to_string(kTargetKindCount) + ")")
         .ThrowAsJavaScriptException();
     return false;
   }

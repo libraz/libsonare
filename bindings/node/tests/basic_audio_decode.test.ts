@@ -97,6 +97,10 @@ describe('Audio class methods', () => {
       expect(() => native.detectKeyCandidates({ modes: ['major', 'nope'] })).toThrow(
         /invalid key mode/,
       );
+      expect(() => native.detectKeyCandidates({ modes: [7] })).toThrow(
+        new RangeError('Audio.detectKeyCandidates: keyMode must be a name or an ordinal in [0, 7)'),
+      );
+      expect(() => native.detectKeyCandidates({ modes: [7] })).toThrow(RangeError);
 
       const opts: KeyDetectionOptions = {
         modes: 'majorMinor',

@@ -35,7 +35,7 @@ SpectralEditMode parseSpectralEditMode(val mode) {
 WindowType parseSpectralEditWindow(val window) {
   if (window.isNumber()) {
     const int ordinal = checkedIntFromVal(window, "window");
-    requireOrdinalInRange(ordinal, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR, "window");
+    requireEnumOrdinal(ordinal, SONARE_WINDOW_RECTANGULAR + 1, "window");
     switch (static_cast<SonareWindowType>(ordinal)) {
       case SONARE_WINDOW_HANN:
         return WindowType::Hann;

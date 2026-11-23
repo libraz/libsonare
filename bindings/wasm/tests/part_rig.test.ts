@@ -86,12 +86,14 @@ describe('Sonare WASM part rig', () => {
     try {
       project.setPartRig({ destinationId: 0, part: 0, mode: 'none' });
       expect(() => project.setPartRig({ destinationId: 0, part: 16, mode: 'none' })).toThrow(
-        /out of range/,
+        /part must be an integer in \[0, 15\]/,
       );
       expect(() => project.setPartRig({ destinationId: 0, part: 256, mode: 'none' })).toThrow(
-        /out of range/,
+        /part must be an integer in \[0, 15\]/,
       );
-      expect(() => project.partRig({ destinationId: 0, part: 16 })).toThrow(/out of range/);
+      expect(() => project.partRig({ destinationId: 0, part: 16 })).toThrow(
+        /part must be an integer in \[0, 15\]/,
+      );
       // @ts-expect-error an unknown mode name is rejected at runtime
       expect(() => project.setPartRig({ destinationId: 0, part: 0, mode: 'wet' })).toThrow(/wet/);
       // The mode is a string token, never an ordinal.
@@ -199,9 +201,12 @@ describe('Sonare WASM part rig', () => {
       );
 
       // The shape is judged before the instrument is consulted.
-      expect(() => engine.setPartRig({ destinationId: 0, part: 16, mode: 'none' })).toThrow(
-        /out of range/,
-      );
+      expect(
+        expectRefusalOf(
+          () => engine.setPartRig({ destinationId: 0, part: 16, mode: 'none' }),
+          RangeError,
+        ).message,
+      ).toBe('RealtimeEngine.setPartRig: part must be an integer in [0, 15] or 255');
       expect(
         expectRefusalOf(
           () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
@@ -298,7 +303,7 @@ describe('Sonare WASM part rig request form', () => {
     [
       'an out-of-range part',
       { part: 16 },
-      new RangeError('Project.setPartRig: part is out of range'),
+      new RangeError('Project.setPartRig: part must be an integer in [0, 15] or 255'),
     ],
   ])('refuses %s', (_, change, refusal) => {
     const project = new Project();

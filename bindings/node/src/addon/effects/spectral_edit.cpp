@@ -42,9 +42,11 @@ int read_window_type(Napi::Env env, const Napi::Value& value) {
                                         std::to_string(value.As<Napi::Number>().DoubleValue()));
     }
     const int ordinal = sonare_node::node_narrow_int(env, value, "window");
-    if (ordinal < SONARE_WINDOW_HANN || ordinal > SONARE_WINDOW_RECTANGULAR) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "unknown window type: " + std::to_string(ordinal));
+    constexpr int kWindowCount = SONARE_WINDOW_RECTANGULAR + 1;
+    if (ordinal < SONARE_WINDOW_HANN || ordinal >= kWindowCount) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "window must be a name or an ordinal in [0, " + std::to_string(kWindowCount) + ")");
     }
     return ordinal;
   }

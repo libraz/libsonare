@@ -8,7 +8,7 @@
  * `floatProperty`/`intProperty`/`boolProperty`/`stringProperty` for
  * presence-checked reads with a sane default, `optionalNumber`/`optionalBool`
  * for type-checked optionals, `requireProperty<T>` for mandatory fields, and
- * `requireOrdinalInRange` for enum ordinals). A "bare" read —
+ * `requireEnumOrdinal` for enum ordinals). A "bare" read —
  * `something["key"].as<T>()` chained directly on a literal string index, with
  * no intervening call to one of those helpers — bypasses all of that: on a
  * missing field, embind's `.as<T>()` silently coerces (an absent boolean

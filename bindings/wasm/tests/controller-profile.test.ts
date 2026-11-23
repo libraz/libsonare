@@ -213,11 +213,14 @@ describe('Sonare WASM controller profile', () => {
       expect(
         expectRefusalOf(() => engine.bindController(0, { ...base, index: 128 }), RangeError)
           .message,
-      ).toBe('RealtimeEngine.bindController: controller binding index is out of range');
+      ).toBe('RealtimeEngine.bindController: index must be an integer in [0, 127]');
       // The struct fields are bytes, so a value that would truncate INTO the
       // domain has to be refused on this side: 256 is CC 0 and input 0 once
       // narrowed, and 257 is a valid axis. embind does not narrow for us.
-      expect(() => engine.bindController(0, { ...base, index: 256 })).toThrow(/out of range/);
+      expect(
+        expectRefusalOf(() => engine.bindController(0, { ...base, index: 256 }), RangeError)
+          .message,
+      ).toBe('RealtimeEngine.bindController: index must be an integer in [0, 127]');
       // input and axis are string tokens: an ordinal is a TypeError whatever its value.
       expect(() => engine.bindController(0, { ...base, input: 256 as never })).toThrow(TypeError);
       expect(() => engine.bindController(0, { ...base, axis: 257 as never })).toThrow(TypeError);

@@ -32,7 +32,7 @@ uint32_t ProjectWasm::addTrack(val desc) {
         }
       } else if (kind.typeOf().as<std::string>() == "number") {
         const int ordinal = checkedIntFromVal(kind, "project track kind");
-        requireOrdinalInRange(ordinal, SONARE_TRACK_AUDIO, SONARE_TRACK_AUX, "project track kind");
+        requireEnumOrdinal(ordinal, SONARE_TRACK_AUX + 1, "project track kind");
         d.kind = static_cast<uint32_t>(ordinal);
       } else {
         throw WasmTypeError("project track kind must be a string or number");
@@ -306,8 +306,8 @@ namespace {
 // A part is 0-15 or SONARE_PART_RIG_ALL_PARTS; anything else is refused before
 // the byte it would narrow into, so 256 cannot arrive as part 0.
 uint8_t partRigPart(int part) {
-  if (part != static_cast<int>(SONARE_PART_RIG_ALL_PARTS)) {
-    requireOrdinalInRange(part, 0, 15, "part");
+  if (part != static_cast<int>(SONARE_PART_RIG_ALL_PARTS) && (part < 0 || part > 15)) {
+    throw WasmRangeError("part must be an integer in [0, 15] or 255");
   }
   return static_cast<uint8_t>(part);
 }

@@ -100,7 +100,9 @@ describe('SonareEngine articulation', () => {
       // The refusals are the main-thread engine's, raised before anything is posted.
       posted.length = 0;
       expect(() => engine.setArticulation(TRACK, 0, 2 as never)).toThrow(TypeError);
-      expect(() => engine.setArticulation(TRACK, 16, 'poly')).toThrow(/out of range/);
+      expect(() => engine.setArticulation(TRACK, 16, 'poly')).toThrow(
+        /channel must be an integer in \[0, 15\]/,
+      );
       expect(() => engine.setArticulation(9, 0, 'poly')).toThrow(/no MIDI instrument is bound/);
       engine.setBuiltinInstrument(TRACK, {});
       posted.length = 0;
@@ -142,7 +144,9 @@ describe('SonareEngine articulation', () => {
       engine.setTrackLanes([{ trackId: TRACK }]);
       engine.setSynthInstrument(TRACK, { engineMode: 'reed' });
       await expect(engine.articulation(TRACK, 16)).rejects.toThrow(RangeError);
-      await expect(engine.articulation(TRACK, 16)).rejects.toThrow(/out of range/);
+      await expect(engine.articulation(TRACK, 16)).rejects.toThrow(
+        /channel must be an integer in \[0, 15\]/,
+      );
       await expect(engine.articulation(9, 0)).rejects.toThrow(/no MIDI instrument is bound/);
       await expect(engine.legatoFallbackCount(9)).rejects.toThrow(/no MIDI instrument is bound/);
       engine.setBuiltinInstrument(TRACK, {});

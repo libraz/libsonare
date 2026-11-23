@@ -130,7 +130,7 @@ class StreamAnalyzerWrapper {
     if (given(window_val)) {
       // Rejects an out-of-range window ordinal, mirroring the C ABI's valid_window.
       const int window = checkedIntFromVal(window_val, "window");
-      requireOrdinalInRange(window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR, "window");
+      requireEnumOrdinal(window, SONARE_WINDOW_RECTANGULAR + 1, "window");
       config.window = window == 1   ? WindowType::Hamming
                       : window == 2 ? WindowType::Blackman
                       : window == 3 ? WindowType::Rectangular

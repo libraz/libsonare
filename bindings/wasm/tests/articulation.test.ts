@@ -19,6 +19,7 @@ import {
   type SynthEngineMode,
   synthEnumTables,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 const BLOCK = 128;
@@ -126,9 +127,15 @@ describe('Sonare WASM articulation', () => {
       expect(() => engine.setArticulation(0, 0, 'legato')).toThrow(/legato/);
       // Checked before the byte it narrows into: 256 is channel 0 once
       // narrowed, and would slur a part the caller never named.
-      expect(() => engine.setArticulation(0, 16, 'poly')).toThrow(/out of range/);
-      expect(() => engine.setArticulation(0, 256, 'poly')).toThrow(/out of range/);
-      expect(() => engine.articulation(0, 16)).toThrow(/out of range/);
+      const channelDomain = /^RealtimeEngine\.\w+: channel must be an integer in \[0, 15\]$/;
+      for (const channel of [16, 256]) {
+        expect(
+          expectRefusalOf(() => engine.setArticulation(0, channel, 'poly'), RangeError).message,
+        ).toMatch(channelDomain);
+      }
+      expect(expectRefusalOf(() => engine.articulation(0, 16), RangeError).message).toMatch(
+        channelDomain,
+      );
       // None of the above took: the mode is still what the instrument started at.
       expect(engine.articulation(0, 0)).toBe('poly');
     });

@@ -8,6 +8,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { spectralEdit } from '../src/index.js';
+import { addon } from '../src/native.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 
@@ -159,6 +161,18 @@ describe('spectralEdit (Node)', () => {
         `ordinal ${ordinal}`,
       ).toThrow(TypeError);
     }
+  });
+
+  it('states the window ordinal domain in the enum words at the addon', () => {
+    const samples = sine(440, 0.1);
+    // The facade takes names only, so the ordinal reader is reached through the addon.
+    // biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose.
+    const native = addon as any;
+    expectRefusal(
+      () => native.spectralEdit(samples, SR, [], { window: 4 }),
+      RangeError,
+      /^spectralEdit: window must be a name or an ordinal in \[0, 4\)$/,
+    );
   });
 
   it('refuses a non-string window of any kind', () => {

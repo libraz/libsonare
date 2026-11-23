@@ -98,9 +98,8 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   // only part that is WASM's.
   WallMaterialRequest request;
   const int material_preset = intProperty(opts, "materialPreset", 0);
-  requireOrdinalInRange(material_preset, 0,
-                        static_cast<int>(kMaterialPresetSelectorNames.size()) - 1,
-                        "materialPreset");
+  requireEnumOrdinal(material_preset, static_cast<int>(kMaterialPresetSelectorNames.size()),
+                     "materialPreset");
   request.has_preset = material_preset_from_selector(material_preset, &request.preset);
   if (hasProperty(opts, "bandAbsorption")) {
     request.absorption_bands = float32ArrayToVector(opts["bandAbsorption"], "bandAbsorption");
@@ -263,8 +262,8 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   config.acoustic.noise_floor_margin_db =
       floatProperty(opts, "noiseFloorMarginDb", config.acoustic.noise_floor_margin_db);
   const int mode = intProperty(opts, "mode", 0);
-  requireOrdinalInRange(
-      mode, 0, static_cast<int>(sonare::acoustic::kAcousticModeSelectorNames.size()) - 1, "mode");
+  requireEnumOrdinal(mode, static_cast<int>(sonare::acoustic::kAcousticModeSelectorNames.size()),
+                     "mode");
   config.acoustic.mode = static_cast<sonare::AcousticConfig::Mode>(mode);
 
   // The core refuses these too, under member names; checked first to name the JS field.

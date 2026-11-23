@@ -45,8 +45,7 @@ std::vector<Mode> modesFromVal(val modes) {
   out.reserve(static_cast<size_t>(length));
   for (int i = 0; i < length; ++i) {
     const int mode = checkedIntFromVal(modes[i], "modes");
-    requireOrdinalInRange(mode, static_cast<int>(Mode::Major), static_cast<int>(Mode::Locrian),
-                          "key mode");
+    requireEnumOrdinal(mode, static_cast<int>(Mode::Locrian) + 1, "keyMode");
     out.push_back(static_cast<Mode>(mode));
   }
   return out;

@@ -38,6 +38,7 @@ import {
   Mixer,
   masteringDynamicsCompressor,
   mixingScenePreset,
+  Project,
   RealtimeEngine,
   type SynthModRouting,
   tempogram,
@@ -380,6 +381,29 @@ describe('the automation curve refuses an ordinal the embind path used to take',
       expect(refused(curve), `curve ${String(curve)} is outside the enum`).toBe(true);
     }
   });
+
+  it('states the curve and target-kind domains in the enum words', () => {
+    // The facade's own native handle translates the C++ throw, so the message is readable here.
+    const project = new Project();
+    const native = (project as unknown as { native: RawProject }).native;
+    try {
+      const track = native.addTrack({ name: 't' });
+      const lane = (extra: object) =>
+        native.addAutomationLane(track, {
+          targetParamId: 7,
+          points: [{ ppq: 0, value: 0 }],
+          ...extra,
+        });
+      expect(
+        expectRefusalOf(() => lane({ points: [{ ppq: 0, value: 0, curveToNext: 4 }] })).message,
+      ).toBe('Project.addAutomationLane: automation curve must be a name or an ordinal in [0, 4)');
+      expect(expectRefusalOf(() => lane({ targetKind: 3 })).message).toBe(
+        'Project.addAutomationLane: automation target kind must be a name or an ordinal in [0, 3)',
+      );
+    } finally {
+      project.destroy();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -470,6 +494,45 @@ describe('module ordinals past their set are refused, not mapped to a default', 
       expectRefusalNaming('mode', () => estimateRoom(impulse(), 48000, { mode } as never));
     }
   });
+
+  it('states the enum domain in the enum words: a name or an ordinal in [0, count)', () => {
+    const native = getSonareModule();
+    const synthesizeRir = native.synthesizeRir;
+    const estimateRoom = native.estimateRoom;
+    if (!synthesizeRir || !estimateRoom) {
+      throw new Error('this build has no acoustic simulation');
+    }
+    const room = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 };
+    expect(
+      expectRefusalOf(() => synthesizeRir({ ...room, materialPreset: 6 } as never)).message,
+    ).toBe('synthesizeRir: materialPreset must be a name or an ordinal in [0, 6)');
+    expect(
+      expectRefusalOf(() => estimateRoom(impulse(), 48000, { mode: 3 } as never)).message,
+    ).toBe('estimateRoom: mode must be a name or an ordinal in [0, 3)');
+    expect(
+      expectRefusalOf(() => native.vectorNormalize(new Float32Array([1, -2, 3]), 4, 0)).message,
+    ).toBe('vectorNormalize: normType must be a name or an ordinal in [0, 4)');
+    expect(
+      expectRefusalOf(() => native.spectralEdit(plucks, sampleRate, [], { window: 4 })).message,
+    ).toBe('spectralEdit: window must be a name or an ordinal in [0, 4)');
+    const detectKey = (modes: number[]) =>
+      native._detectKeyWithOptions(
+        plucks,
+        sampleRate,
+        2048,
+        512,
+        false,
+        false,
+        80,
+        modes,
+        -1,
+        '',
+        'auto',
+      );
+    expect(expectRefusalOf(() => detectKey([7])).message).toBe(
+      '_detectKeyWithOptions: keyMode must be a name or an ordinal in [0, 7)',
+    );
+  });
 });
 
 describe('telemetry scratch readers refuse an index past their record instead of reading 0', () => {
@@ -511,6 +574,12 @@ describe('telemetry scratch readers refuse an index past their record instead of
         // A field outside the enum is what is under test.
         expect(() => mixer.meterScratchValue(field as MeterScratchField)).toThrow(RangeError);
       }
+      // The facade refuses first; the embind reader behind it states the index domain.
+      const native = (mixer as unknown as { mixer: { meterScratchValue(field: number): number } })
+        .mixer;
+      expect(expectRefusalOf(() => native.meterScratchValue(7)).message).toBe(
+        'Mixer.meterScratchValue: field must be an integer in [0, 6]',
+      );
     } finally {
       mixer.destroy();
     }

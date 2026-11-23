@@ -21,8 +21,9 @@ import {
   tempogram,
   tempogramRatio,
 } from '../src/index.js';
+import { addon } from '../src/native.js';
 import type { MasteringChainConfig, StreamFramesI16, StreamFramesU8 } from '../src/types.js';
-import { present, unknownKeyError } from './_helpers.js';
+import { expectRefusal, present, unknownKeyError } from './_helpers.js';
 
 const SR = 22050;
 
@@ -1104,6 +1105,24 @@ describe('StreamAnalyzer quantize-config override', () => {
         TypeError,
       );
     }
+  });
+
+  it('states the window ordinal domain in the enum words at the addon', () => {
+    // The facade takes tokens only, so the ordinal reader is reached through the addon.
+    // biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose.
+    const native = addon as any;
+    expectRefusal(
+      () =>
+        new native.StreamAnalyzer({
+          sampleRate: 8000,
+          nFft: 32,
+          hopLength: 32,
+          nMels: 8,
+          window: 4,
+        }),
+      RangeError,
+      /^StreamAnalyzer: window must be a name or an ordinal in \[0, 4\)$/,
+    );
   });
 
   it('bounds unread frames and reports drop-newest telemetry', () => {

@@ -2,7 +2,7 @@
  * Mechanical enforcement of the WASM binding's validated JS-object-field
  * reader convention (the C++ side of the input-validation consolidation:
  * `wasm/bindings/common/common.h`'s `requireProperty<T>` /
- * `requireOrdinalInRange` / `hasProperty`+friends).
+ * `requireEnumOrdinal` / `requireIntegerInRange` / `hasProperty`+friends).
  *
  * The 2026-08-02 audit found 11 findings from unknown enum names,
  * out-of-range ordinals, and partial config objects being silently defaulted

@@ -759,15 +759,16 @@ bool callbackGiven(const val& callback, const char* key);
 int requireMatchedLength(const val& first, const char* first_subject, const val& second,
                          const char* second_subject, WasmLengthReader read_length,
                          bool require_non_zero = true);
-/// @brief Rejects an out-of-range enum ordinal instead of letting a switch or
-/// ternary's default/else arm silently substitute whichever member it
-/// happens to return. @p subject names the field in the error message.
+/// @brief Rejects an enum ordinal outside [0, @p count) instead of letting a switch or
+/// ternary's default/else arm silently substitute whichever member it happens to return.
 /// Mirrors the C ABI's range-checked enum converters (e.g. core_common.cpp's
-/// fill_key_profile / fill_key_modes, sonare_c_internal.h's valid_window),
-/// which reject an unmapped ordinal rather than defaulting it.
-/// @throws WasmArgumentError when @p value is outside
-/// [@p min, @p max].
-void requireOrdinalInRange(int value, int min, int max, const char* subject);
+/// fill_key_profile / fill_key_modes, sonare_c_internal.h's valid_window), which reject an
+/// unmapped ordinal rather than defaulting it. @p subject is the caller's spelling of the field.
+/// @throws WasmRangeError "<subject> must be a name or an ordinal in [0, <count>)".
+void requireEnumOrdinal(int value, int count, const char* subject);
+/// @brief Rejects a plain integer index outside [@p lo, @p hi].
+/// @throws WasmRangeError "<subject> must be an integer in [<lo>, <hi>]".
+void requireIntegerInRange(int value, int lo, int hi, const char* subject);
 /// @brief Returns @p object[@p key], refusing it by name when absent or when its
 ///        JS `typeof` is not @p js_type (@p article_type is the noun the message uses).
 val requireTypedProperty(const val& object, const char* key, const char* subject,

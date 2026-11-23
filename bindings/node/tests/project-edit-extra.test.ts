@@ -5,6 +5,7 @@ import type {
   ProjectLoopRecordingDesc,
 } from '../src/index.js';
 import { masteringInsertNames, Project, RealtimeEngine } from '../src/index.js';
+import { addon } from '../src/native.js';
 import { expectRefusal } from './_helpers.js';
 
 /** Per clip, the ids of the takes the project JSON marks partial. */
@@ -710,6 +711,29 @@ describe('Project edit ops (new bindings)', () => {
     const { project, clip } = buildProject();
     expect(() => project.setClipSource(clip, 999999)).toThrow();
     project.destroy();
+  });
+});
+
+describe('automation target kind ordinal', () => {
+  it('states its domain in the enum words at the addon', () => {
+    // The facade resolves tokens, so the ordinal reader is reached through the addon.
+    // biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose.
+    const native = new (addon as any).Project();
+    try {
+      const track = native.addTrack({ kind: 0, name: 'lead' });
+      expectRefusal(
+        () =>
+          native.addAutomationLane(track, {
+            targetParamId: 7,
+            targetKind: 3,
+            points: [{ ppq: 0, value: 0 }],
+          }),
+        RangeError,
+        /^Project\.addAutomationLane: automation target kind must be a name or an ordinal in \[0, 3\)$/,
+      );
+    } finally {
+      native.destroy();
+    }
   });
 });
 

@@ -346,8 +346,7 @@ val js_vector_normalize(val values, const val& norm_type_val, const val& thresho
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   std::vector<float> data = float32ArrayToVector(values, "values");
   validateFiniteVector(data, "values");
-  requireOrdinalInRange(norm_type, static_cast<int>(NormType::Inf),
-                        static_cast<int>(NormType::Power), "normType");
+  requireEnumOrdinal(norm_type, static_cast<int>(NormType::Power) + 1, "normType");
   return vectorToFloat32Array(normalize(data, static_cast<NormType>(norm_type), threshold));
 }
 

@@ -239,7 +239,7 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'StreamAnalyzer',
     field: 'window',
     legal: 1,
-    domainRefusal: 'window is out of range',
+    domainRefusal: 'window must be a name or an ordinal in [0, 4)',
     construct: (window) => newAnalyzer({ window }),
   },
 ];

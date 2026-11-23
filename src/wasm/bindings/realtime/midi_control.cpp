@@ -205,7 +205,7 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
   entry.input = static_cast<sonare::midi::ControllerInput>(input);
   entry.axis = static_cast<sonare::midi::ControllerAxis>(axis);
   const int index = intProperty(binding, "index", 0);
-  requireOrdinalInRange(index, 0, 127, "controller binding index");
+  requireIntegerInRange(index, 0, 127, "index");
   entry.index = static_cast<uint8_t>(index);
   const float lo = floatProperty(binding, "lo", 0.0f);
   const float hi = floatProperty(binding, "hi", 1.0f);
@@ -363,7 +363,7 @@ void RealtimeEngineWasm::setArticulation(const val& destination_id_val, const va
   // ABI gives -- poly substituted for a misspelled monoLegato plays every note
   // and slurs none of them.
   const int channel = checkedIntFromVal(channel_val, "channel");
-  requireOrdinalInRange(channel, 0, 15, "channel");
+  requireIntegerInRange(channel, 0, 15, "channel");
   const int mode = sonare_wasm_synth::enumFromVal(articulation, sonare_wasm_synth::kArticulations,
                                                   SONARE_ARTICULATION_COUNT, "articulation");
   wasmRequireControlOk(
@@ -385,7 +385,7 @@ val RealtimeEngineWasm::articulation(const val& destination_id_val, const val& c
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int channel = checkedIntFromVal(channel_val, "channel");
-  requireOrdinalInRange(channel, 0, 15, "channel");
+  requireIntegerInRange(channel, 0, 15, "channel");
   sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
   wasmRequireControlOk(
       engine_.instrument_articulation(destination_id, static_cast<uint8_t>(channel), &mode),
@@ -434,8 +434,8 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
                 "WASM PartRigMode table drifted from C");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int part = checkedIntFromVal(part_val, "part");
-  if (part != static_cast<int>(sonare::midi::kPartRigAllParts)) {
-    requireOrdinalInRange(part, 0, 15, "part");
+  if (part != static_cast<int>(sonare::midi::kPartRigAllParts) && (part < 0 || part > 15)) {
+    throw WasmRangeError("part must be an integer in [0, 15] or 255");
   }
   sonare::midi::PartRig rig;
   rig.mode = static_cast<sonare::midi::PartRigMode>(

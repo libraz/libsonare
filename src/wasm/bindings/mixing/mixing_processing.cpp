@@ -222,7 +222,7 @@ bool MixerWasm::latchMeterSnapshot() {
 
 float MixerWasm::meterScratchValue(const val& field) const {
   const int index = checkedIntFromVal(field, "field");
-  requireOrdinalInRange(index, 0, 6, "field");
+  requireIntegerInRange(index, 0, 6, "field");
   switch (index) {
     case 0:
       return meter_scratch_.peak_db_l;

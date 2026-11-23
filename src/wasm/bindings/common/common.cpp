@@ -884,9 +884,17 @@ int requireMatchedLength(const val& first, const char* first_subject, const val&
   return static_cast<int>(first_length);
 }
 
-void requireOrdinalInRange(int value, int min, int max, const char* subject) {
-  if (value < min || value > max) {
-    throw WasmRangeError(std::string(subject) + " is out of range");
+void requireEnumOrdinal(int value, int count, const char* subject) {
+  if (value < 0 || value >= count) {
+    throw WasmRangeError(std::string(subject) + " must be a name or an ordinal in [0, " +
+                         std::to_string(count) + ")");
+  }
+}
+
+void requireIntegerInRange(int value, int lo, int hi, const char* subject) {
+  if (value < lo || value > hi) {
+    throw WasmRangeError(std::string(subject) + " must be an integer in [" + std::to_string(lo) +
+                         ", " + std::to_string(hi) + "]");
   }
 }
 

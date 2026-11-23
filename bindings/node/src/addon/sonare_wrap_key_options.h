@@ -18,8 +18,11 @@ namespace sonare_node {
 inline SonareMode node_mode_from_value(const Napi::Value& value, const char* what = "keyMode") {
   if (value.IsNumber()) {
     const int mode = sonare_node::node_narrow_int(value.Env(), value, what);
-    if (mode < SONARE_MODE_MAJOR || mode > SONARE_MODE_LOCRIAN) {
-      throw Napi::RangeError::New(value.Env(), std::string(what) + ": invalid key mode");
+    constexpr int kModeCount = SONARE_MODE_LOCRIAN + 1;
+    if (mode < SONARE_MODE_MAJOR || mode >= kModeCount) {
+      throw Napi::RangeError::New(value.Env(), std::string(what) +
+                                                   " must be a name or an ordinal in [0, " +
+                                                   std::to_string(kModeCount) + ")");
     }
     return static_cast<SonareMode>(mode);
   }

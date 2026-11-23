@@ -214,7 +214,7 @@ namespace {
 /// coerced onto a neighbouring curve; the facade resolves the public tokens.
 int automationCurveFromVal(val curve) {
   const int ordinal = checkedIntFromVal(curve, "automation curve");
-  requireOrdinalInRange(ordinal, SONARE_CURVE_LINEAR, SONARE_CURVE_SCURVE, "automation curve");
+  requireEnumOrdinal(ordinal, SONARE_CURVE_SCURVE + 1, "automation curve");
   return ordinal;
 }
 
@@ -276,8 +276,7 @@ SonareAutomationTargetKind automationTargetKindFromVal(val desc,
   const std::string type = target_kind.typeOf().as<std::string>();
   if (type == "number") {
     const int ordinal = checkedIntFromVal(target_kind, "automation target kind");
-    requireOrdinalInRange(ordinal, SONARE_AUTOMATION_TARGET_OPAQUE,
-                          SONARE_AUTOMATION_TARGET_TRACK_PAN, "automation target kind");
+    requireEnumOrdinal(ordinal, SONARE_AUTOMATION_TARGET_TRACK_PAN + 1, "automation target kind");
     return static_cast<SonareAutomationTargetKind>(ordinal);
   }
   if (type == "string") {
