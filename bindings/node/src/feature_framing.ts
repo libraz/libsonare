@@ -388,9 +388,10 @@ export function splitSilenceCommon(...args: unknown[]): Int32Array {
  * const topDb = 60;
  * const signals = channels; // takes of one part, sample-aligned
  * const { intervals, report } = splitSilenceCommonWithReport({ signals, topDb });
- * if (intervals.length === 2 && report.silenceCeilingDb < topDb) {
+ * const ceiling = report.silenceCeilingDb;
+ * if (intervals.length === 2 && ceiling !== undefined && ceiling < topDb) {
  *   // The takes do have a shared dip; this threshold was too loose to see it.
- *   splitSilenceCommonWithReport({ signals, topDb: report.silenceCeilingDb - 5 });
+ *   splitSilenceCommonWithReport({ signals, topDb: ceiling - 5 });
  * }
  * ```
  */
