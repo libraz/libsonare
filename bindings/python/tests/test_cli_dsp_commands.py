@@ -70,7 +70,7 @@ def test_gain_payload_and_samples(source: Path, tmp_path: Path) -> None:
 
     out = tmp_path / "gain.wav"
     payload = _json(_run_cli(["gain", str(source), "-o", str(out), "--gain-db", "-3", "--json"]))
-    assert set(payload) == {"output", "gain_db", "duration"}
+    assert set(payload) == {"output", "output_gain_db", "gain_db", "duration"}
     assert payload["gain_db"] == -3.0
     assert payload["duration"] == pytest.approx(FRAMES / SR)
 
@@ -88,7 +88,7 @@ def test_fade_payload_reports_omitted_side_as_zero(source: Path, tmp_path: Path)
     payload = _json(
         _run_cli(["fade", str(source), "-o", str(out), "--fade-in-sec", "0.1", "--json"])
     )
-    assert set(payload) == {"output", "fade_in_sec", "fade_out_sec", "duration"}
+    assert set(payload) == {"output", "output_gain_db", "fade_in_sec", "fade_out_sec", "duration"}
     assert payload["fade_in_sec"] == pytest.approx(0.1)
     assert payload["fade_out_sec"] == 0.0
     written, _ = _read_wav(out)
@@ -130,7 +130,15 @@ def test_filter_payload(
         )
         if value is not None
     }
-    assert set(payload) == {"output", "type", "order", "zero_phase", "duration", *frequencies}
+    assert set(payload) == {
+        "output",
+        "output_gain_db",
+        "type",
+        "order",
+        "zero_phase",
+        "duration",
+        *frequencies,
+    }
     assert payload["type"] == argv[1]
     assert payload["order"] == order
     for key, value in frequencies.items():

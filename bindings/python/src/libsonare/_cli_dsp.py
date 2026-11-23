@@ -9,6 +9,8 @@ from typing import Any
 
 from ._cli_common import (
     _absent_if_none,
+    _note_output_fit,
+    _OutputFit,
     _strict_json_dumps,
     _write_wav,
 )
@@ -43,11 +45,20 @@ def _save_result(
     fields: dict[str, Any],
 ) -> int:
     """Write the output WAV and report it: the JSON payload, else a "Saved to" line."""
-    _write_wav(args.output, samples, sample_rate)
+    fit = _OutputFit().include(samples)
+    _write_wav(args.output, samples, sample_rate, fit=fit)
+    _note_output_fit(fit)
     if args.json:
         duration = len(samples) / sample_rate if sample_rate > 0 else 0.0
         print(
-            _strict_json_dumps({"output": args.output, **fields, "duration": duration}),
+            _strict_json_dumps(
+                {
+                    "output": args.output,
+                    "output_gain_db": fit.gain_db,
+                    **fields,
+                    "duration": duration,
+                }
+            ),
         )
     else:
         print(f"Saved to {args.output}", file=sys.stderr)
@@ -113,9 +124,20 @@ def _emphasis(args: argparse.Namespace, apply: Callable[..., Any]) -> int:
     samples, sr = _load_audio(args.file)
     coef = _effective(args, apply, "coef")
     result = apply(samples, **_given(args, "coef"))
-    _write_wav(args.output, result, sr)
+    fit = _OutputFit().include(result)
+    _write_wav(args.output, result, sr, fit=fit)
+    _note_output_fit(fit)
     if args.json:
-        print(_strict_json_dumps({"output": args.output, "coef": coef, "samples": len(result)}))
+        print(
+            _strict_json_dumps(
+                {
+                    "output": args.output,
+                    "output_gain_db": fit.gain_db,
+                    "coef": coef,
+                    "samples": len(result),
+                }
+            )
+        )
     else:
         print(f"Saved to {args.output}", file=sys.stderr)
     return 0
@@ -160,9 +182,14 @@ def cmd_mel_to_audio(args: argparse.Namespace) -> int:
         **_given(args, n_iter="n_iter", fmin="fmin_hz", fmax="fmax_hz"),
     )
     n_mels, n_frames = mel.power.shape
-    _write_wav(args.output, result, sr)
+    fit = _OutputFit().include(result)
+    _write_wav(args.output, result, sr, fit=fit)
+    _note_output_fit(fit)
     return _report_inverse(
-        args, len(result) / sr, {"n_mels": n_mels, "n_frames": n_frames, "n_iter": n_iter}
+        args,
+        len(result) / sr,
+        {"n_mels": n_mels, "n_frames": n_frames, "n_iter": n_iter},
+        fit,
     )
 
 
@@ -184,17 +211,31 @@ def cmd_mfcc_to_audio(args: argparse.Namespace) -> int:
         n_iter=n_iter,
         **edges,
     )
-    _write_wav(args.output, result, sr)
+    fit = _OutputFit().include(result)
+    _write_wav(args.output, result, sr, fit=fit)
+    _note_output_fit(fit)
     return _report_inverse(
         args,
         len(result) / sr,
         {"n_mfcc": n_mfcc, "n_frames": coefficients.shape[1], "n_iter": n_iter},
+        fit,
     )
 
 
-def _report_inverse(args: argparse.Namespace, duration: float, fields: dict[str, Any]) -> int:
+def _report_inverse(
+    args: argparse.Namespace, duration: float, fields: dict[str, Any], fit: _OutputFit
+) -> int:
     if args.json:
-        print(_strict_json_dumps({"output": args.output, **fields, "duration": duration}))
+        print(
+            _strict_json_dumps(
+                {
+                    "output": args.output,
+                    "output_gain_db": fit.gain_db,
+                    **fields,
+                    "duration": duration,
+                }
+            )
+        )
     else:
         print(f"Saved to {args.output}", file=sys.stderr)
     return 0

@@ -193,6 +193,7 @@ _VOICE_COMMON_KEYS = {
     "duration",
     "sample_rate",
     "latency_samples",
+    "output_gain_db",
 }
 _VOICE_SIMPLE_KEYS = _VOICE_COMMON_KEYS | {"pitch_semitones", "formant_factor", "formant_mode"}
 _VOICE_PRESET_KEYS = _VOICE_COMMON_KEYS | {"preset"}
@@ -212,7 +213,7 @@ _MASTERING_REPORT_KEYS = {
     "sample_rate",
     "output",
 }
-_SYNTHESIZE_RIR_KEYS = {"output", "sample_rate", "samples"}
+_SYNTHESIZE_RIR_KEYS = {"output", "sample_rate", "samples", "output_gain_db"}
 
 
 def _is_bool(value: Any) -> bool:

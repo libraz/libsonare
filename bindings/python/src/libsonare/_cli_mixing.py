@@ -27,6 +27,8 @@ from ._cli_common import (
     _json_key_to_snake_case,
     _library_token,
     _load_channels_or_downmix,
+    _note_output_fit,
+    _OutputFit,
     _parse_kv_params,
     _PcmQuantizer,
     _resample,
@@ -374,6 +376,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
         strip_count = mixer.strip_count
 
         rendered_samples = 0
+        fit = _OutputFit()
         if args.input:
             # Each input WAV feeds one strip (mono inputs are duplicated to both
             # channels). Inputs that were captured at a different sample rate are
@@ -424,6 +427,11 @@ def cmd_mix(args: argparse.Namespace) -> int:
                     rendered_samples += len(result.left)
                     tail_remaining -= count
 
+                # One gain over the whole render, taken before any block is quantized
+                # so the dither decision sees the samples as they are written.
+                for left_block, right_block in blocks:
+                    fit.include(left_block).include(right_block)
+                blocks = [(fit.apply(left), fit.apply(right)) for left, right in blocks]
                 quantizer = _PcmQuantizer.for_stream(
                     16, 2, (plane for block in blocks for plane in block)
                 )
@@ -431,6 +439,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
                 for left_block, right_block in blocks:
                     _write_wav_stereo_frames(wav, left_block, right_block, quantizer, first_frame)
                     first_frame += min(len(left_block), len(right_block))
+            _note_output_fit(fit)
 
         if args.json:
             payload: dict[str, object] = {
@@ -440,6 +449,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
             if args.input:
                 payload["rendered_samples"] = rendered_samples
                 payload["output"] = args.output
+                payload["output_gain_db"] = fit.gain_db
             print(_strict_json_dumps(payload))
         else:
             print("  Mixer:")
@@ -537,8 +547,10 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
     finally:
         mixer.close()
 
+    fit = _OutputFit().include(result.left).include(result.right)
     if args.output:
-        _write_channel_output(args.output, [result.left, result.right], sample_rate)
+        _write_channel_output(args.output, [result.left, result.right], sample_rate, fit=fit)
+        _note_output_fit(fit)
 
     if args.json:
         print(
@@ -546,6 +558,7 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
                 {
                     "sample_rate": sample_rate,
                     "length": frames,
+                    **({"output_gain_db": fit.gain_db} if args.output else {}),
                     "meter": {
                         "peak_db_l": meter.peak_db_l,
                         "peak_db_r": meter.peak_db_r,

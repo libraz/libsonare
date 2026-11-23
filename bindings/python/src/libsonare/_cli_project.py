@@ -18,6 +18,8 @@ from ._cli_common import (
     _atomic_write_bytes,
     _catalog_token,
     _load_audio_channels,
+    _note_output_fit,
+    _OutputFit,
     _read_bounded,
     _strict_json_dumps,
     _write_project_bounce_wav,
@@ -281,12 +283,15 @@ def _project_bounce(
             audio = cast(Any, project).bounce(synth_instruments=[(0, patch)], **kwargs)
         else:
             audio = cast(Any, project).bounce(**kwargs)
-        frames, channels = _write_project_bounce_wav(args.output, audio, sample_rate)
+        fit = _OutputFit().include(audio)
+        frames, channels = _write_project_bounce_wav(args.output, audio, sample_rate, fit=fit)
+        _note_output_fit(fit)
         if args.json:
             print(
                 _strict_json_dumps(
                     {
                         "output": args.output,
+                        "output_gain_db": fit.gain_db,
                         "frames": frames,
                         "channels": channels,
                         "sample_rate": sample_rate,

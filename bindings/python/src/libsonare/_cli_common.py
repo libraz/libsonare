@@ -76,6 +76,9 @@ from ._cli_output import (
     _on_pcm_grid as _on_pcm_grid,
 )
 from ._cli_output import (
+    _OutputFit as _OutputFit,
+)
+from ._cli_output import (
     _padded_chunks as _padded_chunks,
 )
 from ._cli_output import (
@@ -324,6 +327,39 @@ def _styled(text: str, *codes: str) -> str:
     if not _color_enabled():
         return text
     return "".join(codes) + text + _RESET
+
+
+def _note_output_fit(fit: _OutputFit) -> None:
+    """Say on stderr that ``fit`` lowered the output; silent when it did not."""
+    if fit.gain == 1.0:
+        return
+    print(
+        _styled(
+            f"Output lowered by {-fit.gain_db:.2f} dB so its peak fits full scale "
+            "instead of clipping",
+            _YELLOW,
+        ),
+        file=sys.stderr,
+    )
+
+
+def _write_mastering_output(
+    output: str,
+    channels: Sequence[Sequence[float] | np.ndarray],
+    sample_rate: int,
+    bits: int,
+) -> _OutputFit:
+    """Write a mastering-family result to ``output`` under its own fit, and note the fit.
+
+    Returns the identity fit, with nothing written, when no output path was given.
+    """
+    fit = _OutputFit()
+    if output:
+        for channel in channels:
+            fit.include(channel)
+        _write_channel_output(output, channels, sample_rate, bits, fit=fit)
+        _note_output_fit(fit)
+    return fit
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -649,6 +685,7 @@ def _emit_effect_result(
     *,
     extra: dict[str, object] | None = None,
     label: str,
+    fit: _OutputFit | None = None,
 ) -> int:
     """Write the optional output WAV and print an offline-effect result.
 
@@ -672,9 +709,18 @@ def _emit_effect_result(
 
     A render's required ``-o`` is refused at parse time (``_REQUIRED_OPTIONS``);
     ``trim-silence`` doubles as analysis, so its destination stays optional.
+
+    The channels are written under one ``fit`` (their own peak unless the caller
+    measured it first, as ``normalize`` does to report the level as written), and
+    ``output_gain_db`` is published with the output.
     """
+    if fit is None:
+        fit = _OutputFit()
+        for channel in channels:
+            fit.include(channel)
     if args.output:
-        _write_channel_output(args.output, channels, sr)
+        _write_channel_output(args.output, channels, sr, fit=fit)
+        _note_output_fit(fit)
 
     length = len(channels[0])
     if args.json:
@@ -687,6 +733,7 @@ def _emit_effect_result(
             payload.update(extra)
         if args.output:
             payload["output"] = args.output
+            payload["output_gain_db"] = fit.gain_db
         print(_strict_json_dumps(payload))
     else:
         print(f"  {label}: {length} samples")

@@ -10,6 +10,14 @@ from typing import Any
 
 import pytest
 
+
+def _identity_fit():
+    """A fit that leaves the samples alone: the writer under test is the plain quantizer."""
+    from libsonare._cli_output import _OutputFit
+
+    return _OutputFit()
+
+
 _NATIVE_PROJECT_MIDI_LIMIT = 64 * 1024 * 1024
 
 
@@ -45,7 +53,7 @@ def _artifact_writers(source: Path, destination: Path) -> dict[str, Any]:
     from libsonare import cli
 
     return {
-        "wav": lambda: cli._write_wav(str(destination), [0.25] * 16, 22_050),
+        "wav": lambda: cli._write_wav(str(destination), [0.25] * 16, 22_050, fit=_identity_fit()),
         "bytes": lambda: cli._atomic_write_bytes(str(destination), b"payload"),
         "project": lambda: cli.cmd_project(
             cli._build_parser().parse_args(["project", "new", "-o", str(destination)])
@@ -77,7 +85,7 @@ def test_every_artifact_writer_classifies_a_failed_write(tmp_path, capsys, artif
     from libsonare._runtime import SonareError
 
     source = tmp_path / "tone.wav"
-    cli._write_wav(str(source), [0.25, -0.25] * 512, 22_050)
+    cli._write_wav(str(source), [0.25, -0.25] * 512, 22_050, fit=_identity_fit())
     destination = tmp_path / "destination"
     destination.mkdir()
 
@@ -225,7 +233,7 @@ def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
     # used to land on. The native CLI reports the same class for the same
     # condition, which is what lets a script branch on it whichever CLI it calls.
     with pytest.raises(SonareError, match=f"injected {stage} failure") as raised:
-        cli._write_wav(str(output), [0.25] * 10, 48000)
+        cli._write_wav(str(output), [0.25] * 10, 48000, fit=_identity_fit())
     assert cli._exit_code_for(raised.value) == EXIT_ENCODE_FAILED
 
     _assert_only_old_output(tmp_path, output)
@@ -270,7 +278,7 @@ def test_wav_writer_writes_a_non_finite_sample_as_silence_like_the_core(
     from libsonare import cli
 
     output = tmp_path / f"{label}-{bits}.wav"
-    cli._write_wav(str(output), [sample, 0.5], 48000, bits)
+    cli._write_wav(str(output), [sample, 0.5], 48000, bits, fit=_identity_fit())
 
     codes = _read_codes(output, bits)
     assert codes[0] == 0, (
@@ -300,7 +308,7 @@ def test_wav_export_completes_over_a_sample_no_32_bit_float_can_hold(tmp_path) -
 
     samples = [0.25, 0.5] * 64 + [1e39, -1e39, 3.4e38, 0.5] + [0.25, 0.5] * 64
     output = tmp_path / "overflow.wav"
-    cli._write_wav(str(output), samples, 48000)
+    cli._write_wav(str(output), samples, 48000, fit=_identity_fit())
 
     codes = _read_codes(output, 16)
     assert len(codes) == len(samples)
@@ -321,7 +329,7 @@ def test_wav_writer_keeps_finite_codes_at_and_below_full_scale(tmp_path, bits, e
 
     output = tmp_path / f"finite-{bits}.wav"
     near_full_scale = expected[2] / (32768 if bits == 16 else 8388608)
-    cli._write_wav(str(output), [1.0, -1.0, near_full_scale, 0.0], 48000, bits)
+    cli._write_wav(str(output), [1.0, -1.0, near_full_scale, 0.0], 48000, bits, fit=_identity_fit())
 
     assert _read_codes(output, bits) == expected
 
@@ -332,12 +340,14 @@ def test_stereo_and_bounce_writers_share_the_non_finite_substitution(tmp_path) -
     from libsonare._cli_common import _write_project_bounce_wav
 
     stereo = tmp_path / "stereo.wav"
-    cli._write_wav_stereo(str(stereo), [float("nan"), 0.5], [float("-inf"), -0.5], 48000)
+    cli._write_wav_stereo(
+        str(stereo), [float("nan"), 0.5], [float("-inf"), -0.5], 48000, fit=_identity_fit()
+    )
     assert _read_codes(stereo, 16) == (0, 0, 16384, -16384)
 
     bounce = tmp_path / "bounce.wav"
     frames, channels = _write_project_bounce_wav(
-        str(bounce), [[float("inf"), 0.25], [0.5, float("nan")]], 48000
+        str(bounce), [[float("inf"), 0.25], [0.5, float("nan")]], 48000, fit=_identity_fit()
     )
     assert (frames, channels) == (2, 2)
     assert _read_codes(bounce, 16) == (0, 8192, 16384, 0)
@@ -485,7 +495,7 @@ def test_wav_writer_peak_memory_is_bounded_by_chunk_size(tmp_path) -> None:
     def measured_peak(path: Path, samples: list[float]) -> int:
         tracemalloc.start()
         try:
-            cli._write_wav(str(path), samples, 48000)
+            cli._write_wav(str(path), samples, 48000, fit=_identity_fit())
             return tracemalloc.get_traced_memory()[1]
         finally:
             tracemalloc.stop()
@@ -673,7 +683,9 @@ def test_frame_major_wav_writer_handles_ten_seconds_of_six_channel_audio_quickly
 
     output = tmp_path / "six-channel.wav"
     started = time.monotonic()
-    written_frames, written_channels = _write_frame_major_wav(str(output), audio, sample_rate)
+    written_frames, written_channels = _write_frame_major_wav(
+        str(output), audio, sample_rate, fit=_identity_fit()
+    )
     elapsed = time.monotonic() - started
 
     assert (written_frames, written_channels) == (frames, channels)
@@ -768,18 +780,22 @@ def test_on_grid_input_round_trips_code_for_code_without_dither(tmp_path, bits) 
     values = codes / scale
 
     mono = tmp_path / "mono.wav"
-    cli._write_wav(str(mono), values[:frames], 48000, bits)
+    cli._write_wav(str(mono), values[:frames], 48000, bits, fit=_identity_fit())
     assert _read_codes(mono, bits) == tuple(int(c) for c in codes[:frames])
 
     stereo = tmp_path / "stereo.wav"
-    cli._write_wav_stereo(str(stereo), values[:frames], values[frames:], 48000, bits)
+    cli._write_wav_stereo(
+        str(stereo), values[:frames], values[frames:], 48000, bits, fit=_identity_fit()
+    )
     expected = np.empty(frames * 2, dtype=np.int64)
     expected[0::2], expected[1::2] = codes[:frames], codes[frames:]
     assert _read_codes(stereo, bits) == tuple(int(c) for c in expected)
 
     multi = tmp_path / "multi.wav"
     whole = len(codes) // 4 * 4
-    _write_frame_major_wav(str(multi), values[:whole].reshape(-1, 4), 48000, bits)
+    _write_frame_major_wav(
+        str(multi), values[:whole].reshape(-1, 4), 48000, bits, fit=_identity_fit()
+    )
     assert _data_chunk(multi) == b"".join(
         int(c).to_bytes(bits // 8, "little", signed=True) for c in codes[:whole]
     )
@@ -796,11 +812,13 @@ def test_off_grid_input_matches_the_dither_recipe_across_chunks(tmp_path, bits, 
     audio = _noise(frames, channels)
     output = tmp_path / "out.wav"
     if channels == 1:
-        cli._write_wav(str(output), audio[:, 0], 48000, bits)
+        cli._write_wav(str(output), audio[:, 0], 48000, bits, fit=_identity_fit())
     elif channels == 2:
-        cli._write_wav_stereo(str(output), audio[:, 0], audio[:, 1], 48000, bits)
+        cli._write_wav_stereo(
+            str(output), audio[:, 0], audio[:, 1], 48000, bits, fit=_identity_fit()
+        )
     else:
-        _write_frame_major_wav(str(output), audio, 48000, bits)
+        _write_frame_major_wav(str(output), audio, 48000, bits, fit=_identity_fit())
     assert _data_chunk(output) == _reference_pcm(audio.ravel(), channels, bits)
 
 
@@ -816,7 +834,7 @@ def test_dither_decision_covers_the_whole_stream(tmp_path, bits) -> None:
     values = np.full(frames, 3 / scale)  # on the grid, and not silence, which stays undithered
     values[-1] = 0.1234567
     output = tmp_path / "late.wav"
-    cli._write_wav(str(output), values, 48000, bits)
+    cli._write_wav(str(output), values, 48000, bits, fit=_identity_fit())
     assert _data_chunk(output) == _reference_pcm(values, 1, bits)
     assert any(code != 3 for code in _read_codes(output, bits)[:_CHUNK])
 
@@ -830,7 +848,7 @@ def test_exact_silence_stays_undithered_in_a_dithered_stream(tmp_path, bits) -> 
     values = np.zeros(_CHUNK + 100)
     values[_CHUNK:] = 0.1234567
     output = tmp_path / "silence.wav"
-    cli._write_wav(str(output), values, 48000, bits)
+    cli._write_wav(str(output), values, 48000, bits, fit=_identity_fit())
     assert _data_chunk(output) == _reference_pcm(values, 1, bits)
     assert not any(_read_codes(output, bits)[:_CHUNK])
 
@@ -857,8 +875,8 @@ def test_ragged_rows_agree_with_the_ndarray_fast_path(tmp_path, bits, on_grid) -
 
     fast = tmp_path / "fast.wav"
     slow = tmp_path / "slow.wav"
-    _write_frame_major_wav(str(fast), padded, 48000, bits)
-    _write_frame_major_wav(str(slow), ragged, 48000, bits)
+    _write_frame_major_wav(str(fast), padded, 48000, bits, fit=_identity_fit())
+    _write_frame_major_wav(str(slow), ragged, 48000, bits, fit=_identity_fit())
     assert _data_chunk(fast) == _data_chunk(slow)
 
 

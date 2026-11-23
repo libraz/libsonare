@@ -68,8 +68,10 @@ def _json(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
 
 def _assert_close(written: list[float], expected: Any) -> None:
     assert len(written) == len(expected)
-    # The WAV holds 16-bit samples, so the library's output is clipped to full scale.
-    expected = [max(-1.0, min(1.0, float(b))) for b in expected]
+    # The WAV holds 16-bit samples, so a peak past full scale is lowered to it by one gain.
+    peak = max((abs(float(b)) for b in expected), default=0.0)
+    gain = 1.0 / peak if peak > 1.0 else 1.0
+    expected = [float(b) * gain for b in expected]
     assert max(abs(a - b) for a, b in zip(written, expected, strict=True)) < QUANTUM
 
 
@@ -79,7 +81,7 @@ def test_emphasis_matches_library(command: str, source: Path, tmp_path: Path) ->
 
     out = tmp_path / f"{command}.wav"
     payload = _json(_run_cli([command, str(source), "-o", str(out), "--coef", "0.9", "--json"]))
-    assert set(payload) == {"output", "coef", "samples"}
+    assert set(payload) == {"output", "output_gain_db", "coef", "samples"}
     assert payload["coef"] == 0.9
     input_samples, rate = _read_wav(source)
     written, out_rate = _read_wav(out)
@@ -105,7 +107,7 @@ def test_mel_to_audio_matches_library(source: Path, tmp_path: Path) -> None:
             + ["--json"]
         )
     )
-    assert set(payload) == {"output", "n_mels", "n_frames", "n_iter", "duration"}
+    assert set(payload) == {"output", "output_gain_db", "n_mels", "n_frames", "n_iter", "duration"}
     input_samples, rate = _read_wav(source)
     mel = mel_spectrogram(input_samples, rate, n_mels=64)
     expected = mel_to_audio(mel.power, sr=rate, hop_length=512, n_iter=4)
@@ -128,7 +130,7 @@ def test_mfcc_to_audio_matches_library(source: Path, tmp_path: Path) -> None:
             + ["--n-mels", "64", "--fmax-hz", "8000", "--json"]
         )
     )
-    assert set(payload) == {"output", "n_mfcc", "n_frames", "n_iter", "duration"}
+    assert set(payload) == {"output", "output_gain_db", "n_mfcc", "n_frames", "n_iter", "duration"}
     input_samples, rate = _read_wav(source)
     coefficients = mfcc(input_samples, rate, n_mels=64, n_mfcc=13, fmax=8000.0).coefficients
     expected = mfcc_to_audio(

@@ -13,13 +13,13 @@ from ._cli_common import (
     _atomic_write_bytes,
     _load_channels_or_downmix,
     _measured_pairs,
+    _OutputFit,
     _params_entries,
     _params_grammar_refusal,
     _params_keys,
     _parse_kv_params,
     _strict_json_dumps,
-    _write_channel_output,
-    _write_wav,
+    _write_mastering_output,
 )
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
@@ -51,8 +51,13 @@ if TYPE_CHECKING:
     from .types import StreamingPlatform
 
 
-def _mastering_report_payload(report: Any) -> dict[str, object]:
-    """Serialize the shared chain report without depending on dataclass internals."""
+def _mastering_report_payload(report: Any, gain_db: float = 0.0) -> dict[str, object]:
+    """Serialize the shared chain report without depending on dataclass internals.
+
+    ``gain_db`` is the output fit's gain: the report describes the file as written,
+    so every level in ``after`` and every band delta moves by exactly that, and the
+    loudness range does not.
+    """
 
     if report is None:
         raise _unknown_error("loaded libsonare did not return a mastering report")
@@ -60,38 +65,46 @@ def _mastering_report_payload(report: Any) -> dict[str, object]:
     after = report.after
     return {
         "before": _loudness_summary_payload(before),
-        "after": _loudness_summary_payload(after),
+        "after": _loudness_summary_payload(after, gain_db),
         "applied_gain_db": report.applied_gain_db,
         "max_gain_reduction_db": report.max_gain_reduction_db,
         "loudness_target_limited": report.loudness_target_limited,
         "loudness_gain_db": _absent_if_none(report.loudness_gain_db),
         **_measured_pairs(
-            report.band_energy_delta_db, "band_energy_delta_db", "band_energy_delta_band"
+            [
+                None if delta is None else float(delta) + gain_db
+                for delta in report.band_energy_delta_db
+            ],
+            "band_energy_delta_db",
+            "band_energy_delta_band",
         ),
     }
 
 
-def _loudness_summary_payload(summary: Any) -> dict[str, object]:
-    return {
-        key: _absent_if_none(getattr(summary, key))
-        for key in (
-            "integrated_lufs",
-            "max_momentary_lufs",
-            "max_short_term_lufs",
-            "true_peak_dbtp",
-            "loudness_range_lu",
-        )
-    }
+def _loudness_summary_payload(summary: Any, gain_db: float = 0.0) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    for key in (
+        "integrated_lufs",
+        "max_momentary_lufs",
+        "max_short_term_lufs",
+        "true_peak_dbtp",
+        "loudness_range_lu",
+    ):
+        value = getattr(summary, key)
+        if value is not None and key != "loudness_range_lu":
+            value = float(value) + gain_db
+        payload[key] = _absent_if_none(value)
+    return payload
 
 
-def _write_mastering_report(path: str, report: Any) -> None:
+def _write_mastering_report(path: str, report: Any, gain_db: float = 0.0) -> None:
     """Write the report through the shared artifact writer.
 
     Routing it there rather than through a bare ``open`` gives the report the
     same atomic replace and the same write-failure exit class as every other
     artifact the CLI produces.
     """
-    payload = _strict_json_dumps(_mastering_report_payload(report)) + "\n"
+    payload = _strict_json_dumps(_mastering_report_payload(report, gain_db)) + "\n"
     _atomic_write_bytes(path, payload.encode("utf-8"))
 
 
@@ -162,6 +175,7 @@ def _chain_config_document(raw: str) -> dict[str, Any]:
 
 def _mastering_chain_payload(
     result: Any,
+    fit: _OutputFit,
     *,
     mode: str,
     output: str,
@@ -172,10 +186,12 @@ def _mastering_chain_payload(
     payload: dict[str, object] = {
         "mode": mode,
         "input_lufs": result.input_lufs,
-        "output_lufs": result.output_lufs,
+        "output_lufs": result.output_lufs + fit.gain_db,
         "applied_gain_db": result.applied_gain_db,
         "output": output,
     }
+    if output:
+        payload["output_gain_db"] = fit.gain_db
     if preset:
         payload["preset"] = preset
     payload["stages"] = list(getattr(result, "stages", []))
@@ -398,14 +414,14 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         mode = "assistant"
     rendered = [result.left, result.right] if stereo else [result.samples]
     output = getattr(args, "output", "") or ""
-    if output:
-        _write_channel_output(output, rendered, result.sample_rate, bits)
+    fit = _write_mastering_output(output, rendered, result.sample_rate, bits)
     if report_path:
-        _write_mastering_report(report_path, result.report)
+        _write_mastering_report(report_path, result.report, fit.gain_db)
 
     if getattr(args, "json", False):
         payload = _mastering_chain_payload(
             result,
+            fit,
             mode=mode,
             output=output,
             # preset selects the assistant's starting config too (see
@@ -430,7 +446,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         stages = list(getattr(result, "stages", []))
         print(f"    Stages:       {', '.join(stages) if stages else '(none)'}")
         print(f"    Input LUFS:  {result.input_lufs:.2f}")
-        print(f"    Output LUFS: {result.output_lufs:.2f}")
+        print(f"    Output LUFS: {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
         if output:
             print(f"    Wrote: {output}")
@@ -488,15 +504,14 @@ def cmd_mastering_normalize_loudness(args: argparse.Namespace) -> int:
 
     rendered = [result.left, result.right] if stereo else [result.samples]
     output = getattr(args, "output", "") or ""
-    if output:
-        _write_channel_output(output, rendered, result.sample_rate, bits)
+    fit = _write_mastering_output(output, rendered, result.sample_rate, bits)
     if report_path:
-        _write_mastering_report(report_path, result.report)
+        _write_mastering_report(report_path, result.report, fit.gain_db)
 
     if getattr(args, "json", False):
         payload = {
             "input_lufs": result.input_lufs,
-            "output_lufs": result.output_lufs,
+            "output_lufs": result.output_lufs + fit.gain_db,
             "applied_gain_db": result.applied_gain_db,
             "target_lufs": getattr(args, "target_lufs", -14.0),
             "ceiling_dbtp": getattr(args, "ceiling_dbtp", -1.0),
@@ -506,11 +521,13 @@ def cmd_mastering_normalize_loudness(args: argparse.Namespace) -> int:
             "sample_rate": result.sample_rate,
             "output": output,
         }
+        if output:
+            payload["output_gain_db"] = fit.gain_db
         print(_strict_json_dumps(payload))
     else:
         print("  Mastering:")
         print(f"    Input LUFS:  {result.input_lufs:.2f}")
-        print(f"    Output LUFS: {result.output_lufs:.2f}")
+        print(f"    Output LUFS: {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
         if output:
             print(f"    Wrote: {output}")
@@ -561,25 +578,26 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
         channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
-    if output:
-        _write_channel_output(output, channels, result.sample_rate, bits)
+    fit = _write_mastering_output(output, channels, result.sample_rate, bits)
 
     if getattr(args, "json", False):
         payload = {
             "processor": processor,
             "input_lufs": result.input_lufs,
-            "output_lufs": result.output_lufs,
+            "output_lufs": result.output_lufs + fit.gain_db,
             "applied_gain_db": result.applied_gain_db,
             "latency_samples": result.latency_samples,
             "sample_rate": result.sample_rate,
             "output": output,
             "stereo": use_stereo,
         }
+        if output:
+            payload["output_gain_db"] = fit.gain_db
         print(_strict_json_dumps(payload))
     else:
         print(f"  Mastering processor: {processor}")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
-        print(f"    Output LUFS:  {result.output_lufs:.2f}")
+        print(f"    Output LUFS:  {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
         if output:
             print(f"    Wrote: {output}")
@@ -638,25 +656,26 @@ def cmd_eq(args: argparse.Namespace) -> int:
         channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
-    if output:
-        _write_channel_output(output, channels, result.sample_rate, bits)
+    fit = _write_mastering_output(output, channels, result.sample_rate, bits)
 
     if getattr(args, "json", False):
         payload = {
             "processor": "eq.equalizer",
             "input_lufs": result.input_lufs,
-            "output_lufs": result.output_lufs,
+            "output_lufs": result.output_lufs + fit.gain_db,
             "applied_gain_db": result.applied_gain_db,
             "latency_samples": result.latency_samples,
             "sample_rate": result.sample_rate,
             "output": output,
             "stereo": use_stereo,
         }
+        if output:
+            payload["output_gain_db"] = fit.gain_db
         print(_strict_json_dumps(payload))
     else:
         print("  Equalizer")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
-        print(f"    Output LUFS:  {result.output_lufs:.2f}")
+        print(f"    Output LUFS:  {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
         if output:
             print(f"    Wrote: {output}")
@@ -737,25 +756,23 @@ def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
         params=params or None,
     )
     output = getattr(args, "output", "") or ""
-    if output:
-        _write_wav(output, result.samples, result.sample_rate, _wav_bits(args))
+    fit = _write_mastering_output(output, [result.samples], result.sample_rate, _wav_bits(args))
     if args.json:
-        print(
-            _strict_json_dumps(
-                {
-                    "processor": args.processor,
-                    "input_lufs": result.input_lufs,
-                    "output_lufs": result.output_lufs,
-                    "applied_gain_db": result.applied_gain_db,
-                    "latency_samples": result.latency_samples,
-                    "output": output,
-                }
-            )
-        )
+        payload = {
+            "processor": args.processor,
+            "input_lufs": result.input_lufs,
+            "output_lufs": result.output_lufs + fit.gain_db,
+            "applied_gain_db": result.applied_gain_db,
+            "latency_samples": result.latency_samples,
+            "output": output,
+        }
+        if output:
+            payload["output_gain_db"] = fit.gain_db
+        print(_strict_json_dumps(payload))
     else:
         print(f"  Mastering pair processor: {args.processor}")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
-        print(f"    Output LUFS:  {result.output_lufs:.2f}")
+        print(f"    Output LUFS:  {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
         print(f"    Latency:      {result.latency_samples} samples")
         if output:

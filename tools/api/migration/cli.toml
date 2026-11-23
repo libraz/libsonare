@@ -805,7 +805,7 @@ frontend = "python"
 [[entry]]
 kind = "command"
 old = "repair"
-changed = "a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as \"--explain cannot be combined with <option>\"; the JSON noise floor lists band_floor_dbfs for the measured bands beside their indices in band_floor_band, and the hum harmonic_dbfs ends at the last measured harmonic"
+changed = "a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as \"--explain cannot be combined with <option>\"; the JSON noise floor lists band_floor_dbfs for the measured bands beside their indices in band_floor_band, and the hum harmonic_dbfs ends at the last measured harmonic; a repaired peak past full scale lowers the whole output by one gain, reported as output_gain_db in --json and as a stderr note, instead of the gain line on stdout"
 domain = "mastering"
 rule = "stereo-pair"
 test = "tests/cli/cli_mastering_test.cpp::CLI repair carries a stereo input through as a stereo pair"
@@ -958,6 +958,14 @@ old = "split-silence --input"
 removed = "pass every take as a positional argument: split-silence a.wav b.wav"
 domain = "analysis"
 rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "split-silence --json"
+changed = "prints an object whose intervals key holds the list it used to print bare, adding output_gain_db with --write-takes and report with --report"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "tests/conformance/cli_contract_v2.json::write_takes_past_full_scale"
 
 [[entry]]
 kind = "flag"
@@ -1465,6 +1473,14 @@ changed = "a value outside the accepted set is refused as a usage error (exit 2)
 domain = "effects"
 rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_validate_order.py::test_every_declared_domain_is_refused_on_the_command_line"
+
+[[entry]]
+kind = "flag"
+old = "normalize --target-db"
+changed = "with --mode peak a target above 0 is refused as a usage error (exit 2) before the input is read, since no output format holds a level above full scale; the JSON reports the written level as output_db"
+domain = "effects"
+rule = "cli-front-end-parity"
+test = "tests/cli/cli_effects_test.cpp::a peak target above 0 dBFS is refused before anything is written"
 
 [[entry]]
 kind = "flag"

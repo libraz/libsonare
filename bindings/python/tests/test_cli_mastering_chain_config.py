@@ -22,6 +22,14 @@ import pytest
 
 from libsonare._mastering_offline import _nest_chain_config
 
+
+def _identity_fit():
+    """A fit that leaves the samples alone: the writer under test is the plain quantizer."""
+    from libsonare._cli_output import _OutputFit
+
+    return _OutputFit()
+
+
 _SAMPLE_RATE = 22_050
 _DURATION_SEC = 0.5
 
@@ -532,7 +540,7 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
         )
         rendered = [mono.samples]
     expected = tmp_path / "facade.wav"
-    _write_channel_output(str(expected), rendered, rate)
+    _write_channel_output(str(expected), rendered, rate, fit=_identity_fit())
     assert output.read_bytes() == expected.read_bytes()
 
     # The multiband block is read, not skipped: without it the render differs.

@@ -919,6 +919,7 @@ _COMMAND_VALIDATORS: dict[str, Callable[[argparse.Namespace, argparse.ArgumentPa
     "dynamic-range": _validate_dynamic_range_percentiles,
     "filter": _validate_filter_frequencies,
     "hpss": _refusal_validator("_cli_effects", "_hpss_refusal"),
+    "normalize": _refusal_validator("_cli_effects", "_normalize_refusal"),
     "trim-silence": _refusal_validator("_cli_effects", "_trim_silence_refusal"),
     "voice-change": _refusal_validator("_cli_effects", "_voice_change_refusal"),
     "voice-preset": _refusal_validator("_cli_effects", "_voice_preset_refusal"),

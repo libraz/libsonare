@@ -18,6 +18,8 @@ from ._cli_common import (
     _fmt_optional,
     _load_channels_or_downmix,
     _measured_pairs,
+    _note_output_fit,
+    _OutputFit,
     _strict_json_dumps,
     _write_channel_output,
     _write_wav,
@@ -211,12 +213,15 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
     # 1/(4*pi*d) attenuation, so its peak sits far below full scale and 16-bit
     # quantization would cost the tail roughly 36 dB of the headroom it needs;
     # half the reported samples came back exactly zero.
-    _write_wav(args.output, result.rir, result.sample_rate, 24)
+    fit = _OutputFit().include(result.rir)
+    _write_wav(args.output, result.rir, result.sample_rate, 24, fit=fit)
+    _note_output_fit(fit)
     if args.json:
         print(
             _strict_json_dumps(
                 {
                     "output": args.output,
+                    "output_gain_db": fit.gain_db,
                     "samples": len(result.rir),
                     "sample_rate": result.sample_rate,
                 }
@@ -265,11 +270,20 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     # not ask for. stderr in every mode, so the JSON document on stdout stays
     # exactly the payload both CLIs publish.
     _print_diagnostic_warnings(result)
-    _write_channel_output(args.output, channels, sr)
+    fit = _OutputFit()
+    for channel in channels:
+        fit.include(channel)
+    _write_channel_output(args.output, channels, sr, fit=fit)
+    _note_output_fit(fit)
     if args.json:
         print(
             _strict_json_dumps(
-                {"output": args.output, "samples": len(channels[0]), "stereo": use_stereo}
+                {
+                    "output": args.output,
+                    "output_gain_db": fit.gain_db,
+                    "samples": len(channels[0]),
+                    "stereo": use_stereo,
+                }
             )
         )
     else:

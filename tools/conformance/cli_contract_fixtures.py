@@ -35,6 +35,31 @@ def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
         output.writeframes(bytes(samples))
 
 
+def _write_float_wav(path: Path, fixture: dict[str, Any]) -> None:
+    """Write the tone as 32-bit IEEE float, the one PCM image that holds a sample past full scale."""
+    sample_rate = int(fixture["sample_rate"])
+    frames = int(fixture["frames"])
+    frequency = float(fixture["frequency_hz"])
+    amplitude = float(fixture["amplitude"])
+    data = b"".join(
+        struct.pack("<f", amplitude * math.sin(2.0 * math.pi * frequency * index / sample_rate))
+        for index in range(frames)
+    )
+    fmt = struct.pack("<HHIIHH", 3, 1, sample_rate, sample_rate * 4, 4, 32)
+    body = (
+        b"WAVE"
+        + b"fmt "
+        + struct.pack("<I", len(fmt))
+        + fmt
+        + b"fact"
+        + struct.pack("<II", 4, frames)
+        + b"data"
+        + struct.pack("<I", len(data))
+        + data
+    )
+    path.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+
+
 def _variable_length_quantity(value: int) -> bytes:
     """Encode a delta time the way a MIDI track spells it, high group first."""
     encoded = bytearray([value & 0x7F])
@@ -114,6 +139,11 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         {**fixtures["audio"], "frequencies_hz": fixtures["audio"]["chord_frequencies_hz"]},
     )
     paths["audio_chord"] = str(chord_path)
+    # The tone past full scale, for the writers that lower a whole output set by one
+    # gain instead of clipping it; a 16-bit fixture cannot carry such a sample.
+    hot_path = directory / "contract-hot.wav"
+    _write_float_wav(hot_path, {**fixtures["audio"], "amplitude": fixtures["audio"]["hot_amplitude"]})
+    paths["audio_hot"] = str(hot_path)
     for name, text in fixtures["projects"].items():
         project_path = directory / f"project_{name}.json"
         project_path.write_text(text, encoding="utf-8")
@@ -148,6 +178,7 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     paths["preset_missing"] = str(directory / "preset-does-not-exist.json")
     paths["melody_missing"] = str(directory / "melody-does-not-exist.mid")
     paths["output"] = str(directory / "rejected-output.wav")
+    paths["split_takes_prefix"] = str(directory / "split-take-")
     # The WAV writers are the only place the two surfaces hold separate code for
     # the same bytes, and a sample with no PCM image is the one input where they
     # can disagree. The writers' guard is not against a non-finite the caller

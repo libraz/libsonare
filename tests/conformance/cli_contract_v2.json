@@ -10835,7 +10835,8 @@
             "latency_samples": "integer",
             "pitch_semitones": "number",
             "formant_factor": "number",
-            "formant_mode": "string"
+            "formant_mode": "string",
+            "output_gain_db": "number"
           }
         },
         "preset": {
@@ -10845,7 +10846,8 @@
             "duration": "number",
             "sample_rate": "integer",
             "latency_samples": "integer",
-            "preset": "string"
+            "preset": "string",
+            "output_gain_db": "number"
           }
         },
         "custom": {
@@ -10854,7 +10856,8 @@
             "length": "integer",
             "duration": "number",
             "sample_rate": "integer",
-            "latency_samples": "integer"
+            "latency_samples": "integer",
+            "output_gain_db": "number"
           }
         }
       },
@@ -12112,7 +12115,8 @@
           "keys": {
             "output": "path",
             "sample_rate": "integer",
-            "samples": "integer"
+            "samples": "integer",
+            "output_gain_db": "number"
           }
         }
       },
@@ -13025,6 +13029,19 @@
             "output": "path"
           }
         },
+        "written": {
+          "keys": {
+            "processor": "string",
+            "stereo": "boolean",
+            "input_lufs": "number",
+            "output_lufs": "number",
+            "applied_gain_db": "number",
+            "latency_samples": "integer",
+            "sample_rate": "integer",
+            "output": "path",
+            "output_gain_db": "number"
+          }
+        },
         "non_finite_output": {
           "keys": {
             "processor": "string",
@@ -13034,7 +13051,8 @@
             "applied_gain_db": "number",
             "latency_samples": "integer",
             "sample_rate": "integer",
-            "output": "path"
+            "output": "path",
+            "output_gain_db": "number"
           }
         }
       },
@@ -13061,7 +13079,7 @@
             "--json"
           ],
           "exit": 0,
-          "payload": "success",
+          "payload": "written",
           "artifact": "none",
           "stdout": "json"
         },
@@ -13119,7 +13137,7 @@
             "--json"
           ],
           "exit": 0,
-          "payload": "success",
+          "payload": "written",
           "artifact": "saturating_wav",
           "stdout": "json"
         }
@@ -13129,19 +13147,19 @@
           "placeholder": "eq_non_finite_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "432fc3613a366c9003ec703283fc18f55fe7618199d61204d43df1a7e5bc4686"
+          "sha256": "7780bac56821b4b2f467f1fa5db376569e2916719817bac35f97198780f8e0c4"
         },
         "non_finite_wav_24bit": {
           "placeholder": "eq_non_finite_output_24bit",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "c82dcb977844e36e1cfdc477788e37ed12f3f8f2ae41996a2fb2740274295e72"
+          "sha256": "7107af60417f3760511610fae05271b9589f3e3cd4fc8655b119d17342983b09"
         },
         "saturating_wav": {
           "placeholder": "eq_saturating_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "8bf8e752144973eb33ea5e79a255d07aacf2ccabe6123ee11a3e80d7bcd167ab"
+          "sha256": "f714c1bfda8e2b5e4e55f41b78827d3e25c5e2833df66369af5bf1fd996379c2"
         }
       }
     },
@@ -13456,7 +13474,9 @@
             "target_db": "number",
             "length": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_db": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -13603,7 +13623,8 @@
             "pitch_semitones": "number",
             "length": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -13716,7 +13737,8 @@
             "rate": "number",
             "length": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -13805,7 +13827,8 @@
             "target_midi": "number",
             "length": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -13958,7 +13981,8 @@
             "ratio": "number",
             "length": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -14633,7 +14657,8 @@
             "threshold_db": "number",
             "n_fft": "integer",
             "hop_length": "integer",
-            "output": "path"
+            "output": "path",
+            "output_gain_db": "number"
           }
         }
       },
@@ -14734,11 +14759,15 @@
       ],
       "payloads": {
         "success": {
-          "type": "array",
-          "items": {
-            "keys": {
-              "start_sample": "integer",
-              "end_sample": "integer"
+          "keys": {
+            "intervals": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "start_sample": "integer",
+                  "end_sample": "integer"
+                }
+              }
             }
           }
         },
@@ -14760,6 +14789,20 @@
                 "min_signal_intervals": "integer"
               }
             }
+          }
+        },
+        "written": {
+          "keys": {
+            "intervals": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "start_sample": "integer",
+                  "end_sample": "integer"
+                }
+              }
+            },
+            "output_gain_db": "number"
           }
         }
       },
@@ -14831,6 +14874,39 @@
             "silence ceiling",
             "--top-db",
             "intervals per signal:"
+          ]
+        },
+        {
+          "id": "write_takes",
+          "argv": [
+            "split-silence",
+            "{audio}",
+            "--json",
+            "--write-takes",
+            "{split_takes_prefix}"
+          ],
+          "exit": 0,
+          "payload": "written",
+          "artifact": "none",
+          "stdout": "json",
+          "stderr": "empty"
+        },
+        {
+          "id": "write_takes_past_full_scale",
+          "argv": [
+            "split-silence",
+            "{audio_hot}",
+            "{audio}",
+            "--json",
+            "--write-takes",
+            "{split_takes_prefix}"
+          ],
+          "exit": 0,
+          "payload": "written",
+          "artifact": "none",
+          "stdout": "json",
+          "stderr_contains": [
+            "Output lowered by 6.02 dB"
           ]
         }
       ],
@@ -14981,7 +15057,8 @@
             "harmonic_mean_abs": "number",
             "percussive_mean_abs": "number",
             "harmonic": "path",
-            "percussive": "path"
+            "percussive": "path",
+            "output_gain_db": "number"
           }
         }
       },
@@ -16400,7 +16477,8 @@
             "edits": "integer",
             "length": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -16789,7 +16867,8 @@
             "length": "integer",
             "source_sample_rate": "integer",
             "target_sample_rate": "integer",
-            "output": "string"
+            "output": "string",
+            "output_gain_db": "number"
           }
         }
       },
@@ -17068,7 +17147,8 @@
           "keys": {
             "output": "string",
             "samples": "integer",
-            "stereo": "boolean"
+            "stereo": "boolean",
+            "output_gain_db": "number"
           }
         }
       },
@@ -17784,7 +17864,8 @@
             "frames": "integer",
             "channels": "integer",
             "sample_rate": "integer",
-            "synth": "boolean"
+            "synth": "boolean",
+            "output_gain_db": "number"
           }
         }
       },
@@ -19568,7 +19649,8 @@
                   }
                 }
               }
-            }
+            },
+            "unreconstructed_runs": "integer"
           }
         }
       },
@@ -20624,7 +20706,8 @@
             "length": "integer",
             "sample_rate": "integer",
             "duration": "number",
-            "output": "path"
+            "output": "path",
+            "output_gain_db": "number"
           }
         }
       },
@@ -21057,7 +21140,8 @@
             "length": "integer",
             "sample_rate": "integer",
             "duration": "number",
-            "output": "path"
+            "output": "path",
+            "output_gain_db": "number"
           }
         }
       },
@@ -21709,7 +21793,8 @@
             "components": {
               "type": "array",
               "items": "path"
-            }
+            },
+            "output_gain_db": "number"
           }
         }
       },
@@ -21914,7 +21999,8 @@
             "frames": "integer",
             "channels": "integer",
             "sample_rate": "integer",
-            "synth": "boolean"
+            "synth": "boolean",
+            "output_gain_db": "number"
           }
         }
       },
@@ -22875,7 +22961,8 @@
                 "likely_mono_compatible": "boolean",
                 "max_true_peak_db": "number"
               }
-            }
+            },
+            "output_gain_db": "number"
           }
         }
       },
@@ -23117,7 +23204,8 @@
             "note_count": "integer",
             "length": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -23632,7 +23720,8 @@
             "loudness_gain_clamped": "boolean",
             "hrtf_ignored": "boolean",
             "limiter_gain_reduction_db": "number",
-            "non_finite_discards": "integer"
+            "non_finite_discards": "integer",
+            "output_gain_db": "number"
           }
         }
       },
@@ -23753,7 +23842,8 @@
           "keys": {
             "output": "path",
             "gain_db": "number",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -23854,7 +23944,8 @@
             "output": "path",
             "fade_in_sec": "number",
             "fade_out_sec": "number",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -24032,7 +24123,8 @@
             "order": "integer",
             "cutoff_hz": "number",
             "zero_phase": "boolean",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         },
         "band": {
@@ -24043,7 +24135,8 @@
             "center_hz": "number",
             "bandwidth_hz": "number",
             "zero_phase": "boolean",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -24259,7 +24352,8 @@
             "strip_count": "integer",
             "sample_rate": "integer",
             "rendered_samples": "integer",
-            "output": "string"
+            "output": "string",
+            "output_gain_db": "number"
           }
         }
       },
@@ -24524,7 +24618,8 @@
             "output": "path",
             "frequency_hz": "number",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -24696,7 +24791,8 @@
             "fmax_hz": "number",
             "sample_rate": "integer",
             "duration": "number",
-            "linear": "boolean"
+            "linear": "boolean",
+            "output_gain_db": "number"
           }
         }
       },
@@ -24860,7 +24956,8 @@
             "output": "path",
             "n_clicks": "integer",
             "sample_rate": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -27994,7 +28091,8 @@
           "keys": {
             "output": "path",
             "coef": "number",
-            "samples": "integer"
+            "samples": "integer",
+            "output_gain_db": "number"
           }
         }
       },
@@ -28069,7 +28167,8 @@
           "keys": {
             "output": "path",
             "coef": "number",
-            "samples": "integer"
+            "samples": "integer",
+            "output_gain_db": "number"
           }
         }
       },
@@ -28222,7 +28321,8 @@
             "n_mels": "integer",
             "n_frames": "integer",
             "n_iter": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -28393,7 +28493,8 @@
             "n_mfcc": "integer",
             "n_frames": "integer",
             "n_iter": "integer",
-            "duration": "number"
+            "duration": "number",
+            "output_gain_db": "number"
           }
         }
       },
@@ -28989,7 +29090,8 @@
       "other_rate_take": {
         "sample_rate": 32000,
         "frames": 14400
-      }
+      },
+      "hot_amplitude": 2.0
     },
     "melodies": {
       "reference": {

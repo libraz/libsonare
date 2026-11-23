@@ -16,6 +16,8 @@ from ._cli_common import (
     _json_key_to_snake_case,
     _library_token,
     _load_audio_channels,
+    _note_output_fit,
+    _OutputFit,
     _set_nested_value,
     _strict_json_dumps,
     _write_frame_major_wav,
@@ -241,14 +243,22 @@ def cmd_playback(args: argparse.Namespace) -> int:
         if hrtf is not None:
             hrtf.close()
 
-    frames, _ = _write_frame_major_wav(args.output, rendered, sample_rate)
+    fit = _OutputFit().include(rendered)
+    frames, _ = _write_frame_major_wav(args.output, rendered, sample_rate, fit=fit)
+    _note_output_fit(fit)
 
     if args.json:
         # Field names follow CLI stdout; the stage tokens keyed under latency.stages
         # are values, the same ones inactive_stages lists, so only the top level moves.
         print(
             _strict_json_dumps(
-                {_json_key_to_snake_case(key): value for key, value in (diagnostics or {}).items()}
+                {
+                    **{
+                        _json_key_to_snake_case(key): value
+                        for key, value in (diagnostics or {}).items()
+                    },
+                    "output_gain_db": fit.gain_db,
+                }
             )
         )
     else:

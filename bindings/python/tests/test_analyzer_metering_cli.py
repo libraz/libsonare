@@ -360,12 +360,14 @@ def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
 
 def test_project_bounce_wav_writer_preserves_more_than_two_channels(tmp_path) -> None:
     from libsonare import cli
+    from libsonare._cli_output import _OutputFit
 
     output = tmp_path / "surround.wav"
     frames, channels = cli._write_project_bounce_wav(
         str(output),
         [[0.1, 0.2, 0.3, 0.4], [0.0, -0.1, -0.2, -0.3]],
         48000,
+        fit=_OutputFit(),
     )
 
     assert frames == 2

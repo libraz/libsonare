@@ -9,6 +9,13 @@ from ._analyzer_helpers import *
 from ._analyzer_helpers import _run_cli, _write_test_wav
 
 
+def _identity_fit():
+    """A fit that leaves the samples alone: the writer under test is the plain quantizer."""
+    from libsonare._cli_output import _OutputFit
+
+    return _OutputFit()
+
+
 def _write_stereo_wav(path: str, left: list[float], right: list[float], sample_rate: int) -> None:
     """Write stereo 16-bit PCM using only the standard library."""
     frames = bytearray()
@@ -407,7 +414,9 @@ def test_repair_cli_repairs_a_pair_as_the_stereo_declip_does(tmp_path) -> None:
         pair = mastering_repair_declip_stereo(
             left.data, right.data, sample_rate=left.sample_rate, clip_threshold_db=detect_at_db
         )
-        _write_channel_output(str(via_library), [pair.left, pair.right], left.sample_rate)
+        _write_channel_output(
+            str(via_library), [pair.left, pair.right], left.sample_rate, fit=_identity_fit()
+        )
     with wave.open(str(via_repair), "rb") as wav:
         assert wav.getnchannels() == 2
     assert _side_energy(str(via_repair)) > 0

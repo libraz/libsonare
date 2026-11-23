@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import math
 from typing import TYPE_CHECKING, Any, cast
-
-import numpy as np
 
 from ._cli_common import (
     _load_channels_or_downmix,
     _params_entries,
     _params_grammar_refusal,
     _strict_json_dumps,
-    _write_channel_output,
+    _write_mastering_output,
 )
 from ._cli_inventory import _cli_domain, _token_of
 from ._cli_options import (
@@ -174,32 +171,6 @@ def _repair_explanation(explanation: list[str]) -> list[str]:
         for line in explanation
         if line.startswith(_REPAIR_EXPLANATION_PREFIXES) or "repair" in line
     ]
-
-
-def _fit_repair_output_to_full_scale(channels: list[Any]) -> tuple[list[Any], float]:
-    """Scale ``channels`` so their joint peak lands at full scale.
-
-    Returns the channels to write and the applied gain in dB (``0.0`` when the
-    peak already fit and nothing was touched). One gain across the channels
-    leaves the stereo image alone.
-
-    Declipping reconstructs the peaks a clipper cut off, so its output routinely
-    exceeds full scale -- and this command deliberately runs no limiter. The
-    integer writer clamps, which pins exactly the samples the repair just
-    rebuilt back onto the ceiling they were rescued from, undoing the stage that
-    was asked for. One gain for the whole file keeps the reconstructed waveform
-    intact; a per-sample fit would be the clipper again.
-    """
-    # A non-finite sample would make every comparison false and leave the peak
-    # at 0, so the scale is skipped rather than turned into a NaN gain.
-    buffers = [np.asarray(channel, dtype=np.float64) for channel in channels]
-    peak = max(
-        float(np.max(np.abs(buffer[np.isfinite(buffer)]), initial=0.0)) for buffer in buffers
-    )
-    if peak <= 1.0:
-        return channels, 0.0
-    gain = 1.0 / peak
-    return [buffer * gain for buffer in buffers], 20.0 * math.log10(gain)
 
 
 # Each detector group of the profile's ``defects`` object, with the wire key
@@ -400,10 +371,14 @@ def cmd_repair(args: argparse.Namespace) -> int:
         explanation = _repair_explanation(suggestion.explanation)
 
     stages = list(getattr(result, "stages", []))
-    rendered, output_gain_db = _fit_repair_output_to_full_scale(
-        [result.left, result.right] if stereo else [result.samples]
+    # Declipping rebuilds peaks past full scale and this command runs no limiter, so the
+    # writer's fit is what keeps the rebuilt samples off the ceiling they were rescued from.
+    fit = _write_mastering_output(
+        output,
+        [result.left, result.right] if stereo else [result.samples],
+        result.sample_rate,
+        bits,
     )
-    _write_channel_output(output, rendered, result.sample_rate, bits)
 
     if getattr(args, "json", False):
         payload: dict[str, object] = {"mode": mode}
@@ -416,7 +391,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
         # Always emitted, 0 when the peak already fit: a key that appeared only
         # on the files it acted on would make its absence mean both "did not
         # clip" and "this build does not report it".
-        payload["output_gain_db"] = output_gain_db
+        payload["output_gain_db"] = fit.gain_db
         if defects is not None:
             payload["defects"] = defects
         print(_strict_json_dumps(payload))
@@ -425,8 +400,6 @@ def cmd_repair(args: argparse.Namespace) -> int:
         if preset:
             print(f"    Preset:  {preset}")
         print(f"    Stages:  {', '.join(stages) if stages else '(none)'}")
-        if output_gain_db != 0.0:
-            print(f"    Gain:    {output_gain_db} dB (the repair rebuilt peaks past full scale)")
         if explain:
             if explanation:
                 for line in explanation:

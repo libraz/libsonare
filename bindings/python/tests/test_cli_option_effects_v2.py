@@ -118,7 +118,7 @@ def test_hpss_forwards_all_controls_and_writes_selected_artifacts(
     monkeypatch.setattr(
         effects,
         "_write_wav",
-        lambda path, samples, sample_rate: writes.append((path, list(samples), sample_rate)),
+        lambda path, samples, sample_rate, fit: writes.append((path, list(samples), sample_rate)),
     )
 
     assert (
@@ -156,7 +156,7 @@ def test_hpss_residual_mode_writes_three_artifacts_and_conflicts_are_rejected(
     monkeypatch.setattr(
         effects,
         "_write_wav",
-        lambda path, _samples, _sample_rate: writes.append(path),
+        lambda path, _samples, _sample_rate, fit: writes.append(path),
     )
     monkeypatch.setattr(
         libsonare,

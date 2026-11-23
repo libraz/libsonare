@@ -22,6 +22,8 @@ from ._cli_common import (
     _load_channels_or_downmix,
     _load_voice_preset_pack,
     _mean_abs,
+    _note_output_fit,
+    _OutputFit,
     _resample,
     _strict_json_dumps,
     _voice_set_refusal,
@@ -93,6 +95,18 @@ def _hpss_refusal(args: argparse.Namespace) -> str | None:
             "--percussive-only, or --with-residual"
         )
     return None
+
+
+def _normalize_refusal(args: argparse.Namespace) -> str | None:
+    # A peak target above full scale is out of reach for any input: the writer fits the
+    # peak back to 0 dBFS. An RMS target depends on the crest, so it is fitted and reported.
+    target_db = getattr(args, "target_db", None)
+    if str(getattr(args, "mode", "peak")).lower() != "peak" or target_db is None or target_db <= 0:
+        return None
+    return (
+        "argument --target-db: must be at most 0 for a peak target: "
+        "the output format cannot hold a level above full scale"
+    )
 
 
 def _trim_silence_refusal(args: argparse.Namespace) -> str | None:
@@ -196,8 +210,19 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         residual = _audio_array([])
         output_sr = int(result.sample_rate)
 
-    h_energy = _mean_abs(harmonic)
-    p_energy = _mean_abs(percussive)
+    # The components sum to the input, so the files one run writes share one gain,
+    # and the levels reported are those of the files as written.
+    fit = _OutputFit()
+    if modes == ["harmonic_only"]:
+        fit.include(harmonic)
+    elif modes == ["percussive_only"]:
+        fit.include(percussive)
+    else:
+        fit.include(harmonic).include(percussive)
+        if modes == ["with_residual"]:
+            fit.include(residual)
+    h_energy = _mean_abs(harmonic) * fit.gain
+    p_energy = _mean_abs(percussive) * fit.gain
 
     harmonic_path = ""
     percussive_path = ""
@@ -206,18 +231,19 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         base = args.output[:-4] if args.output.lower().endswith(".wav") else args.output
         if modes == ["harmonic_only"]:
             harmonic_path = f"{base}.wav"
-            _write_wav(harmonic_path, harmonic, output_sr)
+            _write_wav(harmonic_path, harmonic, output_sr, fit=fit)
         elif modes == ["percussive_only"]:
             percussive_path = f"{base}.wav"
-            _write_wav(percussive_path, percussive, output_sr)
+            _write_wav(percussive_path, percussive, output_sr, fit=fit)
         else:
             harmonic_path = f"{base}_harmonic.wav"
             percussive_path = f"{base}_percussive.wav"
-            _write_wav(harmonic_path, harmonic, output_sr)
-            _write_wav(percussive_path, percussive, output_sr)
+            _write_wav(harmonic_path, harmonic, output_sr, fit=fit)
+            _write_wav(percussive_path, percussive, output_sr, fit=fit)
             if modes == ["with_residual"]:
                 residual_path = f"{base}_residual.wav"
-                _write_wav(residual_path, residual, output_sr)
+                _write_wav(residual_path, residual, output_sr, fit=fit)
+        _note_output_fit(fit)
 
     if args.json:
         # Each component's mean absolute amplitude is reported only when that component is part
@@ -225,6 +251,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         # keys on both CLIs -- the native one never separates the other half.
         payload: dict[str, object] = {
             "length": len(percussive) if modes == ["percussive_only"] else len(harmonic),
+            "output_gain_db": fit.gain_db,
             "sample_rate": output_sr,
         }
         if modes != ["percussive_only"]:
@@ -232,7 +259,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         if modes != ["harmonic_only"]:
             payload["percussive_mean_abs"] = p_energy
         if residual.size:
-            payload["residual_mean_abs"] = _mean_abs(residual)
+            payload["residual_mean_abs"] = _mean_abs(residual) * fit.gain
         if harmonic_path:
             payload["harmonic"] = harmonic_path
         if percussive_path:
@@ -245,7 +272,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         print(f"  Harmonic energy:   {h_energy:.6f}")
         print(f"  Percussive energy: {p_energy:.6f}")
         if residual.size:
-            print(f"  Residual energy:   {_mean_abs(residual):.6f}")
+            print(f"  Residual energy:   {_mean_abs(residual) * fit.gain:.6f}")
         paths = [path for path in (harmonic_path, percussive_path, residual_path) if path]
         if paths:
             print(f"  Wrote: {', '.join(paths)}")
@@ -270,15 +297,21 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
     # uses for its two: the destination names the set, not a single file.
     base = args.output[:-4] if args.output.lower().endswith(".wav") else args.output
     paths = [f"{base}_component{index}.wav" for index in range(1, len(components) + 1)]
+    # The components sum to the input, so they share one gain and keep summing to it.
+    fit = _OutputFit()
+    for component in components:
+        fit.include(component)
     for path, component in zip(paths, components, strict=True):
-        _write_wav(path, component, output_sr)
+        _write_wav(path, component, output_sr, fit=fit)
+    _note_output_fit(fit)
 
-    energies = [_mean_abs(component) for component in components]
+    energies = [_mean_abs(component) * fit.gain for component in components]
     if args.json:
         print(
             _strict_json_dumps(
                 {
                     "count": len(components),
+                    "output_gain_db": fit.gain_db,
                     "length": len(components[0]) if components else 0,
                     "sample_rate": output_sr,
                     "energies": energies,
@@ -358,12 +391,23 @@ def cmd_normalize(args: argparse.Namespace) -> int:
         mono = normalize(planes[0], sample_rate=sr, mode=checked_mode, target_db=given)
         channels = [mono]
 
+    # The library's result is unclipped: a level past full scale reaches the
+    # writer's fit, which lowers the whole file instead of flattening the peaks.
+    fit = _OutputFit()
+    for channel in channels:
+        fit.include(channel)
     return _emit_effect_result(
         args,
         channels,
         sr,
-        extra={"mode": mode, "target_db": target_db},
+        # The level of the file as written: the target, less whatever the fit took off.
+        extra={
+            "mode": mode,
+            "target_db": target_db,
+            "output_db": float(np.float32(target_db) + np.float32(fit.gain_db)),
+        },
         label=f"Normalize ({mode}, target {target_db:.2f} dB)",
+        fit=fit,
     )
 
 
@@ -447,35 +491,36 @@ def cmd_split_silence(args: argparse.Namespace) -> int:
     report = split.report
 
     write_takes = getattr(args, "write_takes", None)
+    fit = _OutputFit()
     if write_takes:
-        for take_index, take in enumerate(takes, start=1):
-            for interval_index, (start, end) in enumerate(intervals, start=1):
+        # The slices are parts of takes meant to be compared, so they share one gain.
+        slices = [
+            [_split_silence_slice(take, start, end) for start, end in intervals] for take in takes
+        ]
+        for take_slices in slices:
+            for window in take_slices:
+                fit.include(window)
+        for take_index, take_slices in enumerate(slices, start=1):
+            for interval_index, window in enumerate(take_slices, start=1):
                 _write_wav(
-                    f"{write_takes}{take_index:02d}_{interval_index:03d}.wav",
-                    _split_silence_slice(take, start, end),
-                    sr,
+                    f"{write_takes}{take_index:02d}_{interval_index:03d}.wav", window, sr, fit=fit
                 )
+        _note_output_fit(fit)
 
     with_report = bool(getattr(args, "report", False))
     interval_rows = [{"start_sample": start, "end_sample": end} for start, end in intervals]
     if args.json:
-        # --report wraps the result rather than replacing it, so without the flag
-        # the payload is the bare array it has always been.
+        # One object whatever the flags; the gain and the report are present when their flag is.
+        document: dict[str, object] = {"intervals": interval_rows}
+        if write_takes:
+            document["output_gain_db"] = fit.gain_db
         if with_report:
-            print(
-                _strict_json_dumps(
-                    {
-                        "intervals": interval_rows,
-                        "report": {
-                            "silence_ceiling_db": report.silence_ceiling_db,
-                            "max_signal_intervals": report.max_signal_intervals,
-                            "min_signal_intervals": report.min_signal_intervals,
-                        },
-                    }
-                )
-            )
-        else:
-            print(_strict_json_dumps(interval_rows))
+            document["report"] = {
+                "silence_ceiling_db": report.silence_ceiling_db,
+                "max_signal_intervals": report.max_signal_intervals,
+                "min_signal_intervals": report.min_signal_intervals,
+            }
+        print(_strict_json_dumps(document))
     else:
         print(f"Non-silent intervals: {len(intervals)}")
         for start, end in intervals:
@@ -504,8 +549,10 @@ def cmd_resample(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     result = _resample(samples, sr, target_rate)
 
+    fit = _OutputFit().include(result)
     if args.output:
-        _write_wav(args.output, result, target_rate)
+        _write_wav(args.output, result, target_rate, fit=fit)
+        _note_output_fit(fit)
 
     if args.json:
         payload: dict[str, object] = {
@@ -515,6 +562,7 @@ def cmd_resample(args: argparse.Namespace) -> int:
         }
         if args.output:
             payload["output"] = args.output
+        payload["output_gain_db"] = fit.gain_db
         print(_strict_json_dumps(payload))
     else:
         print(f"  Resample ({sr} -> {target_rate} Hz): {len(result)} samples")

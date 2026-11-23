@@ -504,6 +504,7 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
                 "chord_frequencies_hz",
                 "take_frames",
                 "other_rate_take",
+                "hot_amplitude",
             },
             "manifest.fixtures.audio",
             errors,
@@ -527,6 +528,11 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
             for key in ("frequency_hz", "amplitude"):
                 if not _is_number(audio[key]):
                     errors.append(f"manifest.fixtures.audio.{key}: expected a finite number")
+            # Past full scale, so a writer that fits its output set has a gain to apply.
+            if not _is_number(audio["hot_amplitude"]) or audio["hot_amplitude"] <= 1.0:
+                errors.append(
+                    "manifest.fixtures.audio.hot_amplitude: expected a finite number above 1.0"
+                )
             chord = audio["chord_frequencies_hz"]
             if (
                 not isinstance(chord, list)

@@ -61,7 +61,7 @@ def test_tone(tmp_path: Path) -> None:
         + ["--phase", "0.5", "--amplitude", "0.5", "-o", str(out)]
     )
     expected = libsonare.tone(440.0, sr=8000, duration=0.01, phi=0.5, amplitude=0.5)
-    assert set(payload) == {"output", "frequency_hz", "sample_rate", "duration"}
+    assert set(payload) == {"output", "output_gain_db", "frequency_hz", "sample_rate", "duration"}
     assert payload["frequency_hz"] == 440 and payload["sample_rate"] == 8000
     assert _wav_frames(out) == (len(expected), 8000)
     _approx(payload["duration"], len(expected) / 8000)
@@ -74,7 +74,15 @@ def test_chirp(tmp_path: Path) -> None:
         + ["--fmin-hz", "100", "--exponential", "-o", str(out)]
     )
     expected = libsonare.chirp(100.0, 2000.0, sr=8000, duration=0.01, linear=False)
-    assert set(payload) == {"output", "fmin_hz", "fmax_hz", "sample_rate", "duration", "linear"}
+    assert set(payload) == {
+        "output",
+        "output_gain_db",
+        "fmin_hz",
+        "fmax_hz",
+        "sample_rate",
+        "duration",
+        "linear",
+    }
     assert payload["linear"] is False and payload["fmin_hz"] == 100
     assert _wav_frames(out) == (len(expected), 8000)
 
@@ -85,7 +93,7 @@ def test_clicks(tmp_path: Path) -> None:
         ["clicks", "--times", "0.1,0.2", "--length", "2000", "--sample-rate", "8000"]
         + ["-o", str(out)]
     )
-    assert set(payload) == {"output", "n_clicks", "sample_rate", "duration"}
+    assert set(payload) == {"output", "output_gain_db", "n_clicks", "sample_rate", "duration"}
     assert payload["n_clicks"] == 2
     assert _wav_frames(out) == (2000, 8000)
 

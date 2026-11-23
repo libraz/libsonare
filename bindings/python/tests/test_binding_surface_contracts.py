@@ -142,22 +142,27 @@ def test_cli_mean_abs_matches_the_definition() -> None:
     assert _mean_abs(np.array([-1.0, 3.0], dtype=np.float32)) == pytest.approx(2.0)
 
 
-def test_repair_full_scale_fit_scales_by_one_gain() -> None:
-    from libsonare._cli_repair import _fit_repair_output_to_full_scale
+def test_output_fit_scales_a_set_by_one_gain() -> None:
+    from libsonare._cli_output import _OutputFit
 
-    quiet = [[0.5, -0.25]]
-    same, gain_db = _fit_repair_output_to_full_scale(quiet)
-    assert same is quiet and gain_db == 0.0
+    # A peak of exactly 1.0 is not fitted, and non-finite samples do not set the peak.
+    fit = _OutputFit().include([0.5, -1.0]).include([math.nan, math.inf])
+    assert fit.gain == 1.0 and fit.gain_db == 0.0
+    quiet = [0.5, -0.25]
+    assert fit.apply(quiet) is quiet
+
     loud = np.array([2.0, -1.0, math.nan, 0.5], dtype=np.float32)
-    (fitted,), gain_db = _fit_repair_output_to_full_scale([loud])
-    assert gain_db == pytest.approx(20.0 * math.log10(0.5))
+    fit = _OutputFit().include(loud)
+    assert fit.gain_db == pytest.approx(20.0 * math.log10(0.5), abs=1e-6)
+    fitted = fit.apply(loud)
     assert fitted[0] == pytest.approx(1.0) and fitted[1] == pytest.approx(-0.5)
     assert math.isnan(fitted[2])
-    # A pair takes the gain its louder channel needs, on both channels.
-    (left, right), gain_db = _fit_repair_output_to_full_scale([[0.5, 0.25], [4.0, -2.0]])
-    assert gain_db == pytest.approx(20.0 * math.log10(0.25))
-    assert list(left) == pytest.approx([0.125, 0.0625])
-    assert list(right) == pytest.approx([1.0, -0.5])
+
+    # A set takes the gain its loudest buffer needs, on every buffer.
+    fit = _OutputFit().include([0.5, 0.25]).include([4.0, -2.0])
+    assert fit.gain_db == pytest.approx(20.0 * math.log10(0.25), abs=1e-6)
+    assert list(fit.apply([0.5, 0.25])) == pytest.approx([0.125, 0.0625])
+    assert list(fit.apply([4.0, -2.0])) == pytest.approx([1.0, -0.5])
 
 
 def test_source_span_destination_positions_are_required_and_zero_is_a_position() -> None:

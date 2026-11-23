@@ -75,6 +75,7 @@ def test_voice_change_simple_json_has_sample_preserving_common_schema(tmp_path: 
         "duration",
         "sample_rate",
         "latency_samples",
+        "output_gain_db",
         "pitch_semitones",
         "formant_factor",
         "formant_mode",
@@ -176,6 +177,7 @@ def test_voice_change_preset_json_reports_resolved_chain_latency(tmp_path: Path)
         "duration",
         "sample_rate",
         "latency_samples",
+        "output_gain_db",
         "preset",
     }
     assert payload["output"] == str(output)
@@ -257,6 +259,7 @@ def test_voice_change_custom_preset_json_omits_inferred_preset_id(tmp_path: Path
         "duration",
         "sample_rate",
         "latency_samples",
+        "output_gain_db",
     }
     assert payload["length"] == input_length
     assert payload["duration"] == input_length / sample_rate

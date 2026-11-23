@@ -5523,6 +5523,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairStage` | discriminated union: ({stage:'declick'} & DeclickOptions) \| ({stage:'declip'} & DeclipOptions) \| ({stage:'decrackle'} & DecrackleOptions) \| ({stage:'dehum'} & DehumOptions) \| ({stage:'denoise'} & DenoiseClassicalOptions) \| ({stage:'dereverb'} & DereverbClassicalOptions) |
+| `NormalizeRequest.targetDb` | the result is no longer clipped to [-1, 1] and a target above 0 dB is accepted in both modes; fit or limit the result before writing an integer format |
+| `NormalizeStereoRequest.targetDb` | the result is no longer clipped to [-1, 1] and a target above 0 dB is accepted in both modes; fit or limit the result before writing an integer format |
 | `NoteEdit` | every field readonly |
 | `NoteObject.amplitude` | readonly |
 | `NoteObject.edit` | readonly |
@@ -10145,6 +10147,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairStage` | discriminated union: ({stage:'declick'} & DeclickOptions) \| ({stage:'declip'} & DeclipOptions) \| ({stage:'decrackle'} & DecrackleOptions) \| ({stage:'dehum'} & DehumOptions) \| ({stage:'denoise'} & DenoiseClassicalOptions) \| ({stage:'dereverb'} & DereverbClassicalOptions) |
+| `NormalizeRequest.targetDb` | the result is no longer clipped to [-1, 1] and a target above 0 dB is accepted in both modes; fit or limit the result before writing an integer format |
+| `NormalizeStereoRequest.targetDb` | the result is no longer clipped to [-1, 1] and a target above 0 dB is accepted in both modes; fit or limit the result before writing an integer format |
 | `NoteEdit` (`./analysis`) | every field readonly |
 | `NoteEdit` | every field readonly |
 | `NoteObject.amplitude` (`./analysis`) | readonly |
@@ -12553,7 +12557,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 ## Command line
 
-The native `sonare-cli` and the Python `sonare` take the same commands, options and defaults; a row marked for one CLI applies to that front-end only. Input files are positional arguments. A failure exits with the code of its cause on both front-ends: 2 a usage error (decided before the input is read), 3 an invalid parameter, 4 an input that cannot be found or read, 5 a document that cannot be parsed, 6 audio that cannot be decoded, 7 out of memory, 8 not supported, 9 invalid state, 10 another error, 11 cancelled, 12 an output that cannot be written, 13 an ABI mismatch (Python only) and 14 a stale result. `SONARE_LEGACY_EXIT` is not read.
+The native `sonare-cli` and the Python `sonare` take the same commands, options and defaults; a row marked for one CLI applies to that front-end only. Input files are positional arguments. A failure exits with the code of its cause on both front-ends: 2 a usage error (decided before the input is read), 3 an invalid parameter, 4 an input that cannot be found or read, 5 a document that cannot be parsed, 6 audio that cannot be decoded, 7 out of memory, 8 not supported, 9 invalid state, 10 another error, 11 cancelled, 12 an output that cannot be written, 13 an ABI mismatch (Python only) and 14 a stale result. `SONARE_LEGACY_EXIT` is not read. A written output whose peak passes full scale is lowered by one gain until it fits instead of being clipped: `--json` reports the gain as `output_gain_db`, a stderr note states it, and a set meant to be summed (stems, hpss components, split-silence takes) shares one gain.
 
 ### Command line: Loading, versions, audio buffers and errors
 
@@ -12784,6 +12788,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `scale-quantize --root` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `sections --threshold` (native CLI only) | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `sections` (python CLI only) | the JSON carries form, the section letters the native command already reported |
+| `split-silence --json` | prints an object whose intervals key holds the list it used to print bare, adding output_gain_db with --write-takes and report with --report |
 | `transcribe --max-polyphony` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `transcribe --min-frame-peak-ratio` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `transcribe --min-note-division` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -12888,6 +12893,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `hpss --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `normalize --mode` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `normalize --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
+| `normalize --target-db` | with --mode peak a target above 0 is refused as a usage error (exit 2) before the input is read, since no output format holds a level above full scale; the JSON reports the written level as output_db |
 | `note-move --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `note-stretch --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `pitch-correct --output` | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -12973,7 +12979,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `repair` | a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as "--explain cannot be combined with <option>"; the JSON noise floor lists band_floor_dbfs for the measured bands beside their indices in band_floor_band, and the hum harmonic_dbfs ends at the last measured harmonic |
+| `repair` | a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as "--explain cannot be combined with <option>"; the JSON noise floor lists band_floor_dbfs for the measured bands beside their indices in band_floor_band, and the hum harmonic_dbfs ends at the last measured harmonic; a repaired peak past full scale lowers the whole output by one gain, reported as output_gain_db in --json and as a stderr note, instead of the gain line on stdout |
 
 #### Historical aliases are removed
 

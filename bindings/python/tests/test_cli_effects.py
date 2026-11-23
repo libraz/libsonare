@@ -11,6 +11,13 @@ from ._analyzer_helpers import _run_cli, _write_test_wav
 from ._helpers import patch_mono_decode
 
 
+def _identity_fit():
+    """A fit that leaves the samples alone: the writer under test is the plain quantizer."""
+    from libsonare._cli_output import _OutputFit
+
+    return _OutputFit()
+
+
 @pytest.mark.parametrize(
     ("command", "extra"),
     [
@@ -349,12 +356,12 @@ def test_split_silence_cli_unions_the_takes(tmp_path) -> None:
 
     alone = _run_cli(["split-silence", take_a, "--json"])
     assert alone.returncode == 0, alone.stderr
-    alone_intervals = json.loads(alone.stdout)
+    alone_intervals = json.loads(alone.stdout)["intervals"]
     assert not _split_silence_covers(alone_intervals, only_b_sample)
 
     both = _run_cli(["split-silence", take_a, take_b, "--json"])
     assert both.returncode == 0, both.stderr
-    both_intervals = json.loads(both.stdout)
+    both_intervals = json.loads(both.stdout)["intervals"]
     assert _split_silence_covers(both_intervals, only_b_sample)
     # The union adds; it never narrows what one take alone reported.
     for item in alone_intervals:
@@ -392,9 +399,11 @@ def test_split_silence_cli_single_take_matches_the_facade(tmp_path) -> None:
         expected = libsonare.split_silence(
             audio.data, top_db=60.0, frame_length=2048, hop_length=512
         )
-    assert json.loads(result.stdout) == [
-        {"start_sample": start, "end_sample": end} for start, end in expected.tolist()
-    ]
+    assert json.loads(result.stdout) == {
+        "intervals": [
+            {"start_sample": start, "end_sample": end} for start, end in expected.tolist()
+        ]
+    }
 
 
 def test_split_silence_cli_write_takes_slices_every_take(tmp_path) -> None:
@@ -414,7 +423,10 @@ def test_split_silence_cli_write_takes_slices_every_take(tmp_path) -> None:
 
     result = _run_cli(["split-silence", take_a, take_b, "--write-takes", prefix, "--json"])
     assert result.returncode == 0, result.stderr
-    intervals = json.loads(result.stdout)
+    document = json.loads(result.stdout)
+    intervals = document["intervals"]
+    assert document["output_gain_db"] == 0.0
+    assert result.stderr == ""
     assert len(intervals) >= 2
 
     for index, item in enumerate(intervals, start=1):
@@ -443,13 +455,87 @@ def test_split_silence_cli_write_takes_pads_a_take_that_ends_early(tmp_path) -> 
 
     result = _run_cli(["split-silence", take_a, take_b, "--write-takes", prefix, "--json"])
     assert result.returncode == 0, result.stderr
-    intervals = json.loads(result.stdout)
+    document = json.loads(result.stdout)
+    intervals = document["intervals"]
+    assert document["output_gain_db"] == 0.0
+    assert result.stderr == ""
     last = len(intervals)
     expected_frames = intervals[-1]["end_sample"] - intervals[-1]["start_sample"]
     with wave.open(f"{prefix}02_{last:03d}.wav", "rb") as handle:
         assert handle.getnframes() == expected_frames
         frames = handle.readframes(handle.getnframes())
     assert frames[-64:] == bytes(64)
+
+
+def _write_float_wav(path: str, samples: list[float], sample_rate: int) -> None:
+    """A mono 32-bit float WAV, which can hold a peak past full scale."""
+    import struct
+
+    data = struct.pack(f"<{len(samples)}f", *samples)
+    header = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVEfmt "
+    header += struct.pack("<IHHIIHH", 16, 3, 1, sample_rate, sample_rate * 4, 4, 32)
+    header += b"data" + struct.pack("<I", len(data))
+    with open(path, "wb") as handle:
+        handle.write(header + data)
+
+
+def test_split_silence_cli_write_takes_share_one_gain_past_full_scale(tmp_path) -> None:
+    """One gain over every slice of every take; the note says how far the output was lowered."""
+    sample_rate = 22050
+    quiet = str(tmp_path / "quiet.wav")
+    hot = str(tmp_path / "hot.wav")
+    prefix = str(tmp_path / "slice_")
+    blocks = [(0.5, 0.30), (0.0, 0.40), (0.5, 0.30)]
+    _write_float_wav(quiet, _blocked_sine(blocks, sample_rate), sample_rate)
+    _write_float_wav(hot, [4.0 * v for v in _blocked_sine(blocks, sample_rate)], sample_rate)
+
+    result = _run_cli(["split-silence", hot, quiet, "--write-takes", prefix, "--json"])
+    assert result.returncode == 0, result.stderr
+    # Peak 2.0 across the set: -6.02 dB, shared by the quiet take's slices as well.
+    assert json.loads(result.stdout)["output_gain_db"] == pytest.approx(-6.0206, abs=1e-3)
+    assert "Output lowered by 6.02 dB" in result.stderr
+    with wave.open(f"{prefix}01_001.wav", "rb") as handle:
+        loud = struct.unpack(f"<{handle.getnframes()}h", handle.readframes(handle.getnframes()))
+    with wave.open(f"{prefix}02_001.wav", "rb") as handle:
+        soft = struct.unpack(f"<{handle.getnframes()}h", handle.readframes(handle.getnframes()))
+    assert max(loud) == pytest.approx(32767, abs=2)
+    assert max(soft) == pytest.approx(32767 / 4, abs=2)
+
+
+def test_gain_past_full_scale_is_fitted_and_reported(tmp_path) -> None:
+    """A gain that pushes the peak over full scale lowers the whole file instead of clipping."""
+    sample_rate = 22050
+    source = str(tmp_path / "tone.wav")
+    output = str(tmp_path / "gain.wav")
+    _write_test_wav(source, _blocked_sine([(0.5, 0.2)], sample_rate), sample_rate)
+
+    result = _run_cli(["gain", source, "-o", output, "--gain-db", "12", "--json"])
+    assert result.returncode == 0, result.stderr
+    # 0.5 at +12 dB peaks at about 1.99, so the fit takes off 20*log10(1.99) = 5.98 dB.
+    assert json.loads(result.stdout)["output_gain_db"] == pytest.approx(-5.98, abs=0.05)
+    assert "Output lowered by 5.98 dB so its peak fits full scale instead of clipping" in (
+        result.stderr
+    )
+    with wave.open(output, "rb") as handle:
+        codes = struct.unpack(f"<{handle.getnframes()}h", handle.readframes(handle.getnframes()))
+    assert max(abs(code) for code in codes) >= 32765
+
+    quiet = _run_cli(["gain", source, "-o", output, "--gain-db", "-6", "--json"])
+    assert quiet.returncode == 0, quiet.stderr
+    assert json.loads(quiet.stdout)["output_gain_db"] == 0.0
+    assert "Output lowered" not in quiet.stderr
+
+
+def test_normalize_peak_target_above_full_scale_is_a_usage_error(tmp_path) -> None:
+    """The output format cannot hold a peak above 0 dBFS, so the target is refused up front."""
+    source = str(tmp_path / "tone.wav")
+    _write_test_wav(source, _blocked_sine([(0.5, 0.2)], 22050), 22050)
+    result = _run_cli(["normalize", source, "-o", str(tmp_path / "n.wav"), "--target-db", "3"])
+    assert result.returncode == 2
+    assert (
+        "argument --target-db: must be at most 0 for a peak target: "
+        "the output format cannot hold a level above full scale"
+    ) in result.stderr
 
 
 def test_split_silence_cli_refuses_a_take_at_another_rate(tmp_path) -> None:
@@ -574,7 +660,7 @@ def test_atomic_wav_writer_preserves_old_output_and_cleans_temp(monkeypatch, tmp
     # the generic error code while the native CLI reported exit 12 for the same
     # condition.
     with pytest.raises(SonareError, match="injected") as raised:
-        cli._write_wav(str(output), [0.25] * 10, 48000)
+        cli._write_wav(str(output), [0.25] * 10, 48000, fit=_identity_fit())
     assert cli._exit_code_for(raised.value) == EXIT_ENCODE_FAILED
 
     assert output.read_bytes() == b"old"
@@ -1008,7 +1094,7 @@ def test_synthesize_rir_reports_every_warning_and_keeps_the_tail_headroom() -> N
         # The diagnostics go to stderr, so the JSON document on stdout stays
         # exactly the payload both CLIs publish.
         payload = json.loads(result.stdout)
-        assert set(payload) == {"output", "samples", "sample_rate"}
+        assert set(payload) == {"output", "output_gain_db", "samples", "sample_rate"}
 
         # A RIR carries its physical 1/(4*pi*d) attenuation, so its peak sits far
         # below full scale; 16-bit PCM spends roughly 36 dB of the headroom the

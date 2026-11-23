@@ -448,6 +448,54 @@ def _atomic_wav_writer_multichannel(
     )
 
 
+class _OutputFit:
+    """The one gain an integer write applies to a set of buffers so none is clamped.
+
+    A set is everything one command writes to be heard together: a single
+    output, or the parts of one output that are summed or compared (stems,
+    components, split slices), which share one gain so their relation survives.
+    A finite peak past 1.0 sets the gain to ``1 / peak``; a peak of exactly 1.0
+    is not fitted. Non-finite samples are ignored when measuring. The peak and
+    the gain are held in 32-bit arithmetic, as the native ``OutputFit`` does,
+    so both writers land on the same integer codes.
+    """
+
+    def __init__(self) -> None:
+        self._peak = 0.0
+
+    def include(self, samples: Any) -> _OutputFit:
+        """Fold the finite peak of ``samples`` into the set and return ``self``."""
+        with np.errstate(over="ignore"):
+            narrowed = np.asarray(samples, dtype=np.float32)
+        finite = narrowed[np.isfinite(narrowed)]
+        if finite.size:
+            self._peak = max(self._peak, float(np.abs(finite).max()))
+        return self
+
+    @property
+    def gain(self) -> float:
+        """1 when the set already fits, else ``1 / peak``."""
+        if self._peak <= 1.0:
+            return 1.0
+        return float(np.float32(1.0) / np.float32(self._peak))
+
+    @property
+    def gain_db(self) -> float:
+        """0 when the set already fits, else the negative gain in dB (``output_gain_db``)."""
+        if self._peak <= 1.0:
+            return 0.0
+        return float(np.float32(-20.0) * np.log10(np.float32(self._peak)))
+
+    def apply(self, samples: Any) -> Any:
+        """``samples`` scaled by the gain in 32-bit arithmetic; ``samples`` itself at unity."""
+        gain = self.gain
+        if gain == 1.0:
+            return samples
+        with np.errstate(over="ignore"):
+            narrowed = np.asarray(samples, dtype=np.float32)
+        return narrowed * np.float32(gain)
+
+
 def _write_wav_mono_frames(
     wav: Any, samples: Sequence[float], quantizer: _PcmQuantizer, first_frame: int = 0
 ) -> None:
@@ -473,15 +521,21 @@ def _write_wav_stereo_frames(
 
 
 def _write_wav(
-    path: str, samples: Sequence[float] | np.ndarray, sample_rate: int, bits_per_sample: int = 16
+    path: str,
+    samples: Sequence[float] | np.ndarray,
+    sample_rate: int,
+    bits_per_sample: int = 16,
+    *,
+    fit: _OutputFit,
 ) -> None:
     """Write mono 16- or 24-bit PCM WAV using only the Python standard library.
 
-    Floats are clamped to ``[-1.0, 1.0]`` and scaled to the selected PCM range;
-    a non-finite sample becomes digital silence. Input off the PCM grid is TPDF
-    dithered exactly as the native writer does (``pack_pcm_bytes`` in
+    Samples are scaled by ``fit``'s gain and then scaled to the selected PCM
+    range; a non-finite sample becomes digital silence. Input off the PCM grid
+    is TPDF dithered exactly as the native writer does (``pack_pcm_bytes`` in
     src/core/audio_io.cpp).
     """
+    samples = fit.apply(samples)
     with _atomic_wav_writer(path, 1, sample_rate, bits_per_sample, frames=len(samples)) as wav:
         starts = range(0, len(samples), _WAV_CHUNK_FRAMES)
         quantizer = _PcmQuantizer.for_stream(
@@ -499,14 +553,18 @@ def _write_wav_stereo(
     right: Sequence[float] | np.ndarray,
     sample_rate: int,
     bits_per_sample: int = 16,
+    *,
+    fit: _OutputFit,
 ) -> None:
     """Write a stereo 16- or 24-bit PCM WAV using only the Python standard library.
 
-    Floats are clamped to ``[-1.0, 1.0]`` and scaled to the selected PCM range;
-    a non-finite sample becomes digital silence. Input off the PCM grid is TPDF
-    dithered exactly as the native writer does (``pack_pcm_bytes`` in
+    Samples are scaled by ``fit``'s gain and then scaled to the selected PCM
+    range; a non-finite sample becomes digital silence. Input off the PCM grid
+    is TPDF dithered exactly as the native writer does (``pack_pcm_bytes`` in
     src/core/audio_io.cpp).
     """
+    left = fit.apply(left)
+    right = fit.apply(right)
     count = min(len(left), len(right))
     with _atomic_wav_writer(path, 2, sample_rate, bits_per_sample, frames=count) as wav:
         starts = range(0, count, _WAV_CHUNK_FRAMES)
@@ -528,16 +586,18 @@ def _write_channel_output(
     channels: Sequence[Sequence[float] | np.ndarray],
     sample_rate: int,
     bits_per_sample: int = 16,
+    *,
+    fit: _OutputFit,
 ) -> None:
     """Write however many channels an operation produced."""
     if len(channels) == 2:
-        _write_wav_stereo(path, channels[0], channels[1], sample_rate, bits_per_sample)
+        _write_wav_stereo(path, channels[0], channels[1], sample_rate, bits_per_sample, fit=fit)
     else:
-        _write_wav(path, channels[0], sample_rate, bits_per_sample)
+        _write_wav(path, channels[0], sample_rate, bits_per_sample, fit=fit)
 
 
 def _write_frame_major_wav(
-    path: str, audio: object, sample_rate: int, bits_per_sample: int = 16
+    path: str, audio: object, sample_rate: int, bits_per_sample: int = 16, *, fit: _OutputFit
 ) -> tuple[int, int]:
     """Write frame-major PCM (row i holds frame i's per-channel values) to WAV.
 
@@ -545,7 +605,8 @@ def _write_frame_major_wav(
     the widest row otherwise. A width beyond stereo goes through
     ``_atomic_wav_writer_multichannel`` (WAVE_FORMAT_EXTENSIBLE, matching the
     native CLI's own writer); mono and stereo stay on the plain-PCM
-    ``_atomic_wav_writer``. Returns (frames, channels written).
+    ``_atomic_wav_writer``. Samples are scaled by ``fit``'s gain. Returns
+    (frames, channels written).
     """
     frames = len(cast(Any, audio))
     shape = cast(tuple[int, ...], getattr(audio, "shape", ()))
@@ -572,19 +633,23 @@ def _write_frame_major_wav(
         # time on a movie-length multichannel file.
         if isinstance(audio, np.ndarray) and audio.ndim == 2 and audio.shape[1] == channels:
             starts = range(0, frames, _WAV_CHUNK_FRAMES)
+            fitted: Any = fit.apply(audio)
             quantizer = _PcmQuantizer.for_stream(
-                bits_per_sample, channels, (audio[o : o + _WAV_CHUNK_FRAMES] for o in starts)
+                bits_per_sample, channels, (fitted[o : o + _WAV_CHUNK_FRAMES] for o in starts)
             )
             for offset in starts:
-                chunk = audio[offset : offset + _WAV_CHUNK_FRAMES]
+                chunk = fitted[offset : offset + _WAV_CHUNK_FRAMES]
                 wav.writeframesraw(quantizer.pack(chunk.astype(np.float64).ravel(), offset))
             return frames, channels
         # The general duck-typed fallback: possibly-ragged rows, padded with
         # silence past a short row -- the shape a fast-path ndarray never has.
         quantizer = _PcmQuantizer.for_stream(
-            bits_per_sample, channels, (values for _, values in _padded_chunks(audio, channels))
+            bits_per_sample,
+            channels,
+            (fit.apply(values) for _, values in _padded_chunks(audio, channels)),
         )
-        for first_frame, values in _padded_chunks(audio, channels):
+        for first_frame, chunk in _padded_chunks(audio, channels):
+            values = fit.apply(chunk)
             pcm = bytearray()
             for position, value in enumerate(values):
                 pcm.extend(
@@ -615,9 +680,11 @@ def _padded_chunks(audio: object, channels: int) -> Iterator[tuple[int, list[flo
         yield first_frame, values
 
 
-def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
+def _write_project_bounce_wav(
+    path: str, audio: object, sample_rate: int, *, fit: _OutputFit
+) -> tuple[int, int]:
     """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
-    return _write_frame_major_wav(path, audio, sample_rate)
+    return _write_frame_major_wav(path, audio, sample_rate, fit=fit)
 
 
 def _atomic_write_bytes(path: str, data: bytes) -> None:

@@ -239,7 +239,7 @@ def test_json_payload_shape(stereo_wav: Path, tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
 
-    assert list(payload) == ["sample_rate", "length", "meter"]
+    assert list(payload) == ["sample_rate", "length", "output_gain_db", "meter"]
     assert payload["sample_rate"] == SR
     assert payload["length"] == FRAMES
     assert list(payload["meter"]) == [

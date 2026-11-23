@@ -13,6 +13,13 @@ import pytest
 from ._helpers import patch_mono_decode
 
 
+def _identity_fit():
+    """A fit that leaves the samples alone: the writer under test is the plain quantizer."""
+    from libsonare._cli_output import _OutputFit
+
+    return _OutputFit()
+
+
 def _result(*, stages: list[str] | None = None, report: object | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         samples=[0.1, -0.1],
@@ -44,7 +51,9 @@ def test_mastering_preset_params_and_bits_reach_api_and_writer(
     monkeypatch.setattr(
         _cli_output,
         "_write_wav",
-        lambda path, samples, sample_rate, bits: calls.update(writer=(path, sample_rate, bits)),
+        lambda path, samples, sample_rate, bits, fit: calls.update(
+            writer=(path, sample_rate, bits)
+        ),
     )
 
     output = tmp_path / "mastered.wav"
@@ -208,7 +217,7 @@ def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
     monkeypatch.setattr(
         _cli_output,
         "_write_wav_stereo",
-        lambda path, left, right, sample_rate, bits: calls.update(
+        lambda path, left, right, sample_rate, bits, fit: calls.update(
             writer=(left, right, sample_rate, bits)
         ),
     )
@@ -389,7 +398,7 @@ def test_python_wav_writer_emits_24_bit_header(tmp_path) -> None:
     from libsonare._cli_common import _write_wav
 
     output = tmp_path / "24-bit.wav"
-    _write_wav(str(output), [0.0, 1.0], 48_000, 24)
+    _write_wav(str(output), [0.0, 1.0], 48_000, 24, fit=_identity_fit())
     with wave.open(str(output), "rb") as wav:
         assert wav.getnchannels() == 1
         assert wav.getframerate() == 48_000
