@@ -182,6 +182,16 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
                                std::size_t length, int sample_rate,
                                const std::vector<Param>& params = {});
 
+/// Analyze planar stereo source and reference pairs. The reference is resampled to the source rate.
+/// Loudness is the two-channel integrated LUFS, spectra average the channel powers, and the delay
+/// correlates the mids, summing per-channel correlations when either mid is 40 dB below its
+/// channels.
+std::string analyze_named_pair(const std::string& name, const float* source_left,
+                               const float* source_right, std::size_t source_length,
+                               const float* reference_left, const float* reference_right,
+                               std::size_t reference_length, int sample_rate,
+                               int reference_sample_rate, const std::vector<Param>& params);
+
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,
                                  std::size_t length, int sample_rate,
                                  const std::vector<Param>& params = {});

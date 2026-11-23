@@ -610,13 +610,25 @@ Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
   return Audio::from_vector(std::move(output), audio.sample_rate());
 }
 
-float estimate_reference_delay_samples(const Audio& source, const Audio& reference,
-                                       int max_abs_delay) {
-  if (source.empty() || reference.empty()) {
+namespace {
+
+float estimate_reference_delay_samples_channels(const Audio& source_left, const Audio* source_right,
+                                                const Audio& reference_left,
+                                                const Audio* reference_right, int max_abs_delay) {
+  if (source_left.empty() || reference_left.empty() ||
+      (source_right != nullptr && source_right->empty()) ||
+      (reference_right != nullptr && reference_right->empty())) {
     throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
-  if (source.sample_rate() != reference.sample_rate()) {
+  if (source_left.sample_rate() != reference_left.sample_rate()) {
     throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
+  }
+  if (source_right != nullptr && (source_right->sample_rate() != source_left.sample_rate() ||
+                                  reference_right->sample_rate() != reference_left.sample_rate() ||
+                                  source_right->size() != source_left.size() ||
+                                  reference_right->size() != reference_left.size())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "stereo audio channels must have matching rates and lengths");
   }
   if (max_abs_delay < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_abs_delay must be non-negative");
@@ -624,7 +636,7 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
 
   // Each signal keeps its full length: truncating the longer one to the shorter
   // drops exactly the samples a delayed match lands on.
-  const size_t longest = std::max(source.size(), reference.size());
+  const size_t longest = std::max(source_left.size(), reference_left.size());
   const int clamped_max_delay =
       static_cast<int>(std::min<size_t>(static_cast<size_t>(max_abs_delay), longest - 1));
   if (clamped_max_delay <= 0) {
@@ -638,20 +650,30 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
   // and normalize by the global signal energies so the score is comparable to
   // the previous Pearson-style correlation.
   // Linear (not circular) correlation over every lag the two lengths admit.
-  const int n_fft = static_cast<int>(next_power_of_2(source.size() + reference.size()));
+  const int n_fft = static_cast<int>(next_power_of_2(source_left.size() + reference_left.size()));
   FFT fft(n_fft);
 
   std::vector<float> source_padded(static_cast<size_t>(n_fft), 0.0f);
   std::vector<float> reference_padded(static_cast<size_t>(n_fft), 0.0f);
   double source_energy = 0.0;
   double reference_energy = 0.0;
-  for (size_t i = 0; i < source.size(); ++i) {
-    source_padded[i] = source[i];
-    source_energy += static_cast<double>(source[i]) * source[i];
+  for (size_t i = 0; i < source_left.size(); ++i) {
+    source_padded[i] = source_left[i];
+    source_energy += static_cast<double>(source_left[i]) * source_left[i];
   }
-  for (size_t i = 0; i < reference.size(); ++i) {
-    reference_padded[i] = reference[i];
-    reference_energy += static_cast<double>(reference[i]) * reference[i];
+  if (source_right != nullptr) {
+    for (size_t i = 0; i < source_right->size(); ++i) {
+      source_energy += static_cast<double>((*source_right)[i]) * (*source_right)[i];
+    }
+  }
+  for (size_t i = 0; i < reference_left.size(); ++i) {
+    reference_padded[i] = reference_left[i];
+    reference_energy += static_cast<double>(reference_left[i]) * reference_left[i];
+  }
+  if (reference_right != nullptr) {
+    for (size_t i = 0; i < reference_right->size(); ++i) {
+      reference_energy += static_cast<double>((*reference_right)[i]) * (*reference_right)[i];
+    }
   }
   if (source_energy <= 0.0 || reference_energy <= 0.0) {
     return 0.0f;
@@ -660,13 +682,24 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
   const int n_bins = fft.n_bins();
   std::vector<std::complex<float>> source_spectrum(static_cast<size_t>(n_bins));
   std::vector<std::complex<float>> reference_spectrum(static_cast<size_t>(n_bins));
-  fft.forward(source_padded.data(), source_spectrum.data());
-  fft.forward(reference_padded.data(), reference_spectrum.data());
-
   std::vector<std::complex<float>> product(static_cast<size_t>(n_bins));
+  const auto transform_channel_pair = [&]() {
+    fft.forward(source_padded.data(), source_spectrum.data());
+    fft.forward(reference_padded.data(), reference_spectrum.data());
+  };
+  transform_channel_pair();
   for (int bin = 0; bin < n_bins; ++bin) {
     product[static_cast<size_t>(bin)] = std::conj(source_spectrum[static_cast<size_t>(bin)]) *
                                         reference_spectrum[static_cast<size_t>(bin)];
+  }
+  if (source_right != nullptr) {
+    std::copy_n(source_right->data(), source_right->size(), source_padded.data());
+    std::copy_n(reference_right->data(), reference_right->size(), reference_padded.data());
+    transform_channel_pair();
+    for (int bin = 0; bin < n_bins; ++bin) {
+      product[static_cast<size_t>(bin)] += std::conj(source_spectrum[static_cast<size_t>(bin)]) *
+                                           reference_spectrum[static_cast<size_t>(bin)];
+    }
   }
   std::vector<float> correlation(static_cast<size_t>(n_fft), 0.0f);
   fft.inverse(product.data(), correlation.data());
@@ -675,7 +708,7 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
   int best_lag = 0;
   float best_score = -1.0f;
   for (int lag = -clamped_max_delay; lag <= clamped_max_delay; ++lag) {
-    // Positive lag => reference leads (index n_fft + ... wraps for negatives).
+    // A positive lag reads a later reference sample; negative lags wrap in the FFT.
     const int index = lag >= 0 ? lag : n_fft + lag;
     const float score = correlation[static_cast<size_t>(index)] * inv_norm;
     if (score > best_score) {
@@ -684,6 +717,21 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
     }
   }
   return static_cast<float>(best_lag);
+}
+
+}  // namespace
+
+float estimate_reference_delay_samples(const Audio& source, const Audio& reference,
+                                       int max_abs_delay) {
+  return estimate_reference_delay_samples_channels(source, nullptr, reference, nullptr,
+                                                   max_abs_delay);
+}
+
+float estimate_reference_delay_samples(const Audio& source_left, const Audio& source_right,
+                                       const Audio& reference_left, const Audio& reference_right,
+                                       int max_abs_delay) {
+  return estimate_reference_delay_samples_channels(source_left, &source_right, reference_left,
+                                                   &reference_right, max_abs_delay);
 }
 
 Audio align_reference_to_source(const Audio& source, const Audio& reference, int max_abs_delay) {

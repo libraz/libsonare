@@ -59,6 +59,9 @@ Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
                      const MatchEqFirConfig& fir_config = {});
 float estimate_reference_delay_samples(const Audio& source, const Audio& reference,
                                        int max_abs_delay);
+float estimate_reference_delay_samples(const Audio& source_left, const Audio& source_right,
+                                       const Audio& reference_left, const Audio& reference_right,
+                                       int max_abs_delay);
 Audio align_reference_to_source(const Audio& source, const Audio& reference, int max_abs_delay);
 /// @brief Peaking bands whose composite response follows the source/reference difference.
 /// @details Overlapping RBJ peaking sections add in log magnitude, so band gains

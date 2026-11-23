@@ -3,6 +3,7 @@
 /// @file reference_spectrum.h
 /// @brief Long-term reference spectrum extraction helpers.
 
+#include <type_traits>
 #include <vector>
 
 #include "core/audio.h"
@@ -24,5 +25,13 @@ struct ReferenceSpectrum {
 
 ReferenceSpectrum reference_spectrum(const Audio& audio,
                                      const ReferenceSpectrumConfig& config = {});
+ReferenceSpectrum reference_spectrum(const Audio& left, const Audio& right,
+                                     const ReferenceSpectrumConfig& config);
+
+// Deducing the right channel keeps reference_spectrum(audio, {}) a mono call.
+template <typename Right, std::enable_if_t<std::is_same_v<Right, Audio>, int> = 0>
+ReferenceSpectrum reference_spectrum(const Audio& left, const Right& right) {
+  return reference_spectrum(left, right, {});
+}
 
 }  // namespace sonare::mastering::match

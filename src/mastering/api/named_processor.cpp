@@ -93,6 +93,7 @@
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
 #include "mastering/utility/gain.h"
+#include "metering/lufs.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/json.h"
@@ -1082,33 +1083,78 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
                                            params);
 }
 
-std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
-                               std::size_t source_length, std::size_t reference_length,
-                               int sample_rate, int reference_sample_rate,
-                               const std::vector<Param>& params) {
-  validate_params(params.data(), params.size());
-  validate_offline_audio_input("source", source, source_length, sample_rate);
-  validate_offline_audio_input("reference", reference, reference_length, reference_sample_rate);
-  auto map = make_map(params);
-  auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
-  auto reference_audio =
-      reference_at_rate(reference, reference_length, reference_sample_rate, sample_rate);
-  // Built as a util::json tree rather than hand-rolled text: these analyses
-  // legitimately return non-finite values (reference_loudness yields -inf LUFS
-  // for a silent source), and only util::json::dump maps those to `null` and
-  // pins the decimal separator to "." whatever LC_NUMERIC says. Hand-rolled
-  // formatting would emit "-inf" and, on a comma-decimal host, a comma decimal
-  // mark -- neither of which parses.
+namespace {
+
+match::ReferenceLoudness reference_loudness_stereo(const Audio& source_left,
+                                                   const Audio& source_right,
+                                                   const Audio& reference_left,
+                                                   const Audio& reference_right) {
+  const float reference_lufs = detail::stereo_integrated_lufs(
+      {reference_left.data(), reference_left.data() + reference_left.size()},
+      {reference_right.data(), reference_right.data() + reference_right.size()},
+      reference_left.sample_rate());
+  const auto source =
+      detail::interleave_stereo({source_left.data(), source_left.data() + source_left.size()},
+                                {source_right.data(), source_right.data() + source_right.size()});
+  const auto solved = metering::gain_to_integrated_lufs(source.data(), source_left.size(), 2,
+                                                        source_left.sample_rate(), reference_lufs);
+  return {solved.measured_lufs, reference_lufs, solved.gain_db};
+}
+
+struct StereoMid {
+  Audio audio;
+  bool cancelled;
+};
+
+StereoMid stereo_mid(const Audio& left, const Audio& right) {
+  // A mid at least 40 dB below the mean channel power is effectively cancelled.
+  constexpr double kMidCancellationPowerRatio = 1.0e-4;
+  std::vector<float> mid(left.size());
+  double mid_energy = 0.0;
+  double mean_channel_energy = 0.0;
+  for (std::size_t index = 0; index < left.size(); ++index) {
+    const double l = left[index];
+    const double r = right[index];
+    mid[index] = static_cast<float>(0.5 * (l + r));
+    mid_energy += static_cast<double>(mid[index]) * mid[index];
+    mean_channel_energy += 0.5 * (l * l + r * r);
+  }
+  return {Audio::from_vector(std::move(mid), left.sample_rate()),
+          mid_energy < kMidCancellationPowerRatio * mean_channel_energy};
+}
+
+float estimate_stereo_pair_delay(const Audio& source_left, const Audio& source_right,
+                                 const Audio& reference_left, const Audio& reference_right,
+                                 int max_abs_delay) {
+  const auto source_mid = stereo_mid(source_left, source_right);
+  const auto reference_mid = stereo_mid(reference_left, reference_right);
+  if (source_mid.cancelled || reference_mid.cancelled) {
+    return match::estimate_reference_delay_samples(source_left, source_right, reference_left,
+                                                   reference_right, max_abs_delay);
+  }
+  return match::estimate_reference_delay_samples(source_mid.audio, reference_mid.audio,
+                                                 max_abs_delay);
+}
+
+std::string analyze_pair(const std::string& name, const Audio& source_audio,
+                         const Audio& reference_audio, const Audio* source_right,
+                         const Audio* reference_right, const ParamMap& map) {
+  // JSON serialization maps silence to null and uses a locale-independent decimal separator.
   namespace json_ns = sonare::util::json;
   json_ns::Object root;
+  const auto spectrum = [](const Audio& left, const Audio* right) {
+    return right ? match::reference_spectrum(left, *right) : match::reference_spectrum(left);
+  };
   if (name == "match.referenceLoudness") {
-    auto result = ::sonare::mastering::match::reference_loudness(source_audio, reference_audio);
+    const auto result = source_right ? reference_loudness_stereo(source_audio, *source_right,
+                                                                 reference_audio, *reference_right)
+                                     : match::reference_loudness(source_audio, reference_audio);
     util::json::put(root, "sourceLufs", result.source_lufs);
     util::json::put(root, "referenceLufs", result.reference_lufs);
     put_level(root, "gainToMatchDb", result.gain_to_match_db);
   } else if (name == "match.tonalBalance" || name == "match.tonalBalanceLogBands") {
-    auto source_spectrum = ::sonare::mastering::match::reference_spectrum(source_audio);
-    auto reference_spectrum = ::sonare::mastering::match::reference_spectrum(reference_audio);
+    auto source_spectrum = spectrum(source_audio, source_right);
+    auto reference_spectrum = spectrum(reference_audio, reference_right);
     auto bands =
         name == "match.tonalBalance"
             ? ::sonare::mastering::match::tonal_balance(source_spectrum, reference_spectrum)
@@ -1130,9 +1176,8 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
   } else if (name == "match.matchEqCurve") {
     const ::sonare::mastering::match::MatchEqConfig config = read_match_eq_config(map);
     ::sonare::mastering::match::validate_config(config);
-    auto curve = ::sonare::mastering::match::match_eq_curve(
-        ::sonare::mastering::match::reference_spectrum(source_audio),
-        ::sonare::mastering::match::reference_spectrum(reference_audio), config);
+    auto curve = match::match_eq_curve(spectrum(source_audio, source_right),
+                                       spectrum(reference_audio, reference_right), config);
     json_ns::Array frequencies;
     frequencies.reserve(curve.frequencies.size());
     for (float frequency : curve.frequencies) frequencies.emplace_back(json_ns::Value(frequency));
@@ -1142,8 +1187,12 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
     util::json::put(root, "frequencies", std::move(frequencies));
     util::json::put(root, "gainDb", std::move(gain_db));
   } else if (name == "match.estimateReferenceDelaySamples") {
-    const float delay = ::sonare::mastering::match::estimate_reference_delay_samples(
-        source_audio, reference_audio, i(map, "maxAbsDelay", 4096));
+    const int max_abs_delay = i(map, "maxAbsDelay", 4096);
+    const float delay =
+        source_right
+            ? estimate_stereo_pair_delay(source_audio, *source_right, reference_audio,
+                                         *reference_right, max_abs_delay)
+            : match::estimate_reference_delay_samples(source_audio, reference_audio, max_abs_delay);
     util::json::put(root, "delaySamples", delay);
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair analysis: " + name);
@@ -1152,11 +1201,49 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
   return json_ns::dump(json_ns::Value(std::move(root)));
 }
 
+}  // namespace
+
+std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
+                               std::size_t source_length, std::size_t reference_length,
+                               int sample_rate, int reference_sample_rate,
+                               const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
+  validate_offline_audio_input("source", source, source_length, sample_rate);
+  validate_offline_audio_input("reference", reference, reference_length, reference_sample_rate);
+  const auto map = make_map(params);
+  const auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
+  const auto reference_audio =
+      reference_at_rate(reference, reference_length, reference_sample_rate, sample_rate);
+  return analyze_pair(name, source_audio, reference_audio, nullptr, nullptr, map);
+}
+
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t length, int sample_rate,
                                const std::vector<Param>& params) {
   return analyze_named_pair(name, source, reference, length, length, sample_rate, sample_rate,
                             params);
+}
+
+std::string analyze_named_pair(const std::string& name, const float* source_left,
+                               const float* source_right, std::size_t source_length,
+                               const float* reference_left, const float* reference_right,
+                               std::size_t reference_length, int sample_rate,
+                               int reference_sample_rate, const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
+  validate_offline_audio_input("source_left", source_left, source_length, sample_rate);
+  validate_offline_audio_input("source_right", source_right, source_length, sample_rate);
+  validate_offline_audio_input("reference_left", reference_left, reference_length,
+                               reference_sample_rate);
+  validate_offline_audio_input("reference_right", reference_right, reference_length,
+                               reference_sample_rate);
+  const auto map = make_map(params);
+  const auto left = Audio::from_buffer(source_left, source_length, sample_rate);
+  const auto right = Audio::from_buffer(source_right, source_length, sample_rate);
+  const auto reference_l =
+      reference_at_rate(reference_left, reference_length, reference_sample_rate, sample_rate);
+  const auto reference_r =
+      reference_at_rate(reference_right, reference_length, reference_sample_rate, sample_rate);
+  return analyze_pair(name, left, reference_l, &right, &reference_r, map);
 }
 
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,
