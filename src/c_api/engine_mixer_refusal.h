@@ -9,6 +9,7 @@
 /// through its own refusal-spelling mechanism.
 
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <string>
 
@@ -278,9 +279,8 @@ struct SidechainWording {
       break;
     }
     case SidechainRefusal::kSelfKey:
-      if (wording.target_subject == nullptr) {
-        refuse(wording.source_subject, "must not name the sidechain target itself");
-      }
+      // The master strip has no id to key itself by, so only a lane or bus reaches here.
+      assert(wording.target_subject != nullptr);
       sonare::util::check::refuse_relation({wording.source_subject, wording.target_subject},
                                            "{0} must not equal {1}");
     case SidechainRefusal::kCycle:
