@@ -689,4 +689,237 @@ TEST_CASE("master strip inserts name the index or parameter the mixer refused",
   sonare_engine_destroy(engine);
 }
 
+namespace {
+
+constexpr const char* kGainInsert =
+    R"({"slot":"pre","processor":"utility.gain","params":{"levelDb":0}})";
+// A band above the 24 kHz Nyquist of the 48 kHz engine; only the engine knows its rate.
+constexpr const char* kPastNyquistEq =
+    R"("eq":{"bands":[{"type":"peak","frequencyHz":30000,"gainDb":3,"q":1,"enabled":true}]})";
+
+std::string inserts_of(const std::string& insert, int count) {
+  std::string out = "[";
+  for (int i = 0; i < count; ++i) out += (i == 0 ? "" : ",") + insert;
+  return out + "]";
+}
+
+// A scene whose one strip carries @p members after its id.
+std::string strip_scene(const std::string& id, const std::string& members) {
+  return R"({"version":2,"strips":[{"id":")" + id + R"(")" +
+         (members.empty() ? "" : "," + members) + R"(}],"buses":[],"connections":[]})";
+}
+
+std::string bus_scene(const std::string& id, const std::string& members) {
+  return R"({"version":2,"strips":[],"buses":[{"id":")" + id + R"(")" +
+         (members.empty() ? "" : "," + members) + R"(}],"connections":[]})";
+}
+
+std::string inserts_member(const std::string& insert, int count) {
+  return R"("inserts":)" + inserts_of(insert, count);
+}
+
+SonareEngineTrackLane stereo_lane(uint32_t track_id) {
+  SonareEngineTrackLane lane{};
+  lane.track_id = track_id;
+  lane.source_channel_layout = SONARE_CHANNEL_LAYOUT_STEREO;
+  return lane;
+}
+
+}  // namespace
+
+TEST_CASE("strip scenes name the EQ, insert and bus-image cause the mixer refused",
+          "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineTrackLane lane = stereo_lane(10);
+  REQUIRE(sonare_engine_set_track_lanes(engine, &lane, 1) == SONARE_OK);
+  SonareEngineBus buses[2] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
+                              {2, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
+
+  constexpr const char* kEqText =
+      "scene_json must describe a strip EQ whose bands are valid at the engine's sample rate";
+  const std::string nyquist_strip = strip_scene("s", kPastNyquistEq);
+  CHECK(sonare_engine_set_track_strip_json(engine, 10, nyquist_strip.c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kEqText);
+  CHECK(sonare_engine_set_master_strip_json(engine, nyquist_strip.c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kEqText);
+  CHECK(sonare_engine_set_bus_strip_json(engine, 1, bus_scene("1", kPastNyquistEq).c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kEqText);
+
+  constexpr const char* kUnknownInsert =
+      R"({"slot":"pre","processor":"missing.processor","params":{}})";
+  constexpr const char* kInsertsText = "scene_json must describe inserts the mixer can create";
+  const std::string unknown_strip = strip_scene("s", inserts_member(kUnknownInsert, 1));
+  CHECK(sonare_engine_set_track_strip_json(engine, 10, unknown_strip.c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kInsertsText);
+  CHECK(sonare_engine_set_master_strip_json(engine, unknown_strip.c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kInsertsText);
+  CHECK(sonare_engine_set_bus_strip_json(
+            engine, 1, bus_scene("1", inserts_member(kUnknownInsert, 1)).c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kInsertsText);
+
+  // The scene's own layout is stereo, so only the engine's 5.1 bus refuses the pan.
+  CHECK(sonare_engine_set_bus_strip_json(engine, 2, bus_scene("2", R"("pan":0.5)").c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "scene_json must leave the pan and width of a bus wider than stereo at their defaults");
+  CHECK(sonare_engine_set_bus_strip_json(engine, 2, bus_scene("2", R"("width":1.5)").c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "scene_json must leave the pan and width of a bus wider than stereo at their defaults");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track buses refuse a wider layout while a bus keeps a pan", "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineBus bus{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  REQUIRE(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_scene("1", R"("pan":0.5)").c_str()) ==
+          SONARE_OK);
+
+  bus.channel_layout = SONARE_CHANNEL_LAYOUT_5_1;
+  CHECK(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_ERROR_INVALID_STATE);
+  CHECK(last_message() ==
+        "buses[0].channel_layout cannot be wider than stereo while the bus keeps a pan or width");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track strips name the table that earlier strips filled", "[c_api][engine_refusal]") {
+  const std::string scene = strip_scene("s", R"("faderDb":-1)");
+
+  SECTION("owned strip table") {
+    SonareEngine* engine = make_engine();
+    for (uint32_t track = 1; track <= 32; ++track) {
+      REQUIRE(sonare_engine_set_track_strip_json(engine, track, scene.c_str()) == SONARE_OK);
+    }
+    CHECK(sonare_engine_set_track_strip_json(engine, 33, scene.c_str()) ==
+          SONARE_ERROR_INVALID_STATE);
+    CHECK(last_message() == "the owned strip table is full (32 strips)");
+    sonare_engine_destroy(engine);
+  }
+
+  SECTION("lane table") {
+    SonareEngine* engine = make_engine();
+    SonareEngineTrackLane lanes[32];
+    for (uint32_t i = 0; i < 32; ++i) lanes[i] = stereo_lane(i + 1);
+    REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 32) == SONARE_OK);
+    CHECK(sonare_engine_set_track_strip_json(engine, 99, scene.c_str()) ==
+          SONARE_ERROR_INVALID_STATE);
+    CHECK(last_message() == "the lane table is full (32 lanes)");
+    sonare_engine_destroy(engine);
+  }
+}
+
+TEST_CASE("master strip names the full insert automation table", "[c_api][engine_refusal]") {
+  // Retired entries are never reused, so swapping a 64-slot chain between two processors mints 64.
+  const std::string gain = strip_scene("master", inserts_member(kGainInsert, 64));
+  const std::string mono = strip_scene(
+      "master", inserts_member(R"({"slot":"pre","processor":"stereo.monoMaker","params":{}})", 64));
+  SonareEngine* engine = make_engine();
+
+  SonareError result = SONARE_OK;
+  int swaps = 0;
+  for (; swaps < 200 && result == SONARE_OK; ++swaps) {
+    result = sonare_engine_set_master_strip_json(engine, (swaps % 2 == 0 ? gain : mono).c_str());
+  }
+  REQUIRE(result != SONARE_OK);
+  CHECK(result == SONARE_ERROR_INVALID_STATE);
+  CHECK(last_message() == "the insert automation table is full (8192 entries)");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track strips name a latency past the alignment ceiling", "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineTrackLane lane = stereo_lane(10);
+  REQUIRE(sonare_engine_set_track_lanes(engine, &lane, 1) == SONARE_OK);
+
+  // 5000 ms at 48 kHz is 240000 samples of lookahead, past the 192000-sample ceiling.
+  const std::string slow = strip_scene(
+      "s",
+      inserts_member(
+          R"({"slot":"pre","processor":"dynamics.limiter","params":{"lookaheadMs":5000}})", 1));
+  CHECK(sonare_engine_set_track_strip_json(engine, 10, slow.c_str()) == SONARE_ERROR_INVALID_STATE);
+  CHECK(last_message() ==
+        "the latency the mixer has to align is past the alignment ceiling of 192000 samples");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sidechain keys name the self key, the cycle and the full table",
+          "[c_api][engine_refusal]") {
+  const std::string two_inserts = strip_scene("s", inserts_member(kGainInsert, 1));
+  SonareEngine* engine = make_engine();
+  SonareEngineTrackLane lanes[2] = {stereo_lane(10), stereo_lane(11)};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, two_inserts.c_str()) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 11, two_inserts.c_str()) == SONARE_OK);
+  SonareEngineBus buses[2] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
+                              {2, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
+  const std::string bus_chain = bus_scene("b", inserts_member(kGainInsert, 1));
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_chain.c_str()) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 2, bus_chain.c_str()) == SONARE_OK);
+
+  CHECK(sonare_engine_set_lane_sidechain(engine, 10, 0, 10) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "source_track_id must not equal track_id");
+  CHECK(sonare_engine_set_bus_sidechain(engine, 1, 0, SONARE_SIDECHAIN_SOURCE_BUS, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "source_id must not equal bus_id");
+
+  REQUIRE(sonare_engine_set_lane_sidechain(engine, 10, 0, 11) == SONARE_OK);
+  CHECK(sonare_engine_set_lane_sidechain(engine, 11, 0, 10) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "source_track_id must not make the sidechain keys form a cycle");
+  REQUIRE(sonare_engine_set_bus_sidechain(engine, 1, 0, SONARE_SIDECHAIN_SOURCE_BUS, 2) ==
+          SONARE_OK);
+  CHECK(sonare_engine_set_bus_sidechain(engine, 2, 0, SONARE_SIDECHAIN_SOURCE_BUS, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "source_id must not make the sidechain keys form a cycle");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sidechain keys name the full binding table", "[c_api][engine_refusal]") {
+  const std::string many = strip_scene("s", inserts_member(kGainInsert, 33));
+  SonareEngine* engine = make_engine();
+  SonareEngineTrackLane lanes[2] = {stereo_lane(10), stereo_lane(11)};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, many.c_str()) == SONARE_OK);
+  for (unsigned int insert = 0; insert < 32; ++insert) {
+    REQUIRE(sonare_engine_set_lane_sidechain(engine, 10, insert, 11) == SONARE_OK);
+  }
+  CHECK(sonare_engine_set_lane_sidechain(engine, 10, 32, 11) == SONARE_ERROR_INVALID_STATE);
+  CHECK(last_message() == "the sidechain binding table is full (32 entries)");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("a master sidechain key names a latency past the alignment ceiling",
+          "[c_api][engine_refusal]") {
+  SonareEngine* engine = make_engine();
+  SonareEngineTrackLane lanes[2] = {stereo_lane(10), stereo_lane(11)};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  // 4000 ms at 48 kHz is exactly the 192000-sample ceiling, so the lane alone still fits.
+  const std::string slow = strip_scene(
+      "s",
+      inserts_member(
+          R"({"slot":"pre","processor":"dynamics.limiter","params":{"lookaheadMs":4000}})", 1));
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, slow.c_str()) == SONARE_OK);
+  const std::string master = strip_scene(
+      "master",
+      R"("inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"lookaheadMs":1}},)" +
+          std::string(kGainInsert) + "]");
+  REQUIRE(sonare_engine_set_master_strip_json(engine, master.c_str()) == SONARE_OK);
+
+  // The master input arrives at the ceiling and the key leaves a lane with no latency.
+  CHECK(sonare_engine_set_master_sidechain(engine, 1, SONARE_SIDECHAIN_SOURCE_TRACK, 11) ==
+        SONARE_ERROR_INVALID_STATE);
+  CHECK(last_message() ==
+        "the latency the sidechain key would add to the mix is past the alignment ceiling of "
+        "192000 samples");
+  sonare_engine_destroy(engine);
+}
+
 #endif  // defined(SONARE_WITH_MIXING)
