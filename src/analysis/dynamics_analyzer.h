@@ -14,7 +14,8 @@ namespace sonare {
 
 /// @brief Dynamics analysis results.
 struct Dynamics {
-  float dynamic_range_db = 0.0f;   ///< Dynamic range in dB; NaN when a percentile level is -inf
+  float dynamic_range_db =
+      0.0f;  ///< Dynamic range in dB; +inf over a silent low percentile, NaN when both are silent
   float peak_db = 0.0f;            ///< Peak level in dB; -inf for exact silence
   float rms_db = 0.0f;             ///< RMS level in dB; -inf for exact silence
   float crest_factor = 0.0f;       ///< Peak to RMS ratio in dB; NaN for silence

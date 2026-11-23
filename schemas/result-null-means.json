@@ -4,6 +4,7 @@
     "analysis_result": {
       "root": "AnalysisResult",
       "nullMeans": {
+        "dynamics.dynamicRangeDb": "Infinity",
         "dynamics.peakDb": "-Infinity",
         "dynamics.rmsDb": "-Infinity"
       }

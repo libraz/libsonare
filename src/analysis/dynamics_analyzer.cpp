@@ -127,7 +127,7 @@ std::vector<int> DynamicsAnalyzer::loudness_histogram(int n_bins, float min_db,
                                                       float max_db) const {
   // Guard against degenerate parameters that would yield an empty/negative-sized
   // histogram, a NaN/inf bin_width, or an out-of-bounds bin index.
-  if (n_bins <= 0 || max_db <= min_db) {
+  if (n_bins <= 0 || !std::isfinite(min_db) || !std::isfinite(max_db) || max_db <= min_db) {
     return {};
   }
 

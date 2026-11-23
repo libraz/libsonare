@@ -68,6 +68,12 @@ std::set<std::string> null_paths_of(const std::string& text) {
   return out;
 }
 
+// The first half of @p samples followed by exact zeros.
+std::vector<float> tone_then_silence(std::vector<float> samples) {
+  std::fill(samples.begin() + static_cast<std::ptrdiff_t>(samples.size() / 2), samples.end(), 0.0f);
+  return samples;
+}
+
 using NullMeans = std::vector<std::pair<std::string, std::string>>;
 
 struct Family {
@@ -195,9 +201,15 @@ TEST_CASE("every null a result writes sits at a path declaring its infinite end"
        sonare::analysis_result_null_means(),
        sonare::analysis_result_schema_paths(),
        {[&] {
-         return sonare::analysis_result_to_json(
-             sonare::quick::analyze(silence.data(), silence.size(), kSampleRate));
-       }}},
+          return sonare::analysis_result_to_json(
+              sonare::quick::analyze(silence.data(), silence.size(), kSampleRate));
+        },
+        // Tone then zeros, read at the analysis rate so no resampler tail fills the zeros: the
+        // range over the silent low percentile is +inf.
+        [&, gapped = tone_then_silence(music)] {
+          return sonare::analysis_result_to_json(
+              sonare::quick::analyze(gapped.data(), gapped.size(), 22050));
+        }}},
       {"mix_assistant_result",
        mixing::mix_assistant_result_null_means(),
        mixing::mix_assistant_result_schema_paths(),

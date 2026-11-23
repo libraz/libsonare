@@ -68,16 +68,16 @@ inline double power_to_level_db(double power) noexcept {
   return power == 0.0 ? kNoLevelDbD : 10.0 * std::log10(power);
 }
 
-/// Difference of two levels: the result when finite or -inf, kNotMeasured when it would be NaN
-/// or +inf (silence against silence, a finite level against silence).
+/// Difference of two levels: +inf for a level over silence, -inf for silence under a level, and
+/// kNotMeasured for silence against silence or an operand that was not measured.
 inline float level_difference_db(float a, float b) noexcept {
   const float d = a - b;
-  return std::isnan(d) || d == std::numeric_limits<float>::infinity() ? kNotMeasured : d;
+  return std::isnan(d) ? kNotMeasured : d;
 }
 
 inline double level_difference_db(double a, double b) noexcept {
   const double d = a - b;
-  return std::isnan(d) || d == std::numeric_limits<double>::infinity() ? kNotMeasuredD : d;
+  return std::isnan(d) ? kNotMeasuredD : d;
 }
 
 inline float power_to_offset_db(double power, double offset_db, double floor_power,

@@ -97,9 +97,8 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   std::sort(sorted.begin(), sorted.end());
   result.low_percentile_db = static_cast<float>(percentile_sorted(sorted, config.low_percentile));
   result.high_percentile_db = static_cast<float>(percentile_sorted(sorted, config.high_percentile));
-  result.dynamic_range_db = result.high_percentile_db == kNoLevelDb
-                                ? kNotMeasured
-                                : result.high_percentile_db - result.low_percentile_db;
+  result.dynamic_range_db =
+      level_difference_db(result.high_percentile_db, result.low_percentile_db);
   return result;
 }
 

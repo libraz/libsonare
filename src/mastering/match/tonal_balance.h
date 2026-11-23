@@ -12,8 +12,10 @@ namespace sonare::mastering::match {
 struct TonalBalanceBand {
   float low_hz = 0.0f;
   float high_hz = 0.0f;
-  float source_db = 0.0f;
-  float reference_db = 0.0f;
+  float source_db = 0.0f;     ///< Mean band level; -inf when silent, NaN when no bin falls in it
+  float reference_db = 0.0f;  ///< Mean band level; -inf when silent, NaN when no bin falls in it
+  /// source_db - reference_db; -inf when only the source is silent. NaN when the reference has no
+  /// level in the band: read the two band levels to see which side is silent.
   float deviation_db = 0.0f;
 };
 

@@ -6,6 +6,7 @@ import math
 # -> the infinite end a JSON null at that path stands for.
 NULL_MEANS: dict[str, dict[str, float]] = {
     "analysis_result": {
+        "dynamics.dynamicRangeDb": math.inf,
         "dynamics.peakDb": -math.inf,
         "dynamics.rmsDb": -math.inf,
     },

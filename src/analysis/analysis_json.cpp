@@ -129,6 +129,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
 
 const std::vector<std::pair<std::string, std::string>>& analysis_result_null_means() {
   static const std::vector<std::pair<std::string, std::string>> means = {
+      {"dynamics.dynamicRangeDb", "Infinity"},
       {"dynamics.peakDb", "-Infinity"},
       {"dynamics.rmsDb", "-Infinity"},
   };

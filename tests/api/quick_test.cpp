@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "sonare_c_test_helpers.h"
@@ -156,8 +157,8 @@ TEST_CASE("quick::analyze", "[.][slow][quick][api]") {
     // Beats
     REQUIRE(result.beats.size() >= 1);
 
-    // Dynamics
-    REQUIRE(std::isfinite(result.dynamics.dynamic_range_db));
+    // Dynamics: the gaps between clicks are exact zeros, so the range over them is +inf.
+    REQUIRE(result.dynamics.dynamic_range_db == std::numeric_limits<float>::infinity());
   }
 
   SECTION("form string is not empty") {

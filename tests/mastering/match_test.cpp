@@ -619,6 +619,42 @@ TEST_CASE("TonalBalance can summarize log-frequency bands", "[mastering][match]"
   REQUIRE_THAT(balance[1].deviation_db, WithinAbs(-2.0f, 0.001f));
 }
 
+TEST_CASE("TonalBalance leaves a deviation over a silent reference band to the two band levels",
+          "[mastering][match]") {
+  constexpr float kNone = -std::numeric_limits<float>::infinity();
+  // Bands: reference silent, source silent, both silent, both sounding.
+  const std::vector<float> frequencies = {100.0f, 500.0f, 3000.0f, 12000.0f};
+  const ReferenceSpectrum source{frequencies, {-10.0f, kNone, kNone, -40.0f}, 48000};
+  const ReferenceSpectrum reference{frequencies, {kNone, -18.0f, kNone, -35.0f}, 48000};
+
+  for (const auto& balance : {tonal_balance(source, reference),
+                              tonal_balance_log_bands(source, reference, 1, 50.0f, 24000.0f)}) {
+    const auto band_at = [&](float hz) {
+      for (const auto& band : balance) {
+        if (hz >= band.low_hz && hz < band.high_hz) return band;
+      }
+      FAIL("no band holds " << hz << " Hz");
+      return TonalBalanceBand{};
+    };
+    const TonalBalanceBand reference_silent = band_at(100.0f);
+    CHECK(std::isnan(reference_silent.deviation_db));
+    CHECK(reference_silent.source_db == -10.0f);
+    CHECK(reference_silent.reference_db == kNone);
+
+    const TonalBalanceBand source_silent = band_at(500.0f);
+    CHECK(source_silent.deviation_db == kNone);
+    CHECK(source_silent.source_db == kNone);
+    CHECK(source_silent.reference_db == -18.0f);
+
+    const TonalBalanceBand both_silent = band_at(3000.0f);
+    CHECK(std::isnan(both_silent.deviation_db));
+    CHECK(both_silent.source_db == kNone);
+    CHECK(both_silent.reference_db == kNone);
+
+    CHECK_THAT(band_at(12000.0f).deviation_db, WithinAbs(-5.0f, 0.001f));
+  }
+}
+
 TEST_CASE("ReferenceLoudness reports gain required to match reference", "[mastering][match]") {
   const auto quiet = sine_audio(1000.0f, 0.05f);
   const auto loud = sine_audio(1000.0f, 0.2f);

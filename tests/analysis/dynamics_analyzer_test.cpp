@@ -10,6 +10,7 @@
 #include <limits>
 #include <vector>
 
+#include "metering/dynamic_range.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -224,8 +225,8 @@ TEST_CASE("DynamicsAnalyzer handles degenerate sub-sample window", "[dynamics_an
   REQUIRE(std::isfinite(analyzer.peak_db()));
   REQUIRE(std::isfinite(analyzer.rms_db()));
   REQUIRE(std::isfinite(analyzer.crest_factor()));
-  // The first window holds an exact zero (-inf): the range against it is not measured, never inf.
-  REQUIRE_FALSE(std::isinf(analyzer.dynamic_range_db()));
+  // The high percentile is audible, so the range is measured: finite, or +inf over a silent window.
+  REQUIRE_FALSE(std::isnan(analyzer.dynamic_range_db()));
 
   for (float rms : analyzer.loudness_curve().rms_db) {
     REQUIRE_FALSE(std::isnan(rms));
@@ -411,6 +412,27 @@ TEST_CASE("the dynamics analyzer refuses audio it cannot measure", "[dynamics_an
     REQUIRE(std::isfinite(d.crest_factor));
     REQUIRE(d.peak_db > d.rms_db);
   }
+}
+
+TEST_CASE("DynamicsAnalyzer reads a range over silent windows as the metering range does",
+          "[dynamics_analyzer][evidence]") {
+  constexpr int sr = 22050;
+  // One second of tone then one second of exact zeros: the low percentile window is silent.
+  std::vector<float> gapped(static_cast<size_t>(sr) * 2, 0.0f);
+  for (int i = 0; i < sr; ++i) {
+    gapped[i] = 0.5f * std::sin(2.0f * sonare::constants::kPi * 440.0f * static_cast<float>(i) /
+                                static_cast<float>(sr));
+  }
+  const Audio audio = Audio::from_vector(gapped, sr);
+  const DynamicsAnalyzer analyzer(audio);
+  CHECK(analyzer.dynamic_range_db() == std::numeric_limits<float>::infinity());
+  CHECK(std::isfinite(analyzer.crest_factor()));
+
+  metering::DynamicRangeConfig config;
+  config.window_sec = 0.4f;
+  config.hop_sec = 512.0f / static_cast<float>(sr);
+  const metering::DynamicRangeResult metered = metering::dynamic_range(audio, config);
+  CHECK(metered.dynamic_range_db == analyzer.dynamic_range_db());
 }
 
 TEST_CASE("DynamicsAnalyzer does not call silence compressed", "[dynamics_analyzer][evidence]") {

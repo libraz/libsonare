@@ -1105,7 +1105,8 @@ TEST_CASE("Stage level delta reports silence against silence as not measured", "
   }
 }
 
-TEST_CASE("Stage level delta keeps a stage that silenced its input at -inf", "[mastering]") {
+TEST_CASE("Stage level delta reads a silenced input as -inf and a level over silence as +inf",
+          "[mastering]") {
   constexpr int kSampleRate = 44100;
   const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
   const auto tone = series_tone(frames, kSampleRate, 440.0f, 0.4f);
@@ -1122,8 +1123,8 @@ TEST_CASE("Stage level delta keeps a stage that silenced its input at -inf", "[m
   common::stage_level_delta_lu(silent, loud, &introduced, nullptr);
   REQUIRE_FALSE(removed.empty());
   for (const float delta : removed) CHECK((std::isinf(delta) && delta < 0.0f));
-  // A level against a silent baseline has no finite difference.
-  for (const float delta : introduced) CHECK(std::isnan(delta));
+  REQUIRE_FALSE(introduced.empty());
+  for (const float delta : introduced) CHECK((std::isinf(delta) && delta > 0.0f));
 }
 
 TEST_CASE("Mastering true peak reads its computed level, -inf only for exact silence",

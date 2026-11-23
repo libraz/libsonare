@@ -1208,6 +1208,8 @@ const std::vector<std::string>& match_tonal_balance_schema_paths() {
   return paths;
 }
 
+// deviationDb names only its -inf end: a band the reference does not sound is absent rather than
+// +inf, since one path cannot declare both ends; sourceDb and referenceDb say which side is silent.
 const std::vector<std::pair<std::string, std::string>>& match_tonal_balance_null_means() {
   static const std::vector<std::pair<std::string, std::string>> means = {
       {"bands[].deviationDb", "-Infinity"},

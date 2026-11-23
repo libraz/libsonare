@@ -6,6 +6,7 @@
  */
 export const NULL_MEANS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
   analysis_result: {
+    'dynamics.dynamicRangeDb': Number.POSITIVE_INFINITY,
     'dynamics.peakDb': Number.NEGATIVE_INFINITY,
     'dynamics.rmsDb': Number.NEGATIVE_INFINITY,
   },

@@ -97,9 +97,8 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
   }
   // Referred to the programme rather than to full scale, so a quiet recording
   // with an inaudible floor is not treated like a loud one with the same floor.
-  const float floor_over_programme = defects.noise.floor_dbfs - profile.loudness.integrated_lufs;
   if (std::isfinite(defects.noise.floor_dbfs) && std::isfinite(profile.loudness.integrated_lufs) &&
-      floor_over_programme > kNoiseFloorOverProgrammeDb) {
+      defects.noise.floor_dbfs - profile.loudness.integrated_lufs > kNoiseFloorOverProgrammeDb) {
     out.repair.denoise.enabled = true;
     if (config.prefer_streaming_safe) {
       // The default estimator ranks every frame of the whole signal by energy, so

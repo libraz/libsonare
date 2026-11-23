@@ -26,6 +26,12 @@ float average_band(const ReferenceSpectrum& spectrum, float low_hz, float high_h
   return count == 0 ? kNotMeasured : sum / static_cast<float>(count);
 }
 
+// A band the reference does not sound has no deviation: the +inf end has no JSON encoding beside
+// the -inf one, so it is not measured on every surface and the two band levels say which side.
+float band_deviation_db(float source_db, float reference_db) {
+  return reference_db == kNoLevelDb ? kNotMeasured : level_difference_db(source_db, reference_db);
+}
+
 }  // namespace
 
 std::vector<TonalBalanceBand> tonal_balance(const ReferenceSpectrum& source,
@@ -44,7 +50,7 @@ std::vector<TonalBalanceBand> tonal_balance(const ReferenceSpectrum& source,
   for (auto band : ranges) {
     band.source_db = average_band(source, band.low_hz, band.high_hz);
     band.reference_db = average_band(reference, band.low_hz, band.high_hz);
-    band.deviation_db = level_difference_db(band.source_db, band.reference_db);
+    band.deviation_db = band_deviation_db(band.source_db, band.reference_db);
     result.push_back(band);
   }
   return result;
@@ -69,7 +75,7 @@ std::vector<TonalBalanceBand> tonal_balance_log_bands(const ReferenceSpectrum& s
     TonalBalanceBand band{static_cast<float>(low), static_cast<float>(high), 0.0f, 0.0f, 0.0f};
     band.source_db = average_band(source, band.low_hz, band.high_hz);
     band.reference_db = average_band(reference, band.low_hz, band.high_hz);
-    band.deviation_db = level_difference_db(band.source_db, band.reference_db);
+    band.deviation_db = band_deviation_db(band.source_db, band.reference_db);
     result.push_back(band);
   }
   return result;

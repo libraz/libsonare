@@ -2283,9 +2283,9 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
     REQUIRE(err == SONARE_OK);
     REQUIRE(result.peak_db <= 1.0f);
     REQUIRE(result.rms_db <= result.peak_db);
-    // The gaps between clicks are exact zeros, so the low percentile is -inf and the
-    // range between the two percentiles is not measured.
-    REQUIRE(std::isnan(result.dynamic_range_db));
+    // The gaps between clicks are exact zeros, so the low percentile is -inf and the range over
+    // it from an audible high percentile is +inf.
+    REQUIRE(result.dynamic_range_db == std::numeric_limits<float>::infinity());
     REQUIRE(result.loudness_range_lu >= 0.0f);
     REQUIRE((result.is_compressed == 0 || result.is_compressed == 1));
     REQUIRE(result.loudness_count > 0);
