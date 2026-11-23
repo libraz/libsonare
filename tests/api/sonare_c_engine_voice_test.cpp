@@ -66,13 +66,12 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   const int hop = 512;
   const size_t n_frames = samples.size() / static_cast<size_t>(hop) + 1;
   std::vector<float> f0(n_frames, 440.0f);
-  std::vector<float> voiced_prob(n_frames, 1.0f);
   std::vector<int32_t> voiced(n_frames, 1);
   out = nullptr;
   out_length = 0;
   REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050, f0.data(),
-                                                   voiced_prob.data(), voiced.data(), n_frames, hop,
-                                                   70.0f, &out, &out_length) == SONARE_OK);
+                                                   nullptr, voiced.data(), n_frames, hop, 70.0f,
+                                                   &out, &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == samples.size());
   for (size_t i = 0; i < out_length; ++i) {
@@ -98,20 +97,18 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   out = nullptr;
   out_length = 0;
   REQUIRE(sonare_pitch_correct_to_midi_timevarying(
-              samples.data(), samples.size(), 22050, pyin_f0.data(), voiced_prob.data(),
-              pyin_voiced.data(), n_frames, hop, 70.0f, &out, &out_length) == SONARE_OK);
+              samples.data(), samples.size(), 22050, pyin_f0.data(), nullptr, pyin_voiced.data(),
+              n_frames, hop, 70.0f, &out, &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   sonare_free_floats(out);
   pyin_voiced[0] = 1;
-  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050,
-                                                   pyin_f0.data(), voiced_prob.data(),
-                                                   pyin_voiced.data(), n_frames, hop, 70.0f, &out,
-                                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(
+              samples.data(), samples.size(), 22050, pyin_f0.data(), nullptr, pyin_voiced.data(),
+              n_frames, hop, 70.0f, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   pyin_f0[0] = 22050.0f;
-  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050,
-                                                   pyin_f0.data(), voiced_prob.data(),
-                                                   pyin_voiced.data(), n_frames, hop, 70.0f, &out,
-                                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(
+              samples.data(), samples.size(), 22050, pyin_f0.data(), nullptr, pyin_voiced.data(),
+              n_frames, hop, 70.0f, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 
   // Invalid args are rejected (null f0, zero frames, bad hop, out-of-range target).
   out = nullptr;

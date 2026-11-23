@@ -76,9 +76,8 @@ def test_pitch_correct_timevarying_follows_a_midi_target() -> None:
     assert len(result) == len(samples)
     assert all(math.isfinite(x) for x in result)
 
-    # Explicit voiced flags / probabilities are accepted.
+    # Explicit voiced flags are accepted.
     voiced = [1] * n_frames
-    voiced_prob = [1.0] * n_frames
     result2 = libsonare.pitch_correct_timevarying(
         samples,
         f0_hz=f0,
@@ -86,7 +85,6 @@ def test_pitch_correct_timevarying_follows_a_midi_target() -> None:
         sample_rate=sr,
         hop_length=hop,
         voiced=voiced,
-        voiced_prob=voiced_prob,
     )
     assert len(result2) == len(samples)
 
@@ -101,7 +99,6 @@ def test_pitch_correct_timevarying_follows_a_midi_target() -> None:
         sample_rate=sr,
         hop_length=hop,
         voiced=voiced,
-        voiced_prob=voiced_prob,
     )
     assert all(math.isfinite(x) for x in pyin_result)
 
@@ -158,8 +155,8 @@ def test_pitch_correct_timevarying_derives_voicing_from_voiced_prob() -> None:
         )
 
 
-def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_values() -> None:
-    """Explicit voiced flags take precedence over a companion probability track."""
+def test_pitch_correction_refuses_voiced_and_voiced_prob_together() -> None:
+    """Voiced flags and a probability track are two spellings of one input."""
     sr = 22050
     samples = _tone(sr)
     hop = 512
@@ -167,22 +164,17 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
     f0 = [220.0] * n_frames
     voiced = [1] * n_frames
 
-    general_without_prob = libsonare.pitch_correct_timevarying(
-        samples, f0_hz=f0, sample_rate=sr, hop_length=hop, voiced=voiced
-    )
-
-    # A supplied probability track is ignored completely once voiced is present,
-    # including its length and element-domain checks.
-    for invalid_prob in ([math.nan] * (n_frames + 1), [-0.1] * n_frames, [1.1] * n_frames):
-        general_with_invalid_prob = libsonare.pitch_correct_timevarying(
+    with pytest.raises(
+        libsonare.SonareValueError, match="voiced must be None when voiced_prob is not None$"
+    ):
+        libsonare.pitch_correct_timevarying(
             samples,
             f0_hz=f0,
             sample_rate=sr,
             hop_length=hop,
             voiced=voiced,
-            voiced_prob=invalid_prob,
+            voiced_prob=[1.0] * n_frames,
         )
-        assert list(general_with_invalid_prob) == list(general_without_prob)
 
     # Without explicit flags, the probability track still owns the [0,1] and
     # finite-value contract.

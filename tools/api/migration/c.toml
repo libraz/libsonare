@@ -474,6 +474,22 @@ test = "tests/api/sonare_c_daw_refusal_test.cpp::the note extraction entries ref
 
 [[entry]]
 kind = "function"
+old = "sonare_pitch_correct_to_midi_timevarying"
+changed = "at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/feature/pyin_voicing_contract_test.cpp::Both correction APIs refuse voiced flags and voiced_prob given together"
+
+[[entry]]
+kind = "function"
+old = "sonare_pitch_correct_timevarying"
+changed = "at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/feature/pyin_voicing_contract_test.cpp::Both correction APIs refuse voiced flags and voiced_prob given together"
+
+[[entry]]
+kind = "function"
 old = "sonare_vqt"
 changed = "gamma is NaN for the automatic ERB-derived value and otherwise finite and >= 0; a negative gamma, which selected the automatic value, is refused with SONARE_ERROR_INVALID_PARAMETER 'gamma must be finite and at least 0'"
 domain = "analysis"

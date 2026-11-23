@@ -1605,7 +1605,6 @@ TEST_CASE("low-F0 C pitch correction keeps a short block unchanged", "[c_api][pi
   }
   const float target_midi = sonare_hz_to_midi(input_f0);
   const std::vector<float> f0(1, input_f0);
-  const std::vector<float> voiced_prob(1, 1.0f);
   const std::vector<int32_t> voiced(1, 1);
 
   auto check_identity = [&](float* output, size_t output_length) {
@@ -1617,10 +1616,9 @@ TEST_CASE("low-F0 C pitch correction keeps a short block unchanged", "[c_api][pi
 
   float* output = nullptr;
   size_t output_length = 0;
-  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), sample_rate,
-                                                   f0.data(), voiced_prob.data(), voiced.data(),
-                                                   f0.size(), n_samples, target_midi, &output,
-                                                   &output_length) == SONARE_OK);
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(
+              samples.data(), samples.size(), sample_rate, f0.data(), nullptr, voiced.data(),
+              f0.size(), n_samples, target_midi, &output, &output_length) == SONARE_OK);
   check_identity(output, output_length);
 
   SonarePitchCorrectionConfig config{};
@@ -1629,8 +1627,8 @@ TEST_CASE("low-F0 C pitch correction keeps a short block unchanged", "[c_api][pi
   output = nullptr;
   output_length = 0;
   REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), sample_rate, f0.data(),
-                                           voiced_prob.data(), voiced.data(), f0.size(), n_samples,
-                                           &config, &output, &output_length) == SONARE_OK);
+                                           nullptr, voiced.data(), f0.size(), n_samples, &config,
+                                           &output, &output_length) == SONARE_OK);
   check_identity(output, output_length);
 }
 

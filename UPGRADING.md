@@ -464,6 +464,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_extract_notes` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win |
 | `sonare_merge_notes` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win |
 | `sonare_phase_vocoder` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t |
+| `sonare_pitch_correct_timevarying` | at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced |
+| `sonare_pitch_correct_to_midi_timevarying` | at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced |
 | `sonare_split_note` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win |
 | `sonare_streaming_retune_prepare` | max_block_size 0 is refused; pass the largest block the stream will process |
 
@@ -2491,6 +2493,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `merge_notes` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
 | `pitch_correct_timevarying(mode)` | `pitch_correct_timevarying(target_mode)`: renamed to target_mode (PitchTargetMode = 'midi' \| 'scale'); a non-string is a TypeError and an unknown name a SonareValueError |
 | `pitch_correct_timevarying(reference_midi)` | `pitch_correct_timevarying(scale_reference_midi)` |
+| `pitch_correct_timevarying(voiced_prob)` | voiced_prob= together with voiced= raises SonareValueError where voiced used to win; pass at most one |
 | `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `scale_quantize_midi(reference_midi)` | `scale_quantize_midi(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `split_note` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |

@@ -10139,6 +10139,14 @@ rule = "array-results"
 test = "bindings/python/tests/test_surface_effect_arrays.py::test_one_shot_transforms_return_float32_arrays"
 
 [[entry]]
+kind = "option"
+old = "pitch_correct_timevarying(voiced_prob)"
+changed = "voiced_prob= together with voiced= raises SonareValueError where voiced used to win; pass at most one"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_editing.py::test_pitch_correction_refuses_voiced_and_voiced_prob_together"
+
+[[entry]]
 kind = "function"
 old = "note_stretch"
 changed = "returns a float32 ndarray instead of list[float]"

@@ -122,16 +122,15 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
 ///                    Unvoiced frames accept NaN or finite F0 in
 ///                    [0, sample_rate/2], matching pYIN's unvoiced output.
 /// @param voiced_prob Per-frame voicing probability [0,1] (@p n_frames entries),
-///                    or NULL. It is used ONLY to derive voicing when @p voiced
-///                    is NULL (>= 0.5 is voiced); when @p voiced is supplied it
-///                    is ignored entirely. In particular it does NOT scale the
-///                    per-frame correction amount, so passing
-///                    @ref sonare_pitch_pyin's @c voiced_prob (a frequency-
-///                    dependent observation mass, not a confidence) leaves the
-///                    result identical to omitting it.
+///                    or NULL. It only derives voicing (>= 0.5 is voiced) and
+///                    does NOT scale the per-frame correction amount: it is a
+///                    voicing decision, so @ref sonare_pitch_pyin's @c voiced_flag
+///                    belongs in @p voiced rather than its @c voiced_prob (a
+///                    frequency-dependent observation mass, not a confidence).
 /// @param voiced      Per-frame voiced flags (non-zero = voiced; @p n_frames
-///                    entries), or NULL to fall back to @p voiced_prob (see
-///                    above); with both NULL, every frame is treated as voiced.
+///                    entries), or NULL. At most one of @p voiced_prob and
+///                    @p voiced is given -- both together is refused; with
+///                    both NULL, every frame is treated as voiced.
 /// @param hop_length  F0 hop in samples (> 0). Frame i is centered at sample
 ///                    i*hop_length; nearest-frame voicing switches at half-hop
 ///                    boundaries.
@@ -187,13 +186,14 @@ void sonare_pitch_correction_config_init(SonarePitchCorrectionConfig* config);
 ///                    Voiced frames require finite F0 in (0, sample_rate/2].
 ///                    Unvoiced frames accept NaN or finite F0 in
 ///                    [0, sample_rate/2].
-/// @param voiced_prob Per-frame voicing probability [0,1], or NULL. Used only
-///                    to derive voicing when @p voiced is NULL (>= 0.5 is
-///                    voiced); never a weight on the correction amount (see
+/// @param voiced_prob Per-frame voicing probability [0,1], or NULL. Only
+///                    derives voicing (>= 0.5 is voiced); never a weight on
+///                    the correction amount (see
 ///                    @ref sonare_pitch_correct_to_midi_timevarying).
-/// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL to
-///                    fall back to @p voiced_prob; with both NULL, every
-///                    frame is treated as voiced.
+/// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL. At
+///                    most one of @p voiced_prob and @p voiced is given --
+///                    both together is refused; with both NULL, every frame
+///                    is treated as voiced.
 /// @param hop_length  F0 hop in samples (> 0), with the centered-frame voicing
 ///                    rule of @ref sonare_pitch_correct_to_midi_timevarying.
 /// @note The returned array is heap-allocated and MUST be released with

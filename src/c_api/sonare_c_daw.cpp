@@ -141,11 +141,9 @@ bool valid_pitch_track_f0(float f0_hz, bool voiced, int sample_rate) {
   return f0_hz >= 0.0f && f0_hz <= 0.5f * static_cast<float>(sample_rate);
 }
 
-/// Explicit voiced flags win; absent those, voiced_prob decides (>= 0.5 is
-/// voiced, matching sonare_note_segments' own voiced_threshold default in
-/// features_spectral_pitch.cpp); with both absent, every frame defaults to
-/// voiced. include/sonare/sonare_c_effects.h documents voiced_prob as the
-/// NULL-voiced fallback, not a value the flags-present path also consults.
+/// At most one array is given (the entries refuse both): voiced flags decide, or
+/// voiced_prob >= 0.5 (sonare_note_segments' own voiced_threshold default); with
+/// neither, every frame defaults to voiced.
 bool is_voiced_frame(const int32_t* voiced, const float* voiced_prob, size_t i) {
   if (voiced) return voiced[i] != 0;
   if (voiced_prob) return voiced_prob[i] >= 0.5f;
@@ -168,10 +166,15 @@ void check_pitch_track(const float* f0_hz, const float* voiced_prob, const int32
   }
 }
 
-/// Refuses the frame count and hop of a time-varying correction call.
-SonareError check_timevarying_args(const float* f0_hz, size_t n_frames, size_t hop_length) {
+/// Refuses the track arrays, frame count and hop of a time-varying correction call.
+SonareError check_timevarying_args(const float* f0_hz, const float* voiced_prob,
+                                   const int32_t* voiced, size_t n_frames, size_t hop_length) {
   SONARE_C_REQUIRE_NONNULL(f0_hz);
   return run_validation([&] {
+    if (voiced != nullptr && voiced_prob != nullptr) {
+      util::check::refuse_relation({"voiced_prob", "voiced"},
+                                   "{1} {must_be_absent} when {0} {is_present}");
+    }
     util::check::integer_within(n_frames, kTimeVaryingFrameCountDomain, "n_frames");
     util::check::integer_within(hop_length, editing::pitch_editor::kF0TrackHopLengthDomain,
                                 "hop_length");
@@ -587,7 +590,8 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
   *out = nullptr;
   *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (const SonareError err = check_timevarying_args(f0_hz, n_frames, hop_length);
+  if (const SonareError err =
+          check_timevarying_args(f0_hz, voiced_prob, voiced, n_frames, hop_length);
       err != SONARE_OK) {
     return err;
   }
@@ -648,7 +652,8 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
   *out = nullptr;
   *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (const SonareError err = check_timevarying_args(f0_hz, n_frames, hop_length);
+  if (const SonareError err =
+          check_timevarying_args(f0_hz, voiced_prob, voiced, n_frames, hop_length);
       err != SONARE_OK) {
     return err;
   }

@@ -210,10 +210,12 @@ def pitch_correct_timevarying(
         max_correction_semitones: Per-frame correction clamp; ``None`` keeps the default.
         retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
         vibrato_threshold_cents: Vibrato-preserve threshold; ``None`` keeps the default.
-        voiced: Optional per-frame voiced flags (non-zero = voiced).
-        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``. Used
-            only to derive voicing when ``voiced`` is ``None``; never a weight
-            on the correction amount.
+        voiced: Optional per-frame voiced flags (non-zero = voiced). At most
+            one of ``voiced`` and ``voiced_prob`` is given; with neither, every
+            frame is voiced.
+        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``. It
+            only derives voicing (>= 0.5 is voiced); never a weight on the
+            correction amount.
 
     Returns:
         ``float32`` array of pitch-corrected samples.
@@ -259,7 +261,7 @@ def pitch_correct_timevarying(
         if voiced_len != n_frames:
             raise _refuse("voiced must have the same length as f0_hz")
     prob_array = None
-    if voiced is None and voiced_prob is not None:
+    if voiced_prob is not None:
         prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
         if prob_len != n_frames:
             raise _refuse("voiced_prob must have the same length as f0_hz")

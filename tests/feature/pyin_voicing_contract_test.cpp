@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -146,7 +147,7 @@ TEST_CASE("Time-varying pitch correction ignores voiced_prob", "[feature][pitch]
   }
 }
 
-TEST_CASE("Explicit voiced flags ignore invalid voiced_prob on both correction APIs",
+TEST_CASE("Both correction APIs refuse voiced flags and voiced_prob given together",
           "[feature][pitch][pyin]") {
   const std::vector<float> samples = harmonic_tone(60.0f, 0.5f);
   const size_t n_frames = samples.size() / static_cast<size_t>(kHopLength) + 1;
@@ -186,15 +187,13 @@ TEST_CASE("Explicit voiced flags ignore invalid voiced_prob on both correction A
   REQUIRE(fixed_without_prob.first == SONARE_OK);
   REQUIRE(general_without_prob.first == SONARE_OK);
 
-  for (const float invalid : {std::numeric_limits<float>::quiet_NaN(), -0.1f, 1.1f}) {
-    const std::vector<float> invalid_prob(n_frames, invalid);
-    const auto fixed_with_invalid_prob = fixed(invalid_prob.data(), voiced.data());
-    const auto general_with_invalid_prob = general(invalid_prob.data(), voiced.data());
-    REQUIRE(fixed_with_invalid_prob.first == SONARE_OK);
-    REQUIRE(general_with_invalid_prob.first == SONARE_OK);
-    REQUIRE(fixed_with_invalid_prob.second == fixed_without_prob.second);
-    REQUIRE(general_with_invalid_prob.second == general_without_prob.second);
-  }
+  const std::vector<float> confident_prob(n_frames, 1.0f);
+  REQUIRE(fixed(confident_prob.data(), voiced.data()).first == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "voiced must be NULL when voiced_prob is not NULL");
+  REQUIRE(general(confident_prob.data(), voiced.data()).first == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "voiced must be NULL when voiced_prob is not NULL");
 
   // The probability-only path still owns the [0,1] and finite-value contract.
   for (const float invalid : {std::numeric_limits<float>::quiet_NaN(), -0.1f, 1.1f}) {
