@@ -178,7 +178,7 @@ SonareError check_timevarying_args(const float* f0_hz, const float* voiced_prob,
   return run_validation([&] {
     if (voiced != nullptr && voiced_prob != nullptr) {
       util::check::refuse_relation({"voiced_prob", "voiced"},
-                                   "{1} {must_be_absent} when {0} {is_present}");
+                                   sonare::util::refusal::kAbsentWhenPresentRelation);
     }
     util::check::integer_within(n_frames, kTimeVaryingFrameCountDomain, "n_frames");
     util::check::integer_within(hop_length, editing::pitch_editor::kF0TrackHopLengthDomain,
@@ -277,13 +277,13 @@ SonareError validate_track_args(const float* f0_hz, const float* voiced_prob, co
   if (voiced == nullptr && voiced_prob == nullptr) {
     return run_validation([&] {
       util::check::refuse_relation({"voiced_prob", "voiced"},
-                                   "{0} and {1} {must_not_both_be_absent}");
+                                   sonare::util::refusal::kNotBothAbsentRelation);
     });
   }
   if (voiced != nullptr && voiced_prob != nullptr) {
     return run_validation([&] {
       util::check::refuse_relation({"voiced_prob", "voiced"},
-                                   "{1} {must_be_absent} when {0} {is_present}");
+                                   sonare::util::refusal::kAbsentWhenPresentRelation);
     });
   }
   const SonareError error = validate_f0_frames(f0_hz, n_frames, frame_rate);
@@ -905,7 +905,7 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
   if (voiced != nullptr && f0_hz == nullptr) {
     return run_validation([&] {
       util::check::refuse_relation({"f0_hz", "voiced"},
-                                   "{0} {must_be_present} when {1} {is_present}");
+                                   sonare::util::refusal::kPresentWhenPresentRelation);
     });
   }
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(f0_hz, n_frames);
@@ -990,7 +990,7 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voice
   if (voiced != nullptr && f0_hz == nullptr) {
     return run_validation([&] {
       util::check::refuse_relation({"f0_hz", "voiced"},
-                                   "{0} {must_be_present} when {1} {is_present}");
+                                   sonare::util::refusal::kPresentWhenPresentRelation);
     });
   }
   const SonareError track_error = validate_f0_frames(f0_hz, n_frames, frame_rate);
