@@ -3769,7 +3769,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `ProjectVocalRehydrateStatus.UNRESOLVED` | `ProjectVocalRehydrateStatus='unresolved'` |
 | `ProjectVocalRehydrateStatus` | Literal['rehydrated', 'alreadyReady', 'unresolved']; the IntEnum and its members are removed |
 | `Sf2ProgramStatus.backend` | a SourceBackend token ('synth' or 'sf2') instead of an ordinal |
-| `VocalEditError.reason` | a VocalReason token instead of a number |
 | `VocalFormantMode.PRESERVE` | `VocalFormantMode='preserve'` |
 | `VocalFormantMode.SHIFT` | `VocalFormantMode='shift'` |
 | `VocalFormantMode` | Literal['preserve', 'shift']; the IntEnum and its members are removed |
@@ -3991,6 +3990,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `VocalEditError.actual_text` | `VocalErrorDetail.actual_text` |
+| `VocalEditError.actual` | `VocalErrorDetail.actual`: moves to VocalEditError.detail.actual as a string: the actual text when one was recorded, otherwise the number in decimal |
+| `VocalEditError.expected_text` | `VocalErrorDetail.expected_text` |
+| `VocalEditError.expected` | `VocalErrorDetail.expected`: moves to VocalEditError.detail.expected as a string: the expected text when one was recorded, otherwise the number in decimal |
+| `VocalEditError.field` | `VocalErrorDetail.field` |
+| `VocalEditError.reason` | `VocalErrorDetail.reason`: the vocal-edit reason moves to VocalEditError.detail.reason as a VocalReason token instead of a number; VocalEditError.reason is the generic ErrorReason or None every SonareError carries |
 | `VocalSplitNote.cut_source_sample` | `VocalSplitNote.source_sample` |
 | `VocalSplitNote.cut_source_sec` | `VocalSplitNote.source_sec` |
 

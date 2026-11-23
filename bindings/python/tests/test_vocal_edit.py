@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import ctypes
-from dataclasses import replace
-from typing import get_args
+from dataclasses import FrozenInstanceError, replace
 
 import numpy as np
 import pytest
 
-from libsonare import ErrorCode
+from libsonare import ErrorCode, VocalErrorDetail
 from libsonare._errors import SonareError, SonareValueError
 from libsonare._ffi_types_vocal import (
     SONARE_VOCAL_EDIT_ABI_VERSION,
@@ -31,7 +30,6 @@ from libsonare.vocal_edit import (
     VocalMergeNotes,
     VocalNoteEdit,
     VocalNotesResult,
-    VocalReason,
     VocalSetNoteEdit,
     VocalSetTransition,
     VocalTransition,
@@ -282,9 +280,38 @@ def test_render_job_cancellation_is_call_scoped() -> None:
         with pytest.raises(VocalEditError) as caught:
             job.next(lambda: True)
         assert caught.value.code in (8, 7)
-        assert caught.value.reason in get_args(VocalReason)
-        assert caught.value.reason != "none"
+        assert caught.value.reason is None
+        assert caught.value.detail.reason == "cancelled"
         job.abort()
+
+
+def test_vocal_detail_is_frozen_and_specific_to_vocal_errors() -> None:
+    from libsonare.types import VocalErrorDetail as PublicDetail
+
+    error = VocalEditError(
+        ErrorCode.INVALID_STATE,
+        "stale edit",
+        reason="revisionConflict",
+        field="revision",
+        expected=2**63 + 1,
+        actual=2,
+        expected_text="new",
+        actual_text="old",
+    )
+    assert PublicDetail is VocalErrorDetail
+    assert error.reason is None
+    assert error.detail == VocalErrorDetail(
+        "revisionConflict", "revision", "new", "old", "new", "old"
+    )
+    numeric = VocalEditError(ErrorCode.INVALID_STATE, "stale edit", expected=2**63 + 1, actual=2)
+    assert (numeric.detail.expected, numeric.detail.actual) == (str(2**63 + 1), "2")
+    with pytest.raises(FrozenInstanceError):
+        error.detail.field = "other"  # type: ignore[misc]
+    for field in ("field", "expected", "actual", "expected_text", "actual_text"):
+        assert not hasattr(error, field)
+    plain_error = SonareError(ErrorCode.INVALID_STATE, "invalid state")
+    assert plain_error.reason is None
+    assert not hasattr(plain_error, "detail")
 
 
 def test_premature_finalize_keeps_render_job_usable() -> None:

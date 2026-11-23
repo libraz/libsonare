@@ -55,6 +55,9 @@ from ._vocal_edit_marshal import (
     VocalEditError as VocalEditError,
 )
 from ._vocal_edit_marshal import (
+    VocalErrorDetail as VocalErrorDetail,
+)
+from ._vocal_edit_marshal import (
     _analysis_from_result as _analysis_from_result,
 )
 from ._vocal_edit_marshal import (
@@ -978,6 +981,7 @@ __all__ = [
     "VocalResetNotes",
     "VocalOperation",
     "VocalEditError",
+    "VocalErrorDetail",
     "VocalEditSession",
     "VocalEditDraft",
     "VocalRenderSnapshot",

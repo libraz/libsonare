@@ -809,6 +809,7 @@ if _TYPE_CHECKING:
     from ._project_instruments import ProjectDestinationInstrument as ProjectDestinationInstrument
     from ._project_instruments import ProjectInstrument as ProjectInstrument
     from ._project_model import ProjectAutomationLane as ProjectAutomationLane
+    from ._vocal_edit_marshal import VocalErrorDetail as VocalErrorDetail
 
 
 def __getattr__(name: str) -> object:
@@ -827,4 +828,9 @@ def __getattr__(name: str) -> object:
 
         globals()[name] = ProjectInstrument
         return ProjectInstrument
+    if name == "VocalErrorDetail":
+        from ._vocal_edit_marshal import VocalErrorDetail
+
+        globals()[name] = VocalErrorDetail
+        return VocalErrorDetail
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import math
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, SupportsFloat, cast
 
 import numpy as np
@@ -150,24 +151,29 @@ def _state_token(raw: SonareVocalStateToken) -> VocalStateToken:
     )
 
 
-class VocalEditError(SonareError):
-    """A native vocal-edit failure with the C ABI's structured reason detail.
-
-    Attributes:
-        reason: Why the call was refused; ``"none"`` when no reason was recorded.
-        field: Name of the offending field; empty when none.
-        expected: Expected numeric value, when the detail carries one.
-        actual: Actual numeric value, when the detail carries one.
-        expected_text: Text spelling of the expected value; empty when it is numeric.
-        actual_text: Text spelling of the actual value; empty when it is numeric.
-    """
+@dataclass(frozen=True, slots=True)
+class VocalErrorDetail:
+    """Structured detail of a vocal-edit failure."""
 
     reason: VocalReason
+    """Vocal-edit reason token, or ``"none"`` when none was recorded."""
     field: str
-    expected: int
-    actual: int
+    """Name of the offending field, or an empty string."""
+    expected: str
+    """Expected value: its text when one was recorded, otherwise the number in decimal."""
+    actual: str
+    """Actual value: its text when one was recorded, otherwise the number in decimal."""
     expected_text: str
+    """Expected text value, or an empty string."""
     actual_text: str
+    """Actual text value, or an empty string."""
+
+
+class VocalEditError(SonareError):
+    """A native vocal-edit failure with structured vocal detail."""
+
+    detail: VocalErrorDetail
+    """Reason and values specific to the vocal-edit operation."""
 
     @_entry("VocalEditError")
     def __init__(
@@ -182,13 +188,15 @@ class VocalEditError(SonareError):
         expected_text: str = "",
         actual_text: str = "",
     ) -> None:
-        self.reason = reason
-        self.field = field
-        self.expected = expected
-        self.actual = actual
-        self.expected_text = expected_text
-        self.actual_text = actual_text
         super().__init__(code, message)
+        self.detail = VocalErrorDetail(
+            reason=reason,
+            field=field,
+            expected=expected_text or str(expected),
+            actual=actual_text or str(actual),
+            expected_text=expected_text,
+            actual_text=actual_text,
+        )
 
 
 def _vocal_check(
@@ -210,7 +218,7 @@ def _vocal_check(
         prefix = f"[{exc.code}] "
         if message.startswith(prefix):
             message = message[len(prefix) :]
-        raise VocalEditError(
+        error = VocalEditError(
             exc.code,
             message,
             reason=cast(
@@ -221,7 +229,9 @@ def _vocal_check(
             actual=int(detail.actual),
             expected_text=_text(detail.expected_text),
             actual_text=_text(detail.actual_text),
-        ) from exc
+        )
+        error.reason = exc.reason
+        raise error from exc
 
 
 def _as_given(field: str, root: str | None, respelled: Mapping[str, _Respelling] | None) -> str:

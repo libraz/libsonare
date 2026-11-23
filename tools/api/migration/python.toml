@@ -7285,14 +7285,6 @@ rule = "vocal-edit-model"
 
 [[entry]]
 kind = "field"
-old = "VocalEditError.reason"
-changed = "a VocalReason token instead of a number"
-domain = "project"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_vocal_edit.py::test_render_job_cancellation_is_call_scoped"
-
-[[entry]]
-kind = "field"
 old = "ProjectVocalEditDependency.reason"
 changed = "a VocalReason token instead of a number or IntEnum"
 domain = "project"
@@ -14879,3 +14871,51 @@ old = "Project.remove_automation_lane(target_param_id)"
 new = "Project.remove_automation_lane(lane_id)"
 domain = "project"
 rule = "one-input-form"
+
+[[entry]]
+kind = "field"
+old = "VocalEditError.reason"
+to = "VocalErrorDetail.reason"
+changed = "the vocal-edit reason moves to VocalEditError.detail.reason as a VocalReason token instead of a number; VocalEditError.reason is the generic ErrorReason or None every SonareError carries"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/python/tests/test_vocal_edit.py::test_render_job_cancellation_is_call_scoped"
+
+[[entry]]
+kind = "field"
+old = "VocalEditError.field"
+new = "VocalErrorDetail.field"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "field"
+old = "VocalEditError.expected"
+to = "VocalErrorDetail.expected"
+changed = "moves to VocalEditError.detail.expected as a string: the expected text when one was recorded, otherwise the number in decimal"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/python/tests/test_vocal_edit.py::test_vocal_detail_is_frozen_and_specific_to_vocal_errors"
+
+[[entry]]
+kind = "field"
+old = "VocalEditError.actual"
+to = "VocalErrorDetail.actual"
+changed = "moves to VocalEditError.detail.actual as a string: the actual text when one was recorded, otherwise the number in decimal"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/python/tests/test_vocal_edit.py::test_vocal_detail_is_frozen_and_specific_to_vocal_errors"
+
+[[entry]]
+kind = "field"
+old = "VocalEditError.expected_text"
+new = "VocalErrorDetail.expected_text"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "field"
+old = "VocalEditError.actual_text"
+new = "VocalErrorDetail.actual_text"
+domain = "project"
+rule = "vocal-edit-model"

@@ -1611,6 +1611,9 @@ from .vocal_edit import (
     VocalEditSession as VocalEditSession,
 )
 from .vocal_edit import (
+    VocalErrorDetail as VocalErrorDetail,
+)
+from .vocal_edit import (
     VocalFormantMode as VocalFormantMode,
 )
 from .vocal_edit import VocalHistory as VocalHistory

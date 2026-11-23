@@ -6,6 +6,7 @@ from typing import Any, Literal, TypeAlias
 from numpy.typing import NDArray
 
 from ._vocal_edit_marshal import VocalEditError as VocalEditError
+from ._vocal_edit_marshal import VocalErrorDetail as VocalErrorDetail
 from ._vocal_edit_model import VocalAnalysis as VocalAnalysis
 from ._vocal_edit_model import VocalAnalysisResult as VocalAnalysisResult
 from ._vocal_edit_model import VocalCapabilities as VocalCapabilities
