@@ -262,7 +262,7 @@ class Project(
 
     @classmethod
     @_entry("Project.from_json")
-    def from_json(cls, json: str | bytes) -> Project:
+    def from_json(cls, document: str | bytes) -> Project:
         """Deserialize project JSON into a new :class:`Project`.
 
         Raises a coded :class:`SonareError` (``INVALID_FORMAT`` for a malformed
@@ -271,7 +271,7 @@ class Project(
         """
         lib = _get_lib()
         _check_project_abi(lib)
-        data = _utf8_arg(json, "json") if isinstance(json, str) else bytes(json)
+        data = _utf8_arg(document, "document") if isinstance(document, str) else bytes(document)
         handle = ctypes.c_void_p()
         diag = ctypes.c_char_p()
         rc = lib.sonare_project_deserialize(
@@ -286,13 +286,13 @@ class Project(
 
     @classmethod
     @_entry("Project.from_json_with_diagnostics")
-    def from_json_with_diagnostics(cls, json: str | bytes) -> ProjectDeserializeResult:
+    def from_json_with_diagnostics(cls, document: str | bytes) -> ProjectDeserializeResult:
         """Deserialize project JSON and return warnings from successful loads."""
-        return cls._deserialize_with_diagnostics(json, coded_refusal=False)
+        return cls._deserialize_with_diagnostics(document, coded_refusal=False)
 
     @classmethod
     def _deserialize_with_diagnostics(
-        cls, json: str | bytes, *, coded_refusal: bool
+        cls, document: str | bytes, *, coded_refusal: bool
     ) -> ProjectDeserializeResult:
         """Load a document; with ``coded_refusal`` a refusal carries its coded diagnostic lines.
 
@@ -301,7 +301,7 @@ class Project(
         """
         lib = _get_lib()
         _check_project_abi(lib)
-        data = _utf8_arg(json, "json") if isinstance(json, str) else bytes(json)
+        data = _utf8_arg(document, "document") if isinstance(document, str) else bytes(document)
         handle = ctypes.c_void_p()
         diag = ctypes.c_char_p()
         rc = lib.sonare_project_deserialize(

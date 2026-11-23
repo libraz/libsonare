@@ -335,8 +335,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
   const SonareEngineTrackLane lanes[] = {{tracks[0], nullptr, 0, 0, 1},
                                          {tracks[1], nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, std::size(lanes)) == SONARE_OK);
-  const char* live_strip =
-      R"({"version":2,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"live"}]})";
+  const char* live_strip = R"({"id":"live"})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, tracks[0], live_strip) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(engine, tracks[1], live_strip) == SONARE_OK);
   // Mirror project bounce's offline pre-roll, which settles static lane

@@ -181,21 +181,21 @@ inline std::string send_subject(MixerEditScope scope, const sonare::engine::Mixe
     case Cause::kBusUnknown:
       sonare::util::check::refuse_unknown_id("bus_id", "a bus", "engine");
     case Cause::kStripEqInvalid:
-      refuse("scene_json",
+      refuse("settings",
              "must describe a strip EQ whose bands are valid at the engine's sample rate");
     case Cause::kStripInsertsRefused:
-      refuse("scene_json", "must describe inserts the mixer can create");
+      refuse("settings", "must describe inserts the mixer can create");
     case Cause::kBusPanNotFinite:
-      refuse("scene_json", "must describe a bus whose pan values are finite");
+      refuse("settings", "must describe a bus whose pan values are finite");
     case Cause::kBusImageOnWideLayout:
-      refuse("scene_json",
+      refuse("settings",
              "must leave the pan and width of a bus wider than stereo at their defaults");
     case Cause::kEqBandIndexInvalid:
       refuse("band_index",
              sonare::util::refusal::integer_range_predicate(
                  0, static_cast<double>(sonare::mastering::eq::ParametricEq::kMaxBands) - 1));
     case Cause::kEqBandRefused:
-      refuse("band_json", "must describe a band the EQ stage accepts at the engine's sample rate");
+      refuse("band", "must describe a band the EQ stage accepts at the engine's sample rate");
     case Cause::kInsertAutomationTableFull:
       refuse_insert_automation_table_full();
     case Cause::kOwnedStripTableFull:

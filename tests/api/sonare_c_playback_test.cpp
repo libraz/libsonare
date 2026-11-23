@@ -687,7 +687,7 @@ TEST_CASE("a NULL argument is refused by its parameter name", "[playback][capi]"
   int channels = -1;
   CHECK(sonare_playback_config_num_output_channels(nullptr, &channels) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()) == "config_json must not be NULL");
+  CHECK(std::string(sonare_last_error_message()) == "document must not be NULL");
   CHECK(channels == 0);
 
   SonarePlaybackRenderer* renderer = create_renderer(headphones_config());

@@ -601,8 +601,9 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
 ///   ignored key would answer for a configuration the caller did not ask for.
 ///   Both outputs are zeroed on entry and written only on success.
 /// @param insert Insert processor name (see @ref sonare_mastering_insert_names).
-/// @param params JSON object of flat parameter values, keyed as in @ref
-///   sonare_mastering_insert_param_info. NULL is the empty object.
+/// @param params_json JSON object of flat parameter values, keyed as in @ref
+///   sonare_mastering_insert_param_info. NULL is the empty object. A refusal names the key
+///   under the root `params`.
 /// @param sample_rate Rate the insert is prepared at.
 /// @param out_latency_samples Receives the latency in samples at @p sample_rate.
 /// @param out_tail_samples Receives the tail in samples at @p sample_rate: an upper bound on
@@ -611,8 +612,9 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
 /// @return SONARE_ERROR_INVALID_PARAMETER for an unknown @p insert, a key the
 ///   insert does not read, a value its construction refuses, a sample rate
 ///   outside the supported range, or a NULL output pointer.
-SonareError sonare_mastering_insert_timing(const char* insert, const char* params, int sample_rate,
-                                           int* out_latency_samples, int* out_tail_samples);
+SonareError sonare_mastering_insert_timing(const char* insert, const char* params_json,
+                                           int sample_rate, int* out_latency_samples,
+                                           int* out_tail_samples);
 
 /// @brief The number an enum-valued mastering parameter carries for one of its names.
 /// @details Every flat parameter list is numbers, so a facade that lets a caller write
@@ -917,11 +919,14 @@ void sonare_eq_destroy(SonareEq* eq);
 /// @c releaseMs, @c detectorDelayMs, @c sidechainFreqHz, @c sidechainQ, and
 /// @c externalSidechain. The corresponding snake_case spellings are also
 /// accepted where applicable. Omitted fields use the default @c EqBand values.
-/// Any other key is refused with @c SONARE_ERROR_INVALID_PARAMETER naming it;
-/// keys starting with @c $ or @c x- are ignored.
+/// @p band_json is the shape of @c $defs/eqBand in schemas/mixer-scene.schema.json.
+/// Every refusal of it, malformed JSON and any other key included, is
+/// @c SONARE_ERROR_INVALID_PARAMETER naming its path under @c band
+/// (`unknown key band.gain`); keys starting with @c $ or @c x- are ignored.
 /// @c detectorDelayMs delays the detector's view of the signal, so a larger
 /// value makes the band react later; it is not look-ahead and adds no latency
-/// to the audio path. @c lookaheadMs is still accepted as its former spelling.
+/// to the audio path. Its earlier spelling @c lookaheadMs is refused as
+/// `band.lookaheadMs`, naming `band.detectorDelayMs`.
 /// @c phase == NaturalPhase forces @c coeffMode = Vicanek for the band. Vicanek
 /// has no Q/S parameter, so @c q is ignored on LowShelf and HighShelf, though it
 /// is still stored and read back verbatim; Peak, pass and notch bands honour
@@ -2256,7 +2261,9 @@ SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t
 ///   `stage` one of `declip`, `declick`, `decrackle`, `dehum`, `denoise`,
 ///   `dereverb`. The stages run in that fixed order whatever order the array
 ///   gives; a stage named twice, an unknown stage and an unknown setting are
-///   refused with @c SONARE_ERROR_INVALID_PARAMETER. Declip, declick and dehum
+///   refused with @c SONARE_ERROR_INVALID_PARAMETER, named under the root
+///   `stages` (`stages[1].stage`, `unknown key stages[0].lpcOdrer`), as are
+///   malformed JSON and a value of the wrong type. Declip, declick and dehum
 ///   decide over the whole channel set and report per channel, decrackle runs
 ///   each channel alone, and denoise and dereverb apply one linked mask. The
 ///   reports are `[{ stage, scope, reports }]` in application order, `scope`

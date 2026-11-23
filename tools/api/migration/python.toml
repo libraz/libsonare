@@ -5778,7 +5778,7 @@ test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentil
 [[entry]]
 kind = "class"
 old = "StreamingMasteringChain"
-changed = "builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError"
+changed = "builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError"
 domain = "mastering"
 rule = "construction"
 test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
@@ -7816,7 +7816,7 @@ test = "bindings/python/tests/test_mastering_preset_params.py::test_preset_param
 [[entry]]
 kind = "option"
 old = "master_audio(overrides)"
-changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
@@ -7824,7 +7824,7 @@ test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_c
 [[entry]]
 kind = "option"
 old = "master_audio_stereo(overrides)"
-changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
@@ -7832,7 +7832,7 @@ test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_c
 [[entry]]
 kind = "option"
 old = "streaming_loudness_gain(config)"
-changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
@@ -7840,7 +7840,7 @@ test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_c
 [[entry]]
 kind = "option"
 old = "streaming_loudness_gain_stereo(config)"
-changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path"
+changed = "takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path"
 domain = "mastering"
 rule = "typed-results"
 test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_config_content_is_refused_by_the_core_naming_the_path"
@@ -8513,7 +8513,7 @@ rule = "typed-results"
 [[entry]]
 kind = "option"
 old = "mastering_repair_apply(stages)"
-changed = "takes DeclipStage, DeclickStage, DecrackleStage, DehumStage, DenoiseStage and DereverbStage records with snake_case settings, declip in clip_threshold_db; a mapping raises TypeError"
+changed = "takes DeclipStage, DeclickStage, DecrackleStage, DehumStage, DenoiseStage and DereverbStage records with snake_case settings, declip in clip_threshold_db; a mapping raises TypeError; a refused stage list is SonareValueError naming stages[<i>].<key>"
 domain = "effects"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_repair_session.py::test_refuses_stages_that_are_not_stage_records"
@@ -11368,7 +11368,7 @@ rule = "construction"
 [[entry]]
 kind = "option"
 old = "StreamingEqualizer.set_band(band)"
-changed = "an EqBandInput mapping with camelCase keys only; JSON text raises TypeError, so parse it with json.loads first"
+changed = "an EqBandInput mapping with camelCase keys only; JSON text raises TypeError, so parse it with json.loads first; a refused key or value is SonareValueError naming band.<path>, where 1.x raised SonareError [2]"
 domain = "mastering"
 rule = "one-input-form"
 test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_streaming_equalizer_takes_a_band_mapping_and_refuses_json_text"
@@ -14493,3 +14493,38 @@ changed = "float | None: None for an event over a silent span, instead of 0; suc
 domain = "effects"
 rule = "silence-is-infinite"
 test = "bindings/python/tests/test_percussive_events.py::test_a_silent_span_reports_no_percussive_ratio"
+
+[[entry]]
+kind = "option"
+old = "Project.from_json(json)"
+new = "Project.from_json(document)"
+domain = "project"
+rule = "json-input-kinds"
+
+[[entry]]
+kind = "option"
+old = "Project.from_json_with_diagnostics(json)"
+new = "Project.from_json_with_diagnostics(document)"
+domain = "project"
+rule = "json-input-kinds"
+
+[[entry]]
+kind = "option"
+old = "Project.set_mixer_scene_json(scene_json)"
+new = "Project.set_mixer_scene_json(document)"
+domain = "project"
+rule = "json-input-kinds"
+
+[[entry]]
+kind = "option"
+old = "validate_realtime_voice_changer_preset_json(json_text)"
+new = "validate_realtime_voice_changer_preset_json(document)"
+domain = "effects"
+rule = "json-input-kinds"
+
+[[entry]]
+kind = "option"
+old = "Mixer.from_scene_json(json)"
+new = "Mixer.from_json(document)"
+domain = "engine"
+rule = "json-input-kinds"

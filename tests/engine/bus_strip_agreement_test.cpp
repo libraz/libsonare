@@ -95,7 +95,7 @@ std::string strip_eq_fragment(bool active) {
   return active ? eq_fragment("active") : std::string();
 }
 
-// Bus body shared verbatim between the engine's set_bus_strip_json wrapper and
+// Bus body shared verbatim between the engine's set_bus_strip_json object and
 // the project scene's buses[] entry.
 std::string bus_body(const BusStripCase& c) {
   static const char* const kPanModes[] = {"balance", "stereoPan", "dualPan"};
@@ -119,13 +119,9 @@ std::string master_bus_body(bool eq_active) {
   return std::string(R"("id":"master","role":"master")") + strip_eq_fragment(eq_active);
 }
 
-std::string wrap_strip_scene(const std::string& body) {
-  return std::string(R"({"version":2,"strips":[{)") + body + R"(}],"buses":[],"connections":[]})";
-}
+std::string wrap_strip_object(const std::string& body) { return "{" + body + "}"; }
 
-std::string wrap_bus_scene(const std::string& body) {
-  return std::string(R"({"version":2,"strips":[],"buses":[{)") + body + R"(}],"connections":[]})";
-}
+std::string wrap_bus_object(const std::string& body) { return "{" + body + "}"; }
 
 // Track -> fx bus -> master, matching the engine's group-routing lane
 // (output_bus_id bypasses the master mix) exactly: an explicit bus keeps its
@@ -171,13 +167,13 @@ void configure_engine(SonareEngine* engine, const BusStripCase& c, uint32_t trac
   SonareEngineBus buses[] = {
       {kBusId, 0.0f, static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_STEREO), 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
-  const std::string bus_json = wrap_bus_scene(bus_body(c));
+  const std::string bus_json = wrap_bus_object(bus_body(c));
   REQUIRE(sonare_engine_set_bus_strip_json(engine, kBusId, bus_json.c_str()) == SONARE_OK);
   const SonareEngineTrackLane lane[] = {{track_id, nullptr, 0, kBusId, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  const std::string track_json = wrap_strip_scene(track_strip_body(c.strip_eq));
+  const std::string track_json = wrap_strip_object(track_strip_body(c.strip_eq));
   REQUIRE(sonare_engine_set_track_strip_json(engine, track_id, track_json.c_str()) == SONARE_OK);
-  const std::string master_json = wrap_strip_scene(master_strip_body(c.strip_eq));
+  const std::string master_json = wrap_strip_object(master_strip_body(c.strip_eq));
   REQUIRE(sonare_engine_set_master_strip_json(engine, master_json.c_str()) == SONARE_OK);
 
   SonareEngineBuiltinSynthConfig synth = test_synth_config();

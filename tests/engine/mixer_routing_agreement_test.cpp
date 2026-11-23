@@ -187,13 +187,9 @@ std::string layout_field(bool surround) {
   return surround ? std::string(R"("layout":"5.1")") : std::string(R"("layout":"stereo")");
 }
 
-std::string wrap_strip_scene(const std::string& body) {
-  return std::string(R"({"version":2,"strips":[{)") + body + R"(}],"buses":[],"connections":[]})";
-}
+std::string wrap_strip_object(const std::string& body) { return "{" + body + "}"; }
 
-std::string wrap_bus_scene(const std::string& body) {
-  return std::string(R"({"version":2,"strips":[],"buses":[{)") + body + R"(}],"connections":[]})";
-}
+std::string wrap_bus_object(const std::string& body) { return "{" + body + "}"; }
 
 // ---------------------------------------------------------------------------
 // Project scene
@@ -317,21 +313,21 @@ SonareEngine* make_engine(const Row& row, const EngineOptions& options = {}) {
       {kAudioTrack, nullptr, 0, kBusB, static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_STEREO)}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, kMidiTrack, wrap_strip_scene(midi_strip_body()).c_str()) == SONARE_OK);
+              engine, kMidiTrack, wrap_strip_object(midi_strip_body()).c_str()) == SONARE_OK);
 
   if (row.a_latency) {
     const std::string json =
-        wrap_bus_scene(R"("id":"A",)" + layout_field(a_is_surround(row)) + "," + a_inserts(row));
+        wrap_bus_object(R"("id":"A",)" + layout_field(a_is_surround(row)) + "," + a_inserts(row));
     REQUIRE(sonare_engine_set_bus_strip_json(engine, kBusA, json.c_str()) == SONARE_OK);
   }
   if (keys_b(row)) {
     const std::string json =
-        wrap_bus_scene(R"("id":"B","inserts":[)" + ducker_insert(std::string()) + "]");
+        wrap_bus_object(R"("id":"B","inserts":[)" + ducker_insert(std::string()) + "]");
     REQUIRE(sonare_engine_set_bus_strip_json(engine, kBusB, json.c_str()) == SONARE_OK);
   }
   if (keys_master(row)) {
     const std::string json =
-        wrap_strip_scene(R"("id":"master","inserts":[)" + ducker_insert(std::string()) + "]");
+        wrap_strip_object(R"("id":"master","inserts":[)" + ducker_insert(std::string()) + "]");
     REQUIRE(sonare_engine_set_master_strip_json(engine, json.c_str()) == SONARE_OK);
   }
   if (options.bind_key && row.sidechain != Sidechain::kNone) {

@@ -37,8 +37,7 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
 
   // Azimuth -110 is the left-surround speaker (Ls) of the 5.1 bed (plane 4).
-  const char* strip_json = R"({"version":2,"buses":[{"id":"master","role":"master"}],)"
-                           R"("strips":[{"id":"s","surroundPan":{"azimuth":-110}}]})";
+  const char* strip_json = R"({"id":"s","surroundPan":{"azimuth":-110}})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json) == SONARE_OK);
 
   SonareEngineBounceOptions options;
@@ -133,8 +132,7 @@ TEST_CASE("sonare_engine_set_track_strip_surround_pan moves a lane across the 5.
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
   // A strip with no surroundPan: the setter alone has to place the lane.
-  const char* strip_json = R"({"version":2,"buses":[{"id":"master","role":"master"}],)"
-                           R"("strips":[{"id":"s"}]})";
+  const char* strip_json = R"({"id":"s"})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json) == SONARE_OK);
 
   SonareSurroundPan pan{};
@@ -331,10 +329,9 @@ SonareEngine* make_tape_bias_engine(const float* const* clip_channels, float bia
 
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  const std::string strip_json =
-      R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre",)"
-      R"("processor":"saturation.tape","params":{"bias":)" +
-      std::to_string(bias) + R"(}}]}],"buses":[],"connections":[]})";
+  const std::string strip_json = R"({"id":"track-10","inserts":[{"slot":"pre",)"
+                                 R"("processor":"saturation.tape","params":{"bias":)" +
+                                 std::to_string(bias) + R"(}}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json.c_str()) == SONARE_OK);
   return engine;
 }
@@ -707,9 +704,10 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   // A -6 dB bus gain halves the folded contribution the same way: x + 0.25x.
   REQUIRE(out.back() == Catch::Approx(1.25f).margin(1e-3f));
 
-  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{bad json") ==
+          SONARE_ERROR_INVALID_PARAMETER);
   const char* bus_strip_json =
-      R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"connections":[]})";
+      R"({"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]})";
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_strip_json) == SONARE_OK);
 #else
   SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
@@ -730,7 +728,7 @@ TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[
   SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   const char* bus_strip_json =
-      R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]})";
+      R"({"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]})";
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_strip_json) == SONARE_OK);
 
   // Resolve a bus insert parameter to its reserved automation id (top 3 bits 111).
@@ -769,7 +767,7 @@ TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[
 
   // Master strip insert resolution mirrors the bus path.
   const char* master_json =
-      R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.compressor","params":{"thresholdDb":-3,"ratio":4}}]}],"buses":[],"connections":[]})";
+      R"({"id":"master","inserts":[{"slot":"pre","processor":"dynamics.compressor","params":{"thresholdDb":-3,"ratio":4}}]})";
   REQUIRE(sonare_engine_set_master_strip_json(engine, master_json) == SONARE_OK);
   uint32_t master_id = 0;
   REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "thresholdDb", &master_id) ==
@@ -792,16 +790,13 @@ TEST_CASE("sonare_engine applies, restores and clears strip insert parameters by
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
   const char* eq_insert =
       R"("inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}])";
-  const std::string track_json = std::string(R"({"version":2,"strips":[{"id":"track-10",)") +
-                                 eq_insert + R"(}],"buses":[],"connections":[]})";
+  const std::string track_json = std::string(R"({"id":"track-10",)") + eq_insert + R"(})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, track_json.c_str()) == SONARE_OK);
   SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
-  const std::string bus_json = std::string(R"({"version":2,"strips":[],"buses":[{"id":"1",)") +
-                               eq_insert + R"(}],"connections":[]})";
+  const std::string bus_json = std::string(R"({"id":"1",)") + eq_insert + R"(})";
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_json.c_str()) == SONARE_OK);
-  const std::string master_json = std::string(R"({"version":2,"strips":[{"id":"master",)") +
-                                  eq_insert + R"(}],"buses":[],"connections":[]})";
+  const std::string master_json = std::string(R"({"id":"master",)") + eq_insert + R"(})";
   REQUIRE(sonare_engine_set_master_strip_json(engine, master_json.c_str()) == SONARE_OK);
 
   // Apply-now reports an unknown target through out_applied, not an error.
@@ -873,7 +868,7 @@ TEST_CASE("sonare_engine_set_automation_lane with no points removes the lane", "
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
   const char* track_json =
-      R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"buses":[],"connections":[]})";
+      R"({"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, track_json) == SONARE_OK);
   uint32_t id = 0;
   REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "band0.gainDb", &id) ==
@@ -1076,13 +1071,12 @@ TEST_CASE("a track insert lane set before a lane reorder survives a later automa
   const char* gain_insert =
       R"("inserts":[{"slot":"pre","processor":"utility.gain","params":{"levelDb":0}}])";
   for (const char* track : {"10", "20"}) {
-    const std::string json = std::string(R"({"version":2,"strips":[{"id":"track-)") + track +
-                             R"(",)" + gain_insert + R"(}],"buses":[],"connections":[]})";
+    const std::string json =
+        std::string(R"({"id":"track-)") + track + R"(",)" + gain_insert + R"(})";
     REQUIRE(sonare_engine_set_track_strip_json(engine, static_cast<uint32_t>(std::stoul(track)),
                                                json.c_str()) == SONARE_OK);
   }
-  const std::string master_json = std::string(R"({"version":2,"strips":[{"id":"master",)") +
-                                  gain_insert + R"(}],"buses":[],"connections":[]})";
+  const std::string master_json = std::string(R"({"id":"master",)") + gain_insert + R"(})";
   REQUIRE(sonare_engine_set_master_strip_json(engine, master_json.c_str()) == SONARE_OK);
 
   uint32_t track10_gain = 0;
@@ -1114,22 +1108,17 @@ TEST_CASE("a track insert lane set before a lane reorder survives a later automa
 
 namespace {
 
-// A one-strip scene whose inserts are @p processors, pre-fader up to 32 and post-fader after,
-// each constructed from the JSON object @p params.
-std::string insert_scene(const char* strip_key, const char* strip_id,
-                         const std::vector<const char*>& processors, const char* params = "{}") {
+// A bare strip (or bus) object whose inserts are @p processors, pre-fader up to 32 and post-fader
+// after, each constructed from the JSON object @p params.
+std::string insert_scene(const char* strip_id, const std::vector<const char*>& processors,
+                         const char* params = "{}") {
   std::string inserts;
   for (size_t i = 0; i < processors.size(); ++i) {
     if (i > 0) inserts += ",";
     inserts += std::string(R"({"slot":")") + (i < 32 ? "pre" : "post") + R"(","processor":")" +
                processors[i] + R"(","params":)" + params + "}";
   }
-  if (std::string(strip_key) == "buses") {
-    return std::string(R"({"version":2,"strips":[],"buses":[{"id":")") + strip_id +
-           R"(","inserts":[)" + inserts + R"(]}],"connections":[]})";
-  }
-  return std::string(R"({"version":2,"strips":[{"id":")") + strip_id + R"(","inserts":[)" +
-         inserts + R"(]}],"buses":[],"connections":[]})";
+  return std::string(R"({"id":")") + strip_id + R"(","inserts":[)" + inserts + R"(]})";
 }
 
 uint32_t insert_param_strip_of(uint32_t id) { return (id >> 16u) & 0x1FFFu; }
@@ -1149,11 +1138,9 @@ TEST_CASE("track insert ids keep their track across lane reorders and removals",
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 10, insert_scene("strips", "track-10", {"utility.gain"}).c_str()) ==
-          SONARE_OK);
+              engine, 10, insert_scene("track-10", {"utility.gain"}).c_str()) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 20, insert_scene("strips", "track-20", {"utility.gain"}).c_str()) ==
-          SONARE_OK);
+              engine, 20, insert_scene("track-20", {"utility.gain"}).c_str()) == SONARE_OK);
   uint32_t id10 = 0;
   uint32_t id20 = 0;
   REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb", &id10) ==
@@ -1177,8 +1164,7 @@ TEST_CASE("track insert ids keep their track across lane reorders and removals",
   REQUIRE_FALSE(id_alive(engine, id20));
   REQUIRE(sonare_engine_set_track_lanes(engine, reordered, 2) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 20, insert_scene("strips", "track-20", {"utility.gain"}).c_str()) ==
-          SONARE_OK);
+              engine, 20, insert_scene("track-20", {"utility.gain"}).c_str()) == SONARE_OK);
   REQUIRE_FALSE(id_alive(engine, id20));
   uint32_t readded = 0;
   REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 20, 0, "levelDb", &readded) ==
@@ -1199,11 +1185,11 @@ TEST_CASE("insert ids fail once their slot holds another processor type", "[c_ap
 
   const auto set_all = [&](const char* processor) {
     REQUIRE(sonare_engine_set_track_strip_json(
-                engine, 10, insert_scene("strips", "track-10", {processor}).c_str()) == SONARE_OK);
-    REQUIRE(sonare_engine_set_bus_strip_json(
-                engine, 1, insert_scene("buses", "1", {processor}).c_str()) == SONARE_OK);
+                engine, 10, insert_scene("track-10", {processor}).c_str()) == SONARE_OK);
+    REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, insert_scene("1", {processor}).c_str()) ==
+            SONARE_OK);
     REQUIRE(sonare_engine_set_master_strip_json(
-                engine, insert_scene("strips", "master", {processor}).c_str()) == SONARE_OK);
+                engine, insert_scene("master", {processor}).c_str()) == SONARE_OK);
   };
   const auto resolve_all = [&](const char* key) {
     std::array<uint32_t, 3> ids{};
@@ -1244,9 +1230,9 @@ TEST_CASE("bus insert ids survive bus reorders and fail once the bus is removed"
   SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}, {2, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
   for (const char* bus : {"1", "2"}) {
-    REQUIRE(sonare_engine_set_bus_strip_json(
-                engine, static_cast<uint32_t>(std::stoul(bus)),
-                insert_scene("buses", bus, {"utility.gain"}).c_str()) == SONARE_OK);
+    REQUIRE(sonare_engine_set_bus_strip_json(engine, static_cast<uint32_t>(std::stoul(bus)),
+                                             insert_scene(bus, {"utility.gain"}).c_str()) ==
+            SONARE_OK);
   }
   uint32_t id1 = 0;
   uint32_t id2 = 0;
@@ -1268,7 +1254,7 @@ TEST_CASE("bus insert ids survive bus reorders and fail once the bus is removed"
   REQUIRE_FALSE(id_alive(engine, id1));
   REQUIRE(sonare_engine_set_track_buses(engine, reordered, 2) == SONARE_OK);
   REQUIRE(sonare_engine_set_bus_strip_json(
-              engine, 1, insert_scene("buses", "1", {"utility.gain"}).c_str()) == SONARE_OK);
+              engine, 1, insert_scene("1", {"utility.gain"}).c_str()) == SONARE_OK);
   REQUIRE_FALSE(id_alive(engine, id1));
   REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "levelDb", &again) ==
           SONARE_OK);
@@ -1283,9 +1269,9 @@ TEST_CASE("a GS EFX type change retires the ids of its slot", "[c_api][engine]")
   REQUIRE(sonare_engine_prepare(engine, 48000, 256, 64, 16, 0) == SONARE_OK);
   // Both types are one processor class; only the EFX type tells their byte layouts apart.
   const std::string first =
-      insert_scene("strips", "master", {"effects.gsEfx"}, R"({"typeMsb":1,"typeLsb":16})");
+      insert_scene("master", {"effects.gsEfx"}, R"({"typeMsb":1,"typeLsb":16})");
   const std::string second =
-      insert_scene("strips", "master", {"effects.gsEfx"}, R"({"typeMsb":2,"typeLsb":12})");
+      insert_scene("master", {"effects.gsEfx"}, R"({"typeMsb":2,"typeLsb":12})");
   const auto resolve_any = [&]() {
     for (int slot = 0; slot < 20; ++slot) {
       uint32_t id = 0;
@@ -1317,10 +1303,8 @@ TEST_CASE("track strip, lane and bus changes that would overflow the insert id t
   REQUIRE(sonare_engine_prepare(engine, 48000, 64, 64, 16, 0) == SONARE_OK);
 
   // 127 master rebuilds of 64 slots alternating the processor kind leave 64 of 8192 entries.
-  const std::string gain =
-      insert_scene("strips", "master", std::vector<const char*>(64, "utility.gain"));
-  const std::string tilt =
-      insert_scene("strips", "master", std::vector<const char*>(64, "eq.tilt"));
+  const std::string gain = insert_scene("master", std::vector<const char*>(64, "utility.gain"));
+  const std::string tilt = insert_scene("master", std::vector<const char*>(64, "eq.tilt"));
   for (int round = 0; round < 127; ++round) {
     REQUIRE(sonare_engine_set_master_strip_json(engine, (round % 2 == 0 ? gain : tilt).c_str()) ==
             SONARE_OK);
@@ -1330,35 +1314,31 @@ TEST_CASE("track strip, lane and bus changes that would overflow the insert id t
   SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   const auto gains = [](size_t count) { return std::vector<const char*>(count, "utility.gain"); };
-  REQUIRE(
-      sonare_engine_set_bus_strip_json(engine, 1, insert_scene("buses", "1", gains(40)).c_str()) ==
-      SONARE_OK);  // 24 entries left
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, insert_scene("1", gains(40)).c_str()) ==
+          SONARE_OK);  // 24 entries left
 
   // Track strip: 30 new slots do not fit, 20 do. The table earlier calls filled is
   // state; a processor that does not exist is still the argument.
+  REQUIRE(
+      sonare_engine_set_track_strip_json(engine, 10, insert_scene("track-10", gains(30)).c_str()) ==
+      SONARE_ERROR_INVALID_STATE);
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 10, insert_scene("strips", "track-10", gains(30)).c_str()) ==
-          SONARE_ERROR_INVALID_STATE);
-  REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 10, insert_scene("strips", "track-10", {"no.such.processor"}).c_str()) ==
+              engine, 10, insert_scene("track-10", {"no.such.processor"}).c_str()) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 10, insert_scene("strips", "track-10", gains(20)).c_str()) == SONARE_OK);
+              engine, 10, insert_scene("track-10", gains(20)).c_str()) == SONARE_OK);
   // 4 left. A rebuild that keeps every slot's kind needs no entry, on a track and on a bus.
   const char* quieter = R"({"levelDb":-1})";
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 10, insert_scene("strips", "track-10", gains(20), quieter).c_str()) ==
-          SONARE_OK);
+              engine, 10, insert_scene("track-10", gains(20), quieter).c_str()) == SONARE_OK);
   REQUIRE(sonare_engine_set_bus_strip_json(
-              engine, 1, insert_scene("buses", "1", gains(40), quieter).c_str()) == SONARE_OK);
+              engine, 1, insert_scene("1", gains(40), quieter).c_str()) == SONARE_OK);
   // Bus: a new kind in 40 slots does not fit; an unknown bus is the argument.
-  REQUIRE(
-      sonare_engine_set_bus_strip_json(
-          engine, 1, insert_scene("buses", "1", std::vector<const char*>(40, "eq.tilt")).c_str()) ==
-      SONARE_ERROR_INVALID_STATE);
-  REQUIRE(
-      sonare_engine_set_bus_strip_json(engine, 99, insert_scene("buses", "99", gains(1)).c_str()) ==
-      SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_json(
+              engine, 1, insert_scene("1", std::vector<const char*>(40, "eq.tilt")).c_str()) ==
+          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 99, insert_scene("99", gains(1)).c_str()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   // Buses: five entering buses need five fader entries of the four left; a
   // duplicate bus id is the argument.
   SonareEngineBus six[] = {{1, 0.0f, 1, 0, nullptr, 0}, {2, 0.0f, 1, 0, nullptr, 0},
@@ -1369,7 +1349,7 @@ TEST_CASE("track strip, lane and bus changes that would overflow the insert id t
   REQUIRE(sonare_engine_set_track_buses(engine, twice, 2) == SONARE_ERROR_INVALID_PARAMETER);
   // Lane: a track entering with 10 slots does not fit.
   REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 20, insert_scene("strips", "track-20", gains(10)).c_str()) == SONARE_OK);
+              engine, 20, insert_scene("track-20", gains(10)).c_str()) == SONARE_OK);
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_STATE);
   SonareEngineTrackLane duplicate[] = {{10, nullptr, 0, 0, 1}, {10, nullptr, 0, 0, 1}};
@@ -1387,9 +1367,8 @@ TEST_CASE("a strip change that would overflow the insert id table is refused", "
   // mints 64 entries; the 13-bit selector field holds 8192, so rebuild 129 cannot fit.
   constexpr size_t kInserts = 64;
   const std::string gain =
-      insert_scene("strips", "master", std::vector<const char*>(kInserts, "utility.gain"));
-  const std::string tilt =
-      insert_scene("strips", "master", std::vector<const char*>(kInserts, "eq.tilt"));
+      insert_scene("master", std::vector<const char*>(kInserts, "utility.gain"));
+  const std::string tilt = insert_scene("master", std::vector<const char*>(kInserts, "eq.tilt"));
   for (int round = 0; round < 128; ++round) {
     REQUIRE(sonare_engine_set_master_strip_json(engine, (round % 2 == 0 ? gain : tilt).c_str()) ==
             SONARE_OK);
@@ -1399,7 +1378,7 @@ TEST_CASE("a strip change that would overflow the insert id table is refused", "
           SONARE_OK);
   REQUIRE(sonare_engine_set_master_strip_json(engine, gain.c_str()) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(sonare_engine_set_master_strip_json(
-              engine, insert_scene("strips", "master", {"no.such.processor"}).c_str()) ==
+              engine, insert_scene("master", {"no.such.processor"}).c_str()) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // The refused change left the strip and its ids untouched; an unchanged chain still applies.
   REQUIRE(id_alive(engine, before));
@@ -1432,7 +1411,7 @@ TEST_CASE("master strip setters act on the default master strip before any is se
 
   // A set strip replaces the default one; the same calls refuse only what they name.
   REQUIRE(sonare_engine_set_master_strip_json(
-              engine, insert_scene("strips", "master", {"utility.gain"}).c_str()) == SONARE_OK);
+              engine, insert_scene("master", {"utility.gain"}).c_str()) == SONARE_OK);
   CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 99, band) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 0, band) == SONARE_OK);
@@ -1501,7 +1480,7 @@ TEST_CASE("an allocation failure in an engine mixer setter reports out of memory
   const SonareEngineTrackSend send[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
   SonareEngineTrackLane lane[] = {{10, send, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
   const char* strip_json =
-      R"({"version":2,"strips":[{"id":"s","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"lookaheadMs":1}}]}]})";
+      R"({"id":"s","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"lookaheadMs":1}}]})";
 
   // Each allocation the call makes fails in turn until the call applies; no refusal on the way
   // may read as the arguments' fault or as earlier configuration.
@@ -1604,19 +1583,18 @@ TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][en
 #if defined(SONARE_WITH_MIXING)
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
-  const char* scene_json =
-      R"({"version":2,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]})";
+  const char* scene_json = R"({"id":"track-10","faderDb":-12,"panLaw":"linear0Db"})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(engine, 0, scene_json) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, "{bad json") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   const char* unknown_processor_json =
-      R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]})";
+      R"({"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, unknown_processor_json) ==
           SONARE_ERROR_INVALID_PARAMETER);
   const char* bad_param_json =
-      R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]})";
+      R"({"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, bad_param_json) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
@@ -1663,7 +1641,7 @@ TEST_CASE("sonare_engine_set_track_strip_insert_bypassed toggles track insert", 
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
   const char* scene_json =
-      R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]})";
+      R"({"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_insert_bypassed(engine, 10, 7, 1, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -1719,10 +1697,7 @@ TEST_CASE("sonare_engine_set_track_strip_eq_band_json updates embedded lane EQ",
 #if defined(SONARE_WITH_MIXING)
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
-  REQUIRE(sonare_engine_set_track_strip_json(
-              engine, 10,
-              R"({"version":2,"strips":[{"id":"track-10"}],"buses":[],"connections":[]})") ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, R"({"id":"track-10"})") == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_eq_band_json(engine, 99, 0,
                                                      R"({"type":"peak","enabled":true})") ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -1786,16 +1761,16 @@ TEST_CASE("sonare_engine_set_master_strip_json processes master strip", "[c_api]
   REQUIRE(sonare_engine_set_clips(engine, clips, 2) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  const char* scene_json =
-      R"({"version":2,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]})";
+  const char* scene_json = R"({"id":"master","faderDb":-12,"panLaw":"linear0Db"})";
   REQUIRE(sonare_engine_set_master_strip_json(engine, scene_json) == SONARE_OK);
-  REQUIRE(sonare_engine_set_master_strip_json(engine, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, "{bad json") ==
+          SONARE_ERROR_INVALID_PARAMETER);
   const char* unknown_processor_json =
-      R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]})";
+      R"({"id":"master","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]})";
   REQUIRE(sonare_engine_set_master_strip_json(engine, unknown_processor_json) ==
           SONARE_ERROR_INVALID_PARAMETER);
   const char* bad_param_json =
-      R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]})";
+      R"({"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]})";
   REQUIRE(sonare_engine_set_master_strip_json(engine, bad_param_json) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_master_strip_insert_bypassed(engine, 0, 1, 0) ==
@@ -1854,9 +1829,7 @@ TEST_CASE("sonare_engine_set_master_strip_eq_band_json updates embedded master E
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  REQUIRE(sonare_engine_set_master_strip_json(
-              engine, R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})") ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, R"({"id":"master"})") == SONARE_OK);
   REQUIRE(sonare_engine_set_master_strip_eq_band_json(
               engine, 99, R"({"type":"peak","enabled":true})") == SONARE_ERROR_INVALID_PARAMETER);
 
@@ -1982,10 +1955,9 @@ TEST_CASE(
 
 #if defined(SONARE_WITH_MIXING)
   const char* equalized_json =
-      R"({"version":2,"strips":[{"id":"master","eq":{"bands":)"
-      R"([{"type":"peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}]}}],)"
-      R"("buses":[],"connections":[]})";
-  const char* flat_json = R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
+      R"({"id":"master","eq":{"bands":)"
+      R"([{"type":"peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}]}})";
+  const char* flat_json = R"({"id":"master"})";
   REQUIRE(sonare_engine_set_master_strip_json(engine, equalized_json) == SONARE_OK);
 
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
@@ -2075,10 +2047,9 @@ TEST_CASE(
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
 
   const char* equalized_json =
-      R"({"version":2,"strips":[],"buses":[{"id":"1","eq":{"bands":)"
-      R"([{"type":"peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}]}}],)"
-      R"("connections":[]})";
-  const char* flat_json = R"({"version":2,"strips":[],"buses":[{"id":"1"}],"connections":[]})";
+      R"({"id":"1","eq":{"bands":)"
+      R"([{"type":"peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}]}})";
+  const char* flat_json = R"({"id":"1"})";
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, equalized_json) == SONARE_OK);
 
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
@@ -2198,7 +2169,7 @@ TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
   // A reverb insert starting fully dry: the baseline output is the bare sine.
   const char* scene_json =
-      R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"effects.reverb.fdn","params":{"dryWet":0.0,"decaySec":2.0}}]}],"buses":[],"connections":[]})";
+      R"({"id":"track-10","inserts":[{"slot":"pre","processor":"effects.reverb.fdn","params":{"dryWet":0.0,"decaySec":2.0}}]})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
 
   // Bad arguments are rejected, not silently ignored.
@@ -2262,8 +2233,7 @@ TEST_CASE("sonare_engine track strip pan setters reflect in realtime", "[c_api][
 #if defined(SONARE_WITH_MIXING)
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
-  const char* scene_json =
-      R"({"version":2,"strips":[{"id":"track-10"}],"buses":[],"connections":[]})";
+  const char* scene_json = R"({"id":"track-10"})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
 
   // Unknown track / out-of-range arguments are rejected, not silently ignored.
@@ -2453,8 +2423,7 @@ TEST_CASE("sonare_engine lane send timing taps pre or post fader", "[c_api][engi
     // the send so it lands on the attenuated strip.
     SonareEngineTrackLane bare_lane[] = {{10, nullptr, 0, 0, 1}};
     REQUIRE(sonare_engine_set_track_lanes(engine, bare_lane, 1) == SONARE_OK);
-    const char* scene_json =
-        R"({"version":2,"strips":[{"id":"track-10","faderDb":-40}],"buses":[],"connections":[]})";
+    const char* scene_json = R"({"id":"track-10","faderDb":-40})";
     REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
 
     SonareEngineTrackSend sends[] = {{1, 0.0f, 1, send_timing}};
@@ -2640,8 +2609,7 @@ TEST_CASE("sonare_engine_drain_meter_telemetry reports per-plane meters for a su
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 1, 1}};  // output_bus_id = 1
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  const char* strip_json = R"({"version":2,"buses":[{"id":"master","role":"master"}],)"
-                           R"("strips":[{"id":"s","surroundPan":{"azimuth":-110}}]})";
+  const char* strip_json = R"({"id":"s","surroundPan":{"azimuth":-110}})";
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json) == SONARE_OK);
 
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);

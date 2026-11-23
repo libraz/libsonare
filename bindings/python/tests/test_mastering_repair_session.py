@@ -132,10 +132,11 @@ class TestApply:
         ],
     )
     def test_refuses_a_bad_stage_list(self, stages: list[libsonare.RepairStage]) -> None:
-        with pytest.raises(libsonare.SonareError) as excinfo:
+        with pytest.raises(
+            libsonare.SonareValueError, match=r"^mastering_repair_apply: stages\["
+        ) as excinfo:
             libsonare.mastering_repair_apply([_material(440.0, 10)], SR, stages=stages)
-        assert not isinstance(excinfo.value, libsonare.SonareValueError)
-        assert excinfo.value.code == libsonare.ErrorCode.INVALID_FORMAT
+        assert excinfo.value.code == libsonare.ErrorCode.INVALID_PARAMETER
 
     @pytest.mark.parametrize("stage", ["declick", {"stage": "declick"}])
     def test_refuses_stages_that_are_not_stage_records(self, stage: object) -> None:

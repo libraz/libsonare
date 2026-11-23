@@ -670,13 +670,13 @@ def realtime_voice_changer_preset_json(name: str) -> str:
 
 
 @_entry("validate_realtime_voice_changer_preset_json")
-def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]:
+def validate_realtime_voice_changer_preset_json(document: str) -> dict[str, object]:
     """Validate a preset JSON text; return the verdict as a dict rather than raising."""
     lib = _get_lib()
     normalized = ctypes.c_char_p()
     error = ctypes.c_char_p()
     rc = lib.sonare_realtime_voice_changer_validate_preset_json(
-        _utf8_arg(json_text, "json_text"), ctypes.byref(normalized), ctypes.byref(error)
+        _utf8_arg(document, "document"), ctypes.byref(normalized), ctypes.byref(error)
     )
     if rc == SONARE_OK:
         try:

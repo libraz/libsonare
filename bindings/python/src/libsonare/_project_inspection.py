@@ -647,7 +647,7 @@ class _ProjectInspectionMixin:
         return name_or_uri
 
     @_entry("Project.set_mixer_scene_json")
-    def set_mixer_scene_json(self, scene_json: str) -> None:
+    def set_mixer_scene_json(self, document: str) -> None:
         """Replace the project's mixer scene from scene JSON.
 
         A scene key the reader does not recognise raises ``SonareError``
@@ -658,7 +658,7 @@ class _ProjectInspectionMixin:
         _check(
             lib.sonare_project_set_mixer_scene_json(
                 self._require_handle(),
-                _utf8_arg(scene_json, "scene_json"),
+                _utf8_arg(document, "document"),
             )
         )
 

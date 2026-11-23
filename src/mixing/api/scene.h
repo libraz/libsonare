@@ -224,4 +224,12 @@ const std::vector<std::string>& scene_schema_paths();
 Scene scene_from_value(const SONARE_JSON_NAMESPACE::Value& value,
                        const std::string& root_path = std::string());
 
+/// Reads one strip's settings object, bare, in the shape a scene holds at `strips[i]`, with the
+/// scene walker's own field checks. Every refusal, malformed JSON included, is InvalidParameter
+/// naming its path under @p root.
+Strip strip_settings_from_json(const std::string& json, const std::string& root);
+
+/// As @ref strip_settings_from_json for one bus, in the shape a scene holds at `buses[i]`.
+Bus bus_settings_from_json(const std::string& json, const std::string& root);
+
 }  // namespace sonare::mixing::api

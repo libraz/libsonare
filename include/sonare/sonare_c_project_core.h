@@ -144,8 +144,9 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
                                      size_t* out_len);
 
 /// @brief Deserializes project JSON into a NEW project handle.
-/// @param json Project JSON (need not be NUL-terminated; @p len bytes are read).
-/// @param len  Byte length of @p json.
+/// @param document Project JSON as @ref sonare_project_serialize writes it (need not be
+///        NUL-terminated; @p len bytes are read).
+/// @param len  Byte length of @p document.
 /// @param out  Receives the new handle on success.
 /// @param out_diag Optional; receives a heap C string with the joined diagnostic
 ///        messages, or NULL when the load produced none. A SUCCESSFUL load can
@@ -159,7 +160,7 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 ///        `unknown key scene.strips[2].faderDB` inside the embedded mixer scene. Insert `params`
 ///        bags and the MIDI content map's keys are data and are not checked. Pass NULL to ignore
 ///        the diagnostics entirely. Malformed input returns an error WITHOUT crashing.
-SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
+SonareError sonare_project_deserialize(const char* document, size_t len, SonareProject** out,
                                        char** out_diag);
 
 /// @brief Returns how many audio sources have no decoded PCM registered.
@@ -407,11 +408,12 @@ SonareError sonare_project_get_audio_source_uri(const SonareProject* project, ui
 ///        NULL is safe.
 void sonare_free_project_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata);
 
-/// @brief Replaces the project's mixer scene from scene JSON.
-/// @details A key the scene reader does not consume (other than `$`- and `x-`-prefixed ones)
-///   fails the call with SONARE_ERROR_INVALID_FORMAT naming it, e.g.
+/// @brief Replaces the project's mixer scene from a scene document.
+/// @details @p document is a mixer scene as @ref sonare_mixer_to_scene_json writes it
+///   (schemas/mixer-scene.schema.json). A key the scene reader does not consume (other than `$`-
+///   and `x-`-prefixed ones) fails the call with SONARE_ERROR_INVALID_FORMAT naming it, e.g.
 ///   `unknown key strips[2].faderDB`; the project's scene is left unchanged.
-SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);
+SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* document);
 
 /// @brief Reads the project sample rate (Hz).
 SonareError sonare_project_get_sample_rate(const SonareProject* project, double* out_sample_rate);

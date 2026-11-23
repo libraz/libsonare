@@ -20,7 +20,7 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the wasm facade binds under another name, sorted.
-inline constexpr std::array<Override, 76> kOverrides = {{
+inline constexpr std::array<Override, 73> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
     {"engine_apply_bus_strip_insert_param_by_name_now", "param_name", "param.name"},
@@ -46,7 +46,6 @@ inline constexpr std::array<Override, 76> kOverrides = {{
     {"engine_set_bus_sidechain", "source_id", "source.id"},
     {"engine_set_bus_sidechain", "source_kind", "source.kind"},
     {"engine_set_bus_strip_insert_param_by_name", "param_name", "param.name"},
-    {"engine_set_bus_strip_json", "scene_json", "settings"},
     {"engine_set_controller_velocity_meaningful", "meaningful", "controllerVelocityMeaningful"},
     {"engine_set_external_midi_clock_enabled", "enabled", "externalMidiClockEnabled"},
     {"engine_set_lane_sidechain", "source_track_id", "source.id"},
@@ -54,7 +53,6 @@ inline constexpr std::array<Override, 76> kOverrides = {{
     {"engine_set_master_sidechain", "source_id", "source.id"},
     {"engine_set_master_sidechain", "source_kind", "source.kind"},
     {"engine_set_master_strip_insert_param_by_name", "param_name", "param.name"},
-    {"engine_set_master_strip_json", "scene_json", "settings"},
     {"engine_set_midi_destination_external", "external", "midiDestinationExternal"},
     {"engine_set_part_rig", "inserts_json", "inserts"},
     {"engine_set_track_output_bus", "output_bus_id", "busId"},
@@ -64,7 +62,6 @@ inline constexpr std::array<Override, 76> kOverrides = {{
     {"engine_set_track_strip_insert_bypassed", "track_id", "ref"},
     {"engine_set_track_strip_insert_param_by_name", "param_name", "param.name"},
     {"engine_set_track_strip_insert_param_by_name", "track_id", "ref"},
-    {"engine_set_track_strip_json", "scene_json", "settings"},
     {"engine_set_track_strip_json", "track_id", "ref"},
     {"engine_set_track_strip_pan", "track_id", "ref"},
     {"engine_set_track_strip_pan_law", "track_id", "ref"},
@@ -214,11 +211,7 @@ struct DocumentRoot {
 
 // (C entry key, document prefix, caller root): the facade puts the caller's object in the
 // document slot the prefix names, so a path under it is the caller's path under the root.
-inline constexpr std::array<DocumentRoot, 3> kDocumentRoots = {{
-    {"engine_set_bus_strip_json", "buses[0].", "settings."},
-    {"engine_set_master_strip_json", "strips[0].", "settings."},
-    {"engine_set_track_strip_json", "strips[0].", "settings."},
-}};
+inline constexpr std::array<DocumentRoot, 0> kDocumentRoots = {{}};
 
 // @p subject re-rooted under the caller's root when it lies in entry @p entry's document slot.
 inline std::optional<std::string> DocumentRooted(std::string_view entry, std::string_view subject) {

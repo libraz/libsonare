@@ -110,8 +110,7 @@ std::vector<float> render_engine_offline(int channels, int bus_layout = kNoBus) 
   }
   const SonareEngineTrackLane lane[] = {{kTrackId, nullptr, 0, output_bus, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  const std::string strip_json = std::string(R"({"version":2,"strips":[{)") + track_strip_body() +
-                                 R"(}],"buses":[],"connections":[]})";
+  const std::string strip_json = std::string("{") + track_strip_body() + "}";
   REQUIRE(sonare_engine_set_track_strip_json(engine, kTrackId, strip_json.c_str()) == SONARE_OK);
   SonareEngineBuiltinSynthConfig synth = engine_synth();
   REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &synth) == SONARE_OK);

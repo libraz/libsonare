@@ -154,22 +154,22 @@ TEST_CASE("playback entries refuse the inputs before the output", "[c_api][heade
   SonarePlaybackRenderer* renderer = garbage_pointer<SonarePlaybackRenderer>();
   REQUIRE(sonare_playback_renderer_create_json(nullptr, nullptr, kRate, 0, &renderer) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config_json must not be NULL");
+  CHECK(last_message() == "document must not be NULL");
   CHECK(renderer == nullptr);
 
   REQUIRE(sonare_playback_renderer_create_json(nullptr, nullptr, kRate, 0, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config_json must not be NULL");
+  CHECK(last_message() == "document must not be NULL");
 
   int channels = 41;
   REQUIRE(sonare_playback_config_num_output_channels(nullptr, &channels) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config_json must not be NULL");
+  CHECK(last_message() == "document must not be NULL");
   CHECK(channels == 0);
 
   REQUIRE(sonare_playback_config_num_output_channels(nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "config_json must not be NULL");
+  CHECK(last_message() == "document must not be NULL");
 }
 #endif  // defined(SONARE_WITH_PLAYBACK)
 

@@ -2749,7 +2749,7 @@ TEST_CASE("sonare_mastering_repair_analyze and sonare_mastering_repair_apply",
     char* reports = reinterpret_cast<char*>(static_cast<std::uintptr_t>(0x1));
     REQUIRE(sonare_mastering_repair_apply(
                 channels, 2, length, sr, R"([{"stage":"dehum"},{"stage":"dehum"}])", nullptr,
-                nullptr, planes, &reports, nullptr, nullptr) == SONARE_ERROR_INVALID_FORMAT);
+                nullptr, planes, &reports, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(reports == nullptr);
     CHECK(std::all_of(a.begin(), a.end(), [](float s) { return s == kSentinel; }));
     float* missing[2] = {a.data(), nullptr};

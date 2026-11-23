@@ -131,13 +131,13 @@ void copy_utf8_prefix(char (&out)[N], const std::string& value) {
 
 }  // namespace
 
-SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
+SonareError sonare_project_deserialize(const char* document, size_t len, SonareProject** out,
                                        char** out_diag) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out) *out = nullptr;
   if (out_diag) *out_diag = nullptr;
-  SONARE_C_REQUIRE_NONNULL(json);
+  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_REQUIRE_NONNULL(out);
   if (len > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, "JSON byte budget exceeded");
@@ -145,7 +145,7 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
   }
   SONARE_C_TRY
   sonare::serialize::DeserializeResult result =
-      sonare::serialize::project_from_json(std::string(json, len));
+      sonare::serialize::project_from_json(std::string(document, len));
   if (!result.ok()) {
     if (out_diag) {
       *out_diag = copy_string(serialize_deserialize_diagnostics(result.diagnostics));
@@ -166,8 +166,8 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
 #else
   if (out) *out = {};
   if (out_diag) *out_diag = {};
-  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, json, len,
-                                                 out, out_diag);
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, document,
+                                                 len, out, out_diag);
 #endif
 }
 

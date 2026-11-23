@@ -638,6 +638,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_streaming_retune_create(semitones)` | `sonare_streaming_retune_create(pitch_semitones)` |
 | `sonare_streaming_retune_set_config(semitones)` | `sonare_streaming_retune_set_config(pitch_semitones)` |
 
+#### A JSON argument is named and refused by what it is
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_mastering_repair_apply` | a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_realtime_voice_changer_validate_preset_json(json)` | `sonare_realtime_voice_changer_validate_preset_json(document)` |
+
 #### Other individual changes
 
 | 1.x | 2.0.0 |
@@ -841,6 +848,14 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareCompressorConfig.sidechain_hpf_hz` | `SonareCompressorConfig.sidechain_high_pass_hz` |
 | `SonareGateConfig.key_hpf_hz` | `SonareGateConfig.key_high_pass_hz` |
 
+#### A JSON argument is named and refused by what it is
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_eq_set_band` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_mastering_insert_timing(params)` | `sonare_mastering_insert_timing(params_json)` |
+| `sonare_mixer_from_scene_json(json)` | `sonare_mixer_from_scene_json(document)` |
+
 #### Other individual changes
 
 | 1.x | 2.0.0 |
@@ -964,6 +979,23 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_engine_set_synth_instrument_binding` | removed: call sonare_engine_set_synth_instrument, which takes the SonareSynthInstrumentBinding |
 | `sonare_engine_set_synth_instrument_with_bank` | removed: call sonare_engine_set_synth_instrument with the bank in SonareSynthInstrumentBinding.sample_bank |
 | `sonare_engine_set_synth_instrument` | takes a const SonareSynthInstrumentBinding* (destination_id, patch, use_gm_programs, sample_bank); a NULL sample_bank binds none, as the patch-only call did |
+
+#### A JSON argument is named and refused by what it is
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_engine_set_bus_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_engine_set_bus_strip_json(scene_json)` | `sonare_engine_set_bus_strip_json(settings_json)` |
+| `sonare_engine_set_bus_strip_json` | takes one bare bus object, the shape a mixer scene holds at buses[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path |
+| `sonare_engine_set_master_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_engine_set_master_strip_json(scene_json)` | `sonare_engine_set_master_strip_json(settings_json)` |
+| `sonare_engine_set_master_strip_json` | takes one bare strip object, the shape a mixer scene holds at strips[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path |
+| `sonare_engine_set_track_strip_eq_band_json` | a refused band_json (malformed JSON, an unknown key, an earlier spelling, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming band.<path>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
+| `sonare_engine_set_track_strip_json(scene_json)` | `sonare_engine_set_track_strip_json(settings_json)` |
+| `sonare_engine_set_track_strip_json` | takes one bare strip object, the shape a mixer scene holds at strips[i], instead of a whole scene (pass that element, not the scene); every refusal of it, malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER naming settings.<path>, where 1.x refused with SONARE_ERROR_INVALID_FORMAT naming the scene path |
+| `sonare_playback_render_interleaved(config_json)` | `sonare_playback_render_interleaved(document)` |
+| `sonare_playback_renderer_create_json(config_json)` | `sonare_playback_renderer_create_json(document)` |
+| `sonare_playback_renderer_set_config_json(config_json)` | `sonare_playback_renderer_set_config_json(document)` |
 
 #### Other individual changes
 
@@ -1128,6 +1160,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareProjectSource.channel_count` | `SonareProjectSource.num_channels` |
+
+#### A JSON argument is named and refused by what it is
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_project_deserialize(json)` | `sonare_project_deserialize(document)` |
+| `sonare_project_set_mixer_scene_json(scene_json)` | `sonare_project_set_mixer_scene_json(document)` |
 
 #### Historical aliases are removed
 
@@ -2374,7 +2413,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeVoiceChangerConfig.limiter_enable_isp_limiter` | a bool (was an int read as non-zero); an int, 0 and 1 included, raises TypeError, and RealtimeVoiceChangerConfig.vocoder_enabled is a bool the same way |
 | `decompose_stems_linked` | returns DecomposeStemsLinkedResult(components, w, h, sample_rate) instead of a dict; read the fields by attribute |
 | `decompose_stems` | returns DecomposeStemsResult(components, w, h, sample_rate) instead of a dict; read the fields by attribute |
-| `mastering_repair_apply(stages)` | takes DeclipStage, DeclickStage, DecrackleStage, DehumStage, DenoiseStage and DereverbStage records with snake_case settings, declip in clip_threshold_db; a mapping raises TypeError |
+| `mastering_repair_apply(stages)` | takes DeclipStage, DeclickStage, DecrackleStage, DehumStage, DenoiseStage and DereverbStage records with snake_case settings, declip in clip_threshold_db; a mapping raises TypeError; a refused stage list is SonareValueError naming stages[<i>].<key> |
 | `mastering_repair_declick` | returns a frozen DeclickResult (samples, report) instead of a bare ndarray; read .samples for the audio |
 | `mastering_repair_declip` | returns a frozen DeclipResult (samples, report) instead of a bare ndarray; read .samples for the audio |
 | `mastering_repair_decrackle` | returns a frozen DecrackleResult (samples, report) instead of a bare ndarray; read .samples for the audio |
@@ -2523,6 +2562,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeVoiceChanger.constructor(preset)` | `RealtimeVoiceChanger.constructor(config)` |
 | `normalize(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1]) |
 | `normalize_stereo(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1]) |
+
+#### A JSON argument is named and refused by what it is
+
+| 1.x | 2.0.0 |
+|---|---|
+| `validate_realtime_voice_changer_preset_json(json_text)` | `validate_realtime_voice_changer_preset_json(document)` |
 
 #### Historical aliases are removed
 
@@ -2837,8 +2882,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamingEqualizer.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
 | `StreamingMasteringChain.flush_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
 | `StreamingMasteringChain.process_stereo` | returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists |
-| `master_audio(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path |
-| `master_audio_stereo(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path |
+| `master_audio(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
+| `master_audio_stereo(overrides)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
 | `mastering_ab_match_loudness(with_match)` | removed: the match is always measured and returned in the LoudnessMatchResult; read samples for the audio alone |
 | `mastering_ab_match_loudness_stereo(with_match)` | removed: the match is always measured and returned in the LoudnessMatchStereoResult; read left and right for the audio alone |
 | `mastering_assistant_suggest_stereo` | returns a MasteringAssistantResult record instead of a JSON string |
@@ -2853,8 +2898,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_streaming_preview_stereo` | returns a MasteringStreamingPreviewResult record instead of a JSON string |
 | `mastering_streaming_preview` | returns a MasteringStreamingPreviewResult record instead of a JSON string |
 | `mixing_scene_preset_json` | `mixing_scene_preset`: renamed to the C/JS name and returns the scene as a MixSceneDocument dict instead of JSON text (pass it as Mixer(scene=...)); the argument is name, a non-string raises TypeError and a name mixing_scene_preset_names does not list raises SonareValueError |
-| `streaming_loudness_gain(config)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path |
-| `streaming_loudness_gain_stereo(config)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path |
+| `streaming_loudness_gain(config)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
+| `streaming_loudness_gain_stereo(config)` | takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path |
 | `suggest_mix_scene_json` | removed: read mixing_assistant_suggest(...).scene, the same scene document |
 | `suggest_mix_scene` | `mixing_assistant_suggest`: renamed to the C/JS name and returns a MixAssistantResult record (scene document, MixAssistantTrackProfile per track, MixAssistantMixProfile) instead of a dict; an absent name, exclusion reason or loudness is None |
 
@@ -2961,7 +3006,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `StreamingMasteringChain.prepare` | removed: pass sample_rate=, max_block_size= and num_channels= to the constructor |
-| `StreamingMasteringChain` | builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareError InvalidFormat naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError |
+| `StreamingMasteringChain` | builds and prepares at construction; sample_rate and num_channels are required keywords and an omitted max_block_size takes the library default (an explicit 0 raises SonareValueError); config takes a version 2 chain document's params: a key is a dotted path and nesting is prefix shorthand, enum leaves are tokens; the core reads the content, so a path given twice, a null, a number for a token or a value outside its domain raises SonareValueError naming the path; a repair stage that needs the whole signal (declick, declip, decrackle, dehum, dereverb) and the quantile noise estimator raise SonareError NotSupported, not SonareValueError |
 | `mastering_insert_param_names(name)` | `mastering_insert_param_names(insert)` |
 
 #### Stereo-only algorithms take left and right
@@ -3000,7 +3045,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `StreamingEqualizer.set_band(band)` | an EqBandInput mapping with camelCase keys only; JSON text raises TypeError, so parse it with json.loads first |
+| `StreamingEqualizer.set_band(band)` | an EqBandInput mapping with camelCase keys only; JSON text raises TypeError, so parse it with json.loads first; a refused key or value is SonareValueError naming band.<path>, where 1.x raised SonareError [2] |
 | `master_audio_stereo` | preset, overrides and on_progress are keyword-only; preset defaults to None (was "pop"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError |
 | `master_audio` | preset, overrides and on_progress are keyword-only; preset defaults to None (was "pop"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError |
 
@@ -3458,6 +3503,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeEngine.set_track_strip_json` | `RealtimeEngine.set_strip`: set_strip(ref, settings) with ref a track id takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0]); a key or value refused inside settings is SonareValueError naming settings.<path>, where 1.x raised SonareError [2] naming strips[0].<path> |
 | `render_playback(config)` | a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first. Keys are camelCase (channelMap, bassManagement.crossoverHz, outputLimiter.ceilingDb, ...) and speaker roles are spelled out (left, leftSurround, ...); an earlier snake_case key, a short role token or outputLimiter.ceilingDbtp raises SonareError InvalidFormat. An unset input.channelMap, speaker distanceM or loudness.programLufs is an omitted key: None raises InvalidFormat naming the path, and config() leaves the key out |
 
+#### A JSON argument is named and refused by what it is
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Mixer.from_scene_json(json)` | `Mixer.from_json(document)` |
+
 #### Historical aliases are removed
 
 | 1.x | 2.0.0 |
@@ -3775,6 +3826,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.set_midi_events(events)` | each event is a ProjectMidiEvent record, or the whole list is one (n, 3) array of ppq, word0, word1 columns; a tuple or mapping is TypeError |
 | `Project.set_tempo_segments(segments)` | each segment is a mapping (a tuple is TypeError) taking start_ppq, bpm and end_bpm only; start_sample, which was ignored, and any other key raise SonareValueError naming it |
 | `Project.set_time_signatures(segments)` | each segment is a mapping (a tuple is TypeError) taking start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored |
+
+#### A JSON argument is named and refused by what it is
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.from_json(json)` | `Project.from_json(document)` |
+| `Project.from_json_with_diagnostics(json)` | `Project.from_json_with_diagnostics(document)` |
+| `Project.set_mixer_scene_json(scene_json)` | `Project.set_mixer_scene_json(document)` |
 
 #### Historical aliases are removed
 
@@ -14711,6 +14770,35 @@ Python, 2.0.0:
 
 ```python
 engine.set_markers([EngineMarker(id=1, ppq=0.0, name="intro")])
+```
+
+### A JSON argument is named and refused by what it is
+
+A JSON argument is a document when the library writes that format and the entry loads it (a project, a mixer scene, a voice-changer preset, a playback config): its C parameter is `document` on every surface and a refusal of its content is `InvalidFormat` at the document path. Any other JSON argument is a per-call argument named `<root>_json` in C and `<root>` on the facades, and a malformed text, an unknown key and a bad value are all `InvalidParameter` naming the path under `<root>` (`band`, `stages`, `settings`, `request`), which is `SonareValueError` in Python. A one-shot that builds from a loader family's document and then runs takes that family's kind and name. The engine strip setters take one bare strip or bus object, the shape a scene holds at `strips[i]` or `buses[i]`, rather than a whole scene.
+
+C, 1.x:
+
+```c
+sonare_engine_set_master_strip_json(engine,
+    "{\"version\":2,\"strips\":[{\"id\":\"master\",\"faderDb\":-3}],\"buses\":[],\"connections\":[]}");
+```
+
+C, 2.0.0:
+
+```c
+sonare_engine_set_master_strip_json(engine, "{\"id\":\"master\",\"faderDb\":-3}");
+```
+
+Python, 1.x:
+
+```python
+project = Project.from_json(json=text)
+```
+
+Python, 2.0.0:
+
+```python
+project = Project.from_json(document=text)
 ```
 
 ### Historical aliases are removed

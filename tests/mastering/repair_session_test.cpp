@@ -255,7 +255,7 @@ TEST_CASE("repair apply refuses a repeated stage, an unknown stage and an unknow
     try {
       run_apply(planes, stages);
     } catch (const SonareException& e) {
-      return e.code() == ErrorCode::InvalidFormat;
+      return e.code() == ErrorCode::InvalidParameter;
     }
     return false;
   };
@@ -270,7 +270,7 @@ TEST_CASE("repair apply refuses a repeated stage, an unknown stage and an unknow
   CHECK_FALSE(refused(R"([{"stage":"denoise","mode":"logMmse","noiseEstimator":1}])"));
 }
 
-TEST_CASE("repair analysis refuses its request as the call's argument, the stages as a document",
+TEST_CASE("repair analysis and apply refuse their request and stages as the call's arguments",
           "[mastering][assistant]") {
   const std::vector<std::vector<float>> planes = {material(440.0, 19)};
   using Form = SonareParameterRefusal::Form;
@@ -291,16 +291,30 @@ TEST_CASE("repair analysis refuses its request as the call's argument, the stage
   CHECK(refusal_of(R"({"preferStreamingSaf":true})") ==
         std::pair{ErrorCode::InvalidParameter, Form::UnknownKey});
 
-  // The stage list the analysis writes as `recommended` is read back as a document.
+  // The stage list the analysis writes as `recommended` is accepted back; a refusal of the
+  // stages argument is named under `stages`.
   const json::Value analysis = json::parse(assistant::repair_analyze_json(
       pointers(planes).data(), planes.size(), kLength, kSr, R"({"preferStreamingSafe":true})"));
   CHECK_NOTHROW(run_apply(planes, json::dump(analysis["recommended"])));
-  try {
-    run_apply(planes, R"([{"stage":"declick","lpcOdrer":8}])");
-    FAIL("an unknown setting was accepted");
-  } catch (const SonareException& e) {
-    CHECK(e.code() == ErrorCode::InvalidFormat);
-  }
+  const auto stages_refusal = [&](const std::string& stages) -> std::pair<Form, std::string> {
+    try {
+      run_apply(planes, stages);
+    } catch (const SonareParameterRefusal& e) {
+      CHECK(e.code() == ErrorCode::InvalidParameter);
+      return {e.form(), e.subjects().front()};
+    }
+    FAIL("stages were accepted: " << stages);
+    return {Form::Predicate, std::string()};
+  };
+  CHECK(stages_refusal(R"([{"stage":"declick","lpcOdrer":8}])") ==
+        std::pair<Form, std::string>{Form::UnknownKey, "stages[0].lpcOdrer"});
+  CHECK(stages_refusal("[{") == std::pair<Form, std::string>{Form::Predicate, "stages"});
+  CHECK(stages_refusal(R"({"stage":"declick"})") ==
+        std::pair<Form, std::string>{Form::WrongType, "stages"});
+  CHECK(stages_refusal(R"([{"stage":"dehum"},{"stage":"dehum"}])") ==
+        std::pair<Form, std::string>{Form::Predicate, "stages[1].stage"});
+  CHECK(stages_refusal(R"([{"stage":"declick","lpcOrder":2049}])").second.rfind("stages[0].", 0) ==
+        0);
 }
 
 TEST_CASE("repair apply reports progress per stage and stops when cancelled",

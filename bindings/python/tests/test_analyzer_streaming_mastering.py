@@ -108,7 +108,7 @@ def test_streaming_equalizer_refuses_earlier_band_spellings(band: dict, current:
 
     with (
         StreamingEqualizer(sample_rate=44100, max_block_size=256) as eq,
-        raises_coded(int(ErrorCode.INVALID_FORMAT), match=current),
+        raises_coded(int(ErrorCode.INVALID_PARAMETER), match=current),
     ):
         eq.set_band(0, band)
 

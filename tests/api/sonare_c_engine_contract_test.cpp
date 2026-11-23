@@ -430,14 +430,14 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
     REQUIRE(sonare_project_set_mixer_scene_json(project, json) == SONARE_ERROR_INVALID_FORMAT);
 #endif
 #if defined(SONARE_WITH_MIXING)
-    REQUIRE(sonare_engine_set_master_strip_json(engine, json) == SONARE_ERROR_INVALID_FORMAT);
-    REQUIRE(sonare_engine_set_track_strip_json(engine, 1, json) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_engine_set_master_strip_json(engine, json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_set_track_strip_json(engine, 1, json) == SONARE_ERROR_INVALID_PARAMETER);
 #endif
 #if defined(SONARE_WITH_MASTERING)
     SonareEq* eq = nullptr;
     REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
     REQUIRE(eq != nullptr);
-    REQUIRE(sonare_eq_set_band(eq, 0, json) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_eq_set_band(eq, 0, json) == SONARE_ERROR_INVALID_PARAMETER);
     sonare_eq_destroy(eq);
 #endif
   }
@@ -448,34 +448,35 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
   sonare_engine_destroy(engine);
 }
 
-TEST_CASE("a scene JSON entry point separates a malformed document from an invalid value",
+TEST_CASE("the strip setters refuse a malformed or wrapped settings object as an argument",
           "[c_api][engine][json]") {
-  // INVALID_FORMAT means the document did not parse. A document that parses and
-  // then fails a scene rule carries its own code, which is the difference
-  // between "your file is corrupt" and "this value is not accepted".
+  // The strip setters take one bare strip or bus object, so every refusal is an argument refusal.
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000, 128, 16, 16, 0) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  const char* malformed = R"({"version":2,"strips":[)";
-  const char* unsupported_version =
-      R"({"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
+  const char* malformed = R"({"id":"master","inserts":[)";
+  const char* scene_wrapper =
+      R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
   const char* unknown_insert_slot =
-      R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"nowhere","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]})";
+      R"({"id":"master","inserts":[{"slot":"nowhere","processor":"eq.parametric","params":{}}]})";
 
-  REQUIRE(sonare_engine_set_master_strip_json(engine, malformed) == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_master_strip_json(engine, unsupported_version) ==
-          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, malformed) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).rfind("settings must be valid JSON: ", 0) == 0);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, scene_wrapper) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) == "unknown key settings.buses");
   REQUIRE(sonare_engine_set_master_strip_json(engine, unknown_insert_slot) ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
 
-  REQUIRE(sonare_engine_set_track_strip_json(engine, 1, malformed) == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_track_strip_json(engine, 1, unsupported_version) ==
-          SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, malformed) == SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, unsupported_version) ==
-          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 1, malformed) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 1, scene_wrapper) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, malformed) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, scene_wrapper) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 #else
   REQUIRE(sonare_engine_set_master_strip_json(engine, "{}") == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -549,7 +550,7 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(refused_mixer == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
-    REQUIRE(std::string(sonare_last_error_message()) == "json must not be NULL");
+    REQUIRE(std::string(sonare_last_error_message()) == "document must not be NULL");
 #endif  // defined(SONARE_WITH_MIXING)
 #if defined(SONARE_WITH_MASTERING)
     SonareEq* refused_eq = nullptr;
@@ -885,16 +886,11 @@ TEST_CASE("sonare_engine_parameter_info describes a compressor insert on every s
   // A leading pre-fader EQ puts the compressor at insert index 1 on the
   // track/master strips, so the id decode is exercised on a non-zero index
   // and not just the degenerate single-insert case.
-  const std::string track_json = std::string(R"({"version":2,"strips":[{"id":"s","inserts":[)") +
-                                 kEq + "," + kCompressorPost +
-                                 R"(]}],"buses":[],"connections":[]})";
+  const std::string track_json =
+      std::string(R"({"id":"s","inserts":[)") + kEq + "," + kCompressorPost + R"(]})";
   const std::string master_json =
-      std::string(R"({"version":2,"strips":[{"id":"master","inserts":[)") + kEq + "," +
-      kCompressorPost + R"(]}],"buses":[],"connections":[]})";
-  // sonare_engine_set_bus_strip_json reads scene.buses[0], not scene.strips[0].
-  const std::string bus_json =
-      std::string(R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[)") + kCompressorPre +
-      R"(]}],"connections":[]})";
+      std::string(R"({"id":"master","inserts":[)") + kEq + "," + kCompressorPost + R"(]})";
+  const std::string bus_json = std::string(R"({"id":"1","inserts":[)") + kCompressorPre + R"(]})";
 
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);

@@ -83,21 +83,6 @@ SonareError refuse_source_kind(int source_kind) {
   });
 }
 
-/// Parses a mixing scene from a JSON string, mapping a syntactic parse failure
-/// to SONARE_ERROR_INVALID_FORMAT. Shared by the strip-setter entry points that
-/// accept a scene JSON payload. A semantic failure inside a well-formed document
-/// is left to SONARE_C_CATCH; the scene reader codes every refusal of the document,
-/// an unknown key included, as InvalidFormat.
-SonareError parse_scene_json(const char* json, mixing::api::Scene* out) {
-  try {
-    *out = mixing::api::scene_from_json(json);
-  } catch (const util::json::JsonError& e) {
-    set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
-  return SONARE_OK;
-}
-
 SonareError refuse_with(const std::string& subject, const std::string& predicate) {
   return run_validation([&] { util::check::refuse(subject.c_str(), predicate); });
 }
@@ -535,23 +520,17 @@ SonareError sonare_engine_set_track_buses(SonareEngine* engine, const SonareEngi
 }
 
 SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_id,
-                                             const char* scene_json) {
+                                             const char* settings_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (bus_id == 0) return refuse_bus_id();
-  SONARE_C_REQUIRE_NONNULL(scene_json);
+  SONARE_C_REQUIRE_NONNULL(settings_json);
 #if !defined(SONARE_WITH_MIXING)
-  return refuse_not_compiled_in(Feature::kMixing, bus_id, scene_json);
+  return refuse_not_compiled_in(Feature::kMixing, bus_id, settings_json);
 #else
   SONARE_C_TRY
-  mixing::api::Scene scene;
-  SonareError perr = parse_scene_json(scene_json, &scene);
-  if (perr != SONARE_OK) return perr;
-  if (scene.buses.empty()) {
-    set_last_error(SONARE_ERROR_INVALID_FORMAT, "scene_json must contain at least one bus");
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
-  return engine->engine.set_bus_strip(bus_id, scene.buses.front())
+  const mixing::api::Bus settings = mixing::api::bus_settings_from_json(settings_json, "settings");
+  return engine->engine.set_bus_strip(bus_id, settings)
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
   SONARE_C_CATCH
@@ -559,23 +538,18 @@ SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_
 }
 
 SonareError sonare_engine_set_track_strip_json(SonareEngine* engine, uint32_t track_id,
-                                               const char* scene_json) {
+                                               const char* settings_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   if (track_id == 0) return refuse_track_id();
-  SONARE_C_REQUIRE_NONNULL(scene_json);
+  SONARE_C_REQUIRE_NONNULL(settings_json);
 #if !defined(SONARE_WITH_MIXING)
-  return refuse_not_compiled_in(Feature::kMixing, track_id, scene_json);
+  return refuse_not_compiled_in(Feature::kMixing, track_id, settings_json);
 #else
   SONARE_C_TRY
-  mixing::api::Scene scene;
-  SonareError perr = parse_scene_json(scene_json, &scene);
-  if (perr != SONARE_OK) return perr;
-  if (scene.strips.empty()) {
-    set_last_error(SONARE_ERROR_INVALID_FORMAT, "scene_json must contain at least one strip");
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
-  return engine->engine.set_track_strip(track_id, scene.strips.front())
+  const mixing::api::Strip settings =
+      mixing::api::strip_settings_from_json(settings_json, "settings");
+  return engine->engine.set_track_strip(track_id, settings)
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
   SONARE_C_CATCH
@@ -630,22 +604,17 @@ SonareError sonare_engine_set_track_strip_insert_bypassed(SonareEngine* engine, 
 #endif
 }
 
-SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char* scene_json) {
+SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char* settings_json) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
-  SONARE_C_REQUIRE_NONNULL(scene_json);
+  SONARE_C_REQUIRE_NONNULL(settings_json);
 #if !defined(SONARE_WITH_MIXING)
-  return refuse_not_compiled_in(Feature::kMixing, scene_json);
+  return refuse_not_compiled_in(Feature::kMixing, settings_json);
 #else
   SONARE_C_TRY
-  mixing::api::Scene scene;
-  SonareError perr = parse_scene_json(scene_json, &scene);
-  if (perr != SONARE_OK) return perr;
-  if (scene.strips.empty()) {
-    set_last_error(SONARE_ERROR_INVALID_FORMAT, "scene_json must contain at least one strip");
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
-  return engine->engine.set_master_strip(scene.strips.front())
+  const mixing::api::Strip settings =
+      mixing::api::strip_settings_from_json(settings_json, "settings");
+  return engine->engine.set_master_strip(settings)
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
   SONARE_C_CATCH

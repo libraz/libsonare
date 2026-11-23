@@ -358,7 +358,7 @@ SonareError sonare_project_set_marker(SonareProject* project, const SonareProjec
 #endif
 }
 
-SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json) {
+SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* document) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   // mixing::api::Scene / scene_from_json / arr::SetScene are all control-plane
@@ -368,12 +368,12 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   // made a documented mixing-OFF-available API unreachable in exactly that
   // build.
   SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(scene_json);
+  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_TRY
   sonare::mixing::api::Scene scene;
   sonare_c_detail::clear_last_diagnostics();
   try {
-    scene = sonare::mixing::api::scene_from_json(scene_json);
+    scene = sonare::mixing::api::scene_from_json(document);
   } catch (const sonare::util::json::JsonError& ex) {
     // Malformed JSON is INVALID_FORMAT at every other C-ABI JSON entry point;
     // without this arm it reached SONARE_C_CATCH's std::exception tail as
@@ -387,7 +387,7 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   SONARE_C_CATCH
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 scene_json);
+                                                 document);
 #endif
 }
 

@@ -414,6 +414,8 @@ SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t s
 /// capacity condition).
 SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t send_index,
                                                   int64_t sample_pos, float db, int curve);
+/// @p document is a mixer scene as sonare_mixer_to_scene_json writes it
+/// (schemas/mixer-scene.schema.json).
 /// Returns NULL when the scene JSON is malformed or a strip cannot be built; the
 /// parse-failure message is available from sonare_last_error_message. A non-NULL
 /// handle is owned by the caller and stays valid until sonare_mixer_destroy.
@@ -422,7 +424,8 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
 /// load with SONARE_ERROR_INVALID_FORMAT naming it, e.g. `unknown key strips[2].faderDB`.
 /// Insert params no processor reads do not fail the load; each is one Warning entry of
 /// sonare_last_diagnostic (codes in the SonareDiagnostic table).
-SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
+SonareMixer* sonare_mixer_from_scene_json(const char* document, int sample_rate,
+                                          int max_block_size);
 /// Free *json_out with sonare_free_string.
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);
 /// Rebuilds and compiles the internal routing graph from the current topology

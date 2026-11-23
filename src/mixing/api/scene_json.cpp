@@ -983,4 +983,45 @@ Scene scene_from_json(const std::string& json) {
   return scene_from_value(sonare::util::json::admit_strict(json), std::string());
 }
 
+namespace {
+
+// One settings object read by @p read at @p root, every refusal coded as the caller's argument.
+template <typename Read>
+auto settings_from_json(const std::string& json, const std::string& root,
+                        const Read& read) -> decltype(read(JsonValue(), root)) {
+  JsonValue value;
+  try {
+    value = sonare::util::json::admit_strict(json);
+  } catch (const sonare::util::json::JsonError& e) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, root,
+                                            std::string("must be valid JSON: ") + e.what());
+  }
+  if (!value.is_object()) {
+    throw SonareParameterRefusal::wrong_type(
+        ErrorCode::InvalidParameter, root,
+        std::string("must be ") + schema::kind_text(schema::Kind::Object));
+  }
+  try {
+    return read(value, root);
+  } catch (const SonareParameterRefusal& e) {
+    throw e.respelled(
+        ErrorCode::InvalidParameter, [](const std::string& subject) { return subject; },
+        e.caller_spelled());
+  } catch (const SonareException& e) {
+    // The band reader the walker shares refuses in text; its paths are already under @p root.
+    if (e.code() != ErrorCode::InvalidFormat) throw;
+    throw SonareException(ErrorCode::InvalidParameter, e.what());
+  }
+}
+
+}  // namespace
+
+Strip strip_settings_from_json(const std::string& json, const std::string& root) {
+  return settings_from_json(json, root, &strip_from_value);
+}
+
+Bus bus_settings_from_json(const std::string& json, const std::string& root) {
+  return settings_from_json(json, root, &bus_from_value);
+}
+
 }  // namespace sonare::mixing::api

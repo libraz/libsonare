@@ -797,7 +797,7 @@ TEST_CASE("project core entries refuse by the parameter the header spells", "[pr
 
   // Two NULL pointers: the first in header order is named.
   CHECK(sonare_project_deserialize(nullptr, 0, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "json must not be NULL");
+  CHECK(last_refusal() == "document must not be NULL");
 
   CHECK(sonare_project_serialize(project, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "out_json must not be NULL");

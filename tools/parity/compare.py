@@ -1306,6 +1306,8 @@ def _order_not_comparable(c_cfg: list[str], s_cfg: list[str]) -> str | None:
 
 def _order_verdict(key: str, c_cfg: list[str], s_cfg: list[str]) -> str:
     """Whether one facade's config order matches C's, once both itemize one."""
+    # A per-call JSON argument is `<root>_json` in C and `<root>` on a facade (json-input-kinds).
+    c_cfg = [n.removesuffix("_json") or n for n in c_cfg]
     # A trailing versioned C config struct is commonly flattened into facade
     # keyword/request fields.  The positional prefix still has to match exactly;
     # the struct's interior has no C-level parameter order to compare here.  This

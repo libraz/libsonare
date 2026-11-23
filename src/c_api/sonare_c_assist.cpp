@@ -40,6 +40,9 @@ struct BuiltinModules {
 
 const char* const kGeneratorId = mods::ChordToneGenerator::kModuleId;
 const char* const kHarmonizerId = mods::DiatonicHarmonizer::kModuleId;
+// The request object is the caller's argument; every refusal of it names its path under here.
+constexpr std::string_view kRequestRoot = "request";
+const std::string kScopePath = schema::child_path(kRequestRoot, "scope");
 
 /// Reads the requested module ids. An unknown id is an error rather than a
 /// silent skip: a caller that misspells a module would otherwise get an empty
@@ -53,14 +56,14 @@ bool select_modules(const json::Value& root, bool* out_generator, bool* out_harm
     return true;
   }
   if (!modules->is_array()) {
-    *error = schema::must_be("modules", schema::Kind::Array);
+    *error = schema::must_be(schema::child_path(kRequestRoot, "modules"), schema::Kind::Array);
     return false;
   }
   *out_generator = false;
   *out_harmonizer = false;
   std::size_t index = 0;
   for (const json::Value& entry : modules->as_array()) {
-    const std::string at = schema::index_path("modules", index++);
+    const std::string at = schema::index_path(schema::child_path(kRequestRoot, "modules"), index++);
     if (!entry.is_string()) {
       *error = schema::must_be(at, schema::Kind::String);
       return false;
@@ -83,12 +86,12 @@ bool read_optional_ppq(const json::Value& scope, const char* key, std::optional<
   const json::Value* value = scope.find(key);
   if (value == nullptr) return true;
   if (!value->is_number()) {
-    *error = schema::must_be(schema::child_path("scope", key), schema::Kind::Number);
+    *error = schema::must_be(schema::child_path(kScopePath, key), schema::Kind::Number);
     return false;
   }
   const double ppq = value->as_number();
   if (!sonare::transport::valid_public_ppq(ppq)) {
-    *error = schema::refusal(schema::child_path("scope", key),
+    *error = schema::refusal(schema::child_path(kScopePath, key),
                              "must be inside the representable PPQ range");
     return false;
   }
@@ -122,31 +125,33 @@ bool read_request(const char* request_json, assist::AssistRequest* out, bool* ou
                   bool* out_harmonizer, std::string* error) {
   json::Value root;
   if (request_json == nullptr || *request_json == '\0') {
-    *error = "request_json must name at least a params object with target_clip_id";
+    *error =
+        schema::refusal(kRequestRoot, "must name at least a params object with target_clip_id");
     return false;
   }
   try {
     root = json::admit_strict(request_json);
   } catch (const json::JsonError& parse_error) {
-    *error = parse_error.what();
+    *error =
+        schema::refusal(kRequestRoot, std::string("must be valid JSON: ") + parse_error.what());
     return false;
   }
   if (!root.is_object()) {
-    *error = schema::root_must_be_object();
+    *error = schema::must_be(kRequestRoot, schema::Kind::Object);
     return false;
   }
   if (!select_modules(root, out_generator, out_harmonizer, error)) return false;
-  if (!read_u32(root, "seed", "", &out->seed, error)) return false;
+  if (!read_u32(root, "seed", kRequestRoot, &out->seed, error)) return false;
 
   if (const json::Value* scope = root.find("scope")) {
     if (!scope->is_object()) {
-      *error = schema::must_be("scope", schema::Kind::Object);
+      *error = schema::must_be(kScopePath, schema::Kind::Object);
       return false;
     }
     if (!read_optional_ppq(*scope, "startPpq", &out->scope.start_ppq, error)) return false;
     if (!read_optional_ppq(*scope, "endPpq", &out->scope.end_ppq, error)) return false;
     if (const json::Value* ids = scope->find("trackIds")) {
-      const std::string ids_path = schema::child_path("scope", "trackIds");
+      const std::string ids_path = schema::child_path(kScopePath, "trackIds");
       if (!ids->is_array()) {
         *error = schema::must_be(ids_path, schema::Kind::Array);
         return false;
@@ -163,17 +168,18 @@ bool read_request(const char* request_json, assist::AssistRequest* out, bool* ou
     }
   }
   if (const json::Value* budget = root.find("budget")) {
+    const std::string budget_path = schema::child_path(kRequestRoot, "budget");
     if (!budget->is_object()) {
-      *error = schema::must_be("budget", schema::Kind::Object);
+      *error = schema::must_be(budget_path, schema::Kind::Object);
       return false;
     }
-    if (!read_u32(*budget, "maxTimeMs", "budget", &out->budget.max_time_ms, error)) return false;
-    if (!read_u32(*budget, "maxIterations", "budget", &out->budget.max_iterations, error))
+    if (!read_u32(*budget, "maxTimeMs", budget_path, &out->budget.max_time_ms, error)) return false;
+    if (!read_u32(*budget, "maxIterations", budget_path, &out->budget.max_iterations, error))
       return false;
   }
   if (const json::Value* params = root.find("params")) {
     if (!params->is_object()) {
-      *error = schema::must_be("params", schema::Kind::Object);
+      *error = schema::must_be(schema::child_path(kRequestRoot, "params"), schema::Kind::Object);
       return false;
     }
     out->params_json = json::dump(*params);

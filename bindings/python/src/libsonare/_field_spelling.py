@@ -188,11 +188,7 @@ QUOTIENTS: dict[tuple[str, str], tuple[str, str]] = {
 
 # (C entry key, document prefix, caller root): the facade puts the caller's mapping in the
 # document slot the prefix names, so a path under it is the caller's path under the root.
-DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = (
-    ("engine_set_bus_strip_json", "buses[0].", "settings."),
-    ("engine_set_master_strip_json", "strips[0].", "settings."),
-    ("engine_set_track_strip_json", "strips[0].", "settings."),
-)
+DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = ()
 
 
 def document_rooted(entry: str, subject: str) -> str | None:

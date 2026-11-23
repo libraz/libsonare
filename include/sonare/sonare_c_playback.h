@@ -71,16 +71,17 @@ SonareError sonare_hrtf_set_create_from_memory(const uint8_t* data, size_t size,
 void sonare_hrtf_set_destroy(SonareHrtfSet* set);
 
 /// @brief Creates a playback renderer.
-/// @details @p config_json may be complete or partial; omitted keys take the
-///          schema defaults and unknown keys return
-///          SONARE_ERROR_INVALID_PARAMETER. For a headphones target @p hrtf may
-///          be NULL on native builds (the built-in set is used); WASM builds
+/// @details @p document is a renderer configuration as
+///          @ref sonare_playback_renderer_config_json writes it; it may be complete or
+///          partial, and omitted keys take the schema defaults. A refusal of its content, an
+///          unknown key included, is SONARE_ERROR_INVALID_FORMAT naming its path. For a headphones
+///          target @p hrtf may be NULL on native builds (the built-in set is used); WASM builds
 ///          require it. For a speakers target @p hrtf is ignored.
 ///          @p max_block_size bounds the frames of every `_process_*` call; 0 selects the
 ///          library default (1024 frames) and a negative value is refused.
 /// @note Release @p out with @ref sonare_playback_renderer_destroy; it is a
 ///       handle, not a sonare_free_* buffer.
-SonareError sonare_playback_renderer_create_json(const char* config_json, const SonareHrtfSet* hrtf,
+SonareError sonare_playback_renderer_create_json(const char* document, const SonareHrtfSet* hrtf,
                                                  int sample_rate, int max_block_size,
                                                  SonarePlaybackRenderer** out);
 /// @brief Releases a renderer.
@@ -89,10 +90,11 @@ void sonare_playback_renderer_destroy(SonarePlaybackRenderer* renderer);
 ///        pending input-layout drains). Configuration and head pose are kept.
 SonareError sonare_playback_renderer_reset(SonarePlaybackRenderer* renderer);
 /// @brief Applies a complete configuration document.
-/// @details A prepare key that differs from the current value returns
+/// @details @p document is refused as @ref sonare_playback_renderer_create_json refuses it.
+///          A prepare key that differs from the current value returns
 ///          SONARE_ERROR_INVALID_PARAMETER ("requires a new renderer: <key>").
 SonareError sonare_playback_renderer_set_config_json(SonarePlaybackRenderer* renderer,
-                                                     const char* config_json);
+                                                     const char* document);
 /// @brief Returns the current complete configuration document.
 /// @note Release @p out_json with @ref sonare_free_string.
 SonareError sonare_playback_renderer_config_json(const SonarePlaybackRenderer* renderer,
@@ -122,7 +124,7 @@ SonareError sonare_playback_renderer_num_output_channels(const SonarePlaybackRen
 /// @brief Output channel count a renderer config document produces, without
 ///        creating a renderer. @p out is written 0 first; the document is read
 ///        and refused exactly as @ref sonare_playback_renderer_create_json reads it.
-SonareError sonare_playback_config_num_output_channels(const char* config_json, int* out);
+SonareError sonare_playback_config_num_output_channels(const char* document, int* out);
 /// @brief Renders one planar block.
 /// @details @p frames must not exceed the max block size; 0 is a no-op that
 ///          never switches the input layout. With a fixed input layout
@@ -167,13 +169,14 @@ SonareError sonare_playback_renderer_non_finite_discard_count(
     const SonarePlaybackRenderer* renderer, size_t* out_count);
 
 /// @brief Renders a whole interleaved buffer offline.
-/// @details The output is aligned with the input (the renderer latency is
+/// @details @p document is refused as @ref sonare_playback_renderer_create_json refuses it.
+///          The output is aligned with the input (the renderer latency is
 ///          removed) and has @p frames frames of @p out_channels channels.
 /// @note Release @p out with @ref sonare_free_floats.
 /// @note SONARE_ERROR_INVALID_PARAMETER when @p frames is 0, @p in is null, or
 ///       @p in contains a non-finite sample.
 SonareError sonare_playback_render_interleaved(const float* in, size_t frames, int in_channels,
-                                               int sample_rate, const char* config_json,
+                                               int sample_rate, const char* document,
                                                const SonareHrtfSet* hrtf, float** out,
                                                size_t* out_frames, int* out_channels);
 /// @brief Renders a whole interleaved buffer offline through an existing renderer.

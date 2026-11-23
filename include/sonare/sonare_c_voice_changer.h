@@ -300,7 +300,7 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
                                                      SonareRealtimeVoiceChangerConfig* out);
 
 /// @brief Parses a preset id or a full chain config JSON document into @p out.
-/// @details @p preset_or_config_json may be NULL or empty (neutralMonitor), one of the preset ids
+/// @details @p document may be NULL or empty (neutralMonitor), one of the preset ids
 ///          returned by @ref sonare_realtime_voice_changer_preset_names, a JSON object following
 ///          the realtime-voice-changer-preset schema, or the flat
 ///          @ref SonareRealtimeVoiceChangerConfig field names used by bindings. JSON schema
@@ -310,7 +310,7 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
 ///          SONARE_ERROR_INVALID_FORMAT and leaves @p out untouched. Pass the result to
 ///          @ref sonare_realtime_voice_changer_create or
 ///          @ref sonare_realtime_voice_changer_set_config.
-SonareError sonare_realtime_voice_changer_config_from_json(const char* preset_or_config_json,
+SonareError sonare_realtime_voice_changer_config_from_json(const char* document,
                                                            SonareRealtimeVoiceChangerConfig* out);
 
 /// @brief Renders a whole buffer through a temporary realtime voice changer.
@@ -461,14 +461,15 @@ const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset ordinal)
 ///       @ref sonare_free_string.
 SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** out_json);
 /// @brief Validates a preset JSON document.
-/// @details On success (return SONARE_OK), @p out_normalized_json receives a
-///          canonicalized JSON copy and @p out_error stays NULL. On failure
-///          (return SONARE_ERROR_INVALID_FORMAT), @p out_error receives a
-///          human-readable message and @p out_normalized_json stays NULL.
+/// @details @p document is a preset as @ref sonare_realtime_voice_changer_preset_json writes it
+///          (schemas/realtime-voice-changer-preset.schema.json). On success (return SONARE_OK), @p
+///          out_normalized_json receives a canonicalized JSON copy and @p out_error stays NULL. On
+///          failure (return SONARE_ERROR_INVALID_FORMAT), @p out_error receives a human-readable
+///          message and @p out_normalized_json stays NULL.
 /// @note In every case, any non-NULL pointer returned through @p out_normalized_json
 ///       or @p out_error MUST be released with @ref sonare_free_string by the
 ///       caller.
-SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
+SonareError sonare_realtime_voice_changer_validate_preset_json(const char* document,
                                                                char** out_normalized_json,
                                                                char** out_error);
 

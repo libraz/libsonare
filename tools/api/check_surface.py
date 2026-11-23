@@ -126,6 +126,7 @@ RULE_SLUGS = (
     "type-names",
     "input-types",
     "one-input-form",
+    "json-input-kinds",
     "aliases-removed",
     "abi-probes",
     "worklet-scope",

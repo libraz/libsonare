@@ -74,17 +74,17 @@ void sonare_hrtf_set_destroy(SonareHrtfSet* set) {
 #endif
 }
 
-SonareError sonare_playback_renderer_create_json(const char* config_json, const SonareHrtfSet* hrtf,
+SonareError sonare_playback_renderer_create_json(const char* document, const SonareHrtfSet* hrtf,
                                                  int sample_rate, int max_block_size,
                                                  SonarePlaybackRenderer** out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
-  SONARE_C_REQUIRE_NONNULL(config_json);
+  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_REQUIRE_NONNULL(out);
   if (max_block_size == 0) max_block_size = playback::kPlaybackRendererDefaultMaxBlock;
   SONARE_C_TRY
-  const playback::RendererConfig config = playback::parse_renderer_config(config_json);
+  const playback::RendererConfig config = playback::parse_renderer_config(document);
   const playback::HrtfSet* hrtf_ptr = hrtf ? hrtf->set.get() : nullptr;
   auto handle = std::make_unique<SonarePlaybackRenderer>();
   handle->renderer =
@@ -93,7 +93,7 @@ SonareError sonare_playback_renderer_create_json(const char* config_json, const 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kPlayback, config_json, hrtf, sample_rate, max_block_size,
+  return refuse_not_compiled_in(Feature::kPlayback, document, hrtf, sample_rate, max_block_size,
                                 out);
 #endif
 }
@@ -120,18 +120,18 @@ SonareError sonare_playback_renderer_reset(SonarePlaybackRenderer* renderer) {
 }
 
 SonareError sonare_playback_renderer_set_config_json(SonarePlaybackRenderer* renderer,
-                                                     const char* config_json) {
+                                                     const char* document) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PLAYBACK)
   SONARE_C_REQUIRE_NONNULL(renderer);
-  SONARE_C_REQUIRE_NONNULL(config_json);
+  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_TRY
-  const playback::RendererConfig config = playback::parse_renderer_config(config_json);
+  const playback::RendererConfig config = playback::parse_renderer_config(document);
   renderer->renderer->set_config(config);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kPlayback, renderer, config_json);
+  return refuse_not_compiled_in(Feature::kPlayback, renderer, document);
 #endif
 }
 
@@ -193,19 +193,19 @@ SonareError sonare_playback_renderer_max_input_channels(const SonarePlaybackRend
 #endif
 }
 
-SonareError sonare_playback_config_num_output_channels(const char* config_json, int* out) {
+SonareError sonare_playback_config_num_output_channels(const char* document, int* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PLAYBACK)
-  SONARE_C_REQUIRE_NONNULL(config_json);
+  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
-  const playback::RendererConfig config = playback::parse_renderer_config(config_json);
+  const playback::RendererConfig config = playback::parse_renderer_config(document);
   *out = playback::output_channel_count(config.prepare);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kPlayback, config_json, out);
+  return refuse_not_compiled_in(Feature::kPlayback, document, out);
 #endif
 }
 
@@ -343,19 +343,19 @@ SonareError refuse_no_frames() {
 #endif
 
 SonareError sonare_playback_render_interleaved(const float* in, size_t frames, int in_channels,
-                                               int sample_rate, const char* config_json,
+                                               int sample_rate, const char* document,
                                                const SonareHrtfSet* hrtf, float** out,
                                                size_t* out_frames, int* out_channels) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out, out_frames, out_channels);
 #if defined(SONARE_WITH_PLAYBACK)
-  SONARE_C_REQUIRE_NONNULL(config_json);
+  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_frames);
   SONARE_C_REQUIRE_NONNULL(out_channels);
   if (frames == 0) return refuse_no_frames();
   SONARE_C_TRY
-  const playback::RendererConfig config = playback::parse_renderer_config(config_json);
+  const playback::RendererConfig config = playback::parse_renderer_config(document);
   const playback::HrtfSet* hrtf_ptr = hrtf ? hrtf->set.get() : nullptr;
   int channels = 0;
   const std::vector<float> result = playback::render_interleaved(
@@ -366,8 +366,8 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kPlayback, in, frames, in_channels, sample_rate,
-                                config_json, hrtf, out, out_frames, out_channels);
+  return refuse_not_compiled_in(Feature::kPlayback, in, frames, in_channels, sample_rate, document,
+                                hrtf, out, out_frames, out_channels);
 #endif
 }
 

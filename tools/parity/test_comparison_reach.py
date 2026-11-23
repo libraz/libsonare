@@ -238,6 +238,14 @@ def test_a_config_struct_before_the_itemized_params_is_the_options_bag() -> None
     assert compare._order_verdict("k", ["config", "ops", "gain"], ["gain"]) == compare.DIVERGED
 
 
+def test_a_json_argument_is_spelled_without_its_suffix_on_a_facade() -> None:
+    assert (
+        compare._order_verdict("k", ["insert", "params_json"], ["insert", "params"])
+        == compare.AGREED
+    )
+    assert compare._order_verdict("k", ["ref", "band_json"], ["ref", "json"]) == compare.DIVERGED
+
+
 def _structural(decl: str) -> list[str]:
     params = c_api._mark_derived_counts([c_api._parse_param(p) for p in decl.split(",")])
     return [p.name for p in params if p.structural]

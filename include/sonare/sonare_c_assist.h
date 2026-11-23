@@ -62,8 +62,10 @@ const char* sonare_assist_module_ids(void);
 /// @brief Runs the built-in assist modules over @p project and reports what they
 ///        would do, WITHOUT modifying the project.
 ///
-/// @param request_json A JSON object. All fields are optional except the target
-///        clip, which lives in @c params:
+/// @param request_json A JSON object, the caller's argument: a refusal of it is
+///        @c SONARE_ERROR_INVALID_PARAMETER naming its path under @c request
+///        (`request.budget.maxTimeMs must be ...`). All fields are optional except the
+///        target clip, which lives in @c params:
 ///   - @c modules: array of module ids to run. Absent runs every built-in one.
 ///     An unknown id is an error, not a silent skip.
 ///   - @c seed: unsigned 32-bit determinism seed. The built-in modules consume

@@ -124,7 +124,7 @@ def _scene_handle(text: str, sample_rate: int, max_block_size: int | None) -> tu
     """Build a mixer handle from scene JSON text, with the warnings its load left."""
     lib = _get_lib()
     handle = lib.sonare_mixer_from_scene_json(
-        _utf8_arg(text, "json"),
+        _utf8_arg(text, "document"),
         _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
         _to_c_int(_resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"),
     )
@@ -197,9 +197,11 @@ class Mixer:
 
     @classmethod
     @_entry("Mixer.from_json")
-    def from_json(cls, json: str, *, sample_rate: int, max_block_size: int | None = None) -> Mixer:
+    def from_json(
+        cls, document: str, *, sample_rate: int, max_block_size: int | None = None
+    ) -> Mixer:
         """Build a mixer from a scene's JSON text, as :meth:`to_json` writes it."""
-        handle, warnings = _scene_handle(json, sample_rate, max_block_size)
+        handle, warnings = _scene_handle(document, sample_rate, max_block_size)
         mixer = cls.__new__(cls)
         mixer._adopt(handle, sample_rate, warnings)
         return mixer

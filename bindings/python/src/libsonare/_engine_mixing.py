@@ -6,7 +6,7 @@ import ctypes
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, cast
 
-from ._engine_conversions import _band_json_arg, _scene_entry_json
+from ._engine_conversions import _band_json_arg, _settings_json_arg
 from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._ffi import SonareSurroundPan
 from ._mixing import StripRef
@@ -362,7 +362,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_bus_strip_json(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
-                _scene_entry_json(settings, "buses", "settings"),
+                _settings_json_arg(settings),
             )
         )
 
@@ -374,7 +374,7 @@ class _EngineMixingMixin:
         The mapping carries its own ``id``; the engine applies it to the addressed strip.
         """
         track_id = _strip_target(ref)
-        payload = _scene_entry_json(settings, "strips", "settings")
+        payload = _settings_json_arg(settings)
         if track_id is None:
             rc = _get_lib().sonare_engine_set_master_strip_json(self._require_handle(), payload)
         else:

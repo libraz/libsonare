@@ -32,7 +32,6 @@ new_track_id = "trackId"
 index = "sendIndex"
 input = "samples"
 track_id = "ref"
-scene_json = "settings"
 inserts_json = "inserts"
 source_id = "source.id"
 source_track_id = "source.id"
@@ -65,7 +64,6 @@ new_track_id = "trackId"
 index = "sendIndex"
 input = "samples"
 track_id = "ref"
-scene_json = "settings"
 inserts_json = "inserts"
 
 # The librosa-mirror keywords, then the folded preset.
@@ -311,18 +309,3 @@ offset_samples = "record_offset_samples"
 [wasm.quotient_of]
 "playback_renderer_process_interleaved.frames" = ["samples", "inChannels"]
 "playback_renderer_render_offline.frames" = ["samples", "inChannels"]
-
-[python.document_roots]
-"engine_set_bus_strip_json" = ["buses[0].", "settings."]
-"engine_set_master_strip_json" = ["strips[0].", "settings."]
-"engine_set_track_strip_json" = ["strips[0].", "settings."]
-
-[node.document_roots]
-"engine_set_bus_strip_json" = ["buses[0].", "settings."]
-"engine_set_master_strip_json" = ["strips[0].", "settings."]
-"engine_set_track_strip_json" = ["strips[0].", "settings."]
-
-[wasm.document_roots]
-"engine_set_bus_strip_json" = ["buses[0].", "settings."]
-"engine_set_master_strip_json" = ["strips[0].", "settings."]
-"engine_set_track_strip_json" = ["strips[0].", "settings."]

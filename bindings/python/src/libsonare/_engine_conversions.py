@@ -116,11 +116,11 @@ def _band_json_arg(band: Mapping[str, object]) -> bytes:
     return _utf8_arg(json.dumps(dict(band)), "band")
 
 
-def _scene_entry_json(entry: Mapping[str, object], key: str, name: str) -> bytes:
-    """Wrap one strip or bus mapping as the one-entry scene document the engine setters read."""
-    if not isinstance(entry, Mapping):
-        raise _refuse_type(f"{name} must be a mapping (parse JSON text with json.loads first)")
-    return _utf8_arg(json.dumps({key: [dict(entry)]}), name)
+def _settings_json_arg(settings: Mapping[str, object]) -> bytes:
+    """One strip or bus mapping as the bare settings object the engine strip setters read."""
+    if not isinstance(settings, Mapping):
+        raise _refuse_type("settings must be a mapping (parse JSON text with json.loads first)")
+    return _utf8_arg(json.dumps(dict(settings)), "settings")
 
 
 def _fixed_bytes(value: str, capacity: int, name: str) -> bytes:

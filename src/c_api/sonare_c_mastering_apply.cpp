@@ -498,8 +498,9 @@ SonareError sonare_mastering_insert_param_info(const char* insert, int sample_ra
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_insert_timing(const char* insert, const char* params, int sample_rate,
-                                           int* out_latency_samples, int* out_tail_samples) {
+SonareError sonare_mastering_insert_timing(const char* insert, const char* params_json,
+                                           int sample_rate, int* out_latency_samples,
+                                           int* out_tail_samples) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_latency_samples, out_tail_samples);
   SONARE_C_TRY
@@ -512,8 +513,8 @@ SonareError sonare_mastering_insert_timing(const char* insert, const char* param
   SONARE_C_REQUIRE_NONNULL(out_tail_samples);
 
   const auto timing = sonare::util::check::under_member("params", [&] {
-    return sonare::mastering::api::insert_timing(insert != nullptr ? insert : "",
-                                                 params != nullptr ? params : "{}", sample_rate);
+    return sonare::mastering::api::insert_timing(
+        insert != nullptr ? insert : "", params_json != nullptr ? params_json : "{}", sample_rate);
   });
   *out_latency_samples = timing.latency_samples;
   *out_tail_samples = timing.tail_samples;

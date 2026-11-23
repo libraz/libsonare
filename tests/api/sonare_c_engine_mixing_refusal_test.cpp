@@ -10,6 +10,10 @@
 #include <cstdio>
 #include <limits>
 #include <string>
+#include <vector>
+
+#include "util/constants.h"
+#include "util/json.h"
 
 namespace {
 
@@ -22,7 +26,8 @@ SonareEngine* make_engine() {
   return engine;
 }
 
-constexpr const char* kEmptyScene = R"({"version":2,"strips":[],"buses":[],"connections":[]})";
+// A whole mixer scene, which a strip setter refuses by the keys a strip does not take.
+constexpr const char* kWholeScene = R"({"version":2,"strips":[],"buses":[],"connections":[]})";
 
 }  // namespace
 
@@ -247,13 +252,19 @@ TEST_CASE("mixing strip entries refuse NULL, id and domain by name", "[c_api][en
   CHECK(last_message() == "bus_id must be the id of a bus in this engine");
 
   CHECK(sonare_engine_set_track_strip_json(engine, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "scene_json must not be NULL");
-  CHECK(sonare_engine_set_track_strip_json(engine, 1, kEmptyScene) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(last_message() == "scene_json must contain at least one strip");
-  CHECK(sonare_engine_set_master_strip_json(engine, kEmptyScene) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(last_message() == "scene_json must contain at least one strip");
-  CHECK(sonare_engine_set_bus_strip_json(engine, 1, kEmptyScene) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(last_message() == "scene_json must contain at least one bus");
+  CHECK(last_message() == "settings_json must not be NULL");
+  CHECK(sonare_engine_set_track_strip_json(engine, 1, kWholeScene) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "unknown key settings.buses");
+  CHECK(sonare_engine_set_master_strip_json(engine, kWholeScene) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "unknown key settings.buses");
+  CHECK(sonare_engine_set_master_strip_json(engine, "{bad") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().rfind("settings must be valid JSON: ", 0) == 0);
+  CHECK(sonare_engine_set_master_strip_json(engine, "[]") == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "settings must be an object");
+  CHECK(sonare_engine_set_master_strip_json(engine, R"({"faderDB":-1})") ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "unknown key settings.faderDB");
 
   CHECK(sonare_engine_set_track_strip_eq_band_json(engine, 1, -1, "{}") ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -658,7 +669,7 @@ TEST_CASE("track buses name the state that forbids dropping a routed bus",
 TEST_CASE("master strip inserts name the index or parameter the mixer refused",
           "[c_api][engine_refusal]") {
   constexpr const char* kMasterWithInsert =
-      R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+      R"({"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]})";
   constexpr const char* kPastInserts =
       "insert_index must be less than the number of inserts on the master strip";
   SonareEngine* engine = make_engine();
@@ -703,15 +714,14 @@ std::string inserts_of(const std::string& insert, int count) {
   return out + "]";
 }
 
-// A scene whose one strip carries @p members after its id.
+// One strip's settings: its id followed by @p members.
 std::string strip_scene(const std::string& id, const std::string& members) {
-  return R"({"version":2,"strips":[{"id":")" + id + R"(")" +
-         (members.empty() ? "" : "," + members) + R"(}],"buses":[],"connections":[]})";
+  return R"({"id":")" + id + R"(")" + (members.empty() ? "" : "," + members) + "}";
 }
 
+// One bus's settings: its id followed by @p members.
 std::string bus_scene(const std::string& id, const std::string& members) {
-  return R"({"version":2,"strips":[],"buses":[{"id":")" + id + R"(")" +
-         (members.empty() ? "" : "," + members) + R"(}],"connections":[]})";
+  return strip_scene(id, members);
 }
 
 std::string inserts_member(const std::string& insert, int count) {
@@ -727,7 +737,7 @@ SonareEngineTrackLane stereo_lane(uint32_t track_id) {
 
 }  // namespace
 
-TEST_CASE("strip scenes name the EQ, insert and bus-image cause the mixer refused",
+TEST_CASE("strip settings name the EQ, insert and bus-image cause the mixer refused",
           "[c_api][engine_refusal]") {
   SonareEngine* engine = make_engine();
   SonareEngineTrackLane lane = stereo_lane(10);
@@ -737,7 +747,7 @@ TEST_CASE("strip scenes name the EQ, insert and bus-image cause the mixer refuse
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
 
   constexpr const char* kEqText =
-      "scene_json must describe a strip EQ whose bands are valid at the engine's sample rate";
+      "settings must describe a strip EQ whose bands are valid at the engine's sample rate";
   const std::string nyquist_strip = strip_scene("s", kPastNyquistEq);
   CHECK(sonare_engine_set_track_strip_json(engine, 10, nyquist_strip.c_str()) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -751,7 +761,7 @@ TEST_CASE("strip scenes name the EQ, insert and bus-image cause the mixer refuse
 
   constexpr const char* kUnknownInsert =
       R"({"slot":"pre","processor":"missing.processor","params":{}})";
-  constexpr const char* kInsertsText = "scene_json must describe inserts the mixer can create";
+  constexpr const char* kInsertsText = "settings must describe inserts the mixer can create";
   const std::string unknown_strip = strip_scene("s", inserts_member(kUnknownInsert, 1));
   CHECK(sonare_engine_set_track_strip_json(engine, 10, unknown_strip.c_str()) ==
         SONARE_ERROR_INVALID_PARAMETER);
@@ -768,11 +778,11 @@ TEST_CASE("strip scenes name the EQ, insert and bus-image cause the mixer refuse
   CHECK(sonare_engine_set_bus_strip_json(engine, 2, bus_scene("2", R"("pan":0.5)").c_str()) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "scene_json must leave the pan and width of a bus wider than stereo at their defaults");
+        "settings must leave the pan and width of a bus wider than stereo at their defaults");
   CHECK(sonare_engine_set_bus_strip_json(engine, 2, bus_scene("2", R"("width":1.5)").c_str()) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "scene_json must leave the pan and width of a bus wider than stereo at their defaults");
+        "settings must leave the pan and width of a bus wider than stereo at their defaults");
   sonare_engine_destroy(engine);
 }
 
@@ -920,6 +930,134 @@ TEST_CASE("a master sidechain key names a latency past the alignment ceiling",
         "the latency the sidechain key would add to the mix is past the alignment ceiling of "
         "192000 samples");
   sonare_engine_destroy(engine);
+}
+
+namespace {
+
+constexpr int kRoundTripFrames = 128 * 16;
+
+// Which strip setter a round trip drives.
+enum class StripSetter { Track, Bus, Master };
+
+// The clip a round trip plays; the engine reads it in place, so it outlives the engine.
+struct Tone {
+  std::vector<float> samples;
+  const float* channels[2] = {nullptr, nullptr};
+};
+
+// An engine playing a 440 Hz tone on track 10, routed through bus 1 for StripSetter::Bus.
+SonareEngine* tone_engine(StripSetter setter, Tone& tone) {
+  SonareEngine* engine = make_engine();
+  tone.samples.assign(kRoundTripFrames, 0.0f);
+  for (int i = 0; i < kRoundTripFrames; ++i) {
+    tone.samples[static_cast<size_t>(i)] =
+        0.5f * std::sin(sonare::constants::kTwoPi * 440.0f * i / 48000.0f);
+  }
+  tone.channels[0] = tone.samples.data();
+  tone.channels[1] = tone.samples.data();
+  const float* const* channels = tone.channels;
+  SonareEngineClip clip;
+  sonare_engine_clip_init(&clip);
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 2;
+  clip.num_samples = kRoundTripFrames;
+  clip.length_samples = kRoundTripFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  SonareEngineBus bus{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  REQUIRE(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_OK);
+  SonareEngineTrackLane lane = stereo_lane(10);
+  lane.output_bus_id = setter == StripSetter::Bus ? 1 : 0;
+  REQUIRE(sonare_engine_set_track_lanes(engine, &lane, 1) == SONARE_OK);
+  return engine;
+}
+
+SonareError set_strip(SonareEngine* engine, StripSetter setter, const std::string& settings) {
+  const char* text = settings.c_str();
+  switch (setter) {
+    case StripSetter::Track:
+      return sonare_engine_set_track_strip_json(engine, 10, text);
+    case StripSetter::Bus:
+      return sonare_engine_set_bus_strip_json(engine, 1, text);
+    case StripSetter::Master:
+      return sonare_engine_set_master_strip_json(engine, text);
+  }
+  return SONARE_ERROR_INVALID_PARAMETER;
+}
+
+// Bounces @p engine and destroys it.
+std::vector<float> bounce_and_destroy(SonareEngine* engine) {
+  SonareEngineBounceOptions options;
+  sonare_engine_bounce_options_init(&options);
+  options.total_frames = kRoundTripFrames;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+  options.normalize_lufs = 0;
+  options.dither = 0;
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  std::vector<float> out(result.interleaved,
+                         result.interleaved + static_cast<size_t>(result.frames) * 2);
+  sonare_free_engine_bounce_result(&result);
+  sonare_engine_destroy(engine);
+  return out;
+}
+
+// The bounce after handing @p settings to @p setter; empty @p settings keeps the defaults.
+std::vector<float> bounce_after(StripSetter setter, const std::string& settings) {
+  Tone tone;
+  SonareEngine* engine = tone_engine(setter, tone);
+  if (!settings.empty()) REQUIRE(set_strip(engine, setter, settings) == SONARE_OK);
+  return bounce_and_destroy(engine);
+}
+
+constexpr const char* kSavedStrip =
+    R"({"id":"s","faderDb":-6,"pan":0.3,"eq":{"bands":[{"type":"peak","frequencyHz":1000,"gainDb":6,"q":1,"enabled":true}]}})";
+constexpr const char* kSavedBus = R"({"id":"b","inputTrimDb":-4,"pan":-0.2})";
+
+// The scene a mixer holding kSavedStrip and kSavedBus writes.
+std::string saved_scene() {
+  const std::string scene = std::string(R"({"version":2,"strips":[)") + kSavedStrip +
+                            R"(],"buses":[)" + kSavedBus + R"(],"connections":[]})";
+  SonareMixer* mixer = sonare_mixer_from_scene_json(scene.c_str(), 48000, 128);
+  REQUIRE(mixer != nullptr);
+  char* written = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &written) == SONARE_OK);
+  std::string out(written);
+  sonare_free_string(written);
+  sonare_mixer_destroy(mixer);
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("strip setters take back the element a saved scene holds for that strip",
+          "[c_api][engine_refusal]") {
+  namespace json = sonare::util::json;
+  const json::Value scene = json::parse(saved_scene());
+  const std::string strip = json::dump(scene["strips"][0]);
+  const std::string bus = json::dump(scene["buses"][0]);
+  for (const StripSetter setter : {StripSetter::Track, StripSetter::Master, StripSetter::Bus}) {
+    const bool is_bus = setter == StripSetter::Bus;
+    const std::vector<float> handed = bounce_after(setter, is_bus ? kSavedBus : kSavedStrip);
+    CHECK(bounce_after(setter, is_bus ? bus : strip) == handed);
+    CHECK(bounce_after(setter, std::string()) != handed);
+  }
+}
+
+TEST_CASE("the master strip setter refuses a saved scene by name and keeps its strip",
+          "[c_api][engine_refusal]") {
+  const std::string scene = saved_scene();
+  Tone tone;
+  SonareEngine* engine = tone_engine(StripSetter::Master, tone);
+  REQUIRE(set_strip(engine, StripSetter::Master, kSavedStrip) == SONARE_OK);
+  CHECK(set_strip(engine, StripSetter::Master, scene) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message().rfind("unknown key settings.", 0) == 0);
+  CHECK(bounce_and_destroy(engine) == bounce_after(StripSetter::Master, kSavedStrip));
 }
 
 #endif  // defined(SONARE_WITH_MIXING)

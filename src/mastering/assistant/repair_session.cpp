@@ -88,17 +88,23 @@ std::optional<Stage> stage_from_name(const std::string& name) {
   throw SonareException(ErrorCode::InvalidParameter, message);
 }
 
-/// Refuses the content of a stages document, the form the analysis writes as `recommended`.
-[[noreturn]] void refuse_document(const std::string& message) {
-  throw SonareException(ErrorCode::InvalidFormat, message);
+/// Refuses a value of the stages argument at @p path for failing @p predicate.
+[[noreturn]] void refuse_stages(const std::string& path, const std::string& predicate) {
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, path, predicate);
 }
 
-/// Parses a stages document, refusing malformed JSON and a repeated key as its content.
-json::Value parse_document(const std::string& text) {
+/// Refuses a value of the wrong JSON type at @p path of the stages argument.
+[[noreturn]] void refuse_stages_type(const std::string& path, schema::Kind kind) {
+  throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter, path,
+                                           std::string("must be ") + schema::kind_text(kind));
+}
+
+/// Parses the stages argument, refusing malformed JSON and a repeated key under `stages`.
+json::Value parse_stages_text(const std::string& text) {
   try {
     return json::parse_strict(text);
   } catch (const json::JsonError& e) {
-    refuse_document(e.what());
+    refuse_stages("stages", std::string("must be valid JSON: ") + e.what());
   }
 }
 
@@ -174,7 +180,7 @@ json::Object settings_of(const repair::DereverbClassicalConfig& config) {
 
 /// Refuses an unknown setting by its path.
 [[noreturn]] void refuse_unknown_setting(const std::string& stage_path, const std::string& key) {
-  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat,
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter,
                                         schema::child_path(stage_path, key));
 }
 
@@ -205,32 +211,28 @@ auto read_settings(const json::Object& object, const std::string& stage_path, Re
     } else if (value.is_string()) {
       const auto choices = declared.probed_choices().find(key);
       if (choices == declared.probed_choices().end())
-        refuse_document(schema::refusal(schema::child_path(stage_path, key),
-                                        "takes a number, not a choice name"));
+        refuse_stages_type(schema::child_path(stage_path, key), schema::Kind::Number);
       const std::string& name = value.as_string();
       const auto choice =
           std::find_if(choices->second.begin(), choices->second.end(),
                        [&name](const api::detail::EnumChoice& c) { return c.name == name; });
       if (choice == choices->second.end()) {
-        refuse_document(schema::refusal(schema::child_path(stage_path, key),
-                                        "must be one of " + choice_names(choices->second)));
+        refuse_stages(schema::child_path(stage_path, key),
+                      "must be one of " + choice_names(choices->second));
       }
       map[key] = static_cast<double>(choice->value);
     } else {
-      refuse_document(schema::refusal(schema::child_path(stage_path, key),
-                                      "must be a number, a boolean or a choice name"));
+      throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidParameter,
+                                               schema::child_path(stage_path, key),
+                                               "must be a number, a boolean or a choice name");
     }
   }
-  // The catalog builder refuses a value outside its range as an argument; here it is document
-  // content.
+  // The catalog builder names a setting by its key; the refusal is placed under the stage.
   try {
     return reader(map);
   } catch (const SonareParameterRefusal& e) {
     if (e.code() != ErrorCode::InvalidParameter) throw;
-    schema::rethrow_under(e, stage_path, ErrorCode::InvalidFormat);
-  } catch (const SonareException& e) {
-    if (e.code() != ErrorCode::InvalidParameter) throw;
-    throw SonareException(ErrorCode::InvalidFormat, e.what());
+    schema::rethrow_under(e, stage_path, ErrorCode::InvalidParameter);
   }
 }
 
@@ -263,27 +265,27 @@ struct StagePlan {
 };
 
 StagePlan parse_stages(const std::string& stages_json) {
-  const json::Value root = parse_document(stages_json.empty() ? "[]" : stages_json);
-  if (!root.is_array()) refuse_document(schema::must_be("stages", schema::Kind::Array));
+  const json::Value root = parse_stages_text(stages_json.empty() ? "[]" : stages_json);
+  if (!root.is_array()) refuse_stages_type("stages", schema::Kind::Array);
   StagePlan plan;
   std::size_t position = 0;
   for (const json::Value& entry : root.as_array()) {
     const std::string stage_path = schema::index_path("stages", position++);
-    if (!entry.is_object()) refuse_document(schema::must_be(stage_path, schema::Kind::Object));
+    if (!entry.is_object()) refuse_stages_type(stage_path, schema::Kind::Object);
     const json::Object& object = entry.as_object();
     const std::string name_path = schema::child_path(stage_path, "stage");
     const auto name = object.find("stage");
-    if (name == object.end()) refuse_document(schema::missing_key(name_path));
+    if (name == object.end()) refuse_stages(name_path, "must be given");
     if (!name->second.is_string()) {
-      refuse_document(schema::must_be(name_path, schema::Kind::String));
+      refuse_stages_type(name_path, schema::Kind::String);
     }
     const std::optional<Stage> stage = stage_from_name(name->second.as_string());
     if (!stage) {
-      refuse_document(schema::refusal(
-          name_path, "must be one of declip, declick, decrackle, dehum, denoise, dereverb"));
+      refuse_stages(name_path,
+                    "must be one of declip, declick, decrackle, dehum, denoise, dereverb");
     }
     if (plan.has(*stage)) {
-      refuse_document(schema::refusal(name_path, "must not repeat a stage given earlier"));
+      refuse_stages(name_path, "must not repeat a stage given earlier");
     }
     switch (*stage) {
       case Stage::Declip:

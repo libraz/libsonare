@@ -3,8 +3,9 @@
 /// @file part_rig_json.h
 /// @brief The inserts_json reader and chain validation shared by the project and
 ///        engine part-rig setters.
-/// @details inserts_json is a per-call argument, not a document the library writes and
-///          reads back, so every refusal here is a SonareParameterRefusal under
+/// @details inserts_json is a per-call argument: the project document carries part rigs, but
+///          a setter is not a loader of that document, so every refusal here is a
+///          SonareParameterRefusal under
 ///          InvalidParameter rooted at @c inserts, the name every surface gives the
 ///          argument; a wrong type, a missing processor and an unknown key are shape
 ///          refusals. Subjects are already in the

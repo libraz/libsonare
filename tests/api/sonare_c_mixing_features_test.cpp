@@ -808,7 +808,7 @@ TEST_CASE("mixer strip lookup, scene and query entries name the refused argument
   CHECK(mixer_refusal_message() == "id must be the id of a strip in this mixer");
 
   CHECK(sonare_mixer_from_scene_json(nullptr, 48000, 512) == nullptr);
-  CHECK(mixer_refusal_message() == "json must not be NULL");
+  CHECK(mixer_refusal_message() == "document must not be NULL");
 
   char* json = reinterpret_cast<char*>(0x1);
   CHECK(sonare_mixer_to_scene_json(nullptr, &json) == SONARE_ERROR_INVALID_PARAMETER);

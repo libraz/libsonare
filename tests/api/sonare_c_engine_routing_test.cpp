@@ -25,11 +25,11 @@ constexpr int kRoutingFrames = kRoutingBlock * kRoutingBlocks;
 
 #if defined(SONARE_WITH_MIXING)
 constexpr const char* kDuckerBusJson =
-    R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"connections":[]})";
+    R"({"id":"1","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]})";
 constexpr const char* kLimiterBusJson =
-    R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]}],"connections":[]})";
+    R"({"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]})";
 constexpr const char* kDuckerMasterJson =
-    R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+    R"({"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]})";
 
 // A DC 1.0 mono source shared by every clip; clips never outlive it.
 const std::vector<float>& dc_source() {
@@ -102,9 +102,8 @@ constexpr const char* kThreeInsertInserts =
     R"({"slot":"post","processor":"dynamics.limiter","params":{"thresholdDb":-20,"lookaheadMs":0,"releaseMs":50}})";
 
 std::string three_insert_track_json(bool muted = false) {
-  return std::string(R"({"version":2,"strips":[{"id":"track-10","muted":)") +
-         (muted ? "true" : "false") + R"(,"inserts":[)" + kThreeInsertInserts +
-         R"(]}],"buses":[],"connections":[]})";
+  return std::string(R"({"id":"track-10","muted":)") + (muted ? "true" : "false") +
+         R"(,"inserts":[)" + kThreeInsertInserts + R"(]})";
 }
 
 struct InsertGainReduction {
@@ -494,7 +493,7 @@ TEST_CASE("C engine reads immutable insert construction values",
   REQUIRE(
       sonare_engine_set_master_strip_json(
           engine,
-          R"({"version":2,"strips":[{"id":"master","inserts":[{"processor":"utility.gain","params":{"levelDb":-3}}]}],"buses":[]})") ==
+          R"({"id":"master","inserts":[{"processor":"utility.gain","params":{"levelDb":-3}}]})") ==
       SONARE_OK);
   uint32_t id = 0;
   REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "levelDb", &id) ==
@@ -571,7 +570,7 @@ TEST_CASE("C engine master meter carries pre-trim input and compressor reduction
   REQUIRE(
       sonare_engine_set_master_strip_json(
           engine,
-          R"({"version":2,"strips":[{"id":"master","inputTrimDb":-6,"inserts":[{"processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"buses":[]})") ==
+          R"({"id":"master","inputTrimDb":-6,"inserts":[{"processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]})") ==
       SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
   std::array<float, kRoutingBlock> samples{};
@@ -608,7 +607,7 @@ TEST_CASE("C engine meter carries a multi-plane pre-trim input and compressor re
   REQUIRE(
       sonare_engine_set_master_strip_json(
           engine,
-          R"({"version":2,"strips":[{"id":"master","inputTrimDb":-6,"inserts":[{"processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"buses":[]})") ==
+          R"({"id":"master","inputTrimDb":-6,"inserts":[{"processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]})") ==
       SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 
@@ -764,12 +763,12 @@ TEST_CASE("per-insert gain reduction covers the master and a bus",
   REQUIRE(
       sonare_engine_set_bus_strip_json(
           engine, 1,
-          R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"connections":[]})") ==
+          R"({"id":"1","inserts":[{"slot":"pre","processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]})") ==
       SONARE_OK);
   REQUIRE(
       sonare_engine_set_master_strip_json(
           engine,
-          R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}},{"slot":"post","processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"buses":[]})") ==
+          R"({"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}},{"slot":"post","processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]})") ==
       SONARE_OK);
 
   const uint32_t kBusTarget = 33;
@@ -1039,7 +1038,7 @@ TEST_CASE("a track insert automation id survives per-lane routing edits", "[c_en
   REQUIRE(
       sonare_engine_set_track_strip_json(
           engine, 10,
-          R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"utility.gain","params":{"levelDb":0}}]}],"buses":[],"connections":[]})") ==
+          R"({"id":"track-10","inserts":[{"slot":"pre","processor":"utility.gain","params":{"levelDb":0}}]})") ==
       SONARE_OK);
   uint32_t gain_id = 0;
   REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb", &gain_id) ==

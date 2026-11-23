@@ -119,15 +119,15 @@ TEST_CASE("sonare_engine tail and graph latency queries", "[c_api][engine][feedb
 namespace {
 
 constexpr const char* kLimiterBusJson =
-    R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]}],"connections":[]})";
+    R"({"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]})";
 constexpr const char* kDuckerBusJson =
-    R"({"version":2,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]},{"id":"2","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"connections":[]})";
+    R"({"id":"2","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]})";
 constexpr const char* kDuckerMasterJson =
-    R"({"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+    R"({"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]})";
 constexpr const char* kDuckerTrackJson =
-    R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+    R"({"id":"track-10","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]})";
 constexpr const char* kDuckerTrack30Json =
-    R"({"version":2,"strips":[{"id":"track-30","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+    R"({"id":"track-30","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]})";
 
 // Tracks 10 and 30 into buses 2 and 1; bus 1 has a limiter, bus 2 a ducker,
 // the master a ducker, and tracks 10 and 30 a ducker insert each.
@@ -271,7 +271,7 @@ TEST_CASE("sonare_engine lane transient shaper reports negative gain reduction",
   REQUIRE(
       sonare_engine_set_track_strip_json(
           engine, 10,
-          R"({"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"dynamics.transientShaper","params":{"attackGainDb":-12,"sustainGainDb":0}}]}],"buses":[],"connections":[]})") ==
+          R"({"id":"track-10","inserts":[{"slot":"pre","processor":"dynamics.transientShaper","params":{"attackGainDb":-12,"sustainGainDb":0}}]})") ==
       SONARE_OK);
 
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);

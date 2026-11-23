@@ -492,31 +492,34 @@ SonareError sonare_engine_can_set_master_sidechain(SonareEngine* engine, unsigne
                                                    int source_kind, uint32_t source_id,
                                                    int* out_refusal);
 
-/// @brief Configure a bus strip from the first bus in a mixer scene JSON.
-/// @details The bus must already exist via sonare_engine_set_track_buses. A key the scene
-///          reader does not consume (other than `$`- and `x-`-prefixed ones) is refused with
-///          SONARE_ERROR_INVALID_FORMAT and a message naming it, e.g.
-///          `unknown key buses[0].faderDB`.
-/// @return SONARE_ERROR_INVALID_PARAMETER for an unknown bus or a spec the bus
+/// @brief Configure a bus strip from one bus's settings.
+/// @details The bus must already exist via sonare_engine_set_track_buses. @p settings_json is
+///          one bare bus object, the shape a mixer scene holds at `buses[i]`
+///          (`$defs/bus` in schemas/mixer-scene.schema.json), so an element taken from what
+///          @ref sonare_mixer_to_scene_json writes can be handed back. Every refusal of it,
+///          malformed JSON and an unknown key included, is SONARE_ERROR_INVALID_PARAMETER
+///          naming its path under `settings`, e.g. `unknown key settings.faderDB`; a whole
+///          scene is refused by its own keys (`unknown key settings.buses`).
+/// @return SONARE_ERROR_INVALID_PARAMETER for an unknown bus or settings the bus
 ///   cannot take; SONARE_ERROR_INVALID_STATE when a rebuilt insert chain would not
 ///   fit the automation id table or its latency cannot be aligned;
 ///   SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state unchanged).
 SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_id,
-                                             const char* scene_json);
-/// @brief Builds an engine-owned ChannelStrip for @p track_id from a mixer scene JSON.
-/// @details The first `strips[0]` entry in @p scene_json is used as the track strip spec.
-///          This is a control-thread structural mutation; do not call concurrently with
-///          @ref sonare_engine_process. An unknown key is refused as for
-///          @ref sonare_engine_set_bus_strip_json.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a spec that cannot be built;
+                                             const char* settings_json);
+/// @brief Builds an engine-owned ChannelStrip for @p track_id from one strip's settings.
+/// @details @p settings_json is one bare strip object, the shape a mixer scene holds at
+///          `strips[i]` (`$defs/strip` in schemas/mixer-scene.schema.json), refused as for
+///          @ref sonare_engine_set_bus_strip_json. This is a control-thread structural
+///          mutation; do not call concurrently with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER for settings that cannot be built;
 ///   SONARE_ERROR_INVALID_STATE when the strip table is full, a rebuilt insert
 ///   chain would not fit the automation id table, or the lanes cannot align the
 ///   new latency; SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state
 ///   unchanged).
 SonareError sonare_engine_set_track_strip_json(SonareEngine* engine, uint32_t track_id,
-                                               const char* scene_json);
+                                               const char* settings_json);
 /// @brief Sets one embedded EQ band on an engine-owned track strip.
-/// @details @p band_json uses the same JSON schema as @ref sonare_eq_set_band.
+/// @details @p band_json is one band object, refused as @ref sonare_eq_set_band refuses it.
 ///          Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_track_strip_eq_band_json(SonareEngine* engine, uint32_t track_id,
                                                        int band_index, const char* band_json);
@@ -525,18 +528,17 @@ SonareError sonare_engine_set_track_strip_eq_band_json(SonareEngine* engine, uin
 SonareError sonare_engine_set_track_strip_insert_bypassed(SonareEngine* engine, uint32_t track_id,
                                                           unsigned int insert_index, int bypassed,
                                                           int reset_on_bypass);
-/// @brief Builds an engine-owned master ChannelStrip from a mixer scene JSON.
-/// @details The first `strips[0]` entry in @p scene_json is used as the master strip spec.
-///          This is a control-thread structural mutation; do not call concurrently with
-///          @ref sonare_engine_process. An unknown key is refused as for
-///          @ref sonare_engine_set_bus_strip_json.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a spec that cannot be built;
+/// @brief Builds an engine-owned master ChannelStrip from one strip's settings.
+/// @details @p settings_json is one bare strip object, as for
+///          @ref sonare_engine_set_track_strip_json. This is a control-thread structural
+///          mutation; do not call concurrently with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER for settings that cannot be built;
 ///   SONARE_ERROR_INVALID_STATE when a rebuilt insert chain would not fit the
 ///   automation id table or the mixer cannot align its latency;
 ///   SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state unchanged).
-SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char* scene_json);
+SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char* settings_json);
 /// @brief Sets one embedded EQ band on an engine-owned master strip.
-/// @details @p band_json uses the same JSON schema as @ref sonare_eq_set_band.
+/// @details @p band_json is one band object, refused as @ref sonare_eq_set_band refuses it.
 ///          Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
 ///          The setter acts on the engine's default master strip; a later
 ///          @ref sonare_engine_set_master_strip_json replaces it wholesale and the first one
@@ -552,7 +554,7 @@ SonareError sonare_engine_set_master_strip_insert_bypassed(SonareEngine* engine,
                                                            unsigned int insert_index, int bypassed,
                                                            int reset_on_bypass);
 /// @brief Sets one embedded EQ band on an engine-owned bus strip.
-/// @details @p band_json uses the same JSON schema as @ref sonare_eq_set_band.
+/// @details @p band_json is one band object, refused as @ref sonare_eq_set_band refuses it.
 ///   @p bus_id must already exist via sonare_engine_set_track_buses. Control-thread
 ///   mutation; do not call concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_bus_strip_eq_band_json(SonareEngine* engine, uint32_t bus_id,

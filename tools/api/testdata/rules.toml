@@ -270,6 +270,11 @@ title = "Title of one-input-form"
 summary = "Summary of one-input-form."
 
 [[rule]]
+slug = "json-input-kinds"
+title = "Title of json-input-kinds"
+summary = "Summary of json-input-kinds."
+
+[[rule]]
 slug = "aliases-removed"
 title = "Title of aliases-removed"
 summary = "Summary of aliases-removed."

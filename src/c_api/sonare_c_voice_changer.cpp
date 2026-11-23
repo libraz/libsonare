@@ -586,15 +586,13 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
 #endif
 }
 
-SonareError sonare_realtime_voice_changer_config_from_json(const char* preset_or_config_json,
+SonareError sonare_realtime_voice_changer_config_from_json(const char* document,
                                                            SonareRealtimeVoiceChangerConfig* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_TRY
-  const std::string config_text = preset_or_config_json && preset_or_config_json[0] != '\0'
-                                      ? preset_or_config_json
-                                      : "neutralMonitor";
+  const std::string config_text = document && document[0] != '\0' ? document : "neutralMonitor";
   editing::voice_changer::RealtimeVoiceChangerConfig config;
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
@@ -606,7 +604,7 @@ SonareError sonare_realtime_voice_changer_config_from_json(const char* preset_or
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kVoiceChanger, preset_or_config_json, out);
+  return refuse_not_compiled_in(Feature::kVoiceChanger, document, out);
 #endif
 }
 
@@ -852,13 +850,13 @@ SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** o
 #endif
 }
 
-SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
+SonareError sonare_realtime_voice_changer_validate_preset_json(const char* document,
                                                                char** out_normalized_json,
                                                                char** out_error) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out_normalized_json, out_error);
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  SONARE_C_REQUIRE_NONNULL(json);
+  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_REQUIRE_NONNULL(out_normalized_json);
   SONARE_C_REQUIRE_NONNULL(out_error);
   // Both copy_string calls stay inside the guarded body so an allocation
@@ -868,7 +866,7 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
   SONARE_C_TRY
   std::string normalized;
   std::string error;
-  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(json, &normalized,
+  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(document, &normalized,
                                                                            &error)) {
     *out_error = copy_string(error.empty() ? "invalid preset JSON" : error);
     return SONARE_ERROR_INVALID_FORMAT;
@@ -877,6 +875,6 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  return refuse_not_compiled_in(Feature::kVoiceChanger, json, out_normalized_json, out_error);
+  return refuse_not_compiled_in(Feature::kVoiceChanger, document, out_normalized_json, out_error);
 #endif
 }

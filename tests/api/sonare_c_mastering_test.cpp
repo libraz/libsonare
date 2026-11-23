@@ -50,20 +50,20 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                "\"q\":1,\"enabled\":true,\"coeffMode\":\"vicanek\","
                                "\"proportionalQ\":true}") == SONARE_OK);
     // A refused band document, malformed or carrying a bad field, is
-    // INVALID_FORMAT, matching every other JSON-accepting C-ABI entry point.
-    REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_FORMAT);
+    // INVALID_PARAMETER, like every other argument bag a C-ABI entry point parses.
+    REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"enabled\":truish}") ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\" \"enabled\":true}") ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"type\":\"notch\"}") ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Unknown\",\"enabled\":true}") ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":7,\"enabled\":true}") ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"coeffMode\":\"unknown\"}") ==
-            SONARE_ERROR_INVALID_FORMAT);
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0,
                                "{\"x-note\":\"\\\"type\\\":\\\"Unknown\\\"\","
                                "\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":9,"
@@ -72,10 +72,10 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     // An earlier snake_case spelling is refused, not read.
     REQUIRE(sonare_eq_set_band(eq, 0,
                                "{\"type\":\"peak\",\"frequency_hz\":1000,\"gainDb\":9,"
-                               "\"q\":1,\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
+                               "\"q\":1,\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE_THAT(sonare_last_error_message(),
                  Catch::Matchers::ContainsSubstring(
-                     "frequency_hz is an earlier spelling; write frequencyHz"));
+                     "band.frequency_hz is an earlier spelling; write band.frequencyHz"));
     REQUIRE(sonare_eq_latency_samples(eq) == 0);
     sonare_eq_set_auto_gain(eq, 1);
     REQUIRE(sonare_eq_set_gain_scale(eq, 0.5f) == SONARE_OK);
@@ -944,13 +944,13 @@ TEST_CASE("sonare_eq_set_band reads detectorDelayMs and refuses its earlier look
 
   REQUIRE_THROWS_WITH(
       parse_eq_band_json(R"({"type":"peak","dynamic":true,"lookaheadMs":8})"),
-      ContainsSubstring("lookaheadMs is an earlier spelling; write detectorDelayMs"));
+      ContainsSubstring("band.lookaheadMs is an earlier spelling; write band.detectorDelayMs"));
   REQUIRE_THROWS_WITH(
       parse_eq_band_json(R"({"type":"peak","dynamic":true,"lookahead_ms":6})"),
-      ContainsSubstring("lookahead_ms is an earlier spelling; write detectorDelayMs"));
+      ContainsSubstring("band.lookahead_ms is an earlier spelling; write band.detectorDelayMs"));
   REQUIRE_THROWS_WITH(
       parse_eq_band_json(R"({"type":"peak","dynamic":true,"lookaheadMs":8,"detectorDelayMs":12})"),
-      ContainsSubstring("write detectorDelayMs"));
+      ContainsSubstring("write band.detectorDelayMs"));
 
   SonareEq* eq = nullptr;
   REQUIRE(sonare_eq_create(48000, 512, &eq) == SONARE_OK);
@@ -958,7 +958,7 @@ TEST_CASE("sonare_eq_set_band reads detectorDelayMs and refuses its earlier look
   REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"dynamic\":true,\"detectorDelayMs\":8}") ==
           SONARE_OK);
   REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"dynamic\":true,\"lookaheadMs\":8}") ==
-          SONARE_ERROR_INVALID_FORMAT);
+          SONARE_ERROR_INVALID_PARAMETER);
   sonare_eq_destroy(eq);
 }
 
@@ -970,27 +970,31 @@ TEST_CASE(
   using sonare::c_api::parse_eq_band_json;
 
   const std::pair<const char*, const char*> earlier_keys[] = {
-      {R"({"frequency_hz":1000})", "frequency_hz is an earlier spelling; write frequencyHz"},
-      {R"({"gain_db":3})", "gain_db is an earlier spelling; write gainDb"},
-      {R"({"coeff_mode":"rbj"})", "coeff_mode is an earlier spelling; write coeffMode"},
-      {R"({"slope_db_oct":12})", "slope_db_oct is an earlier spelling; write slopeDbOct"},
-      {R"({"proportional_q":true})", "proportional_q is an earlier spelling; write proportionalQ"},
+      {R"({"frequency_hz":1000})",
+       "band.frequency_hz is an earlier spelling; write band.frequencyHz"},
+      {R"({"gain_db":3})", "band.gain_db is an earlier spelling; write band.gainDb"},
+      {R"({"coeff_mode":"rbj"})", "band.coeff_mode is an earlier spelling; write band.coeffMode"},
+      {R"({"slope_db_oct":12})", "band.slope_db_oct is an earlier spelling; write band.slopeDbOct"},
+      {R"({"proportional_q":true})",
+       "band.proportional_q is an earlier spelling; write band.proportionalQ"},
       {R"({"proportional_q_strength":0.1})",
-       "proportional_q_strength is an earlier spelling; write proportionalQStrength"},
-      {R"({"threshold_db":-20})", "threshold_db is an earlier spelling; write thresholdDb"},
-      {R"({"auto_threshold":true})", "auto_threshold is an earlier spelling; write autoThreshold"},
-      {R"({"range_db":-6})", "range_db is an earlier spelling; write rangeDb"},
-      {R"({"attack_ms":5})", "attack_ms is an earlier spelling; write attackMs"},
-      {R"({"release_ms":50})", "release_ms is an earlier spelling; write releaseMs"},
+       "band.proportional_q_strength is an earlier spelling; write band.proportionalQStrength"},
+      {R"({"threshold_db":-20})",
+       "band.threshold_db is an earlier spelling; write band.thresholdDb"},
+      {R"({"auto_threshold":true})",
+       "band.auto_threshold is an earlier spelling; write band.autoThreshold"},
+      {R"({"range_db":-6})", "band.range_db is an earlier spelling; write band.rangeDb"},
+      {R"({"attack_ms":5})", "band.attack_ms is an earlier spelling; write band.attackMs"},
+      {R"({"release_ms":50})", "band.release_ms is an earlier spelling; write band.releaseMs"},
       {R"({"detector_delay_ms":5})",
-       "detector_delay_ms is an earlier spelling; write detectorDelayMs"},
+       "band.detector_delay_ms is an earlier spelling; write band.detectorDelayMs"},
       {R"({"sidechain_freq_hz":100})",
-       "sidechain_freq_hz is an earlier spelling; write sidechainFreqHz"},
-      {R"({"sidechain_q":1})", "sidechain_q is an earlier spelling; write sidechainQ"},
+       "band.sidechain_freq_hz is an earlier spelling; write band.sidechainFreqHz"},
+      {R"({"sidechain_q":1})", "band.sidechain_q is an earlier spelling; write band.sidechainQ"},
       {R"({"external_sidechain":true})",
-       "external_sidechain is an earlier spelling; write externalSidechain"},
-      {R"({"dyn_enabled":true})", "dyn_enabled is an earlier spelling; write dynamic"},
-      {R"({"dynEnabled":true})", "dynEnabled is an earlier spelling; write dynamic"},
+       "band.external_sidechain is an earlier spelling; write band.externalSidechain"},
+      {R"({"dyn_enabled":true})", "band.dyn_enabled is an earlier spelling; write band.dynamic"},
+      {R"({"dynEnabled":true})", "band.dynEnabled is an earlier spelling; write band.dynamic"},
   };
   for (const auto& [json, message] : earlier_keys) {
     INFO(json);
@@ -1818,10 +1822,10 @@ TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
   // have to be refused before the band is installed, not absorbed as +inf.
   REQUIRE(sonare_eq_set_band(eq, 0,
                              "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":1e39,\"q\":1,"
-                             "\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
+                             "\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_eq_set_band(eq, 0,
                              "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":20000,\"q\":1,"
-                             "\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
+                             "\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
 
   // The refused bands left no infinite tap behind: the still-installed band
   // must produce finite audio.

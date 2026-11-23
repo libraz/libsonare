@@ -561,10 +561,11 @@ SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id) {
   return strip;
 }
 
-SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size) {
+SonareMixer* sonare_mixer_from_scene_json(const char* document, int sample_rate,
+                                          int max_block_size) {
   SONARE_C_API_ENTRY;
-  if (!json) {
-    sonare_c_detail::refuse_null("json");
+  if (!document) {
+    sonare_c_detail::refuse_null("document");
     return nullptr;
   }
   // A scene can load fine while still carrying unknown keys or insert params no
@@ -577,7 +578,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   // A malformed document is InvalidFormat, as on the engine's scene entry point;
   // without this arm it would reach the std::exception tail as Unknown.
   try {
-    scene = sonare::mixing::api::scene_from_json(json);
+    scene = sonare::mixing::api::scene_from_json(document);
   } catch (const sonare::util::json::JsonError& e) {
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
     return nullptr;
