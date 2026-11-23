@@ -844,6 +844,93 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          const ProjectPtr project = new_project();
          sonare_project_set_part_rig(project.get(), 1, 0, SONARE_PART_RIG_CHAIN, nullptr);
        }}},
+      {"engine_set_bus_strip_insert_param_by_name.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_bus_strip_insert_param_by_name(engine.get(), 1, 0, "", 0.0f);
+       }}},
+      {"engine_set_master_strip_insert_param_by_name.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_master_strip_insert_param_by_name(engine.get(), 0, "", 0.0f);
+       }}},
+      {"engine_set_track_strip_insert_param_by_name.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_track_strip_insert_param_by_name(engine.get(), 1, 0, "", 0.0f);
+       }}},
+      {"engine_restore_bus_strip_insert_param_by_name.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_restore_bus_strip_insert_param_by_name(engine.get(), 1, 0, "", 0.0f);
+       }}},
+      {"engine_restore_master_strip_insert_param_by_name.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_restore_master_strip_insert_param_by_name(engine.get(), 0, "", 0.0f);
+       }}},
+      {"engine_restore_track_strip_insert_param_by_name.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_restore_track_strip_insert_param_by_name(engine.get(), 1, 0, "", 0.0f);
+       }}},
+      {"engine_apply_bus_strip_insert_param_by_name_now.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         int applied = 0;
+         sonare_engine_apply_bus_strip_insert_param_by_name_now(engine.get(), 1, 0, "", 0.0f,
+                                                                &applied);
+       }}},
+      {"engine_apply_master_strip_insert_param_by_name_now.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         int applied = 0;
+         sonare_engine_apply_master_strip_insert_param_by_name_now(engine.get(), 0, "", 0.0f,
+                                                                   &applied);
+       }}},
+      {"engine_apply_track_strip_insert_param_by_name_now.param_name", {[] {
+         const EnginePtr engine = prepared_engine();
+         int applied = 0;
+         sonare_engine_apply_track_strip_insert_param_by_name_now(engine.get(), 1, 0, "", 0.0f,
+                                                                  &applied);
+       }}},
+      // The queries answer through out_refusal, so they refuse no source.
+      {"engine_can_set_bus_sidechain.source_id", {nullptr}},
+      {"engine_can_set_bus_sidechain.source_kind", {nullptr}},
+      {"engine_can_set_lane_sidechain.source_track_id", {nullptr}},
+      {"engine_can_set_master_sidechain.source_id", {nullptr}},
+      {"engine_can_set_master_sidechain.source_kind", {nullptr}},
+      {"engine_set_bus_sidechain.source_kind", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_bus_sidechain(engine.get(), 1, 0, 2, 1);
+       }}},
+      {"engine_set_master_sidechain.source_kind", {[] {
+         const EnginePtr engine = prepared_engine();
+         sonare_engine_set_master_sidechain(engine.get(), 0, 2, 1);
+       }}},
+      {"engine_set_bus_sidechain.source_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         const SonareEngineBus bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+         REQUIRE(sonare_engine_set_track_buses(engine.get(), bus, 1) == SONARE_OK);
+         REQUIRE(sonare_engine_set_bus_strip_json(
+                     engine.get(), 1,
+                     "{\"version\":2,\"strips\":[],\"buses\":[{\"id\":\"1\",\"inserts\":[{\"slot\":"
+                     "\"pre\",\"processor\":\"dynamics.duckingProcessor\",\"params\":{}}]}],"
+                     "\"connections\":[]}") == SONARE_OK);
+         sonare_engine_set_bus_sidechain(engine.get(), 1, 0, SONARE_SIDECHAIN_SOURCE_TRACK, 99);
+       }}},
+      {"engine_set_lane_sidechain.source_track_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         const SonareEngineTrackLane lane[] = {{1, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+         REQUIRE(sonare_engine_set_track_lanes(engine.get(), lane, 1) == SONARE_OK);
+         REQUIRE(sonare_engine_set_track_strip_json(
+                     engine.get(), 1,
+                     "{\"version\":2,\"strips\":[{\"id\":\"track-1\",\"inserts\":[{\"slot\":"
+                     "\"pre\",\"processor\":\"dynamics.duckingProcessor\",\"params\":{}}]}],"
+                     "\"buses\":[],\"connections\":[]}") == SONARE_OK);
+         sonare_engine_set_lane_sidechain(engine.get(), 1, 0, 99);
+       }}},
+      {"engine_set_master_sidechain.source_id", {[] {
+         const EnginePtr engine = prepared_engine();
+         REQUIRE(sonare_engine_set_master_strip_json(
+                     engine.get(),
+                     "{\"version\":2,\"strips\":[{\"id\":\"master\",\"inserts\":[{\"slot\":\"pre\","
+                     "\"processor\":\"dynamics.duckingProcessor\",\"params\":{}}]}],"
+                     "\"buses\":[],\"connections\":[]}") == SONARE_OK);
+         sonare_engine_set_master_sidechain(engine.get(), 0, SONARE_SIDECHAIN_SOURCE_TRACK, 99);
+       }}},
       {"engine_set_track_output_bus.output_bus_id", {[] {
          const EnginePtr engine = prepared_engine();
          const SonareEngineTrackLane lane[] = {{1, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};

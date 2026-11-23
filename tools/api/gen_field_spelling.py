@@ -99,14 +99,22 @@ def entry_key(entry: str) -> str:
 def entry_keys(entry: str) -> set[str]:
     """Every C key a facade entry may answer to: a handle class also answers under the C
     prefixes the parity tables map to it (``RealtimeEngine.renderOffline`` is
-    ``engine_render_offline``)."""
+    ``engine_render_offline``), and under each C function of those prefixes parity aliases
+    to the method (``RealtimeEngine.setStripInsertParam`` is
+    ``engine_set_track_strip_insert_param_by_name``)."""
     keys = {entry_key(entry)}
     owner, dot, method = entry.partition(".")
     if dot:
-        from compare import _HANDLE_FULL_PREFIXES
+        from compare import _ALIAS_COVERAGE, _HANDLE_FULL_PREFIXES
 
         tail = camel_to_snake(method)
-        keys.update(prefix + tail for prefix, cls in _HANDLE_FULL_PREFIXES if cls == owner)
+        prefixes = [prefix for prefix, cls in _HANDLE_FULL_PREFIXES if cls == owner]
+        keys.update(prefix + tail for prefix in prefixes)
+        keys.update(
+            key
+            for key, aliases in _ALIAS_COVERAGE.items()
+            if tail in aliases and any(key.startswith(prefix) for prefix in prefixes)
+        )
     return keys
 
 
@@ -130,6 +138,7 @@ def derive(
         for row in entries:
             for key in entry_keys(row["entry"]):
                 names[(surface, key)].update(row["fields"])
+                names[(surface, key)].add(row["param"])
     for b in bindings:
         if b.surface_spelling is not None:
             names[(b.surface, b.c_key)].add(b.surface_spelling)
@@ -158,7 +167,10 @@ def derive(
             continue
         known = names[(b.surface, b.c_key)]
         by_canonical = {camel_to_snake(f): f for f in known}
-        renamed = [r for r in spellings(b.surface, b.c_subject) if r in known]
+        # A dotted spelling names a member of an object the facade takes, so it binds on the root.
+        renamed = [
+            r for r in spellings(b.surface, b.c_subject) if r in known or r.split(".")[0] in known
+        ]
         array = lengths[b.surface].get(f"{b.c_key}.{b.c_subject}")
         if b.c_subject in by_canonical:
             bind(b.surface, b.c_key, b.c_subject, by_canonical[b.c_subject])

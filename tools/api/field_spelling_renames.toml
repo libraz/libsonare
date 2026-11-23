@@ -12,7 +12,7 @@ bytes = "data"
 mel = "power"
 num_channels = "channels"
 in = ["planes", "samples"]
-param_name = "kind"
+param_name = ["kind", "param.name"]
 base_sample_offset = "startSample"
 sample_offset = "startSample"
 enable_metering = "enabled"
@@ -34,6 +34,9 @@ input = "samples"
 track_id = "ref"
 scene_json = "settings"
 inserts_json = "inserts"
+source_id = "source.id"
+source_track_id = "source.id"
+source_kind = "source.kind"
 
 [wasm]
 reference_sample_rate = "sampleRate"
@@ -42,7 +45,7 @@ bytes = "data"
 mel = "power"
 num_channels = "channels"
 in = ["planes", "samples"]
-param_name = "kind"
+param_name = ["kind", "param.name"]
 base_sample_offset = "startSample"
 sample_offset = "startSample"
 enable_metering = "enabled"
@@ -66,6 +69,10 @@ scene_json = "settings"
 inserts_json = "inserts"
 
 # The librosa-mirror keywords, then the folded preset.
+source_id = "source.id"
+source_track_id = "source.id"
+source_kind = "source.kind"
+
 [python]
 fmin_hz = "fmin"
 fmax_hz = "fmax"

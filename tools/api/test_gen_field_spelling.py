@@ -90,6 +90,44 @@ class RequestFieldTest(unittest.TestCase):
         )
         self.assertEqual((unbound, idle), ([], []))
 
+    def test_a_handle_method_answers_to_the_c_functions_parity_aliases_to_it(self) -> None:
+        facts = [
+            Fact("engine_set_track_strip_insert_param_by_name", "param_name", "param", "node", None)
+        ]
+        request = {
+            "node": [
+                {
+                    "entry": "RealtimeEngine.setStripInsertParam",
+                    "param": "param",
+                    "fields": ["name", "value"],
+                }
+            ]
+        }
+        rows, unbound, idle = gen.derive(facts, request, {"node": {"param_name": "param.name"}})
+        self.assertEqual(
+            rows["node"],
+            [gen.Row("engine_set_track_strip_insert_param_by_name", "param_name", "param.name")],
+        )
+        self.assertEqual((unbound, idle), ([], []))
+
+    def test_a_dotted_rename_binds_on_the_object_the_facade_takes(self) -> None:
+        facts = [
+            Fact("engine_set_bus_sidechain", "source_id", "param", "node", None),
+            Fact("engine_set_bus_sidechain", None, "param", "node", "source"),
+        ]
+        rows, unbound, idle = gen.derive(facts, {}, {"node": {"source_id": "source.id"}})
+        self.assertEqual(
+            rows["node"], [gen.Row("engine_set_bus_sidechain", "source_id", "source.id")]
+        )
+        self.assertEqual((unbound, idle), ([], []))
+
+    def test_a_dotted_rename_needs_its_root_on_that_entry(self) -> None:
+        facts = [Fact("engine_set_bus_sidechain", "source_id", "param", "node", None)]
+        rows, unbound, idle = gen.derive(facts, {}, {"node": {"source_id": "source.id"}})
+        self.assertEqual(rows["node"], [])
+        self.assertEqual([u.c_subject for u in unbound], ["source_id"])
+        self.assertEqual(idle, [("node", "source_id", "source.id")])
+
     def test_a_ruled_rename_is_tabled(self) -> None:
         facts = [Fact("resample", "target_sr", "param", "node", None)]
         request = {
