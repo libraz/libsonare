@@ -1,7 +1,7 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
-import { sampleNeed, withHeapNeed } from './internal/memory_budget.js';
+import { sampleNeed, withHeapNeed, withHeapNeedWhen } from './internal/memory_budget.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -167,7 +167,19 @@ export class PlaybackRenderer {
    * Unlike the block methods, an empty buffer or a non-finite sample throws.
    */
   renderOffline(samples: Float32Array, inChannels: number): Float32Array {
-    return this.native.renderOffline(samples, inChannels);
+    // The output width is the target layout the handle holds; the native reader refuses
+    // a channel count that is not a positive integer, so only a valid one is sized.
+    const outChannels = this.native.outputChannels();
+    return withHeapNeedWhen(
+      Number.isInteger(inChannels) && inChannels >= 1,
+      sampleNeed(
+        'samples',
+        samples.length,
+        undefined,
+        (n) => 4 * n + 4 * Math.floor(n / inChannels) * outChannels,
+      ),
+      () => this.native.renderOffline(samples, inChannels),
+    );
   }
 
   /** Applies a complete configuration document; a changed prepare key throws. */

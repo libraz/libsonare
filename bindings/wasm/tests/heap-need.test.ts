@@ -1,5 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { decomposeStems, fixLength, init, meteringPeakDb } from '../dist/index.js';
+import {
+  decomposeStems,
+  fixLength,
+  init,
+  meteringPeakDb,
+  PlaybackRenderer,
+} from '../dist/index.js';
 
 function refusal(call: () => unknown): RangeError {
   let caught: unknown;
@@ -43,6 +49,22 @@ describe('a one-shot call whose certain need exceeds the heap', () => {
     expect(error.message).toMatch(
       /^decomposeStems: samples is 20000000 samples \(416\.67 s at 48000 Hz\) and needs at least \d+\.\d MiB, more than the \d+\.\d MiB available; the longest accepted is \d+ samples \(\d+\.\d\d s\)$/,
     );
+  });
+
+  it('sizes an offline render by the output width the renderer holds', () => {
+    const renderer = new PlaybackRenderer({
+      config: { target: { kind: 'speakers', layout: '7.1' } },
+      sampleRate: 48000,
+    });
+    try {
+      // A mono input of n samples renders to 8n output samples: 36 bytes per input sample.
+      const error = refusal(() => renderer.renderOffline(new Float32Array(60_000_000), 1));
+      expect(error.message).toMatch(
+        /^PlaybackRenderer\.renderOffline: samples is 60000000 samples and needs 2060\.0 MiB, more than the \d+\.\d MiB available; the longest accepted is \d+ samples$/,
+      );
+    } finally {
+      renderer.destroy();
+    }
   });
 
   it('bounds a typed array by the heap, not by the plain-array element budget', () => {

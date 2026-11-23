@@ -144,6 +144,8 @@ export const MEASURED_FLOORS = {
   // 2026-11-23 at 030f6a607: 14x-60x over k in [1, 8], r in [1, 4]; fit 2 + 10r + k(1 + r).
   decomposeStems: (r: number, k: number): number => 0.67 * (2 + 10 * r + k * (1 + r)),
 } as const;
+// Not wired: meteringSpectrumFrame copies only the analysed frame (nFft <= 4194304 floats), so no need scales with the input.
+// Not wired: Project.bounce takes its length and channel count from the project the handle holds, and core refuses an oversized render by name.
 
 /** STFT bins per hop sample for a transform of `nFft` at `hop`; the hop 0 is a quarter of `nFft`. */
 export function binsPerHop(nFft: number, hop: number): number {
