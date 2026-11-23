@@ -192,9 +192,6 @@ arr::DestinationInstrumentBinding to_model_binding(const SonareProjectInstrument
     const auto& config = *input.builtin;
     require_struct_size(config.struct_size, sizeof(config), "instrument.builtin",
                         "sonare_builtin_synth_config_init");
-    check::integer_in_range(config.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1,
-                            "instrument.builtin.waveform");
-    (void)builtin_synth_config_from_c(config, "instrument.builtin.");
     binding.instrument = arr::DestinationBuiltinInstrument{
         config.waveform, config.gain,       config.attack_ms, config.decay_ms,
         config.sustain,  config.release_ms, config.polyphony};
@@ -202,17 +199,29 @@ arr::DestinationInstrumentBinding to_model_binding(const SonareProjectInstrument
     const auto& config = *input.sf2;
     require_struct_size(config.struct_size, sizeof(config), "instrument.sf2",
                         "sonare_sf2_instrument_config_init");
-    (void)sf2_player_config_from_c(config, "instrument.sf2.");
     arr::DestinationSf2Instrument model{
         config.gain,           config.polyphony,          config.prefer_model_for_modeled_families,
         config.clear_bank_rig, config.gs_efx_realization, std::nullopt};
     if (input.sound_font_uri != nullptr) {
-      check::non_empty(input.sound_font_uri, "instrument.sound_font_uri");
       model.sound_font_uri = input.sound_font_uri;
     }
     binding.instrument = std::move(model);
   }
   return binding;
+}
+
+sonare::SonareParameterRefusal project_instrument_spelling(
+    const sonare::SonareParameterRefusal& error) {
+  return error.respelled(
+      sonare::ErrorCode::InvalidParameter,
+      [](const std::string& subject) {
+        if (subject == "bank.msb") return std::string("instrument.bank_msb");
+        if (subject == "bank.lsb") return std::string("instrument.bank_lsb");
+        if (subject == "program") return std::string("instrument.program");
+        if (subject == "sf2.sound_font_uri") return std::string("instrument.sound_font_uri");
+        return std::string("instrument.") + subject;
+      },
+      false);
 }
 }  // namespace
 
@@ -306,9 +315,13 @@ SonareError sonare_project_set_destination_instrument(SonareProject* project,
     return SONARE_OK;
   }
   auto command = std::make_unique<arr::SetDestinationInstrument>(destination_id, std::move(value));
-  if (!project->history.apply(std::move(command))) {
-    set_last_error(SONARE_ERROR_INVALID_STATE, "the instrument binding could not be applied");
-    return SONARE_ERROR_INVALID_STATE;
+  try {
+    if (!project->history.apply(std::move(command))) {
+      set_last_error(SONARE_ERROR_INVALID_STATE, "the instrument binding could not be applied");
+      return SONARE_ERROR_INVALID_STATE;
+    }
+  } catch (const sonare::SonareParameterRefusal& error) {
+    throw project_instrument_spelling(error);
   }
   return SONARE_OK;
   SONARE_C_CATCH

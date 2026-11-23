@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "arrangement/automation_lane_validation.h"
 #include "arrangement/edit_command_internal.h"
 #include "arrangement/edit_source.h"
 #include "arrangement/harmonic_limits.h"
@@ -22,7 +23,6 @@
 #include "c_api/synth_patch_fields.h"
 #include "mixing/api/scene.h"
 #include "mixing/panner.h"
-#include "mixing/stereo_width.h"
 #include "serialize/project_serializer_internal.h"
 #include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
@@ -143,7 +143,12 @@ void patch_field_map_from_json(const Value& value, const std::string& path, cons
     const auto numeric_row = std::find_if(std::begin(numeric_rows), std::end(numeric_rows),
                                           [&](const auto& row) { return name == row.name; });
     if (numeric_row == std::end(numeric_rows)) {
-      throw SonareException(ErrorCode::InvalidFormat, schema::unknown_key(field_path));
+      std::vector<std::string> accepted;
+      for (const auto& row : enum_rows) accepted.emplace_back(row.name);
+      for (const auto& row : numeric_rows) accepted.emplace_back(row.name);
+      throw SonareException(
+          ErrorCode::InvalidFormat,
+          schema::unknown_key_expected(field_path, schema::expected_keys(accepted)));
     }
     if (!field.is_number()) {
       throw SonareException(ErrorCode::InvalidFormat,
@@ -291,17 +296,10 @@ automation::AutomationLane automation_lane_from_json(const Value& v, const std::
             ErrorCode::InvalidFormat,
             schema::refusal(schema::child_path(point_path, "ppq"), "must be finite"));
       }
-      if (!std::isfinite(bp.value)) {
-        throw SonareException(
-            ErrorCode::InvalidFormat,
-            schema::refusal(schema::child_path(point_path, "value"), "must be finite"));
-      }
-      if (target_kind == automation::AutomationTargetKind::kTrackWidth &&
-          !mixing::width_in_range(bp.value)) {
-        throw SonareException(
-            ErrorCode::InvalidFormat,
-            schema::refusal(schema::child_path(point_path, "value"),
-                            schema::range_predicate(mixing::kWidthMin, mixing::kWidthMax)));
+      try {
+        arrangement::check_automation_lane_value(target_kind, target_param_id, bp.value, "value");
+      } catch (const SonareParameterRefusal& error) {
+        schema::rethrow_under(error, point_path, ErrorCode::InvalidFormat);
       }
       points.push_back(bp);
     }
@@ -424,11 +422,6 @@ void restore_destination_instrument_from_json(const Value& v, const std::string&
         int_or(*config, config_path, "gsEfxRealization", sf2.gs_efx_realization);
     if (config->find("soundFontUri") != nullptr) {
       sf2.sound_font_uri = required_string(*config, config_path, "soundFontUri");
-      if (sf2.sound_font_uri->empty()) {
-        throw SonareException(
-            ErrorCode::InvalidFormat,
-            schema::refusal(schema::child_path(config_path, "soundFontUri"), "must not be empty"));
-      }
     }
     instrument = std::move(sf2);
   } else {
@@ -458,7 +451,12 @@ void restore_destination_instrument_from_json(const Value& v, const std::string&
   try {
     project->restore_destination_instrument(destination_id, std::move(binding));
   } catch (const SonareParameterRefusal& error) {
-    schema::rethrow_under(error, path, ErrorCode::InvalidFormat);
+    throw error.respelled(
+        ErrorCode::InvalidFormat,
+        [&](const std::string& subject) {
+          return schema::child_path(path, sonare::util::check::camel_path(subject));
+        },
+        false);
   }
 }
 

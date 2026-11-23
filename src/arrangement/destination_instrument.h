@@ -100,4 +100,8 @@ struct DestinationInstrumentBinding {
   }
 };
 
+/// Refuses a destination instrument whose model values cannot be used by the
+/// corresponding instrument runtime.
+void validate_destination_instrument(const DestinationInstrumentBinding& binding);
+
 }  // namespace sonare::arrangement

@@ -10,9 +10,14 @@
 #include <utility>
 
 #include "arrangement/edit_command_internal.h"
+#include "c_api/instrument_config_domains.h"
+#include "c_api/midi_input_domains.h"
+#include "midi/builtin_synth.h"
+#include "midi/synth/mod_matrix.h"
 #include "util/exception.h"
 #include "util/json_schema.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/api/insert_factory.h"
@@ -372,32 +377,61 @@ const DestinationInstrumentBinding* Project::find_destination_instrument(
   return it == destination_instruments_.end() ? nullptr : &it->second;
 }
 
-namespace {
-
 void validate_destination_instrument(const DestinationInstrumentBinding& binding) {
-  const auto refuse_instrument_field = [](const std::string& subject,
-                                          const std::string& predicate) {
-    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject, predicate)
-        .as_caller_spelled();
-  };
+  namespace check = sonare::util::check;
+  namespace domains = sonare_c_detail;
+  using sonare::midi::synth::ModDestination;
+  using sonare::midi::synth::ModSource;
+  constexpr auto builtin_waveform_domain =
+      check::integer_domain(static_cast<int>(sonare::midi::SynthWaveform::kSine),
+                            static_cast<int>(sonare::midi::SynthWaveform::kTriangle));
+  constexpr auto mod_source_domain = check::integer_domain(static_cast<int>(ModSource::kAmpEnv),
+                                                           static_cast<int>(ModSource::kPitchBend));
+  constexpr auto mod_destination_domain =
+      check::integer_domain(static_cast<int>(ModDestination::kPitchCents),
+                            static_cast<int>(ModDestination::kSpectrumMorph));
+
   if (binding.bank.has_value()) {
-    if (binding.bank->msb < 0 || binding.bank->msb > 127) {
-      refuse_instrument_field("bank.msb", "must be 0 to 127");
-    }
-    if (binding.bank->lsb < 0 || binding.bank->lsb > 127) {
-      refuse_instrument_field("bank.lsb", "must be 0 to 127");
-    }
+    check::integer_within(binding.bank->msb, domains::kMidiDataByteDomain, "bank.msb");
+    check::integer_within(binding.bank->lsb, domains::kMidiDataByteDomain, "bank.lsb");
   }
-  if (binding.program.has_value() && (*binding.program < 0 || *binding.program > 127)) {
-    refuse_instrument_field("program", "must be 0 to 127");
+  if (binding.program.has_value()) {
+    check::integer_within(*binding.program, domains::kMidiDataByteDomain, "program");
   }
-  if (const auto* sf2 = std::get_if<DestinationSf2Instrument>(&binding.instrument);
-      sf2 != nullptr && sf2->sound_font_uri.has_value() && sf2->sound_font_uri->empty()) {
-    refuse_instrument_field("sound_font_uri", "must not be empty");
+
+  if (const auto* builtin = std::get_if<DestinationBuiltinInstrument>(&binding.instrument)) {
+    check::integer_within(builtin->waveform, builtin_waveform_domain, "builtin.waveform");
+    check::within(builtin->gain, domains::kBuiltinSynthGainDomain, "builtin.gain");
+    check::within(builtin->attack_ms, domains::kBuiltinSynthStageMsDomain, "builtin.attack_ms");
+    check::within(builtin->decay_ms, domains::kBuiltinSynthStageMsDomain, "builtin.decay_ms");
+    check::within(builtin->release_ms, domains::kBuiltinSynthStageMsDomain, "builtin.release_ms");
+    check::within(builtin->sustain, domains::kBuiltinSynthSustainDomain, "builtin.sustain");
+    check::integer_within(builtin->polyphony, domains::kSynthPolyphonyDomain, "builtin.polyphony");
+  } else if (const auto* sf2 = std::get_if<DestinationSf2Instrument>(&binding.instrument)) {
+    check::within(sf2->gain, domains::kSf2PlayerGainDomain, "sf2.gain");
+    check::integer_within(sf2->polyphony, domains::kSynthPolyphonyDomain, "sf2.polyphony");
+    check::integer_within(sf2->prefer_model_for_modeled_families, domains::kSf2PlayerFlagDomain,
+                          "sf2.prefer_model_for_modeled_families");
+    check::integer_within(sf2->clear_bank_rig, domains::kSf2PlayerFlagDomain, "sf2.clear_bank_rig");
+    check::integer_within(sf2->gs_efx_realization, domains::kGsEfxRealizationDomain,
+                          "sf2.gs_efx_realization");
+    if (sf2->sound_font_uri.has_value() && sf2->sound_font_uri->empty()) {
+      check::refuse("sf2.sound_font_uri", "must not be empty");
+    }
+  } else if (const auto* synth = std::get_if<DestinationSynthInstrument>(&binding.instrument)) {
+    check::integer_within(synth->mod_routings.size(), domains::kSynthModRoutingCountDomain,
+                          "synth.mod_routings");
+    const float depth_limit = domains::synth_patch_mod_depth_limit();
+    for (std::size_t i = 0; i < synth->mod_routings.size(); ++i) {
+      const auto& route = synth->mod_routings[i];
+      const std::string prefix = "synth.mod_routings[" + std::to_string(i) + "].";
+      check::integer_within(route.source, mod_source_domain, (prefix + "source").c_str());
+      check::integer_within(route.destination, mod_destination_domain,
+                            (prefix + "destination").c_str());
+      check::in_computed_range(route.depth, -depth_limit, depth_limit, (prefix + "depth").c_str());
+    }
   }
 }
-
-}  // namespace
 
 void Project::set_destination_instrument(uint32_t destination_id,
                                          DestinationInstrumentBinding binding) {

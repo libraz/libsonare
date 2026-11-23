@@ -4,10 +4,13 @@
 /// @brief Numeric domains of the built-in synth, SF2 player and metronome C-ABI configs, stated
 ///        once for the checks that refuse them and for the table in numeric_domain_rows.h.
 
+#include <limits>
+
 #include "engine/metronome.h"
 #include "midi/builtin_synth.h"
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/native_synth_patch.h"
+#include "midi/synth/patch_clamp.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
@@ -42,6 +45,13 @@ inline constexpr sonare::util::check::NumericDomain kSf2PlayerFlagDomain =
 /// @brief What the SF2 player's gs_efx_realization accepts.
 inline constexpr sonare::util::check::NumericDomain kGsEfxRealizationDomain =
     sonare::util::check::integer_domain(0, 1);
+
+/// @brief The mod-route depth bound, read back from the patch clamp's extreme.
+inline float synth_patch_mod_depth_limit() {
+  sonare::midi::synth::NativeSynthPatch p;
+  p.mod_matrix.routes[0].depth = std::numeric_limits<float>::max();
+  return sonare::midi::synth::clamp_synth_patch(p).mod_matrix.routes[0].depth;
+}
 
 /// @brief What the metronome's beat_gain and accent_gain accept.
 inline constexpr sonare::util::check::NumericDomain kMetronomeGainDomain =

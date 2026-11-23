@@ -4,7 +4,6 @@
 #include "serialize/project_serializer.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -105,30 +104,7 @@ arrangement::ProjectPartRig part_rig_from_json(const Value& v, const std::string
 
 using KeyList = std::initializer_list<const char*>;
 
-// The current spelling of a snake_case key: lowerCamelCase, with a spelled-out `_seconds`
-// unit folded to `Sec`.
-std::string current_spelling(const std::string& key) {
-  std::string out;
-  bool upper = false;
-  for (char c : key) {
-    if (c == '_' && !out.empty()) {
-      upper = true;
-      continue;
-    }
-    out.push_back(upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c);
-    upper = false;
-  }
-  const std::string seconds = "Seconds";
-  if (out.size() > seconds.size() &&
-      out.compare(out.size() - seconds.size(), seconds.size(), seconds) == 0) {
-    out.replace(out.size() - seconds.size(), seconds.size(), "Sec");
-  }
-  return out;
-}
-
-// Refuses the first key of @p object outside @p known, naming its path; a snake_case spelling
-// of a known key is refused naming the key to write. `$`- and `x-`-prefixed annotation keys are
-// exempt, as in every other reader that refuses an unknown key.
+// Refuses the first key outside the record's accepted fields. Annotation keys are exempt.
 void refuse_unknown_keys(const Value& object, const std::string& path, KeyList known) {
   const auto is_known = [&known](const std::string& key) {
     return std::any_of(known.begin(), known.end(),
@@ -137,15 +113,11 @@ void refuse_unknown_keys(const Value& object, const std::string& path, KeyList k
   for (const auto& entry : object.as_object()) {
     const std::string& key = entry.first;
     if (json::is_annotation_key(key) || is_known(key)) continue;
-    const std::string current = current_spelling(key);
-    if (key.find('_') != std::string::npos && is_known(current)) {
-      throw SonareException(
-          ErrorCode::InvalidFormat,
-          schema::refusal(schema::child_path(path, key),
-                          "is an earlier spelling; write " + schema::child_path(path, current)));
-    }
-    throw SonareException(ErrorCode::InvalidFormat,
-                          schema::unknown_key(schema::child_path(path, key)));
+    throw SonareException(
+        ErrorCode::InvalidFormat,
+        schema::unknown_key_expected(
+            schema::child_path(path, key),
+            schema::expected_keys(std::vector<std::string>(known.begin(), known.end()))));
   }
 }
 
@@ -230,15 +202,14 @@ void check_annotation_keys(const Value& annotation, const std::string& path) {
 }
 
 // The MIDI content store is a map keyed by clip id (plus the SysEx payload table keyed by
-// handle), so only its event records are checked. An earlier event spelling is refused naming
-// the current one.
+// handle), so the fixed field lists apply to its event records.
 void check_midi_content_keys(const Value& content, const std::string& path) {
   for (const auto& [clip_key, events] : content.as_object()) {
     if (clip_key == "__sysex_payloads") {
       throw SonareException(ErrorCode::InvalidFormat,
-                            schema::refusal(schema::child_path(path, clip_key),
-                                            "is an earlier spelling; write " +
-                                                schema::child_path(path, "__sysexPayloads")));
+                            schema::unknown_key_expected(
+                                schema::child_path(path, clip_key),
+                                schema::expected_keys({"__sysexPayloads", "uint32 clip id"})));
     }
     if (clip_key == "__sysexPayloads" || !events.is_array()) continue;
     const auto& elements = events.as_array();
@@ -246,15 +217,6 @@ void check_midi_content_keys(const Value& content, const std::string& path) {
       const Value& event = elements[index];
       if (!event.is_object()) continue;
       const std::string event_path = schema::index_path(schema::child_path(path, clip_key), index);
-      for (const auto& [earlier, current] :
-           {std::pair<const char*, const char*>{"data0", "word0"}, {"data1", "word1"}}) {
-        if (event.find(earlier) != nullptr) {
-          throw SonareException(ErrorCode::InvalidFormat,
-                                schema::refusal(schema::child_path(event_path, earlier),
-                                                "is an earlier spelling; write " +
-                                                    schema::child_path(event_path, current)));
-        }
-      }
       refuse_unknown_keys(event, event_path, {"ppq", "word0", "word1", "sysexHandle"});
     }
   }

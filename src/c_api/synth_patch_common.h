@@ -247,16 +247,6 @@ inline const SynthPatchSampleBounds& synth_patch_sample_bounds() {
   return bounds;
 }
 
-/// The mod-route depth bound, read back from the patch clamp's extreme.
-inline float synth_patch_mod_depth_limit() {
-  static const float limit = [] {
-    sonare::midi::synth::NativeSynthPatch p = sonare::midi::synth::NativeSynthConfig{}.patch;
-    p.mod_matrix.routes[0].depth = std::numeric_limits<float>::max();
-    return sonare::midi::synth::clamp_synth_patch(p).mod_matrix.routes[0].depth;
-  }();
-  return limit;
-}
-
 /// Copies the engine section @p mode reads from @p from into @p to, leaving
 /// every other section of @p to as it was. Modes without a section copy nothing.
 inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& from,

@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "arrangement/destination_instrument.h"
@@ -356,7 +357,9 @@ TEST_CASE("project v7 refuses malformed lane identities and unknown instrument k
       R"({"version":7,"instruments":[{"destinationId":1,"kind":"builtin","builtin":{"waveform":0,"futureField":1}}]})");
   CHECK_FALSE(unknown_key.ok());
   REQUIRE_FALSE(unknown_key.diagnostics.empty());
-  CHECK(unknown_key.diagnostics.back().message == "unknown key instruments[0].builtin.futureField");
+  CHECK(unknown_key.diagnostics.back().message ==
+        "unknown key instruments[0].builtin.futureField (expected attackMs, decayMs, gain, "
+        "polyphony, releaseMs, sustain, waveform)");
 
   const auto invalid_width = sonare::serialize::project_from_json(
       R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"targetParamId":1,"targetKind":"trackWidth","points":[{"ppq":0,"value":2.5}]}]}]})");
@@ -388,6 +391,43 @@ TEST_CASE("project v7 refuses unknown or mistyped synth patch fields",
     REQUIRE_FALSE(result.diagnostics.empty());
     CHECK(result.diagnostics.back().message.find(std::string("instruments[0].synth.fields.") +
                                                  refusal.subject) != std::string::npos);
+    if (std::string_view(refusal.subject) == "futureField") {
+      const auto& message = result.diagnostics.back().message;
+      CHECK(message.find("unknown key instruments[0].synth.fields.futureField (expected ") == 0);
+      CHECK(message.find(", gain, ") != std::string::npos);
+      CHECK(message.find(", waveform") != std::string::npos);
+    }
+  }
+}
+
+TEST_CASE("project v7 refuses destination instruments outside their runtime domains",
+          "[serialize][project_v7][refusal]") {
+  struct Refusal {
+    const char* config;
+    const char* subject;
+  };
+  const Refusal refusals[] = {
+      {R"({"destinationId":3,"kind":"builtin","builtin":{"waveform":0,"gain":0,"attackMs":5,"decayMs":60,"sustain":0.7,"releaseMs":120,"polyphony":16}})",
+       "instruments[0].builtin.gain"},
+      {R"({"destinationId":3,"kind":"sf2","sf2":{"gain":0.5,"polyphony":48,"preferModelForModeledFamilies":0,"clearBankRig":0,"gsEfxRealization":2}})",
+       "instruments[0].sf2.gsEfxRealization"},
+      {R"({"destinationId":3,"kind":"sf2","sf2":{"gain":0.5,"polyphony":48,"preferModelForModeledFamilies":0,"clearBankRig":0,"gsEfxRealization":0,"soundFontUri":""}})",
+       "instruments[0].sf2.soundFontUri"},
+      {R"({"destinationId":3,"kind":"synth","synth":{"preset":"patch","fields":{},"engineParams":{},"modRoutings":[{"source":0,"destination":1,"depth":0}],"useGmPrograms":false}})",
+       "instruments[0].synth.modRoutings[0].source"},
+      {R"({"destinationId":3,"kind":"synth","synth":{"preset":"patch","fields":{},"engineParams":{},"modRoutings":[{"source":1,"destination":99,"depth":0}],"useGmPrograms":false}})",
+       "instruments[0].synth.modRoutings[0].destination"},
+      {R"({"destinationId":3,"kind":"synth","synth":{"preset":"patch","fields":{},"engineParams":{},"modRoutings":[{"source":1,"destination":1,"depth":9601}],"useGmPrograms":false}})",
+       "instruments[0].synth.modRoutings[0].depth"},
+  };
+  for (const auto& refusal : refusals) {
+    CAPTURE(refusal.config);
+    const auto result = sonare::serialize::project_from_json(
+        std::string(R"({"version":7,"instruments":[)") + refusal.config + "]}");
+    CHECK_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+    CHECK(result.diagnostics.back().message.find(refusal.subject) == 0);
   }
 }
 

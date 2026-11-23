@@ -425,6 +425,26 @@ TEST_CASE("persistent synth names nonfinite dormant sample fields",
   CHECK(serialize(project.value) == before);
 }
 
+TEST_CASE("destination instrument model validator names the C argument field",
+          "[c_api][project][writers][instruments]") {
+  ProjectHandle project;
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project.value, 0, 1, &track, &clip) == SONARE_OK);
+
+  SonareBuiltinSynthConfig builtin{};
+  sonare_builtin_synth_config_init(&builtin);
+  builtin.gain = 0.0f;
+  SonareProjectInstrument instrument{};
+  sonare_project_instrument_init(&instrument);
+  instrument.kind = SONARE_PROJECT_INSTRUMENT_BUILTIN;
+  instrument.builtin = &builtin;
+
+  CHECK(sonare_project_set_destination_instrument(project.value, 0, &instrument) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("instrument.builtin.gain") == 0);
+}
+
 TEST_CASE("bounce names an unresolved persistent SoundFont URI",
           "[c_api][project][writers][instruments]") {
   ProjectHandle project;

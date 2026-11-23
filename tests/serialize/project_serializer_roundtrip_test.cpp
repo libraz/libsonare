@@ -1061,7 +1061,8 @@ TEST_CASE("project deserialize preserves next id counters without gaps", "[seria
   CHECK(new_marker == max_marker + 1);
 }
 
-TEST_CASE("a key no record reads is refused by its path at every level", "[serialize]") {
+TEST_CASE("a key no record reads is refused by its path at every level",
+          "[serialize][project-unknown-keys]") {
   const auto doc = [](const std::string& body) {
     return std::string(R"({"version":7,)") + body + "}";
   };
@@ -1104,14 +1105,21 @@ TEST_CASE("a key no record reads is refused by its path at every level", "[seria
     CHECK_FALSE(refused.project.has_value());
     REQUIRE_FALSE(refused.diagnostics.empty());
     CHECK(refused.diagnostics.back().code == "invalid_format");
-    CHECK(refused.diagnostics.back().message == std::string("unknown key ") + c.path);
+    const std::string prefix = std::string("unknown key ") + c.path + " (expected ";
+    CHECK(refused.diagnostics.back().message.find(prefix) == 0);
   }
+
+  const auto tempo = project_from_json(doc(R"("tempoSegments":[{"zzz":1,"aaa":2}])"));
+  REQUIRE_FALSE(tempo.ok());
+  REQUIRE_FALSE(tempo.diagnostics.empty());
+  CHECK(tempo.diagnostics.back().message ==
+        "unknown key tempoSegments[0].aaa (expected bpm, endBpm, startPpq, startSample)");
 
   // The embedded scene refuses through its own reader, with paths from the project root.
   const auto scene = project_from_json(doc(R"("scene":{"version":2,"strips":[{"id":"a","x":1}]})"));
   CHECK_FALSE(scene.ok());
   REQUIRE_FALSE(scene.diagnostics.empty());
-  CHECK(scene.diagnostics.back().message == "unknown key scene.strips[0].x");
+  CHECK(scene.diagnostics.back().message.find("unknown key scene.strips[0].x (expected ") == 0);
 
   // A control character in a key cannot forge a second line.
   const auto forged = project_from_json(doc("\"clips\":[{\"id\":1,\"x\\nunknown\":1}]"));
@@ -1120,7 +1128,8 @@ TEST_CASE("a key no record reads is refused by its path at every level", "[seria
   CHECK(forged.diagnostics.back().message.find("\\x0a") != std::string::npos);
 }
 
-TEST_CASE("annotation keys are exempt from the unknown-key refusal", "[serialize]") {
+TEST_CASE("annotation keys are exempt from the unknown-key refusal",
+          "[serialize][project-unknown-keys]") {
   Fixture f = make_fixture();
   auto root = util::json::parse(project_to_json(f.project, f.midi));
   root.as_object()["$schema"] = std::string("project");
@@ -1132,22 +1141,30 @@ TEST_CASE("annotation keys are exempt from the unknown-key refusal", "[serialize
   CHECK_FALSE(result.has_error());
 }
 
-TEST_CASE("a snake_case project key is refused naming the camelCase key to write", "[serialize]") {
+TEST_CASE("earlier project field names are refused with the accepted field list",
+          "[serialize][project-unknown-keys]") {
+  constexpr char kRootKeys[] =
+      "annotation, assistSidecars, clips, instruments, markers, midiContent, overlapPolicy, "
+      "partRigs, sampleRate, scene, sources, tempoSegments, timeSignatures, tracks, version, "
+      "warpMaps";
+  constexpr char kClipKeys[] =
+      "activeTakeId, compRenderParts, compSegments, fadeIn, fadeOut, gain, id, lengthPpq, "
+      "loopCrossfadePpq, loopLengthPpq, loopMode, loopPeriodSec, loopPhaseSec, sourceId, "
+      "sourceOffsetPpq, sourceOffsetSec, startPpq, takes, trackId, warpMode, warpRefId";
   const struct {
     const char* document;
-    const char* message;
+    const char* path;
+    const char* expected;
   } kCases[] = {
-      {R"({"version":7,"sample_rate":48000})",
-       "sample_rate is an earlier spelling; write sampleRate"},
-      {R"({"version":7,"clips":[{"id":1,"start_ppq":0}]})",
-       "clips[0].start_ppq is an earlier spelling; write clips[0].startPpq"},
+      {R"({"version":7,"sample_rate":48000})", "sample_rate", kRootKeys},
+      {R"({"version":7,"clips":[{"id":1,"start_ppq":0}]})", "clips[0].start_ppq", kClipKeys},
       {R"({"version":7,"clips":[{"id":1,"loop_period_seconds":1}]})",
-       "clips[0].loop_period_seconds is an earlier spelling; write clips[0].loopPeriodSec"},
+       "clips[0].loop_period_seconds", kClipKeys},
       {R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"target_kind":1}]}]})",
-       "tracks[0].automationLanes[0].target_kind is an earlier spelling; write "
-       "tracks[0].automationLanes[0].targetKind"},
-      {R"({"version":7,"midiContent":{"__sysex_payloads":{}}})",
-       "midiContent.__sysex_payloads is an earlier spelling; write midiContent.__sysexPayloads"},
+       "tracks[0].automationLanes[0].target_kind",
+       "id, insertIndex, paramName, points, processor, sendId, targetKind, targetParamId"},
+      {R"({"version":7,"midiContent":{"__sysex_payloads":{}}})", "midiContent.__sysex_payloads",
+       "__sysexPayloads, uint32 clip id"},
   };
   for (const auto& c : kCases) {
     CAPTURE(c.document);
@@ -1155,7 +1172,8 @@ TEST_CASE("a snake_case project key is refused naming the camelCase key to write
     CHECK_FALSE(refused.ok());
     REQUIRE_FALSE(refused.diagnostics.empty());
     CHECK(refused.diagnostics.back().code == "invalid_format");
-    CHECK(refused.diagnostics.back().message == c.message);
+    CHECK(refused.diagnostics.back().message ==
+          std::string("unknown key ") + c.path + " (expected " + c.expected + ")");
   }
 }
 
@@ -1394,6 +1412,25 @@ TEST_CASE("project deserialize refuses a track pan outside [-1, 1]", "[serialize
   }
 }
 
+TEST_CASE("project deserialize refuses invalid typed automation point values",
+          "[serialize][project_v7][lane-values]") {
+  for (
+      const char* lane : {
+          R"("targetKind":"trackPan","points":[{"ppq":2,"value":0},{"ppq":1,"value":1.01}])",
+          R"("targetKind":"trackSendDb","sendId":"hall","points":[{"ppq":2,"value":0},{"ppq":1,"value":25}])",
+      }) {
+    const auto result = project_from_json(
+        std::string(R"({"version":7,"tracks":[{"id":1,"automationLanes":[{"targetParamId":0,)") +
+        lane + "}]}]}");
+    INFO(lane);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+    CHECK(result.diagnostics.back().message.find("tracks[0].automationLanes[0].points[1].value") ==
+          0);
+  }
+}
+
 TEST_CASE("project deserialize rejects float narrowing overflow with a field path", "[serialize]") {
   struct InvalidFloatField {
     const char* document;
@@ -1430,14 +1467,14 @@ TEST_CASE("project deserialize rejects float narrowing overflow with a field pat
       {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"azimuth":1e39}}]}})",
        "scene.strips[0].surroundPan.azimuth must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"elevation":-1e39}}]}})",
-       "unknown key scene.strips[0].surroundPan.elevation"},
+       "unknown key scene.strips[0].surroundPan.elevation (expected azimuth, divergence, lfe)"},
       {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"divergence":1e39}}]}})",
        "scene.strips[0].surroundPan.divergence must be finite and in [-3.4028235e38, "
        "3.4028235e38]"},
       {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"lfe":-1e39}}]}})",
        "scene.strips[0].surroundPan.lfe must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":2,"strips":[{"surroundPan":{"distance":1e39}}]}})",
-       "unknown key scene.strips[0].surroundPan.distance"},
+       "unknown key scene.strips[0].surroundPan.distance (expected azimuth, divergence, lfe)"},
       {R"({"version":7,"scene":{"version":2,"strips":[{"sends":[{"sendDb":-1e39}]}]}})",
        "scene.strips[0].sends[0].sendDb must be finite and in [-3.4028235e38, 3.4028235e38]"},
       {R"({"version":7,"scene":{"version":2,"buses":[{"inputTrimDb":1e39}]}})",
@@ -3173,8 +3210,8 @@ TEST_CASE("a built-in assist module id in its earlier spelling is refused naming
   }
 }
 
-TEST_CASE("a MIDI event word in its earlier spelling is refused naming the current one",
-          "[serialize]") {
+TEST_CASE("earlier MIDI event fields are refused with the accepted field list",
+          "[serialize][project-unknown-keys]") {
   const auto document = [](const std::string& event) {
     return R"({"version":7,"sources":[{"id":1,"kind":"audio"}],"tracks":[{"id":1}],)"
            R"("clips":[{"id":1,"trackId":1,"sourceId":1,"lengthPpq":1}],)"
@@ -3188,10 +3225,10 @@ TEST_CASE("a MIDI event word in its earlier spelling is refused naming the curre
 
   const struct {
     const char* event;
-    const char* current_key;
+    const char* earlier_key;
   } kEarlier[] = {
-      {R"({"ppq":0.0,"data0":546323556,"data1":0})", "word0"},
-      {R"({"ppq":0.0,"word0":546323556,"data1":0})", "word1"},
+      {R"({"ppq":0.0,"data0":546323556,"data1":0})", "data0"},
+      {R"({"ppq":0.0,"word0":546323556,"data1":0})", "data1"},
   };
   for (const auto& e : kEarlier) {
     CAPTURE(e.event);
@@ -3199,8 +3236,9 @@ TEST_CASE("a MIDI event word in its earlier spelling is refused naming the curre
     CHECK_FALSE(refused.ok());
     CHECK_FALSE(refused.project.has_value());
     REQUIRE_FALSE(refused.diagnostics.empty());
-    CHECK(refused.diagnostics.back().message.find(std::string("write midiContent.1[0].") +
-                                                  e.current_key) != std::string::npos);
+    CHECK(refused.diagnostics.back().message == std::string("unknown key midiContent.1[0].") +
+                                                    e.earlier_key +
+                                                    " (expected ppq, sysexHandle, word0, word1)");
   }
 }
 

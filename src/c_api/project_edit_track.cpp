@@ -1,16 +1,12 @@
 #include <algorithm>
 #include <limits>
 
+#include "arrangement/automation_lane_validation.h"
 #include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
-#include "engine/track_mixer.h"
 #include "mixing/panner.h"
-#include "mixing/stereo_width.h"
 #include "util/parameter_checks.h"
-#if defined(SONARE_WITH_MIXING)
-#include "engine/mixing_runtime.h"
-#endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -62,39 +58,8 @@ static_assert(static_cast<int>(arr::MarkerKind::kKeySignature) == SONARE_MARKER_
 
 namespace {
 
-// Refuses @p value unless it is inside the domain of the pan or width parameter the lane drives.
-void check_lane_value(sonare::automation::AutomationTargetKind kind, uint32_t param_id, float value,
-                      const char* subject) {
-  namespace check = sonare::util::check;
-  if (kind == sonare::automation::AutomationTargetKind::kTrackPan) {
-    check::in_range(value, sonare::mixing::kPanMin, sonare::mixing::kPanMax, subject);
-    return;
-  }
-  if (kind == sonare::automation::AutomationTargetKind::kTrackWidth) {
-    check::in_range(value, sonare::mixing::kWidthMin, sonare::mixing::kWidthMax, subject);
-    return;
-  }
-  if (kind == sonare::automation::AutomationTargetKind::kTrackSendDb) {
-    check::in_range(value, sonare::constants::kFloorDb,
-                    sonare::engine::TrackMixerRuntime::kMaxGainDb, subject);
-    return;
-  }
-#if defined(SONARE_WITH_MIXING)
-  if (kind == sonare::automation::AutomationTargetKind::kOpaque) {
-    if (param_id == sonare::engine::MixingRuntime::kPan) {
-      check::in_range(value, sonare::mixing::kPanMin, sonare::mixing::kPanMax, subject);
-      return;
-    }
-    if (param_id == sonare::engine::MixingRuntime::kWidth) {
-      check::in_range(value, sonare::mixing::kWidthMin, sonare::mixing::kWidthMax, subject);
-      return;
-    }
-  }
-#else
-  (void)param_id;
-#endif
-  check::finite_float(value, subject);
-}
+constexpr sonare::util::check::NumericDomain kAutomationInsertIndexDomain =
+    sonare::util::check::integer_domain(0, std::numeric_limits<int32_t>::max());
 
 // Validates lane descriptor fields and builds an automation::AutomationLane, refusing by throwing.
 // A non-null @p current preserves the target identity when the descriptor uses UNCHANGED.
@@ -181,8 +146,8 @@ void automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
         if (desc->send_id != nullptr) {
           check::refuse("desc.send_id", "must be NULL for an insert target");
         }
-        check::integer_in_range(desc->insert_index, 0, std::numeric_limits<int32_t>::max(),
-                                "desc.insert_index");
+        check::integer_within<int32_t>(desc->insert_index, kAutomationInsertIndexDomain,
+                                       "desc.insert_index");
         check::non_null(desc->processor, "desc.processor");
         check::non_empty(desc->processor, "desc.processor");
         check::non_null(desc->param_name, "desc.param_name");
@@ -203,8 +168,8 @@ void automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
     const SonareAutomationPoint& p = desc->points[i];
     check::within(p.ppq, sonare_c_detail::kPublicPpqDomain,
                   check::indexed_subject("desc.points", i, "ppq").c_str());
-    check_lane_value(kind, target_param_id, p.value,
-                     check::indexed_subject("desc.points", i, "value").c_str());
+    arr::check_automation_lane_value(kind, target_param_id, p.value,
+                                     check::indexed_subject("desc.points", i, "value").c_str());
     sonare::automation::Breakpoint bp;
     if (!ordinal_to_enum(p.curve_to_next, 0, static_cast<int>(sonare::AutomationCurve::SCurve),
                          &bp.curve_to_next)) {
