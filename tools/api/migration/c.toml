@@ -5133,3 +5133,27 @@ changed = "gains loudness_gain_db at the tail and embeds a SonareMasteringReport
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_mastering_test.cpp::chain results carry the loudness stage gain"
+
+[[entry]]
+kind = "type"
+old = "SonareDeclipConfig"
+changed = "gains int32_t link_channels at the tail, 0 by default; values other than 0 and 1 are refused on every entry and 1 on the mono entry point; recompile against the 2.0 header"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::link_channels outside 0/1 is refused on every entry, and 1 on the mono entry"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_declip_stereo"
+changed = "each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); config.link_channels = 1 restores the union"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::by default each channel repairs its own runs, as the mono entry point does"
+
+[[entry]]
+kind = "field"
+old = "SonareDeclipReport.linked_runs"
+changed = "0 unless config.link_channels is set on a multichannel entry point"
+domain = "mastering"
+rule = "individual"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::by default each channel repairs its own runs, as the mono entry point does"

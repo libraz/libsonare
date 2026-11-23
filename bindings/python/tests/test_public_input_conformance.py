@@ -549,3 +549,23 @@ def test_mel_family_follows_the_corpus(case: dict[str, Any], entry: str) -> None
     text = f"{entry}: {case['predicate'].format(**names)}"
     with pytest.raises(_GM_REFUSALS[case["refused"]], match=rf"^{re.escape(text)}$"):
         fn(**kwargs)
+
+
+_DECLIP_LINK = _CORPUS["declip_link_channels"]
+
+
+@pytest.mark.parametrize("case", _DECLIP_LINK["cases"], ids=lambda case: case["id"])
+def test_declip_link_channels_follow_the_corpus(case: dict[str, Any]) -> None:
+    n = _DECLIP_LINK["samples"]
+    signal = [0.5 * math.sin(2 * math.pi * 440 * i / _DECLIP_LINK["sample_rate"]) for i in range(n)]
+    fn = getattr(libsonare, case["entry"])
+    planes = [signal] if case["entry"] == "mastering_repair_declip" else [signal, signal]
+    call = lambda: fn(  # noqa: E731
+        *planes, _DECLIP_LINK["sample_rate"], link_channels=case["link_channels"]
+    )
+    if case["accepted"]:
+        call()
+        return
+    with pytest.raises(TypeError) as refused:
+        call()
+    assert type(refused.value).__name__ == _DECLIP_LINK["error"]["python"]

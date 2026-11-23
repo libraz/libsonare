@@ -13,7 +13,7 @@ from ._effects_repair_common import (
     _run_detection,
     _run_repair,
 )
-from ._errors import _entry, _refuse
+from ._errors import _entry, _refuse, _refuse_type
 from ._ffi import (
     SonareClickDetection,
     SonareClipDetection,
@@ -432,16 +432,17 @@ def mastering_repair_declip_stereo(
     clip_threshold_db: float = _DEFAULT_CLIP_THRESHOLD_DB,
     lpc_order: int = 36,
     iterations: int = 2,
+    link_channels: bool = False,
 ) -> DeclipStereoResult:
-    """Declips a stereo pair over the union of both channels' clipped runs.
+    """Declips a stereo pair.
 
-    Each channel reconstructs the whole of every union run it has at least
-    one clipped sample in; a channel with none in a run is left untouched
-    there -- reconstructing unclipped audio to match the other side would
-    replace real samples with an estimate, so this is not
-    :func:`mastering_repair_declick_stereo`'s behaviour. A clipped plateau
-    present in only one channel therefore produces no linking at all: linking
-    needs both channels clipped in the same region with different extents.
+    By default each channel repairs its own clipped runs and leaves every
+    sample it did not clip as it was. With ``link_channels`` each channel
+    reconstructs the whole of every run either channel clipped that it has at
+    least one clipped sample in, so the channels' repair errors agree, at the
+    cost of re-estimating unclipped samples in the quieter channel; use it on
+    near-mono material. A channel with no clipped sample in a run is left
+    untouched there even when linked.
 
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
@@ -451,11 +452,14 @@ def mastering_repair_declip_stereo(
             (default 20 * log10(0.98)).
         lpc_order: LPC order used for prediction (default 36).
         iterations: LPC reconstruction iterations (default 2).
+        link_channels: Link the two channels' repair regions (default False).
 
     Returns:
         :class:`DeclipStereoResult` with the declipped channels and each
         channel's own detection/repair report.
     """
+    if not isinstance(link_channels, bool):
+        raise _refuse_type("link_channels must be a bool")
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
@@ -465,6 +469,7 @@ def mastering_repair_declip_stereo(
         clip_threshold_db=_narrow_double(clip_threshold_db, "clip_threshold_db"),
         lpc_order=_narrow_int(lpc_order, "lpc_order", _C_INT_MIN, _C_INT_MAX),
         iterations=_narrow_int(iterations, "iterations", _C_INT_MIN, _C_INT_MAX),
+        link_channels=1 if link_channels else 0,
     )
     out = SonareDeclipStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_declip_stereo(

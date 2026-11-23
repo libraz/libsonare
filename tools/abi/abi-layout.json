@@ -1333,9 +1333,15 @@
         "name": "iterations",
         "offset": 12,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "link_channels",
+        "offset": 16,
+        "size": 4
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareDeclipReport": {
     "align": 8,

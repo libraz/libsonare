@@ -1506,6 +1506,12 @@ typedef struct {
                             ///< (default 20*log10(0.98), about -0.175 dBFS)
   int lpc_order;            ///< LPC order used for prediction (default 36)
   int iterations;           ///< LPC reconstruction iterations (default 2)
+  /// 1 links the channels of a multichannel entry point: each channel repairs every
+  /// run any channel clipped that it has at least one clipped sample in, so their
+  /// repair errors agree, at the cost of re-estimating unclipped samples in the
+  /// quieter channel; use on near-mono material. 0 (default): each channel repairs
+  /// its own runs. Other values are refused, and so is 1 on the mono entry point.
+  int32_t link_channels;
 } SonareDeclipConfig;
 
 /// @brief Fills @p config with sizeof and the library defaults. A NULL @p config is ignored.
@@ -1560,7 +1566,8 @@ typedef struct {
   size_t linked_runs;             ///< of the repaired runs, those reaching past
                                   ///< this channel's own clipped samples because
                                   ///< the other channel's run was wider; always 0
-                                  ///< from the mono entry point
+                                  ///< unless link_channels is set on a
+                                  ///< multichannel entry point
 } SonareDeclipReport;
 
 /// @brief A declipped stereo pair and what each channel's pass did.
@@ -1574,14 +1581,13 @@ typedef struct {
   SonareDeclipReport right_report;  ///< What the right channel's own pass found and repaired.
 } SonareDeclipStereoResult;
 
-/// @brief Declips a stereo pair over the union of both channels' clipped runs.
-/// @details One clipped plateau rarely ends on the same sample in both
-///   channels, and a run a single sample splits on one side only reconstructs
-///   differently there, which moves the image. Each channel therefore
-///   reconstructs the whole of every union run it has at least one clipped
-///   sample in. A channel with none in a run is left untouched there --
-///   reconstructing unclipped audio to match the other side would replace real
-///   samples with an estimate, so this is not the declicker's behaviour.
+/// @brief Declips a stereo pair.
+/// @details By default each channel reconstructs its own clipped runs and
+///   leaves every sample it did not clip bit-identical. With
+///   @c config.link_channels set, each channel reconstructs the whole of every
+///   run either channel clipped that it has at least one clipped sample in, so
+///   a plateau ending one sample apart on the two sides is repaired alike; a
+///   channel with no clipped sample in a run is left untouched there.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_declip_stereo(const float* left, const float* right,
                                                   size_t length, int sample_rate,

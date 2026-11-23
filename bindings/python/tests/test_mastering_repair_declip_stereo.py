@@ -1,13 +1,13 @@
 """Tests for the stereo offline declip Python wrapper.
 
 ``mastering_repair_declip_stereo`` is a ctypes pass-through over
-``mastering::repair::declip_stereo``, and its linking rule is NOT the
-declicker's: a channel only reconstructs a union run when it has at least one
-clipped sample of its own inside it, so a clipped plateau present in only one
-channel produces no linking at all. The fixture below therefore clips BOTH
-channels over the same region but with different extents -- the only shape
-that can produce linking here -- plus a separate right-only clipped run that
-must leave the left channel untouched.
+``mastering::repair::declip_stereo``. By default each channel repairs its own
+runs. With ``link_channels`` a channel reconstructs a union run only when it
+has at least one clipped sample of its own inside it, so a clipped plateau
+present in only one channel produces no linking at all. The fixture below
+therefore clips BOTH channels over the same region but with different
+extents -- the only shape that can produce linking -- plus a separate
+right-only clipped run that must leave the left channel untouched.
 """
 
 from __future__ import annotations
@@ -67,9 +67,28 @@ class TestMasteringRepairDeclipStereo:
         # carry different tones.
         assert not np.array_equal(result.left, result.right)
 
+    def test_unlinked_by_default_each_channel_matches_the_mono_pass(self) -> None:
+        left, right = _fixture()
+        stereo = libsonare.mastering_repair_declip_stereo(left, right, SR)
+        mono_left = libsonare.mastering_repair_declip(left, SR).samples
+        assert stereo.left_report.linked_runs == 0
+        assert stereo.right_report.linked_runs == 0
+        assert np.array_equal(stereo.left, mono_left)
+        # Past the left's own run its input survives bit for bit.
+        assert np.array_equal(
+            stereo.left[_LEFT_CLIP_END:_RIGHT_CLIP_END], left[_LEFT_CLIP_END:_RIGHT_CLIP_END]
+        )
+
+    def test_link_channels_must_be_a_bool_and_the_mono_entry_has_none(self) -> None:
+        left, right = _fixture()
+        with pytest.raises(TypeError, match="link_channels must be a bool"):
+            libsonare.mastering_repair_declip_stereo(left, right, SR, link_channels=1)  # type: ignore[arg-type]
+        with pytest.raises(TypeError):
+            libsonare.mastering_repair_declip(left, SR, link_channels=True)  # type: ignore[call-arg]
+
     def test_wider_run_links_the_narrower_channel(self) -> None:
         left, right = _fixture()
-        result = libsonare.mastering_repair_declip_stereo(left, right, SR)
+        result = libsonare.mastering_repair_declip_stereo(left, right, SR, link_channels=True)
 
         # Non-vacuity: each channel's own detector must have found its own
         # clipped samples before the cross-channel assertions below mean
@@ -97,7 +116,7 @@ class TestMasteringRepairDeclipStereo:
         in a run is left exactly as it came in.
         """
         left, right = _fixture()
-        result = libsonare.mastering_repair_declip_stereo(left, right, SR)
+        result = libsonare.mastering_repair_declip_stereo(left, right, SR, link_channels=True)
 
         left_slice = result.left[_RIGHT_ONLY_CLIP_START:_RIGHT_ONLY_CLIP_END]
         original_slice = left[_RIGHT_ONLY_CLIP_START:_RIGHT_ONLY_CLIP_END].tolist()
@@ -108,12 +127,11 @@ class TestMasteringRepairDeclipStereo:
 
         The mono declipper never sees the right channel's clipped samples, so
         it leaves the left channel's [2010, 2040) span untouched (it is not
-        clipped there). The stereo entry point reconstructs that span in the
-        left channel too, because of the linked run, so the two must
-        disagree there.
+        clipped there). The linked stereo entry point reconstructs that span
+        in the left channel too, so the two must disagree there.
         """
         left, right = _fixture()
-        stereo = libsonare.mastering_repair_declip_stereo(left, right, SR)
+        stereo = libsonare.mastering_repair_declip_stereo(left, right, SR, link_channels=True)
         mono_left = libsonare.mastering_repair_declip(left, SR).samples
 
         stereo_slice = stereo.left[_LEFT_CLIP_END:_RIGHT_CLIP_END]

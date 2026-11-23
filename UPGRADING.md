@@ -796,8 +796,11 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `SonareDeclipConfig.lpc_blend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
+| `SonareDeclipConfig` | gains int32_t link_channels at the tail, 0 by default; values other than 0 and 1 are refused on every entry and 1 on the mono entry point; recompile against the 2.0 header |
+| `SonareDeclipReport.linked_runs` | 0 unless config.link_channels is set on a multichannel entry point |
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
+| `sonare_mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); config.link_channels = 1 restores the union |
 
 ### C: Realtime engine, synthesis, MIDI and playback
 
@@ -2918,6 +2921,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `DeclipReport.linked_runs` | 0 unless link_channels=True is passed to a multichannel entry point |
 | `MixMeterSnapshot.channel_count` | `MixMeterSnapshot.num_channels` |
 | `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)` |
 | `master_audio(preset_name)` | `master_audio(preset)` |
@@ -2929,6 +2933,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_pair_process_stereo(processor_name)` | `mastering_apply_pair_processor_stereo(processor)` |
 | `mastering_process(processor_name)` | `mastering_apply_processor(processor)` |
 | `mastering_process_stereo(processor_name)` | `mastering_apply_processor_stereo(processor)` |
+| `mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); the new keyword link_channels=True restores the union |
 | `mastering_stereo_analyze(analysis_name)` | `mastering_analyze_stereo(analysis)` |
 | `metering_dynamic_range(high_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `metering_dynamic_range(low_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
@@ -10083,6 +10088,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `DeclipOptions.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `DeclipReport.interpolatedRuns` (`./analysis`) | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
 | `DeclipReport.interpolatedRuns` | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
+| `DeclipReport.linkedRuns` | 0 unless linkChannels: true is passed: each channel of a stereo declip, in masteringRepairDeclipStereo and in a masteringRepairApply declip stage, repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); linkChannels: true restores the union |
 | `MasteringRepairDeclipRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
@@ -11131,6 +11137,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClippingReport.clippingRatio` | `ClippingReport.clippedRatio`: clippingRatio -> clippedRatio |
 | `MasteringChainConfig.repair.declip.lpcBlend` (`./analysis`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringChainConfig.repair.declip.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `MasteringChainConfig.repair.declip` (`./analysis`) | a new linkChannels, default false: on more than one channel each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); true restores the union |
+| `MasteringChainConfig.repair.declip` | a new linkChannels, default false: on more than one channel each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); true restores the union |
 | `MasteringProcessorParams` (`./analysis`) | MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> = MasteringProcessorParamMap[P] |
 | `MasteringProcessorParams` | MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> = MasteringProcessorParamMap[P] |
 | `MeteringDynamicRangeOptions.lowPercentile` (`./analysis`) | a value outside [0, 1], or a lowPercentile above highPercentile, is a RangeError |

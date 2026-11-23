@@ -1799,6 +1799,7 @@ def mastering_repair_declip_stereo(
     clip_threshold_db: float = ...,
     lpc_order: int = 36,
     iterations: int = 2,
+    link_channels: bool = False,
 ) -> DeclipStereoResult: ...
 def mastering_repair_decrackle(
     samples: FloatSamples,

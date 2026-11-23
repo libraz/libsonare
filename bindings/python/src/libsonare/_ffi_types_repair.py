@@ -241,6 +241,7 @@ class SonareDeclipConfig(CStruct):
         ("clip_threshold_db", ctypes.c_float),
         ("lpc_order", ctypes.c_int),
         ("iterations", ctypes.c_int),
+        ("link_channels", ctypes.c_int32),
     ]
 
 

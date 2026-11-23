@@ -742,13 +742,11 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
   for (auto& s : left) s *= 0.5f;
   for (auto& s : right) s *= 0.5f;
 
-  // Declip does not link the way declick does: a channel with no clipped sample
-  // of its own in a run is left alone there rather than reconstructed to match.
-  // Linking therefore needs the SAME region clipped in both channels to
-  // DIFFERENT extents -- [2000,2010) in both, carried on to 2040 in the right
-  // only, so the union run is [2000,2040) and the left is dragged past its own
-  // 10 clipped samples. The isolated right-only run at 5000 is the control for
-  // the other half of the rule.
+  // Linking needs the SAME region clipped in both channels to DIFFERENT extents --
+  // [2000,2010) in both, carried on to 2040 in the right only, so the union run is
+  // [2000,2040) and a linked left is dragged past its own 10 clipped samples. The
+  // isolated right-only run at 5000 is the control: a channel with no clipped
+  // sample of its own in a run is left alone there even when linked.
   const size_t kSharedBegin = 2000, kSharedEnd = 2010;
   const size_t kRightWideEnd = 2040;
   const size_t kRightOnlyBegin = 5000, kRightOnlyEnd = 5010;
@@ -757,10 +755,36 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
   for (size_t i = kRightOnlyBegin; i < kRightOnlyEnd; ++i) right[i] = 1.0f;
   const std::vector<float> left_input = left;
 
-  SECTION("a wider run on one side extends the other side's reconstruction") {
+  SonareDeclipConfig linked;
+  sonare_declip_config_init(&linked);
+  CHECK(linked.link_channels == 0);
+  linked.link_channels = 1;
+
+  SECTION("by default each channel repairs its own runs, as the mono entry point does") {
+    SonareDeclipStereoResult stereo{};
+    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr,
+                                                  nullptr, &stereo) == SONARE_OK);
+    SonareDeclipResult mono{};
+    REQUIRE(sonare_mastering_repair_declip(left.data(), left.size(), sr, nullptr, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == stereo.length);
+    CHECK(stereo.left_report.linked_runs == 0);
+    CHECK(stereo.right_report.linked_runs == 0);
+    for (size_t i = 0; i < mono.length; ++i) {
+      if (stereo.left[i] != mono.samples[i]) FAIL("left differs from mono at " << i);
+    }
+    // Past the left's own run its input survives bit for bit.
+    for (size_t i = kSharedEnd; i < kRightWideEnd; ++i) {
+      CHECK(stereo.left[i] == left_input[i]);
+    }
+    sonare_free_declip_result(&mono);
+    sonare_free_declip_stereo_result(&stereo);
+  }
+
+  SECTION("linked, a wider run on one side extends the other side's reconstruction") {
     SonareDeclipStereoResult out{};
     REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr,
-                                                  nullptr, &out) == SONARE_OK);
+                                                  &linked, &out) == SONARE_OK);
     REQUIRE(out.left != nullptr);
     REQUIRE(out.right != nullptr);
     REQUIRE(out.length == left.size());
@@ -770,39 +794,51 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
     CHECK(out.left_report.detected.clipped_samples == kSharedEnd - kSharedBegin);
     CHECK(out.right_report.detected.run_count == 2);
 
-    // The asymmetry is the whole point: the left is carried past its own
-    // clipped samples by the right's wider run, while the right's own detection
-    // already spans that run and so borrows nothing.
+    // The left is carried past its own clipped samples by the right's wider run,
+    // while the right's own detection already spans that run and borrows nothing.
     CHECK(out.left_report.linked_runs > 0);
     CHECK(out.right_report.linked_runs == 0);
 
-    // A run only the right channel clipped leaves the left untouched -- this is
-    // where declick would have repaired both.
+    bool extended = false;
+    for (size_t i = kSharedEnd; i < kRightWideEnd; ++i) {
+      if (out.left[i] != left_input[i]) extended = true;
+    }
+    CHECK(extended);
+
+    // A run only the right channel clipped leaves the left untouched.
     for (size_t i = kRightOnlyBegin; i < kRightOnlyEnd; ++i) {
-      CHECK(out.left[i] == Catch::Approx(left_input[i]).margin(1e-6));
+      CHECK(out.left[i] == left_input[i]);
     }
 
     sonare_free_declip_stereo_result(&out);
   }
 
-  SECTION("the extended region differs from the mono entry point") {
+  SECTION("link_channels outside 0/1 is refused on every entry, and 1 on the mono entry") {
+    SonareDeclipConfig bad = linked;
+    bad.link_channels = 2;
     SonareDeclipStereoResult stereo{};
-    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr,
-                                                  nullptr, &stereo) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr, &bad,
+                                                  &stereo) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "config.link_channels must be 0 or 1");
     SonareDeclipResult mono{};
-    REQUIRE(sonare_mastering_repair_declip(left.data(), left.size(), sr, nullptr, &mono) ==
-            SONARE_OK);
-    REQUIRE(mono.length == stereo.length);
+    REQUIRE(sonare_mastering_repair_declip(left.data(), left.size(), sr, &bad, &mono) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "config.link_channels must be 0 or 1");
+    SonareClipDetection detected{};
+    REQUIRE(sonare_mastering_repair_detect_clipping(left.data(), left.size(), sr, &bad,
+                                                    &detected) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "config.link_channels must be 0 or 1");
+    bad.link_channels = -1;
+    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr, &bad,
+                                                  &stereo) == SONARE_ERROR_INVALID_PARAMETER);
 
-    // The mono pass never sees the right channel's run, so it stops at 2010.
-    bool differs = false;
-    for (size_t i = kSharedEnd; i < kRightWideEnd; ++i) {
-      if (stereo.left[i] != mono.samples[i]) differs = true;
-    }
-    CHECK(differs);
-
-    sonare_free_declip_result(&mono);
-    sonare_free_declip_stereo_result(&stereo);
+    REQUIRE(sonare_mastering_repair_declip(left.data(), left.size(), sr, &linked, &mono) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "config.link_channels applies to a multichannel entry point");
+    // A detection reads no link, so 1 is accepted there.
+    REQUIRE(sonare_mastering_repair_detect_clipping(left.data(), left.size(), sr, &linked,
+                                                    &detected) == SONARE_OK);
   }
 
   SECTION("clears the result before refusing") {

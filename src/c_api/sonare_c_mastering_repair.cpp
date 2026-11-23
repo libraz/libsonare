@@ -110,7 +110,9 @@ sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
   return cpp;
 }
 
-sonare::mastering::repair::DeclipConfig to_cpp_declip_config(const SonareDeclipConfig* config) {
+/// @param multichannel false for the mono entry point, which refuses link_channels.
+sonare::mastering::repair::DeclipConfig to_cpp_declip_config(const SonareDeclipConfig* config,
+                                                             bool multichannel) {
   sonare::mastering::repair::DeclipConfig cpp;
   if (!config) return cpp;
   require_config_size(*config, "sonare_declip_config_init");
@@ -118,6 +120,16 @@ sonare::mastering::repair::DeclipConfig to_cpp_declip_config(const SonareDeclipC
                                                                          "clip_threshold_db");
   cpp.lpc_order = config->lpc_order;
   cpp.iterations = config->iterations;
+  if (config->link_channels != 0 && config->link_channels != 1) {
+    throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter,
+                                                    "link_channels", "must be 0 or 1");
+  }
+  if (config->link_channels == 1 && !multichannel) {
+    throw sonare::SonareParameterRefusal::predicate(sonare::ErrorCode::InvalidParameter,
+                                                    "link_channels",
+                                                    "applies to a multichannel entry point");
+  }
+  cpp.link_channels = config->link_channels == 1;
   return cpp;
 }
 
@@ -843,12 +855,12 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
                                            SonareDeclipResult* out) {
   SONARE_C_API_ENTRY;
   return run_mono(
-      "samples", [&] { validate_cpp(to_cpp_declip_config(config)); }, samples, length, sample_rate,
-      out,
+      "samples", [&] { validate_cpp(to_cpp_declip_config(config, false)); }, samples, length,
+      sample_rate, out,
       [&](const Audio& audio) {
         sonare::mastering::repair::DeclipReport report;
         Audio result =
-            sonare::mastering::repair::declip(audio, to_cpp_declip_config(config), &report);
+            sonare::mastering::repair::declip(audio, to_cpp_declip_config(config, false), &report);
         return std::make_pair(std::move(result), to_c_declip_report(report));
       });
 }
@@ -860,11 +872,11 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
   return run_stereo(
-      "left", "right", [&] { validate_cpp(to_cpp_declip_config(config)); }, left, right, length,
-      sample_rate, out,
+      "left", "right", [&] { validate_cpp(to_cpp_declip_config(config, true)); }, left, right,
+      length, sample_rate, out,
       [&](const Audio& l, const Audio& r) {
         const auto result =
-            sonare::mastering::repair::declip_stereo(l, r, to_cpp_declip_config(config));
+            sonare::mastering::repair::declip_stereo(l, r, to_cpp_declip_config(config, true));
         out->left_report = to_c_declip_report(result.left_report);
         out->right_report = to_c_declip_report(result.right_report);
         fill_stereo_channels(result, out);
@@ -878,11 +890,12 @@ SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t
                                                     SonareClipDetection* out) {
   SONARE_C_API_ENTRY;
   return run_detection(
-      "samples", samples, length, sample_rate, [&] { validate_cpp(to_cpp_declip_config(config)); },
-      out,
+      "samples", samples, length, sample_rate,
+      // link_channels does not reach a detection, so only its 0/1 domain is checked.
+      [&] { validate_cpp(to_cpp_declip_config(config, true)); }, out,
       [&] {
         return to_c_clip_detection(sonare::mastering::repair::detect_clipping(
-            samples, length, sample_rate, to_cpp_declip_config(config)));
+            samples, length, sample_rate, to_cpp_declip_config(config, true)));
       });
 }
 

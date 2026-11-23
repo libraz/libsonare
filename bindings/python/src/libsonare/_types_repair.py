@@ -153,7 +153,8 @@ class DeclipReport:
     without a usable solve, or reconstructed more than 20 dB above the
     threshold. ``linked_runs`` is the part of the repaired
     runs reaching past this channel's own clipped samples because the other
-    channel's run was wider -- always 0 from the mono declip entry point.
+    channel's run was wider -- always 0 unless ``link_channels`` was set on a
+    multichannel entry point.
     """
 
     detected: ClipDetection
@@ -165,8 +166,8 @@ class DeclipReport:
     repaired_samples: int
     """Number of samples in the reconstructed runs."""
     linked_runs: int
-    """Repaired runs reaching past this channel's own clipped samples; always 0 from the mono entry
-    point."""
+    """Repaired runs reaching past this channel's own clipped samples; always 0 unless
+    ``link_channels`` was set on a multichannel entry point."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -183,10 +184,10 @@ class DeclipResult:
 class DeclipStereoResult:
     """A declipped stereo pair and what each channel's pass did.
 
-    Declip repairs the union of both channels' clipped runs: each channel
-    reconstructs the whole of every union run it has at least one clipped
-    sample in, and is left untouched where it has none, so a run clipped in
-    only one channel produces no linking at all.
+    Each channel repairs its own clipped runs unless ``link_channels`` was
+    set, in which case each reconstructs every run either channel clipped
+    that it has at least one clipped sample in; ``linked_runs`` in each report
+    is always 0 unless ``link_channels`` was set.
     """
 
     left: npt.NDArray[np.float32]
