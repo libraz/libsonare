@@ -377,7 +377,7 @@ describe('RealtimeEngine native binding', () => {
     expectRefusal(
       () => engine.setStripSurroundPan(999, { azimuth: 0 }),
       RangeError,
-      /^RealtimeEngine\.setStripSurroundPan: trackId must be the id of a track in this engine$/,
+      /^RealtimeEngine\.setStripSurroundPan: ref must be the id of a track in this engine$/,
     );
     engine.destroy();
   });
@@ -1065,7 +1065,7 @@ describe('RealtimeEngine native binding', () => {
     expectRefusal(
       () => engine.setStripInsertParam(0, 0, { name: 'dryWet', value: 1 }),
       RangeError,
-      /^RealtimeEngine\.setStripInsertParam: trackId must be the id of a track in this engine$/,
+      /^RealtimeEngine\.setStripInsertParam: ref must be the id of a track in this engine$/,
     );
     expectRefusal(
       () => engine.setStripInsertParam(10, 0, { name: 'bogusParam', value: 1 }),

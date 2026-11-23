@@ -11,20 +11,46 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   alignTakeToReference,
+  chordFunctions,
+  createVocalEditSession,
+  decomposeNotePitch,
+  detectKey,
+  detectKeyCandidates,
   downmix,
+  estimateMeter,
   Mixer,
+  masteringAbMatchLoudness,
+  masteringAbMatchLoudnessStereo,
+  masteringAnalyzePair,
+  masteringApplyPairProcessor,
+  masteringApplyPairProcessorStereo,
   melToAudio,
   melToStft,
+  mergeNotes,
   meteringSpectrumFrame,
+  midiCc,
+  midiCcLearn,
+  midiRouteEvents,
   mixingScenePreset,
   noteTargetsFromSmf,
   PlaybackLoudnessMeter,
   PlaybackRenderer,
   Project,
+  pitchCorrectTimevarying,
   RealtimeEngine,
   RealtimeVoiceChanger,
   realtimeVoiceChangerRender,
+  renderNotes,
+  renderPercussiveEvents,
+  roomMorph,
+  roomMorphStereo,
+  SampleBank,
   StreamAnalyzer,
+  StreamingEqualizer,
+  StreamingMasteringChain,
+  StreamingRetune,
+  splitNote,
+  synthesizeRir,
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index.js';
@@ -68,6 +94,43 @@ const MEL = { data: new Float32Array(128 * 4).fill(1), rows: 128, cols: 4 };
 /** A well-formed Standard MIDI File header, so only the swept key can be the refused one. */
 const SMF = Uint8Array.from([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0, 96]);
 
+const F0 = new Float32Array(20).fill(220);
+const VOICED_PROB = new Float32Array(20).fill(1);
+const NOTE = { onsetSample: 0, offsetSample: 5000, frameStart: 0, frameEnd: 10, medianHz: 220 };
+const NOTE_TRACK = { samples: TONE, sampleRate: SR, f0Hz: F0, frameRate: 40 };
+const EMPTY = new Float32Array(0);
+const LONG = new Float32Array(1 << 20);
+
+/** A non-empty valid pair of planes at a sample rate every pair entry accepts. */
+const PAIR = { source: TONE, reference: TONE, sampleRate: SR };
+const STEREO_PAIR = {
+  sourceLeft: TONE,
+  sourceRight: TONE,
+  referenceLeft: TONE,
+  referenceRight: TONE,
+  sampleRate: SR,
+};
+
+/** The room every acoustic entry accepts: small, with source and listener placed inside it. */
+const ROOM = {
+  lengthM: 4,
+  widthM: 3,
+  heightM: 2.5,
+  ismOrder: 1,
+  maxSec: 0.2,
+  source: { x: 1, y: 1, z: 1.2 },
+  listener: { x: 3, y: 2, z: 1.2 },
+};
+
+const BEATS = Array.from({ length: 8 }, (_, i) => ({
+  timeSec: i * 0.5,
+  strength: i % 4 ? 0.5 : 1,
+}));
+const MIDI_CC_EVENTS = [
+  midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
+  midiCc({ ppq: 0.1, group: 0, channel: 2, controller: 33, value: 12 }),
+];
+
 const OUTSIDE: unknown[] = [0, -1, -1.5, Number.NaN, 1e30, 'nope'];
 
 /** A `Float32Array` holding a non-finite sample, which a sample buffer refuses. */
@@ -75,6 +138,50 @@ const NON_FINITE = Float32Array.of(Number.NaN, 0);
 
 /** Candidates beyond `OUTSIDE` for a spelling that is a byte or sample buffer or a plane set. */
 const EXTRA_OUTSIDE: Record<string, unknown[]> = {
+  align_take_to_reference: [EMPTY],
+  chord_functions: [[]],
+  decompose_note_pitch: [EMPTY],
+  detect_key: [[]],
+  detect_key_candidates: [[]],
+  engine_set_bus_strip_json: [{ inserts: [{}] }],
+  engine_set_master_strip_json: [{ inserts: [{}] }],
+  engine_set_track_strip_json: [{ inserts: [{}] }],
+  engine_push_midi_sysex: [new Uint8Array(0), new Uint8Array(1 << 20)],
+  engine_render_offline: [[], Array.from({ length: 65 }, () => new Float32Array(16))],
+  engine_set_track_lanes: [Array.from({ length: 33 }, (_, i) => ({ trackId: i + 1 }))],
+  eq_magnitude_response: [EMPTY, LONG],
+  eq_match: [EMPTY],
+  eq_process: [EMPTY, LONG],
+  eq_set_sidechain: [EMPTY, LONG],
+  estimate_meter_json: [[], Array(17).fill(4)],
+  mastering_ab_match_loudness: [EMPTY],
+  mastering_ab_match_loudness_stereo: [EMPTY],
+  mastering_analyze_pair: [EMPTY],
+  mastering_apply_pair_processor: [EMPTY],
+  mastering_apply_pair_processor_stereo: [EMPTY],
+  merge_notes: [EMPTY, []],
+  midi_cc_learn: [[]],
+  midi_route_events: [[]],
+  pitch_correct_timevarying: [EMPTY],
+  project_add_automation_lane: [[]],
+  project_annotate_chords: [[]],
+  project_annotate_keys: [[]],
+  project_bounce: [[]],
+  project_edit_automation_lane: [[]],
+  project_import_external_stems: [[]],
+  project_set_assist_sidecar: [new Uint8Array(0)],
+  project_set_warp_map: [[]],
+  render_notes: [EMPTY, []],
+  render_percussive_events: [[]],
+  room_morph: [EMPTY, new Float32Array(1 << 10)],
+  room_morph_stereo: [EMPTY, new Float32Array(1 << 10)],
+  sample_bank_add_sample: [EMPTY],
+  split_note: [EMPTY, []],
+  streaming_mastering_chain_process_mono: [EMPTY, LONG],
+  streaming_mastering_chain_process_stereo: [EMPTY, LONG],
+  streaming_retune_process_mono: [EMPTY, LONG],
+  synthesize_rir: [EMPTY, new Float32Array(1 << 10)],
+  vocal_draft_apply: [[]],
   downmix: [[], [new Float32Array(0)], [new Float32Array(4), new Float32Array(5)]],
   engine_drain_external_midi: [1, 2.5],
   engine_process: [[], [new Float32Array(0)], [new Float32Array(1 << 20)]],
@@ -146,14 +253,249 @@ const withChanger = (fn: (changer: RealtimeVoiceChanger) => unknown) =>
     fn,
   );
 
+const withProject = (fn: (project: Project) => unknown) => withHandle(new Project(), fn);
+
+const withEq = (fn: (eq: StreamingEqualizer) => unknown) =>
+  withHandle(new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 128 }), fn);
+
+const withChain = (numChannels: number, fn: (chain: StreamingMasteringChain) => unknown) =>
+  withHandle(
+    new StreamingMasteringChain({ sampleRate: 48000, maxBlockSize: 128, numChannels }),
+    fn,
+  );
+
+/** A vocal-edit draft over the smallest session the draft accepts, released after `fn`. */
+function withDraft(
+  fn: (draft: ReturnType<ReturnType<typeof createVocalEditSession>['beginEdit']>) => unknown,
+) {
+  const frames = Math.ceil(4096 / 128) + 1;
+  const session = createVocalEditSession({
+    samples: new Float32Array(4096).map((_, i) => 0.25 * Math.sin((2 * Math.PI * 440 * i) / 16000)),
+    sampleRate: 16000,
+    frameLengthSamples: 256,
+    hopLengthSamples: 128,
+    analysis: {
+      frameOriginSample: 0,
+      samplesPerFrame: 128,
+      frameLengthSamples: 256,
+      f0Hz: new Float32Array(frames).fill(440),
+      voiced: new Uint8Array(frames).fill(1),
+      algorithmId: 'libsonare.pyin',
+      algorithmVersion: 1,
+    },
+  });
+  try {
+    return fn(session.beginEdit());
+  } finally {
+    session.destroy();
+  }
+}
+
+const withTrack = (fn: (project: Project, trackId: number) => unknown) =>
+  withProject((project) => fn(project, project.addTrack({ kind: 'audio' })));
+
+const PARAM = { name: 'x', value: 0 };
+/** A sidechain source whose `kind` or `id` (named by the spelling) is the swept value. */
+const source = (spelling: string, value: unknown) =>
+  spelling === 'source.kind' ? { kind: value, id: 2 } : { kind: 'track', id: value };
+/** An insert parameter whose `name` is the swept value. */
+const param = (_spelling: string, value: unknown) => ({ ...PARAM, name: value }) as never;
+const RIG = { destinationId: 0, part: 0, mode: 'chain' } as const;
+const SCENE_STRIP = { id: 'a' };
+
 /**
  * A fresh valid call of the facade reaching each C entry, every argument valid except the one
  * the caller spells `spelling`, which gets `value`. Add a row's driver here when the generator adds
  * the row.
  */
 const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
+  chord_functions: (_s, v) =>
+    chordFunctions({ chords: v, key: { root: 0, mode: 'major' } } as never),
+  decompose_note_pitch: (s, v) =>
+    decomposeNotePitch(given({ f0Hz: F0, frameRate: 40, medianHz: 220 }, s, v) as never),
+  detect_key: (s, v) => detectKey(given({ samples: TONE, sampleRate: SR }, s, v) as never),
+  detect_key_candidates: (s, v) =>
+    detectKeyCandidates(given({ samples: TONE, sampleRate: SR }, s, v) as never),
+  engine_apply_track_strip_insert_param_by_name_now: (s, v) =>
+    withEngine((engine) =>
+      s === 'ref'
+        ? engine.applyStripInsertParamNow(v as never, 0, PARAM)
+        : engine.applyStripInsertParamNow(1, 0, param(s, v)),
+    ),
+  engine_apply_master_strip_insert_param_by_name_now: (s, v) =>
+    withEngine((engine) => engine.applyStripInsertParamNow('master', 0, param(s, v))),
+  engine_apply_bus_strip_insert_param_by_name_now: (s, v) =>
+    withEngine((engine) => engine.applyBusInsertParamNow(1, 0, param(s, v))),
+  engine_can_set_bus_sidechain: (s, v) =>
+    withEngine((engine) => engine.canSetBusSidechain(1, 0, source(s, v) as never)),
+  engine_can_set_lane_sidechain: (s, v) =>
+    withEngine((engine) =>
+      s === 'ref'
+        ? engine.canSetStripSidechain(v as never, 0, { kind: 'track', id: 2 })
+        : engine.canSetStripSidechain(1, 0, source(s, v) as never),
+    ),
+  engine_can_set_master_sidechain: (s, v) =>
+    withEngine((engine) => engine.canSetStripSidechain('master', 0, source(s, v) as never)),
+  engine_clear_track_insert_parameter_bases: (_s, v) =>
+    withEngine((engine) => engine.clearStripInsertParameterBases(v as never)),
+  engine_push_midi_sysex: (_s, v) =>
+    withEngine((engine) => engine.pushMidiSysex(0, v as Uint8Array)),
+  engine_render_offline: (_s, v) =>
+    withEngine((engine) => engine.renderOffline({ channels: v } as never)),
+  engine_resolve_track_insert_automation_id: (_s, v) =>
+    withEngine((engine) => engine.resolveStripInsertAutomationId(v as never, 0, 'x')),
+  engine_restore_track_strip_insert_param_by_name: (s, v) =>
+    withEngine((engine) =>
+      s === 'ref'
+        ? engine.restoreStripInsertParam(v as never, 0, PARAM)
+        : engine.restoreStripInsertParam(1, 0, param(s, v)),
+    ),
+  engine_restore_master_strip_insert_param_by_name: (s, v) =>
+    withEngine((engine) => engine.restoreStripInsertParam('master', 0, param(s, v))),
+  engine_restore_bus_strip_insert_param_by_name: (s, v) =>
+    withEngine((engine) => engine.restoreBusInsertParam(1, 0, param(s, v))),
+  engine_set_bus_strip_json: (_s, v) =>
+    withEngine((engine) => {
+      engine.setTrackBuses([{ busId: 1 }]);
+      return engine.setBusStrip(1, v as never);
+    }),
+  engine_set_bus_sidechain: (s, v) =>
+    withEngine((engine) => engine.setBusSidechain(1, 0, source(s, v) as never)),
+  engine_set_lane_sidechain: (s, v) =>
+    withEngine((engine) =>
+      s === 'ref'
+        ? engine.setStripSidechain(v as never, 0, { kind: 'track', id: 2 })
+        : engine.setStripSidechain(1, 0, source(s, v) as never),
+    ),
+  engine_set_master_sidechain: (s, v) =>
+    withEngine((engine) => engine.setStripSidechain('master', 0, source(s, v) as never)),
+  engine_set_master_strip_json: (_s, v) =>
+    withEngine((engine) => engine.setStrip('master', v as never)),
+  engine_set_part_rig: (_s, v) =>
+    withEngine((engine) => engine.setPartRig({ ...RIG, inserts: v } as never)),
+  engine_set_track_lanes: (_s, v) => withEngine((engine) => engine.setTrackLanes(v as never)),
+  engine_set_track_strip_channel_delay_samples: (_s, v) =>
+    withEngine((engine) => engine.setStripChannelDelaySamples(v as never, 0)),
+  engine_set_track_strip_dual_pan: (_s, v) =>
+    withEngine((engine) => engine.setStripDualPan(v as never, 0, 0)),
+  engine_set_track_strip_eq_band_json: (_s, v) =>
+    withEngine((engine) => engine.setStripEqBand(v as never, 0, {})),
+  engine_set_track_strip_insert_bypassed: (_s, v) =>
+    withEngine((engine) => engine.setStripInsertBypassed(v as never, 0, { bypassed: true })),
+  engine_set_track_strip_insert_param_by_name: (s, v) =>
+    withEngine((engine) =>
+      s === 'ref'
+        ? engine.setStripInsertParam(v as never, 0, PARAM)
+        : engine.setStripInsertParam(1, 0, param(s, v)),
+    ),
+  engine_set_master_strip_insert_param_by_name: (s, v) =>
+    withEngine((engine) => engine.setStripInsertParam('master', 0, param(s, v))),
+  engine_set_bus_strip_insert_param_by_name: (s, v) =>
+    withEngine((engine) => engine.setBusInsertParam(1, 0, param(s, v))),
+  engine_set_track_strip_json: (s, v) =>
+    withEngine((engine) =>
+      s === 'ref' ? engine.setStrip(v as never, SCENE_STRIP) : engine.setStrip(1, v as never),
+    ),
+  engine_set_track_strip_pan: (_s, v) => withEngine((engine) => engine.setStripPan(v as never, 0)),
+  engine_set_track_strip_pan_law: (_s, v) =>
+    withEngine((engine) => engine.setStripPanLaw(v as never, 'constantPower' as never)),
+  engine_set_track_strip_pan_mode: (_s, v) =>
+    withEngine((engine) => engine.setStripPanMode(v as never, 'balance' as never)),
+  engine_set_track_strip_surround_pan: (_s, v) =>
+    withEngine((engine) => engine.setStripSurroundPan(v as never, {})),
+  eq_magnitude_response: (_s, v) => withEq((eq) => eq.magnitudeResponse(v as Float32Array)),
+  eq_match: (s, v) =>
+    withEq((eq) =>
+      s === 'source' ? eq.match(v as Float32Array, TONE) : eq.match(TONE, v as Float32Array),
+    ),
+  eq_process: (_s, v) => withEq((eq) => eq.processMono(v as Float32Array)),
+  eq_set_sidechain: (_s, v) => withEq((eq) => eq.setSidechainMono(v as Float32Array)),
+  estimate_meter_json: (s, v) => estimateMeter(given({ beats: BEATS }, s, v) as never),
+  mastering_ab_match_loudness: (s, v) => masteringAbMatchLoudness(given(PAIR, s, v) as never),
+  mastering_ab_match_loudness_stereo: (s, v) =>
+    masteringAbMatchLoudnessStereo(given(STEREO_PAIR, s, v) as never),
+  mastering_analyze_pair: (s, v) =>
+    masteringAnalyzePair(given({ ...PAIR, analysis: 'match.referenceLoudness' }, s, v) as never),
+  mastering_apply_pair_processor: (s, v) =>
+    masteringApplyPairProcessor(given({ ...PAIR, processor: 'match.abCrossfade' }, s, v) as never),
+  mastering_apply_pair_processor_stereo: (s, v) =>
+    masteringApplyPairProcessorStereo(
+      given({ ...STEREO_PAIR, processor: 'match.abCrossfade' }, s, v) as never,
+    ),
+  merge_notes: (s, v) =>
+    mergeNotes(
+      given(
+        { ...NOTE_TRACK, voicedProb: VOICED_PROB, notes: [NOTE], first: 0, last: 0 },
+        s,
+        v,
+      ) as never,
+    ),
+  midi_cc_learn: (s, v) =>
+    midiCcLearn(given({ events: MIDI_CC_EVENTS, paramId: 77 }, s, v) as never),
+  midi_route_events: (s, v) => midiRouteEvents(given({ events: MIDI_CC_EVENTS }, s, v) as never),
+  pitch_correct_timevarying: (s, v) =>
+    pitchCorrectTimevarying(given({ samples: TONE, sampleRate: SR, f0Hz: F0 }, s, v) as never),
+  project_add_automation_lane: (_s, v) =>
+    withTrack((project, trackId) =>
+      project.addAutomationLane(trackId, { targetParamId: 1, points: v } as never),
+    ),
+  project_annotate_chords: (_s, v) => withProject((project) => project.annotateChords(v as never)),
+  project_annotate_keys: (_s, v) => withProject((project) => project.annotateKeys(v as never)),
+  project_bounce: (s, v) => withProject((project) => project.bounce({ [s]: v } as never)),
+  project_edit_automation_lane: (_s, v) =>
+    withTrack((project, trackId) =>
+      project.editAutomationLane(trackId, 1, { targetParamId: 1, points: v } as never),
+    ),
+  project_import_external_stems: (_s, v) =>
+    withProject((project) => project.importExternalStems({ sampleRate: 48000, stems: v } as never)),
+  project_set_assist_sidecar: (_s, v) =>
+    withProject((project) => project.setAssistSidecar({ moduleId: 'm', payload: v } as never)),
+  project_set_part_rig: (_s, v) =>
+    withProject((project) => project.setPartRig({ ...RIG, inserts: v } as never)),
+  project_set_warp_map: (_s, v) =>
+    withProject((project) => project.setWarpMap({ id: 1, anchors: v } as never)),
+  render_notes: (s, v) =>
+    renderNotes(
+      given({ ...NOTE_TRACK, notes: [{ ...NOTE, edit: { pitchSemitones: 1 } }] }, s, v) as never,
+    ),
+  render_percussive_events: (s, v) =>
+    renderPercussiveEvents(
+      given(
+        {
+          samples: TONE,
+          sampleRate: SR,
+          events: [{ onsetSample: 0, offsetSample: 200, edit: { muted: true } }],
+        },
+        s,
+        v,
+      ) as never,
+    ),
+  room_morph: (s, v) =>
+    roomMorph(given({ samples: TONE, sampleRate: 48000, ...ROOM }, s, v) as never),
+  room_morph_stereo: (s, v) =>
+    roomMorphStereo(given({ left: TONE, right: TONE, sampleRate: 48000, ...ROOM }, s, v) as never),
+  sample_bank_add_sample: (_s, v) => new SampleBank().addSample(v as Float32Array),
+  split_note: (s, v) =>
+    splitNote(
+      given(
+        { ...NOTE_TRACK, voicedProb: VOICED_PROB, notes: [NOTE], index: 0, frame: 5 },
+        s,
+        v,
+      ) as never,
+    ),
+  streaming_mastering_chain_process_mono: (_s, v) =>
+    withChain(1, (chain) => chain.processMono(v as Float32Array)),
+  streaming_mastering_chain_process_stereo: (_s, v) =>
+    withChain(2, (chain) => chain.processStereo(v as Float32Array, new Float32Array(16))),
+  streaming_retune_process_mono: (_s, v) =>
+    withHandle(new StreamingRetune(), (retune) => {
+      retune.prepare(48000, 128);
+      return retune.processMono(v as Float32Array);
+    }),
+  synthesize_rir: (s, v) => synthesizeRir(given({ sampleRate: 48000, ...ROOM }, s, v) as never),
+  vocal_draft_apply: (_s, v) => withDraft((draft) => draft.apply({ operations: v } as never)),
   align_take_to_reference: (s, v) =>
-    alignTakeToReference(given({ reference: TONE, take: TONE }, s, v) as never),
+    alignTakeToReference(given({ reference: TONE, take: TONE, sampleRate: SR }, s, v) as never),
   audio_spectrum_frame: (_s, v) =>
     withHandle(Audio.fromBuffer(TONE, SR), (audio) => audio.spectrumFrame(v as number)),
   downmix: (_s, v) => downmix(v as Float32Array[], 'mono'),
@@ -165,8 +507,12 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     ),
   engine_resolve_master_automation_id: (_s, v) =>
     withEngine((engine) => engine.resolveStripAutomationId('master', v as never)),
-  engine_resolve_track_lane_automation_id: (_s, v) =>
-    withEngine((engine) => engine.resolveStripAutomationId(1, v as never)),
+  engine_resolve_track_lane_automation_id: (s, v) =>
+    withEngine((engine) =>
+      s === 'ref'
+        ? engine.resolveStripAutomationId(v as never, 'pan')
+        : engine.resolveStripAutomationId(1, v as never),
+    ),
   engine_set_controller_velocity_meaningful: (_s, v) =>
     withEngine((engine) => engine.setControllerVelocityMeaningful(0, v as boolean)),
   engine_set_external_midi_clock_enabled: (_s, v) =>
