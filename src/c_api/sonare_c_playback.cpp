@@ -10,6 +10,8 @@
 #include <sonare/sonare_c.h>
 
 #include "sonare_c_internal.h"
+#include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -327,6 +329,19 @@ SonareError sonare_playback_renderer_non_finite_discard_count(
 #endif
 }
 
+#if defined(SONARE_WITH_PLAYBACK)
+namespace {
+
+// An empty interleaved buffer is refused by its frame count, which each facade spells from the
+// array it takes.
+SonareError refuse_no_frames() {
+  return run_validation(
+      [] { util::check::refuse("frames", util::refusal::integer_at_least_predicate(1)); });
+}
+
+}  // namespace
+#endif
+
 SonareError sonare_playback_render_interleaved(const float* in, size_t frames, int in_channels,
                                                int sample_rate, const char* config_json,
                                                const SonareHrtfSet* hrtf, float** out,
@@ -338,6 +353,7 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_frames);
   SONARE_C_REQUIRE_NONNULL(out_channels);
+  if (frames == 0) return refuse_no_frames();
   SONARE_C_TRY
   const playback::RendererConfig config = playback::parse_renderer_config(config_json);
   const playback::HrtfSet* hrtf_ptr = hrtf ? hrtf->set.get() : nullptr;
@@ -366,6 +382,7 @@ SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* rend
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_frames);
   SONARE_C_REQUIRE_NONNULL(out_channels);
+  if (frames == 0) return refuse_no_frames();
   SONARE_C_TRY
   const std::vector<float> result =
       playback::render_interleaved(*renderer->renderer, in, frames, in_channels);

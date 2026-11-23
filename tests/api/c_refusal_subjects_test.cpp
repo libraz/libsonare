@@ -1185,6 +1185,68 @@ TEST_CASE("a strip document refusal names the caller's settings object, not the 
   }
 }
 
+namespace {
+
+// One call per quotient row: a frame count the facade derives from an interleaved array's length.
+// The realtime process entries record no refusal by contract, so they reach no spelling at all.
+template <typename Quotients, typename Spell>
+void check_quotient_rows(const Quotients& rows, const Spell& spelled_last_refusal) {
+  REQUIRE(!rows.empty());
+  for (const auto& row : rows) {
+    const std::string entry(row.entry);
+    CAPTURE(entry, row.subject, row.spelling, row.divisor);
+    SonarePlaybackRenderer* raw = nullptr;
+    REQUIRE(sonare_playback_renderer_create_json("{}", nullptr, 48000, 512, &raw) == SONARE_OK);
+    const std::unique_ptr<SonarePlaybackRenderer, decltype(&sonare_playback_renderer_destroy)>
+        renderer(raw, sonare_playback_renderer_destroy);
+    const float sample = 0.0f;
+    float out_sample = 0.0f;
+    if (entry == "playback_renderer_process_interleaved") {
+      CHECK(sonare_playback_renderer_process_interleaved(renderer.get(), &sample, 2, &out_sample, 2,
+                                                         -1) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(sonare_last_refusal_subject_count() == 0);
+      continue;
+    }
+    REQUIRE(entry == "playback_renderer_render_offline");
+    float* out = nullptr;
+    size_t out_frames = 0;
+    int out_channels = 0;
+    CHECK(sonare_playback_renderer_render_offline(renderer.get(), &sample, 0, 2, &out, &out_frames,
+                                                  &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(last_refusal_subjects() == std::vector<std::string>{std::string(row.subject)});
+    const auto shown = spelled_last_refusal({});
+    REQUIRE(shown.has_value());
+    CHECK(std::string(shown->what()) == std::string(row.spelling) + ".length / " +
+                                            std::string(row.divisor) +
+                                            " must be an integer of at least 1");
+  }
+}
+
+}  // namespace
+
+TEST_CASE("an empty interleaved buffer names the array over its channel count",
+          "[c_api][field_spelling]") {
+  SECTION("node") {
+    check_quotient_rows(sonare_field_spelling::node::kQuotients, [](std::string_view root) {
+      return sonare_field_spelling::node::SpelledLastRefusal(root);
+    });
+  }
+  SECTION("wasm") {
+    check_quotient_rows(sonare_field_spelling::wasm::kQuotients, [](std::string_view root) {
+      return sonare_field_spelling::wasm::SpelledLastRefusal(root);
+    });
+  }
+  SECTION("C callers read the frame count") {
+    float* out = nullptr;
+    size_t out_frames = 0;
+    int out_channels = 0;
+    const float sample = 0.0f;
+    CHECK(sonare_playback_render_interleaved(&sample, 0, 2, 48000, "{}", nullptr, &out, &out_frames,
+                                             &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "frames must be an integer of at least 1");
+  }
+}
+
 TEST_CASE("an empty SMF or MIDI Clip File buffer is refused as empty, not as left out",
           "[c_api][project]") {
   using ImportEntry = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
