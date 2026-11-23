@@ -186,6 +186,14 @@ class MasteringResult:
     #: replace with, not because nothing needed replacing.
     non_finite_substitution_count: int = 0
     """Number of samples the processor replaced with a finite value."""
+    #: Clipped runs a declip stage left as they were because they are longer
+    #: than it reconstructs, summed over the channels.
+    declip_unreconstructed_runs: int | None = None
+    """Clipped runs left unreconstructed; None when no declip stage ran."""
+    #: Samples whose value before quantization and dither was past full scale
+    #: (``|x| > 1.0``), summed over the channels.
+    quantize_clipped_samples: int | None = None
+    """Samples clipped by quantization; None when no quantizing stage ran."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -211,6 +219,14 @@ class MasteringStereoResult:
     #: See :class:`MasteringResult`. Aggregated over both channels.
     non_finite_substitution_count: int = 0
     """Number of samples the processor replaced with a finite value."""
+    #: Clipped runs a declip stage left as they were because they are longer
+    #: than it reconstructs, summed over the channels.
+    declip_unreconstructed_runs: int | None = None
+    """Clipped runs left unreconstructed; None when no declip stage ran."""
+    #: Samples whose value before quantization and dither was past full scale
+    #: (``|x| > 1.0``), summed over the channels.
+    quantize_clipped_samples: int | None = None
+    """Samples clipped by quantization; None when no quantizing stage ran."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -401,6 +417,14 @@ class MasteringChainResult:
     """Number of samples a stage replaced with a finite value."""
     loudness_gain_db: float | None = None
     """Same value as ``report.loudness_gain_db``; None when not measured."""
+    #: Clipped runs a declip stage left as they were because they are longer
+    #: than it reconstructs, summed over the channels.
+    declip_unreconstructed_runs: int | None = None
+    """Clipped runs left unreconstructed; None when no declip stage ran."""
+    #: Samples whose value before quantization and dither was past full scale
+    #: (``|x| > 1.0``), summed over the channels.
+    quantize_clipped_samples: int | None = None
+    """Samples clipped by quantization; None when no quantizing stage ran."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -438,3 +462,11 @@ class MasteringChainStereoResult:
     """Number of samples a stage replaced with a finite value."""
     loudness_gain_db: float | None = None
     """Same value as ``report.loudness_gain_db``; None when not measured."""
+    #: Clipped runs a declip stage left as they were because they are longer
+    #: than it reconstructs, summed over the channels.
+    declip_unreconstructed_runs: int | None = None
+    """Clipped runs left unreconstructed; None when no declip stage ran."""
+    #: Samples whose value before quantization and dither was past full scale
+    #: (``|x| > 1.0``), summed over the channels.
+    quantize_clipped_samples: int | None = None
+    """Samples clipped by quantization; None when no quantizing stage ran."""

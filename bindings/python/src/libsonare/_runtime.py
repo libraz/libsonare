@@ -777,6 +777,11 @@ def _to_c_float_array_owned(
     return c_array, length
 
 
+def _present_count(value: int, has: int) -> int | None:
+    """A count the C result reports beside a ``has_`` flag, ``None`` where the flag is clear."""
+    return int(value) if has else None
+
+
 def _measured_level(value: float) -> float | None:
     """A level as a float, ``None`` where the core did not measure it (NaN).
 

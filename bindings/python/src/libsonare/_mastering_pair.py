@@ -20,6 +20,7 @@ from ._ffi import (
 from ._mastering_offline import (
     _assistant_params,
     _mastering_params,
+    _stage_counts,
 )
 from ._narrowing import _narrow_double
 from ._result_records import _fill_null_ends, _optional_float, _record
@@ -123,6 +124,7 @@ def mastering_apply_pair_processor(
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
             non_finite_substitution_count=int(out.non_finite_substitution_count),
+            **_stage_counts(out),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
@@ -198,6 +200,7 @@ def mastering_apply_pair_processor_stereo(
             latency_samples=int(out.latency_samples),
             loudness_target_limited=bool(out.loudness_target_limited),
             non_finite_substitution_count=int(out.non_finite_substitution_count),
+            **_stage_counts(out),
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))

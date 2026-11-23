@@ -72,6 +72,16 @@ inline sonare::mastering::assistant::AudioProfileConfig to_audio_profile_config(
   });
 }
 
+// Copy the optional stage counts of a core mastering result into a C result struct; a count the
+// core left absent reads as 0 with its has_ flag clear.
+template <typename CoreResultT, typename CResultT>
+inline void set_stage_counts(const CoreResultT& result, CResultT* out) {
+  out->declip_unreconstructed_runs = result.declip_unreconstructed_runs.value_or(0);
+  out->has_declip_unreconstructed_runs = result.declip_unreconstructed_runs ? 1 : 0;
+  out->quantize_clipped_samples = result.quantize_clipped_samples.value_or(0);
+  out->has_quantize_clipped_samples = result.quantize_clipped_samples ? 1 : 0;
+}
+
 inline void set_mastering_result(const sonare::mastering::api::MonoResult& result,
                                  SonareMasteringResult* out) {
   out->length = result.samples.size();
@@ -82,6 +92,7 @@ inline void set_mastering_result(const sonare::mastering::api::MonoResult& resul
   out->latency_samples = result.latency_samples;
   out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
   out->non_finite_substitution_count = result.non_finite_substitution_count;
+  set_stage_counts(result, out);
   std::unique_ptr<float[]> processed(new float[out->length]);
   std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
   out->samples = sonare_c_detail::release_array(processed);
@@ -119,6 +130,10 @@ inline void zero_chain_metrics(ChainResultT* out) {
   out->loudness_target_limited = 0;
   out->non_finite_substitution_count = 0;
   out->loudness_gain_db = 0.0f;
+  out->declip_unreconstructed_runs = 0;
+  out->has_declip_unreconstructed_runs = 0;
+  out->quantize_clipped_samples = 0;
+  out->has_quantize_clipped_samples = 0;
   out->stage_gain_reduction_stages = nullptr;
   out->stage_gain_reduction_values = nullptr;
   out->stage_gain_reductions_count = 0;
@@ -322,6 +337,7 @@ inline void fill_mono_chain_result(const sonare::mastering::api::MonoChainResult
   staged->stages = copy_stage_array(result.stages);
   staged->stages_count = result.stages.size();
   staged->non_finite_substitution_count = result.non_finite_substitution_count;
+  set_stage_counts(result, &staged.value());
   set_chain_metrics(result, &staged.value());
   staged.publish(out);
 }
@@ -343,6 +359,7 @@ inline void fill_stereo_chain_result(const sonare::mastering::api::StereoChainRe
   staged->stages = copy_stage_array(result.stages);
   staged->stages_count = result.stages.size();
   staged->non_finite_substitution_count = result.non_finite_substitution_count;
+  set_stage_counts(result, &staged.value());
   set_chain_metrics(result, &staged.value());
   staged.publish(out);
 }

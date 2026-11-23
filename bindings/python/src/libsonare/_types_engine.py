@@ -648,6 +648,10 @@ class EngineBounceResult:
     """Sample rate of the result, in Hz."""
     integrated_lufs: float
     """Integrated loudness of the rendered audio, in LUFS."""
+    #: Samples whose value before quantization and dither was past full scale
+    #: (``|x| > 1.0``), summed over the channels.
+    quantize_clipped_samples: int | None = None
+    """Samples clipped by the dither; None when the bounce did not dither."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -63,6 +63,7 @@ void set_stereo_result(const sonare::mastering::api::StereoResult& result,
   out->latency_samples = result.latency_samples;
   out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
   out->non_finite_substitution_count = result.non_finite_substitution_count;
+  set_stage_counts(result, out);
   out->left = release_array(left);
   out->right = release_array(right);
 }
@@ -184,6 +185,7 @@ SonareError sonare_mastering_apply_processor_stereo(
   out->latency_samples = result.latency_samples;
   out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
   out->non_finite_substitution_count = result.non_finite_substitution_count;
+  set_stage_counts(result, out);
   copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), &out->left,
                        &out->right, &out->length);
   return SONARE_OK;

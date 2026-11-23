@@ -61,6 +61,7 @@ from ._runtime import (
     _get_lib,
     _narrow_int,
     _planar_channel_arrays,
+    _present_count,
     _require_instance,
     _resolve_render_frame,
     _resolve_sample_bound,
@@ -457,6 +458,9 @@ class _EngineIoMixin:
                 num_channels=int(raw_result.num_channels),
                 sample_rate=int(raw_result.sample_rate),
                 integrated_lufs=float(raw_result.integrated_lufs),
+                quantize_clipped_samples=_present_count(
+                    raw_result.quantize_clipped_samples, raw_result.has_quantize_clipped_samples
+                ),
             )
         finally:
             if raw_result.interleaved:

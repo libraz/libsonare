@@ -1,6 +1,7 @@
 /// @file sonare_c_mastering_test.cpp
 /// @brief Mastering C API tests.
 
+#include <algorithm>
 #include <array>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <string>
@@ -2871,3 +2872,86 @@ TEST_CASE("chain results carry the loudness stage gain, NaN where it was not mea
   check(mono);
   check(stereo);
 }
+
+#ifdef SONARE_WITH_MASTERING
+namespace {
+
+// A tone clipped flat at 0.5, with one held run longer than declip reconstructs.
+std::vector<float> clipped_tone_with_long_run() {
+  std::vector<float> samples = generate_sine(220.0f, 48000, 0.25f);
+  for (float& sample : samples) sample = std::clamp(sample * 2.0f, -0.5f, 0.5f);
+  std::fill(samples.begin() + 2000, samples.begin() + 2800, 0.5f);
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("a C mastering result carries each stage count only when its stage ran",
+          "[c_api][mastering]") {
+  const std::vector<float> clipped = clipped_tone_with_long_run();
+  const SonareMasteringParam declip_params[] = {{"clipThresholdDb", -6.5}};
+  const auto expected = sonare::mastering::api::apply_named_processor(
+      "repair.declip", clipped.data(), clipped.size(), 48000, {{"clipThresholdDb", -6.5}});
+  REQUIRE(expected.declip_unreconstructed_runs.has_value());
+  REQUIRE(*expected.declip_unreconstructed_runs > 0);
+
+  SonareMasteringResult declipped{};
+  REQUIRE(sonare_mastering_apply_processor("repair.declip", clipped.data(), clipped.size(), 48000,
+                                           declip_params, 1, &declipped) == SONARE_OK);
+  CHECK(declipped.has_declip_unreconstructed_runs == 1);
+  CHECK(declipped.declip_unreconstructed_runs == *expected.declip_unreconstructed_runs);
+  CHECK(declipped.has_quantize_clipped_samples == 0);
+  CHECK(declipped.quantize_clipped_samples == 0);
+  sonare_free_mastering_result(&declipped);
+
+  // Two of the four samples sit past full scale; exactly 1.0 is not counted.
+  const std::vector<float> hot = {0.25f, 1.5f, -2.0f, 1.0f};
+  const SonareMasteringParam bits[] = {{"targetBits", 16}};
+  SonareMasteringResult quantized{};
+  REQUIRE(sonare_mastering_apply_processor("final.bitDepth", hot.data(), hot.size(), 48000, bits, 1,
+                                           &quantized) == SONARE_OK);
+  CHECK(quantized.has_quantize_clipped_samples == 1);
+  CHECK(quantized.quantize_clipped_samples == 2);
+  CHECK(quantized.has_declip_unreconstructed_runs == 0);
+  sonare_free_mastering_result(&quantized);
+
+  // A None dither quantizes nothing, so it leaves the count absent rather than 0.
+  const SonareMasteringParam no_dither[] = {{"type", 0}};
+  SonareMasteringResult undithered{};
+  REQUIRE(sonare_mastering_apply_processor("final.dither", hot.data(), hot.size(), 48000, no_dither,
+                                           1, &undithered) == SONARE_OK);
+  CHECK(undithered.has_quantize_clipped_samples == 0);
+  sonare_free_mastering_result(&undithered);
+
+  const std::vector<float> quiet = {0.25f, -0.5f, 0.75f, 1.0f};
+  SonareMasteringStereoResult stereo{};
+  REQUIRE(sonare_mastering_apply_processor_stereo("final.bitDepth", hot.data(), quiet.data(),
+                                                  hot.size(), 48000, bits, 1,
+                                                  &stereo) == SONARE_OK);
+  CHECK(stereo.has_quantize_clipped_samples == 1);
+  CHECK(stereo.quantize_clipped_samples == 2);
+  CHECK(stereo.has_declip_unreconstructed_runs == 0);
+  sonare_free_mastering_stereo_result(&stereo);
+}
+
+TEST_CASE("a C mastering chain result carries the declip count only when declip ran",
+          "[c_api][mastering]") {
+  const std::vector<float> clipped = clipped_tone_with_long_run();
+  SonareMasteringChainResult with_declip{};
+  REQUIRE(sonare_master_audio(nullptr, clipped.data(), clipped.size(), 48000,
+                              R"({"repair":{"declip":{"enabled":true}}})", nullptr,
+                              &with_declip) == SONARE_OK);
+  CHECK(with_declip.has_declip_unreconstructed_runs == 1);
+  // The chain has no quantizing stage.
+  CHECK(with_declip.has_quantize_clipped_samples == 0);
+  sonare_free_mastering_chain_result(&with_declip);
+
+  SonareMasteringChainStereoResult without{};
+  REQUIRE(sonare_master_audio_stereo(nullptr, clipped.data(), clipped.data(), clipped.size(), 48000,
+                                     nullptr, nullptr, &without) == SONARE_OK);
+  CHECK(without.has_declip_unreconstructed_runs == 0);
+  CHECK(without.declip_unreconstructed_runs == 0);
+  CHECK(without.has_quantize_clipped_samples == 0);
+  sonare_free_mastering_chain_stereo_result(&without);
+}
+#endif

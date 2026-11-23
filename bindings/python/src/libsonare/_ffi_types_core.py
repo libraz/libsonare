@@ -475,6 +475,8 @@ class SonareEngineBounceResult(CStruct):
         ("num_channels", ctypes.c_int),
         ("sample_rate", ctypes.c_int),
         ("integrated_lufs", ctypes.c_float),
+        ("quantize_clipped_samples", ctypes.c_size_t),
+        ("has_quantize_clipped_samples", ctypes.c_int),
     ]
 
 

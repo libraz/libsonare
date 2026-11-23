@@ -6,9 +6,11 @@ import argparse
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
+    _add_unreconstructed_runs,
     _load_channels_or_downmix,
     _params_entries,
     _params_grammar_refusal,
+    _print_unreconstructed_runs,
     _strict_json_dumps,
     _write_mastering_output,
 )
@@ -392,6 +394,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
         # on the files it acted on would make its absence mean both "did not
         # clip" and "this build does not report it".
         payload["output_gain_db"] = fit.gain_db
+        _add_unreconstructed_runs(payload, result.declip_unreconstructed_runs)
         if defects is not None:
             payload["defects"] = defects
         print(_strict_json_dumps(payload))
@@ -400,6 +403,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
         if preset:
             print(f"    Preset:  {preset}")
         print(f"    Stages:  {', '.join(stages) if stages else '(none)'}")
+        _print_unreconstructed_runs(result.declip_unreconstructed_runs, 9)
         if explain:
             if explanation:
                 for line in explanation:

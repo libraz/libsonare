@@ -379,6 +379,31 @@ TEST_CASE("the C bounce entry point charges the budget for the dither request", 
   sonare_engine_destroy(engine);
 }
 
+#if defined(SONARE_WITH_MASTERING)
+TEST_CASE("a bounce reports its clipped-sample count only when it dithered",
+          "[c_api][engine][dither]") {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 128, 2, 2, 0) == SONARE_OK);
+  for (const int dither : {0, 2}) {
+    CAPTURE(dither);
+    SonareEngineBounceOptions options;
+    sonare_engine_bounce_options_init(&options);
+    options.total_frames = 256;
+    options.block_size = 128;
+    options.num_channels = 2;
+    options.dither = dither;
+    SonareEngineBounceResult result{};
+    REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+    // A silent render clips nothing, so a dithered one reports a present 0.
+    CHECK(result.has_quantize_clipped_samples == (dither != 0 ? 1 : 0));
+    CHECK(result.quantize_clipped_samples == 0u);
+    sonare_free_engine_bounce_result(&result);
+  }
+  sonare_engine_destroy(engine);
+}
+#endif
+
 TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api][engine]") {
   // A freshly created engine has never been prepared: max_block_size_ is 0, so
   // render_offline renders nothing and its only diagnostic path (a kNotPrepared

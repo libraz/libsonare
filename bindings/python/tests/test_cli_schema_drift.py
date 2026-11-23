@@ -103,6 +103,7 @@ def _mastering_result() -> SimpleNamespace:
         output_lufs=-14.654321,
         applied_gain_db=3.469135,
         latency_samples=17,
+        declip_unreconstructed_runs=None,
     )
 
 
@@ -191,6 +192,7 @@ def test_mastering_processor_json_marks_stereo_only_processor(monkeypatch, capsy
             output_lufs=-14.654321,
             applied_gain_db=3.469135,
             latency_samples=17,
+            declip_unreconstructed_runs=None,
         ),
     )
 

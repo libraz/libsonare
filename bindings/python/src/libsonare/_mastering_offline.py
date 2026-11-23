@@ -6,7 +6,7 @@ import ctypes
 import json
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 from ._cancellation import (
     CancellationState,
@@ -35,6 +35,7 @@ from ._runtime import (
     _guard_buffer,
     _last_error,
     _measured_level,
+    _present_count,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -115,6 +116,7 @@ def mastering(
             latency_samples=int(out.latency_samples),
             loudness_target_limited=bool(out.loudness_target_limited),
             non_finite_substitution_count=int(out.non_finite_substitution_count),
+            **_stage_counts(out),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
@@ -472,6 +474,7 @@ def mastering_apply_processor(
             latency_samples=int(out.latency_samples),
             loudness_target_limited=bool(out.loudness_target_limited),
             non_finite_substitution_count=int(out.non_finite_substitution_count),
+            **_stage_counts(out),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
@@ -519,6 +522,7 @@ def mastering_apply_processor_stereo(
             latency_samples=int(out.latency_samples),
             loudness_target_limited=bool(out.loudness_target_limited),
             non_finite_substitution_count=int(out.non_finite_substitution_count),
+            **_stage_counts(out),
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
@@ -672,6 +676,23 @@ def _chain_config_json(config: Mapping[str, Any] | None, name: str) -> bytes | N
     return _utf8_arg(json.dumps(dict(config)), name)
 
 
+class _StageCounts(TypedDict):
+    declip_unreconstructed_runs: int | None
+    quantize_clipped_samples: int | None
+
+
+def _stage_counts(out: Any) -> _StageCounts:
+    """The optional stage counts of a C mastering result, keyed as the result types name them."""
+    return {
+        "declip_unreconstructed_runs": _present_count(
+            out.declip_unreconstructed_runs, out.has_declip_unreconstructed_runs
+        ),
+        "quantize_clipped_samples": _present_count(
+            out.quantize_clipped_samples, out.has_quantize_clipped_samples
+        ),
+    }
+
+
 def _extract_stages(stages_ptr: object, count: int) -> list[str]:
     if not stages_ptr or count == 0:
         return []
@@ -784,6 +805,7 @@ def _chain_result_fields(out: Any) -> dict[str, Any]:
         "report": _extract_mastering_report(out.report),
         "non_finite_substitution_count": int(out.non_finite_substitution_count),
         "loudness_gain_db": _measured_level(out.loudness_gain_db),
+        **_stage_counts(out),
     }
 
 

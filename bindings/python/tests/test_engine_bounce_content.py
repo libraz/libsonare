@@ -175,3 +175,30 @@ def test_bounce_dither_seed_is_reproducible_and_effective() -> None:
     other, _ = _bounce(dither="tpdf", dither_bits=DITHER_BITS, dither_seed=2)
     assert first == repeat
     assert _max_abs_diff(other, first) > 0.0
+
+
+def test_bounce_reports_clipped_samples_only_when_it_dithered() -> None:
+    # A 2.0-amplitude tone sits past full scale on about two thirds of its samples.
+    hot = [2.0 * math.sin(2.0 * math.pi * 440.0 * i / SAMPLE_RATE) for i in range(FRAMES)]
+    past_full_scale = 2 * sum(1 for sample in hot if abs(sample) > 1.0)
+
+    def render(**overrides: object) -> int | None:
+        clip = EngineClip(id=1, channels=[hot, list(hot)], start_ppq=0.0, length_samples=FRAMES)
+        with RealtimeEngine(sample_rate=SAMPLE_RATE, max_block_size=BLOCK_SIZE) as engine:
+            engine.set_clips([clip])
+            engine.play()
+            result = engine.bounce_offline(
+                EngineBounceOptions(
+                    total_frames=FRAMES,
+                    block_size=BLOCK_SIZE,
+                    num_channels=2,
+                    **overrides,  # type: ignore[arg-type]
+                )
+            )
+        return result.quantize_clipped_samples
+
+    assert render() is None
+    dithered = render(dither="tpdf", dither_bits=16)
+    assert dithered is not None
+    # The strip's smoothing and the bounce's pre-roll may move a sample or two across 1.0.
+    assert abs(dithered - past_full_scale) <= 8

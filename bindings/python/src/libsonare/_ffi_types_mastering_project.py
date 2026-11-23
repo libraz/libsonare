@@ -36,6 +36,10 @@ class SonareMasteringResult(CStruct):
         ("latency_samples", ctypes.c_int32),
         ("loudness_target_limited", ctypes.c_int32),
         ("non_finite_substitution_count", ctypes.c_size_t),
+        ("declip_unreconstructed_runs", ctypes.c_size_t),
+        ("has_declip_unreconstructed_runs", ctypes.c_int),
+        ("quantize_clipped_samples", ctypes.c_size_t),
+        ("has_quantize_clipped_samples", ctypes.c_int),
     ]
 
 
@@ -62,6 +66,10 @@ class SonareMasteringStereoResult(CStruct):
         ("latency_samples", ctypes.c_int32),
         ("loudness_target_limited", ctypes.c_int32),
         ("non_finite_substitution_count", ctypes.c_size_t),
+        ("declip_unreconstructed_runs", ctypes.c_size_t),
+        ("has_declip_unreconstructed_runs", ctypes.c_int),
+        ("quantize_clipped_samples", ctypes.c_size_t),
+        ("has_quantize_clipped_samples", ctypes.c_int),
     ]
 
 
@@ -112,6 +120,10 @@ class SonareMasteringChainResult(CStruct):
         ("report", SonareMasteringReport),
         ("non_finite_substitution_count", ctypes.c_size_t),
         ("loudness_gain_db", ctypes.c_float),
+        ("declip_unreconstructed_runs", ctypes.c_size_t),
+        ("has_declip_unreconstructed_runs", ctypes.c_int),
+        ("quantize_clipped_samples", ctypes.c_size_t),
+        ("has_quantize_clipped_samples", ctypes.c_int),
     ]
 
 
@@ -137,6 +149,10 @@ class SonareMasteringChainStereoResult(CStruct):
         ("report", SonareMasteringReport),
         ("non_finite_substitution_count", ctypes.c_size_t),
         ("loudness_gain_db", ctypes.c_float),
+        ("declip_unreconstructed_runs", ctypes.c_size_t),
+        ("has_declip_unreconstructed_runs", ctypes.c_int),
+        ("quantize_clipped_samples", ctypes.c_size_t),
+        ("has_quantize_clipped_samples", ctypes.c_int),
     ]
 
 

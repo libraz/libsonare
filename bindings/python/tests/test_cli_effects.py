@@ -306,6 +306,7 @@ def test_mastering_processor_cli_uses_the_runtime_stereo_catalog(monkeypatch) ->
             output_lufs=-19.0,
             applied_gain_db=1.0,
             latency_samples=0,
+            declip_unreconstructed_runs=None,
         )
 
     monkeypatch.setattr(libsonare, "mastering_apply_processor_stereo", stereo)

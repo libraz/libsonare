@@ -329,6 +329,23 @@ def _styled(text: str, *codes: str) -> str:
     return "".join(codes) + text + _RESET
 
 
+#: Longest clipped run, in samples, a declip stage reconstructs; longer runs are left as they were.
+_DECLIP_MAX_GAP_SAMPLES = 512
+
+
+def _add_unreconstructed_runs(payload: dict[str, object], runs: int | None) -> None:
+    """Add ``unreconstructed_runs`` to a JSON payload when a declip stage ran."""
+    if runs is not None:
+        payload["unreconstructed_runs"] = runs
+
+
+def _print_unreconstructed_runs(runs: int | None, label_width: int) -> None:
+    """Print the runs a declip stage left clipped; nothing when no declip stage ran."""
+    if runs is not None:
+        label = "Left clipped:".ljust(label_width)
+        print(f"    {label}{runs} runs longer than {_DECLIP_MAX_GAP_SAMPLES} samples")
+
+
 def _note_output_fit(fit: _OutputFit) -> None:
     """Say on stderr that ``fit`` lowered the output; silent when it did not."""
     if fit.gain == 1.0:

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _absent_if_none,
+    _add_unreconstructed_runs,
     _atomic_write_bytes,
     _load_channels_or_downmix,
     _measured_pairs,
@@ -18,6 +19,7 @@ from ._cli_common import (
     _params_grammar_refusal,
     _params_keys,
     _parse_kv_params,
+    _print_unreconstructed_runs,
     _strict_json_dumps,
     _write_mastering_output,
 )
@@ -192,6 +194,7 @@ def _mastering_chain_payload(
     }
     if output:
         payload["output_gain_db"] = fit.gain_db
+    _add_unreconstructed_runs(payload, result.declip_unreconstructed_runs)
     if preset:
         payload["preset"] = preset
     payload["stages"] = list(getattr(result, "stages", []))
@@ -448,6 +451,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         print(f"    Input LUFS:  {result.input_lufs:.2f}")
         print(f"    Output LUFS: {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
+        _print_unreconstructed_runs(result.declip_unreconstructed_runs, 14)
         if output:
             print(f"    Wrote: {output}")
     return 0
@@ -572,6 +576,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
             output_lufs=stereo.output_lufs,
             applied_gain_db=stereo.applied_gain_db,
             latency_samples=stereo.latency_samples,
+            declip_unreconstructed_runs=stereo.declip_unreconstructed_runs,
         )
     else:
         result = mastering_apply_processor(processor_name, planes[0], sample_rate=sr, params=params)
@@ -593,12 +598,14 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
         }
         if output:
             payload["output_gain_db"] = fit.gain_db
+        _add_unreconstructed_runs(payload, result.declip_unreconstructed_runs)
         print(_strict_json_dumps(payload))
     else:
         print(f"  Mastering processor: {processor}")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
         print(f"    Output LUFS:  {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
+        _print_unreconstructed_runs(result.declip_unreconstructed_runs, 14)
         if output:
             print(f"    Wrote: {output}")
     return 0
@@ -768,6 +775,7 @@ def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
         }
         if output:
             payload["output_gain_db"] = fit.gain_db
+        _add_unreconstructed_runs(payload, result.declip_unreconstructed_runs)
         print(_strict_json_dumps(payload))
     else:
         print(f"  Mastering pair processor: {args.processor}")
@@ -775,6 +783,7 @@ def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
         print(f"    Output LUFS:  {result.output_lufs + fit.gain_db:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
         print(f"    Latency:      {result.latency_samples} samples")
+        _print_unreconstructed_runs(result.declip_unreconstructed_runs, 14)
         if output:
             print(f"    Wrote: {output}")
     return 0

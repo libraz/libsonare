@@ -2521,9 +2521,21 @@
         "name": "integrated_lufs",
         "offset": 32,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "quantize_clipped_samples",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_quantize_clipped_samples",
+        "offset": 48,
+        "size": 4
       }
     ],
-    "size": 40
+    "size": 56
   },
   "SonareEngineBuiltinSynthConfig": {
     "align": 4,
@@ -4123,9 +4135,33 @@
         "name": "loudness_gain_db",
         "offset": 280,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "declip_unreconstructed_runs",
+        "offset": 288,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_declip_unreconstructed_runs",
+        "offset": 296,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "quantize_clipped_samples",
+        "offset": 304,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_quantize_clipped_samples",
+        "offset": 312,
+        "size": 4
       }
     ],
-    "size": 288
+    "size": 320
   },
   "SonareMasteringChainStereoResult": {
     "align": 8,
@@ -4237,9 +4273,33 @@
         "name": "loudness_gain_db",
         "offset": 288,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "declip_unreconstructed_runs",
+        "offset": 296,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_declip_unreconstructed_runs",
+        "offset": 304,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "quantize_clipped_samples",
+        "offset": 312,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_quantize_clipped_samples",
+        "offset": 320,
+        "size": 4
       }
     ],
-    "size": 296
+    "size": 328
   },
   "SonareMasteringConfig": {
     "align": 4,
@@ -4441,9 +4501,33 @@
         "name": "non_finite_substitution_count",
         "offset": 40,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "declip_unreconstructed_runs",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_declip_unreconstructed_runs",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "quantize_clipped_samples",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_quantize_clipped_samples",
+        "offset": 72,
+        "size": 4
       }
     ],
-    "size": 48
+    "size": 80
   },
   "SonareMasteringStereoResult": {
     "align": 8,
@@ -4507,9 +4591,33 @@
         "name": "non_finite_substitution_count",
         "offset": 48,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "declip_unreconstructed_runs",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_declip_unreconstructed_runs",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "quantize_clipped_samples",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "has_quantize_clipped_samples",
+        "offset": 80,
+        "size": 4
       }
     ],
-    "size": 56
+    "size": 88
   },
   "SonareMelFilterbankOptions": {
     "align": 4,

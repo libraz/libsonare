@@ -418,6 +418,7 @@ def test_mastering_processor_feeds_a_mono_source_to_both_channels(monkeypatch, c
             output_lufs=-19.0,
             applied_gain_db=0.0,
             latency_samples=0,
+            declip_unreconstructed_runs=None,
         )
 
     monkeypatch.setattr(

@@ -30,6 +30,7 @@ def _result(*, stages: list[str] | None = None, report: object | None = None) ->
         latency_samples=12,
         stages=stages or ["loudness"],
         report=report,
+        declip_unreconstructed_runs=None,
     )
 
 
@@ -211,6 +212,7 @@ def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
             output_lufs=-17.0,
             applied_gain_db=1.0,
             latency_samples=3,
+            declip_unreconstructed_runs=None,
         )
 
     monkeypatch.setattr(libsonare, "mastering_apply_processor_stereo", stereo)
@@ -285,6 +287,7 @@ def test_mastering_processor_stereo_only_catalog_auto_routes(monkeypatch, capsys
                 output_lufs=-17.0,
                 applied_gain_db=1.0,
                 latency_samples=3,
+                declip_unreconstructed_runs=None,
             )
         ),
     )

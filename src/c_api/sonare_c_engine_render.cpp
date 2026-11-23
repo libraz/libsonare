@@ -363,6 +363,8 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
         static_cast<size_t>(options->num_channels), config, &quantize_report);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
+    out->quantize_clipped_samples = quantize_report.clipped_samples;
+    out->has_quantize_clipped_samples = 1;
   }
 #endif
   const auto loudness = metering::lufs_interleaved(interleaved.data(), channels[0].size(),

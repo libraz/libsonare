@@ -63,6 +63,16 @@ typedef struct {
   /// Which stages can contribute depends on the call that filled this result,
   /// so what a zero means is stated on each of them rather than here.
   size_t non_finite_substitution_count;
+  /// Clipped runs a declip stage left as they were because they are longer than it reconstructs,
+  /// summed over the channels. Read only when @c has_declip_unreconstructed_runs is non-zero,
+  /// which it is exactly when a declip stage ran.
+  size_t declip_unreconstructed_runs;
+  int has_declip_unreconstructed_runs;  ///< Non-zero when a declip stage ran.
+  /// The count of samples whose value before quantization and dither has |x| > 1.0, summed over
+  /// channels; 0 when none clipped. Read only when @c has_quantize_clipped_samples is non-zero,
+  /// which it is exactly when a quantizing stage ran (final.dither type none leaves it absent).
+  size_t quantize_clipped_samples;
+  int has_quantize_clipped_samples;  ///< Non-zero when a quantizing stage ran.
 } SonareMasteringResult;
 
 /// @brief One flat key/value processor or chain parameter.
@@ -91,6 +101,12 @@ typedef struct {
   /// See @c SonareMasteringResult::non_finite_substitution_count. Aggregated
   /// over both channels.
   size_t non_finite_substitution_count;
+  /// @copydoc SonareMasteringResult::declip_unreconstructed_runs
+  size_t declip_unreconstructed_runs;
+  int has_declip_unreconstructed_runs;  ///< Non-zero when a declip stage ran.
+  /// @copydoc SonareMasteringResult::quantize_clipped_samples
+  size_t quantize_clipped_samples;
+  int has_quantize_clipped_samples;  ///< Non-zero when a quantizing stage ran.
 } SonareMasteringStereoResult;
 
 /// @brief Progress callback type. Called per chain stage completion.
@@ -188,6 +204,12 @@ typedef struct {
   /// The same value as @c report.loudness_gain_db, kept here beside the other
   /// whole-run fields because the report is also returned on its own.
   float loudness_gain_db;
+  /// @copydoc SonareMasteringResult::declip_unreconstructed_runs
+  size_t declip_unreconstructed_runs;
+  int has_declip_unreconstructed_runs;  ///< Non-zero when a declip stage ran.
+  /// @copydoc SonareMasteringResult::quantize_clipped_samples
+  size_t quantize_clipped_samples;
+  int has_quantize_clipped_samples;  ///< Non-zero when a quantizing stage ran.
 } SonareMasteringChainResult;
 
 /// @brief Result of running the mastering chain on a stereo pair.
@@ -218,6 +240,12 @@ typedef struct {
   size_t non_finite_substitution_count;
   /// @copydoc SonareMasteringChainResult::loudness_gain_db
   float loudness_gain_db;
+  /// @copydoc SonareMasteringResult::declip_unreconstructed_runs
+  size_t declip_unreconstructed_runs;
+  int has_declip_unreconstructed_runs;  ///< Non-zero when a declip stage ran.
+  /// @copydoc SonareMasteringResult::quantize_clipped_samples
+  size_t quantize_clipped_samples;
+  int has_quantize_clipped_samples;  ///< Non-zero when a quantizing stage ran.
 } SonareMasteringChainStereoResult;
 
 /// @details This call always runs exactly one true-peak limiter, so

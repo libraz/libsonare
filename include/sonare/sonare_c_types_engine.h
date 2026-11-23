@@ -467,6 +467,11 @@ typedef struct {
   int num_channels;       ///< Interleaved channel count.
   int sample_rate;        ///< Sample rate of the returned audio in Hz.
   float integrated_lufs;  ///< Integrated loudness of the returned audio in LUFS.
+  /// The count of samples whose value before quantization and dither has |x| > 1.0, summed over
+  /// channels; 0 when none clipped. Read only when @c has_quantize_clipped_samples is non-zero,
+  /// which it is exactly when the bounce dithered (dither not 0).
+  size_t quantize_clipped_samples;
+  int has_quantize_clipped_samples;  ///< Non-zero when the bounce dithered.
 } SonareEngineBounceResult;
 
 /// Options for sonare_engine_freeze_offline, which renders the engine's output into a new clip.
@@ -587,7 +592,7 @@ static_assert(offsetof(SonareTransportState, beat_fraction) == 104u,
               "SonareTransportState beat_fraction offset changed");
 
 static_assert(sizeof(SonareEngineBounceResult) ==
-                  ((offsetof(SonareEngineBounceResult, integrated_lufs) + sizeof(float) +
+                  ((offsetof(SonareEngineBounceResult, has_quantize_clipped_samples) + sizeof(int) +
                     alignof(SonareEngineBounceResult) - 1u) /
                    alignof(SonareEngineBounceResult)) *
                       alignof(SonareEngineBounceResult),
