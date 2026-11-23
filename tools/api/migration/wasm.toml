@@ -17422,6 +17422,22 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 
 [[entry]]
 kind = "field"
+old = "NormalizeRequest.targetDb"
+changed = "the result is no longer clipped to [-1, 1] and a target above 0 dB is accepted in both modes; fit or limit the result before writing an integer format"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/normalize-unclipped.test.ts::brings the RMS exactly to target on a high-crest input"
+
+[[entry]]
+kind = "field"
+old = "NormalizeStereoRequest.targetDb"
+changed = "the result is no longer clipped to [-1, 1] and a target above 0 dB is accepted in both modes; fit or limit the result before writing an integer format"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/normalize-unclipped.test.ts::brings the joint RMS exactly to target on a high-crest pair"
+
+[[entry]]
+kind = "field"
 old = "PercussiveRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "effects"
