@@ -1,4 +1,5 @@
 import { ErrorCode } from './errors.js';
+import { ordinalToken } from './internal/core_tokens.js';
 import {
   codedError,
   entryClass,
@@ -12,7 +13,7 @@ import {
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
-import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
+import { attachVocalErrorDetail, VOCAL_REASONS } from './internal/vocal_error_detail.js';
 import { expectedRevisionOption } from './internal/vocal_revision.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -135,12 +136,8 @@ function addVocalErrorDetail(error: unknown, detail: NativeVocalErrorDetail): vo
   if (candidate.name !== 'SonareError' || typeof candidate.code !== 'number') {
     return;
   }
-  const reason = vocalReasonFromCode(detail.reason);
-  if (reason === undefined) {
-    return;
-  }
   attachVocalErrorDetail(candidate, {
-    reason,
+    reason: ordinalToken(VOCAL_REASONS, detail.reason, 'vocal reason'),
     field: detail.field,
     expected: detail.expected,
     actual: detail.actual,
@@ -188,13 +185,15 @@ function module(): VocalWasmModule {
           return Reflect.apply(member, target, args);
         } catch (error) {
           if (beforeSequence !== undefined) {
+            let detail: NativeVocalErrorDetail | undefined;
             try {
-              const detail = detailReader.call(target);
-              if (detail.sequence !== beforeSequence) {
-                addVocalErrorDetail(error, detail);
-              }
+              const current = detailReader.call(target);
+              detail = current.sequence !== beforeSequence ? current : undefined;
             } catch {
               // Keep the original native error if detail decoding is unavailable.
+            }
+            if (detail !== undefined) {
+              addVocalErrorDetail(error, detail);
             }
           }
           throw error;

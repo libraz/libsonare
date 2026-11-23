@@ -174,7 +174,7 @@ PolyphonicAnalysisWrap::PolyphonicAnalysisWrap(const Napi::CallbackInfo& info)
   // by a note index the C ABI validated against the handle, not against it.
   if (written != note_count) {
     Release();
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
                                          "the analysis reported a different note count");
     return;
   }
@@ -234,7 +234,7 @@ Napi::Value PolyphonicAnalysisWrap::Notes(const Napi::CallbackInfo& info) {
   // The capacity is the count this handle reported at construction, so a short
   // write is an inconsistency rather than a buffer the caller sized badly.
   if (written != notes.size()) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
                                          "the analysis reported a different note count");
     return env.Undefined();
   }

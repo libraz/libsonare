@@ -679,6 +679,11 @@ SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* w
 
 Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence) {
   Napi::Object key = Napi::Object::New(env);
+  const int mode_ordinal = static_cast<int>(mode);
+  if (mode_ordinal < SONARE_MODE_MAJOR || mode_ordinal > SONARE_MODE_LOCRIAN) {
+    throw MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                          "unknown key mode ordinal: " + std::to_string(mode_ordinal));
+  }
   std::string root_name = PitchClassNameLocal(root);
   std::string mode_name = ModeNameLocal(mode);
   key.Set("root", Napi::Number::New(env, static_cast<double>(root)));

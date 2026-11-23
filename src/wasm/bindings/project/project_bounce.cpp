@@ -349,7 +349,14 @@ val ProjectWasm::compile(const val& with_timeline_val) {
     sonare_project_timeline_destroy(timeline);
     throwCodedCError(err);
   }
-  val out = projectCompileResultToVal(result);
+  val out = val::undefined();
+  try {
+    out = projectCompileResultToVal(result);
+  } catch (...) {
+    sonare_free_project_compile_result(&result);
+    sonare_project_timeline_destroy(timeline);
+    throw;
+  }
   sonare_free_project_compile_result(&result);
   if (with_timeline) {
     if (timeline != nullptr) {

@@ -1,3 +1,4 @@
+import { ordinalToken, skewError } from './internal/core_tokens.js';
 import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
@@ -47,13 +48,6 @@ function objectValue(value: unknown, field: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function arrayValue(value: unknown, field: string): readonly unknown[] {
-  if (!Array.isArray(value)) {
-    throw refuseType(`${field} must be an array`);
-  }
-  return value;
-}
-
 function finiteNumber(value: unknown, field: string): number {
   if (typeof value !== 'number') {
     throw refuseType(`${field} must be a number`);
@@ -79,16 +73,6 @@ function safeInteger(
     throw refuse(`${field} must be a safe integer in [${minimum}, ${maximum}]`);
   }
   return value;
-}
-
-/** The native base-source id 0 becomes an absent `takeId`. */
-function optionalTakeId(value: unknown, field: string): { takeId?: number } {
-  const id = projectId(value, field, true);
-  return id === 0 ? {} : { takeId: id };
-}
-
-function uint32(value: unknown, field: string): number {
-  return safeInteger(value, field, 0, UINT32_MAX);
 }
 
 function requestSafeInteger(
@@ -128,10 +112,6 @@ function requestTakeId(value: unknown): number {
     throw refuse('takeId must not be 0; omit it for the base source');
   }
   return requestProjectId(value, 'request.takeId');
-}
-
-function projectId(value: unknown, field: string, allowZero = false): number {
-  return safeInteger(value, field, allowZero ? 0 : 1, MAX_PROJECT_ID);
 }
 
 function uint64String(value: unknown, field: string): string {
@@ -241,83 +221,144 @@ function normalizeApplyRequest(request: ProjectVocalEditApplyRequest): NativeApp
   };
 }
 
-function applyResult(value: unknown): ProjectVocalEditApplyResult {
-  const result = objectValue(value, 'native applyVocalEdit result');
-  return {
-    clipId: projectId(result.clipId, 'result.clipId'),
-    ...optionalTakeId(result.takeId, 'result.takeId'),
-    originalSourceId: projectId(result.originalSourceId, 'result.originalSourceId'),
-    derivedSourceId: projectId(result.derivedSourceId, 'result.derivedSourceId'),
-    committedRevision: uint64String(result.committedRevision, 'result.committedRevision'),
-    profileId: uint32(result.profileId, 'result.profileId'),
-    derivedSourceSha256: digest(result.derivedSourceSha256, 'result.derivedSourceSha256'),
-    sidecarKey: stringValue(result.sidecarKey, 'result.sidecarKey'),
-  };
+function resultObject(value: unknown, field: string): Record<string, unknown> {
+  if (!isNonArrayObject(value)) {
+    throw skewError(`${field} is not an object`);
+  }
+  return value as Record<string, unknown>;
 }
 
-function stringValue(value: unknown, field: string): string {
-  if (typeof value !== 'string') {
-    throw refuseType(`${field} must be a string`);
+function resultArray(value: unknown, field: string): readonly unknown[] {
+  if (!Array.isArray(value)) {
+    throw skewError(`${field} is not an array`);
   }
   return value;
 }
 
-function reasonName(value: unknown, field: string): VocalReason {
-  const index = safeInteger(value, field, 0, VOCAL_REASONS.length - 1);
-  return VOCAL_REASONS[index];
+function resultInteger(
+  value: unknown,
+  field: string,
+  minimum = 0,
+  maximum = Number.MAX_SAFE_INTEGER,
+): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
+    throw skewError(`${field} is not an integer in [${minimum}, ${maximum}]`);
+  }
+  return value;
+}
+
+function resultUint32(value: unknown, field: string): number {
+  return resultInteger(value, field, 0, UINT32_MAX);
+}
+
+function resultProjectId(value: unknown, field: string, allowZero = false): number {
+  return resultInteger(value, field, allowZero ? 0 : 1, MAX_PROJECT_ID);
+}
+
+/** The native base-source id 0 becomes an absent `takeId`. */
+function resultTakeId(value: unknown, field: string): { takeId?: number } {
+  const id = resultProjectId(value, field, true);
+  return id === 0 ? {} : { takeId: id };
+}
+
+function resultUint64(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value) || BigInt(value) > UINT64_MAX) {
+    throw skewError(`${field} is not a decimal uint64 string`);
+  }
+  return value;
+}
+
+function resultDigest(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value)) {
+    throw skewError(`${field} is not 64 hexadecimal characters`);
+  }
+  return value.toLowerCase();
+}
+
+function resultString(value: unknown, field: string): string {
+  if (typeof value !== 'string') {
+    throw skewError(`${field} is not a string`);
+  }
+  return value;
+}
+
+function resultBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw skewError(`${field} is not a boolean`);
+  }
+  return value;
+}
+
+function applyResult(value: unknown): ProjectVocalEditApplyResult {
+  const result = resultObject(value, 'native applyVocalEdit result');
+  return {
+    clipId: resultProjectId(result.clipId, 'result.clipId'),
+    ...resultTakeId(result.takeId, 'result.takeId'),
+    originalSourceId: resultProjectId(result.originalSourceId, 'result.originalSourceId'),
+    derivedSourceId: resultProjectId(result.derivedSourceId, 'result.derivedSourceId'),
+    committedRevision: resultUint64(result.committedRevision, 'result.committedRevision'),
+    profileId: resultUint32(result.profileId, 'result.profileId'),
+    derivedSourceSha256: resultDigest(result.derivedSourceSha256, 'result.derivedSourceSha256'),
+    sidecarKey: resultString(result.sidecarKey, 'result.sidecarKey'),
+  };
+}
+
+function reasonName(value: unknown): VocalReason {
+  return ordinalToken(VOCAL_REASONS, value, 'vocal reason');
 }
 
 function dependency(value: unknown, index: number): ProjectVocalEditDependency {
-  const result = objectValue(value, `native dependency[${index}]`);
+  const result = resultObject(value, `native dependency[${index}]`);
   return {
-    clipId: projectId(result.clipId, `dependency[${index}].clipId`),
-    ...optionalTakeId(result.takeId, `dependency[${index}].takeId`),
-    originalSourceId: projectId(
+    clipId: resultProjectId(result.clipId, `dependency[${index}].clipId`),
+    ...resultTakeId(result.takeId, `dependency[${index}].takeId`),
+    originalSourceId: resultProjectId(
       result.originalSourceId,
       `dependency[${index}].originalSourceId`,
       true,
     ),
-    derivedSourceId: projectId(
+    derivedSourceId: resultProjectId(
       result.derivedSourceId,
       `dependency[${index}].derivedSourceId`,
       true,
     ),
-    sourceSampleRate: uint32(result.sourceSampleRate, `dependency[${index}].sourceSampleRate`),
-    profileId: uint32(result.profileId, `dependency[${index}].profileId`),
-    sourceSampleCount: safeInteger(
+    sourceSampleRate: resultUint32(
+      result.sourceSampleRate,
+      `dependency[${index}].sourceSampleRate`,
+    ),
+    profileId: resultUint32(result.profileId, `dependency[${index}].profileId`),
+    sourceSampleCount: resultInteger(
       result.sourceSampleCount,
       `dependency[${index}].sourceSampleCount`,
     ),
-    committedRevision: uint64String(
+    committedRevision: resultUint64(
       result.committedRevision,
       `dependency[${index}].committedRevision`,
     ),
-    originalSourceSha256: digest(
+    originalSourceSha256: resultDigest(
       result.originalSourceSha256,
       `dependency[${index}].originalSourceSha256`,
     ),
-    derivedSourceSha256: digest(
+    derivedSourceSha256: resultDigest(
       result.derivedSourceSha256,
       `dependency[${index}].derivedSourceSha256`,
     ),
-    originalPcmAvailable: booleanValue(
+    originalPcmAvailable: resultBoolean(
       result.originalPcmAvailable,
       `dependency[${index}].originalPcmAvailable`,
     ),
-    derivedPcmAvailable: booleanValue(
+    derivedPcmAvailable: resultBoolean(
       result.derivedPcmAvailable,
       `dependency[${index}].derivedPcmAvailable`,
     ),
-    reason: reasonName(result.reason, `dependency[${index}].reason`),
-    sidecarKey: stringValue(result.sidecarKey, `dependency[${index}].sidecarKey`),
+    reason: reasonName(result.reason),
+    sidecarKey: resultString(result.sidecarKey, `dependency[${index}].sidecarKey`),
   };
-}
-
-function booleanValue(value: unknown, field: string): boolean {
-  if (typeof value !== 'boolean') {
-    throw refuseType(`${field} must be a boolean`);
-  }
-  return value;
 }
 
 function originalSource(value: unknown, index: number): ProjectVocalOriginalSource {
@@ -337,14 +378,18 @@ function originalSource(value: unknown, index: number): ProjectVocalOriginalSour
 }
 
 function rehydrateItem(value: unknown, index: number): ProjectVocalRehydrateItem {
-  const item = objectValue(value, `native rehydrate item[${index}]`);
-  const status = safeInteger(item.status, `rehydrate[${index}].status`, 0, 2);
+  const item = resultObject(value, `native rehydrate item[${index}]`);
+  const status = ordinalToken(REHYDRATE_STATUSES, item.status, 'rehydrate status');
   return {
-    clipId: projectId(item.clipId, `rehydrate[${index}].clipId`),
-    ...optionalTakeId(item.takeId, `rehydrate[${index}].takeId`),
-    derivedSourceId: projectId(item.derivedSourceId, `rehydrate[${index}].derivedSourceId`, true),
-    status: REHYDRATE_STATUSES[status],
-    reason: reasonName(item.reason, `rehydrate[${index}].reason`),
+    clipId: resultProjectId(item.clipId, `rehydrate[${index}].clipId`),
+    ...resultTakeId(item.takeId, `rehydrate[${index}].takeId`),
+    derivedSourceId: resultProjectId(
+      item.derivedSourceId,
+      `rehydrate[${index}].derivedSourceId`,
+      true,
+    ),
+    status,
+    reason: reasonName(item.reason),
   };
 }
 
@@ -360,7 +405,7 @@ export function projectApplyVocalEdit(
 export function projectGetVocalEditDependencies(
   native: NativeProjectVocal,
 ): ProjectVocalEditDependency[] {
-  const values = arrayValue(native.getVocalEditDependencies(), 'native vocal dependencies');
+  const values = resultArray(native.getVocalEditDependencies(), 'native vocal dependencies');
   const result: ProjectVocalEditDependency[] = [];
   for (let index = 0; index < values.length; index += 1) {
     result.push(dependency(values[index], index));
@@ -398,7 +443,7 @@ export function projectRehydrateVocalEdits(
     cancel === undefined
       ? native.rehydrateVocalEdits(sources)
       : native.rehydrateVocalEdits(sources, cancel);
-  const values = arrayValue(value, 'native vocal rehydrate result');
+  const values = resultArray(value, 'native vocal rehydrate result');
   const result: ProjectVocalRehydrateItem[] = [];
   for (let index = 0; index < values.length; index += 1) {
     result.push(rehydrateItem(values[index], index));

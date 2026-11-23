@@ -13,6 +13,7 @@ import type {
 } from '../public_types_engine.js';
 import type { WasmEngineClip, WasmEngineMeterTelemetry } from '../sonare.js';
 import { nativeClipPageProviderOf } from './clip_page_native.js';
+import { ordinalToken } from './core_tokens.js';
 import { refuse } from './entry.js';
 import { requireListBudget } from './list_budget.js';
 import { MARKER_KINDS, tokenName, WARP_MODES } from './project_tokens.js';
@@ -132,14 +133,9 @@ export function telemetryFromNative(record: {
   graphLatencySamplesQ8: number;
   value: number;
 }): EngineTelemetry {
-  const type = TELEMETRY_TYPES[record.type];
-  const error = TELEMETRY_ERRORS[record.error];
-  if (type === undefined || error === undefined) {
-    throw refuse(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
-  }
   return {
-    type,
-    error,
+    type: ordinalToken(TELEMETRY_TYPES, record.type, 'telemetry type'),
+    error: ordinalToken(TELEMETRY_ERRORS, record.error, 'telemetry error'),
     renderFrame: record.renderFrame,
     timelineSample: record.timelineSample,
     audibleTimelineSample: record.audibleTimelineSample,

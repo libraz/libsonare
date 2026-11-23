@@ -273,8 +273,9 @@ int VocalProjectCancel(void* user_data) {
 
 bool ResultCountValid(Napi::Env env, uint64_t count, const char* field) {
   if (count > kMaxResultItems || count > std::numeric_limits<uint32_t>::max()) {
-    Napi::RangeError::New(env, std::string(field) + " count is unreasonable")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_INVALID_FORMAT,
+        std::string("native vocal project ") + field + " count is unreasonable");
     return false;
   }
   return true;
@@ -282,8 +283,9 @@ bool ResultCountValid(Napi::Env env, uint64_t count, const char* field) {
 
 bool ResultPointerValid(Napi::Env env, const void* pointer, uint64_t count, const char* field) {
   if (count != 0 && pointer == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
-                                         std::string(field) + " result contains a null array");
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_INVALID_FORMAT,
+        std::string("native vocal project ") + field + " result contains a null array");
     return false;
   }
   return true;

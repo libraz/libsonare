@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -253,14 +254,28 @@ Napi::Object RealtimeVoiceChangerConfigObject(
   static constexpr const char* kVariations[] = {"reverb", "echo", "tempoDelay", "dubEcho"};
   static constexpr const char* kDivisions[] = {"quarter", "eighth", "dottedEighth", "sixteenth"};
   static constexpr const char* kMidiReleases[] = {"hold", "input"};
-  const auto index = [](auto value) { return static_cast<std::size_t>(value); };
-  out.Set("voiceEngine", name(kEngines[index(config.voice_engine.engine)]));
+  // An ordinal past a table is a mirror that has drifted from the core, refused rather than read.
+  const auto enum_name = [&env, &name](const char* const* names, std::size_t count, auto value,
+                                       const char* noun) {
+    const auto ordinal = static_cast<std::size_t>(value);
+    if (ordinal >= count) {
+      throw sonare_node::MakeSonareError(
+          env, SONARE_ERROR_INVALID_FORMAT,
+          std::string("unknown ") + noun + " ordinal: " + std::to_string(ordinal));
+    }
+    return name(names[ordinal]);
+  };
+  out.Set("voiceEngine",
+          enum_name(kEngines, std::size(kEngines), config.voice_engine.engine, "voice engine"));
   out.Set("voiceEngineF0MinHz", number(config.voice_engine.f0_min_hz));
-  out.Set("pitchCorrectionMode", name(kCorrectionModes[index(config.pitch_correction.mode)]));
+  out.Set("pitchCorrectionMode", enum_name(kCorrectionModes, std::size(kCorrectionModes),
+                                           config.pitch_correction.mode, "pitch correction mode"));
   out.Set("pitchCorrectionAmount", number(config.pitch_correction.amount));
   out.Set("pitchCorrectionSpeedMs", number(config.pitch_correction.speed_ms));
   out.Set("pitchCorrectionKeyRoot", number(config.pitch_correction.key_root));
-  out.Set("pitchCorrectionScale", name(kScales[index(config.pitch_correction.scale)]));
+  out.Set("pitchCorrectionScale",
+          enum_name(kScales, std::size(kScales), config.pitch_correction.scale,
+                    "pitch correction scale"));
   out.Set("pitchCorrectionRobotOctave", number(config.pitch_correction.robot_octave));
   out.Set("harmonyVoices", number(config.harmony.voices));
   Napi::Array harmony_steps = Napi::Array::New(env, vc::kMaxHarmonyVoices);
@@ -277,19 +292,27 @@ Napi::Object RealtimeVoiceChangerConfigObject(
   out.Set("vocoderAttackMs", number(config.vocoder.attack_ms));
   out.Set("vocoderReleaseMs", number(config.vocoder.release_ms));
   out.Set("vocoderSibilance", number(config.vocoder.sibilance));
-  out.Set("vocoderCarrierSource", name(kCarrierSources[index(config.vocoder.carrier_source)]));
-  out.Set("vocoderCarrierWave", name(kCarrierWaves[index(config.vocoder.carrier_wave)]));
+  out.Set("vocoderCarrierSource",
+          enum_name(kCarrierSources, std::size(kCarrierSources), config.vocoder.carrier_source,
+                    "vocoder carrier source"));
+  out.Set("vocoderCarrierWave", enum_name(kCarrierWaves, std::size(kCarrierWaves),
+                                          config.vocoder.carrier_wave, "vocoder carrier wave"));
   out.Set("vocoderEnsembleDetuneCents", number(config.vocoder.ensemble_detune_cents));
   out.Set("vocoderLevel", number(config.vocoder.level));
-  out.Set("characterType", name(kCharacters[index(config.character.type)]));
+  out.Set("characterType",
+          enum_name(kCharacters, std::size(kCharacters), config.character.type, "character type"));
   out.Set("characterAmount", number(config.character.amount));
   out.Set("characterTone", number(config.character.tone));
-  out.Set("reverbVariation", name(kVariations[index(config.reverb_variation.variation)]));
+  out.Set("reverbVariation", enum_name(kVariations, std::size(kVariations),
+                                       config.reverb_variation.variation, "reverb variation"));
   out.Set("reverbVariationDelayMs", number(config.reverb_variation.delay_ms));
   out.Set("reverbVariationFeedback", number(config.reverb_variation.feedback));
   out.Set("reverbVariationTempoBpm", number(config.reverb_variation.tempo_bpm));
-  out.Set("reverbVariationDivision", name(kDivisions[index(config.reverb_variation.division)]));
-  out.Set("midiRelease", name(kMidiReleases[index(config.midi.release)]));
+  out.Set("reverbVariationDivision",
+          enum_name(kDivisions, std::size(kDivisions), config.reverb_variation.division,
+                    "reverb variation division"));
+  out.Set("midiRelease",
+          enum_name(kMidiReleases, std::size(kMidiReleases), config.midi.release, "midi release"));
   return out;
 }
 

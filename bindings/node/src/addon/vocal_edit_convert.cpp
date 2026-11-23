@@ -404,11 +404,28 @@ Napi::Object PointToObject(Napi::Env env, const SonareVocalPitchPoint& point) {
   return object;
 }
 
+namespace {
+
+/// The spelling of an enum ordinal the library returned; one past the table is a mirror that has
+/// drifted from the core, refused as an InvalidFormat rather than clamped onto the last member.
+const char* LibraryEnumName(Napi::Env env, const char* const* names, size_t count, uint32_t ordinal,
+                            const char* noun) {
+  if (ordinal >= count) {
+    throw sonare_node::MakeSonareError(
+        env, SONARE_ERROR_INVALID_FORMAT,
+        std::string("unknown ") + noun + " ordinal: " + std::to_string(ordinal));
+  }
+  return names[ordinal];
+}
+
+}  // namespace
+
 Napi::Object EditToObject(Napi::Env env, const SonareVocalNoteEdit& edit) {
   Napi::Object pitch = Napi::Object::New(env);
   Napi::Object target = Napi::Object::New(env);
   const char* const target_names[] = {"none", "center", "curve"};
-  target.Set("mode", target_names[std::min<uint32_t>(edit.target_mode, 2u)]);
+  target.Set("mode", LibraryEnumName(env, target_names, std::size(target_names), edit.target_mode,
+                                     "vocal target mode"));
   if (edit.target_mode == SONARE_VOCAL_TARGET_CENTER) {
     target.Set("midi", edit.target_midi);
   } else if (edit.target_mode == SONARE_VOCAL_TARGET_CURVE) {
@@ -428,7 +445,8 @@ Napi::Object EditToObject(Napi::Env env, const SonareVocalNoteEdit& edit) {
 
   Napi::Object formant = Napi::Object::New(env);
   const char* const formant_names[] = {"preserve", "shift"};
-  formant.Set("mode", formant_names[std::min<uint32_t>(edit.formant_mode, 1u)]);
+  formant.Set("mode", LibraryEnumName(env, formant_names, std::size(formant_names),
+                                      edit.formant_mode, "vocal formant mode"));
   formant.Set("shiftSemitones", edit.formant_shift_semitones);
   Napi::Object result = Napi::Object::New(env);
   result.Set("pitch", pitch);

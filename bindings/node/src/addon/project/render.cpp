@@ -78,18 +78,24 @@ Napi::Object CompileResultToObject(Napi::Env env, SonareProjectCompileResult* re
   Napi::Array diagnostics = Napi::Array::New(env, result->diagnostic_count);
   for (size_t i = 0; i < result->diagnostic_count; ++i) {
     Napi::Object diag = Napi::Object::New(env);
-    // The library names every code and severity it emits; a NULL would be a library defect,
-    // so it surfaces as the bare number rather than as an invented token.
-    const auto token = [](const char* name, int value) {
-      return name != nullptr ? std::string(name) : std::to_string(value);
+    // The library names every code and severity it emits; a NULL is a version skew, refused
+    // rather than shown as a bare number.
+    const auto token = [&](const char* name, int value, const char* noun) {
+      if (name == nullptr) {
+        sonare_free_project_compile_result(result);
+        throw sonare_node::MakeSonareError(
+            env, SONARE_ERROR_INVALID_FORMAT,
+            std::string("unknown ") + noun + " ordinal: " + std::to_string(value));
+      }
+      return std::string(name);
     };
     const int code = result->diagnostics[i].code;
     const int severity = result->diagnostics[i].severity;
-    diag.Set("code",
-             Napi::String::New(env, token(sonare_project_diagnostic_code_name(code), code)));
-    diag.Set(
-        "severity",
-        Napi::String::New(env, token(sonare_project_diagnostic_severity_name(severity), severity)));
+    diag.Set("code", Napi::String::New(env, token(sonare_project_diagnostic_code_name(code), code,
+                                                  "diagnostic code")));
+    diag.Set("severity",
+             Napi::String::New(env, token(sonare_project_diagnostic_severity_name(severity),
+                                          severity, "diagnostic severity")));
     diag.Set("targetId", Napi::Number::New(env, result->diagnostics[i].target_id));
     diag.Set("message",
              Napi::String::New(env, i < diagnostic_messages.size() ? diagnostic_messages[i] : ""));

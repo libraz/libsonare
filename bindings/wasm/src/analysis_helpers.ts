@@ -1,3 +1,4 @@
+import { libraryToken, ordinalToken, skewError } from './internal/core_tokens.js';
 import { refuse, refuseType } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { isAbsent } from './internal/value_guards.js';
@@ -53,11 +54,7 @@ const KEY_MODE_NAMES = [
 
 /** Name of a key-mode ordinal as the module reports it. */
 export function keyModeName(ordinal: number): KeyMode {
-  const name = KEY_MODE_NAMES[ordinal];
-  if (name === undefined) {
-    throw refuse(`Invalid key mode: ${String(ordinal)}`);
-  }
-  return name;
+  return ordinalToken(KEY_MODE_NAMES, ordinal, 'key mode');
 }
 
 export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate {
@@ -107,19 +104,24 @@ export function chordQualityOrdinal(quality: unknown, field = 'chord quality'): 
 
 /** Token of a native chord-quality ordinal; an ordinal outside the table is refused. */
 export function chordQualityToken(ordinal: number): ChordQuality {
-  const token = CHORD_QUALITIES[ordinal];
-  if (token === undefined) {
-    throw refuse(`Invalid chord quality ordinal: ${String(ordinal)}`);
-  }
-  return token;
+  return ordinalToken(CHORD_QUALITIES, ordinal, 'chord quality');
 }
 
-function sectionTypeToken(ordinal: number): Section['type'] {
-  const token = SECTION_TYPES[ordinal];
-  if (token === undefined) {
-    throw refuse(`Invalid section type ordinal: ${String(ordinal)}`);
+function sectionTypeToken(ordinal: number | undefined): Section['type'] {
+  if (ordinal === undefined || ordinal === null) {
+    throw skewError('analysis result section is missing its type field');
   }
-  return token;
+  return ordinalToken(SECTION_TYPES, ordinal, 'section type');
+}
+
+const BPM_CANDIDATE_RELATIONS = ['primary', 'half', 'double', 'other'] as const;
+
+/** Holds each tempo candidate's relation token to the mirrored set. */
+function checkedBpmCandidates(candidates: AnalysisResult['bpmCandidates']) {
+  return candidates.map((candidate) => ({
+    ...candidate,
+    relation: libraryToken(BPM_CANDIDATE_RELATIONS, candidate.relation, 'BPM candidate relation'),
+  }));
 }
 
 const ALL_MODE_ORDINALS = [0, 1, 2, 3, 4, 5, 6];
@@ -206,6 +208,7 @@ export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): Chord
 export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
   return {
     ...wasm,
+    bpmCandidates: checkedBpmCandidates(wasm.bpmCandidates),
     key: {
       root: wasm.key.root as PitchClass,
       mode: keyModeName(wasm.key.mode),

@@ -439,7 +439,13 @@ val ProjectWasm::lastBounceCompileResult() const {
     sonare_free_project_compile_result(&result);
     throwCodedCError(err);
   }
-  val out = projectCompileResultToVal(result);
+  val out = val::undefined();
+  try {
+    out = projectCompileResultToVal(result);
+  } catch (...) {
+    sonare_free_project_compile_result(&result);
+    throw;
+  }
   sonare_free_project_compile_result(&result);
   return out;
 }

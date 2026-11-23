@@ -1,4 +1,5 @@
 import { chainConfigJson } from './internal/chain_config.js';
+import { ordinalToken } from './internal/core_tokens.js';
 import {
   assertDeclaredKeys,
   entryClass,
@@ -484,7 +485,7 @@ function streamQuantizedFrames<T extends Uint8Array | Int16Array>(
 function streamChordChange(c: NativeStreamChord): StreamChordChange {
   return {
     root: c.root as PitchClass,
-    quality: CHORD_QUALITIES[c.quality],
+    quality: ordinalToken(CHORD_QUALITIES, c.quality, 'chord quality'),
     name: c.name,
     startSec: c.startSec,
     confidence: c.confidence,

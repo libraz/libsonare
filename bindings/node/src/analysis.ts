@@ -1,3 +1,4 @@
+import { libraryToken, ordinalToken, skewError } from './internal/core_tokens.js';
 import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
@@ -22,6 +23,7 @@ import type {
   BoundaryOptions,
   BoundaryResult,
   BpmAnalysisResult,
+  BpmCandidateRelation,
   Chord,
   ChordAnalysisResult,
   ChordChromaMethod,
@@ -190,6 +192,12 @@ const KEY_PROFILE_NATIVE: Readonly<Record<KeyProfile, string>> = {
 
 const GENRE_HINTS = ['auto', 'edm', 'electronic', 'dance', 'pop', 'classical', 'jazz'] as const;
 const CHORD_CHROMA_METHODS: readonly ChordChromaMethod[] = ['stft', 'nnls', 'cqt'];
+const BPM_CANDIDATE_RELATIONS: readonly BpmCandidateRelation[] = [
+  'primary',
+  'half',
+  'double',
+  'other',
+];
 const SECTION_TYPES: readonly SectionType[] = [
   'intro',
   'verse',
@@ -225,7 +233,7 @@ function chordFromNative(raw: Native): Chord {
     bass: pitchClassOf(raw.bass),
     rootName: raw.rootName,
     bassName: raw.bassName,
-    quality: CHORD_QUALITIES[raw.quality],
+    quality: ordinalToken(CHORD_QUALITIES, raw.quality, 'chord quality'),
     name: raw.name,
     startSec: raw.startSec,
     endSec: raw.endSec,
@@ -238,9 +246,16 @@ function keyFromNative(raw: Native): Key {
   return { ...raw, root: pitchClassOf(raw.root) };
 }
 
+function sectionTypeFromNative(ordinal: unknown): SectionType {
+  if (ordinal === undefined || ordinal === null) {
+    throw skewError('analysis result section is missing its type field');
+  }
+  return ordinalToken(SECTION_TYPES, ordinal, 'section type');
+}
+
 function sectionFromNative(raw: Native): Section {
   return {
-    type: SECTION_TYPES[raw.type],
+    type: sectionTypeFromNative(raw.type),
     name: raw.name,
     startSec: raw.startSec,
     endSec: raw.endSec,
@@ -265,6 +280,10 @@ function analysisFromNative(raw: Native): AnalysisResult {
   const { chords, sections, ...rest } = restoreNullMeans(raw, 'analysis_result') as Native;
   return {
     ...rest,
+    bpmCandidates: rest.bpmCandidates.map((candidate: Native) => ({
+      ...candidate,
+      relation: libraryToken(BPM_CANDIDATE_RELATIONS, candidate.relation, 'BPM candidate relation'),
+    })),
     key: keyFromNative(raw.key),
     chords: chords.map(
       (c: Native): AnalysisChord => ({ ...chordFromNative(c), romanNumeral: c.romanNumeral }),

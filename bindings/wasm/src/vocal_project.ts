@@ -1,7 +1,8 @@
+import { ordinalToken, skewError } from './internal/core_tokens.js';
 import { assertDeclaredKeys, refuse, refuseType } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { isAbsent, isNonArrayObject, UINT32_MAX, UINT64_MAX } from './internal/value_guards.js';
-import { vocalReasonFromCode } from './internal/vocal_error_detail.js';
+import { VOCAL_REASONS } from './internal/vocal_error_detail.js';
 import type { VocalReason, VocalStateToken } from './public_types_vocal_edit.js';
 import type {
   ProjectVocalEditApplyRequest,
@@ -67,14 +68,73 @@ function nativeUint32(value: unknown, field: string): number {
     value < 0 ||
     value > UINT32_MAX
   ) {
-    throw refuse(`${field} must be a native uint32`);
+    throw skewError(`native vocal project ${field} is not a uint32`);
   }
   return value;
 }
 
 function nativeInt64(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-    throw refuse(`${field} must be a safe integer`);
+    throw skewError(`native vocal project ${field} is not a safe integer`);
+  }
+  return value;
+}
+
+function resultObject(value: unknown, field: string): Record<string, unknown> {
+  if (!isNonArrayObject(value)) {
+    throw skewError(`native vocal project ${field} is not an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function resultArray(value: unknown, field: string): readonly unknown[] {
+  if (!Array.isArray(value)) {
+    throw skewError(`native vocal project ${field} is not an array`);
+  }
+  return value;
+}
+
+function resultProjectId(value: unknown, field: string, allowZero = true): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < (allowZero ? 0 : 1) ||
+    value > PROJECT_ID_MAX
+  ) {
+    throw skewError(`native vocal project ${field} is not a project id`);
+  }
+  return value;
+}
+
+function resultUint64(value: unknown, field: string): string {
+  if (
+    typeof value !== 'string' ||
+    !/^(0|[1-9]\d*)$/.test(value) ||
+    value.length > UINT64_MAX.length ||
+    (value.length === UINT64_MAX.length && value > UINT64_MAX)
+  ) {
+    throw skewError(`native vocal project ${field} is not a uint64 string`);
+  }
+  return value;
+}
+
+function resultSha256(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value)) {
+    throw skewError(`native vocal project ${field} is not a SHA-256 digest`);
+  }
+  return value.toLowerCase();
+}
+
+function resultBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw skewError(`native vocal project ${field} is not a boolean`);
+  }
+  return value;
+}
+
+function resultString(value: unknown, field: string): string {
+  if (typeof value !== 'string') {
+    throw skewError(`native vocal project ${field} is not a string`);
   }
   return value;
 }
@@ -214,35 +274,26 @@ function optionalTake(takeId: number): { takeId?: number } {
   return takeId === 0 ? {} : { takeId };
 }
 
-function reasonToken(code: number, field: string): VocalReason {
-  const reason = vocalReasonFromCode(code);
-  if (reason === undefined) {
-    throw refuse(`${field} is not a known vocal reason`);
-  }
-  return reason;
+function reasonToken(code: number): VocalReason {
+  return ordinalToken(VOCAL_REASONS, code, 'vocal reason');
 }
 
 function copyApplyResult(value: unknown): ProjectVocalEditApplyResult {
-  const source = requireObject(value, 'applyVocalEdit result');
+  const source = resultObject(value, 'applyVocalEdit result');
   return {
-    clipId: uint32(source.clipId, 'result.clipId', false),
-    ...optionalTake(uint32(source.takeId, 'result.takeId')),
-    originalSourceId: uint32(source.originalSourceId, 'result.originalSourceId', false),
-    derivedSourceId: uint32(source.derivedSourceId, 'result.derivedSourceId', false),
-    committedRevision: decimalUint64(source.committedRevision, 'result.committedRevision'),
-    profileId: uint32(source.profileId, 'result.profileId'),
-    derivedSourceSha256: hexSha256(source.derivedSourceSha256, 'result.derivedSourceSha256'),
-    sidecarKey:
-      typeof source.sidecarKey === 'string'
-        ? source.sidecarKey
-        : (() => {
-            throw refuseType('result.sidecarKey must be a string');
-          })(),
+    clipId: resultProjectId(source.clipId, 'result.clipId', false),
+    ...optionalTake(resultProjectId(source.takeId, 'result.takeId')),
+    originalSourceId: resultProjectId(source.originalSourceId, 'result.originalSourceId', false),
+    derivedSourceId: resultProjectId(source.derivedSourceId, 'result.derivedSourceId', false),
+    committedRevision: resultUint64(source.committedRevision, 'result.committedRevision'),
+    profileId: resultProjectId(source.profileId, 'result.profileId'),
+    derivedSourceSha256: resultSha256(source.derivedSourceSha256, 'result.derivedSourceSha256'),
+    sidecarKey: resultString(source.sidecarKey, 'result.sidecarKey'),
   };
 }
 
 function copyDependency(value: unknown): ProjectVocalEditDependency {
-  const source = requireObject(value, 'vocal edit dependency');
+  const source = resultObject(value, 'vocal edit dependency');
   const reason = nativeUint32(source.reason, 'dependency.reason');
   return {
     clipId: nativeUint32(source.clipId, 'dependency.clipId'),
@@ -252,18 +303,22 @@ function copyDependency(value: unknown): ProjectVocalEditDependency {
     sourceSampleRate: nativeUint32(source.sourceSampleRate, 'dependency.sourceSampleRate'),
     profileId: nativeUint32(source.profileId, 'dependency.profileId'),
     sourceSampleCount: nativeInt64(source.sourceSampleCount, 'dependency.sourceSampleCount'),
-    committedRevision: decimalUint64(source.committedRevision, 'dependency.committedRevision'),
-    originalSourceSha256: hexSha256(source.originalSourceSha256, 'dependency.originalSourceSha256'),
-    derivedSourceSha256: hexSha256(source.derivedSourceSha256, 'dependency.derivedSourceSha256'),
-    originalPcmAvailable: source.originalPcmAvailable === true,
-    derivedPcmAvailable: source.derivedPcmAvailable === true,
-    reason: reasonToken(reason, 'dependency.reason'),
-    sidecarKey:
-      typeof source.sidecarKey === 'string'
-        ? source.sidecarKey
-        : (() => {
-            throw refuseType('dependency.sidecarKey must be a string');
-          })(),
+    committedRevision: resultUint64(source.committedRevision, 'dependency.committedRevision'),
+    originalSourceSha256: resultSha256(
+      source.originalSourceSha256,
+      'dependency.originalSourceSha256',
+    ),
+    derivedSourceSha256: resultSha256(source.derivedSourceSha256, 'dependency.derivedSourceSha256'),
+    originalPcmAvailable: resultBoolean(
+      source.originalPcmAvailable,
+      'dependency.originalPcmAvailable',
+    ),
+    derivedPcmAvailable: resultBoolean(
+      source.derivedPcmAvailable,
+      'dependency.derivedPcmAvailable',
+    ),
+    reason: reasonToken(reason),
+    sidecarKey: resultString(source.sidecarKey, 'dependency.sidecarKey'),
   };
 }
 
@@ -274,18 +329,15 @@ const REHYDRATE_STATUSES: readonly ProjectVocalRehydrateStatus[] = [
 ];
 
 function copyRehydrateItem(value: unknown): ProjectVocalRehydrateItem {
-  const source = requireObject(value, 'vocal rehydrate item');
-  const status = REHYDRATE_STATUSES[source.status as number];
-  if (status === undefined) {
-    throw refuse('rehydrate.status is not a known rehydrate status');
-  }
+  const source = resultObject(value, 'vocal rehydrate item');
+  const status = ordinalToken(REHYDRATE_STATUSES, source.status, 'rehydrate status');
   const reason = nativeUint32(source.reason, 'rehydrate.reason');
   return {
     clipId: nativeUint32(source.clipId, 'rehydrate.clipId'),
     ...optionalTake(nativeUint32(source.takeId, 'rehydrate.takeId')),
     derivedSourceId: nativeUint32(source.derivedSourceId, 'rehydrate.derivedSourceId'),
     status,
-    reason: reasonToken(reason, 'rehydrate.reason'),
+    reason: reasonToken(reason),
   };
 }
 
@@ -328,10 +380,7 @@ export function projectGetVocalEditDependencies(
   native: VocalProjectNative,
 ): ProjectVocalEditDependency[] {
   const value = native.getVocalEditDependencies();
-  if (!Array.isArray(value)) {
-    throw refuseType('native vocal dependencies must be an array');
-  }
-  return value.map(copyDependency);
+  return resultArray(value, 'dependencies').map(copyDependency);
 }
 
 /**
@@ -384,8 +433,5 @@ export function projectRehydrateVocalEdits(
   if (value !== null && typeof value === 'object' && 'cancelFailure' in value) {
     throw (value as { cancelFailure: unknown }).cancelFailure;
   }
-  if (!Array.isArray(value)) {
-    throw refuseType('native vocal rehydrate result must be an array');
-  }
-  return value.map(copyRehydrateItem);
+  return resultArray(value, 'rehydrate result').map(copyRehydrateItem);
 }

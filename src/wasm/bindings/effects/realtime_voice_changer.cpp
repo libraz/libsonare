@@ -134,11 +134,14 @@ Enum vcParseEnum(const val& pod, const char* key, const VcEnumName (&names)[N]) 
 }
 
 template <typename Enum, size_t N>
-const char* vcEnumName(const VcEnumName (&names)[N], Enum value) {
+const char* vcEnumName(const VcEnumName (&names)[N], Enum value, const char* noun) {
   for (const VcEnumName& row : names) {
     if (row.value == static_cast<int>(value)) return row.name;
   }
-  return names[0].name;
+  // An ordinal past the table is a mirror that has drifted from the core, not a caller's value.
+  throw sonare::SonareException(
+      sonare::ErrorCode::InvalidFormat,
+      std::string("unknown ") + noun + " ordinal: " + std::to_string(static_cast<int>(value)));
 }
 
 }  // namespace
@@ -160,22 +163,30 @@ val realtimeVoiceChangerPodVal(const editing::voice_changer::RealtimeVoiceChange
   if (cfg.retune.grain_size != 0) out.set("retuneGrainSizeSamples", cfg.retune.grain_size);
   out.set("limiterEnableIspLimiter", cfg.limiter.enable_isp_limiter);
   out.set("formantMode", std::string(editing::voice_changer::formant_mode_name(cfg.formant_mode)));
-  out.set("voiceEngine", std::string(vcEnumName(kVcEngineNames, cfg.voice_engine.engine)));
+  out.set("voiceEngine",
+          std::string(vcEnumName(kVcEngineNames, cfg.voice_engine.engine, "voice engine")));
   out.set("pitchCorrectionMode",
-          std::string(vcEnumName(kVcCorrectionModeNames, cfg.pitch_correction.mode)));
-  out.set("pitchCorrectionScale",
-          std::string(vcEnumName(kVcScaleNames, cfg.pitch_correction.scale)));
+          std::string(vcEnumName(kVcCorrectionModeNames, cfg.pitch_correction.mode,
+                                 "pitch correction mode")));
+  out.set("pitchCorrectionScale", std::string(vcEnumName(kVcScaleNames, cfg.pitch_correction.scale,
+                                                         "pitch correction scale")));
   out.set("vocoderEnabled", cfg.vocoder.enabled);
   out.set("vocoderCarrierSource",
-          std::string(vcEnumName(kVcCarrierSourceNames, cfg.vocoder.carrier_source)));
+          std::string(vcEnumName(kVcCarrierSourceNames, cfg.vocoder.carrier_source,
+                                 "vocoder carrier source")));
   out.set("vocoderCarrierWave",
-          std::string(vcEnumName(kVcCarrierWaveNames, cfg.vocoder.carrier_wave)));
-  out.set("characterType", std::string(vcEnumName(kVcCharacterNames, cfg.character.type)));
+          std::string(
+              vcEnumName(kVcCarrierWaveNames, cfg.vocoder.carrier_wave, "vocoder carrier wave")));
+  out.set("characterType",
+          std::string(vcEnumName(kVcCharacterNames, cfg.character.type, "character type")));
   out.set("reverbVariation",
-          std::string(vcEnumName(kVcVariationNames, cfg.reverb_variation.variation)));
+          std::string(
+              vcEnumName(kVcVariationNames, cfg.reverb_variation.variation, "reverb variation")));
   out.set("reverbVariationDivision",
-          std::string(vcEnumName(kVcDivisionNames, cfg.reverb_variation.division)));
-  out.set("midiRelease", std::string(vcEnumName(kVcMidiReleaseNames, cfg.midi.release)));
+          std::string(vcEnumName(kVcDivisionNames, cfg.reverb_variation.division,
+                                 "reverb variation division")));
+  out.set("midiRelease",
+          std::string(vcEnumName(kVcMidiReleaseNames, cfg.midi.release, "midi release")));
   return out;
 }
 

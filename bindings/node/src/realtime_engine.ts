@@ -1,5 +1,6 @@
 import type { ClipPageSampleRequest } from './clip_page_provider.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { SonareError } from './errors.js';
+import { unknownOrdinal } from './internal/core_tokens.js';
 import {
   bounceToNative,
   busToNative,
@@ -17,7 +18,6 @@ import {
   toNativeClip,
 } from './internal/engine_native.js';
 import {
-  codedError,
   entryClass,
   invalidState,
   mergeRespelled,
@@ -235,11 +235,10 @@ function sidechainCheck(code: number): SidechainCheck {
   if (code === 0) {
     return { ok: true };
   }
-  const reason = SIDECHAIN_REFUSALS[code - 1];
-  if (reason === undefined) {
-    throw refuse(`Unknown sidechain refusal: ${code}`);
+  if (!Number.isInteger(code) || code < 1 || code > SIDECHAIN_REFUSALS.length) {
+    throw unknownOrdinal('sidechain refusal', code);
   }
-  return { ok: false, reason };
+  return { ok: false, reason: SIDECHAIN_REFUSALS[code - 1] };
 }
 
 /** A sidechain source resolved to the native `(kind, id)` pair; `id` 0 is the native "no binding". */
@@ -398,10 +397,10 @@ function bankFields(
   };
 }
 
-/** A name read back from the addon; a number is an ordinal this binding has no name for. */
+/** A name read back from the addon; anything else is an ordinal the addon could not name. */
 function nameFromNative(value: unknown): string {
   if (typeof value !== 'string') {
-    throw codedError(ErrorCode.Unknown, `the engine returned an unnamed value ${String(value)}`);
+    throw unknownOrdinal('synth enum', value);
   }
   return value;
 }
@@ -1692,13 +1691,13 @@ export class RealtimeEngine {
    * A span over the memory budget is a `RangeError`; see {@link EngineBounceOptions.totalFrames}.
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
-    const { interleaved, numChannels, sampleRate, integratedLufs } = this.native.bounceOffline(
-      bounceToNative(options),
-    );
+    const { interleaved, numChannels, sampleRate, integratedLufs, quantizeClippedSamples } =
+      this.native.bounceOffline(bounceToNative(options));
     return {
       channels: deinterleave(interleaved, numChannels),
       sampleRate,
       integratedLufs,
+      ...(quantizeClippedSamples === undefined ? {} : { quantizeClippedSamples }),
     };
   }
 

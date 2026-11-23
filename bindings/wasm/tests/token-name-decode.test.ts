@@ -1,6 +1,6 @@
 /**
  * An ordinal the native library returns that the binding's table does not know is a coded
- * `Unknown` error naming the token family, never an argument refusal: the caller passed nothing.
+ * `InvalidFormat` error naming the token family, never an argument refusal: the caller passed nothing.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,7 @@ describe('tokenName', () => {
     expect(tokenName(TABLE, 1, 'loop mode')).toBe('loop');
   });
 
-  it('reports an unknown ordinal as a coded Unknown error', () => {
+  it('reports an unknown ordinal as a coded InvalidFormat error', () => {
     let caught: unknown;
     try {
       tokenName(TABLE, 7, 'loop mode');
@@ -22,7 +22,7 @@ describe('tokenName', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(SonareError);
-    expect((caught as SonareError).code).toBe(ErrorCode.Unknown);
-    expect((caught as Error).message).toBe('unknown loop mode ordinal 7 from the native library');
+    expect((caught as SonareError).code).toBe(ErrorCode.InvalidFormat);
+    expect((caught as Error).message).toBe('unknown loop mode ordinal: 7');
   });
 });

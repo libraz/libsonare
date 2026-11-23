@@ -1,4 +1,4 @@
-import { refuse } from '../internal/entry.js';
+import { unknownOrdinal } from '../internal/core_tokens.js';
 import { externalMidiEvent } from '../internal/external_midi.js';
 import type {
   EngineTelemetry,
@@ -17,8 +17,11 @@ function lowerCamel(name: string): string {
 export function telemetryFromRecord(record: EngineTelemetryRecord): EngineTelemetry {
   const type = SonareEngineTelemetryType[record.type as number];
   const error = SonareEngineTelemetryError[record.error as number];
-  if (type === undefined || error === undefined) {
-    throw refuse(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
+  if (type === undefined) {
+    throw unknownOrdinal('telemetry type', record.type);
+  }
+  if (error === undefined) {
+    throw unknownOrdinal('telemetry error', record.error);
   }
   return {
     type: lowerCamel(type) as EngineTelemetryType,

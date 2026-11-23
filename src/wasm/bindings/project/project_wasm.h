@@ -53,15 +53,21 @@ inline val projectCompileResultToVal(const SonareProjectCompileResult& result) {
   val diagnostics = val::array();
   for (size_t i = 0; i < result.diagnostic_count; ++i) {
     val diag = val::object();
-    // The library names every code and severity it emits; a NULL would be a library defect,
-    // so it surfaces as the bare number rather than as an invented token.
-    const auto token = [](const char* name, int value) {
-      return name != nullptr ? std::string(name) : std::to_string(value);
+    // The library names every code and severity it emits; a NULL is a version skew, refused
+    // rather than shown as a bare number.
+    const auto token = [](const char* name, int value, const char* noun) {
+      if (name == nullptr) {
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidFormat,
+            std::string("unknown ") + noun + " ordinal: " + std::to_string(value));
+      }
+      return std::string(name);
     };
     const int code = result.diagnostics[i].code;
     const int severity = result.diagnostics[i].severity;
-    diag.set("code", token(sonare_project_diagnostic_code_name(code), code));
-    diag.set("severity", token(sonare_project_diagnostic_severity_name(severity), severity));
+    diag.set("code", token(sonare_project_diagnostic_code_name(code), code, "diagnostic code"));
+    diag.set("severity", token(sonare_project_diagnostic_severity_name(severity), severity,
+                               "diagnostic severity"));
     diag.set("targetId", static_cast<double>(result.diagnostics[i].target_id));
     diag.set("message", i < diagnostic_messages.size() ? diagnostic_messages[i] : std::string());
     diagnostics.set(static_cast<unsigned>(i), diag);

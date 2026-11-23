@@ -55,7 +55,7 @@ val property(const val& object, const char* key) { return object[key]; }
 
 // A native result the library built wrongly is a library failure, not a refused argument.
 [[noreturn]] void nativeResultInvalid(const std::string& message) {
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, message);
 }
 
 uint32_t projectId(uint32_t result, const char* field, bool allow_zero = true) {

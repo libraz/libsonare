@@ -1,7 +1,7 @@
 import type { VocalErrorDetail, VocalReason } from '../public_types_vocal_edit.js';
 
 /** Native reason codes in `SonareVocalReason` order. */
-const REASONS: readonly VocalReason[] = [
+export const VOCAL_REASONS: readonly VocalReason[] = [
   'none',
   'invalidInput',
   'revisionConflict',
@@ -12,11 +12,6 @@ const REASONS: readonly VocalReason[] = [
   'invalidState',
 ];
 
-/** Token for a native reason code, or `undefined` for a code this build does not know. */
-export function vocalReasonFromCode(code: unknown): VocalReason | undefined {
-  return typeof code === 'number' && Number.isInteger(code) ? REASONS[code] : undefined;
-}
-
 /** Whether a value read off a message is a {@link VocalErrorDetail}. */
 export function isVocalErrorDetail(value: unknown): value is VocalErrorDetail {
   if (value === null || typeof value !== 'object') {
@@ -25,7 +20,7 @@ export function isVocalErrorDetail(value: unknown): value is VocalErrorDetail {
   const v = value as Record<string, unknown>;
   return (
     typeof v.reason === 'string' &&
-    REASONS.includes(v.reason as VocalReason) &&
+    VOCAL_REASONS.includes(v.reason as VocalReason) &&
     typeof v.field === 'string' &&
     typeof v.expected === 'string' &&
     typeof v.actual === 'string' &&

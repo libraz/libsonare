@@ -122,12 +122,13 @@ inline int enumFromVal(emscripten::val value, const char* const* names, int coun
   return static_cast<int>(number);
 }
 
-/// Spells an enum ordinal as its canonical name, or hands back the ordinal
-/// itself when the table cannot spell it. The surface's one reading of an enum
-/// value back out, so a patch field and a standalone getter agree.
+/// Spells an enum ordinal as its canonical name. The surface's one reading of an enum value back
+/// out, so a patch field and a standalone getter agree; an ordinal past the table is a mirror
+/// that has drifted from the core, refused as an InvalidFormat.
 inline emscripten::val enumNameVal(int value, const char* const* names, int count) {
   if (value >= 0 && value < count) return emscripten::val(std::string(names[value]));
-  return emscripten::val(value);
+  throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                "unknown synth enum ordinal: " + std::to_string(value));
 }
 
 /// Reads an enum field accepting the C ordinal or a name; throws on an unknown

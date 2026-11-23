@@ -12,6 +12,7 @@
 
 #include "c_api/synth_enum_names.h"
 #include "sonare_wrap_options.h"
+#include "sonare_wrap_utils.h"
 
 namespace sonare_node {
 
@@ -88,11 +89,12 @@ inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char
 }
 
 // Spells an enum ordinal as its canonical name, so a value read back out of the
-// C ABI can be handed straight back in. An ordinal past the table stays a number
-// rather than becoming a wrong name.
+// C ABI can be handed straight back in. An ordinal past the table is a mirror that
+// has drifted from the core, refused as an InvalidFormat rather than passed on.
 inline Napi::Value SynthEnumName(Napi::Env env, int value, const char* const* names, int count) {
   if (value >= 0 && value < count) return Napi::String::New(env, names[value]);
-  return Napi::Number::New(env, value);
+  throw MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                        "unknown synth enum ordinal: " + std::to_string(value));
 }
 
 // True when the descriptor carries the key with a usable value. JS absence and

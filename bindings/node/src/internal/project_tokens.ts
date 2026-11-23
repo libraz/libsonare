@@ -3,7 +3,6 @@
  * token and the ordinal the native layer reads and writes.
  */
 
-import { ErrorCode } from '../errors.js';
 import type {
   ProjectChordQuality,
   ProjectFadeCurve,
@@ -17,7 +16,7 @@ import type {
   ProjectWarpMode,
 } from '../types_project.js';
 import { assertClosedToken } from '../validation.js';
-import { codedError } from './entry.js';
+import { unknownOrdinal } from './core_tokens.js';
 
 /** `SonareProjectTrackKind` ordinals. */
 export const TRACK_KIND = { audio: 0, midi: 1, aux: 2 } as const satisfies Record<
@@ -119,10 +118,7 @@ export function tokenName<T extends string>(
 ): T {
   const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
   if (name === undefined) {
-    throw codedError(
-      ErrorCode.Unknown,
-      `unknown ${what} ordinal ${ordinal} from the native library`,
-    );
+    throw unknownOrdinal(what, ordinal);
   }
   return name;
 }

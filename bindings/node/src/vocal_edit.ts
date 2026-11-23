@@ -1,4 +1,5 @@
 import { ErrorCode, isSonareError, type SonareError } from './errors.js';
+import { ordinalToken } from './internal/core_tokens.js';
 import {
   codedError,
   entryClass,
@@ -141,7 +142,7 @@ export const VOCAL_REASONS: readonly VocalReason[] = [
 ];
 
 function vocalReasonName(value: unknown): VocalReason {
-  return typeof value === 'number' ? (VOCAL_REASONS[value] ?? 'invalidState') : 'invalidState';
+  return ordinalToken(VOCAL_REASONS, value, 'vocal reason');
 }
 
 /** Moves the addon's flat reason fields on a vocal failure into one `detail` record. */

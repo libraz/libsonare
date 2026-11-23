@@ -365,7 +365,9 @@ describe('WASM Project vocal edit adapter', () => {
       getVocalEditDependencies: () => [],
       rehydrateVocalEdits: () => [],
     };
-    expect(() => projectApplyVocalEdit(leadingZeroResult, request())).toThrow(RangeError);
+    expect(() => projectApplyVocalEdit(leadingZeroResult, request())).toThrow(
+      /native vocal project result.committedRevision is not a uint64 string/,
+    );
   });
 
   it('rejects non-committed tokens, invalid digest, and non-finite mono', () => {

@@ -3,9 +3,8 @@
  * native layer reads and writes.
  */
 
-import { ErrorCode } from '../errors.js';
 import type { ProjectChordQuality, ProjectKeyMode } from '../project_types.js';
-import { codedError } from './entry.js';
+import { unknownOrdinal } from './core_tokens.js';
 
 /** `SonareProjectTrackKind` ordinals. */
 export const TRACK_KINDS = { audio: 0, midi: 1, aux: 2 } as const;
@@ -48,7 +47,7 @@ export const CHORD_QUALITY_CODES = {
   suspended: 7,
 } as const satisfies Record<ProjectChordQuality, number>;
 
-/** The token for an ordinal the native library returned; one this table does not know is a coded `Unknown`. */
+/** The token for an ordinal the native library returned; one this table does not know is a coded `InvalidFormat`. */
 export function tokenName<T extends string>(
   table: Readonly<Record<T, number>>,
   ordinal: number,
@@ -56,10 +55,7 @@ export function tokenName<T extends string>(
 ): T {
   const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
   if (name === undefined) {
-    throw codedError(
-      ErrorCode.Unknown,
-      `unknown ${what} ordinal ${ordinal} from the native library`,
-    );
+    throw unknownOrdinal(what, ordinal);
   }
   return name;
 }

@@ -455,12 +455,24 @@ val rangeToVal(const SonareVocalRange& range) {
   return out;
 }
 
+// The spelling of an enum ordinal the library returned; one past the table is a mirror that has
+// drifted from the core, refused rather than clamped onto the last member.
+const char* libraryEnumName(const char* const* names, std::size_t count, uint32_t ordinal,
+                            const char* noun) {
+  if (ordinal >= count) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string("unknown ") + noun + " ordinal: " + std::to_string(ordinal));
+  }
+  return names[ordinal];
+}
+
 val editToVal(const SonareVocalNoteEdit& edit) {
   val pitch = val::object();
   const char* modes[] = {"none", "center", "curve"};
   pitch.set("target", val::object());
   val target = val::object();
-  target.set("mode", modes[std::min<uint32_t>(edit.target_mode, 2u)]);
+  target.set("mode",
+             libraryEnumName(modes, std::size(modes), edit.target_mode, "vocal target mode"));
   if (edit.target_mode == SONARE_VOCAL_TARGET_CENTER) target.set("midi", edit.target_midi);
   if (edit.target_mode == SONARE_VOCAL_TARGET_CURVE) {
     val points = val::array();
@@ -492,7 +504,9 @@ val editToVal(const SonareVocalNoteEdit& edit) {
     out.set("amplitudeEnvelope", val::global("Float32Array").new_(0));
   }
   val formant = val::object();
-  formant.set("mode", edit.formant_mode == SONARE_VOCAL_FORMANT_SHIFT ? "shift" : "preserve");
+  const char* formant_modes[] = {"preserve", "shift"};
+  formant.set("mode", libraryEnumName(formant_modes, std::size(formant_modes), edit.formant_mode,
+                                      "vocal formant mode"));
   formant.set("shiftSemitones", edit.formant_shift_semitones);
   out.set("formant", formant);
   return out;

@@ -4,7 +4,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, isSonareError, RealtimeEngine } from '../dist/index.js';
+import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
 import { sidechainCheckFromCode } from '../src/codes';
 import { expectRefusalOf } from './_helpers';
 
@@ -795,7 +795,14 @@ describe('Sonare WASM Module', () => {
       names.forEach((name, i) => {
         expect(sidechainCheckFromCode(i + 1)).toEqual({ ok: false, reason: name });
       });
-      expect(() => sidechainCheckFromCode(9)).toThrow(RangeError);
+      let caught: unknown;
+      try {
+        sidechainCheckFromCode(9);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidFormat);
+      expect((caught as Error).message).toBe('unknown sidechain refusal ordinal: 9');
     });
 
     it('reports a tail from a delay insert and a latency in 1/256 samples', () => {

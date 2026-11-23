@@ -1,3 +1,4 @@
+import { unknownOrdinal } from './internal/core_tokens.js';
 import { refuse, refuseType } from './internal/entry.js';
 import type {
   AutomationCurve,
@@ -99,11 +100,10 @@ export function sidechainCheckFromCode(code: number): SidechainCheck {
   if (code === 0) {
     return { ok: true };
   }
-  const reason = SIDECHAIN_REFUSALS[code - 1];
-  if (reason === undefined) {
-    throw refuse(`Unknown sidechain refusal: ${code}`);
+  if (!Number.isInteger(code) || code < 1 || code > SIDECHAIN_REFUSALS.length) {
+    throw unknownOrdinal('sidechain refusal', code);
   }
-  return { ok: false, reason };
+  return { ok: false, reason: SIDECHAIN_REFUSALS[code - 1] };
 }
 
 /** Resolve a per-track PFL/AFL monitor mode to its C-ABI ordinal. */
