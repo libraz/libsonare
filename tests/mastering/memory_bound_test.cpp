@@ -123,7 +123,7 @@ constexpr LinedPreset kLinedPresets[] = {
     {"voiceMemo", 8.75, {2.0f, 3.0f, 4.0f}},       // 8.0
     {"vinyl", 8.75, {2.0f, 3.0f, 4.0f}},           // 8.0
     {"shellac78", 8.75, {2.0f, 3.0f, 4.0f}},       // 8.0
-    {"tapeHiss", 4.5, {2.0f, 3.0f, 4.0f}},         // 4.0
+    {"tapeHiss", 3.5, {24.0f, 30.0f, 36.0f}},      // 3.0; mono reads 4.0 below 6 s, 0.6 MB over
 };
 
 // Segment slopes of a straight line agree within this fraction of the larger.
