@@ -773,7 +773,7 @@ describe('v1.2 feature additions (WASM)', () => {
           () => mixer.scheduleInsertAutomation(999, 0, { paramId: 0, samplePos: 0, value: 0.0 }),
           RangeError,
         ).message,
-      ).toBe('Mixer.scheduleInsertAutomation: index must be an integer in [0, 1]');
+      ).toBe('Mixer.scheduleInsertAutomation: strip must be an integer in [0, 1]');
 
       // Processing after scheduling still produces output.
       const vocalL = new Float32Array(BLOCK);

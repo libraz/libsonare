@@ -190,7 +190,7 @@ export function synthEnumTables(): SynthEnumTables {
 
 export function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
   return withEntry('synthPatchRoundTripForTest', () => {
-    refuseSynthPatchOrdinals(patch);
+    refuseSynthPatchOrdinals(patch, '');
     return projectModule()._synthPatchRoundTrip(patch);
   });
 }

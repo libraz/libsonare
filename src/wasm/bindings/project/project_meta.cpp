@@ -56,12 +56,12 @@ struct ProjectStringListGuard {
 };
 
 template <size_t N>
-void refuseUnknownAnnotationKeys(const val& row, const char* array, size_t index,
+void refuseUnknownAnnotationKeys(const val& row, const char* array_subject, size_t index,
                                  const std::array<const char*, N>& allowed) {
   if (row.isNull() || row.isUndefined()) return;
   const val names = val::global("Object").call<val>("keys", row);
-  const uint32_t count = names["length"].as<uint32_t>();
-  for (uint32_t i = 0; i < count; ++i) {
+  const size_t count = wasmArrayLength(names, array_subject);
+  for (size_t i = 0; i < count; ++i) {
     const std::string key = names[i].as<std::string>();
     const bool known = std::any_of(allowed.begin(), allowed.end(),
                                    [&](const char* candidate) { return key == candidate; });
@@ -71,7 +71,8 @@ void refuseUnknownAnnotationKeys(const val& row, const char* array, size_t index
         if (!expected.empty()) expected += ", ";
         expected += candidate;
       }
-      const std::string subject = std::string(array) + "[" + std::to_string(index) + "]." + key;
+      const std::string subject =
+          std::string(array_subject) + "[" + std::to_string(index) + "]." + key;
       throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, subject,
                                                     "", expected)
           .as_caller_spelled();

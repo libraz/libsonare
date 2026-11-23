@@ -33,9 +33,7 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
   }
   SonareError err = sonare_strip_schedule_insert_automation(strip, insert_index, param_id,
                                                             sample_pos, value, curve);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
-  }
+  checkStripError(err);
 }
 
 // Reads a strip's meter snapshot at the given tap point. tap: 0 = pre-fader,

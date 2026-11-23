@@ -125,8 +125,8 @@ val js_istft(val magnitude, const val& n_bins_val, const val& n_frames_val, val 
 
   float* data = nullptr;
   size_t length = 0;
-  const SonareError err = sonare_istft(magnitude_data.data(), phase_data.data(), n_bins, n_frames,
-                                       n_fft, hop_length, &options, &data, &length);
+  const SonareError err = sonare_istft(elementData(magnitude_data), elementData(phase_data), n_bins,
+                                       n_frames, n_fft, hop_length, &options, &data, &length);
   if (err != SONARE_OK) throwCodedCError(err, CErrorReasonMode::kCurrentEntry);
   std::unique_ptr<float, decltype(&sonare_free_floats)> guard(data, sonare_free_floats);
   return vectorToFloat32Array(guard.get(), length);

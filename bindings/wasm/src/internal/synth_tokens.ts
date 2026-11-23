@@ -24,26 +24,28 @@ function requireName(path: string, value: unknown): void {
 /**
  * Refuse a closed-set field of a synth patch given as anything but a name, so an
  * ordinal never reaches the native resolver, which still reads one. An unknown
- * name is left to that resolver, which refuses it as a RangeError.
+ * name is left to that resolver, which refuses it as a RangeError. `root` prefixes every
+ * refused subject, so a patch nested in a caller's argument is named from that argument.
  */
-export function refuseSynthPatchOrdinals(patch: unknown): void {
+export function refuseSynthPatchOrdinals(patch: unknown, root: string): void {
   if (typeof patch !== 'object' || patch === null) {
     return;
   }
+  const at = (path: string): string => (root === '' ? path : `${root}.${path}`);
   const record = patch as Record<string, unknown>;
   for (const field of PATCH_TOKEN_FIELDS) {
-    requireName(field, record[field]);
+    requireName(at(field), record[field]);
   }
   const routings = record.modRoutings;
   if (!Array.isArray(routings)) {
     return;
   }
-  requireListBudget(routings, 'modRoutings');
+  requireListBudget(routings, at('modRoutings'));
   routings.forEach((routing, index) => {
     if (typeof routing === 'object' && routing !== null) {
       const entry = routing as Record<string, unknown>;
-      requireName(`modRoutings[${index}].source`, entry.source);
-      requireName(`modRoutings[${index}].destination`, entry.destination);
+      requireName(at(`modRoutings[${index}].source`), entry.source);
+      requireName(at(`modRoutings[${index}].destination`), entry.destination);
     }
   });
 }

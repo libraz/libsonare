@@ -747,7 +747,7 @@ describe('resample refusals come from the core', () => {
 
   it.each(refused)('refuses $id', (item) => {
     const kind = errorClassFor[item.cause as Cause];
-    const text = literal(item.message as string);
+    const text = publicText(item.message as string);
     const samples = samplesFor(item);
     const calls: Array<() => unknown> = [
       () => resample(samples, item.src_sr, item.target_sr),

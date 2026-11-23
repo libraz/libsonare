@@ -403,7 +403,7 @@ describe('the automation curve refuses an ordinal the embind path used to take',
       expect(
         expectRefusalOf(() => lane({ points: [{ ppq: 0, value: 0, curveToNext: 4 }] })).message,
       ).toBe('Project.addAutomationLane: automation curve must be a name or an ordinal in [0, 4)');
-      expect(expectRefusalOf(() => lane({ targetKind: 3 })).message).toBe(
+      expect(expectRefusalOf(() => lane({ targetKind: 3 }), TypeError).message).toBe(
         'Project.addAutomationLane: targetKind must be a string token',
       );
     } finally {
@@ -536,7 +536,7 @@ describe('module ordinals past their set are refused, not mapped to a default', 
         'auto',
       );
     expect(expectRefusalOf(() => detectKey([7])).message).toBe(
-      '_detectKeyWithOptions: keyMode must be a name or an ordinal in [0, 7)',
+      'detectKey: keyMode must be a name or an ordinal in [0, 7)',
     );
   });
 });

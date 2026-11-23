@@ -171,7 +171,7 @@ export function normalizeProjectDestinationInstrument(
         { reason: 'notPersistable' },
       );
     }
-    refuseSynthPatchOrdinals(patch);
+    refuseSynthPatchOrdinals(patch, 'instrument.patch');
     if (!isAbsent(patch.engineMode)) {
       assertClosedToken(patch.engineMode, SYNTH_ENGINE_MODES, 'instrument.patch.engineMode');
     }

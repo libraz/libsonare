@@ -41,12 +41,13 @@ const FORWARDED = new Set<string>([
   'key',
   'left_name',
   'left_subject.c_str()',
-  'list_subject.c_str()',
   'name',
+  'name.c_str()',
   'right_name',
   'right_subject.c_str()',
   'second_subject',
   'subject',
+  'subject.c_str()',
 ]);
 
 const LITERAL = /^"[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9]*)*"$/;

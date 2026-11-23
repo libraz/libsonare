@@ -123,7 +123,7 @@ describe('mastering chain: one name per operation', () => {
 
 /** Mono entry points taking `(samples, sampleRate, options?)` or a request, with the options a call needs. */
 const MONO: ReadonlyArray<[string, Record<string, unknown>]> = [
-  ['masterAudio', {}],
+  ['masterAudio', { preset: 'pop' }],
   ['masteringNormalizeLoudness', {}],
   ['masteringApplyProcessor', { processor: 'dynamics.limiter' }],
   ['masteringAudioProfile', {}],
@@ -134,7 +134,7 @@ const MONO: ReadonlyArray<[string, Record<string, unknown>]> = [
 
 /** Stereo entry points: request only. */
 const STEREO: ReadonlyArray<[string, Record<string, unknown>]> = [
-  ['masterAudioStereo', {}],
+  ['masterAudioStereo', { preset: 'pop' }],
   ['masteringApplyProcessorStereo', { processor: 'dynamics.limiter' }],
   ['masteringAnalyzeStereo', { analysis: 'stereo.monoCompatCheck' }],
   ['masteringAudioProfileStereo', {}],

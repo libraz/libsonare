@@ -280,7 +280,7 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding {
   if (!isNonArrayObject(patch)) {
     throw refuseType(`patch must be a SynthPatch object; a preset is named by its preset field`);
   }
-  refuseSynthPatchOrdinals(patch);
+  refuseSynthPatchOrdinals(patch, '');
   const { sampleBank, ...rest } = patch as SynthPatch;
   if (!sampleBank) {
     // Omitted, and at runtime an explicit null: both mean no bank, which a
