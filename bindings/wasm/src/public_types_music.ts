@@ -228,7 +228,10 @@ export interface ChordDetectionOptions {
 export interface AnalyzeBpmOptions {
   /** Lowest BPM to consider. Default 60. */
   bpmMin?: number;
-  /** Highest BPM to consider. Default 200. */
+  /**
+   * Highest BPM to consider. Default 200. A range other than the default is searched as given, and
+   * the unconstrained estimate is preferred when it lies inside it.
+   */
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;
@@ -244,7 +247,10 @@ export interface AnalyzeBpmOptions {
 export interface AnalyzeRhythmOptions {
   /** Lowest BPM to consider. Default 60. */
   bpmMin?: number;
-  /** Highest BPM to consider. Default 200. */
+  /**
+   * Highest BPM to consider. Default 200. A range other than the default is searched as given, and
+   * the unconstrained estimate is preferred when it lies inside it.
+   */
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;

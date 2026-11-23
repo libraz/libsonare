@@ -209,7 +209,11 @@ interface SampleInput {
 export interface TempoRangeOptions {
   /** Lowest tempo searched, in BPM; default 60. Finite and positive, below `bpmMax`; a `RangeError` otherwise. */
   bpmMin?: number;
-  /** Highest tempo searched, in BPM; default 200. Finite and positive, above `bpmMin`; a `RangeError` otherwise. */
+  /**
+   * Highest tempo searched, in BPM; default 200. Finite and positive, above `bpmMin`; a
+   * `RangeError` otherwise. A range other than the default is searched as given, and the
+   * unconstrained estimate is preferred when it lies inside it.
+   */
   bpmMax?: number;
 }
 
@@ -666,7 +670,10 @@ export interface MusicAnalyzeOptions {
   hopLength?: number;
   /** Lowest tempo searched in BPM; default 60. */
   bpmMin?: number;
-  /** Highest tempo searched in BPM; default 200. */
+  /**
+   * Highest tempo searched in BPM; default 200. A range other than the default is searched as
+   * given, and the unconstrained estimate is preferred when it lies inside it.
+   */
   bpmMax?: number;
   /** Prior tempo estimate in BPM. Default `120`. */
   startBpm?: number;
