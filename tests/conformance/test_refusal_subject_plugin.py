@@ -45,6 +45,17 @@ class MisnamedTest(unittest.TestCase):
             plugin.misnamed(seen, params), [("apply", "version"), ("load", "params.ratio")]
         )
 
+    def test_every_json_input_spelling_reads_a_document(self) -> None:
+        for names in ({"json", "sample_rate"}, {"scene_json"}, {"document", "json_out"}):
+            self.assertTrue(plugin.takes_document(names), names)
+        for names in ({"out_json"}, {"json_out", "params"}, {"samples"}):
+            self.assertFalse(plugin.takes_document(names), names)
+
+    def test_a_content_refusal_under_a_json_parameter_is_not_checked(self) -> None:
+        params = {"from_scene_json": {"json", "sample_rate"}}
+        seen = {("from_scene_json", "strips[0].gainDb"): 1}
+        self.assertEqual(plugin.misnamed(seen, params, set(seen)), [])
+
     def test_the_tree_declarations_are_read(self) -> None:
         params = plugin.header_parameters()
         self.assertGreater(len(params), 500)
