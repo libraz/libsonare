@@ -1,10 +1,17 @@
 #include "core/audio_io_ffmpeg.h"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
+#include <map>
 #include <memory>
+#include <ratio>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "core/audio_io_detail.h"
@@ -33,6 +40,7 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/audio_fifo.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
 #include <libavutil/mem.h>
@@ -72,6 +80,16 @@ struct AVFormatContextDeleter {
 };
 using AVFormatContextPtr = std::unique_ptr<AVFormatContext, AVFormatContextDeleter>;
 
+struct AVOutputContextDeleter {
+  void operator()(AVFormatContext* ctx) const {
+    if (ctx != nullptr) {
+      ctx->pb = nullptr;
+      avformat_free_context(ctx);
+    }
+  }
+};
+using AVOutputContextPtr = std::unique_ptr<AVFormatContext, AVOutputContextDeleter>;
+
 struct AVCodecContextDeleter {
   void operator()(AVCodecContext* ctx) const {
     if (ctx != nullptr) {
@@ -107,6 +125,13 @@ struct SwrContextDeleter {
   }
 };
 using SwrContextPtr = std::unique_ptr<SwrContext, SwrContextDeleter>;
+
+struct AVAudioFifoDeleter {
+  void operator()(AVAudioFifo* fifo) const {
+    if (fifo != nullptr) av_audio_fifo_free(fifo);
+  }
+};
+using AVAudioFifoPtr = std::unique_ptr<AVAudioFifo, AVAudioFifoDeleter>;
 
 struct ChannelLayoutGuard {
   AVChannelLayout layout{};
@@ -685,11 +710,10 @@ int refuse_secondary_input(AVFormatContext* /*s*/, AVIOContext** /*pb*/, const c
 /// @brief Opens @p data as an AVFormat input over custom memory AVIO.
 /// @details The only input libavformat may read is the caller's buffer: the demuxer must be on
 ///          @ref kAudioDemuxerAllowlist, no protocol is whitelisted, and io_open refuses.
-/// @throws SonareException on an empty buffer, an allocation failure, an unreadable container,
-///         or a container outside the allowlist (DecodeFailed).
-MemoryInput open_memory_input(const uint8_t* data, size_t size) {
-  SONARE_CHECK_MSG(data != nullptr && size > 0, ErrorCode::InvalidParameter,
-                   "FFmpeg: empty input buffer");
+/// @throws SonareException on an empty buffer, an allocation failure, or an unreadable container.
+MemoryInput open_memory_input(const uint8_t* data, size_t size,
+                              ErrorCode invalid_input_code = ErrorCode::DecodeFailed) {
+  SONARE_CHECK_MSG(data != nullptr && size > 0, invalid_input_code, "FFmpeg: empty input buffer");
 
   constexpr int kIOBufferSize = 32 * 1024;
   MemoryInput input;
@@ -732,7 +756,7 @@ MemoryInput open_memory_input(const uint8_t* data, size_t size) {
     // On failure libavformat already freed the context; release ours to avoid
     // a double-free in the destructor.
     (void)input.format_ctx.release();
-    SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
+    SONARE_CHECK_MSG(false, invalid_input_code,
                      "FFmpeg: avformat_open_input failed (unreadable input, or a container "
                      "outside the audio demuxer allowlist): " +
                          ff_err(ret));
@@ -784,6 +808,492 @@ int probe_channels_ffmpeg(const uint8_t* data, size_t size) {
     }
   }
   SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed, "FFmpeg: no audio stream found in input");
+}
+
+namespace {
+
+struct FFmpegEncodeFormat {
+  std::string_view token;
+  const char* encoder_name;
+  const char* muxer_name;
+  int max_channels;
+};
+
+constexpr std::array<FFmpegEncodeFormat, 5> kFFmpegEncodeFormats = {{
+    {"flac", "flac", "flac", 8},
+    {"mp3", "libmp3lame", "mp3", 2},
+    {"ogg", "libvorbis", "ogg", 0},
+    {"opus", "libopus", "ogg", 8},
+    {"m4a", "aac", "mp4", 8},
+}};
+
+const FFmpegEncodeFormat* find_ffmpeg_encode_format(std::string_view token) {
+  for (const auto& format : kFFmpegEncodeFormats) {
+    if (format.token == token) return &format;
+  }
+  return nullptr;
+}
+
+struct EncoderConfigList {
+  const void* values = nullptr;
+  int count = 0;
+};
+
+enum class EncoderConfigKind { SampleRate, SampleFormat, ChannelLayout };
+
+EncoderConfigList encoder_config(const AVCodec* codec, EncoderConfigKind config) {
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+  AVCodecConfig ffmpeg_config = AV_CODEC_CONFIG_SAMPLE_RATE;
+  switch (config) {
+    case EncoderConfigKind::SampleRate:
+      ffmpeg_config = AV_CODEC_CONFIG_SAMPLE_RATE;
+      break;
+    case EncoderConfigKind::SampleFormat:
+      ffmpeg_config = AV_CODEC_CONFIG_SAMPLE_FORMAT;
+      break;
+    case EncoderConfigKind::ChannelLayout:
+      ffmpeg_config = AV_CODEC_CONFIG_CHANNEL_LAYOUT;
+      break;
+  }
+  EncoderConfigList result;
+  if (avcodec_get_supported_config(nullptr, codec, ffmpeg_config, 0, &result.values,
+                                   &result.count) < 0) {
+    return {};
+  }
+  return result;
+#else
+  switch (config) {
+    case EncoderConfigKind::SampleRate: {
+      const int* values = codec->supported_samplerates;
+      if (values == nullptr) return {};
+      int count = 0;
+      while (values[count] != 0) ++count;
+      return {values, count};
+    }
+    case EncoderConfigKind::SampleFormat: {
+      const AVSampleFormat* values = codec->sample_fmts;
+      if (values == nullptr) return {};
+      int count = 0;
+      while (values[count] != AV_SAMPLE_FMT_NONE) ++count;
+      return {values, count};
+    }
+    case EncoderConfigKind::ChannelLayout: {
+      const AVChannelLayout* values = codec->ch_layouts;
+      if (values == nullptr) return {};
+      int count = 0;
+      while (values[count].nb_channels != 0) ++count;
+      return {values, count};
+    }
+    default:
+      return {};
+  }
+#endif
+}
+
+bool encoder_supports_sample_rate(const AVCodec* codec, int sample_rate) {
+  const EncoderConfigList list = encoder_config(codec, EncoderConfigKind::SampleRate);
+  if (list.values == nullptr) return true;
+  const auto* rates = static_cast<const int*>(list.values);
+  return std::find(rates, rates + list.count, sample_rate) != rates + list.count;
+}
+
+bool encoder_supports_layout(const AVCodec* codec, const AVChannelLayout& layout) {
+  const EncoderConfigList list = encoder_config(codec, EncoderConfigKind::ChannelLayout);
+  if (list.values == nullptr) return true;
+  const auto* layouts = static_cast<const AVChannelLayout*>(list.values);
+  for (int i = 0; i < list.count; ++i) {
+    if (av_channel_layout_compare(&layouts[i], &layout) == 0) return true;
+  }
+  return false;
+}
+
+AVSampleFormat encoder_sample_format(const AVCodec* codec, std::string_view format, int bit_depth) {
+  const EncoderConfigList list = encoder_config(codec, EncoderConfigKind::SampleFormat);
+  if (list.values == nullptr || list.count == 0) return AV_SAMPLE_FMT_FLTP;
+  const auto* formats = static_cast<const AVSampleFormat*>(list.values);
+  if (format == "flac") {
+    const AVSampleFormat preferred16[] = {AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S16P, AV_SAMPLE_FMT_S32,
+                                          AV_SAMPLE_FMT_S32P};
+    const AVSampleFormat preferred24[] = {AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_S32P, AV_SAMPLE_FMT_S16,
+                                          AV_SAMPLE_FMT_S16P};
+    const AVSampleFormat* preferred = bit_depth == 24 ? preferred24 : preferred16;
+    for (size_t i = 0; i < 4; ++i) {
+      if (std::find(formats, formats + list.count, preferred[i]) != formats + list.count) {
+        return preferred[i];
+      }
+    }
+  }
+  return formats[0];
+}
+
+class DynamicOutputBuffer {
+ public:
+  DynamicOutputBuffer() = default;
+  DynamicOutputBuffer(const DynamicOutputBuffer&) = delete;
+  DynamicOutputBuffer& operator=(const DynamicOutputBuffer&) = delete;
+
+  ~DynamicOutputBuffer() { discard(); }
+
+  int open() { return avio_open_dyn_buf(&context_); }
+
+  AVIOContext* get() const { return context_; }
+
+  int close(uint8_t** data) {
+    AVIOContext* context = std::exchange(context_, nullptr);
+    return avio_close_dyn_buf(context, data);
+  }
+
+ private:
+  void discard() {
+    if (context_ == nullptr) return;
+    uint8_t* data = nullptr;
+    (void)avio_close_dyn_buf(std::exchange(context_, nullptr), &data);
+    av_free(data);
+  }
+
+  AVIOContext* context_ = nullptr;
+};
+
+struct AVFreeDeleter {
+  void operator()(uint8_t* data) const { av_free(data); }
+};
+
+void append_dictionary_tags(std::vector<std::pair<std::string, std::string>>& tags,
+                            const AVDictionary* dictionary) {
+  const AVDictionaryEntry* entry = nullptr;
+  while ((entry = av_dict_get(dictionary, "", entry, AV_DICT_IGNORE_SUFFIX)) != nullptr) {
+    const std::pair<std::string, std::string> value(entry->key, entry->value);
+    if (std::find(tags.begin(), tags.end(), value) == tags.end()) tags.push_back(value);
+  }
+}
+
+void write_tags(AVDictionary** destination, const std::map<std::string, std::string>& tags) {
+  for (const auto& [key, value] : tags) {
+    const int ret = av_dict_set(destination, key.c_str(), value.c_str(), 0);
+    SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: could not set output tag " + key + ": " + ff_err(ret));
+  }
+}
+
+AVFramePtr make_audio_frame(AVSampleFormat sample_format, const AVChannelLayout& layout,
+                            int sample_rate, int capacity) {
+  AVFramePtr frame(av_frame_alloc());
+  SONARE_CHECK_MSG(frame != nullptr, ErrorCode::OutOfMemory,
+                   "FFmpeg: av_frame_alloc returned null");
+  frame->format = sample_format;
+  frame->sample_rate = sample_rate;
+  frame->nb_samples = capacity;
+  const int copy_result = av_channel_layout_copy(&frame->ch_layout, &layout);
+  SONARE_CHECK_MSG(copy_result >= 0, ErrorCode::EncodeFailed,
+                   "FFmpeg: av_channel_layout_copy failed: " + ff_err(copy_result));
+  const int buffer_result = av_frame_get_buffer(frame.get(), 0);
+  SONARE_CHECK_MSG(buffer_result >= 0, ErrorCode::OutOfMemory,
+                   "FFmpeg: av_frame_get_buffer failed: " + ff_err(buffer_result));
+  return frame;
+}
+
+void check_output_io(AVFormatContext* context) {
+  SONARE_CHECK_MSG(
+      context->pb == nullptr || context->pb->error >= 0, ErrorCode::EncodeFailed,
+      "FFmpeg: output AVIO failed: " + ff_err(context->pb == nullptr ? 0 : context->pb->error));
+}
+
+}  // namespace
+
+std::vector<std::pair<std::string, std::string>> read_raw_audio_tags_ffmpeg(const uint8_t* data,
+                                                                            size_t size) {
+  const MemoryInput input = open_memory_input(data, size, ErrorCode::InvalidFormat);
+  AVFormatContext* format_context = input.format_ctx.get();
+  AVStream* first_audio_stream = nullptr;
+  for (unsigned int i = 0; i < format_context->nb_streams; ++i) {
+    AVStream* stream = format_context->streams[i];
+    if (stream != nullptr && stream->codecpar != nullptr &&
+        stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+      first_audio_stream = stream;
+      break;
+    }
+  }
+  SONARE_CHECK_MSG(first_audio_stream != nullptr, ErrorCode::InvalidFormat,
+                   "FFmpeg: input has no audio stream");
+
+  std::vector<std::pair<std::string, std::string>> tags;
+  append_dictionary_tags(tags, format_context->metadata);
+  append_dictionary_tags(tags, first_audio_stream->metadata);
+  return tags;
+}
+
+bool ffmpeg_audio_encode_available(std::string_view format) noexcept {
+  const FFmpegEncodeFormat* spec = find_ffmpeg_encode_format(format);
+  if (spec == nullptr) return false;
+  return avcodec_find_encoder_by_name(spec->encoder_name) != nullptr &&
+         av_guess_format(spec->muxer_name, nullptr, nullptr) != nullptr;
+}
+
+std::vector<uint8_t> encode_audio_ffmpeg(const float* planar, size_t frames, int num_channels,
+                                         int sample_rate, std::string_view format, int bit_depth,
+                                         float quality,
+                                         const std::map<std::string, std::string>& tags) {
+  const FFmpegEncodeFormat* spec = find_ffmpeg_encode_format(format);
+  SONARE_CHECK_MSG(spec != nullptr, ErrorCode::InvalidParameter,
+                   "format must be flac, mp3, ogg, opus, or m4a");
+  if (!ffmpeg_audio_encode_available(format)) {
+    throw SonareParameterRefusal::predicate_with_reason(
+        ErrorCode::NotSupported, std::string(format), "encoding is unavailable in this build",
+        ErrorReason::NotCompiledIn);
+  }
+
+  const AVCodec* codec = avcodec_find_encoder_by_name(spec->encoder_name);
+  const AVOutputFormat* muxer = av_guess_format(spec->muxer_name, nullptr, nullptr);
+  SONARE_CHECK_MSG(codec != nullptr && muxer != nullptr, ErrorCode::NotSupported,
+                   "FFmpeg: encoder or muxer is unavailable for " + std::string(format));
+
+  if (spec->max_channels > 0 && num_channels > spec->max_channels) {
+    throw SonareParameterRefusal::predicate(
+        ErrorCode::InvalidParameter, "num_channels",
+        "must be at most " + std::to_string(spec->max_channels) + " for this format");
+  }
+  ChannelLayoutGuard input_layout;
+  av_channel_layout_default(&input_layout.layout, num_channels);
+  if (input_layout.layout.nb_channels != num_channels ||
+      !encoder_supports_layout(codec, input_layout.layout)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "num_channels",
+                                            "is not supported by the encoder for this format");
+  }
+  if (!encoder_supports_sample_rate(codec, sample_rate)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "sample_rate",
+                                            "is not supported by the encoder for this format");
+  }
+
+  const AVSampleFormat sample_format = encoder_sample_format(codec, format, bit_depth);
+  AVCodecContextPtr codec_context(avcodec_alloc_context3(codec));
+  SONARE_CHECK_MSG(codec_context != nullptr, ErrorCode::OutOfMemory,
+                   "FFmpeg: avcodec_alloc_context3 returned null");
+  codec_context->sample_rate = sample_rate;
+  codec_context->sample_fmt = sample_format;
+  codec_context->time_base = AVRational{1, sample_rate};
+  const int layout_result = av_channel_layout_copy(&codec_context->ch_layout, &input_layout.layout);
+  SONARE_CHECK_MSG(layout_result >= 0, ErrorCode::EncodeFailed,
+                   "FFmpeg: av_channel_layout_copy failed: " + ff_err(layout_result));
+
+  if (format == "flac") {
+    codec_context->bits_per_raw_sample = bit_depth;
+  } else if (format == "mp3") {
+    const int q = static_cast<int>(std::lround(9.0 * (1.0 - static_cast<double>(quality))));
+    codec_context->flags |= AV_CODEC_FLAG_QSCALE;
+    codec_context->global_quality = q * FF_QP2LAMBDA;
+  } else if (format == "ogg") {
+    const double q = -1.0 + 11.0 * static_cast<double>(quality);
+    codec_context->flags |= AV_CODEC_FLAG_QSCALE;
+    codec_context->global_quality = static_cast<int>(std::lround(q * FF_QP2LAMBDA));
+  } else {
+    const double kilobits_per_second = format == "opus"
+                                           ? 32.0 + 288.0 * static_cast<double>(quality)
+                                           : 64.0 + 256.0 * static_cast<double>(quality);
+    codec_context->bit_rate = static_cast<int64_t>(
+        std::llround(kilobits_per_second * static_cast<double>(std::kilo::num)));
+  }
+  if ((muxer->flags & AVFMT_GLOBALHEADER) != 0) codec_context->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+  int ret = avcodec_open2(codec_context.get(), codec, nullptr);
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                   "FFmpeg: avcodec_open2 failed: " + ff_err(ret));
+
+  AVFormatContext* output_raw = nullptr;
+  ret = avformat_alloc_output_context2(&output_raw, muxer, nullptr, nullptr);
+  AVOutputContextPtr output_context(output_raw);
+  SONARE_CHECK_MSG(ret >= 0 && output_context != nullptr, ErrorCode::EncodeFailed,
+                   "FFmpeg: avformat_alloc_output_context2 failed: " + ff_err(ret));
+
+  AVStream* stream = avformat_new_stream(output_context.get(), nullptr);
+  SONARE_CHECK_MSG(stream != nullptr, ErrorCode::OutOfMemory,
+                   "FFmpeg: avformat_new_stream returned null");
+  stream->time_base = codec_context->time_base;
+  ret = avcodec_parameters_from_context(stream->codecpar, codec_context.get());
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                   "FFmpeg: avcodec_parameters_from_context failed: " + ff_err(ret));
+  write_tags(&output_context->metadata, tags);
+  write_tags(&stream->metadata, tags);
+
+  DynamicOutputBuffer output_buffer;
+  ret = output_buffer.open();
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::OutOfMemory,
+                   "FFmpeg: avio_open_dyn_buf failed: " + ff_err(ret));
+  output_context->pb = output_buffer.get();
+  output_context->flags |= AVFMT_FLAG_CUSTOM_IO;
+  SONARE_CHECK_MSG((output_context->pb->seekable & AVIO_SEEKABLE_NORMAL) != 0,
+                   ErrorCode::EncodeFailed, "FFmpeg: dynamic output AVIO is not seekable");
+
+  AVDictionary* muxer_options_raw = nullptr;
+  if (format == "m4a") {
+    ret = av_dict_set(&muxer_options_raw, "movflags", "use_metadata_tags", 0);
+  }
+  AVDictionaryPtr muxer_options(muxer_options_raw);
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::OutOfMemory, "FFmpeg: av_dict_set failed: " + ff_err(ret));
+  muxer_options_raw = muxer_options.release();
+  ret = avformat_write_header(output_context.get(), &muxer_options_raw);
+  muxer_options.reset(muxer_options_raw);
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                   "FFmpeg: avformat_write_header failed: " + ff_err(ret));
+  check_output_io(output_context.get());
+
+  AVPacketPtr packet(av_packet_alloc());
+  SONARE_CHECK_MSG(packet != nullptr, ErrorCode::OutOfMemory,
+                   "FFmpeg: av_packet_alloc returned null");
+  auto drain_encoder = [&]() {
+    while (true) {
+      const int receive_result = avcodec_receive_packet(codec_context.get(), packet.get());
+      if (receive_result == AVERROR(EAGAIN) || receive_result == AVERROR_EOF) return;
+      SONARE_CHECK_MSG(receive_result >= 0, ErrorCode::EncodeFailed,
+                       "FFmpeg: avcodec_receive_packet failed: " + ff_err(receive_result));
+      av_packet_rescale_ts(packet.get(), codec_context->time_base, stream->time_base);
+      packet->stream_index = stream->index;
+      const int write_result = av_interleaved_write_frame(output_context.get(), packet.get());
+      av_packet_unref(packet.get());
+      SONARE_CHECK_MSG(write_result >= 0, ErrorCode::EncodeFailed,
+                       "FFmpeg: av_interleaved_write_frame failed: " + ff_err(write_result));
+      check_output_io(output_context.get());
+    }
+  };
+  auto send_frame = [&](AVFrame* frame) {
+    int send_result = avcodec_send_frame(codec_context.get(), frame);
+    if (send_result == AVERROR(EAGAIN)) {
+      drain_encoder();
+      send_result = avcodec_send_frame(codec_context.get(), frame);
+    }
+    SONARE_CHECK_MSG(send_result >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: avcodec_send_frame failed: " + ff_err(send_result));
+    drain_encoder();
+  };
+
+  const int frame_size = codec_context->frame_size;
+  const int chunk_size = frame_size > 0 ? frame_size : 4096;
+  const int initial_capacity = std::max(chunk_size, 1);
+  AVAudioFifoPtr fifo(av_audio_fifo_alloc(sample_format, num_channels, initial_capacity));
+  SONARE_CHECK_MSG(fifo != nullptr, ErrorCode::OutOfMemory,
+                   "FFmpeg: av_audio_fifo_alloc returned null");
+  SwrContext* resampler_raw = nullptr;
+  ret = swr_alloc_set_opts2(&resampler_raw, &codec_context->ch_layout, sample_format, sample_rate,
+                            &input_layout.layout, AV_SAMPLE_FMT_FLTP, sample_rate, 0, nullptr);
+  SwrContextPtr resampler(resampler_raw);
+  SONARE_CHECK_MSG(ret >= 0 && resampler != nullptr, ErrorCode::EncodeFailed,
+                   "FFmpeg: swr_alloc_set_opts2 failed: " + ff_err(ret));
+  ret = swr_init(resampler.get());
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed, "FFmpeg: swr_init failed: " + ff_err(ret));
+
+  const int conversion_capacity = swr_get_out_samples(resampler.get(), chunk_size);
+  SONARE_CHECK_MSG(conversion_capacity > 0, ErrorCode::EncodeFailed,
+                   "FFmpeg: swr_get_out_samples returned an invalid capacity");
+  AVFramePtr conversion_frame =
+      make_audio_frame(sample_format, codec_context->ch_layout, sample_rate, conversion_capacity);
+  auto append_fifo = [&](AVFrame* frame, int samples) {
+    if (samples <= 0) return;
+    const int current_size = av_audio_fifo_size(fifo.get());
+    SONARE_CHECK_MSG(samples <= std::numeric_limits<int>::max() - current_size,
+                     ErrorCode::EncodeFailed, "FFmpeg: audio FIFO size overflow");
+    ret = av_audio_fifo_realloc(fifo.get(), current_size + samples);
+    SONARE_CHECK_MSG(ret >= 0, ErrorCode::OutOfMemory,
+                     "FFmpeg: av_audio_fifo_realloc failed: " + ff_err(ret));
+    ret = av_audio_fifo_write(fifo.get(), reinterpret_cast<void**>(frame->extended_data), samples);
+    SONARE_CHECK_MSG(ret == samples, ErrorCode::EncodeFailed, "FFmpeg: short write to audio FIFO");
+  };
+
+  std::vector<const uint8_t*> input_planes(static_cast<size_t>(num_channels));
+  size_t input_offset = 0;
+  while (input_offset < frames) {
+    const int input_count =
+        static_cast<int>(std::min(frames - input_offset, static_cast<size_t>(chunk_size)));
+    for (int channel = 0; channel < num_channels; ++channel) {
+      const size_t plane_offset = static_cast<size_t>(channel) * frames + input_offset;
+      input_planes[static_cast<size_t>(channel)] =
+          reinterpret_cast<const uint8_t*>(planar + plane_offset);
+    }
+    ret = av_frame_make_writable(conversion_frame.get());
+    SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: av_frame_make_writable failed: " + ff_err(ret));
+    const int converted = swr_convert(resampler.get(), conversion_frame->extended_data,
+                                      conversion_capacity, input_planes.data(), input_count);
+    SONARE_CHECK_MSG(converted >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: swr_convert failed: " + ff_err(converted));
+    append_fifo(conversion_frame.get(), converted);
+    input_offset += static_cast<size_t>(input_count);
+  }
+
+  while (true) {
+    const int flush_capacity = swr_get_out_samples(resampler.get(), 0);
+    SONARE_CHECK_MSG(flush_capacity >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: swr_get_out_samples failed during flush");
+    if (flush_capacity == 0) break;
+    if (flush_capacity > conversion_frame->nb_samples) {
+      conversion_frame =
+          make_audio_frame(sample_format, codec_context->ch_layout, sample_rate, flush_capacity);
+    }
+    ret = av_frame_make_writable(conversion_frame.get());
+    SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: av_frame_make_writable failed: " + ff_err(ret));
+    const int converted = swr_convert(resampler.get(), conversion_frame->extended_data,
+                                      conversion_frame->nb_samples, nullptr, 0);
+    SONARE_CHECK_MSG(converted >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: swr_convert flush failed: " + ff_err(converted));
+    if (converted == 0) break;
+    append_fifo(conversion_frame.get(), converted);
+  }
+
+  AVFramePtr encode_frame = make_audio_frame(sample_format, codec_context->ch_layout, sample_rate,
+                                             std::max(frame_size, chunk_size));
+  int64_t next_pts = 0;
+  auto encode_fifo_samples = [&](int samples_to_encode, int samples_to_read) {
+    ret = av_frame_make_writable(encode_frame.get());
+    SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                     "FFmpeg: av_frame_make_writable failed: " + ff_err(ret));
+    encode_frame->nb_samples = samples_to_encode;
+    encode_frame->pts = next_pts;
+    av_samples_set_silence(encode_frame->extended_data, 0, samples_to_encode, num_channels,
+                           sample_format);
+    if (samples_to_read > 0) {
+      ret = av_audio_fifo_read(fifo.get(), reinterpret_cast<void**>(encode_frame->extended_data),
+                               samples_to_read);
+      SONARE_CHECK_MSG(ret == samples_to_read, ErrorCode::EncodeFailed,
+                       "FFmpeg: short read from audio FIFO");
+    }
+    next_pts += samples_to_encode;
+    send_frame(encode_frame.get());
+  };
+
+  const int output_frame_size = frame_size > 0 ? frame_size : chunk_size;
+  while (av_audio_fifo_size(fifo.get()) >= output_frame_size) {
+    encode_fifo_samples(output_frame_size, output_frame_size);
+  }
+  const int remaining = av_audio_fifo_size(fifo.get());
+  if (remaining > 0) {
+    const bool can_encode_short = frame_size <= 0 ||
+                                  (codec->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME) != 0 ||
+                                  (codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE) != 0;
+    encode_fifo_samples(can_encode_short ? remaining : output_frame_size, remaining);
+  }
+
+  ret = avcodec_send_frame(codec_context.get(), nullptr);
+  if (ret == AVERROR(EAGAIN)) {
+    drain_encoder();
+    ret = avcodec_send_frame(codec_context.get(), nullptr);
+  }
+  SONARE_CHECK_MSG(ret >= 0 || ret == AVERROR_EOF, ErrorCode::EncodeFailed,
+                   "FFmpeg: flushing encoder failed: " + ff_err(ret));
+  drain_encoder();
+
+  ret = av_write_trailer(output_context.get());
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::EncodeFailed,
+                   "FFmpeg: av_write_trailer failed: " + ff_err(ret));
+  check_output_io(output_context.get());
+  avio_flush(output_context->pb);
+  check_output_io(output_context.get());
+  output_context->pb = nullptr;
+
+  uint8_t* encoded_data = nullptr;
+  const int encoded_size = output_buffer.close(&encoded_data);
+  std::unique_ptr<uint8_t, AVFreeDeleter> encoded_buffer(encoded_data);
+  SONARE_CHECK_MSG(encoded_size > 0 && encoded_buffer != nullptr, ErrorCode::EncodeFailed,
+                   "FFmpeg: dynamic output buffer is empty");
+  return std::vector<uint8_t>(encoded_buffer.get(), encoded_buffer.get() + encoded_size);
 }
 
 }  // namespace sonare

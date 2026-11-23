@@ -9,7 +9,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "core/audio_io.h"
 
@@ -39,5 +43,18 @@ InterleavedAudioLoadResult load_buffer_ffmpeg_interleaved(const uint8_t* data, s
 
 /// @brief Probes the first audio stream's source channel count without decoding.
 int probe_channels_ffmpeg(const uint8_t* data, size_t size);
+
+/// @brief Reads raw format and first-audio-stream tags without decoding PCM.
+std::vector<std::pair<std::string, std::string>> read_raw_audio_tags_ffmpeg(const uint8_t* data,
+                                                                            size_t size);
+
+/// @brief Returns whether FFmpeg has both an encoder and muxer for @p format.
+bool ffmpeg_audio_encode_available(std::string_view format) noexcept;
+
+/// @brief Encodes channel-major float audio into an FFmpeg-supported container.
+std::vector<uint8_t> encode_audio_ffmpeg(const float* planar, size_t frames, int num_channels,
+                                         int sample_rate, std::string_view format, int bit_depth,
+                                         float quality,
+                                         const std::map<std::string, std::string>& tags);
 
 }  // namespace sonare
