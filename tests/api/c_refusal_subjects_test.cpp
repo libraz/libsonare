@@ -935,3 +935,15 @@ TEST_CASE("every renamed refusal subject reaches the caller under the facade's s
     });
   }
 }
+
+TEST_CASE("an empty SMF or MIDI Clip File buffer is refused as empty, not as left out",
+          "[c_api][project]") {
+  using ImportEntry = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
+  for (ImportEntry entry : {&sonare_project_import_smf, &sonare_project_import_clip_file}) {
+    const ProjectPtr project = new_project();
+    const uint8_t byte = 0;
+    uint32_t first_clip_id = 0;
+    CHECK(entry(project.get(), &byte, 0, &first_clip_id) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_message() == "bytes must not be empty");
+  }
+}

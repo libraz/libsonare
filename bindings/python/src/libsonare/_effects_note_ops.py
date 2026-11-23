@@ -826,7 +826,7 @@ def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> l
     lib = _get_lib()
 
     raw = bytes(data)
-    buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
+    buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw)
     out = ctypes.POINTER(SonareNoteTarget)()
     out_count = ctypes.c_size_t()
     _check(

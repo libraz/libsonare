@@ -94,7 +94,7 @@ class HrtfSet:
     def from_bytes(cls, data: bytes) -> HrtfSet:
         """Parse SHRF v1 bytes into an HRTF set; malformed data raises :class:`SonareError`."""
         lib = _get_lib()
-        buf = (ctypes.c_uint8 * len(data)).from_buffer_copy(data) if data else None
+        buf = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
         handle = ctypes.c_void_p()
         _check(
             lib.sonare_hrtf_set_create_from_memory(

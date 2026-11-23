@@ -316,7 +316,7 @@ class _ProjectMidiMixin:
         """
         lib = _get_lib()
         raw = bytes(data)
-        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
+        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw)
         out_id = ctypes.c_uint32()
         _check(
             lib.sonare_project_import_smf(
@@ -359,7 +359,7 @@ class _ProjectMidiMixin:
         """
         lib = _get_lib()
         raw = bytes(data)
-        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
+        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw)
         out_id = ctypes.c_uint32()
         _check(
             lib.sonare_project_import_clip_file(

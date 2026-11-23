@@ -1175,6 +1175,8 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(bytes);
   if (const SonareError err = run_validation([&] {
+        // An empty file is refused as the buffer's emptiness, not as a length domain.
+        if (len == 0) check::refuse("bytes", sonare::util::refusal::kNonEmptyPredicate);
         check::integer_in_range(static_cast<long long>(len), 1,
                                 static_cast<long long>(kMaxBufferSize), "len");
       });
@@ -1220,6 +1222,8 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(bytes);
   if (const SonareError err = run_validation([&] {
+        // An empty file is refused as the buffer's emptiness, not as a length domain.
+        if (len == 0) check::refuse("bytes", sonare::util::refusal::kNonEmptyPredicate);
         check::integer_in_range(static_cast<long long>(len), 1,
                                 static_cast<long long>(kMaxBufferSize), "len");
       });

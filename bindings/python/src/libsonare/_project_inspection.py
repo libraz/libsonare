@@ -373,7 +373,7 @@ class _ProjectInspectionMixin:
         if not module_id:
             raise _refuse("module_id must be a non-empty string")
         raw = bytes(payload)
-        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
+        buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw)
         _check(
             _get_lib().sonare_project_set_assist_sidecar(
                 self._require_handle(),
