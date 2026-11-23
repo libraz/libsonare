@@ -9,7 +9,7 @@
   },
   "surfaces": {
     "node": {
-      "leaking_refusals": 20
+      "leaking_refusals": 12
     },
     "wasm": {
       "leaking_refusals": 12
