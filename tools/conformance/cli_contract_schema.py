@@ -79,7 +79,17 @@ _OPTION_TYPES = {"boolean", "integer", "number", "string", "path"}
 _POSITIONAL_TYPES = {"boolean", "integer", "number", "string", "path"}
 _EXIT_CODES = {0, 2, 3, 4, 5, 9}
 _ARRAY_TYPES = {"array:string", "array:number:12"}
-_PAYLOAD_TYPES = _OPTION_TYPES | _ARRAY_TYPES | {"null", "any"}
+# A level both CLIs write by one rule: a value not measured leaves its key out, and an
+# infinite end is written as null. `measured` is a number or an absent key; the two
+# suffixed tokens also take null, and the suffix is the end that null means, so a null
+# is accepted only at a path whose token names an end. These tokens are the CLI's
+# null-means list: a null anywhere else is a defect.
+_MEASURED_TOKENS = {"measured", "measured:-inf", "measured:+inf"}
+_PAYLOAD_TYPES = _OPTION_TYPES | _ARRAY_TYPES | _MEASURED_TOKENS | {"null", "any"}
+# A level array with gaps: the measured entries under the field's key, and their
+# ascending indices under the sibling key the schema names in `index`.
+_MEASURED_PAIRS = "measured_pairs"
+_MEASURED_PAIR_ITEMS = {"number", "measured:-inf", "measured:+inf"}
 _SCHEMA_METADATA_KEYS = {"optional", "required"}
 _PAYLOAD_PROPERTY_NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)*$")
 _ANALYZE_TOP_LEVEL_KEYS = {
@@ -541,7 +551,12 @@ def _validate_object_schema(value: dict[str, Any], label: str, errors: list[str]
                 continue
             field_schemas[key] = schema
             field_sources[key] = source
-            _validate_payload_schema(schema, f"{label}.{source}.{key}", errors)
+            _validate_field_schema(schema, f"{label}.{source}.{key}", errors)
+
+    for key, schema in field_schemas.items():
+        index = _measured_pairs_index(schema)
+        if index is not None and index in field_schemas:
+            errors.append(f"{label}: {key}.index {index!r} is also declared as a field")
 
     if isinstance(required, list):
         for key in required:
@@ -582,6 +597,29 @@ def _validate_object_schema(value: dict[str, Any], label: str, errors: list[str]
         errors.append(f"{label}: additional property flags disagree")
 
 
+def _measured_pairs_index(schema: Any) -> str | None:
+    """The sibling index key of a measured-pairs field schema, or None for any other schema."""
+    if isinstance(schema, dict) and schema.get("type") == _MEASURED_PAIRS:
+        index = schema.get("index")
+        return index if isinstance(index, str) else None
+    return None
+
+
+def _validate_field_schema(value: Any, label: str, errors: list[str]) -> None:
+    """Validate an object field's schema, the one place a measured-pairs form may sit."""
+    if not (isinstance(value, dict) and value.get("type") == _MEASURED_PAIRS):
+        _validate_payload_schema(value, label, errors)
+        return
+    unknown = sorted(set(value) - {"type", "index", "items"})
+    if unknown:
+        errors.append(f"{label}: unknown keys {', '.join(unknown)}")
+    index = value.get("index")
+    if not isinstance(index, str) or not _PAYLOAD_PROPERTY_NAME_RE.match(index):
+        errors.append(f"{label}.index: expected a snake_case sibling key")
+    if value.get("items", "number") not in _MEASURED_PAIR_ITEMS:
+        errors.append(f"{label}.items: expected one of {', '.join(sorted(_MEASURED_PAIR_ITEMS))}")
+
+
 def _validate_payload_schema(value: Any, label: str, errors: list[str]) -> None:
     """Validate one recursive JSON payload schema node.
 
@@ -596,12 +634,19 @@ def _validate_payload_schema(value: Any, label: str, errors: list[str]) -> None:
         for token in alternatives:
             if token not in _PAYLOAD_TYPES:
                 errors.append(f"{label}: unknown payload type token {token!r}")
+            elif token in _MEASURED_TOKENS and len(alternatives) > 1:
+                errors.append(f"{label}: {token!r} names its own null and stands alone")
         return
     if isinstance(value, list):
         _validate_schema_alternatives(value, label, errors)
         return
     if not isinstance(value, dict):
         errors.append(f"{label}: expected a schema token or object")
+        return
+    if value.get("type") == _MEASURED_PAIRS:
+        errors.append(
+            f"{label}: a {_MEASURED_PAIRS} schema names a sibling key, so it is an object field"
+        )
         return
 
     # A field-level optional/required flag is accepted as a convenient wrapper
@@ -678,6 +723,10 @@ def _validate_payload_schema(value: Any, label: str, errors: list[str]) -> None:
             errors.append(f"{label}: unknown keys {', '.join(unknown)}")
         if "items" not in core:
             errors.append(f"{label}.items: missing array item schema")
+        elif core["items"] == "measured":
+            errors.append(
+                f"{label}.items: an array cannot leave an entry out; use {_MEASURED_PAIRS}"
+            )
         else:
             _validate_payload_schema(core["items"], f"{label}.items", errors)
         for key in ("min_items", "max_items", "length"):

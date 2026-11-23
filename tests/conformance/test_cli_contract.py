@@ -1518,5 +1518,111 @@ class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
             self.assertEqual(run(7, surface), [])
 
 
+class MeasuredLevelSchemaTest(unittest.TestCase):
+    """The measured tokens and the measured-pairs form: what each accepts and refuses."""
+
+    SCHEMA: ClassVar[dict[str, object]] = {
+        "keys": {
+            "rms_db": "measured",
+            "floor_db": "measured:-inf",
+            "f0": {"type": "measured_pairs", "index": "f0_frame"},
+            "rt60": {"type": "measured_pairs", "index": "rt60_band", "items": "measured:+inf"},
+        }
+    }
+    FULL: ClassVar[dict[str, object]] = {
+        "rms_db": -12.0,
+        "floor_db": -60.0,
+        "f0": [220.0, 221.5],
+        "f0_frame": [0, 3],
+        "rt60": [0.4, None],
+        "rt60_band": [1, 2],
+    }
+
+    def _errors(self, **changes: object) -> list[str]:
+        payload = dict(self.FULL)
+        for key, value in changes.items():
+            if value is ...:
+                payload.pop(key)
+            else:
+                payload[key] = value
+        return CHECKER.validate_payload(payload, self.SCHEMA, "m")
+
+    @staticmethod
+    def _schema_errors(schema: object) -> list[str]:
+        errors: list[str] = []
+        sys.modules["cli_contract_schema"]._validate_payload_schema(schema, "s", errors)
+        return errors
+
+    def test_the_full_record_and_its_schema_are_accepted(self) -> None:
+        self.assertEqual(self._schema_errors(self.SCHEMA), [])
+        self.assertEqual(self._errors(), [])
+
+    def test_an_unmeasured_level_leaves_its_key_out(self) -> None:
+        self.assertEqual(self._errors(rms_db=...), [])
+        self.assertEqual(self._errors(floor_db=...), [])
+
+    def test_a_bare_measured_level_refuses_null(self) -> None:
+        errors = self._errors(rms_db=None)
+        self.assertTrue(any("m.rms_db" in e for e in errors), errors)
+
+    def test_a_suffixed_token_reads_null_as_its_named_end(self) -> None:
+        self.assertEqual(self._errors(floor_db=None), [])
+        errors = self._errors(floor_db="-inf")
+        self.assertTrue(any("m.floor_db" in e for e in errors), errors)
+
+    def test_a_pair_array_refuses_null_unless_its_items_name_an_end(self) -> None:
+        errors = self._errors(f0=[220.0, None])
+        self.assertTrue(any("m.f0[1]" in e for e in errors), errors)
+
+    def test_a_pair_needs_one_index_per_value(self) -> None:
+        errors = self._errors(f0_frame=[0])
+        self.assertTrue(any("1 indices for 2 values in f0" in e for e in errors), errors)
+
+    def test_pair_indices_strictly_ascend(self) -> None:
+        for indices in ([3, 0], [2, 2]):
+            with self.subTest(indices=indices):
+                errors = self._errors(f0_frame=indices)
+                self.assertTrue(any("strictly ascending" in e for e in errors), errors)
+        errors = self._errors(f0_frame=[-1, 0])
+        self.assertTrue(any("non-negative integers" in e for e in errors), errors)
+
+    def test_a_pair_without_its_index_is_missing_a_key(self) -> None:
+        errors = self._errors(f0_frame=...)
+        self.assertTrue(any("missing keys f0_frame" in e for e in errors), errors)
+        errors = self._errors(f0_frame=..., f0=...)
+        self.assertTrue(any("missing keys f0, f0_frame" in e for e in errors), errors)
+
+    def test_an_index_key_may_not_also_be_a_field(self) -> None:
+        schema = copy.deepcopy(self.SCHEMA)
+        schema["keys"]["f0_frame"] = "integer"
+        errors = self._schema_errors(schema)
+        self.assertTrue(any("also declared as a field" in e for e in errors), errors)
+
+    def test_an_array_of_measured_entries_is_refused(self) -> None:
+        errors = self._schema_errors({"keys": {"f0": {"type": "array", "items": "measured"}}})
+        self.assertTrue(any("measured_pairs" in e for e in errors), errors)
+
+    def test_a_measured_token_stands_alone(self) -> None:
+        for token in ("measured|null", "number|measured:-inf"):
+            with self.subTest(token=token):
+                errors = self._schema_errors({"keys": {"level": token}})
+                self.assertTrue(any("stands alone" in e for e in errors), errors)
+
+    def test_a_pair_form_is_only_an_object_field(self) -> None:
+        errors = self._schema_errors(
+            {"type": "array", "items": {"type": "measured_pairs", "index": "i"}}
+        )
+        self.assertTrue(any("object field" in e for e in errors), errors)
+
+    def test_a_pair_form_is_closed(self) -> None:
+        for field in (
+            {"type": "measured_pairs", "index": "Frame"},
+            {"type": "measured_pairs", "index": "frame", "items": "measured"},
+            {"type": "measured_pairs", "index": "frame", "extra": 1},
+        ):
+            with self.subTest(field=field):
+                self.assertTrue(self._schema_errors({"keys": {"f0": field}}))
+
+
 if __name__ == "__main__":
     unittest.main()

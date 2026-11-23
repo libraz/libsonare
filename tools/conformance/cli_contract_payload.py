@@ -8,11 +8,14 @@ responses.  The manifest vocabulary it builds on lives in
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from typing import Any
 
 from cli_contract_schema import (
+    _MEASURED_PAIRS,
+    _MEASURED_TOKENS,
     _SCHEMA_METADATA_KEYS,
     _SPECTRAL_FEATURES,
     _SPECTRAL_STATS,
@@ -47,8 +50,11 @@ def _payload_type(value: Any, token: str) -> bool:
         return _is_bool(value)
     if token == "integer":
         return _is_int(value)
-    if token == "number":
+    if token in {"number", "measured"}:
         return _is_number(value)
+    if token in _MEASURED_TOKENS:
+        # The suffix names the end a null means, so null is that end, not "not measured".
+        return value is None or _is_number(value)
     if token in {"string", "path"}:
         return isinstance(value, str)
     if token == "null":
@@ -177,15 +183,33 @@ def _schema_matches(value: Any, schema: Any, path: str) -> list[str]:
             return [f"{path}: expected object, got {type(value).__name__}"]
         required, optional, additional = _object_schema_parts(core)
         errors: list[str] = []
-        expected = set(required) | set(optional)
-        missing = sorted(set(required) - set(value))
+        # A measured level leaves its key out when nothing was measured.
+        absentable = {
+            key
+            for key, field in required.items()
+            if isinstance(field, str) and field in _MEASURED_TOKENS
+        }
+        pairs = {
+            key: field["index"]
+            for key, field in (*required.items(), *optional.items())
+            if isinstance(field, dict) and field.get("type") == _MEASURED_PAIRS
+        }
+        expected = set(required) | set(optional) | set(pairs.values())
+        missing = sorted(
+            (set(required) - absentable - set(value))
+            | {pairs[key] for key in pairs if key in required and pairs[key] not in value}
+        )
         unknown = sorted(set(value) - expected)
         if missing:
             errors.append(f"{path}: missing keys {', '.join(missing)}")
         if unknown and not additional:
             errors.append(f"{path}: unknown keys {', '.join(unknown)}")
         for key, field_schema in (*required.items(), *optional.items()):
-            if key in value:
+            if key not in value:
+                continue
+            if key in pairs:
+                errors.extend(_measured_pairs_match(value, key, field_schema, path))
+            else:
                 errors.extend(_schema_matches(value[key], field_schema, f"{path}.{key}"))
         return errors
     if schema_type == "array":
@@ -207,6 +231,34 @@ def _schema_matches(value: Any, schema: Any, path: str) -> list[str]:
             return []
         return [f"{path}: expected {schema_type}, got {type(value).__name__}"]
     return [f"{path}: invalid payload schema"]
+
+
+def _measured_pairs_match(
+    record: dict[str, Any], key: str, schema: dict[str, Any], path: str
+) -> list[str]:
+    """Validate one gappy level array: its measured values and their ascending indices."""
+    index_key = schema["index"]
+    values = record.get(key)
+    indices = record.get(index_key)
+    if not isinstance(values, list):
+        return [f"{path}.{key}: expected array, got {type(values).__name__}"]
+    if not isinstance(indices, list):
+        return [f"{path}.{index_key}: expected array, got {type(indices).__name__}"]
+    item = schema.get("items", "number")
+    errors = [
+        error
+        for position, entry in enumerate(values)
+        for error in _schema_matches(entry, item, f"{path}.{key}[{position}]")
+    ]
+    if len(indices) != len(values):
+        errors.append(
+            f"{path}.{index_key}: {len(indices)} indices for {len(values)} values in {key}"
+        )
+    if not all(_is_int(index) and index >= 0 for index in indices):
+        errors.append(f"{path}.{index_key}: expected non-negative integers")
+    elif any(left >= right for left, right in itertools.pairwise(indices)):
+        errors.append(f"{path}.{index_key}: expected strictly ascending indices")
+    return errors
 
 
 def _schema_description(schema: Any) -> str:
