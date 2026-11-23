@@ -3,7 +3,9 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/mastering_input_domains.h"
@@ -67,25 +69,42 @@ SonareDehumConfig DefaultDehumConfig() {
   return config;
 }
 
-/// @brief Marshal the pair-level noise analysis into the JS shape the denoise
-///        stereo report carries.
-template <typename T>
-Napi::Object EmitNoiseDetection(Napi::Env env, const T& detection) {
+/// @brief Marshal a noise analysis into the JS shape the denoise reports carry: the measured
+///        bands' levels beside each one's grid index.
+Napi::Object EmitNoiseDetection(Napi::Env env, float floor_dbfs,
+                                const std::vector<std::pair<int32_t, float>>& bands) {
   Napi::Object out = Napi::Object::New(env);
-  SetMeasured(out, "floorDbfs", detection.floor_dbfs);
-  // Only bands holding a bin carry a level; a band with none (NaN) is left out with its index.
-  Napi::Array band_floor_dbfs = Napi::Array::New(env);
-  Napi::Array band_floor_band = Napi::Array::New(env);
-  uint32_t measured = 0;
-  for (int i = 0; i < SONARE_REPAIR_NOISE_BAND_COUNT; ++i) {
-    if (std::isnan(detection.band_floor_dbfs[i])) continue;
-    band_floor_dbfs.Set(measured, Napi::Number::New(env, detection.band_floor_dbfs[i]));
-    band_floor_band.Set(measured, Napi::Number::New(env, i));
-    ++measured;
+  SetMeasured(out, "floorDbfs", floor_dbfs);
+  Napi::Array band_floor_dbfs = Napi::Array::New(env, bands.size());
+  Napi::Array band_floor_band = Napi::Array::New(env, bands.size());
+  for (uint32_t i = 0; i < bands.size(); ++i) {
+    band_floor_band.Set(i, Napi::Number::New(env, bands[i].first));
+    band_floor_dbfs.Set(i, Napi::Number::New(env, bands[i].second));
   }
   out.Set("bandFloorDbfs", band_floor_dbfs);
   out.Set("bandFloorBand", band_floor_band);
   return out;
+}
+
+/// @brief The C record packs the measured bands into [0, band_count) and names each band.
+Napi::Object EmitNoiseDetection(Napi::Env env, const SonareNoiseDetection& detection) {
+  std::vector<std::pair<int32_t, float>> bands;
+  bands.reserve(detection.band_count);
+  for (size_t i = 0; i < detection.band_count; ++i) {
+    bands.emplace_back(detection.band_floor_band[i], detection.band_floor_dbfs[i]);
+  }
+  return EmitNoiseDetection(env, detection.floor_dbfs, bands);
+}
+
+/// @brief The core record holds every band; one with no bin (NaN) is left out with its index.
+Napi::Object EmitNoiseDetection(Napi::Env env,
+                                const sonare::mastering::repair::NoiseDetection& detection) {
+  std::vector<std::pair<int32_t, float>> bands;
+  for (int32_t i = 0; i < SONARE_REPAIR_NOISE_BAND_COUNT; ++i) {
+    if (std::isnan(detection.band_floor_dbfs[i])) continue;
+    bands.emplace_back(i, detection.band_floor_dbfs[i]);
+  }
+  return EmitNoiseDetection(env, detection.floor_dbfs, bands);
 }
 
 template <typename T>
