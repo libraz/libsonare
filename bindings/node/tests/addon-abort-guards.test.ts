@@ -898,7 +898,13 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => p.setMidiEvents(clipId, [{}, {}]));
         swallow(() => p.setMidiEvents(clipId, [[], []]));
         swallow(() => p.addAutomationLane(trackId, { targetParamId: 1, points: [{}, {}] }));
-        swallow(() => p.editAutomationLane(trackId, 1, { targetParamId: 1, points: [{}, {}] }));
+        swallow(() =>
+          p.editAutomationLane(trackId, 1, {
+            targetKind: 'opaque',
+            targetParamId: 1,
+            points: [{}, {}],
+          }),
+        );
         // Positional project arguments, every one of them a string.
         swallow(() => p.addTrack('audio'));
         swallow(() => p.addMidiClip('0', '4'));

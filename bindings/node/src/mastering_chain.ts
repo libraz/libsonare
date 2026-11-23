@@ -202,10 +202,10 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
   return withEntry('masterAudio', () => {
     const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
     assertChainCallbacks(r);
-    assertAudioInput(r.samples, r.sampleRate, r);
     if (isAbsent(r.preset) && isAbsent(r.overrides)) {
       throw refuseType('give preset or overrides');
     }
+    assertAudioInput(r.samples, r.sampleRate, r);
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;
     const progress = r.onProgress ?? undefined;
@@ -231,13 +231,13 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   return withEntry('masterAudioStereo', () => {
     const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
     assertChainCallbacks(r);
+    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
+      throw refuseType('give preset or overrides');
+    }
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
       throw refuse('left and right must have the same length');
-    }
-    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-      throw refuseType('give preset or overrides');
     }
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;
@@ -323,10 +323,10 @@ export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResu
   return withEntry('masterAudioAsync', () => {
     try {
       const r = sampleOneShot<MasterAudioAsyncRequest>('masterAudioAsync', args);
-      assertAudioInput(r.samples, r.sampleRate, r);
       if (isAbsent(r.preset) && isAbsent(r.overrides)) {
         throw refuseType('give preset or overrides');
       }
+      assertAudioInput(r.samples, r.sampleRate, r);
       return addon
         .masterAudioAsync(
           r.preset ?? null,
@@ -348,13 +348,13 @@ export function masterAudioStereoAsync(
   return withEntry('masterAudioStereoAsync', () => {
     try {
       const r = requestOnly<MasterAudioStereoAsyncRequest>('masterAudioStereoAsync', [request]);
+      if (isAbsent(r.preset) && isAbsent(r.overrides)) {
+        throw refuseType('give preset or overrides');
+      }
       assertAudioInput(r.left, r.sampleRate, r, 'left');
       assertAudioInput(r.right, r.sampleRate, r, 'right');
       if (r.left.length !== r.right.length) {
         throw refuse('left and right must have the same length');
-      }
-      if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-        throw refuseType('give preset or overrides');
       }
       return addon
         .masterAudioStereoAsync(

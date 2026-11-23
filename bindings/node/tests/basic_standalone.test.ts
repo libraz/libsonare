@@ -90,6 +90,7 @@ describe('standalone functions', () => {
       'platform',
       'features',
       'decode',
+      'encode',
       'simd',
       'hardwareConcurrency',
     ]);
@@ -118,6 +119,8 @@ describe('standalone functions', () => {
     });
     expect(report.decode.builtin).toEqual(['wav', 'mp3']);
     expect(Array.isArray(report.decode.ffmpeg)).toBe(true);
+    expect(report.encode.builtin).toEqual(['wav']);
+    expect(Array.isArray(report.encode.ffmpeg)).toBe(true);
     expect(report.simd).toEqual(expect.any(String));
     expect(report.hardwareConcurrency).toBeGreaterThan(0);
   });
@@ -126,6 +129,7 @@ describe('standalone functions', () => {
     const catalog = capabilityCatalog();
     expect(catalog.version).toBe(version());
     expect(catalog.abi.project).toBe(EXPECTED_PROJECT_ABI_VERSION);
+    expect(catalog.encode).toEqual(capabilities().encode);
     expect(catalog.processors.length).toBeGreaterThan(0);
     expect(catalog.presets.mastering).toContain('pop');
     expect(Object.keys(catalog.presets).sort()).toEqual([

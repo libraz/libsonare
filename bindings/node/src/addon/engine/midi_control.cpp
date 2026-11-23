@@ -25,6 +25,12 @@ using namespace sonare_node::engine;
 
 namespace {
 
+struct MidiCcBindingListGuard {
+  SonareMidiCcBindingList value{};
+
+  ~MidiCcBindingListGuard() { sonare_free_midi_cc_binding_list(&value); }
+};
+
 // Controller-profile spellings: the C ABI's own tables.
 constexpr const auto& kControllerInputs = sonare::c_api::synth_names::kControllerInputs;
 constexpr const auto& kControllerAxes = sonare::c_api::synth_names::kControllerAxes;
@@ -71,9 +77,12 @@ Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SonareMidiCcBinding binding{};
-  if (!sonare_node::CcBindingFromObject(env, info[0].As<Napi::Object>(), &binding, "")) {
+  const auto object = info[0].As<Napi::Object>();
+  if (!sonare_node::CcBindingFromObject(env, object, &binding, "")) {
     return env.Undefined();
   }
+  binding.consume = sonare_node::BoolProperty(object, "consume", false) ? 1 : 0;
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, &binding));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -95,6 +104,42 @@ Napi::Value RealtimeEngineWrap::MidiCcBindingCount(const Napi::CallbackInfo& inf
   size_t count = 0;
   ThrowIfError(env, sonare_engine_midi_cc_binding_count(engine_, &count));
   return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::MidiCcBindings(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
+  MidiCcBindingListGuard bindings;
+  ThrowIfError(env, sonare_engine_midi_cc_bindings(engine_, &bindings.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if ((bindings.value.count == 0) != (bindings.value.items == nullptr) ||
+      bindings.value.count > std::numeric_limits<uint32_t>::max()) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "MIDI CC binding list is not representable as an array");
+    return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, static_cast<uint32_t>(bindings.value.count));
+  for (size_t i = 0; i < bindings.value.count; ++i) {
+    const SonareMidiCcBinding& binding = bindings.value.items[i];
+    if (binding.kind >= sonare_node::CcBindingKindNames().size()) {
+      sonare_node::ThrowSonareErrorMessage(
+          env, SONARE_ERROR_INVALID_FORMAT,
+          "unknown MIDI CC binding kind ordinal: " + std::to_string(binding.kind));
+      return env.Undefined();
+    }
+    if (binding.consume > 1) {
+      sonare_node::ThrowSonareErrorMessage(
+          env, SONARE_ERROR_INVALID_FORMAT,
+          "unknown MIDI CC consume value: " + std::to_string(binding.consume));
+      return env.Undefined();
+    }
+    Napi::Object item = sonare_node::CcBindingToObject(env, binding);
+    item.Set("consume", binding.consume != 0);
+    out.Set(static_cast<uint32_t>(i), item);
+  }
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

@@ -107,10 +107,10 @@ export function mixStereo(...args: unknown[]): MixResult {
   return withEntry('mixStereo', () => {
     const fnName = 'mixStereo';
     const req = requestOnly<MixStereoRequest>(fnName, args);
-    assertSampleRate(req.sampleRate);
     if (!Array.isArray(req.strips)) {
       throw refuseType(`strips must be an array`);
     }
+    assertSampleRate(req.sampleRate);
     requireListBudget(req.strips, 'strips');
     if (req.strips.length === 0) {
       throw refuse(`strips must not be empty`);
@@ -124,6 +124,9 @@ export function mixStereo(...args: unknown[]): MixResult {
         throw refuseType(`${path} must be an object`);
       }
       assertDeclaredKeys(strip, STRIP_KEYS, path);
+      const muted = isAbsent(strip.muted)
+        ? undefined
+        : requireBoolean(strip.muted, `${path}.muted`);
       assertAudioInput(strip.left, req.sampleRate, req, `${path}.left`);
       assertAudioInput(strip.right, req.sampleRate, req, `${path}.right`);
       if (strip.left.length !== strip.right.length) {
@@ -141,8 +144,8 @@ export function mixStereo(...args: unknown[]): MixResult {
       if (!isAbsent(strip.panMode)) {
         given.panMode = panModeToNative(strip.panMode, `${path}.panMode`);
       }
-      if (!isAbsent(strip.muted)) {
-        given.muted = requireBoolean(strip.muted, `${path}.muted`);
+      if (muted !== undefined) {
+        given.muted = muted;
       }
       for (const [key, value] of Object.entries(given)) {
         // A strip that leaves a field out stays at its default: the native array holds a hole.

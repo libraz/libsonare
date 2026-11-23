@@ -27,6 +27,19 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 /** Canonical name of an {@link ErrorCode}, e.g. `'InvalidParameter'`. */
 export type ErrorCodeName = keyof typeof ErrorCode;
 
+/** Machine-readable cause of a coded error. */
+export type ErrorReason =
+  | 'malformedJson'
+  | 'unsupportedSchemaVersion'
+  | 'notCompiledIn'
+  | 'notPersistable'
+  | 'unresolvedSource'
+  | 'unresolvedSoundFont'
+  | 'deviceUnavailable'
+  | 'deviceFormatRefused'
+  | 'engineDeviceDriven'
+  | 'releasedHandle';
+
 const ERROR_CODE_NAMES = new Map<number, ErrorCodeName>(
   (Object.keys(ErrorCode) as ErrorCodeName[]).map((name) => [ErrorCode[name], name]),
 );
@@ -35,6 +48,8 @@ const ERROR_CODE_NAMES = new Map<number, ErrorCodeName>(
 export interface SonareErrorOptions {
   /** Underlying cause, passed through to `Error`. */
   cause?: unknown;
+  /** Machine-readable cause of this error, when available. */
+  reason?: ErrorReason;
 }
 
 /**
@@ -68,6 +83,10 @@ export class SonareError extends Error {
   readonly code: ErrorCode;
   /** Canonical name of `code`, e.g. `'InvalidParameter'`. */
   readonly codeName: ErrorCodeName;
+  /** The public entry the caller invoked. */
+  declare readonly entry?: string;
+  /** Machine-readable cause of this error, when available. */
+  declare readonly reason?: ErrorReason;
   /** Structured detail of a vocal-edit failure: the reason token and the field it concerns. */
   declare readonly detail?: VocalErrorDetail;
 
@@ -80,6 +99,9 @@ export class SonareError extends Error {
     super(message, options);
     this.code = code;
     this.codeName = ERROR_CODE_NAMES.get(code) ?? 'Unknown';
+    if (options?.reason !== undefined) {
+      this.reason = options.reason;
+    }
   }
 
   /**

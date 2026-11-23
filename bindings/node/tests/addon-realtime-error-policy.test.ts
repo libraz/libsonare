@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { addonSources } from './_addon_sources.js';
+import { addonSources, addonSourceText } from './_addon_sources.js';
 
 /**
  * Audio-thread C-ABI entry points neither clear nor record
@@ -103,5 +103,17 @@ describe('audio-thread C-ABI calls never report the stale thread-local message',
         'call, so keep the call inside the ThrowIfRealtimeError(...) argument list rather than ' +
         'storing the code first.',
     ).toEqual([]);
+  });
+
+  it('attaches the fixed device-driven reason only to manual engine processing', () => {
+    expect(callSites('sonare_engine_process')).toHaveLength(1);
+    const source = withoutLineComments(addonSourceText('engine/graph_offline.cpp'));
+    expect(source).toMatch(
+      /ThrowIfRealtimeError\(\s*env,\s*sonare_engine_process\([\s\S]*?\),\s*sonare::error_reason_token\(sonare::ErrorReason::EngineDeviceDriven\)\s*\)/,
+    );
+    const utils = withoutLineComments(addonSourceText('sonare_wrap_utils.h'));
+    expect(utils).toMatch(
+      /err\s*==\s*SONARE_ERROR_INVALID_STATE\s*\?\s*invalid_state_reason\s*:\s*nullptr/,
+    );
   });
 });

@@ -273,10 +273,10 @@ export function masteringRepairApply(
 export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyResult {
   return withEntry('masteringRepairApply', () => {
     const request = requestOnly<MasteringRepairApplyRequest>('masteringRepairApply', args);
-    assertAudioChannels(request.channels, request.sampleRate, request);
     if (!Array.isArray(request.stages)) {
       throw refuseType('stages must be an array');
     }
+    assertAudioChannels(request.channels, request.sampleRate, request);
     requireListBudget(request.stages, 'stages');
     const result = addon.masteringRepairApply(
       request.channels,

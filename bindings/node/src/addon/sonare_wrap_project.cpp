@@ -1,13 +1,19 @@
 #include "sonare_wrap_project.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <string>
+#include <variant>
 #include <vector>
 
+#include "c_api/midi_input_domains.h"
 #include "c_api/project_input_domains.h"
+#include "c_api/synth_patch_fields.h"
 #include "project/common.h"
 #include "sonare_wrap_options.h"
+#include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node::project;
@@ -27,6 +33,270 @@ struct HeapStringGuard {
     if (value != nullptr) sonare_free_string(value);
   }
 };
+
+struct StringListGuard {
+  SonareStringList value{};
+
+  ~StringListGuard() {
+    if (value.count != 0 && value.items == nullptr) value.count = 0;
+    sonare_free_string_list(&value);
+  }
+};
+
+struct ProjectInstrumentListGuard {
+  SonareProjectInstrumentList value{};
+
+  ~ProjectInstrumentListGuard() {
+    if (value.count != 0 && value.items == nullptr) value.count = 0;
+    sonare_free_project_instrument_list(&value);
+  }
+};
+
+bool ReadDestinationInstrumentOptions(Napi::Env env, const Napi::Value& value,
+                                      SonareProjectInstrument* instrument) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Object options;
+  if (!RequiredObjectValue(env, value, "options", &options)) return false;
+  const Napi::Value bank_value = options.Get("bank");
+  if (!bank_value.IsUndefined() && !bank_value.IsNull()) {
+    Napi::Object bank;
+    if (!RequiredObjectValue(env, bank_value, "options.bank", &bank) ||
+        !RequiredDomainValue(env, bank.Get("msb"), "options.bank.msb",
+                             sonare_c_detail::kMidiDataByteDomain, &instrument->bank_msb) ||
+        !RequiredDomainValue(env, bank.Get("lsb"), "options.bank.lsb",
+                             sonare_c_detail::kMidiDataByteDomain, &instrument->bank_lsb)) {
+      return false;
+    }
+  }
+  const Napi::Value program = options.Get("program");
+  if (!program.IsUndefined() && !program.IsNull() &&
+      !RequiredDomainValue(env, program, "options.program", sonare_c_detail::kMidiDataByteDomain,
+                           &instrument->program)) {
+    return false;
+  }
+  return true;
+}
+
+bool ReadDestinationInstrument(Napi::Env env, const Napi::Object& object,
+                               SonareProjectInstrument* instrument,
+                               sonare_node::SynthPatchStorage* synth_storage,
+                               SonareBuiltinSynthConfig* builtin, SonareSf2InstrumentConfig* sf2,
+                               std::string* sound_font_uri) {
+  std::string kind;
+  if (!RequiredStringProperty(env, object, "kind", &kind)) return false;
+  if (kind == "synth") {
+    instrument->kind = SONARE_PROJECT_INSTRUMENT_SYNTH;
+    if (!ReadSynthPatch(env, object.Get("patch"), synth_storage)) return false;
+    instrument->synth = &synth_storage->patch;
+    instrument->use_gm_programs = BoolProperty(object, "useGmPrograms", false) ? 1 : 0;
+    return !env.IsExceptionPending();
+  }
+  if (kind == "builtin") {
+    instrument->kind = SONARE_PROJECT_INSTRUMENT_BUILTIN;
+    sonare_builtin_synth_config_init(builtin);
+    Napi::Object config;
+    if (!RequiredObjectValue(env, object.Get("config"), "instrument.config", &config) ||
+        !ReadBuiltinWaveform(env, config.Get("waveform"), &builtin->waveform)) {
+      return false;
+    }
+    builtin->gain = FloatProperty(config, "gain", builtin->gain);
+    builtin->attack_ms = FloatProperty(config, "attackMs", builtin->attack_ms);
+    builtin->decay_ms = FloatProperty(config, "decayMs", builtin->decay_ms);
+    builtin->sustain = FloatProperty(config, "sustain", builtin->sustain);
+    builtin->release_ms = FloatProperty(config, "releaseMs", builtin->release_ms);
+    builtin->polyphony = IntProperty(config, "polyphony", builtin->polyphony);
+    if (env.IsExceptionPending()) return false;
+    instrument->builtin = builtin;
+    return true;
+  }
+  if (kind == "sf2") {
+    instrument->kind = SONARE_PROJECT_INSTRUMENT_SF2;
+    sonare_sf2_instrument_config_init(sf2);
+    Napi::Object config;
+    if (!RequiredObjectValue(env, object.Get("config"), "instrument.config", &config)) {
+      return false;
+    }
+    sf2->gain = FloatProperty(config, "gain", sf2->gain);
+    sf2->polyphony = IntProperty(config, "polyphony", sf2->polyphony);
+    sf2->prefer_model_for_modeled_families =
+        BoolProperty(config, "preferModelForModeledFamilies",
+                     sf2->prefer_model_for_modeled_families != 0)
+            ? 1
+            : 0;
+    sf2->clear_bank_rig = BoolProperty(config, "clearBankRig", sf2->clear_bank_rig != 0) ? 1 : 0;
+    sf2->gs_efx_realization = sonare_node::GsEfxRealizationProperty(config, "gsEfxRealization");
+    if (env.IsExceptionPending()) return false;
+    instrument->sf2 = sf2;
+    const Napi::Value uri = object.Get("soundFontUri");
+    if (!uri.IsUndefined() && !uri.IsNull()) {
+      if (!RequiredStringValue(env, uri, "instrument.soundFontUri", sound_font_uri)) return false;
+      instrument->sound_font_uri = sound_font_uri->c_str();
+    }
+    return true;
+  }
+  Napi::RangeError::New(env, "instrument.kind must be 'synth', 'builtin', or 'sf2'")
+      .ThrowAsJavaScriptException();
+  return false;
+}
+
+Napi::Object SparseSynthPatchToObject(Napi::Env env, const SonareSynthPatch& patch) {
+  Napi::Object out = Napi::Object::New(env);
+  const auto preset_end = std::find(std::begin(patch.preset), std::end(patch.preset), '\0');
+  if (preset_end == std::end(patch.preset)) {
+    throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                       "stored synth preset name is not terminated");
+  }
+  if (preset_end != std::begin(patch.preset)) {
+    out.Set("preset", Napi::String::New(env, std::string(std::begin(patch.preset), preset_end)));
+  }
+  if (patch.engine_mode != SONARE_SYNTH_ENGINE_DEFAULT) {
+    out.Set("engineMode",
+            sonare_node::SynthEnumName(env, patch.engine_mode, sonare_node::kSynthEngineModes,
+                                       SONARE_SYNTH_ENGINE_MODE_COUNT));
+  }
+  for (const auto& row : sonare_c_detail::kSynthPatchEnumFields) {
+    const int ordinal = patch.*row.member;
+    if (ordinal == 0) continue;
+    out.Set(row.name, sonare_node::SynthEnumName(env, ordinal, row.values.names,
+                                                 static_cast<int>(row.values.count)));
+  }
+  for (const auto& row : sonare_c_detail::kSynthPatchNumericFields) {
+    const uint32_t present = row.presence_fields2 ? patch.present_fields2 : patch.present_fields;
+    const double value =
+        std::visit([&](const auto member) { return double(patch.*member); }, row.member);
+    if (value == 0.0 && (present & row.presence_bit) == 0u) continue;
+    if (std::strcmp(row.name, "oneShot") == 0) {
+      out.Set(row.name, Napi::Boolean::New(env, value != 0.0));
+    } else {
+      out.Set(row.name, Napi::Number::New(env, value));
+    }
+  }
+  if (patch.engine_param_count != 0) {
+    if (patch.engine_params == nullptr) {
+      throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "stored synth engine parameters are missing");
+    }
+    Napi::Object params = Napi::Object::New(env);
+    for (size_t i = 0; i < patch.engine_param_count; ++i) {
+      if (patch.engine_params[i].key == nullptr) {
+        throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "stored synth engine parameter has no key");
+      }
+      params.Set(patch.engine_params[i].key, patch.engine_params[i].value);
+    }
+    out.Set("engineParams", params);
+  }
+  if (patch.num_mod_routings < 0 || patch.num_mod_routings > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
+    throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                       "destination instrument has an invalid mod routing count");
+  }
+  if (patch.num_mod_routings > 0 ||
+      (patch.present_fields & SONARE_SYNTH_FIELD_MOD_ROUTINGS) != 0u) {
+    Napi::Array routings = Napi::Array::New(env, static_cast<uint32_t>(patch.num_mod_routings));
+    for (int i = 0; i < patch.num_mod_routings; ++i) {
+      const SonareSynthModRouting& route = patch.mod_routings[i];
+      Napi::Object routing = Napi::Object::New(env);
+      routing.Set("source",
+                  sonare_node::SynthEnumName(env, route.source, sonare_node::kSynthModSources,
+                                             SONARE_SYNTH_MOD_SOURCE_COUNT));
+      routing.Set("destination", sonare_node::SynthEnumName(env, route.destination,
+                                                            sonare_node::kSynthModDestinations,
+                                                            SONARE_SYNTH_MOD_DESTINATION_COUNT));
+      routing.Set("depth", route.depth);
+      routings.Set(static_cast<uint32_t>(i), routing);
+    }
+    out.Set("modRoutings", routings);
+  }
+  return out;
+}
+
+Napi::Value BuiltinWaveformToName(Napi::Env env, int waveform) {
+  const char* name = nullptr;
+  switch (waveform) {
+    case SONARE_SYNTH_WAVEFORM_SINE:
+      name = sonare::c_api::synth_names::kBuiltinWaveforms[0];
+      break;
+    case SONARE_SYNTH_WAVEFORM_SAW:
+      name = sonare::c_api::synth_names::kBuiltinWaveforms[1];
+      break;
+    case SONARE_SYNTH_WAVEFORM_SQUARE:
+      name = sonare::c_api::synth_names::kBuiltinWaveforms[3];
+      break;
+    case SONARE_SYNTH_WAVEFORM_TRIANGLE:
+      name = sonare::c_api::synth_names::kBuiltinWaveforms[4];
+      break;
+    default:
+      throw sonare_node::MakeSonareError(
+          env, SONARE_ERROR_INVALID_FORMAT,
+          "unknown built-in synth waveform ordinal: " + std::to_string(waveform));
+  }
+  return Napi::String::New(env, name);
+}
+
+Napi::Object ProjectInstrumentToObject(Napi::Env env, const SonareProjectInstrument& instrument) {
+  Napi::Object out = Napi::Object::New(env);
+  if (instrument.kind == SONARE_PROJECT_INSTRUMENT_SYNTH) {
+    if (instrument.synth == nullptr) {
+      throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "stored synth instrument has no patch");
+    }
+    out.Set("kind", "synth");
+    out.Set("patch", SparseSynthPatchToObject(env, *instrument.synth));
+    out.Set("useGmPrograms", Napi::Boolean::New(env, instrument.use_gm_programs != 0));
+  } else if (instrument.kind == SONARE_PROJECT_INSTRUMENT_BUILTIN) {
+    if (instrument.builtin == nullptr) {
+      throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "stored built-in instrument has no config");
+    }
+    const SonareBuiltinSynthConfig& config = *instrument.builtin;
+    Napi::Object values = Napi::Object::New(env);
+    values.Set("waveform", BuiltinWaveformToName(env, config.waveform));
+    values.Set("gain", config.gain);
+    values.Set("attackMs", config.attack_ms);
+    values.Set("decayMs", config.decay_ms);
+    values.Set("sustain", config.sustain);
+    values.Set("releaseMs", config.release_ms);
+    values.Set("polyphony", config.polyphony);
+    out.Set("kind", "builtin");
+    out.Set("config", values);
+  } else if (instrument.kind == SONARE_PROJECT_INSTRUMENT_SF2) {
+    if (instrument.sf2 == nullptr) {
+      throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "stored SoundFont instrument has no config");
+    }
+    const SonareSf2InstrumentConfig& config = *instrument.sf2;
+    if (config.gs_efx_realization != 0 && config.gs_efx_realization != 1) {
+      throw sonare_node::MakeSonareError(
+          env, SONARE_ERROR_INVALID_FORMAT,
+          "unknown GS effects realization ordinal: " + std::to_string(config.gs_efx_realization));
+    }
+    Napi::Object values = Napi::Object::New(env);
+    values.Set("gain", config.gain);
+    values.Set("polyphony", config.polyphony);
+    values.Set("preferModelForModeledFamilies",
+               Napi::Boolean::New(env, config.prefer_model_for_modeled_families != 0));
+    values.Set("clearBankRig", Napi::Boolean::New(env, config.clear_bank_rig != 0));
+    values.Set("gsEfxRealization", config.gs_efx_realization == 0 ? "modern" : "classic");
+    out.Set("kind", "sf2");
+    out.Set("config", values);
+    if (instrument.sound_font_uri != nullptr) {
+      out.Set("soundFontUri", Napi::String::New(env, instrument.sound_font_uri));
+    }
+  } else {
+    throw sonare_node::MakeSonareError(
+        env, SONARE_ERROR_INVALID_FORMAT,
+        "unknown project instrument kind ordinal: " + std::to_string(instrument.kind));
+  }
+  return out;
+}
+
+Napi::Value AutomationTargetKindNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  return sonare_node::JoinedNamesToArray(env, sonare_automation_target_kind_names(),
+                                         "automation target kind names");
+  SONARE_NODE_CATCH(env)
+}
 
 // Builds the ProjectSource object from the descriptor and the source's full name or URI, which
 // the caller reads through an untruncated getter rather than the descriptor's bounded field.
@@ -85,6 +355,8 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::RemoveWarpMap>("removeWarpMap", napi_default_method),
           InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination",
                                                                 napi_default_method),
+          InstanceMethod<&ProjectWrap::SetDestinationInstrument>("setDestinationInstrument",
+                                                                 napi_default_method),
           InstanceMethod<&ProjectWrap::SetPartRig>("setPartRig", napi_default_method),
           InstanceMethod<&ProjectWrap::GetPartRig>("getPartRig", napi_default_method),
           InstanceMethod<&ProjectWrap::ClearPartRig>("clearPartRig", napi_default_method),
@@ -109,6 +381,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
                                                            napi_default_method),
           InstanceMethod<&ProjectWrap::RemoveAutomationLane>("removeAutomationLane",
                                                              napi_default_method),
+          InstanceMethod<&ProjectWrap::AutomationLanes>("automationLanes", napi_default_method),
           InstanceMethod<&ProjectWrap::Undo>("undo", napi_default_method),
           InstanceMethod<&ProjectWrap::Redo>("redo", napi_default_method),
           InstanceMethod<&ProjectWrap::ClearHistory>("clearHistory", napi_default_method),
@@ -116,6 +389,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetMaxHistoryBytes>("setMaxHistoryBytes",
                                                            napi_default_method),
           InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents", napi_default_method),
+          InstanceMethod<&ProjectWrap::MidiEvents>("midiEvents", napi_default_method),
           InstanceMethod<&ProjectWrap::ImportSmf>("importSmf", napi_default_method),
           InstanceMethod<&ProjectWrap::ExportSmf>("exportSmf", napi_default_method),
           InstanceMethod<&ProjectWrap::ImportClipFile>("importClipFile", napi_default_method),
@@ -131,6 +405,11 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid", napi_default_method),
           InstanceMethod<&ProjectWrap::AnnotateKeys>("annotateKeys", napi_default_method),
           InstanceMethod<&ProjectWrap::AnnotateChords>("annotateChords", napi_default_method),
+          InstanceMethod<&ProjectWrap::KeyAnnotations>("keyAnnotations", napi_default_method),
+          InstanceMethod<&ProjectWrap::ChordAnnotations>("chordAnnotations", napi_default_method),
+          InstanceMethod<&ProjectWrap::AnnotateSections>("annotateSections", napi_default_method),
+          InstanceMethod<&ProjectWrap::SectionAnnotations>("sectionAnnotations",
+                                                           napi_default_method),
           InstanceMethod<&ProjectWrap::SetAssistSidecar>("setAssistSidecar", napi_default_method),
           InstanceMethod<&ProjectWrap::AssistSidecarCount>("assistSidecarCount",
                                                            napi_default_method),
@@ -140,6 +419,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::LastBounceCompileResult>("lastBounceCompileResult",
                                                                 napi_default_method),
           InstanceMethod<&ProjectWrap::Bounce>("bounce", napi_default_method),
+          InstanceMethod<&ProjectWrap::CountInFrames>("countInFrames", napi_default_method),
           InstanceMethod<&ProjectWrap::LoadSoundFont>("loadSoundFont", napi_default_method),
           InstanceMethod<&ProjectWrap::ClearSoundFont>("clearSoundFont", napi_default_method),
           InstanceMethod<&ProjectWrap::SoundFontPresetCount>("soundFontPresetCount",
@@ -149,6 +429,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetOverlapPolicy>("setOverlapPolicy", napi_default_method),
           InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy", napi_default_method),
           InstanceMethod<&ProjectWrap::SetMixerSceneJson>("setMixerSceneJson", napi_default_method),
+          InstanceMethod<&ProjectWrap::MixerSceneJson>("mixerSceneJson", napi_default_method),
           InstanceMethod<&ProjectWrap::SetMarker>("setMarker", napi_default_method),
           InstanceMethod<&ProjectWrap::MarkerByIndex>("markerByIndex", napi_default_method),
           InstanceMethod<&ProjectWrap::TrackByIndex>("trackByIndex", napi_default_method),
@@ -163,6 +444,12 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
                                                                  napi_default_method),
           InstanceMethod<&ProjectWrap::UnresolvedAudioSources>("unresolvedAudioSources",
                                                                napi_default_method),
+          InstanceMethod<&ProjectWrap::UnresolvedSoundFontUris>("unresolvedSoundFontUris",
+                                                                napi_default_method),
+          InstanceMethod<&ProjectWrap::DestinationInstruments>("destinationInstruments",
+                                                               napi_default_method),
+          InstanceMethod<&ProjectWrap::AddAudioSource>("addAudioSource", napi_default_method),
+          InstanceMethod<&ProjectWrap::RelinkSource>("relinkSource", napi_default_method),
           InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio", napi_default_method),
           InstanceMethod<&ProjectWrap::SetAudioSourceMetadata>("setAudioSourceMetadata",
                                                                napi_default_method),
@@ -171,6 +458,11 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
                                                             napi_default_method),
           InstanceMethod<&ProjectWrap::TimeSignatureByIndex>("timeSignatureByIndex",
                                                              napi_default_method),
+          InstanceMethod<&ProjectWrap::PpqToSec>("ppqToSec", napi_default_method),
+          InstanceMethod<&ProjectWrap::SecToPpq>("secToPpq", napi_default_method),
+          InstanceMethod<&ProjectWrap::PositionAtPpq>("positionAtPpq", napi_default_method),
+          InstanceMethod<&ProjectWrap::BarStartPpq>("barStartPpq", napi_default_method),
+          InstanceMethod<&ProjectWrap::EndPpq>("endPpq", napi_default_method),
           InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount",
                                                            napi_default_method),
           InstanceMethod<&ProjectWrap::MarkerCount>("markerCount", napi_default_method),
@@ -178,6 +470,8 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           StaticMethod<&ProjectWrap::FromJson>("fromJson", napi_default_method),
       });
   exports.Set("Project", func);
+  exports.Set("automationTargetKindNames",
+              Napi::Function::New(env, AutomationTargetKindNames, "automationTargetKindNames"));
   return exports;
 }
 
@@ -341,6 +635,18 @@ Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value ProjectWrap::MixerSceneJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  HeapStringGuard document;
+  ThrowIfError(env, sonare_project_mixer_scene_json(project_, &document.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if (document.value == nullptr) return env.Null();
+  return Napi::String::New(env, document.value);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -404,6 +710,11 @@ Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   HeapStringGuard name;
   ThrowIfError(env, sonare_project_track_name_by_index(project_, index, &name.value));
   if (env.IsExceptionPending()) return env.Undefined();
+  HeapStringGuard channel_strip_ref;
+  HeapStringGuard output_target;
+  ThrowIfError(env, sonare_project_track_route_by_index(project_, index, &channel_strip_ref.value,
+                                                        &output_target.value));
+  if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("id", track.id);
   out.Set("kind", track.kind);
@@ -413,6 +724,8 @@ Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   out.Set("mute", track.mute != 0);
   out.Set("solo", track.solo != 0);
   out.Set("name", name.value);
+  if (channel_strip_ref.value != nullptr) out.Set("channelStripRef", channel_strip_ref.value);
+  if (output_target.value != nullptr) out.Set("outputTarget", output_target.value);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -491,6 +804,87 @@ Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
   out.Set("numerator", Napi::Number::New(env, seg.numerator));
   out.Set("denominator", Napi::Number::New(env, seg.denominator));
   return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::PpqToSec(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  double ppq = 0.0;
+  if (!sonare_node::RequiredDoubleArg(env, info, 0, "ppq", &ppq)) return env.Undefined();
+  double sec = 0.0;
+  ThrowIfError(env, sonare_project_ppq_to_sec(project_, ppq, &sec));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, sec);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::SecToPpq(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  double sec = 0.0;
+  if (!sonare_node::RequiredDoubleArg(env, info, 0, "sec", &sec)) return env.Undefined();
+  double ppq = 0.0;
+  ThrowIfError(env, sonare_project_sec_to_ppq(project_, sec, &ppq));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, ppq);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::PositionAtPpq(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  double ppq = 0.0;
+  if (!sonare_node::RequiredDoubleArg(env, info, 0, "ppq", &ppq)) return env.Undefined();
+  SonareProjectPosition position{};
+  ThrowIfError(env, sonare_project_position_at_ppq(project_, ppq, &position));
+  if (env.IsExceptionPending()) return env.Undefined();
+  constexpr int64_t kMaxSafeBarIndex = static_cast<int64_t>(sonare_node::kMaxSafeInteger);
+  if (position.bar_index < -kMaxSafeBarIndex || position.bar_index > kMaxSafeBarIndex) {
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_INVALID_FORMAT,
+        "position.barIndex is not exactly representable as a number");
+    return env.Undefined();
+  }
+  Napi::Object time_signature = Napi::Object::New(env);
+  time_signature.Set("startPpq", Napi::Number::New(env, position.time_signature.start_ppq));
+  time_signature.Set("numerator", Napi::Number::New(env, position.time_signature.numerator));
+  time_signature.Set("denominator", Napi::Number::New(env, position.time_signature.denominator));
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("bpm", Napi::Number::New(env, position.bpm));
+  out.Set("timeSignature", time_signature);
+  out.Set("barStartPpq", Napi::Number::New(env, position.bar_start_ppq));
+  out.Set("barIndex", Napi::Number::New(env, static_cast<double>(position.bar_index)));
+  out.Set("beat", Napi::Number::New(env, static_cast<double>(position.beat)));
+  out.Set("beatFraction", Napi::Number::New(env, position.beat_fraction));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::BarStartPpq(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  int64_t bar_index = 0;
+  if (!RequiredSafeIntegerValue(env, info[0], "barIndex", &bar_index)) return env.Undefined();
+  double ppq = 0.0;
+  ThrowIfError(env, sonare_project_bar_start_ppq(project_, bar_index, &ppq));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, ppq);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::EndPpq(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  double end_ppq = 0.0;
+  ThrowIfError(env, sonare_project_end_ppq(project_, &end_ppq));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, end_ppq);
   SONARE_NODE_CATCH(env)
 }
 
@@ -631,6 +1025,151 @@ Napi::Value ProjectWrap::UnresolvedAudioSources(const Napi::CallbackInfo& info) 
     sources.Set(static_cast<uint32_t>(i), built);
   }
   return sources;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::UnresolvedSoundFontUris(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  StringListGuard list;
+  ThrowIfError(env, sonare_project_unresolved_sound_font_uris(project_, &list.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "invalid unresolved SoundFont URI list");
+    return env.Undefined();
+  }
+  Napi::Array uris = Napi::Array::New(env, list.value.count);
+  for (size_t i = 0; i < list.value.count; ++i) {
+    if (list.value.items[i] == nullptr) {
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "unresolved SoundFont URI list contains a null item");
+      return env.Undefined();
+    }
+    uris.Set(static_cast<uint32_t>(i), Napi::String::New(env, list.value.items[i]));
+  }
+  return uris;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::SetDestinationInstrument(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  uint32_t destination_id = 0;
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) {
+    return env.Undefined();
+  }
+  SonareProjectInstrument instrument{};
+  sonare_project_instrument_init(&instrument);
+  if (!ReadDestinationInstrumentOptions(env, info[2], &instrument)) return env.Undefined();
+  const Napi::Value input = info[1];
+  if (input.IsUndefined() || input.IsNull()) {
+    if (instrument.bank_msb != SONARE_PROJECT_INSTRUMENT_FROM_CLIP ||
+        instrument.bank_lsb != SONARE_PROJECT_INSTRUMENT_FROM_CLIP ||
+        instrument.program != SONARE_PROJECT_INSTRUMENT_FROM_CLIP) {
+      Napi::RangeError::New(env, "bank and program require an instrument")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    ThrowIfError(env, sonare_project_set_destination_instrument(project_, destination_id, nullptr));
+    return env.Undefined();
+  }
+  Napi::Object object;
+  if (!RequiredObjectValue(env, input, "instrument", &object)) return env.Undefined();
+  sonare_node::SynthPatchStorage synth_storage;
+  SonareBuiltinSynthConfig builtin{};
+  SonareSf2InstrumentConfig sf2{};
+  std::string sound_font_uri;
+  if (!ReadDestinationInstrument(env, object, &instrument, &synth_storage, &builtin, &sf2,
+                                 &sound_font_uri)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env,
+               sonare_project_set_destination_instrument(project_, destination_id, &instrument));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::DestinationInstruments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  ProjectInstrumentListGuard list;
+  ThrowIfError(env, sonare_project_destination_instruments(project_, &list.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if (list.value.count != 0 && list.value.items == nullptr) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "invalid project destination instrument list");
+    return env.Undefined();
+  }
+  Napi::Array result = Napi::Array::New(env, list.value.count);
+  for (size_t i = 0; i < list.value.count; ++i) {
+    const SonareProjectInstrumentBinding& item = list.value.items[i];
+    if (item.reserved != 0) {
+      throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "project instrument binding reserved field is nonzero");
+    }
+    const SonareProjectInstrument& instrument = item.instrument;
+    Napi::Object binding = Napi::Object::New(env);
+    binding.Set("destinationId", item.destination_id);
+    binding.Set("instrument", ProjectInstrumentToObject(env, instrument));
+    const int absent = SONARE_PROJECT_INSTRUMENT_FROM_CLIP;
+    if ((instrument.bank_msb == absent) != (instrument.bank_lsb == absent)) {
+      throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "stored project instrument has a partial bank");
+    }
+    if (instrument.bank_msb != absent) {
+      if (instrument.bank_msb < 0 || instrument.bank_msb > 127 || instrument.bank_lsb < 0 ||
+          instrument.bank_lsb > 127) {
+        throw sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "destination instrument has an invalid bank override");
+      }
+      Napi::Object bank = Napi::Object::New(env);
+      bank.Set("msb", instrument.bank_msb);
+      bank.Set("lsb", instrument.bank_lsb);
+      binding.Set("bank", bank);
+    }
+    if (instrument.program != absent) {
+      if (instrument.program < 0 || instrument.program > 127) {
+        throw sonare_node::MakeSonareError(
+            env, SONARE_ERROR_INVALID_FORMAT,
+            "destination instrument has an invalid program override");
+      }
+      binding.Set("program", instrument.program);
+    }
+    result.Set(static_cast<uint32_t>(i), binding);
+  }
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::AddAudioSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  std::string uri;
+  if (!sonare_node::RequiredStringValue(env, info[0], "uri", &uri)) return env.Undefined();
+  uint32_t source_id = 0;
+  ThrowIfError(env, sonare_project_add_audio_source(project_, uri.c_str(), &source_id));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, source_id);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::RelinkSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  uint32_t source_id = 0;
+  std::string uri;
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "sourceId", &source_id) ||
+      !sonare_node::RequiredStringValue(env, info[1], "uri", &uri)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_relink_source(project_, source_id, uri.c_str()));
+  return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 

@@ -25,9 +25,11 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetOverlapPolicy(const Napi::CallbackInfo& info);
   Napi::Value GetOverlapPolicy(const Napi::CallbackInfo& info);
   Napi::Value SetMixerSceneJson(const Napi::CallbackInfo& info);
+  Napi::Value MixerSceneJson(const Napi::CallbackInfo& info);
   Napi::Value SetMarker(const Napi::CallbackInfo& info);
   Napi::Value MarkerByIndex(const Napi::CallbackInfo& info);
   Napi::Value TrackByIndex(const Napi::CallbackInfo& info);
+  Napi::Value UnresolvedSoundFontUris(const Napi::CallbackInfo& info);
   Napi::Value ClipByIndex(const Napi::CallbackInfo& info);
   Napi::Value SourceByIndex(const Napi::CallbackInfo& info);
   Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
@@ -39,12 +41,19 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SourceCount(const Napi::CallbackInfo& info);
   Napi::Value UnresolvedAudioSourceIds(const Napi::CallbackInfo& info);
   Napi::Value UnresolvedAudioSources(const Napi::CallbackInfo& info);
+  Napi::Value AddAudioSource(const Napi::CallbackInfo& info);
+  Napi::Value RelinkSource(const Napi::CallbackInfo& info);
   Napi::Value SetSourceAudio(const Napi::CallbackInfo& info);
   Napi::Value SetAudioSourceMetadata(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentByIndex(const Napi::CallbackInfo& info);
   Napi::Value TimeSignatureByIndex(const Napi::CallbackInfo& info);
   Napi::Value TimeSignatureCount(const Napi::CallbackInfo& info);
+  Napi::Value PpqToSec(const Napi::CallbackInfo& info);
+  Napi::Value SecToPpq(const Napi::CallbackInfo& info);
+  Napi::Value PositionAtPpq(const Napi::CallbackInfo& info);
+  Napi::Value BarStartPpq(const Napi::CallbackInfo& info);
+  Napi::Value EndPpq(const Napi::CallbackInfo& info);
   Napi::Value MarkerCount(const Napi::CallbackInfo& info);
 
   // -- edit --
@@ -65,6 +74,8 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetWarpMap(const Napi::CallbackInfo& info);
   Napi::Value RemoveWarpMap(const Napi::CallbackInfo& info);
   Napi::Value SetTrackMidiDestination(const Napi::CallbackInfo& info);
+  Napi::Value SetDestinationInstrument(const Napi::CallbackInfo& info);
+  Napi::Value DestinationInstruments(const Napi::CallbackInfo& info);
   Napi::Value SetPartRig(const Napi::CallbackInfo& info);
   Napi::Value GetPartRig(const Napi::CallbackInfo& info);
   Napi::Value ClearPartRig(const Napi::CallbackInfo& info);
@@ -86,6 +97,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value AddAutomationLane(const Napi::CallbackInfo& info);
   Napi::Value EditAutomationLane(const Napi::CallbackInfo& info);
   Napi::Value RemoveAutomationLane(const Napi::CallbackInfo& info);
+  Napi::Value AutomationLanes(const Napi::CallbackInfo& info);
   Napi::Value Undo(const Napi::CallbackInfo& info);
   Napi::Value Redo(const Napi::CallbackInfo& info);
   Napi::Value ClearHistory(const Napi::CallbackInfo& info);
@@ -94,6 +106,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
   // -- MIDI --
   Napi::Value SetMidiEvents(const Napi::CallbackInfo& info);
+  Napi::Value MidiEvents(const Napi::CallbackInfo& info);
   Napi::Value ImportSmf(const Napi::CallbackInfo& info);
   Napi::Value ExportSmf(const Napi::CallbackInfo& info);
   Napi::Value ImportClipFile(const Napi::CallbackInfo& info);
@@ -112,6 +125,10 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SnapToGrid(const Napi::CallbackInfo& info);
   Napi::Value AnnotateKeys(const Napi::CallbackInfo& info);
   Napi::Value AnnotateChords(const Napi::CallbackInfo& info);
+  Napi::Value KeyAnnotations(const Napi::CallbackInfo& info);
+  Napi::Value ChordAnnotations(const Napi::CallbackInfo& info);
+  Napi::Value AnnotateSections(const Napi::CallbackInfo& info);
+  Napi::Value SectionAnnotations(const Napi::CallbackInfo& info);
 
   // -- assist sidecars --
   Napi::Value SetAssistSidecar(const Napi::CallbackInfo& info);
@@ -123,6 +140,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value Compile(const Napi::CallbackInfo& info);
   Napi::Value LastBounceCompileResult(const Napi::CallbackInfo& info);
   Napi::Value Bounce(const Napi::CallbackInfo& info);
+  Napi::Value CountInFrames(const Napi::CallbackInfo& info);
 
   // -- SoundFont (SF2) instrument --
   void LoadSoundFont(const Napi::CallbackInfo& info);

@@ -19,7 +19,7 @@ import type {
   AnalyzeRhythmOptions,
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
-  Beat,
+  BeatObservations,
   BoundaryOptions,
   BoundaryResult,
   BpmAnalysisResult,
@@ -70,7 +70,6 @@ import {
   assertInt32,
   assertPitchClass,
   assertU32,
-  requestObject,
   requestOnly,
   sampleOneShot,
 } from './validation.js';
@@ -447,7 +446,10 @@ export interface MusicAnalyzeOptions {
    * given, and the unconstrained estimate is preferred when it lies inside it.
    */
   bpmMax?: number;
-  /** Prior tempo estimate in BPM. Default `120`. */
+  /**
+   * Finite, positive BPM prior that seeds beat tracking if the tempo search finds none.
+   * `bpm` is absent when no tempo is measured. Default 120.
+   */
   startBpm?: number;
   /** Detect triads only, with no seventh chords. Default `true`. */
   useTriadsOnly?: boolean;
@@ -526,15 +528,8 @@ export type AnalyzeAsyncRequest = Omit<AnalyzeRequest, 'onProgress' | 'cancel'>;
 
 /** Request for {@link estimateMeter}. */
 export interface EstimateMeterRequest {
-  /**
-   * Detected beats, non-decreasing in `timeSec`. Each beat's `strength` is the
-   * accent value scored; the series is divided by its own maximum before scoring,
-   * so only the accent contrast within it is read. `AnalysisResult.beats` is the
-   * usual source; its `strength` is a single unwindowed envelope frame, and
-   * `beatObservations.onsetStrength` is the windowed aggregate the library's own
-   * meter pass scores.
-   */
-  beats: readonly Beat[];
+  /** Beat-level accent evidence, usually from {@link AnalysisResult.beatObservations}. */
+  observations: BeatObservations;
   /**
    * Meter numerators to score. At most 16 entries, each in `[2, 32]`; an empty
    * list is rejected rather than restoring the default. Widening the set does
@@ -543,10 +538,8 @@ export interface EstimateMeterRequest {
   candidateNumerators?: number[];
   /**
    * Beat unit reported for the detected meter; a power of two in `[1, 32]`.
-   * Reported as requested: whether a beat divides into three is measured from
-   * energy *between* the beats, which per-beat accents do not carry, so a
-   * compound meter is not resolvable here — a six accented 3+3 comes back with
-   * this denominator and `grouping === [3, 3]`. Default 4.
+   * A six with a compound 3+3 grouping can be reported with denominator 8 when
+   * the subdivision observations support it. Default 4.
    */
   denominator?: number;
   /** Weight on the accent at each measure's first beat. Default 1. */
@@ -556,13 +549,8 @@ export interface EstimateMeterRequest {
   /** Weight on the subdivision accent pattern. Default 0.15. */
   subdivisionWeight?: number;
   /**
-   * Mean accent between the beats, as a fraction of the mean accent on them, at
-   * and above which a six (or a three) is read as compound. Only a midpoint
-   * holding an attack contributes: an event counts where it rises at least the
-   * refiner's evidence margin above the local level, so a subdivision masked by
-   * a sustained bed does not count. Only consulted when there is a subdivision
-   * to measure, so it has no effect on {@link estimateMeter}, which scores
-   * per-beat accents alone. Default 0.5.
+   * Mean inter-beat accent as a fraction of the mean beat accent, at and above
+   * which a six (or a three) is read as compound. Default 0.5.
    */
   compoundSubdivisionThreshold?: number;
 }
@@ -851,58 +839,76 @@ export function analyze(...args: unknown[]): AnalysisResult {
   });
 }
 
-const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
-  values instanceof Float32Array ? values : Float32Array.from(values);
-
-/** The core refuses the beat lists under their own names; the caller wrote them as `beats`. */
-const BEAT_RESPELLED = {
-  beatTimes: { name: 'beats[].timeSec', scale: 1 },
-  beatStrengths: { name: 'beats[].strength', scale: 1 },
+/** The core names these fields under `beats`; the caller supplied `observations`. */
+const METER_OBSERVATION_RESPELLED = {
+  'beats.accent': { name: 'observations.accent', scale: 1 },
+  'beats.hasAttack': { name: 'observations.hasAttack', scale: 1 },
+  'beats.lowFrequencyEnergy': { name: 'observations.lowFrequencyEnergy', scale: 1 },
+  'beats.subdivisionAccent': { name: 'observations.subdivisionAccent', scale: 1 },
 };
 
+const METER_OBSERVATION_KEYS = [
+  'accent',
+  'hasAttack',
+  'lowFrequencyEnergy',
+  'subdivisionAccent',
+  'chordChange',
+] as const satisfies readonly (keyof BeatObservations)[];
+
+function meterFloatStream(value: unknown, name: string): Float32Array {
+  if (!Array.isArray(value)) {
+    throw refuseType(`${name} must be an array`);
+  }
+  requireListBudget(value, name);
+  for (let i = 0; i < value.length; i += 1) {
+    if (typeof value[i] !== 'number') {
+      throw refuseType(`${name}[${i}] must be a number`);
+    }
+  }
+  return Float32Array.from(value);
+}
+
 /**
- * Estimate meter over a caller-supplied beat series, without audio and without
- * re-running analysis, so an arbitrary span of an existing result — or a beat
- * series from anywhere else — can be scored on its own.
- *
- * Each beat's `strength` is the accent evidence the scoring reads. It arrives in
- * whatever units the envelope produced; the series is divided by its own maximum
- * before scoring, so it needs no pre-scaling.
+ * Estimate meter from the provided beat-level observations. Pass a span of an
+ * existing result's observations or observations collected elsewhere.
  *
  * Option values are validated by the core, so an out-of-range weight, a
  * denominator that is not a power of two, an empty `candidateNumerators`, or
- * beats whose `timeSec` decreases surfaces as a `RangeError`.
+ * observation streams with invalid lengths or values surfaces as a `RangeError`.
  *
  * The result carries `grouping` alongside the numerator: how the bar divides
  * into accent groups of two and three beats, so a seven comes back as
  * `[3, 2, 2]` or `[2, 2, 3]` rather than as a bare seven.
  */
-export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
+export function estimateMeter(request: EstimateMeterRequest): MeterEstimate;
+export function estimateMeter(...args: unknown[]): MeterEstimate {
   return withEntry('estimateMeter', () => {
-    const { beats } = requestOnly<EstimateMeterRequest>('estimateMeter', [request]);
-    if (!Array.isArray(beats)) {
-      throw refuseType('beats must be an array of { timeSec, strength }');
+    const request = requestOnly<EstimateMeterRequest>('estimateMeter', args);
+    const { observations } = request;
+    if (observations === null || typeof observations !== 'object' || Array.isArray(observations)) {
+      throw refuseType('observations must be an object');
     }
-    requireListBudget(beats, 'beats');
-    const times: number[] = [];
-    const strengths: number[] = [];
-    beats.forEach((beat: Beat, i: number) => {
-      if (typeof beat !== 'object' || beat === null) {
-        throw refuseType(`beats[${i}] must be an object`);
-      }
-      for (const key of ['timeSec', 'strength'] as const) {
-        if (typeof beat[key] !== 'number') {
-          throw refuseType(`beats[${i}].${key} must be a number`);
-        }
-      }
-      times.push(beat.timeSec);
-      strengths.push(beat.strength);
-    });
-    return withRespelled(BEAT_RESPELLED, () =>
+    assertDeclaredKeys(observations, METER_OBSERVATION_KEYS, 'observations');
+    if (!Array.isArray(observations.hasAttack)) {
+      throw refuseType('observations.hasAttack must be an array of booleans');
+    }
+    const accent = meterFloatStream(observations.accent, 'observations.accent');
+    requireListBudget(observations.hasAttack, 'observations.hasAttack');
+    const lowFrequencyEnergy = meterFloatStream(
+      observations.lowFrequencyEnergy,
+      'observations.lowFrequencyEnergy',
+    );
+    const subdivisionAccent = meterFloatStream(
+      observations.subdivisionAccent,
+      'observations.subdivisionAccent',
+    );
+    return withRespelled(METER_OBSERVATION_RESPELLED, () =>
       addon.estimateMeter(
-        asFloat32Array(times),
-        asFloat32Array(strengths),
-        without(request, 'beats'),
+        accent,
+        observations.hasAttack,
+        lowFrequencyEnergy,
+        subdivisionAccent,
+        without(request, 'observations'),
       ),
     );
   });
@@ -1022,18 +1028,19 @@ export function roomMorph(...args: unknown[]): RoomMorphResult {
  * @throws {RangeError} on a length mismatch, `receiverSpacingM` outside (0, 4], an
  *   unusable room geometry, or an explicit 0 where omission selects the default
  */
-export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult {
+export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult;
+export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
   return withEntry('roomMorphStereo', () => {
-    const req = requestObject('roomMorphStereo', request, 'left', true);
+    const req = requestOnly<RoomMorphStereoRequest>('roomMorphStereo', args);
+    const spacing = req.receiverSpacingM;
+    if (spacing !== undefined && typeof spacing !== 'number') {
+      throw refuseType('receiverSpacingM must be a number');
+    }
     const native = nativeRoomOptions(req);
     assertAudioInput(req.left, req.sampleRate, req, 'left');
     assertAudioInput(req.right, req.sampleRate, req, 'right');
     if (req.left.length !== req.right.length) {
       throw refuse('left and right must have the same length');
-    }
-    const spacing = req.receiverSpacingM;
-    if (spacing !== undefined && typeof spacing !== 'number') {
-      throw refuseType('receiverSpacingM must be a number');
     }
     return addon.roomMorphStereo(req.left, req.right, req.sampleRate, native);
   });
@@ -1208,7 +1215,6 @@ export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
       request.sampleRate,
       request.bpmMin,
       request.bpmMax,
-      request.startBpm,
       fft.nFft,
       fft.hopLength,
       request.maxCandidates ?? 5,
@@ -1485,8 +1491,6 @@ export function chordFunctions<T extends ChordFunctionsInput = Chord>(
     if (typeof key !== 'object' || key === null) {
       throw refuseType('key must be an object');
     }
-    assertPitchClass(key.root, 'key.root');
-    assertClosedToken(key.mode, KEY_MODES, 'key.mode');
     if (typeof chords !== 'object' || chords === null) {
       throw refuseType('chords must be an array or a chord analysis result');
     }
@@ -1494,6 +1498,8 @@ export function chordFunctions<T extends ChordFunctionsInput = Chord>(
     if (!Array.isArray(entries)) {
       throw refuseType('chords must be an array');
     }
+    assertPitchClass(key.root, 'key.root');
+    assertClosedToken(key.mode, KEY_MODES, 'key.mode');
     requireListBudget(entries, 'chords');
     entries.forEach((chord, i) => {
       if (typeof chord !== 'object' || chord === null) {

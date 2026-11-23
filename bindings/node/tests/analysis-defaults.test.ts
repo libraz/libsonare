@@ -65,7 +65,6 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
     const defaults: Required<AnalyzeBpmOptions> = {
       bpmMin: 60.0,
       bpmMax: 200.0,
-      startBpm: 120.0,
       nFft: 2048,
       hopLength: 512,
       maxCandidates: 5,

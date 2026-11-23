@@ -136,29 +136,25 @@ export interface Beat {
   /**
    * The onset envelope sampled at the single frame nearest this beat. It is a
    * raw, unnormalized value: its scale depends on the material, and it shifts
-   * with beat-position jitter because nothing is averaged around the beat. For
-   * accent scoring use {@link BeatObservations.onsetStrength}, the windowed
-   * aggregate the library's own downbeat and meter passes score.
+   * with beat-position jitter because nothing is averaged around the beat.
    */
   strength: number;
 }
 
 /**
- * Beat-level evidence the library's own downbeat and meter decisions score —
- * the input to those decisions, not their output. Each stream is parallel to
- * {@link AnalysisResult.beats}, one value per beat. An empty stream means the
- * analysis could not produce it, NOT that every beat scored zero.
+ * Beat-level evidence from the analysis. The streams use linear units, and
+ * empty optional streams keep an unavailable measurement distinct from zero.
  */
 export interface BeatObservations {
-  /**
-   * Onset-envelope aggregate over a window around each beat. This is the
-   * accent evidence the library's own meter pass scores;
-   * {@link Beat.strength} is a single unwindowed frame of the same envelope.
-   */
-  onsetStrength: number[];
-  /** Low-frequency energy at each beat. Empty when the analysis ran without audio. */
+  /** N values: maximum 5 ms RMS near an attack around each beat, in linear units. */
+  accent: number[];
+  /** N attack flags. Empty means every beat has an attack. */
+  hasAttack: boolean[];
+  /** N low-frequency energy values. Empty disables masked-beat judgments. */
   lowFrequencyEnergy: number[];
-  /** Chord-change evidence at each beat. Empty until chords are analyzed. */
+  /** N−1 interval accents. Empty is unmeasured; zero means measured silence. */
+  subdivisionAccent: number[];
+  /** N chord-change values. Empty until chords are analyzed. */
   chordChange: number[];
 }
 
@@ -315,9 +311,8 @@ export interface MeterEstimate {
    * none to find, it was too wide to search, or the span was too short to
    * search at all.
    *
-   * This is also what tells a compound bar from a simple one: per-beat accents
-   * cannot say how a beat subdivides, so a six accented 3+3 keeps the requested
-   * denominator and reports `[3, 3]` rather than being promoted to 6/8.
+   * A measured inter-beat accent can promote a compound 3+3 six to denominator
+   * 8; without subdivision evidence, the requested denominator is retained.
    */
   grouping: number[];
   /**
@@ -375,8 +370,6 @@ export interface AnalyzeBpmOptions {
    * the unconstrained estimate is preferred when it lies inside it.
    */
   bpmMax?: number;
-  /** Tempo prior the tracker is biased toward. Default 120. */
-  startBpm?: number;
   /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
   /** Hop length in samples of the input buffer. Default 512. */
@@ -394,7 +387,10 @@ export interface AnalyzeRhythmOptions {
    * the unconstrained estimate is preferred when it lies inside it.
    */
   bpmMax?: number;
-  /** Tempo prior the tracker is biased toward. Default 120. */
+  /**
+   * Finite, positive BPM prior that seeds beat tracking if the tempo search finds none.
+   * `bpm` is absent when no tempo is measured. Default 120.
+   */
   startBpm?: number;
   /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;

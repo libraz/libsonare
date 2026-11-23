@@ -1,10 +1,16 @@
+import { ErrorCode } from './errors.js';
+import { libraryToken, unknownOrdinal } from './internal/core_tokens.js';
 import {
   assertDeclaredKeys,
+  codedError,
   entryClass,
   invalidState,
+  type Respelling,
+  refusalOf,
   refuse,
   refuseType,
   refuseUnknownKey,
+  withEntry,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
@@ -13,7 +19,6 @@ import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
 import { setTimelineHandle } from './internal/project_handles.js';
 import {
-  AUTOMATION_TARGET_KIND,
   CHORD_QUALITY,
   FADE_CURVE,
   KEY_MODE,
@@ -27,21 +32,28 @@ import {
   tokenOrdinal,
   WARP_MODE,
 } from './internal/project_tokens.js';
-import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
+import { respellRefusal } from './internal/respell.js';
+import { refuseBuiltinSynthOrdinals, refuseSynthPatchOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
+import { synthPatchParamInfo } from './synth_catalog.js';
 import type {
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
+  MixSceneDocument,
   PartRigEntry,
   PartRigKey,
   PartRigMode,
   PartRigRequest,
   ProjectAnalyzeTempoRequest,
+  ProjectArticulationBinding,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
   ProjectAudioSourceMetadataRequest,
+  ProjectAutomationLane,
   ProjectAutomationLaneDesc,
+  ProjectAutomationLaneEditDesc,
+  ProjectAutomationTargetKind,
   ProjectAutoTempoOptions,
   ProjectAutoTempoRequest,
   ProjectBounceOptions,
@@ -57,7 +69,11 @@ import type {
   ProjectClipTakesOptions,
   ProjectCompileOptions,
   ProjectCompileResult,
+  ProjectControllerProfileBinding,
+  ProjectDestinationInstrumentBinding,
+  ProjectDestinationInstrumentOptions,
   ProjectDiagnostic,
+  ProjectInstrument,
   ProjectInstrumentBinding,
   ProjectKeySegment,
   ProjectLoopRecordingDesc,
@@ -71,7 +87,9 @@ import type {
   ProjectMidiFxPreviewRequest,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
+  ProjectPosition,
   ProjectProgramOptions,
+  ProjectSection,
   ProjectSource,
   ProjectSourceAudioRequest,
   ProjectTempoCandidate,
@@ -86,7 +104,14 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './types.js';
-import { PART_RIG_MODES } from './types_instrument.js';
+import {
+  ARTICULATIONS,
+  BUILTIN_SYNTH_WAVEFORMS,
+  PART_RIG_MODES,
+  SYNTH_ENGINE_MODES,
+  SYNTH_MOD_DESTINATIONS,
+  SYNTH_MOD_SOURCES,
+} from './types_instrument.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
@@ -97,8 +122,12 @@ import type {
 } from './types_vocal_project.js';
 import {
   assertAudioInput,
+  assertBoundedInteger,
   assertClosedToken,
+  assertFiniteScalar,
+  assertNonNegativeFloatValue,
   assertProjectMidiEvents,
+  assertSafeInteger,
   assertSampleRate,
   assertSamples,
   assertU7,
@@ -113,6 +142,7 @@ import {
   normalizePartRig,
   normalizeSynthInstrument,
   projectAutomationLaneValue,
+  projectAutomationPointFromNative,
 } from './value_coercion.js';
 import {
   projectApplyVocalEdit,
@@ -130,6 +160,14 @@ export * from './take_alignment.js';
 export function projectAbiVersion(): number | undefined {
   const version = (addon.projectAbiVersion as (() => number) | undefined)?.() ?? 0;
   return version > 0 ? version : undefined;
+}
+
+/** Names of the persistent automation targets accepted by project lanes. */
+export function automationTargetKindNames(): ProjectAutomationTargetKind[] {
+  return withEntry(
+    'automationTargetKindNames',
+    () => addon.automationTargetKindNames() as ProjectAutomationTargetKind[],
+  );
 }
 
 type NativeProject = InstanceType<typeof addon.Project>;
@@ -154,6 +192,133 @@ function requireInteger(value: unknown, argName: string): number {
     throw refuseType(`${argName} must be an integer`);
   }
   return value;
+}
+
+/** Reads a string handed to a C UTF-8 field without replacement or truncation. */
+function requireProjectText(value: unknown, argName: string): string {
+  if (typeof value !== 'string') {
+    throw refuseType(`${argName} must be a string`);
+  }
+  if (value.includes('\0')) {
+    throw refuse(`${argName} must not contain NUL`);
+  }
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw refuse(`${argName} must contain well-formed Unicode`);
+      }
+      i++;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      throw refuse(`${argName} must contain well-formed Unicode`);
+    }
+  }
+  return value;
+}
+
+function assertSectionPpq(value: unknown, argName: string): asserts value is number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be a number`);
+  }
+  if (!Number.isFinite(value) || value < 0 || value > 1e12) {
+    throw refuse(`${argName} must be finite and in [0, 1e12]`);
+  }
+}
+
+function bounceMetronomeSettings(value: unknown): Record<string, unknown> | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  if (!isNonArrayObject(value)) {
+    throw refuseType('metronome must be an object');
+  }
+  assertDeclaredKeys(
+    value,
+    ['enabled', 'beatGain', 'accentGain', 'clickSamples', 'clickSec'],
+    'metronome',
+  );
+  const enabled = requireBoolean(value.enabled, 'metronome.enabled');
+  const native: Record<string, unknown> = { enabled };
+  const beatGain = value.beatGain;
+  if (!isAbsent(beatGain)) {
+    assertNonNegativeFloatValue(beatGain, 'metronome.beatGain');
+    native.beatGain = beatGain;
+  }
+  const accentGain = value.accentGain;
+  if (!isAbsent(accentGain)) {
+    assertNonNegativeFloatValue(accentGain, 'metronome.accentGain');
+    native.accentGain = accentGain;
+  }
+  const clickSamples = value.clickSamples;
+  const clickSec = value.clickSec;
+  if (!isAbsent(clickSamples)) {
+    assertBoundedInteger(clickSamples, 'metronome.clickSamples', 1, 384000);
+    native.clickSamples = clickSamples;
+  }
+  if (!isAbsent(clickSec)) {
+    if (typeof clickSec !== 'number') {
+      throw refuseType('metronome.clickSec must be a number');
+    }
+    assertFiniteScalar(clickSec, 'metronome.clickSec');
+    if (clickSec <= 0 || clickSec > 1) {
+      throw refuse('metronome.clickSec must be in (0, 1]');
+    }
+    native.clickSec = clickSec;
+  }
+  if (!isAbsent(clickSamples) && !isAbsent(clickSec)) {
+    throw refuse('give metronome.clickSamples or metronome.clickSec, not both');
+  }
+  return native;
+}
+
+function bounceControllerProfiles(value: unknown): ProjectControllerProfileBinding[] | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw refuseType('controllerProfiles must be an array');
+  }
+  requireListBudget(value, 'controllerProfiles');
+  return value.map((item: unknown, index): ProjectControllerProfileBinding => {
+    const at = `controllerProfiles[${index}]`;
+    if (!isNonArrayObject(item)) {
+      throw refuseType(`${at} must be an object`);
+    }
+    assertDeclaredKeys(item, ['destinationId', 'presetName'], at);
+    const destinationId = requireInteger(item.destinationId, `${at}.destinationId`);
+    assertU32(destinationId, `${at}.destinationId`);
+    return {
+      destinationId,
+      presetName: requireProjectText(item.presetName, `${at}.presetName`),
+    };
+  });
+}
+
+function bounceArticulations(value: unknown): ProjectArticulationBinding[] | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw refuseType('articulations must be an array');
+  }
+  requireListBudget(value, 'articulations');
+  return value.map((item: unknown, index): ProjectArticulationBinding => {
+    const at = `articulations[${index}]`;
+    if (!isNonArrayObject(item)) {
+      throw refuseType(`${at} must be an object`);
+    }
+    assertDeclaredKeys(item, ['destinationId', 'channel', 'articulation'], at);
+    const destinationId = requireInteger(item.destinationId, `${at}.destinationId`);
+    assertU32(destinationId, `${at}.destinationId`);
+    assertBoundedInteger(item.channel, `${at}.channel`, 0, 15);
+    assertClosedToken(item.articulation, ARTICULATIONS, `${at}.articulation`);
+    return {
+      destinationId,
+      channel: item.channel,
+      articulation: item.articulation,
+    };
+  });
 }
 
 /** An optional string field whose empty form would read as "not given": absent stays absent, `""` is refused. */
@@ -230,6 +395,10 @@ function bounceSettings(request: ProjectBounceOptions): Record<string, unknown> 
   );
   const blockSize = optionalPositiveInt('blockSize', request.blockSize, C_INT_MAX);
   const numChannels = optionalPositiveInt('numChannels', request.numChannels, C_INT_MAX);
+  if (!isAbsent(request.countInBars)) {
+    assertBoundedInteger(request.countInBars, 'countInBars', 0, 16);
+    native.countInBars = request.countInBars;
+  }
   if (totalFrames !== undefined) {
     native.totalFrames = totalFrames;
   }
@@ -241,6 +410,18 @@ function bounceSettings(request: ProjectBounceOptions): Record<string, unknown> 
   }
   if (!isAbsent(request.instrumentLatencySamples)) {
     native.instrumentLatencySamples = request.instrumentLatencySamples;
+  }
+  const metronome = bounceMetronomeSettings(request.metronome);
+  if (metronome !== undefined) {
+    native.metronome = metronome;
+  }
+  const controllerProfiles = bounceControllerProfiles(request.controllerProfiles);
+  if (controllerProfiles !== undefined) {
+    native.controllerProfiles = controllerProfiles;
+  }
+  const articulations = bounceArticulations(request.articulations);
+  if (articulations !== undefined) {
+    native.articulations = articulations;
   }
   return native;
 }
@@ -309,6 +490,223 @@ const withDestinationCopy = <T extends object>(instrument: T, destinationId: num
 /** Same as {@link withDestinationCopy} but keeps the instrument's prototype callbacks reachable. */
 const withDestinationLayer = <T extends object>(instrument: T, destinationId: number): T =>
   Object.assign(Object.create(instrument) as T, { destinationId });
+
+const PROJECT_INSTRUMENT_KINDS = ['synth', 'builtin', 'sf2'] as const;
+const NONPERSISTENT_INSTRUMENT_KINDS = ['sample', 'sampler', 'callback', 'external'] as const;
+const BUILTIN_INSTRUMENT_KEYS = [
+  'waveform',
+  'gain',
+  'attackMs',
+  'decayMs',
+  'sustain',
+  'releaseMs',
+  'polyphony',
+];
+const SF2_INSTRUMENT_KEYS = [
+  'gain',
+  'polyphony',
+  'preferModelForModeledFamilies',
+  'clearBankRig',
+  'gsEfxRealization',
+];
+let synthPatchParamRows: ReturnType<typeof synthPatchParamInfo> | undefined;
+
+function projectSynthPatchRows(): ReturnType<typeof synthPatchParamInfo> {
+  synthPatchParamRows ??= synthPatchParamInfo();
+  return synthPatchParamRows;
+}
+
+function respellDestinationInstrument(error: unknown): unknown {
+  const refusal = refusalOf(error);
+  if (refusal === undefined) {
+    return error;
+  }
+  const subjects = refusal.renamedTo ? [...refusal.subjects, refusal.renamedTo] : refusal.subjects;
+  const respelled: Record<string, Respelling> = {};
+  for (const subject of subjects) {
+    const name = subject.replace(/^instrument\.(synth|builtin|sf2)(?=\.|$)/, (_root, kind) =>
+      kind === 'synth' ? 'instrument.patch' : 'instrument.config',
+    );
+    if (name !== subject) {
+      respelled[subject] = { name, scale: 1 };
+    }
+  }
+  return respellRefusal(error, respelled);
+}
+
+function normalizeDestinationInstrument(
+  value: unknown,
+  options: unknown,
+): {
+  instrument: Record<string, unknown> | null;
+  options?: Record<string, unknown>;
+} {
+  let nativeOptions: Record<string, unknown> | undefined;
+  if (!isAbsent(options)) {
+    if (!isNonArrayObject(options)) {
+      throw refuseType('options must be an object');
+    }
+    const settings = options as Record<string, unknown>;
+    assertDeclaredKeys(settings, ['bank', 'program'], 'options');
+    nativeOptions = {};
+    if (!isAbsent(settings.bank)) {
+      if (!isNonArrayObject(settings.bank)) {
+        throw refuseType('options.bank must be an object');
+      }
+      const bank = settings.bank as Record<string, unknown>;
+      assertDeclaredKeys(bank, ['msb', 'lsb'], 'options.bank');
+      nativeOptions.bank = {
+        msb: assertU7(requireInteger(bank.msb, 'options.bank.msb'), 'options.bank.msb'),
+        lsb: assertU7(requireInteger(bank.lsb, 'options.bank.lsb'), 'options.bank.lsb'),
+      };
+    }
+    if (!isAbsent(settings.program)) {
+      nativeOptions.program = assertU7(
+        requireInteger(settings.program, 'options.program'),
+        'options.program',
+      );
+    }
+  }
+
+  if (isAbsent(value)) {
+    if (nativeOptions !== undefined && Object.keys(nativeOptions).length > 0) {
+      throw refuse('bank and program require an instrument');
+    }
+    return { instrument: null, options: nativeOptions };
+  }
+  if (!isNonArrayObject(value)) {
+    throw refuseType('instrument must be a ProjectInstrument object');
+  }
+  const instrument = value as Record<string, unknown>;
+  if (
+    typeof instrument.kind === 'string' &&
+    (NONPERSISTENT_INSTRUMENT_KINDS as readonly string[]).includes(instrument.kind)
+  ) {
+    throw codedError(ErrorCode.NotSupported, 'this instrument kind cannot be persisted', {
+      reason: 'notPersistable',
+    });
+  }
+  if (
+    instrument.kind === undefined &&
+    ['prepare', 'onEvent', 'render'].some((key) => typeof instrument[key] === 'function')
+  ) {
+    throw codedError(ErrorCode.NotSupported, 'callback instruments cannot be persisted', {
+      reason: 'notPersistable',
+    });
+  }
+  assertClosedToken(instrument.kind, PROJECT_INSTRUMENT_KINDS, 'instrument.kind');
+  const normalized: Record<string, unknown> = { kind: instrument.kind };
+
+  if (instrument.kind === 'synth') {
+    assertDeclaredKeys(instrument, ['kind', 'patch', 'useGmPrograms'], 'instrument');
+    if (!isNonArrayObject(instrument.patch)) {
+      throw refuseType('instrument.patch must be an object');
+    }
+    const patch = instrument.patch as Record<string, unknown>;
+    if (!isAbsent(patch.sampleBank)) {
+      throw codedError(ErrorCode.NotSupported, 'sample banks cannot be persisted', {
+        reason: 'notPersistable',
+      });
+    }
+    const rows = projectSynthPatchRows();
+    const patchKeys = [
+      'preset',
+      'engineMode',
+      'engineParams',
+      'modRoutings',
+      'useGmPrograms',
+      'sampleBank',
+      ...rows.map((r) => r.name),
+    ];
+    assertDeclaredKeys(patch, patchKeys, 'instrument.patch');
+    refuseSynthPatchOrdinals(patch);
+    const nestedUseGmPrograms = isAbsent(patch.useGmPrograms)
+      ? undefined
+      : requireBoolean(patch.useGmPrograms, 'instrument.patch.useGmPrograms');
+    const outerUseGmPrograms = isAbsent(instrument.useGmPrograms)
+      ? undefined
+      : requireBoolean(instrument.useGmPrograms, 'instrument.useGmPrograms');
+    if (
+      nestedUseGmPrograms !== undefined &&
+      outerUseGmPrograms !== undefined &&
+      nestedUseGmPrograms !== outerUseGmPrograms
+    ) {
+      throw refuse('instrument.useGmPrograms conflicts with instrument.patch.useGmPrograms');
+    }
+    const useGmPrograms = outerUseGmPrograms ?? nestedUseGmPrograms;
+    if (!isAbsent(patch.engineMode)) {
+      assertClosedToken(patch.engineMode, SYNTH_ENGINE_MODES, 'instrument.patch.engineMode');
+    }
+    for (const row of rows) {
+      if (row.type === 'enum' && !isAbsent(patch[row.name])) {
+        assertClosedToken(patch[row.name], row.values, `instrument.patch.${row.name}`);
+      }
+    }
+    if (!isAbsent(patch.engineParams) && !isNonArrayObject(patch.engineParams)) {
+      throw refuseType('instrument.patch.engineParams must be an object');
+    }
+    if (!isAbsent(patch.modRoutings)) {
+      if (!Array.isArray(patch.modRoutings)) {
+        throw refuseType('instrument.patch.modRoutings must be an array');
+      }
+      patch.modRoutings.forEach((routing, index) => {
+        const at = `instrument.patch.modRoutings[${index}]`;
+        if (!isNonArrayObject(routing)) {
+          throw refuseType(`${at} must be an object`);
+        }
+        assertDeclaredKeys(routing, ['source', 'destination', 'depth'], at);
+        assertClosedToken(routing.source, SYNTH_MOD_SOURCES, `${at}.source`);
+        assertClosedToken(routing.destination, SYNTH_MOD_DESTINATIONS, `${at}.destination`);
+        if (routing.source === 'none' || routing.destination === 'none') {
+          throw refuse(`${at}.source and ${at}.destination must not be 'none'`);
+        }
+      });
+    }
+    if (useGmPrograms !== undefined) {
+      normalized.useGmPrograms = useGmPrograms;
+    }
+    const patchFields = { ...patch };
+    delete patchFields.useGmPrograms;
+    delete patchFields.sampleBank;
+    normalized.patch = patchFields;
+  } else if (instrument.kind === 'builtin') {
+    assertDeclaredKeys(instrument, ['kind', 'config'], 'instrument');
+    if (!isNonArrayObject(instrument.config)) {
+      throw refuseType('instrument.config must be an object');
+    }
+    const config = instrument.config as Record<string, unknown>;
+    assertDeclaredKeys(config, BUILTIN_INSTRUMENT_KEYS, 'instrument.config');
+    refuseBuiltinSynthOrdinals(config);
+    if (!isAbsent(config.waveform)) {
+      assertClosedToken(config.waveform, BUILTIN_SYNTH_WAVEFORMS, 'instrument.config.waveform');
+    }
+    normalized.config = config;
+  } else {
+    assertDeclaredKeys(instrument, ['kind', 'config', 'soundFontUri'], 'instrument');
+    if (!isNonArrayObject(instrument.config)) {
+      throw refuseType('instrument.config must be an object');
+    }
+    const config = instrument.config as Record<string, unknown>;
+    assertDeclaredKeys(config, SF2_INSTRUMENT_KEYS, 'instrument.config');
+    if (!isAbsent(config.gsEfxRealization)) {
+      assertClosedToken(
+        config.gsEfxRealization,
+        ['modern', 'classic'],
+        'instrument.config.gsEfxRealization',
+      );
+    }
+    normalized.config = config;
+    if (!isAbsent(instrument.soundFontUri)) {
+      const uri = requireProjectText(instrument.soundFontUri, 'instrument.soundFontUri');
+      if (uri.length === 0) {
+        throw refuse('instrument.soundFontUri must not be empty');
+      }
+      normalized.soundFontUri = uri;
+    }
+  }
+
+  return { instrument: normalized, options: nativeOptions };
+}
 
 /** A native bounce: interleaved samples and the width the render was mixed at. */
 interface NativeBounce {
@@ -409,18 +807,106 @@ function tempoCandidateFromNative(raw: Record<string, unknown>): ProjectTempoCan
   return { ...rest, firstTimeSignature: timeSignature } as unknown as ProjectTempoCandidate;
 }
 
-function automationLaneToNative(desc: ProjectAutomationLaneDesc): NativeAutomationLaneDesc {
-  const { targetKind, ...rest } = desc;
-  const resolved =
-    targetKind === undefined
-      ? rest
-      : {
-          ...rest,
-          targetKind: tokenOrdinal(targetKind, AUTOMATION_TARGET_KIND, 'targetKind'),
-        };
-  return projectAutomationLaneValue(
-    resolved as Omit<ProjectAutomationLaneDesc, 'targetKind'> & { targetKind?: 0 | 1 | 2 },
-  );
+function respellMidiSysexBudget(error: unknown): unknown {
+  const refusal = refusalOf(error);
+  if (refusal === undefined) {
+    return error;
+  }
+  const subjects = refusal.renamedTo
+    ? [...refusal.subjects, refusal.renamedTo]
+    : [...refusal.subjects];
+  const respelled: Record<string, Respelling> = {};
+  for (const subject of subjects) {
+    const match = /^events\[(\d+)\]\.sysexSize$/.exec(subject);
+    if (match !== null) {
+      respelled[subject] = { name: `events[${match[1]}].sysex`, scale: 1 };
+    }
+  }
+  return Object.keys(respelled).length === 0 ? error : respellRefusal(error, respelled);
+}
+
+const AUTOMATION_LANE_DESC_KEYS = [
+  'targetKind',
+  'targetParamId',
+  'sendId',
+  'insertIndex',
+  'processor',
+  'paramName',
+  'points',
+];
+
+function automationLaneToNative(
+  desc: ProjectAutomationLaneDesc | ProjectAutomationLaneEditDesc,
+  editing: boolean,
+): NativeAutomationLaneDesc {
+  if (!isNonArrayObject(desc)) {
+    throw refuseType('desc must be an object');
+  }
+  assertDeclaredKeys(desc, AUTOMATION_LANE_DESC_KEYS, '');
+  const targetKind = isAbsent(desc.targetKind) ? undefined : desc.targetKind;
+  if (targetKind !== undefined) {
+    assertClosedToken(targetKind, automationTargetKindNames(), 'targetKind');
+  }
+  const hasTargetParamId = !isAbsent(desc.targetParamId);
+  const identityKeys = ['sendId', 'insertIndex', 'processor', 'paramName'] as const;
+  if (targetKind === undefined && editing) {
+    if (hasTargetParamId) {
+      throw refuse('targetParamId must be omitted when targetKind is omitted');
+    }
+    for (const key of identityKeys) {
+      if (!isAbsent(desc[key])) {
+        throw refuse(`${key} must be omitted when targetKind is omitted`);
+      }
+    }
+  }
+  const effectiveKind = targetKind ?? (editing ? undefined : 'opaque');
+  if (effectiveKind === 'opaque' && !hasTargetParamId) {
+    throw refuseType('targetParamId must be given for an opaque target');
+  }
+  if (effectiveKind !== undefined && effectiveKind !== 'opaque' && hasTargetParamId) {
+    throw refuse('targetParamId must be omitted for a typed target');
+  }
+  const expectedIdentity =
+    effectiveKind === 'trackSendDb'
+      ? ['sendId']
+      : effectiveKind === 'trackInsertParam'
+        ? ['insertIndex', 'processor', 'paramName']
+        : [];
+  for (const key of identityKeys) {
+    if (!isAbsent(desc[key]) && !expectedIdentity.includes(key)) {
+      throw refuse(`${key} must be omitted for targetKind ${effectiveKind}`);
+    }
+  }
+  if (expectedIdentity.some((key) => isAbsent((desc as Record<string, unknown>)[key]))) {
+    throw refuseType(`targetKind ${effectiveKind} requires ${expectedIdentity.join(', ')}`);
+  }
+  const normalized = {
+    ...desc,
+    targetKind,
+    ...(typeof desc.sendId === 'string'
+      ? { sendId: requireProjectText(desc.sendId, 'sendId') }
+      : {}),
+    ...(typeof desc.processor === 'string'
+      ? { processor: requireProjectText(desc.processor, 'processor') }
+      : {}),
+    ...(typeof desc.paramName === 'string'
+      ? { paramName: requireProjectText(desc.paramName, 'paramName') }
+      : {}),
+  } as ProjectAutomationLaneDesc;
+  return projectAutomationLaneValue(normalized);
+}
+
+function automationLaneFromNative(
+  raw: Record<string, unknown>,
+  targetKinds: readonly ProjectAutomationTargetKind[],
+): ProjectAutomationLane {
+  const points = raw.points as Array<{ ppq: number; value: number; curveToNext: number }>;
+  const targetKind = libraryToken(targetKinds, raw.targetKind, 'automation target kind');
+  return {
+    ...raw,
+    targetKind,
+    points: points.map(projectAutomationPointFromNative),
+  } as unknown as ProjectAutomationLane;
 }
 
 /**
@@ -651,6 +1137,14 @@ export class Project {
     this.native.setMixerSceneJson(document);
   }
 
+  /** Read the project's mixer scene, or `undefined` when no scene is stored. */
+  mixerScene(): MixSceneDocument | undefined {
+    const document = this.native.mixerSceneJson();
+    return document === null || document === undefined
+      ? undefined
+      : (JSON.parse(document) as MixSceneDocument);
+  }
+
   /**
    * Add or replace a marker. An omitted `id` allocates a new one; an explicit
    * `0` is a `RangeError`.
@@ -752,6 +1246,40 @@ export class Project {
     );
   }
 
+  /** Count-in length at the project's initial tempo and meter. */
+  countInFrames(countInBars: number): number {
+    return this.native.countInFrames(countInBars);
+  }
+
+  /** Convert a project PPQ position to seconds from PPQ zero. */
+  ppqToSec(ppq: number): number {
+    assertFiniteScalar(ppq, 'ppq');
+    return this.native.ppqToSec(ppq);
+  }
+
+  /** Convert seconds from PPQ zero to a project PPQ position. */
+  secToPpq(sec: number): number {
+    assertFiniteScalar(sec, 'sec');
+    return this.native.secToPpq(sec);
+  }
+
+  /** Read the effective tempo, meter, bar, and beat at a project PPQ position. */
+  positionAtPpq(ppq: number): ProjectPosition {
+    assertFiniteScalar(ppq, 'ppq');
+    return this.native.positionAtPpq(ppq);
+  }
+
+  /** Read the PPQ start of a zero-based bar. The index must be a safe integer. */
+  barStartPpq(barIndex: number): number {
+    assertSafeInteger(barIndex, 'barIndex');
+    return this.native.barStartPpq(barIndex);
+  }
+
+  /** Read the PPQ end of the last audible audio or MIDI clip, excluding render tails. Zero when none. */
+  endPpq(): number {
+    return this.native.endPpq();
+  }
+
   /** Audio source ids that need decoded PCM after deserialization. */
   unresolvedAudioSourceIds(): number[] {
     return this.native.unresolvedAudioSourceIds();
@@ -762,6 +1290,29 @@ export class Project {
     return (this.native.unresolvedAudioSources() as unknown as Record<string, unknown>[]).map(
       sourceFromNative,
     );
+  }
+
+  /** SoundFont URIs used by destination instruments that have no loaded bytes. */
+  unresolvedSoundFontUris(): string[] {
+    return this.native.unresolvedSoundFontUris();
+  }
+
+  /** Stored destination instruments, ordered by destination id. */
+  destinationInstruments(): ProjectDestinationInstrumentBinding<ProjectInstrument>[] {
+    return this.native.destinationInstruments() as ProjectDestinationInstrumentBinding<ProjectInstrument>[];
+  }
+
+  /** Add an unresolved audio source and return its new id. */
+  addAudioSource(uri: string): number {
+    return this.native.addAudioSource(requireProjectText(uri, 'uri'));
+  }
+
+  /** Relink an audio source and return its unchanged id. */
+  relinkSource(sourceId: number, uri: string): number {
+    const id = requireInteger(sourceId, 'sourceId');
+    assertU32(id, 'sourceId');
+    this.native.relinkSource(id, requireProjectText(uri, 'uri'));
+    return id;
   }
 
   /** Register decoded PCM for an existing audio source (undoable). */
@@ -953,6 +1504,22 @@ export class Project {
    */
   setTrackMidiDestination(trackId: number, destinationId?: number | null): void {
     this.native.setTrackMidiDestination(trackId, destinationId ?? 0);
+  }
+
+  /** Store or clear a destination instrument. Omit `instrument` to remove the binding. */
+  setDestinationInstrument(
+    destinationId: number,
+    instrument?: ProjectInstrument | null,
+    options?: ProjectDestinationInstrumentOptions,
+  ): void {
+    const id = requireInteger(destinationId, 'destinationId');
+    assertU32(id, 'destinationId');
+    const normalized = normalizeDestinationInstrument(instrument, options);
+    try {
+      this.native.setDestinationInstrument(id, normalized.instrument, normalized.options);
+    } catch (error) {
+      throw respellDestinationInstrument(error);
+    }
   }
 
   /**
@@ -1151,28 +1718,30 @@ export class Project {
 
   /**
    * Append an automation lane to a track via an undoable edit; returns the
-   * lane's stable target parameter id. An omitted `desc.targetKind` adds an
-   * `'opaque'` lane; supply it to persist a typed fader or pan target.
+   * lane's stable id. An omitted `desc.targetKind` adds an opaque lane.
    */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
-    return this.native.addAutomationLane(trackId, automationLaneToNative(desc));
+    return this.native.addAutomationLane(trackId, automationLaneToNative(desc, false));
   }
 
   /**
-   * Replace the lane identified by its stable target parameter id. An omitted
-   * `desc.targetKind` keeps the lane's current kind; a supplied one replaces it.
+   * Replace the lane identified by its stable lane id. An omitted `desc.targetKind`
+   * keeps the current target; in that form only `points` may be supplied.
    */
-  editAutomationLane(
-    trackId: number,
-    targetParamId: number,
-    desc: ProjectAutomationLaneDesc,
-  ): void {
-    this.native.editAutomationLane(trackId, targetParamId, automationLaneToNative(desc));
+  editAutomationLane(trackId: number, laneId: number, desc: ProjectAutomationLaneEditDesc): void {
+    this.native.editAutomationLane(trackId, laneId, automationLaneToNative(desc, true));
   }
 
-  /** Remove the lane identified by its stable target parameter id. */
-  removeAutomationLane(trackId: number, targetParamId: number): void {
-    this.native.removeAutomationLane(trackId, targetParamId);
+  /** Every automation lane, flattened with its owning track and stable lane id. */
+  automationLanes(): ProjectAutomationLane[] {
+    const lanes = this.native.automationLanes() as Record<string, unknown>[];
+    const targetKinds = automationTargetKindNames();
+    return lanes.map((lane) => automationLaneFromNative(lane, targetKinds));
+  }
+
+  /** Remove the lane identified by its stable lane id. */
+  removeAutomationLane(trackId: number, laneId: number): void {
+    this.native.removeAutomationLane(trackId, laneId);
   }
 
   /** Undo the most recent edit (throws when the undo stack is empty). */
@@ -1208,18 +1777,16 @@ export class Project {
 
   // -- MIDI --
 
+  /** Read a MIDI clip's events in stable PPQ order, copying any SysEx payloads. */
+  midiEvents(clipId: number): ProjectMidiEvent[] {
+    assertU32(clipId, 'clipId');
+    return this.native.midiEvents(clipId);
+  }
+
   /**
    * Replace a MIDI clip's entire event list. Each event is
-   * `{ ppq, word0, word1? }`; pass an empty array to clear. `word0`/`word1` are
-   * the first two UMP words of a channel-voice message (stored opaquely).
-   *
-   * Drops the clip's SysEx, which {@link importSmf} and {@link exportSmf} both
-   * keep. The payloads sit beside the event list and are reached by a handle
-   * `ProjectMidiEvent` does not carry, so replacing the list leaves nothing
-   * referring to them: a GS setup block that survives an import and an export
-   * byte for byte is gone after one call here. Nothing reads the handles back
-   * either, so a caller that must keep the setup edits the exported file
-   * rather than the event list.
+   * `{ ppq, word0, word1?, sysex? }`; pass an empty array to clear. `word0` and
+   * `word1` carry the UMP message, and `sysex` carries the bytes of a Data64 event.
    *
    * Only events inside the clip's half-open window `[0, lengthPpq)` (after the
    * source offset) are kept for export; a note still sounding at the clip end,
@@ -1228,7 +1795,11 @@ export class Project {
    */
   setMidiEvents(clipId: number, events: ReadonlyArray<ProjectMidiEvent>): void {
     assertProjectMidiEvents(events);
-    this.native.setMidiEvents(clipId, events);
+    try {
+      this.native.setMidiEvents(clipId, events);
+    } catch (error) {
+      throw respellMidiSysexBudget(error);
+    }
   }
 
   /**
@@ -1421,6 +1992,23 @@ export class Project {
     );
   }
 
+  /** Read key annotations in their stored order. */
+  keyAnnotations(): ProjectKeySegment[] {
+    const keys = this.native.keyAnnotations() as unknown as Record<string, unknown>[];
+    return keys.map((key) => {
+      const tonicPc = key.tonicPc as number;
+      if (tonicPc !== 255 && (!Number.isInteger(tonicPc) || tonicPc < 0 || tonicPc > 11)) {
+        throw unknownOrdinal('pitch class', tonicPc);
+      }
+      return {
+        startPpq: key.startPpq as number,
+        endPpq: key.endPpq as number,
+        ...(tonicPc === 255 ? {} : { tonicPc }),
+        mode: tokenName(KEY_MODE, key.mode as number, 'key mode'),
+      };
+    });
+  }
+
   /** Replace the project's chord-symbol annotation stream via an undoable edit. */
   annotateChords(chords: ProjectChordSymbol[]): void {
     if (Array.isArray(chords)) {
@@ -1434,6 +2022,65 @@ export class Project {
           : { quality: tokenOrdinal(chord.quality, CHORD_QUALITY, 'quality') }),
       })),
     );
+  }
+
+  /** Read chord-symbol annotations in their stored order. */
+  chordAnnotations(): ProjectChordSymbol[] {
+    const chords = this.native.chordAnnotations() as unknown as Record<string, unknown>[];
+    return chords.map((chord) => {
+      const rootPc = chord.rootPc as number;
+      const slashBassPc = chord.slashBassPc as number;
+      if (rootPc !== 255 && (!Number.isInteger(rootPc) || rootPc < 0 || rootPc > 11)) {
+        throw unknownOrdinal('pitch class', rootPc);
+      }
+      if (
+        slashBassPc !== 255 &&
+        (!Number.isInteger(slashBassPc) || slashBassPc < 0 || slashBassPc > 11)
+      ) {
+        throw unknownOrdinal('pitch class', slashBassPc);
+      }
+      const romanNumeral = chord.romanNumeral;
+      return {
+        startPpq: chord.startPpq as number,
+        endPpq: chord.endPpq as number,
+        ...(rootPc === 255 ? {} : { rootPc }),
+        quality: tokenName(CHORD_QUALITY, chord.quality as number, 'chord quality'),
+        extensions: chord.extensions as number[],
+        ...(slashBassPc === 255 ? {} : { slashBassPc }),
+        ...(typeof romanNumeral === 'string' && romanNumeral.length > 0 ? { romanNumeral } : {}),
+        modulationBoundary: chord.modulationBoundary as boolean,
+      };
+    });
+  }
+
+  /** Replace all labeled section annotations as one undoable edit. */
+  annotateSections(sections: ProjectSection[]): void {
+    if (!Array.isArray(sections)) {
+      throw refuseType('sections must be an array');
+    }
+    requireListBudget(sections, 'sections');
+    const normalized = sections.map((section: unknown, index) => {
+      const at = `sections[${index}]`;
+      if (!isNonArrayObject(section)) {
+        throw refuseType(`${at} must be an object`);
+      }
+      assertDeclaredKeys(section, ['startPpq', 'endPpq', 'label'], at);
+      const startPpq = section.startPpq;
+      const endPpq = section.endPpq;
+      assertSectionPpq(startPpq, `${at}.startPpq`);
+      assertSectionPpq(endPpq, `${at}.endPpq`);
+      if (endPpq <= startPpq) {
+        throw refuse(`${at}.endPpq must be greater than ${at}.startPpq`);
+      }
+      const label = requireProjectText(section.label, `${at}.label`);
+      return { startPpq, endPpq, label };
+    });
+    this.native.annotateSections(normalized);
+  }
+
+  /** Read all labeled section annotations in stored order. */
+  sectionAnnotations(): ProjectSection[] {
+    return this.native.sectionAnnotations();
   }
 
   // -- assist sidecars --

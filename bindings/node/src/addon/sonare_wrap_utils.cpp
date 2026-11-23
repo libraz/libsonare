@@ -1,6 +1,7 @@
 #include "sonare_wrap_utils.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -19,6 +20,7 @@
 #include "sonare_wrap_options.h"
 #include "util/constants.h"
 #include "util/error_classification.h"
+#include "util/error_reason.h"
 #include "util/parameter_checks.h"
 #include "util/refusal_predicates.h"
 
@@ -32,8 +34,7 @@ std::string RefusalText(const sonare::SonareParameterRefusal& refusal) {
 
 std::string ErrorMessageForCode(SonareError err) {
   // A recorded parameter refusal is rendered in request keys from its subjects, never parsed.
-  if (const std::optional<sonare::SonareParameterRefusal> shown =
-          sonare_field_spelling::node::SpelledLastRefusal()) {
+  if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
     return RefusalText(*shown);
   }
   const char* detail = sonare_last_error_message();
@@ -229,36 +230,74 @@ sonare::ErrorCode CodeFromCError(SonareError err) {
 
 namespace {
 
-void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err) {
+bool IsKnownErrorReason(const char* reason) {
+  if (reason == nullptr) return true;
+  constexpr std::array<sonare::ErrorReason, 10> kReasons = {
+      sonare::ErrorReason::MalformedJson,      sonare::ErrorReason::UnsupportedSchemaVersion,
+      sonare::ErrorReason::NotCompiledIn,      sonare::ErrorReason::NotPersistable,
+      sonare::ErrorReason::UnresolvedSource,   sonare::ErrorReason::UnresolvedSoundFont,
+      sonare::ErrorReason::DeviceUnavailable,  sonare::ErrorReason::DeviceFormatRefused,
+      sonare::ErrorReason::EngineDeviceDriven, sonare::ErrorReason::ReleasedHandle,
+  };
+  return std::any_of(kReasons.begin(), kReasons.end(), [reason](sonare::ErrorReason candidate) {
+    return std::strcmp(reason, sonare::error_reason_token(candidate)) == 0;
+  });
+}
+
+std::string UnknownErrorReasonMessage(const char* reason) {
+  return "unknown error reason token: " + std::string(reason);
+}
+
+bool HasDriftedReason(const Napi::Object& error, const char* reason) {
+  return reason != nullptr && error.Has("code") && !error.Has("reason");
+}
+
+void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err,
+                              const char* reason) {
   error.Set("name", Napi::String::New(env, "SonareError"));
   error.Set("code", Napi::Number::New(env, static_cast<double>(static_cast<int>(err))));
   error.Set("codeName", Napi::String::New(env, ErrorCodeName(err)));
+  if (reason != nullptr) {
+    error.Set("reason", Napi::String::New(env, reason));
+  } else if (error.Has("reason")) {
+    error.Delete("reason");
+  }
 }
 
 }  // namespace
 
-Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message) {
-  return MakeSonareError(env, err, message, false);
+Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message,
+                            const char* reason) {
+  return MakeSonareError(env, err, message, false, reason);
 }
 
 Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message,
-                            bool shape_refusal) {
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    if (shape_refusal) return Napi::TypeError::New(env, message);
-    return Napi::RangeError::New(env, message);
+                            bool shape_refusal, const char* reason) {
+  std::string translated_message = message;
+  if (!IsKnownErrorReason(reason)) {
+    err = SONARE_ERROR_INVALID_FORMAT;
+    shape_refusal = false;
+    translated_message = UnknownErrorReasonMessage(reason);
+    reason = nullptr;
   }
-  Napi::Error error = Napi::Error::New(env, message);
-  SetSonareErrorProperties(env, error.Value(), err);
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    if (shape_refusal) return Napi::TypeError::New(env, translated_message);
+    return Napi::RangeError::New(env, translated_message);
+  }
+  Napi::Error error = Napi::Error::New(env, translated_message);
+  SetSonareErrorProperties(env, error.Value(), err, reason);
   return error;
 }
 
 namespace {
 
-/// Throws the error for @p err with @p message, carrying the last refusal when there is one.
-void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& message) {
-  Napi::Error error = MakeSonareError(env, err, message, LastRefusalIsShape());
+/// Throws a failed C-ABI call with the refusal, entry and reason captured by its caller.
+void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& message,
+                          const char* reason) {
+  Napi::Error error = MakeSonareError(env, err, message, LastRefusalIsShape(), reason);
+  const Napi::Object value = error.Value().As<Napi::Object>();
   if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
-    AttachRefusal(env, error.Value(), *shown, LastRefusalEntry());
+    if (!HasDriftedReason(value, reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
   }
   error.ThrowAsJavaScriptException();
 }
@@ -267,7 +306,8 @@ void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& mes
 
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix) {
   if (env.IsExceptionPending()) return;
-  ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err));
+  const char* reason = sonare_last_error_reason();
+  ThrowWithLastRefusal(env, err, prefix + ErrorMessageForCode(err), reason);
 }
 
 void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_root) {
@@ -278,8 +318,10 @@ void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_ro
     ThrowSonareError(env, err);
     return;
   }
-  Napi::Error error = MakeSonareError(env, err, RefusalText(*shown), shown->shape_error());
-  AttachRefusal(env, error.Value(), *shown, LastRefusalEntry());
+  const char* reason = sonare_last_error_reason();
+  Napi::Error error = MakeSonareError(env, err, RefusalText(*shown), shown->shape_error(), reason);
+  const Napi::Object value = error.Value().As<Napi::Object>();
+  if (!HasDriftedReason(value, reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
   error.ThrowAsJavaScriptException();
 }
 
@@ -331,7 +373,8 @@ void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError 
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;
   if (env.IsExceptionPending()) return;
-  ThrowWithLastRefusal(env, code, prefix + ErrorMessageForCode(code));
+  const char* reason = sonare_last_error_reason();
+  ThrowWithLastRefusal(env, code, prefix + ErrorMessageForCode(code), reason);
 }
 
 Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::string& what) {
@@ -359,8 +402,9 @@ Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::str
 void ThrowStdException(Napi::Env env, const std::exception& e) {
   if (const auto* coded = dynamic_cast<const sonare::SonareException*>(&e)) {
     if (env.IsExceptionPending()) return;
-    Napi::Error error =
-        MakeSonareError(env, CErrorFromException(*coded), ExceptionMessage(e), IsShapeRefusal(e));
+    const char* reason = coded->reason() ? sonare::error_reason_token(*coded->reason()) : nullptr;
+    Napi::Error error = MakeSonareError(env, CErrorFromException(*coded), ExceptionMessage(e),
+                                        IsShapeRefusal(e), reason);
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e)) {
       AttachRefusal(env, error.Value(), sonare::util::check::camel_spelled(*refusal), "");
     }
@@ -373,7 +417,24 @@ void ThrowStdException(Napi::Env env, const std::exception& e) {
 
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal,
                          const std::optional<sonare::SonareParameterRefusal>& shown,
-                         const std::string& c_entry) {
+                         const std::string& c_entry, const char* reason) {
+  const std::string message = error.Get("message").As<Napi::String>().Utf8Value();
+  const Napi::Object translated =
+      MakeSonareError(env, err, message, shape_refusal, reason).Value().As<Napi::Object>();
+  if (translated.Has("code")) {
+    const bool drifted_reason = HasDriftedReason(translated, reason);
+    if (shown && !drifted_reason) AttachRefusal(env, error, *shown, c_entry);
+    error.Set("message", translated.Get("message"));
+    error.Set("name", translated.Get("name"));
+    error.Set("code", translated.Get("code"));
+    error.Set("codeName", translated.Get("codeName"));
+    if (translated.Has("reason")) {
+      error.Set("reason", translated.Get("reason"));
+    } else if (error.Has("reason")) {
+      error.Delete("reason");
+    }
+    return;
+  }
   if (shown) AttachRefusal(env, error, *shown, c_entry);
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
     // The async worker built a plain Error; re-class it as the TypeError or RangeError the
@@ -387,7 +448,7 @@ void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, boo
     object_ctor.Get("setPrototypeOf").As<Napi::Function>().Call(object_ctor, {error, proto});
     return;
   }
-  SetSonareErrorProperties(env, error, err);
+  SetSonareErrorProperties(env, error, err, reason);
 }
 
 bool ReadWholeHertzSampleRate(Napi::Env env, const Napi::Value& value, int* out) {
@@ -841,10 +902,6 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* i
 
 Napi::Object MixMeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
   Napi::Object out = Napi::Object::New(env);
-  SetMeasured(out, "peakDbL", snapshot.peak_db_l);
-  SetMeasured(out, "peakDbR", snapshot.peak_db_r);
-  SetMeasured(out, "rmsDbL", snapshot.rms_db_l);
-  SetMeasured(out, "rmsDbR", snapshot.rms_db_r);
   SetMeasured(out, "correlation", snapshot.correlation);
   SetMeasured(out, "monoCompatWidth", snapshot.mono_compat_width);
   out.Set("monoCompatPeak", snapshot.mono_compat_peak);
@@ -854,14 +911,11 @@ Napi::Object MixMeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapsho
   SetMeasured(out, "shortTermLufs", snapshot.short_term_lufs);
   SetMeasured(out, "integratedLufs", snapshot.integrated_lufs);
   out.Set("gainReductionDb", snapshot.gain_reduction_db);
-  SetMeasured(out, "truePeakDbtpL", snapshot.true_peak_dbtp_l);
-  SetMeasured(out, "truePeakDbtpR", snapshot.true_peak_dbtp_r);
   SetMeasured(out, "maxTruePeakDbtp", snapshot.max_true_peak_dbtp);
   out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
 
-  // Per-plane surround meters: expose [0, numChannels) as arrays alongside the
-  // stereo convenience fields above. Clamp to the array capacity so a
-  // future/out-of-range num_channels can never index past the fixed buffers.
+  // Expose only the valid planes and keep unmeasured entries in place.
+  // Clamp the count so a bad value cannot index past the fixed buffers.
   int channel_count = snapshot.num_channels;
   if (channel_count < 0) channel_count = 0;
   if (channel_count > SONARE_MAX_METER_CHANNELS) channel_count = SONARE_MAX_METER_CHANNELS;
@@ -870,9 +924,9 @@ Napi::Object MixMeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapsho
   Napi::Array rms_db = Napi::Array::New(env, channel_count);
   Napi::Array true_peak_db = Napi::Array::New(env, channel_count);
   for (int ch = 0; ch < channel_count; ++ch) {
-    peak_db.Set(ch, Napi::Number::New(env, snapshot.peak_db[ch]));
-    rms_db.Set(ch, Napi::Number::New(env, snapshot.rms_db[ch]));
-    true_peak_db.Set(ch, Napi::Number::New(env, snapshot.true_peak_dbtp[ch]));
+    peak_db.Set(ch, MeasuredNumber(env, snapshot.peak_db[ch]));
+    rms_db.Set(ch, MeasuredNumber(env, snapshot.rms_db[ch]));
+    true_peak_db.Set(ch, MeasuredNumber(env, snapshot.true_peak_dbtp[ch]));
   }
   out.Set("peakDb", peak_db);
   out.Set("rmsDb", rms_db);

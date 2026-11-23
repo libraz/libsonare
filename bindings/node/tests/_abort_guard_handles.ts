@@ -359,8 +359,8 @@ export interface NativeProject {
   setWarpMap(map: unknown): void;
   setMixerSceneJson(scene: unknown): void;
   addAutomationLane(trackId: unknown, desc?: unknown): number;
-  editAutomationLane(trackId: unknown, targetParamId?: unknown, desc?: unknown): void;
-  removeAutomationLane(trackId: unknown, targetParamId?: unknown): void;
+  editAutomationLane(trackId: unknown, laneId?: unknown, desc?: unknown): void;
+  removeAutomationLane(trackId: unknown, laneId?: unknown): void;
   setSampleRate(sampleRate: unknown): void;
   setPartRig(destinationId: unknown, part: unknown, mode: unknown, insertsJson?: unknown): void;
   setOverlapPolicy(policy: unknown): void;
@@ -631,7 +631,7 @@ export interface ProjectFixture {
   midiClipId: number;
   sourceId: number;
   markerId: number;
-  laneParamId: number;
+  laneId: number;
 }
 
 export function withConfiguredProject<T>(body: (fixture: ProjectFixture) => T): T {
@@ -669,7 +669,7 @@ export function withConfiguredProject<T>(body: (fixture: ProjectFixture) => T): 
     });
     project.setClipWarpRef(clipId, 1);
     project.setClipWarpMode(clipId, 1);
-    const laneParamId = project.addAutomationLane(trackId, {
+    const laneId = project.addAutomationLane(trackId, {
       targetParamId: 7,
       points: [
         { ppq: 0, value: 0.25 },
@@ -710,7 +710,7 @@ export function withConfiguredProject<T>(body: (fixture: ProjectFixture) => T): 
       midiClipId: midi.clipId,
       sourceId: 1,
       markerId,
-      laneParamId,
+      laneId,
     });
   } finally {
     project.destroy();

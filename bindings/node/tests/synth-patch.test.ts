@@ -31,7 +31,7 @@ import {
   synthPresetPatch,
 } from '../src/index.js';
 import { addon } from '../src/native.js';
-import type { SynthPatch } from '../src/types.js';
+import type { SynthParamInfo, SynthPatch } from '../src/types.js';
 
 /** The addon's own patch reader, which still takes an ordinal the facades refuse. */
 function synthPatchRoundTripForTest(patch: object): SynthPatch {
@@ -446,7 +446,12 @@ describe('Project.bounce with synthInstruments', () => {
         throw new Error('expected the bounce to be refused');
       };
       const info = synthPatchParamInfo();
-      const cutoff = info.find((field) => field.name === 'cutoffHz');
+      const cutoff = info.find(
+        (field): field is SynthParamInfo & { type: 'number' } =>
+          field.name === 'cutoffHz' && field.type === 'number',
+      );
+      expect(cutoff).toBeDefined();
+      expect(cutoff?.type).toBe('number');
       expect(cutoff?.max).toBe(22000);
       for (const [patch, key] of [
         [{ cutoffHz: 1e6 }, 'cutoffHz'],
@@ -968,7 +973,12 @@ describe('synth parameter descriptors', () => {
     for (const expected of ['cutoffHz', 'resonanceQ', 'ampAttackMs', 'gain']) {
       expect(names).toContain(expected);
     }
-    expect(fields.find((field) => field.name === 'resonanceQ')?.unit).toBe('ratio');
+    const resonance = fields.find(
+      (field): field is SynthParamInfo & { type: 'number' } =>
+        field.name === 'resonanceQ' && field.type === 'number',
+    );
+    expect(resonance?.type).toBe('number');
+    expect(resonance?.unit).toBe('ratio');
     expect(new Set(names).size).toBe(names.length);
     for (const expected of [
       'driftRateHz',
@@ -979,6 +989,10 @@ describe('synth parameter descriptors', () => {
     ]) {
       expect(names).toContain(expected);
     }
-    expect(fields.find((field) => field.name === 'oneShot')?.type).toBe('boolean');
+    const oneShot = fields.find(
+      (field): field is SynthParamInfo & { type: 'boolean' } =>
+        field.name === 'oneShot' && field.type === 'boolean',
+    );
+    expect(oneShot?.type).toBe('boolean');
   });
 });

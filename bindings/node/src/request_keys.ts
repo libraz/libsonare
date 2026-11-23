@@ -125,7 +125,7 @@ const MUSIC_ANALYZE_ASYNC_REQUEST_KEYS = keySet(
   'tuningCents',
 );
 const ESTIMATE_METER_REQUEST_KEYS = keySet(
-  'beats',
+  'observations',
   'candidateNumerators',
   'denominator',
   'downbeatWeight',
@@ -253,7 +253,6 @@ const ANALYZE_MELODY_REQUEST_KEYS = keySet(
 const ANALYZE_BPM_REQUEST_KEYS = keySet(
   'bpmMin',
   'bpmMax',
-  'startBpm',
   'nFft',
   'hopLength',
   'maxCandidates',
@@ -1365,6 +1364,10 @@ const PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS = keySet(
   'blockSize',
   'numChannels',
   'instrumentLatencySamples',
+  'metronome',
+  'countInBars',
+  'controllerProfiles',
+  'articulations',
   'instruments',
   'builtinInstruments',
   'synthInstruments',
@@ -1619,7 +1622,10 @@ export const REQUEST_KEYS = {
   realtimeVoiceChangerRender: REALTIME_VOICE_CHANGER_RENDER_REQUEST_KEYS,
   powerToDb: keySet('values', 'ref', 'amin', 'topDb'),
   amplitudeToDb: keySet('values', 'ref', 'amin', 'topDb'),
-  stft: keySet('samples', 'sampleRate', 'nFft', 'hopLength', 'db'),
+  stft: keySet('samples', 'sampleRate', 'nFft', 'hopLength', 'db', 'phase'),
+  istft: keySet('magnitude', 'phase', 'nFft', 'hopLength', 'lengthSamples'),
+  readAudioTags: keySet('data'),
+  encodeAudio: keySet('channels', 'sampleRate', 'format', 'tags', 'bitDepth', 'quality'),
   melFilterbank: keySet('sampleRate', 'nFft', 'nMels', 'fminHz', 'fmaxHz', 'htk', 'norm'),
   melFrequencies: keySet('nMels', 'fminHz', 'fmaxHz', 'htk'),
   melSpectrogram: keySet(
@@ -1904,6 +1910,11 @@ export const REQUEST_KEYS = {
 } as const;
 
 export const NESTED_REQUEST_KEYS = {
+  bounce: {
+    metronome: keySet('enabled', 'beatGain', 'accentGain', 'clickSamples', 'clickSec'),
+    controllerProfiles: keySet('destinationId', 'presetName'),
+    articulations: keySet('destinationId', 'channel', 'articulation'),
+  },
   setProgram: { bank: keySet('msb', 'lsb') },
   midi2Program: { bank: keySet('msb', 'lsb') },
   midiBankProgram: { bank: keySet('msb', 'lsb') },

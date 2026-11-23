@@ -16,6 +16,7 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   requestObject,
+  requestOnly,
 } from './validation.js';
 
 type NativeHrtfSet = InstanceType<typeof addon.HrtfSet>;
@@ -301,9 +302,10 @@ export class PlaybackLoudnessMeter {
  * front of the result so the output aligns with the input.
  * An empty or non-finite `samples` is refused with a `RangeError` naming `samples`.
  */
-export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
+export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult;
+export function renderPlayback(...args: unknown[]): RenderPlaybackResult {
   return withEntry('renderPlayback', () => {
-    requestObject('renderPlayback', request, 'request', true);
+    const request = requestOnly<RenderPlaybackRequest>('renderPlayback', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const { samples, channels } = addon.renderPlayback(
       request.samples,

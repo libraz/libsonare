@@ -47,6 +47,7 @@ const FEATURE_KEYS = [
   'fx',
   'graph',
   'instrumentParamAutomation',
+  'liveDevices',
   'mastering',
   'mixing',
   'mixingAssistant',
@@ -64,6 +65,10 @@ describe('capabilities().features', () => {
     for (const key of FEATURE_KEYS) {
       expect(typeof features[key], key).toBe('boolean');
     }
+  });
+
+  it('reports live device support as unavailable in the native addon', () => {
+    expect(mod.capabilities().features.liveDevices).toBe(false);
   });
 
   it('declares every key as a required boolean and refuses unknown keys', () => {

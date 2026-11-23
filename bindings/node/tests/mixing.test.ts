@@ -29,7 +29,10 @@ describe('mixing native binding', () => {
     expect(result.left[1]).toBeCloseTo(1.0, 2);
     expect(Array.from(result.right)).toEqual([0, 0]);
     expect(result.meters).toHaveLength(1);
-    expect(Number.isFinite(result.meters[0].peakDbL)).toBe(true);
+    expect(result.meters[0].numChannels).toBe(2);
+    expect(result.meters[0].peakDb).toHaveLength(2);
+    expect(Number.isFinite(result.meters[0].peakDb[0])).toBe(true);
+    expect(Object.keys(result.meters[0])).not.toContain('peakDbL');
     expect(typeof result.meters[0].likelyMonoCompatible).toBe('boolean');
   });
 
@@ -183,8 +186,8 @@ describe('insert param validation', () => {
     left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
     const right = new Float32Array(left);
     const result = mixStereo({ strips: [{ left, right }], sampleRate: 48000 });
-    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDbtp(left, 48000), 4);
-    expect(result.meters[0].truePeakDbtpL).toBeGreaterThan(-1);
+    expect(result.meters[0].truePeakDbtp[0]).toBeCloseTo(meteringTruePeakDbtp(left, 48000), 4);
+    expect(result.meters[0].truePeakDbtp[0]).toBeGreaterThan(-1);
   });
 
   it("flushes a streaming mixer's meters on request", () => {

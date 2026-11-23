@@ -18,6 +18,7 @@ import {
   detectKey,
   detectKeyCandidates,
   downmix,
+  encodeAudio,
   estimateMeter,
   lufsMultichannel,
   lufsSeriesMultichannel,
@@ -129,10 +130,13 @@ const ROOM = {
   listener: { x: 3, y: 2, z: 1.2 },
 };
 
-const BEATS = Array.from({ length: 8 }, (_, i) => ({
-  timeSec: i * 0.5,
-  strength: i % 4 ? 0.5 : 1,
-}));
+const METER_OBSERVATIONS = {
+  accent: Array.from({ length: 8 }, (_, i) => (i % 4 ? 0.5 : 1)),
+  hasAttack: [] as boolean[],
+  lowFrequencyEnergy: [] as number[],
+  subdivisionAccent: [] as number[],
+  chordChange: [] as number[],
+};
 const MIDI_CC_EVENTS = [
   midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
   midiCc({ ppq: 0.1, group: 0, channel: 2, controller: 33, value: 12 }),
@@ -153,6 +157,7 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   engine_set_bus_strip_json: [{ inserts: [{}] }],
   engine_set_master_strip_json: [{ inserts: [{}] }],
   engine_set_track_strip_json: [{ inserts: [{}] }],
+  encode_audio: [[], Array.from({ length: 9 }, () => TONE)],
   engine_push_midi_sysex: [new Uint8Array(0), new Uint8Array(1 << 20)],
   engine_render_offline: [[], Array.from({ length: 65 }, () => new Float32Array(16))],
   engine_set_track_lanes: [Array.from({ length: 33 }, (_, i) => ({ trackId: i + 1 }))],
@@ -164,6 +169,7 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   mastering_ab_match_loudness: [EMPTY],
   mastering_ab_match_loudness_stereo: [EMPTY],
   mastering_analyze_pair: [EMPTY],
+  mastering_analyze_pair_stereo: [EMPTY, LONG],
   mastering_apply_pair_processor: [EMPTY],
   mastering_apply_pair_processor_stereo: [EMPTY],
   merge_notes: [EMPTY, []],
@@ -175,6 +181,7 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   project_add_automation_lane: [[]],
   project_annotate_chords: [[]],
   project_annotate_keys: [[]],
+  project_annotate_sections: [[{}]],
   project_bounce: [[]],
   project_edit_automation_lane: [[]],
   project_import_external_stems: [[]],
@@ -419,12 +426,28 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     ),
   eq_process: (_s, v) => withEq((eq) => eq.processMono(v as Float32Array)),
   eq_set_sidechain: (_s, v) => withEq((eq) => eq.setSidechainMono(v as Float32Array)),
-  estimate_meter_json: (s, v) => estimateMeter(given({ beats: BEATS }, s, v) as never),
+  encode_audio: (s, v) =>
+    encodeAudio(given({ channels: [TONE], sampleRate: SR, format: 'wav' }, s, v) as never),
+  estimate_meter_json: (s, v) =>
+    estimateMeter(given({ observations: METER_OBSERVATIONS }, s, v) as never),
   mastering_ab_match_loudness: (s, v) => masteringAbMatchLoudness(given(PAIR, s, v) as never),
   mastering_ab_match_loudness_stereo: (s, v) =>
     masteringAbMatchLoudnessStereo(given(STEREO_PAIR, s, v) as never),
   mastering_analyze_pair: (s, v) =>
     masteringAnalyzePair(given({ ...PAIR, analysis: 'match.referenceLoudness' }, s, v) as never),
+  mastering_analyze_pair_stereo: (s, v) =>
+    masteringAnalyzePair(
+      given(
+        {
+          analysis: 'match.referenceLoudness',
+          source: [TONE, TONE],
+          reference: [TONE, TONE],
+          sampleRate: SR,
+        },
+        s,
+        [v, v],
+      ) as never,
+    ),
   mastering_apply_pair_processor: (s, v) =>
     masteringApplyPairProcessor(given({ ...PAIR, processor: 'match.abCrossfade' }, s, v) as never),
   mastering_apply_pair_processor_stereo: (s, v) =>
@@ -450,10 +473,16 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     ),
   project_annotate_chords: (_s, v) => withProject((project) => project.annotateChords(v as never)),
   project_annotate_keys: (_s, v) => withProject((project) => project.annotateKeys(v as never)),
+  project_annotate_sections: (_s, v) =>
+    withProject((project) => project.annotateSections(v as never)),
   project_bounce: (s, v) => withProject((project) => project.bounce({ [s]: v } as never)),
   project_edit_automation_lane: (_s, v) =>
     withTrack((project, trackId) =>
-      project.editAutomationLane(trackId, 1, { targetParamId: 1, points: v } as never),
+      project.editAutomationLane(trackId, 1, {
+        targetKind: 'opaque',
+        targetParamId: 1,
+        points: v,
+      } as never),
     ),
   project_import_external_stems: (_s, v) =>
     withProject((project) => project.importExternalStems({ sampleRate: 48000, stems: v } as never)),

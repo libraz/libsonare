@@ -143,7 +143,7 @@ describe('one positional form, sampleRate required', () => {
 
   it.each([
     ['detectKey', (r: object) => detectKey({ samples, sampleRate, ...r }), { nFft: 2048 }],
-    ['analyzeBpm', (r: object) => analyzeBpm({ samples, sampleRate, ...r }), { startBpm: 100 }],
+    ['analyzeBpm', (r: object) => analyzeBpm({ samples, sampleRate, ...r }), { bpmMin: 100 }],
     ['detectOnsets', (r: object) => detectOnsets({ samples, sampleRate, ...r }), { wait: 2 }],
   ])('%s: request and positional forms agree', (name, viaRequest, options) => {
     const fn = (sonare as unknown as Record<string, (...a: unknown[]) => unknown>)[name];
@@ -476,29 +476,34 @@ describe('analyzeBpm tempo range', () => {
   });
 });
 
-describe('estimateMeter takes beats', () => {
-  const beats: Beat[] = Array.from({ length: 16 }, (_, i) => ({
-    timeSec: i * 0.5,
-    strength: i % 4 === 0 ? 1 : 0.4,
-  }));
+describe('estimateMeter takes observations', () => {
+  const observations = {
+    accent: Array.from({ length: 16 }, (_, i) => (i % 4 === 0 ? 1 : 0.4)),
+    hasAttack: [],
+    lowFrequencyEnergy: [],
+    subdivisionAccent: [],
+    chordChange: [],
+  };
 
-  it('scores a Beat series', () => {
-    const meter = estimateMeter({ beats });
+  it('scores beat observations', () => {
+    const meter = estimateMeter({ observations });
     expect(meter.timeSignature.numerator).toBe(4);
   });
 
-  it('refuses the old parallel arrays', () => {
+  it('refuses the former beat input names', () => {
     expect(() =>
       estimateMeter({
+        observations,
+        beats: [],
         beatTimes: new Float32Array(8),
         beatStrengths: new Float32Array(8),
       } as never),
     ).toThrow(TypeError);
   });
 
-  it('refuses a malformed beat', () => {
-    expect(() => estimateMeter({ beats: [{ timeSec: 0 }] } as never)).toThrow(TypeError);
-    expect(() => estimateMeter({ beats: 3 } as never)).toThrow(TypeError);
+  it('refuses malformed observations', () => {
+    expect(() => estimateMeter({ observations: null } as never)).toThrow(TypeError);
+    expect(() => estimateMeter({ observations: 3 } as never)).toThrow(TypeError);
   });
 });
 

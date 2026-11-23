@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze } from '../src/index.js';
+import { analyze, analyzeBpm } from '../src/index.js';
 
 const sampleRate = 22050;
 // Request-versus-positional equivalence for these functions lives in the
@@ -10,6 +10,13 @@ const tone = new Float32Array(sampleRate * 2).map(
 );
 
 describe('analysis request-object compatibility', () => {
+  it('refuses a beat-tracking prior on BPM-only analysis', () => {
+    expect(() => analyzeBpm({ samples: tone, sampleRate, startBpm: 55 } as never)).toThrow(
+      TypeError,
+    );
+    expect(() => analyzeBpm(tone, sampleRate, { startBpm: 55 } as never)).toThrow(TypeError);
+  });
+
   it('accepts complete analyzer options', () => {
     const options = {
       bpmMin: 30,

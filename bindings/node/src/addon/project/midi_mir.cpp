@@ -1,5 +1,8 @@
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -16,6 +19,61 @@
 using namespace sonare_node::project;
 
 namespace {
+
+struct MidiEventListGuard {
+  SonareMidiEventList value{};
+
+  ~MidiEventListGuard() { sonare_free_midi_event_list(&value); }
+};
+
+struct SectionListGuard {
+  SonareProjectSectionList value{};
+
+  ~SectionListGuard() { sonare_free_project_section_list(&value); }
+};
+
+struct KeySegmentListGuard {
+  SonareProjectKeySegmentList value{};
+
+  ~KeySegmentListGuard() { sonare_free_project_key_segment_list(&value); }
+};
+
+struct ChordSymbolListGuard {
+  SonareProjectChordSymbolList value{};
+
+  ~ChordSymbolListGuard() { sonare_free_project_chord_symbol_list(&value); }
+};
+
+constexpr size_t kChordExtensionCapacity = 32;
+
+template <size_t N>
+bool RefuseUnknownAnnotationKeys(Napi::Env env, const Napi::Object& row, const char* array,
+                                 uint32_t index, const std::array<const char*, N>& allowed) {
+  napi_value names_value = nullptr;
+  const auto key_filter = static_cast<napi_key_filter>(napi_key_enumerable | napi_key_skip_symbols);
+  const napi_status status = napi_get_all_property_names(env, row, napi_key_own_only, key_filter,
+                                                         napi_key_numbers_to_strings, &names_value);
+  NAPI_THROW_IF_FAILED(env, status, false);
+  const Napi::Array names(env, names_value);
+  const uint32_t count = names.Length();
+  for (uint32_t i = 0; i < count; ++i) {
+    const std::string key = names.Get(i).As<Napi::String>().Utf8Value();
+    const bool known = std::any_of(allowed.begin(), allowed.end(),
+                                   [&](const char* candidate) { return key == candidate; });
+    if (!known) {
+      std::string expected;
+      for (const char* candidate : allowed) {
+        if (!expected.empty()) expected += ", ";
+        expected += candidate;
+      }
+      const std::string subject = std::string(array) + "[" + std::to_string(index) + "]." + key;
+      throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, subject,
+                                                    "", expected)
+          .as_caller_spelled();
+    }
+  }
+  return true;
+}
 
 // Marshals one heap-owned SonareProjectAssistSidecar into a JS object and frees
 // its heap fields. The struct is consumed (zeroed) by the C free function.
@@ -45,10 +103,12 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
   uint32_t clip_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   std::vector<SonareMidiEventPod> events;
+  std::vector<std::vector<uint8_t>> payloads;
   if (info.Length() > 1 && info[1].IsArray()) {
     Napi::Array input = info[1].As<Napi::Array>();
     const uint32_t input_count = sonare_node::node_list_length(input, "events");
     events.reserve(input_count);
+    payloads.resize(input_count);
     for (uint32_t i = 0; i < input_count; ++i) {
       Napi::Value entry = input.Get(i);
       SonareMidiEventPod ev{};
@@ -69,6 +129,19 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
         if (!RequiredWordValue(env, obj.Get("word0"), "word0", &ev.word0)) return env.Undefined();
         ev.word1 = WordProperty(obj, "word1", ev.word1);
         if (env.IsExceptionPending()) return env.Undefined();
+        const Napi::Value sysex_value = obj.Get("sysex");
+        if (!sysex_value.IsUndefined() && !sysex_value.IsNull()) {
+          Napi::Uint8Array sysex;
+          const std::string subject = "events[" + std::to_string(i) + "].sysex";
+          if (!RequiredUint8ArrayValue(env, sysex_value, subject, &sysex)) return env.Undefined();
+          const size_t sysex_size = sysex.ElementLength();
+          const uint8_t* bytes = sonare_node::ElementData(sysex);
+          if (sysex_size > 0) {
+            payloads[i].assign(bytes, bytes + sysex_size);
+          }
+          ev.sysex = sonare_node::ElementData(payloads[i]);
+          ev.sysex_size = sysex_size;
+        }
       } else {
         Napi::TypeError::New(env, "MIDI event must be a [ppq, word0, word1] tuple or object")
             .ThrowAsJavaScriptException();
@@ -81,6 +154,43 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
       env, sonare_project_set_midi_events(project_, clip_id,
                                           events.empty() ? nullptr : events.data(), events.size()));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::MidiEvents(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  uint32_t clip_id = 0;
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "clipId", &clip_id)) return env.Undefined();
+  MidiEventListGuard events;
+  ThrowIfError(env, sonare_project_midi_events(project_, clip_id, &events.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if ((events.value.count != 0 && events.value.items == nullptr) ||
+      events.value.count > std::numeric_limits<uint32_t>::max()) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "MIDI event list is not representable as an array");
+    return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, events.value.count);
+  for (size_t i = 0; i < events.value.count; ++i) {
+    const SonareMidiEventPod& event = events.value.items[i];
+    if ((event.sysex == nullptr) != (event.sysex_size == 0)) {
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "MIDI event list contains an invalid SysEx view");
+      return env.Undefined();
+    }
+    Napi::Object output_event = sonare_node::MidiEventToObject(env, event);
+    if (event.sysex != nullptr) {
+      Napi::Uint8Array sysex = Napi::Uint8Array::New(env, event.sysex_size);
+      if (event.sysex_size > 0) {
+        std::memcpy(sonare_node::ElementData(sysex), event.sysex, event.sysex_size);
+      }
+      output_event.Set("sysex", sysex);
+    }
+    out.Set(static_cast<uint32_t>(i), output_event);
+  }
+  return out;
   SONARE_NODE_CATCH(env)
 }
 
@@ -379,6 +489,11 @@ Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object obj = entry.As<Napi::Object>();
+    static constexpr std::array<const char*, 4> kAllowed = {"endPpq", "mode", "startPpq",
+                                                            "tonicPc"};
+    if (!RefuseUnknownAnnotationKeys(env, obj, "keys", i, kAllowed)) {
+      return env.Undefined();
+    }
     SonareProjectKeySegment seg{};
     if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq) ||
         !RequiredDoubleProperty(env, obj, "endPpq", &seg.end_ppq)) {
@@ -417,6 +532,12 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object obj = entry.As<Napi::Object>();
+    static constexpr std::array<const char*, 8> kAllowed = {
+        "endPpq",       "extensions", "modulationBoundary", "quality",
+        "romanNumeral", "rootPc",     "slashBassPc",        "startPpq"};
+    if (!RefuseUnknownAnnotationKeys(env, obj, "chords", i, kAllowed)) {
+      return env.Undefined();
+    }
     SonareProjectChordSymbol chord{};
     if (!RequiredDoubleProperty(env, obj, "startPpq", &chord.start_ppq) ||
         !RequiredDoubleProperty(env, obj, "endPpq", &chord.end_ppq)) {
@@ -457,6 +578,134 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_annotate_chords(
                         project_, chords.empty() ? nullptr : chords.data(), chords.size()));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::KeyAnnotations(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  KeySegmentListGuard keys;
+  ThrowIfError(env, sonare_project_key_annotations(project_, &keys.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if ((keys.value.count != 0 && keys.value.items == nullptr) ||
+      keys.value.count > std::numeric_limits<uint32_t>::max()) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "key annotation list is not representable as an array");
+    return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, static_cast<uint32_t>(keys.value.count));
+  for (size_t i = 0; i < keys.value.count; ++i) {
+    const SonareProjectKeySegment& key = keys.value.items[i];
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("startPpq", Napi::Number::New(env, key.start_ppq));
+    item.Set("endPpq", Napi::Number::New(env, key.end_ppq));
+    item.Set("tonicPc", Napi::Number::New(env, key.tonic_pc));
+    item.Set("mode", Napi::Number::New(env, key.mode));
+    out.Set(static_cast<uint32_t>(i), item);
+  }
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::ChordAnnotations(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  ChordSymbolListGuard chords;
+  ThrowIfError(env, sonare_project_chord_annotations(project_, &chords.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if ((chords.value.count != 0 && chords.value.items == nullptr) ||
+      chords.value.count > std::numeric_limits<uint32_t>::max()) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                         "chord annotation list is not representable as an array");
+    return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, static_cast<uint32_t>(chords.value.count));
+  for (size_t i = 0; i < chords.value.count; ++i) {
+    const SonareProjectChordSymbol& chord = chords.value.items[i];
+    if (chord.extension_count > kChordExtensionCapacity ||
+        (chord.extension_count != 0 && chord.extensions == nullptr)) {
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "chord annotation has invalid extension storage");
+      return env.Undefined();
+    }
+    Napi::Array extensions = Napi::Array::New(env, static_cast<uint32_t>(chord.extension_count));
+    for (size_t j = 0; j < chord.extension_count; ++j) {
+      extensions.Set(static_cast<uint32_t>(j), Napi::Number::New(env, chord.extensions[j]));
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("startPpq", Napi::Number::New(env, chord.start_ppq));
+    item.Set("endPpq", Napi::Number::New(env, chord.end_ppq));
+    item.Set("rootPc", Napi::Number::New(env, chord.root_pc));
+    item.Set("quality", Napi::Number::New(env, chord.quality));
+    item.Set("extensions", extensions);
+    item.Set("slashBassPc", Napi::Number::New(env, chord.slash_bass_pc));
+    if (chord.roman_numeral != nullptr && chord.roman_numeral[0] != '\0') {
+      item.Set("romanNumeral", Napi::String::New(env, chord.roman_numeral));
+    }
+    item.Set("modulationBoundary", Napi::Boolean::New(env, chord.modulation_boundary != 0));
+    out.Set(static_cast<uint32_t>(i), item);
+  }
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::AnnotateSections(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  Napi::Array input;
+  if (!RequiredArrayValue(env, info[0], "sections", &input)) return env.Undefined();
+  const uint32_t count = sonare_node::node_list_length(input, "sections");
+  std::vector<SonareProjectSection> sections(count);
+  std::vector<std::string> labels(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Object obj;
+    std::string at;
+    if (!sonare_node::RequiredElementObject(env, input, i, "sections", &obj, &at) ||
+        !RequiredDoubleProperty(env, obj, "startPpq", &sections[i].start_ppq) ||
+        !RequiredDoubleProperty(env, obj, "endPpq", &sections[i].end_ppq) ||
+        !RequiredStringProperty(env, obj, "label", &labels[i])) {
+      return env.Undefined();
+    }
+  }
+  for (uint32_t i = 0; i < count; ++i) sections[i].label = labels[i].c_str();
+  ThrowIfError(env, sonare_project_annotate_sections(
+                        project_, sections.empty() ? nullptr : sections.data(), sections.size()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::SectionAnnotations(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  SectionListGuard sections;
+  ThrowIfError(env, sonare_project_section_annotations(project_, &sections.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if ((sections.value.count != 0 && sections.value.items == nullptr) ||
+      sections.value.count > std::numeric_limits<uint32_t>::max()) {
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_INVALID_FORMAT,
+        "section annotation list is not representable as an array");
+    return env.Undefined();
+  }
+  Napi::Array out = Napi::Array::New(env, static_cast<uint32_t>(sections.value.count));
+  for (size_t i = 0; i < sections.value.count; ++i) {
+    const SonareProjectSection& section = sections.value.items[i];
+    if (section.label == nullptr) {
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "section annotation has no label");
+      return env.Undefined();
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("startPpq", Napi::Number::New(env, section.start_ppq));
+    item.Set("endPpq", Napi::Number::New(env, section.end_ppq));
+    item.Set("label", Napi::String::New(env, section.label));
+    out.Set(static_cast<uint32_t>(i), item);
+  }
+  return out;
   SONARE_NODE_CATCH(env)
 }
 
@@ -547,9 +796,6 @@ struct WarpAnchorArrayDeleter {
     sonare_free_project_warp_anchors(anchors);
   }
 };
-
-// Capacity for the extension scale degrees; the library emits at most three.
-constexpr size_t kChordExtensionCapacity = 32;
 
 }  // namespace
 

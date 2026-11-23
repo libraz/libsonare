@@ -1,6 +1,8 @@
 #include <napi.h>
 #include <sonare/sonare_c.h>
 
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -444,6 +446,7 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   Napi::Array input_array = info[0].As<Napi::Array>();
   const uint32_t length = sonare_node::node_list_length(input_array, "events");
   std::vector<SonareMidiEventPod> input(length);
+  std::vector<std::vector<uint8_t>> sysex_payloads(length);
   for (uint32_t i = 0; i < length; ++i) {
     Napi::Value value = input_array.Get(i);
     if (!value.IsObject()) {
@@ -452,6 +455,19 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
     }
     Napi::Object event = value.As<Napi::Object>();
     if (!MidiEventFromObject(env, event, &input[i])) return env.Undefined();
+    const Napi::Value sysex_value = event.Get("sysex");
+    if (!sysex_value.IsUndefined() && !sysex_value.IsNull()) {
+      Napi::Uint8Array sysex;
+      const std::string subject = "events[" + std::to_string(i) + "].sysex";
+      if (!sonare_node::RequiredUint8ArrayValue(env, sysex_value, subject, &sysex)) {
+        return env.Undefined();
+      }
+      const size_t size = sysex.ElementLength();
+      const uint8_t* bytes = sonare_node::ElementData(sysex);
+      if (size > 0) sysex_payloads[i].assign(bytes, bytes + size);
+      input[i].sysex = sonare_node::ElementData(sysex_payloads[i]);
+      input[i].sysex_size = size;
+    }
   }
 
   // An omitted, null, or explicitly `undefined` field must land on the init defaults (any
@@ -478,15 +494,28 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
       sonare_midi_route_events(input.empty() ? nullptr : input.data(), input.size(), &config,
                                output.empty() ? nullptr : output.data(), output.size(),
                                &output_count, &overflowed, &overflow_count);
-  if (err != SONARE_OK) {
-    Napi::RangeError::New(env, "invalid MIDI route arguments").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  sonare_node::ThrowIfError(env, err);
+  if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Object result = Napi::Object::New(env);
   Napi::Array events = Napi::Array::New(env, output_count);
   for (size_t i = 0; i < output_count; ++i) {
-    events.Set(i, sonare_node::MidiEventToObject(env, output[i]));
+    Napi::Object event = sonare_node::MidiEventToObject(env, output[i]);
+    if (output[i].sysex_size > 0) {
+      if (output[i].sysex == nullptr || output[i].sysex_size > sonare_node::kNodeListBudget) {
+        sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                             "MIDI route result has invalid SysEx storage");
+        return env.Undefined();
+      }
+      Napi::Uint8Array sysex = Napi::Uint8Array::New(env, output[i].sysex_size);
+      std::memcpy(sonare_node::ElementData(sysex), output[i].sysex, output[i].sysex_size);
+      event.Set("sysex", sysex);
+    } else if (output[i].sysex != nullptr) {
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "MIDI route result has empty SysEx storage");
+      return env.Undefined();
+    }
+    events.Set(i, event);
   }
   result.Set("events", events);
   result.Set("overflowed", overflowed != 0);

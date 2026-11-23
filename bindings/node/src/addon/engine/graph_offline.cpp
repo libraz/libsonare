@@ -10,6 +10,7 @@
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/error_reason.h"
 
 using namespace sonare_node::engine;
 
@@ -256,10 +257,12 @@ Napi::Value RealtimeEngineWrap::Process(const Napi::CallbackInfo& info) {
   // Audio-thread entry point: its failure carries no detail message of its own,
   // so it must not be reported through the thread-local one (see
   // ThrowIfRealtimeError).
-  ThrowIfRealtimeError(env, sonare_engine_process(
-                                engine_, sonare_node::ElementData(block.pointers),
-                                with_monitor ? sonare_node::ElementData(monitor.pointers) : nullptr,
-                                static_cast<int>(block.pointers.size()), block.frames));
+  ThrowIfRealtimeError(
+      env,
+      sonare_engine_process(engine_, sonare_node::ElementData(block.pointers),
+                            with_monitor ? sonare_node::ElementData(monitor.pointers) : nullptr,
+                            static_cast<int>(block.pointers.size()), block.frames),
+      sonare::error_reason_token(sonare::ErrorReason::EngineDeviceDriven));
   if (env.IsExceptionPending()) return env.Undefined();
   if (!with_monitor) return sonare_node::Float32ArraysFrom(env, block.storage);
 

@@ -21,6 +21,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import type { PolyphonicAnalysis } from '../src/index.js';
 import * as sonare from '../src/index.js';
+import { unknownKeyError } from './_helpers.js';
 
 const SR = 22050;
 /** A sample rate no function defaults to, so passing it is observable. */
@@ -121,6 +122,12 @@ const TG = sonare.tempogram({ onsetEnvelope: ENV, sampleRate: SR, hopLength: 256
 const CHROMA = sonare.chroma(SIG, SR, { nFft: 1024, hopLength: 256 });
 const F0 = new Float32Array(Math.ceil(SIG.length / 256) + 1).fill(220);
 const SMALL = Float32Array.from({ length: 80 }, (_, i) => 0.1 + ((i * 37) % 11) / 11);
+const TAGGED_WAV = sonare.encodeAudio({
+  channels: [SIG],
+  sampleRate: SR,
+  format: 'wav',
+  tags: { title: 'request-object equivalence' },
+});
 
 type Args = Record<string, unknown>;
 
@@ -2331,6 +2338,30 @@ const ROWS: Row[] = [
     values: { samples: SIG, srcSr: SR, targetSr: 16000 },
     invalid: { targetSr: 0 },
   },
+  // audio_codec.ts
+  {
+    name: 'encodeAudio',
+    fn: sonare.encodeAudio,
+    params: 'channels sampleRate ...options?',
+    values: {
+      channels: [SIG, SIG2],
+      sampleRate: ALT_SR,
+      options: {
+        format: 'wav',
+        bitDepth: 24,
+        tags: { title: 'request-object equivalence' },
+      },
+    },
+    invalid: { bitDepth: 0 },
+    oneOf: [{ fields: ['format'], error: 'TypeError: encodeAudio: format is required' }],
+  },
+  {
+    name: 'readAudioTags',
+    fn: sonare.readAudioTags,
+    params: 'data',
+    values: { data: TAGGED_WAV },
+    invalid: { data: new Uint8Array([0]) },
+  },
   // voice_changer.ts
   {
     name: 'voiceChange',
@@ -2377,6 +2408,99 @@ function overloadedFunctions(): string[] {
     }
   }
   return [...names].sort();
+}
+
+type DynamicCall = (...args: unknown[]) => unknown;
+
+interface SampleOneShotEntry {
+  name: string;
+  prefix: string;
+  call: DynamicCall;
+}
+
+function dynamicCall(fn: unknown): DynamicCall {
+  return fn as DynamicCall;
+}
+
+const SAMPLE_ONE_SHOT_ENTRIES: SampleOneShotEntry[] = [
+  { name: 'stft', prefix: 'stft', call: dynamicCall(sonare.stft) },
+  { name: 'detectBpm', prefix: 'detectBpm', call: dynamicCall(sonare.detectBpm) },
+  { name: 'analyzeAsync', prefix: 'analyzeAsync', call: dynamicCall(sonare.analyzeAsync) },
+  { name: 'meteringRmsDb', prefix: 'meteringRmsDb', call: dynamicCall(sonare.meteringRmsDb) },
+  { name: 'cqt', prefix: 'cqt', call: dynamicCall(sonare.cqt) },
+  { name: 'pitchYin', prefix: 'pitchYin', call: dynamicCall(sonare.pitchYin) },
+  {
+    name: 'extractPercussiveEvents',
+    prefix: 'extractPercussiveEvents',
+    call: dynamicCall(sonare.extractPercussiveEvents),
+  },
+  {
+    name: 'analyzePolyphonic',
+    prefix: 'analyzePolyphonic',
+    call: dynamicCall(sonare.analyzePolyphonic),
+  },
+  {
+    name: 'Project.analyzeTempo',
+    prefix: 'Project.analyzeTempo',
+    call: (...args: unknown[]) => {
+      const project = new sonare.Project();
+      try {
+        return dynamicCall(project.analyzeTempo).apply(project, args);
+      } finally {
+        project.destroy();
+      }
+    },
+  },
+];
+
+const SAMPLE_ONE_SHOT_ORDER_PROBES = [
+  {
+    name: 'unknown option before out-of-range sampleRate',
+    request: [{ samples: SIG, sampleRate: 0, bogus: true }],
+    positional: [SIG, 0, { bogus: true }],
+    expected: 'unknown-key',
+  },
+  {
+    name: 'wrong samples type before out-of-range sampleRate',
+    request: [{ samples: 'not samples', sampleRate: 0 }],
+    positional: ['not samples', 0],
+    expected: 'samples-type',
+  },
+  {
+    name: 'wrong samples type before wrong sampleRate type',
+    request: [{ samples: 'not samples', sampleRate: 'not a rate' }],
+    positional: ['not samples', 'not a rate'],
+    expected: 'samples-type',
+  },
+] as const;
+
+const SAMPLE_ONE_SHOT_ORDER_CASES = SAMPLE_ONE_SHOT_ENTRIES.flatMap((entry) =>
+  SAMPLE_ONE_SHOT_ORDER_PROBES.map((probe) => ({ entry, probe })),
+);
+
+async function captureRefusal(call: () => unknown): Promise<Error> {
+  try {
+    await call();
+  } catch (error) {
+    if (error instanceof Error) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error('expected the call to refuse');
+}
+
+function expectSampleOneShotOrderError(
+  error: Error,
+  prefix: string,
+  kind: (typeof SAMPLE_ONE_SHOT_ORDER_PROBES)[number]['expected'],
+): void {
+  expect(error).toBeInstanceOf(TypeError);
+  if (kind === 'unknown-key') {
+    expect(error).toEqual(unknownKeyError(`${prefix}: unknown key bogus`));
+    return;
+  }
+  expect(error.message).toBe(`${prefix}: samples must be a Float32Array`);
 }
 
 describe('request-object equivalence', () => {
@@ -2478,4 +2602,184 @@ describe('request-object equivalence', () => {
       expect(await run(row, specs, bad, 'request')).toEqual(positional);
     });
   });
+
+  it.each(SAMPLE_ONE_SHOT_ORDER_CASES)(
+    '$entry.name: $probe.name wins in request and positional forms',
+    async ({ entry, probe }) => {
+      const requestError = await captureRefusal(() => entry.call(...probe.request));
+      const positionalError = await captureRefusal(() => entry.call(...probe.positional));
+      expectSampleOneShotOrderError(requestError, entry.prefix, probe.expected);
+      expectSampleOneShotOrderError(positionalError, entry.prefix, probe.expected);
+    },
+  );
+
+  it('checks positional options shape before the sample-rate domain', async () => {
+    const error = await captureRefusal(() => dynamicCall(sonare.stft)(SIG, 0, 42));
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error.message).toBe('stft: options must be an object');
+  });
+
+  it('checks surplus request arguments before the sample-rate domain', async () => {
+    const error = await captureRefusal(() => dynamicCall(sonare.stft)({ samples: SIG }, 0));
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error.message).toBe('stft: unexpected argument after the request object');
+  });
+
+  it.each([
+    {
+      name: 'mixStereo muted type',
+      call: dynamicCall(sonare.mixStereo),
+      request: {
+        strips: [{ left: new Float32Array(0), right: SIG2, muted: 'yes' }],
+        sampleRate: SR,
+      },
+      message: 'mixStereo: strips[0].muted must be a boolean',
+    },
+    {
+      name: 'mixStereo strips shape',
+      call: dynamicCall(sonare.mixStereo),
+      request: { strips: 'not strips', sampleRate: 0 },
+      message: 'mixStereo: strips must be an array',
+    },
+    {
+      name: 'biquadFilter zeroPhase type',
+      call: dynamicCall(sonare.biquadFilter),
+      request: { samples: SIG, sampleRate: 0, type: 'lowPass', cutoffHz: 1000, zeroPhase: 'yes' },
+      message: 'biquadFilter: zeroPhase must be a boolean',
+    },
+    {
+      name: 'masterAudioStereo required selector',
+      call: dynamicCall(sonare.masterAudioStereo),
+      request: { left: SIG, right: SIG2, sampleRate: 0 },
+      message: 'masterAudioStereo: give preset or overrides',
+    },
+    {
+      name: 'masterAudioStereoAsync required selector',
+      call: dynamicCall(sonare.masterAudioStereoAsync),
+      request: { left: SIG, right: SIG2, sampleRate: 0 },
+      message: 'masterAudioStereoAsync: give preset or overrides',
+    },
+    {
+      name: 'masteringRepairApply stages shape',
+      call: dynamicCall(sonare.masteringRepairApply),
+      request: { channels: [SIG], sampleRate: 0, stages: 'not stages' },
+      message: 'masteringRepairApply: stages must be an array',
+    },
+    {
+      name: 'roomMorphStereo receiverSpacingM type',
+      call: dynamicCall(sonare.roomMorphStereo),
+      request: { left: SIG, right: SIG2, sampleRate: 0, receiverSpacingM: 'not a number' },
+      message: 'roomMorphStereo: receiverSpacingM must be a number',
+    },
+    {
+      name: 'fourierTempogram center type',
+      call: dynamicCall(sonare.fourierTempogram),
+      request: { onsetEnvelope: SIG, sampleRate: 0, center: 'yes' },
+      message: 'fourierTempogram: center must be a boolean',
+    },
+    {
+      name: 'masterAudio required selector',
+      call: dynamicCall(sonare.masterAudio),
+      request: { samples: new Float32Array(0), sampleRate: SR },
+      positional: [new Float32Array(0), SR],
+      message: 'masterAudio: give preset or overrides',
+    },
+    {
+      name: 'masterAudioAsync required selector',
+      call: dynamicCall(sonare.masterAudioAsync),
+      request: { samples: new Float32Array(0), sampleRate: SR },
+      positional: [new Float32Array(0), SR, {}],
+      message: 'masterAudioAsync: give preset or overrides',
+    },
+    {
+      name: 'renderPercussiveEvents events type',
+      call: dynamicCall(sonare.renderPercussiveEvents),
+      request: { samples: new Float32Array(0), sampleRate: SR, events: 'bad' },
+      positional: [new Float32Array(0), SR, { events: 'bad' }],
+      message: 'renderPercussiveEvents: events must be an array',
+    },
+    {
+      name: 'estimateMeter attack stream type',
+      call: dynamicCall(sonare.estimateMeter),
+      request: {
+        observations: { accent: new Array(64 * 1024 * 1024 + 1), hasAttack: 'bad' },
+      },
+      message: 'estimateMeter: observations.hasAttack must be an array of booleans',
+    },
+    {
+      name: 'chordFunctions chord container type',
+      call: dynamicCall(sonare.chordFunctions),
+      request: { chords: { chords: 'bad' }, key: { root: 12, mode: 'major' } },
+      message: 'chordFunctions: chords must be an array',
+    },
+    {
+      name: 'realtimeVoiceChangerRender harmonySteps type',
+      call: dynamicCall(sonare.realtimeVoiceChangerRender),
+      get request() {
+        return {
+          channels: [SIG],
+          sampleRate: SR,
+          config: {
+            ...sonare.realtimeVoiceChangerPresetConfig('neutralMonitor'),
+            retuneGrainSizeSamples: 1,
+            harmonySteps: 'bad',
+          },
+        };
+      },
+      message: 'realtimeVoiceChangerRender: harmonySteps must be an array of three numbers',
+    },
+    {
+      name: 'estimateMeter surplus argument',
+      call: dynamicCall(sonare.estimateMeter),
+      request: { observations: null },
+      extra: [true],
+      message: 'estimateMeter: unexpected argument after the request object',
+    },
+    {
+      name: 'alignTakeToReference surplus argument',
+      call: dynamicCall(sonare.alignTakeToReference),
+      request: { reference: SIG, take: SIG2, sampleRate: 0 },
+      extra: [true],
+      message: 'alignTakeToReference: unexpected argument after the request object',
+    },
+    {
+      name: 'renderPlayback surplus argument',
+      call: dynamicCall(sonare.renderPlayback),
+      request: { samples: SIG, sampleRate: 0 },
+      extra: [true],
+      message: 'renderPlayback: unexpected argument after the request object',
+    },
+    {
+      name: 'roomMorphStereo surplus argument',
+      call: dynamicCall(sonare.roomMorphStereo),
+      request: { left: SIG, right: SIG2, sampleRate: 0 },
+      extra: [true],
+      message: 'roomMorphStereo: unexpected argument after the request object',
+    },
+  ])('$name is refused first', async ({ call, request, message, extra = [], positional }) => {
+    for (const args of [[request, ...extra], ...(positional ? [positional] : [])]) {
+      const error = await captureRefusal(() => call(...args));
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error.message).toBe(message);
+    }
+  });
+
+  it('checks percussive options keys before the plain-array input budget in both forms', async () => {
+    const call = dynamicCall(sonare.extractPercussiveEvents);
+    const samples = new Array(64 * 1024 * 1024 + 1);
+    const expected = unknownKeyError('extractPercussiveEvents: unknown key bogus');
+    expect(await captureRefusal(() => call({ samples, sampleRate: SR, bogus: true }))).toEqual(
+      expected,
+    );
+    expect(await captureRefusal(() => call(samples, SR, { bogus: true }))).toEqual(expected);
+  });
+});
+
+it('stft returns the same phase plane through the request and positional forms', () => {
+  const options = { nFft: 1024, hopLength: 256, phase: true };
+  const positional = sonare.stft(SIG, ALT_SR, options);
+  const request = sonare.stft({ samples: SIG, sampleRate: ALT_SR, ...options });
+  expect(request).toEqual(positional);
+  expect(request.phase?.data).toBeInstanceOf(Float32Array);
+  expect(request.phase?.rows).toBeGreaterThan(0);
 });

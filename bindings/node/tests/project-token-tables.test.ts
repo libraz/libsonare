@@ -4,14 +4,13 @@
  *
  * The core's list is read off the refusal a document with an unknown token at
  * that field earns ("<path> must be one of <tokens>"), so the comparison is
- * against the table the serializer actually uses. The facade's token→ordinal map
- * is sorted by ordinal, so a member out of place reads as a drift too.
+ * against the table the serializer actually uses. The automation target list is
+ * read from the C token-name function and checked against that same refusal.
  */
 
 import { describe, expect, it } from 'vitest';
-import { Project } from '../src/index.js';
+import { automationTargetKindNames, Project } from '../src/index.js';
 import {
-  AUTOMATION_TARGET_KIND,
   CHORD_QUALITY,
   FADE_CURVE,
   KEY_MODE,
@@ -32,7 +31,6 @@ function richDocument(): Record<string, unknown> {
     project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
     project.setMarker({ ppq: 1, kind: 'text', name: 'cue' });
     project.addAutomationLane(trackId, {
-      targetParamId: 1,
       targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3, curveToNext: 'hold' }],
     });
@@ -88,11 +86,6 @@ const TABLES: readonly [string, Readonly<Record<string, number>>, readonly (stri
     ['chord quality', CHORD_QUALITY, ['annotation', 'chords', 0, 'quality']],
     ['key mode', KEY_MODE, ['annotation', 'keys', 0, 'mode']],
     [
-      'automation target kind',
-      AUTOMATION_TARGET_KIND,
-      ['tracks', 0, 'automationLanes', 0, 'targetKind'],
-    ],
-    [
       'automation curve',
       AUTOMATION_CURVE_VALUES,
       ['tracks', 0, 'automationLanes', 0, 'points', 0, 'curveToNext'],
@@ -104,5 +97,11 @@ describe('project token tables', () => {
 
   it.each(TABLES)('the %s list is the core table in order', (_name, map, path) => {
     expect(inOrdinalOrder(map)).toEqual(coreTokens(document, path));
+  });
+
+  it('automation target names match the core token list', () => {
+    expect(automationTargetKindNames()).toEqual(
+      coreTokens(document, ['tracks', 0, 'automationLanes', 0, 'targetKind']),
+    );
   });
 });

@@ -1,6 +1,7 @@
 #include "sonare_wrap.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -8,6 +9,7 @@
 
 #include "analysis/bpm_analyzer.h"
 #include "c_api/feature_input_domains.h"
+#include "core/audio.h"
 #include "core/channel_layout.h"
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_mixer.h"
@@ -214,6 +216,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                   "realtimeVoiceChangerPresetConfig"));
   exports.Set("decodeChannels",
               Napi::Function::New(env, &SonareWrap::DecodeChannels, "decodeChannels"));
+  exports.Set("readAudioTags",
+              Napi::Function::New(env, &SonareWrap::ReadAudioTags, "readAudioTags"));
+  exports.Set("encodeAudio", Napi::Function::New(env, &SonareWrap::EncodeAudio, "encodeAudio"));
   exports.Set("downmix", Napi::Function::New(env, &SonareWrap::Downmix, "downmix"));
   exports.Set("decompose", Napi::Function::New(env, &SonareWrap::Decompose, "decompose"));
   exports.Set("decomposeStems",
@@ -315,6 +320,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                   "masteringAbMatchLoudnessStereo"));
   exports.Set("masteringPairAnalyze",
               Napi::Function::New(env, &SonareWrap::MasteringPairAnalyze, "masteringPairAnalyze"));
+  exports.Set("masteringPairAnalyzeStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringPairAnalyzeStereo,
+                                  "masteringPairAnalyzeStereo"));
   exports.Set(
       "masteringStereoAnalyze",
       Napi::Function::New(env, &SonareWrap::MasteringStereoAnalyze, "masteringStereoAnalyze"));
@@ -465,6 +473,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("melToStft", Napi::Function::New(env, &SonareWrap::MelToStft, "melToStft"));
   exports.Set("melToAudio", Napi::Function::New(env, &SonareWrap::MelToAudio, "melToAudio"));
   exports.Set("griffinLim", Napi::Function::New(env, &SonareWrap::GriffinLim, "griffinLim"));
+  exports.Set("istft", Napi::Function::New(env, &SonareWrap::Istft, "istft"));
   exports.Set("mfccToMel", Napi::Function::New(env, &SonareWrap::MfccToMel, "mfccToMel"));
   exports.Set("mfccToAudio", Napi::Function::New(env, &SonareWrap::MfccToAudio, "mfccToAudio"));
 
@@ -760,6 +769,175 @@ Napi::Value SonareWrap::DecodeChannels(const Napi::CallbackInfo& info) {
   result.Set("sampleRate", Napi::Number::New(env, sample_rate));
   result.Set("channels", planes);
   return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::ReadAudioTags(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+
+  const uint8_t* data = nullptr;
+  size_t length = 0;
+  if (!sonare_node::RequiredBytesArg(env, info, 0, "data", &data, &length)) {
+    return env.Undefined();
+  }
+
+  SonareAudioTags tags{};
+  const SonareError err = sonare_read_audio_tags(data, length, &tags);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  std::unique_ptr<SonareAudioTags, decltype(&sonare_free_audio_tags)> guard(&tags,
+                                                                            sonare_free_audio_tags);
+
+  Napi::Object out = Napi::Object::New(env);
+  for (size_t i = 0; i < tags.count; ++i) {
+    const std::string key = tags.keys[i] == nullptr ? "" : tags.keys[i];
+    const std::string value = tags.values[i] == nullptr ? "" : tags.values[i];
+    out.DefineProperty(Napi::PropertyDescriptor::Value(
+        Napi::String::New(env, key), Napi::String::New(env, value),
+        static_cast<napi_property_attributes>(napi_enumerable | napi_configurable |
+                                              napi_writable)));
+  }
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::EncodeAudio(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+
+  int sample_rate = 0;
+  if (!sonare_node::RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) {
+    return env.Undefined();
+  }
+
+  Napi::Object options_object = Napi::Object::New(env);
+  if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
+    if (!sonare_node::RequiredObjectValue(env, info[2], "options", &options_object)) {
+      return env.Undefined();
+    }
+  }
+
+  SonareEncodeOptions options{};
+  sonare_encode_options_init(&options);
+  std::string format;
+  const Napi::Value format_value = options_object.Get("format");
+  if (format_value.IsUndefined() || format_value.IsNull()) {
+    Napi::TypeError::New(env, "format is required").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (!sonare_node::RequiredStringValue(env, format_value, "format", &format)) {
+    return env.Undefined();
+  }
+  options.format = format.c_str();
+
+  const Napi::Value bit_depth_value = options_object.Get("bitDepth");
+  if (!bit_depth_value.IsUndefined() && !bit_depth_value.IsNull()) {
+    int bit_depth = 0;
+    if (!sonare_node::Int32Value(env, bit_depth_value, "bitDepth", &bit_depth)) {
+      return env.Undefined();
+    }
+    if (bit_depth == 0) {
+      Napi::RangeError::New(env, "bitDepth must not be 0; omit it for the format default")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    options.bit_depth = bit_depth;
+  }
+
+  const Napi::Value quality_value = options_object.Get("quality");
+  if (!quality_value.IsUndefined() && !quality_value.IsNull()) {
+    const double quality =
+        sonare_node::DomainDoubleValue(env, quality_value, "quality", options.quality);
+    if (!std::isfinite(quality) || quality < 0.0 || quality > 1.0) {
+      Napi::RangeError::New(env, "quality must be finite and in [0, 1]")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    options.quality = sonare_node::FloatProperty(options_object, "quality", options.quality);
+  }
+
+  SonareAudioTags tags{};
+  std::vector<std::string> tag_keys;
+  std::vector<std::string> tag_values;
+  std::vector<char*> tag_key_ptrs;
+  std::vector<char*> tag_value_ptrs;
+  const Napi::Value tags_value = options_object.Get("tags");
+  if (!tags_value.IsUndefined() && !tags_value.IsNull()) {
+    Napi::Object tag_object;
+    if (!sonare_node::RequiredObjectValue(env, tags_value, "tags", &tag_object)) {
+      return env.Undefined();
+    }
+    napi_value tag_names_value = nullptr;
+    const auto key_filter =
+        static_cast<napi_key_filter>(napi_key_enumerable | napi_key_skip_symbols);
+    const auto status = napi_get_all_property_names(env, tag_object, napi_key_own_only, key_filter,
+                                                    napi_key_numbers_to_strings, &tag_names_value);
+    NAPI_THROW_IF_FAILED(env, status, env.Undefined());
+    const Napi::Array tag_names(env, tag_names_value);
+    const uint32_t tag_count = sonare_node::node_list_length(tag_names, "tags");
+    tag_keys.reserve(tag_count);
+    tag_values.reserve(tag_count);
+    tag_key_ptrs.reserve(tag_count);
+    tag_value_ptrs.reserve(tag_count);
+    for (uint32_t i = 0; i < tag_count; ++i) {
+      const std::string key = sonare_node::node_narrow_string(env, tag_names.Get(i), "tags.<key>");
+      const std::string field = "tags." + key;
+      std::string value;
+      if (!sonare_node::RequiredStringValue(env, tag_object.Get(key), field, &value)) {
+        return env.Undefined();
+      }
+      tag_keys.push_back(key);
+      tag_values.push_back(std::move(value));
+    }
+    for (std::string& key : tag_keys) tag_key_ptrs.push_back(const_cast<char*>(key.c_str()));
+    for (std::string& value : tag_values) {
+      tag_value_ptrs.push_back(const_cast<char*>(value.c_str()));
+    }
+    tags.keys = tag_key_ptrs.empty() ? nullptr : tag_key_ptrs.data();
+    tags.values = tag_value_ptrs.empty() ? nullptr : tag_value_ptrs.data();
+    tags.count = tag_count;
+    options.tags = &tags;
+  }
+
+  sonare_node::ChannelInputs inputs;
+  if (!sonare_node::ReadChannelInputs(env, info[0], &inputs)) return env.Undefined();
+  const size_t channel_count = inputs.arrays.size();
+  const size_t frames = inputs.length;
+  if (frames != 0 && channel_count > sonare::kMaxAudioBufferSize / frames) {
+    Napi::RangeError::New(env, "frames times channels exceed the audio sample limit")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<float> planar(channel_count * frames);
+  for (size_t channel = 0; channel < channel_count; ++channel) {
+    // A later channel getter can detach or resize an earlier view.
+    const auto view = inputs.arrays[channel].As<Napi::Float32Array>();
+    if (view.ElementLength() != frames) {
+      Napi::RangeError::New(env, "channels[" + std::to_string(channel) + "] length changed")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    std::copy_n(sonare_node::ElementData(view), frames,
+                planar.begin() + static_cast<std::ptrdiff_t>(channel * frames));
+  }
+
+  uint8_t* encoded = nullptr;
+  size_t encoded_size = 0;
+  const SonareError err =
+      sonare_encode_audio(planar.data(), frames, static_cast<int>(channel_count), sample_rate,
+                          &options, &encoded, &encoded_size);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  std::unique_ptr<uint8_t, decltype(&sonare_free_bytes)> guard(encoded, sonare_free_bytes);
+
+  Napi::Uint8Array out = Napi::Uint8Array::New(env, encoded_size);
+  if (encoded_size != 0) std::memcpy(out.Data(), encoded, encoded_size);
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

@@ -908,3 +908,18 @@ export interface SynthParamInfo {
    */
   activeWhen?: SynthParamCondition[][];
 }
+
+/** One enum field descriptor from {@link synthPatchParamInfo}. */
+export interface SynthPatchEnumParamInfo {
+  /** The {@link SynthPatch} field name. */
+  name: string;
+  /** Enum vocabulary and its default token. */
+  type: 'enum';
+  /** Accepted tokens in C ordinal order. */
+  values: string[];
+  /** The ordinal-0 token. */
+  default: string;
+}
+
+/** A numeric, boolean, or enum descriptor from {@link synthPatchParamInfo}. */
+export type SynthPatchParamInfo = SynthParamInfo | SynthPatchEnumParamInfo;

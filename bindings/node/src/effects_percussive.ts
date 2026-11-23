@@ -5,7 +5,6 @@
 
 import { resolveEntryTimes, toSamples } from './internal/effects_common.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
-import { requireListBudget } from './internal/list_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
@@ -18,16 +17,10 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-// The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
 function percussiveRequest<
   R extends { samples: Float32Array | readonly number[]; sampleRate: number },
 >(requestName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
-  const first = args[0];
-  if (Array.isArray(first)) {
-    requireListBudget(first, 'samples');
-  }
-  const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
-  return sampleOneShot<R & { samples: Float32Array }>(requestName, widened);
+  return sampleOneShot<R & { samples: Float32Array }>(requestName, args);
 }
 
 /**
@@ -298,11 +291,11 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
       args,
     );
     const { samples: input, sampleRate, events, ...options } = request;
-    const samples = Array.isArray(input) ? toSamples(input) : input;
-    assertAudioInput(samples, sampleRate);
     if (!Array.isArray(events)) {
       throw refuseType('events must be an array');
     }
+    const samples = Array.isArray(input) ? toSamples(input) : input;
+    assertAudioInput(samples, sampleRate);
     assertPercussiveSeparation(options);
     refuseZeroDefaults(options, ['fadeMs']);
     const { entries: nativeEvents, respelled } = resolveEntryTimes(

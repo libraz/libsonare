@@ -675,7 +675,11 @@ export const CASES: AbortGuardCase[] = [
           withProject((p) => {
             const { trackId } = p.addMidiClip(0, 4);
             p.addAutomationLane(trackId, { targetParamId: 1, points: [{ ppq: 0, value: 0.5 }] });
-            p.editAutomationLane(trackId, 1, { targetParamId: 1, points: [{ value: 0.5 }] });
+            p.editAutomationLane(trackId, 1, {
+              targetKind: 'opaque',
+              targetParamId: 1,
+              points: [{ value: 0.5 }],
+            });
           }),
       },
     ],
@@ -2442,10 +2446,11 @@ export const CASES: AbortGuardCase[] = [
         call: ({ project }) => project.editAutomationLane('bad', 'bad2', 'not-an-object'),
       },
       {
-        argument: 'targetParamId',
-        call: ({ project, trackId, laneParamId }) =>
-          project.editAutomationLane(trackId, String(laneParamId), {
-            targetParamId: laneParamId,
+        argument: 'laneId',
+        call: ({ project, trackId, laneId }) =>
+          project.editAutomationLane(trackId, String(laneId), {
+            targetKind: 'opaque',
+            targetParamId: 7,
             points: [{ ppq: 0, value: 0.5 }],
           }),
       },
@@ -2456,9 +2461,9 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     badProjectArguments: [
       {
-        argument: 'targetParamId',
-        call: ({ project, trackId, laneParamId }) =>
-          project.removeAutomationLane(trackId, String(laneParamId)),
+        argument: 'laneId',
+        call: ({ project, trackId, laneId }) =>
+          project.removeAutomationLane(trackId, String(laneId)),
       },
     ],
   },

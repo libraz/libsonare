@@ -301,7 +301,12 @@ const projectLaneCases: ReadonlyArray<
     RangeError,
     'points[1].ppq must be finite and in [0, 1e12]',
   ],
-  ['an absent target', { points: [] }, TypeError, 'targetParamId must be an integer'],
+  [
+    'an absent target',
+    { points: [] },
+    TypeError,
+    'targetParamId must be given for an opaque target',
+  ],
   [
     'a target outside its domain',
     { targetParamId: 2 ** 32, points: [] },

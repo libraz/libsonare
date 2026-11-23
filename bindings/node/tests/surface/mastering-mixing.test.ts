@@ -332,13 +332,19 @@ describe('mastering mixing surface', () => {
     });
   });
 
-  describe('meters and profiles use the unit-bearing names', () => {
+  describe('meters use channel-sized arrays and unit-bearing names', () => {
     const meterFields: Array<[string, string, string]> = [
-      ['MixMeterSnapshot.truePeakDbL', 'truePeakDbtpL', 'truePeakDbL'],
-      ['MixMeterSnapshot.truePeakDbR', 'truePeakDbtpR', 'truePeakDbR'],
       ['MixMeterSnapshot.maxTruePeakDb', 'maxTruePeakDbtp', 'maxTruePeakDb'],
       ['MixMeterSnapshot.channelCount', 'numChannels', 'channelCount'],
       ['MixMeterSnapshot.truePeakDb', 'truePeakDbtp', 'truePeakDb'],
+    ];
+    const scalarPlaneFields: Array<[string, string, string, string, number]> = [
+      ['MixMeterSnapshot.peakDbL', 'peakDbL', 'peakDbL', 'peakDb', 0],
+      ['MixMeterSnapshot.peakDbR', 'peakDbR', 'peakDbR', 'peakDb', 1],
+      ['MixMeterSnapshot.rmsDbL', 'rmsDbL', 'rmsDbL', 'rmsDb', 0],
+      ['MixMeterSnapshot.rmsDbR', 'rmsDbR', 'rmsDbR', 'rmsDb', 1],
+      ['MixMeterSnapshot.truePeakDbL', 'truePeakDbtpL', 'truePeakDbL', 'truePeakDbtp', 0],
+      ['MixMeterSnapshot.truePeakDbR', 'truePeakDbtpR', 'truePeakDbR', 'truePeakDbtp', 1],
     ];
 
     it.each(meterFields)('%s -> %s on a Mixer strip meter', (_entry, name, oldName) => {
@@ -358,17 +364,80 @@ describe('mastering mixing surface', () => {
       }
     });
 
-    // The one-shot mix's native meter carries no plane count or per-plane arrays.
-    it.each(meterFields.slice(0, 3))('%s -> %s on a mixStereo meter', (_entry, name, oldName) => {
+    it.each(meterFields)('%s -> %s on a mixStereo meter', (_entry, name, oldName) => {
       const meter = mix().meters[0] as unknown as Record<string, unknown>;
       expect(meter).toHaveProperty(name);
       expect(meter).not.toHaveProperty(oldName);
     });
 
+    it.each(scalarPlaneFields)(
+      '%s is read from %s on a Mixer strip meter',
+      (_entry, scalar, oldName, arrayName, plane) => {
+        const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
+          sampleRate: SR,
+          maxBlockSize: 256,
+        });
+        try {
+          const block = () => Float32Array.from({ length: 256 }, (_, i) => 0.5 * Math.sin(i / 8));
+          mixer.processStereo([block(), block(), block()], [block(), block(), block()]);
+          const meter = mixer.stripMeter('host') as unknown as Record<string, unknown>;
+          const values = meter[arrayName] as unknown[];
+          const numChannels = meter.numChannels as number;
+          expect(meter).not.toHaveProperty(scalar);
+          expect(meter).not.toHaveProperty(oldName);
+          expect(values).toHaveLength(numChannels);
+          expect(values[plane]).not.toBeNaN();
+        } finally {
+          mixer.destroy();
+        }
+      },
+    );
+
+    it.each(scalarPlaneFields)(
+      '%s is read from %s on a mixStereo meter',
+      (_entry, scalar, oldName, arrayName, plane) => {
+        const meter = mix().meters[0] as unknown as Record<string, unknown>;
+        const values = meter[arrayName] as unknown[];
+        const numChannels = meter.numChannels as number;
+        expect(meter).not.toHaveProperty(scalar);
+        expect(meter).not.toHaveProperty(oldName);
+        expect(values).toHaveLength(numChannels);
+        expect(values[plane]).not.toBeNaN();
+      },
+    );
+
     it('MixMeterSnapshot names the fields in the type', () => {
-      expectTypeOf<MixMeterSnapshot>().toHaveProperty('truePeakDbtpL');
+      expectTypeOf<
+        Extract<
+          keyof MixMeterSnapshot,
+          | 'peakDbL'
+          | 'peakDbR'
+          | 'rmsDbL'
+          | 'rmsDbR'
+          | 'truePeakDbtpL'
+          | 'truePeakDbtpR'
+          | 'truePeakDbL'
+          | 'truePeakDbR'
+        >
+      >().toBeNever();
       expectTypeOf<MixMeterSnapshot>().toHaveProperty('numChannels');
-      expectTypeOf<MixMeterSnapshot>().not.toHaveProperty('truePeakDbL');
+    });
+
+    it('keeps unmeasured planes optional in the meter array types', () => {
+      type IsExactly<Actual, Expected> = [Actual] extends [Expected]
+        ? [Expected] extends [Actual]
+          ? true
+          : false
+        : false;
+      expectTypeOf<
+        IsExactly<MixMeterSnapshot['peakDb'][number], number | undefined>
+      >().toEqualTypeOf<true>();
+      expectTypeOf<
+        IsExactly<MixMeterSnapshot['rmsDb'][number], number | undefined>
+      >().toEqualTypeOf<true>();
+      expectTypeOf<
+        IsExactly<MixMeterSnapshot['truePeakDbtp'][number], number | undefined>
+      >().toEqualTypeOf<true>();
     });
 
     const profileFields: Array<[string, string, string]> = [

@@ -316,28 +316,62 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "beatTimes must be a Float32Array") ||
-      !RequireFloat32Array(info, 1, "beatStrengths must be a Float32Array")) {
+  Napi::Float32Array accent;
+  Napi::Array has_attack;
+  Napi::Float32Array low_frequency_energy;
+  Napi::Float32Array subdivision_accent;
+  if (!RequiredFloat32ArrayValue(env, info[0], "observations.accent", &accent) ||
+      !RequiredArrayValue(env, info[1], "observations.hasAttack", &has_attack) ||
+      !RequiredFloat32ArrayValue(env, info[2], "observations.lowFrequencyEnergy",
+                                 &low_frequency_energy) ||
+      !RequiredFloat32ArrayValue(env, info[3], "observations.subdivisionAccent",
+                                 &subdivision_accent)) {
     return env.Undefined();
   }
 
-  auto beat_times = info[0].As<Napi::Float32Array>();
-  auto beat_strengths = info[1].As<Napi::Float32Array>();
-  // The C ABI carries a single beat count for both arrays, so a mismatch cannot
-  // reach the core guard that rejects it: passing the shorter length would read
-  // a prefix nobody asked about, and the longer one would run off a buffer.
-  if (beat_times.ElementLength() != beat_strengths.ElementLength()) {
-    Napi::RangeError::New(env, "beatTimes and beatStrengths must be the same length (got " +
-                                   std::to_string(beat_times.ElementLength()) + " and " +
-                                   std::to_string(beat_strengths.ElementLength()) + ")")
+  const size_t beat_count = accent.ElementLength();
+  const size_t has_attack_count = node_list_length(has_attack, "observations.hasAttack");
+  std::vector<uint8_t> has_attack_values;
+  has_attack_values.reserve(has_attack_count);
+  for (uint32_t i = 0; i < has_attack_count; ++i) {
+    const Napi::Value value = has_attack.Get(i);
+    if (!value.IsBoolean()) {
+      Napi::TypeError::New(env,
+                           "observations.hasAttack[" + std::to_string(i) + "] must be a boolean")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    has_attack_values.push_back(value.As<Napi::Boolean>().Value() ? 1 : 0);
+  }
+
+  if (has_attack_count != 0 && has_attack_count != beat_count) {
+    Napi::RangeError::New(
+        env, "observations.hasAttack must be empty or have the same length as observations.accent")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const size_t energy_count = low_frequency_energy.ElementLength();
+  if (energy_count != 0 && energy_count != beat_count) {
+    Napi::RangeError::New(env,
+                          "observations.lowFrequencyEnergy must be empty or have the same length "
+                          "as observations.accent")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const size_t subdivision_count = subdivision_accent.ElementLength();
+  const size_t expected_subdivision_count = beat_count == 0 ? 0 : beat_count - 1;
+  if (subdivision_count != 0 && subdivision_count != expected_subdivision_count) {
+    Napi::RangeError::New(env,
+                          "observations.subdivisionAccent must be empty or have one fewer entry "
+                          "than observations.accent")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
   SonareMeterOptions options;
   sonare_meter_options_init(&options);
-  if (info.Length() >= 3 && info[2].IsObject()) {
-    Napi::Object bag = info[2].As<Napi::Object>();
+  if (info.Length() >= 5 && info[4].IsObject()) {
+    Napi::Object bag = info[4].As<Napi::Object>();
     options.denominator = IntProperty(bag, "denominator", options.denominator);
     options.downbeat_weight = FloatProperty(bag, "downbeatWeight", options.downbeat_weight);
     options.measure_weight = FloatProperty(bag, "measureWeight", options.measure_weight);
@@ -352,9 +386,16 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   }
 
   char* json_str = nullptr;
-  SonareError err = sonare_estimate_meter_json(sonare_node::ElementData(beat_times),
-                                               sonare_node::ElementData(beat_strengths),
-                                               beat_times.ElementLength(), &options, &json_str);
+  SonareMeterBeats beats;
+  sonare_meter_beats_init(&beats);
+  beats.accent = beat_count == 0 ? nullptr : sonare_node::ElementData(accent);
+  beats.has_attack = has_attack_count == 0 ? nullptr : sonare_node::ElementData(has_attack_values);
+  beats.low_frequency_energy =
+      energy_count == 0 ? nullptr : sonare_node::ElementData(low_frequency_energy);
+  beats.subdivision_accent =
+      subdivision_count == 0 ? nullptr : sonare_node::ElementData(subdivision_accent);
+  beats.beat_count = beat_count;
+  SonareError err = sonare_estimate_meter_json(&beats, &options, &json_str);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -583,24 +624,21 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   float bpm_max{};
   if (!OptionalFloatArg(env, info, 3, "bpmMax", sonare::BpmConfig{}.bpm_max, &bpm_max))
     return env.Undefined();
-  float start_bpm{};
-  if (!OptionalFloatArg(env, info, 4, "startBpm", sonare::BpmConfig{}.start_bpm, &start_bpm))
-    return env.Undefined();
   int n_fft{};
-  if (!OptionalIntArg(env, info, 5, "nFft", sonare::constants::kDefaultNFft, &n_fft)) {
+  if (!OptionalIntArg(env, info, 4, "nFft", sonare::constants::kDefaultNFft, &n_fft)) {
     return env.Undefined();
   }
   int hop_length{};
-  if (!OptionalDomainArg(env, info, 6, "hopLength", sonare::constants::kDefaultHopLength,
+  if (!OptionalDomainArg(env, info, 5, "hopLength", sonare::constants::kDefaultHopLength,
                          sonare::kBpmCountDomain, &hop_length)) {
     return env.Undefined();
   }
   int max_candidates{};
-  if (!RequiredIntArg(env, info, 7, "maxCandidates", &max_candidates)) return env.Undefined();
+  if (!RequiredIntArg(env, info, 6, "maxCandidates", &max_candidates)) return env.Undefined();
 
   SonareBpmAnalysisResult analysis{};
-  SonareError err = sonare_analyze_bpm(data, length, sample_rate, bpm_min, bpm_max, start_bpm,
-                                       n_fft, hop_length, max_candidates, &analysis);
+  SonareError err = sonare_analyze_bpm(data, length, sample_rate, bpm_min, bpm_max, n_fft,
+                                       hop_length, max_candidates, &analysis);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

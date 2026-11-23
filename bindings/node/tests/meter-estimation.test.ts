@@ -1,25 +1,28 @@
 /**
- * Meter estimation over a caller-supplied beat series, plus the beat-level
- * observations `analyze()` reports.
+ * Meter estimation over caller-supplied observations and the observations
+ * `analyze()` reports.
  *
- * The scoring reads only per-beat accents, so these tests drive it with a
- * synthetic beat series rather than audio: an accent pattern with a known
- * period is what the estimator is supposed to resolve, and building it directly
- * keeps a failure attributable to the estimator instead of to beat tracking.
+ * Synthetic observations give the scorer known accent patterns. A separate
+ * analysis result checks that the published observations match its meter.
  */
 
 import { describe, expect, it } from 'vitest';
-import { analyze, type Beat, estimateMeter } from '../src/index.js';
+import { analyze, type BeatObservations, estimateMeter } from '../src/index.js';
 import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 
-/** Pairs parallel time and strength arrays into the beat list `estimateMeter` takes. */
-function toBeats(times: ArrayLike<number>, strengths: ArrayLike<number>): Beat[] {
-  return Array.from({ length: times.length }, (_, i) => ({
-    timeSec: times[i],
-    strength: strengths[i],
-  }));
+function observationsFromAccent(
+  accent: ArrayLike<number>,
+  subdivisionAccent: ArrayLike<number> = [],
+): BeatObservations {
+  return {
+    accent: Array.from(accent),
+    hasAttack: [],
+    lowFrequencyEnergy: [],
+    subdivisionAccent: Array.from(subdivisionAccent),
+    chordChange: [],
+  };
 }
 
 /**
@@ -28,32 +31,26 @@ function toBeats(times: ArrayLike<number>, strengths: ArrayLike<number>): Beat[]
  * @param numerator Beats per measure.
  * @param measures Number of measures to render.
  * @param phase Beat index the first accent lands on.
- * @param beatSec Beat period in seconds.
- * @returns The beats, accented every `numerator`-th beat.
+ * @returns Beat observations accented every `numerator`-th beat.
  */
 function beatSeries(
   numerator: number,
   measures: number,
   phase = 0,
-  beatSec = 0.5,
-): { beats: Beat[] } {
+): { observations: BeatObservations } {
   const count = numerator * measures;
-  const beatTimes = new Float32Array(count);
-  const beatStrengths = new Float32Array(count);
+  const accent = new Float32Array(count);
   for (let i = 0; i < count; i++) {
-    beatTimes[i] = i * beatSec;
-    beatStrengths[i] = (((i - phase) % numerator) + numerator) % numerator === 0 ? 1 : 0.3;
+    accent[i] = (((i - phase) % numerator) + numerator) % numerator === 0 ? 1 : 0.3;
   }
-  return { beats: toBeats(beatTimes, beatStrengths) };
+  return { observations: observationsFromAccent(accent) };
 }
 
 /**
- * Percussive click track with the first beat of every measure accented, the
- * accent pattern the analysis pipeline's own meter pass scores.
+ * Percussive click track with the first beat of every measure accented.
  *
  * @param numerator Beats per measure.
  * @param measures Number of measures to render.
- * @param beatSec Beat period in seconds.
  * @returns The generated mono click track.
  */
 function clickTrack(numerator: number, measures: number, beatSec = 0.4): Float32Array {
@@ -91,16 +88,14 @@ describe('estimateMeter()', () => {
   });
 
   it('reads accent contrast rather than absolute level', () => {
-    // `beatObservations.onsetStrength`, the documented strength source, is a
-    // windowed aggregate in the onset envelope's own units and runs well above
-    // 1 on ordinary material. Scoring divides the series by its own maximum, so
-    // a caller has no scale to supply; saturating it instead would flatten
-    // every beat to one value and tie every candidate.
-    const { beats } = beatSeries(4, 8);
-    const scaled = beats.map((beat) => ({ ...beat, strength: beat.strength * 20 }));
+    const { observations } = beatSeries(4, 8);
+    const scaled = {
+      ...observations,
+      accent: observations.accent.map((accent) => accent * 20),
+    };
 
-    const unit = estimateMeter({ beats });
-    const loud = estimateMeter({ beats: scaled });
+    const unit = estimateMeter({ observations });
+    const loud = estimateMeter({ observations: scaled });
 
     expect(loud).toEqual(unit);
     expect(loud.timeSignature.numerator).toBe(4);
@@ -113,23 +108,29 @@ describe('estimateMeter()', () => {
     // it. The wider the numerator the further under: it searched more phases
     // and found nothing in any of them, which is the width advantage the
     // standardization removes.
-    const beats = toBeats(
-      Float32Array.from({ length: 48 }, (_, i) => i * 0.5),
-      new Float32Array(48).fill(0.5),
-    );
+    const observations = observationsFromAccent(new Float32Array(48).fill(0.5));
 
-    const result = estimateMeter({ beats, candidateNumerators: [3, 4, 13] });
+    const result = estimateMeter({ observations, candidateNumerators: [3, 4, 13] });
 
     expect(result.candidateScores.every((score) => score < 0)).toBe(true);
     expect(result.candidateScores).toEqual([...result.candidateScores].sort((a, b) => b - a));
     expect(result.timeSignature.confidence).toBeLessThan(0.6);
   });
 
-  it('accepts a readonly beat list', () => {
-    const { beats } = beatSeries(4, 8);
-    const frozen: readonly Beat[] = Object.freeze([...beats]);
+  it('accepts readonly observation streams', () => {
+    const { observations } = beatSeries(4, 8);
+    const frozen = Object.freeze({
+      ...observations,
+      accent: Object.freeze([...observations.accent]),
+      hasAttack: Object.freeze([...observations.hasAttack]),
+      lowFrequencyEnergy: Object.freeze([...observations.lowFrequencyEnergy]),
+      subdivisionAccent: Object.freeze([...observations.subdivisionAccent]),
+      chordChange: Object.freeze([...observations.chordChange]),
+    });
 
-    expect(estimateMeter({ beats: frozen })).toEqual(estimateMeter({ beats }));
+    expect(estimateMeter({ observations: frozen as unknown as BeatObservations })).toEqual(
+      estimateMeter({ observations }),
+    );
   });
 
   describe('candidateNumerators reaches the estimator', () => {
@@ -197,28 +198,52 @@ describe('estimateMeter()', () => {
   });
 
   describe('input validation', () => {
-    it('rejects an empty beat series', () => {
-      // The rejection is the core's, not the binding's: an empty series would
-      // otherwise be answered with a fixed low-confidence 4/4 that reads like a
-      // detection result. The core names its own list, which the facade spells
-      // back as the caller's `beats`.
-      expect(() => estimateMeter({ beats: [] })).toThrow(
-        new RangeError('estimateMeter: beats[].timeSec must not be empty'),
-      );
-    });
-
-    it('refuses a non-array beats with the same text on every surface', () => {
-      for (const beats of [null, 'beats', { length: 1 }]) {
-        expect(() => estimateMeter({ beats } as never)).toThrow(
-          new TypeError('estimateMeter: beats must be an array of { timeSec, strength }'),
+    it('refuses a missing or non-object observations record', () => {
+      for (const observations of [undefined, null, 'observations', []]) {
+        expect(() => estimateMeter({ observations } as never)).toThrow(
+          new TypeError('estimateMeter: observations must be an object'),
         );
       }
     });
 
-    it('still answers a single-beat series with the low-confidence default', () => {
-      // The line is drawn at empty, not at "too short to score": one beat is
-      // answerable, so it returns the default rather than throwing.
-      const result = estimateMeter({ beats: [{ timeSec: 0, strength: 1 }] });
+    it('refuses non-array streams and non-boolean attack flags', () => {
+      const observations = beatSeries(4, 2).observations;
+      expect(() =>
+        estimateMeter({ observations: { ...observations, accent: 'accent' } as never }),
+      ).toThrow(TypeError);
+      expect(() =>
+        estimateMeter({
+          observations: { ...observations, hasAttack: [true, 1] } as never,
+        }),
+      ).toThrow(TypeError);
+    });
+
+    it('refuses an unknown observation key', () => {
+      const { observations } = beatSeries(4, 2);
+      expect(() =>
+        estimateMeter({ observations: { ...observations, onsetStrength: [] } as never }),
+      ).toThrow(/unknown key observations\.onsetStrength/);
+    });
+
+    it('refuses optional streams with the wrong lengths', () => {
+      const observations = beatSeries(4, 2).observations;
+      expect(() => estimateMeter({ observations: { ...observations, hasAttack: [true] } })).toThrow(
+        RangeError,
+      );
+      expect(() =>
+        estimateMeter({ observations: { ...observations, lowFrequencyEnergy: [0.5] } }),
+      ).toThrow(RangeError);
+      expect(() =>
+        estimateMeter({ observations: { ...observations, subdivisionAccent: [0.5] } }),
+      ).toThrow(RangeError);
+    });
+
+    it('rejects an empty accent but answers a single-beat stream with the fallback', () => {
+      expect(() => estimateMeter({ observations: observationsFromAccent([]) })).toThrow(
+        new RangeError('estimateMeter: observations.accent must not be empty'),
+      );
+
+      const result = estimateMeter({ observations: observationsFromAccent([1]) });
 
       expect(result.timeSignature.numerator).toBe(4);
       expect(result.timeSignature.denominator).toBe(4);
@@ -257,25 +282,29 @@ describe('estimateMeter()', () => {
       expectRefusal(() => estimateMeter({ ...beatSeries(4, 8), denominator: 3 }), RangeError);
     });
 
-    it('rejects beats whose timeSec decreases', () => {
-      const beats = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
-      beats[5].timeSec = beats[4].timeSec - 1;
-      expect(() => estimateMeter({ beats })).toThrow(
-        new RangeError('estimateMeter: beats[].timeSec must be non-decreasing'),
-      );
-    });
-
-    it('refuses a negative timeSec and a non-finite strength under the beats spelling', () => {
-      const negative = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
-      negative[0].timeSec = -1;
-      expect(() => estimateMeter({ beats: negative })).toThrow(
-        new RangeError('estimateMeter: beats[].timeSec must hold only finite values of at least 0'),
-      );
-      const unmeasured = beatSeries(4, 8).beats.map((beat) => ({ ...beat }));
-      unmeasured[2].strength = Number.NaN;
-      expect(() => estimateMeter({ beats: unmeasured })).toThrow(
-        new RangeError('estimateMeter: beats[].strength must hold only finite values'),
-      );
+    it('refuses non-finite or negative observation values', () => {
+      const observations = beatSeries(4, 8).observations;
+      expect(() =>
+        estimateMeter({
+          observations: { ...observations, accent: [-1, ...observations.accent.slice(1)] },
+        }),
+      ).toThrow(RangeError);
+      expect(() =>
+        estimateMeter({
+          observations: {
+            ...observations,
+            lowFrequencyEnergy: [Number.NaN, ...new Array(observations.accent.length - 1).fill(0)],
+          },
+        }),
+      ).toThrow(RangeError);
+      expect(() =>
+        estimateMeter({
+          observations: {
+            ...observations,
+            subdivisionAccent: [-1, ...new Array(observations.accent.length - 2).fill(0)],
+          },
+        }),
+      ).toThrow(RangeError);
     });
   });
 });
@@ -283,11 +312,16 @@ describe('estimateMeter()', () => {
 describe('analyze() beat observations', () => {
   const result = analyze(clickTrack(4, 8), SR);
 
-  it('reports every non-empty stream beat-indexed', () => {
-    const { onsetStrength, lowFrequencyEnergy, chordChange } = result.beatObservations;
+  it('reports the measured streams at their beat and interval lengths', () => {
+    const { accent, hasAttack, lowFrequencyEnergy, subdivisionAccent, chordChange } =
+      result.beatObservations;
 
     expect(result.beats.length).toBeGreaterThan(0);
-    for (const stream of [onsetStrength, lowFrequencyEnergy, chordChange]) {
+    expect(accent).toHaveLength(result.beats.length);
+    expect(hasAttack).toHaveLength(result.beats.length);
+    expect(hasAttack.every((value) => typeof value === 'boolean')).toBe(true);
+    expect(subdivisionAccent).toHaveLength(result.beats.length - 1);
+    for (const stream of [lowFrequencyEnergy, chordChange]) {
       expect(Array.isArray(stream)).toBe(true);
       if (stream.length > 0) {
         expect(stream).toHaveLength(result.beats.length);
@@ -295,34 +329,23 @@ describe('analyze() beat observations', () => {
     }
   });
 
-  it('reports an onsetStrength distinct from beats[].strength', () => {
-    // The two are different quantities — a window around the beat versus the
-    // single envelope frame nearest it — so an element-wise match would mean
-    // one of them is not what it is documented to be.
-    const { onsetStrength } = result.beatObservations;
-    expect(onsetStrength.length).toBeGreaterThan(0);
-    expect(onsetStrength).not.toEqual(result.beats.map((beat) => beat.strength));
+  it('reports beat and subdivision accents separately', () => {
+    const { accent, subdivisionAccent } = result.beatObservations;
+    expect(accent.length).toBeGreaterThan(0);
+    expect(accent).not.toEqual(result.beats.map((beat) => beat.strength));
+    expect(subdivisionAccent.some((value) => value === 0)).toBe(true);
   });
 
-  it('feeds estimateMeter without re-running analysis', () => {
-    const { onsetStrength } = result.beatObservations;
-    // The stream arrives in the envelope's units rather than pre-scaled, which
-    // is the case the estimator has to handle for the documented source to be
-    // usable at all.
-    expect(Math.max(...onsetStrength)).toBeGreaterThan(1);
+  it('matches the meter reported by analysis', () => {
+    expect(result.beats.length).toBeGreaterThanOrEqual(8);
+    const estimate = estimateMeter({ observations: result.beatObservations });
 
-    const estimate = estimateMeter({
-      beats: toBeats(
-        result.beats.map((beat) => beat.timeSec),
-        onsetStrength,
-      ),
-    });
-
-    expect(estimate.timeSignature.numerator).toBeGreaterThan(1);
-    expect(estimate.downbeatPhase).toBeLessThan(estimate.timeSignature.numerator);
-    // Every candidate scoring alike is the signature of a saturated series, so
-    // the scores have to separate for this to be a search and not a fallback.
-    expect(new Set(estimate.candidateScores).size).toBe(estimate.candidateScores.length);
+    expect(estimate.searched).toBe(true);
+    expect(estimate.timeSignature.numerator).toBe(result.timeSignature.numerator);
+    expect(estimate.timeSignature.denominator).toBe(result.timeSignature.denominator);
+    expect(
+      Math.abs(estimate.timeSignature.confidence - result.timeSignature.confidence),
+    ).toBeLessThanOrEqual(1e-6);
   });
 });
 
@@ -335,9 +358,14 @@ describe('analyze() beat observations', () => {
  *
  * @param grouping Beats per accent group within one bar.
  * @param measures Number of measures to render.
- * @returns The beats with the grouped accent shape.
+ * @param subdivisionAccent When given, fills the interval stream with this accent.
+ * @returns The observations with the grouped accent shape.
  */
-function groupedSeries(grouping: number[], measures = 12): { beats: Beat[] } {
+function groupedSeries(
+  grouping: number[],
+  measures = 12,
+  subdivisionAccent?: number,
+): { observations: BeatObservations } {
   const accents = new Set<number>();
   let position = 0;
   for (const part of grouping.slice(0, -1)) {
@@ -347,14 +375,14 @@ function groupedSeries(grouping: number[], measures = 12): { beats: Beat[] } {
 
   const numerator = grouping.reduce((sum, part) => sum + part, 0);
   const count = numerator * measures;
-  const beatTimes = new Float32Array(count);
   const beatStrengths = new Float32Array(count);
   for (let i = 0; i < count; i++) {
     const pos = i % numerator;
-    beatTimes[i] = i * 0.5;
     beatStrengths[i] = pos === 0 ? 1 : accents.has(pos) ? 0.65 : 0.35;
   }
-  return { beats: toBeats(beatTimes, beatStrengths) };
+  const subdivisions =
+    subdivisionAccent === undefined ? [] : new Array(count - 1).fill(subdivisionAccent);
+  return { observations: observationsFromAccent(beatStrengths, subdivisions) };
 }
 
 describe('estimateMeter() grouping', () => {
@@ -396,20 +424,25 @@ describe('estimateMeter() grouping', () => {
   it('leaves a bar undivided when nothing divided it', () => {
     // Below the search floor no scoring ran at all, so the bar comes back whole
     // rather than carrying the 2+2 a four would have been given.
-    const result = estimateMeter({ beats: beatSeries(4, 8).beats.slice(0, 4) });
+    const observations = beatSeries(4, 8).observations;
+    const result = estimateMeter({
+      observations: { ...observations, accent: observations.accent.slice(0, 4) },
+    });
 
     expect(result.timeSignature.confidence).toBeLessThanOrEqual(0.5);
     expect(result.grouping).toEqual([result.timeSignature.numerator]);
   });
 
-  it('reports how a six divides as a grouping, not as a beat unit', () => {
-    // Whether a beat divides into three is measured between the beats, which
-    // this entry point never sees, so the compound reading is not one it can
-    // reach: both sixes keep the requested unit and differ in the grouping.
+  it('uses subdivision evidence to distinguish compound and simple sixes', () => {
     const compound = estimateMeter(groupedSeries([3, 3]));
     expect(compound.timeSignature.numerator).toBe(6);
     expect(compound.timeSignature.denominator).toBe(4);
     expect(compound.grouping).toEqual([3, 3]);
+
+    const measuredCompound = estimateMeter(groupedSeries([3, 3], 12, 0.8));
+    expect(measuredCompound.timeSignature.numerator).toBe(6);
+    expect(measuredCompound.timeSignature.denominator).toBe(8);
+    expect(measuredCompound.grouping).toEqual([3, 3]);
     for (const candidate of compound.candidates) {
       if (candidate.numerator === 6) {
         expect(candidate.denominator).toBe(4);
@@ -423,23 +456,27 @@ describe('estimateMeter() grouping', () => {
     expect(simple.timeSignature.denominator).toBe(4);
     expect(simple.grouping).toEqual([2, 2, 2]);
 
-    // The unit follows the request even for the bar that divides into threes.
-    const inEighths = estimateMeter({ ...groupedSeries([3, 3]), denominator: 8 });
+    const inEighths = estimateMeter({ ...groupedSeries([3, 3], 12, 0.8), denominator: 8 });
     expect(inEighths.timeSignature.denominator).toBe(8);
     expect(inEighths.grouping).toEqual([3, 3]);
   });
 
   it('says whether a search ran, so a fallback is not read as a detection', () => {
-    const { beats } = groupedSeries([2, 2]);
-    expect(estimateMeter({ beats }).searched).toBe(true);
+    const { observations } = groupedSeries([2, 2]);
+    expect(estimateMeter({ observations }).searched).toBe(true);
 
     for (let count = 1; count < 8; count += 1) {
-      const short = estimateMeter({ beats: beats.slice(0, count) });
+      const short = estimateMeter({
+        observations: { ...observations, accent: observations.accent.slice(0, count) },
+      });
       expect(short.searched).toBe(false);
       expect(short.timeSignature.numerator).toBe(4);
       expect(short.candidateScores.every((score) => score === 0)).toBe(true);
     }
 
-    expect(estimateMeter({ beats: beats.slice(0, 8) }).searched).toBe(true);
+    expect(
+      estimateMeter({ observations: { ...observations, accent: observations.accent.slice(0, 8) } })
+        .searched,
+    ).toBe(true);
   });
 });

@@ -167,22 +167,68 @@ describe('Mixer runtime methods', () => {
     mixer.processStereo(left, right);
 
     const meter = mixer.stripMeter('host');
-    for (const field of ['peakDbL', 'peakDbR', 'rmsDbL', 'rmsDbR', 'correlation'] as const) {
-      expect(Number.isFinite(meter[field])).toBe(true);
+    for (const value of [
+      meter.peakDb[0],
+      meter.peakDb[1],
+      meter.rmsDb[0],
+      meter.rmsDb[1],
+      meter.correlation,
+    ]) {
+      expect(Number.isFinite(value)).toBe(true);
     }
+    expect(meter.peakDb).toHaveLength(meter.numChannels);
+    expect(meter.rmsDb).toHaveLength(meter.numChannels);
+    expect(meter.truePeakDbtp).toHaveLength(meter.numChannels);
     // One 8-sample block fills no loudness window and passes no gating block.
     expect('momentaryLufs' in meter).toBe(false);
     expect('integratedLufs' in meter).toBe(false);
     expect(typeof meter.likelyMonoCompatible).toBe('boolean');
-    expect(meter.peakDbL).toBeGreaterThan(-120);
+    expect(present(meter.peakDb[0], 'peakDb[0]')).toBeGreaterThan(-120);
 
     const preFader = mixer.stripMeter('host', 'preFader');
     const postFader = mixer.stripMeter('host', 'postFader');
-    expect(Number.isFinite(preFader.peakDbL)).toBe(true);
-    expect(Number.isFinite(postFader.peakDbL)).toBe(true);
+    expect(Number.isFinite(preFader.peakDb[0])).toBe(true);
+    expect(Number.isFinite(postFader.peakDb[0])).toBe(true);
     const master = mixer.busMeter('master');
     expect(master.numChannels).toBe(2);
     expect(Number.isFinite(master.peakDb[0])).toBe(true);
+  });
+
+  it('returns all measured planes from a wide bus meter', () => {
+    const wide = Mixer.fromJson(
+      JSON.stringify({
+        version: 2,
+        strips: [{ id: 'source' }],
+        buses: [
+          { id: 'surround', role: 'aux', layout: '5.1' },
+          { id: 'master', role: 'master', layout: '5.1' },
+        ],
+        connections: [
+          { source: 'source', destination: 'surround' },
+          { source: 'surround', destination: 'master' },
+        ],
+      }),
+      { sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE },
+    );
+    try {
+      wide.processStereo(
+        [new Float32Array(BLOCK_SIZE).fill(0.5)],
+        [new Float32Array(BLOCK_SIZE).fill(0.25)],
+      );
+
+      const meter = wide.busMeter('surround');
+      expect(meter.numChannels).toBe(6);
+      expect(meter.peakDb).toHaveLength(meter.numChannels);
+      expect(meter.rmsDb).toHaveLength(meter.numChannels);
+      expect(meter.truePeakDbtp).toHaveLength(meter.numChannels);
+      for (const levels of [meter.peakDb, meter.rmsDb, meter.truePeakDbtp]) {
+        expect(levels.every((level) => level === undefined || !Number.isNaN(level))).toBe(true);
+      }
+      expect(meter.peakDb[0]).toBe(Number.NEGATIVE_INFINITY);
+      expect(present(meter.peakDb[2], 'peakDb[2]')).toBeGreaterThan(-10);
+    } finally {
+      wide.destroy();
+    }
   });
 
   it('stripMeter accepts an optional tap argument', () => {
@@ -195,14 +241,16 @@ describe('Mixer runtime methods', () => {
     const preTap = mixer.stripMeter('host', 'preFader');
 
     for (const m of [post, postTap, preTap]) {
-      expect(Number.isFinite(m.peakDbL)).toBe(true);
-      expect(m.peakDbL).toBeGreaterThan(-120);
+      expect(Number.isFinite(m.peakDb[0])).toBe(true);
+      expect(present(m.peakDb[0], 'peakDb[0]')).toBeGreaterThan(-120);
     }
     // The no-tap default matches the explicit post-fader tap.
-    const postTapPeak = present(postTap.peakDbL, 'post-fader tap peakDbL');
-    expect(post.peakDbL).toBeCloseTo(postTapPeak, 5);
+    const postTapPeak = present(postTap.peakDb[0], 'post-fader tap peakDb[0]');
+    expect(present(post.peakDb[0], 'post-fader peakDb[0]')).toBeCloseTo(postTapPeak, 5);
     // Pre-fader on host (before its fader trim) should be >= post-fader.
-    expect(preTap.peakDbL).toBeGreaterThanOrEqual(postTapPeak - 1e-3);
+    expect(present(preTap.peakDb[0], 'pre-fader peakDb[0]')).toBeGreaterThanOrEqual(
+      postTapPeak - 1e-3,
+    );
   });
 
   it('refuses an out-of-domain pan or width with a RangeError', () => {
@@ -325,9 +373,9 @@ describe('Mixer solo behaviour', () => {
     expect(soloPeak).toBeGreaterThan(0);
     expect(soloPeak).toBeLessThan(baselinePeak * 0.6);
 
-    expect(soloed.stripMeter('host').peakDbL).toBeGreaterThan(-120);
-    expect(soloed.stripMeter('guest').peakDbL).toBe(Number.NEGATIVE_INFINITY);
-    expect(soloed.stripMeter('music-bed').peakDbL).toBe(Number.NEGATIVE_INFINITY);
+    expect(present(soloed.stripMeter('host').peakDb[0], 'host peakDb[0]')).toBeGreaterThan(-120);
+    expect(soloed.stripMeter('guest').peakDb[0]).toBe(Number.NEGATIVE_INFINITY);
+    expect(soloed.stripMeter('music-bed').peakDb[0]).toBe(Number.NEGATIVE_INFINITY);
   });
 
   it('keeps a solo-safe strip audible when another strip is soloed', () => {
@@ -340,9 +388,9 @@ describe('Mixer solo behaviour', () => {
 
     // Both the soloed strip and the solo-safe strip pass; the unmarked,
     // non-soloed strip is silenced.
-    expect(mixer.stripMeter('host').peakDbL).toBeGreaterThan(-120);
-    expect(mixer.stripMeter('guest').peakDbL).toBeGreaterThan(-120);
-    expect(mixer.stripMeter('music-bed').peakDbL).toBe(Number.NEGATIVE_INFINITY);
+    expect(present(mixer.stripMeter('host').peakDb[0], 'host peakDb[0]')).toBeGreaterThan(-120);
+    expect(present(mixer.stripMeter('guest').peakDb[0], 'guest peakDb[0]')).toBeGreaterThan(-120);
+    expect(mixer.stripMeter('music-bed').peakDb[0]).toBe(Number.NEGATIVE_INFINITY);
   });
 });
 

@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 import type {
+  AudioFormatCapabilities,
   CapabilityCatalog,
   CapabilityCatalogChain,
   CapabilityCatalogChainList,
@@ -118,6 +119,7 @@ const catalogSlot = {
 
 const catalogProcessor = {
   id: 'saturation.softClipper',
+  description: 'Soft-clips peaks above a threshold.',
   kind: 'realtime',
   forms: ['realtime'],
   realtimeInsertable: true,
@@ -170,6 +172,11 @@ const catalogChain = {
   params: [catalogParameter],
 } satisfies CapabilityCatalogChain;
 
+const catalogEncode = {
+  builtin: ['wav'],
+  ffmpeg: [],
+} satisfies AudioFormatCapabilities;
+
 const capabilityCatalog = {
   version: '',
   abi: null as unknown as CapabilityCatalog['abi'],
@@ -177,6 +184,7 @@ const capabilityCatalog = {
   chain: catalogChain,
   presets: catalogPresets,
   masteringPresets: [catalogMasteringPreset],
+  encode: catalogEncode,
 } satisfies CapabilityCatalog;
 
 describe('capability catalog type shapes', () => {
@@ -190,6 +198,7 @@ describe('capability catalog type shapes', () => {
     ['MasteringInsertSlot', catalogSlot],
     ['MasteringPresetCatalogEntry', catalogMasteringPreset],
     ['MasteringProcessorCatalogEntry', catalogProcessor],
+    ['AudioFormatCapabilities', catalogEncode],
   ] as const)('%s is the shape the shared corpus declares', (name, sample) => {
     expect(Object.keys(sample).sort()).toEqual([...shapes.types[name]].sort());
   });

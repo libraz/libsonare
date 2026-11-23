@@ -203,14 +203,12 @@ describe('closed sets', () => {
       expect(() => project.setClipWarpMode(clipId, 'time-stretch' as never)).toThrow(RangeError);
       expect(() =>
         project.addAutomationLane(trackId, {
-          targetParamId: 20,
           targetKind: 'trackFaderDb',
           points: [{ ppq: 0, value: -3 }],
         }),
       ).not.toThrow();
       expect(() =>
         project.addAutomationLane(trackId, {
-          targetParamId: 21,
           targetKind: 'track-pan' as never,
           points: [{ ppq: 0, value: 0 }],
         }),

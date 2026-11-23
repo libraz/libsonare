@@ -322,6 +322,8 @@ export interface StftResult {
   power: Matrix2D;
   /** Magnitude in dB: rows = `nFft / 2 + 1` bins, cols = frames. Present only when requested with `db: true`. */
   db?: Matrix2D;
+  /** Phase in radians: rows = `nFft / 2 + 1` bins, cols = frames. Present only when requested with `phase: true`. */
+  phase?: Matrix2D;
 }
 
 /**

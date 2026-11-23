@@ -24,7 +24,14 @@ export function abiVersion(): number {
  * feature.
  */
 export function capabilities(): Capabilities {
-  return addon.capabilities() as Capabilities;
+  type NativeCapabilities = Omit<Capabilities, 'features'> & {
+    features: Omit<Capabilities['features'], 'liveDevices'>;
+  };
+  const native = addon.capabilities() as NativeCapabilities;
+  return {
+    ...native,
+    features: { ...native.features, liveDevices: false },
+  };
 }
 
 /**

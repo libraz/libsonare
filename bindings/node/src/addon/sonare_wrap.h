@@ -53,6 +53,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value FromBuffer(const Napi::CallbackInfo& info);
   static Napi::Value FromMemory(const Napi::CallbackInfo& info);
   static Napi::Value DecodeChannels(const Napi::CallbackInfo& info);
+  static Napi::Value ReadAudioTags(const Napi::CallbackInfo& info);
+  static Napi::Value EncodeAudio(const Napi::CallbackInfo& info);
   static Napi::Value Downmix(const Napi::CallbackInfo& info);
 
   // Static analysis functions (standalone, exported on module)
@@ -189,6 +191,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringAbMatchLoudness(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAbMatchLoudnessStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairAnalyze(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringPairAnalyzeStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStereoAnalyze(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAssistantSuggest(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPresetParams(const Napi::CallbackInfo& info);
@@ -263,6 +266,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MelToStft(const Napi::CallbackInfo& info);
   static Napi::Value MelToAudio(const Napi::CallbackInfo& info);
   static Napi::Value GriffinLim(const Napi::CallbackInfo& info);
+  static Napi::Value Istft(const Napi::CallbackInfo& info);
   static Napi::Value MfccToMel(const Napi::CallbackInfo& info);
   static Napi::Value MfccToAudio(const Napi::CallbackInfo& info);
 

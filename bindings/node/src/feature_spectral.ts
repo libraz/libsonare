@@ -37,6 +37,8 @@ export interface StftRequest {
   hopLength?: number;
   /** Also return the magnitude in dB as `db`. Default false. */
   db?: boolean;
+  /** Also return phase in radians. Default false. */
+  phase?: boolean;
 }
 
 /** Request for {@link spectralCentroid}. */
@@ -268,7 +270,7 @@ export interface PcenRequest {
   eps?: number;
 }
 
-/** STFT magnitude and power; with `db: true` the result also carries the dB plane. */
+/** STFT magnitude and power, with optional dB and phase planes. */
 export function stft(request: StftRequest): StftResult;
 export function stft(
   samples: Float32Array,
@@ -280,7 +282,14 @@ export function stft(...args: unknown[]): StftResult {
     const request = sampleOneShot<StftRequest>('stft', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft, request.hopLength);
-    const r = addon.stft(request.samples, request.sampleRate, fft.nFft, fft.hopLength, request.db);
+    const r = addon.stft(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      request.db,
+      request.phase,
+    );
     const out: StftResult = {
       nFft: r.nFft,
       hopLength: r.hopLength,
@@ -290,6 +299,9 @@ export function stft(...args: unknown[]): StftResult {
     };
     if (request.db === true) {
       out.db = toMatrix2D(r.db, r.nBins, r.nFrames);
+    }
+    if (request.phase === true) {
+      out.phase = toMatrix2D(r.phase, r.nBins, r.nFrames);
     }
     return out;
   });

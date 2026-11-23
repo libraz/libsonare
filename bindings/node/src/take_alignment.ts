@@ -1,7 +1,7 @@
 import { withEntry } from './internal/entry.js';
 import { addon } from './native.js';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from './types.js';
-import { assertAudioInput, assertSampleRate, requestObject } from './validation.js';
+import { assertAudioInput, assertSampleRate, requestOnly } from './validation.js';
 
 /**
  * Align one take to a reference timeline, producing the warp anchors that place
@@ -59,9 +59,10 @@ import { assertAudioInput, assertSampleRate, requestObject } from './validation.
  */
 export function alignTakeToReference(
   request: AlignTakeToReferenceRequest,
-): AlignTakeToReferenceResult {
+): AlignTakeToReferenceResult;
+export function alignTakeToReference(...args: unknown[]): AlignTakeToReferenceResult {
   return withEntry('alignTakeToReference', () => {
-    requestObject('alignTakeToReference', request, 'request', true);
+    const request = requestOnly<AlignTakeToReferenceRequest>('alignTakeToReference', args);
     assertAudioInput(request.reference, request.sampleRate, {}, 'reference');
     // Resolved before any reader runs, so the addon always receives two rates.
     const takeSampleRate = request.takeSampleRate ?? request.sampleRate;

@@ -2011,6 +2011,11 @@ export class RealtimeEngine {
     this.native.bindMidiCc(binding);
   }
 
+  /** Returns a copied snapshot of the live MIDI CC bindings in unspecified order. */
+  midiCcBindings(): ProjectMidiCcBinding[] {
+    return this.native.midiCcBindings();
+  }
+
   /** Removes every live MIDI CC / RPN / NRPN binding. */
   clearMidiCcBindings(): void {
     this.native.clearMidiCcBindings();

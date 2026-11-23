@@ -108,12 +108,12 @@ function withRetuneGrain(config: Record<string, unknown>): Record<string, unknow
  *   another length or a retune grain that is not a multiple of 4 in [4, 8192].
  */
 function nativePodConfig(config: Record<string, unknown>): Record<string, unknown> {
-  config = withRetuneGrain(config);
   assertFlatConfigFields(config);
   const steps = config.harmonySteps;
   if (!Array.isArray(steps)) {
     throw refuseType(`harmonySteps must be an array of three numbers`);
   }
+  config = withRetuneGrain(config);
   if (steps.length !== 3) {
     throw refuse(`harmonySteps must hold exactly three numbers`);
   }

@@ -522,21 +522,22 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
-  it('addAutomationLane returns its stable target id; edit + remove undo cleanly', () => {
+  it('addAutomationLane returns its stable lane id; edit + remove undo cleanly', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const targetParamId = project.addAutomationLane(track, {
-      targetParamId: 1,
+    const laneId = project.addAutomationLane(track, {
+      targetParamId: 99,
       points: [
         { ppq: 0, value: 0, curveToNext: 'linear' },
         { ppq: 4, value: 1, curveToNext: 'exponential' },
       ],
     });
-    expect(targetParamId).toBe(1);
+    expect(laneId).not.toBe(99);
 
     const afterAdd = project.toJson();
     expect(afterAdd).not.toContain('"targetKind"');
-    project.editAutomationLane(track, targetParamId, {
+    project.editAutomationLane(track, laneId, {
+      targetKind: 'opaque',
       targetParamId: 1,
       points: [{ ppq: 0, value: 0.5 }],
     });
@@ -544,7 +545,7 @@ describe('Project edit ops (new bindings)', () => {
     project.undo();
     expect(project.toJson()).toBe(afterAdd);
 
-    project.removeAutomationLane(track, targetParamId);
+    project.removeAutomationLane(track, laneId);
     expect(project.toJson()).not.toBe(afterAdd);
     project.undo();
     expect(project.toJson()).toBe(afterAdd);
@@ -556,12 +557,10 @@ describe('Project edit ops (new bindings)', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     project.addAutomationLane(track, {
-      targetParamId: 101,
       targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3 }],
     });
     project.addAutomationLane(track, {
-      targetParamId: 102,
       targetKind: 'trackPan',
       points: [{ ppq: 0, value: 0 }],
     });
@@ -579,13 +578,11 @@ describe('Project edit ops (new bindings)', () => {
   it('rejects a conflicting typed lane atomically', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    project.addAutomationLane(track, {
-      targetParamId: 201,
+    const faderLaneId = project.addAutomationLane(track, {
       targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3 }],
     });
     project.addAutomationLane(track, {
-      targetParamId: 203,
       targetKind: 'trackPan',
       points: [{ ppq: 0, value: 0 }],
     });
@@ -593,7 +590,6 @@ describe('Project edit ops (new bindings)', () => {
 
     expect(() =>
       project.addAutomationLane(track, {
-        targetParamId: 202,
         targetKind: 'trackFaderDb',
         points: [{ ppq: 0, value: -6 }],
       }),
@@ -601,8 +597,7 @@ describe('Project edit ops (new bindings)', () => {
     expect(project.toJson()).toBe(before);
 
     expect(() =>
-      project.editAutomationLane(track, 201, {
-        targetParamId: 201,
+      project.editAutomationLane(track, faderLaneId, {
         targetKind: 'trackPan',
         points: [{ ppq: 0, value: -6 }],
       }),
@@ -659,13 +654,11 @@ describe('Project edit ops (new bindings)', () => {
   it('legacy automation edits preserve a typed lane kind', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    project.addAutomationLane(track, {
-      targetParamId: 301,
+    const laneId = project.addAutomationLane(track, {
       targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3 }],
     });
-    project.editAutomationLane(track, 301, {
-      targetParamId: 301,
+    project.editAutomationLane(track, laneId, {
       points: [{ ppq: 0, value: -6 }],
     });
     const json = project.toJson();
@@ -686,7 +679,6 @@ describe('Project edit ops (new bindings)', () => {
     ] as const) {
       expect(() =>
         project.addAutomationLane(track, {
-          targetParamId: 401,
           targetKind: targetKind as never,
           points: [{ ppq: 0, value: 0 }],
         }),
@@ -714,9 +706,8 @@ describe('Project edit ops (new bindings)', () => {
   });
 });
 
-describe('automation target kind ordinal', () => {
-  it('states its domain in the enum words at the addon', () => {
-    // The facade resolves tokens, so the ordinal reader is reached through the addon.
+describe('automation target kind token', () => {
+  it('refuses numeric values at the addon boundary', () => {
     // biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose.
     const native = new (addon as any).Project();
     try {
@@ -728,8 +719,8 @@ describe('automation target kind ordinal', () => {
             targetKind: 3,
             points: [{ ppq: 0, value: 0 }],
           }),
-        RangeError,
-        /^Project\.addAutomationLane: automation target kind must be a name or an ordinal in \[0, 3\)$/,
+        TypeError,
+        /^targetKind must be a string$/,
       );
     } finally {
       native.destroy();

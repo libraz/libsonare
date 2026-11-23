@@ -55,9 +55,6 @@ export const WARP_MODE = {
   timeStretch: 3,
 } as const satisfies Record<ProjectWarpMode, number>;
 
-/** `SonareAutomationTargetKind` ordinals. */
-export const AUTOMATION_TARGET_KIND = { opaque: 0, trackFaderDb: 1, trackPan: 2 } as const;
-
 /** `SonareExternalStemLayout` ordinals. */
 export const STEM_LAYOUT = { mono: 1, stereo: 2 } as const satisfies Record<
   ProjectStemLayout,

@@ -164,7 +164,8 @@ Napi::Value RunChainWithCallbacks(Napi::Env env, mastering_api::MasteringChain& 
   // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
   if (env.IsExceptionPending()) return env.Undefined();
   if (!result) {
-    ThrowSonareError(env, SONARE_ERROR_CANCELLED);
+    ThrowSonareErrorMessage(env, SONARE_ERROR_CANCELLED,
+                            ErrorMessageForCode(SONARE_ERROR_CANCELLED));
     return env.Undefined();
   }
   return emit(*result);

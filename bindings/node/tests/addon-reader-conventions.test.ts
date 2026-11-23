@@ -313,10 +313,13 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       estimateMeter({
         ...o,
-        beats: Array.from({ length: 32 }, (_, i) => ({
-          timeSec: i * 0.5,
-          strength: i % 4 === 0 ? 1 : 0.3,
-        })),
+        observations: {
+          accent: Array.from({ length: 32 }, (_, i) => (i % 4 === 0 ? 1 : 0.3)),
+          hasAttack: [],
+          lowFrequencyEnergy: [],
+          subdivisionAccent: [],
+          chordChange: [],
+        },
       }),
   },
   {

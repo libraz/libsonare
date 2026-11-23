@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BuiltinSynthConfig } from '../src/index.js';
+import type { BuiltinSynthConfig, ProjectMidiEvent } from '../src/index.js';
 import {
   ErrorCode,
   gm2DrumName,
@@ -265,6 +265,213 @@ it('describes unresolved audio sources with the full untruncated URI', () => {
   project.destroy();
 });
 
+it('adds and relinks an audio source without changing its id and restores it on undo', () => {
+  const project = new Project();
+  try {
+    expect(() => project.addAudioSource('asset://bad\0uri')).toThrow(RangeError);
+    expect(() => project.addAudioSource('asset://\ud800.wav')).toThrow(RangeError);
+    expect(() => project.addAudioSource('')).toThrow(RangeError);
+    const uri = `asset://${'音'.repeat(180)}.wav`;
+    const sourceId = project.addAudioSource(uri);
+    expect(project.addAudioSource(uri)).not.toBe(sourceId);
+    project.setAudioSourceMetadata({
+      sourceId,
+      contentHash: 'sha256:before',
+      externalStemRole: 'vocals',
+    });
+    project.setSourceAudio({
+      sourceId,
+      channels: [new Float32Array(64).fill(0.25)],
+      sampleRate: 48000,
+    });
+    const before = project.sources().find((source) => source.id === sourceId);
+    expect(before?.nameOrUri).toBe(uri);
+    expect(project.unresolvedAudioSourceIds()).not.toContain(sourceId);
+
+    expect(project.relinkSource(sourceId, 'asset://replacement.wav')).toBe(sourceId);
+    expect(project.unresolvedAudioSourceIds()).toContain(sourceId);
+    const relinked = project.sources().find((source) => source.id === sourceId);
+    expect(relinked?.nameOrUri).toBe('asset://replacement.wav');
+    expect(relinked).not.toHaveProperty('contentHash');
+    expect(relinked).not.toHaveProperty('externalStemRole');
+
+    project.undo();
+    expect(project.unresolvedAudioSourceIds()).not.toContain(sourceId);
+    expect(project.sources().find((source) => source.id === sourceId)).toEqual(before);
+    project.redo();
+    expect(project.unresolvedAudioSourceIds()).toContain(sourceId);
+  } finally {
+    project.destroy();
+  }
+});
+
+it('reads key annotations in stored order and restores them with redo', () => {
+  const project = new Project();
+  try {
+    const keys = [
+      { startPpq: 4, endPpq: 8, tonicPc: 9, mode: 'mixolydian' as const },
+      { startPpq: 0, endPpq: 4, mode: 'unknown' as const },
+    ];
+    project.annotateKeys(keys);
+    expect(project.keyAnnotations()).toEqual(keys);
+    project.undo();
+    expect(project.keyAnnotations()).toEqual([]);
+    project.redo();
+    expect(project.keyAnnotations()).toEqual(keys);
+  } finally {
+    project.destroy();
+  }
+});
+
+it('refuses undeclared key and chord annotation fields by indexed path', () => {
+  const project = new Project();
+  try {
+    const keys = [
+      { startPpq: 0, endPpq: 4, mode: 'major' },
+      { startPpq: 4, endPpq: 8, mode: 'minor', unexpected: true },
+    ] as never;
+    expect(() => project.annotateKeys(keys)).toThrow(
+      new TypeError(
+        'Project.annotateKeys: unknown key keys[1].unexpected (expected endPpq, mode, startPpq, tonicPc)',
+      ),
+    );
+
+    const functionRow = Object.assign(() => undefined, {
+      startPpq: 4,
+      endPpq: 8,
+      unexpected: true,
+    });
+    const functionKeys = [{ startPpq: 0, endPpq: 4 }, functionRow] as never;
+    expect(() => project.annotateKeys(functionKeys)).toThrow(
+      new TypeError(
+        'Project.annotateKeys: unknown key keys[1].unexpected (expected endPpq, mode, startPpq, tonicPc)',
+      ),
+    );
+
+    const chords = [
+      { startPpq: 0, endPpq: 4, quality: 'major' },
+      { startPpq: 4, endPpq: 8, quality: 'minor', unexpected: true },
+    ] as never;
+    expect(() => project.annotateChords(chords)).toThrow(
+      new TypeError(
+        'Project.annotateChords: unknown key chords[1].unexpected (expected endPpq, extensions, modulationBoundary, quality, romanNumeral, rootPc, slashBassPc, startPpq)',
+      ),
+    );
+  } finally {
+    project.destroy();
+  }
+});
+
+it('reads chord annotations with owned extensions and no unset or empty numeral', () => {
+  const project = new Project();
+  try {
+    const chords = [
+      {
+        startPpq: 4,
+        endPpq: 8,
+        rootPc: 7,
+        quality: 'dominant' as const,
+        extensions: [7, 9],
+        slashBassPc: 0,
+        modulationBoundary: true,
+        romanNumeral: 'V7',
+      },
+      {
+        startPpq: 0,
+        endPpq: 4,
+        rootPc: 0,
+        quality: 'major' as const,
+        extensions: [3, 5],
+        modulationBoundary: false,
+      },
+      {
+        startPpq: 8,
+        endPpq: 12,
+        rootPc: 2,
+        quality: 'minor' as const,
+        extensions: [3, 5],
+        modulationBoundary: false,
+        romanNumeral: '',
+      },
+    ];
+    project.annotateChords(chords);
+    const annotations = project.chordAnnotations();
+    const expected = chords.map(({ romanNumeral, ...chord }) =>
+      romanNumeral === undefined || romanNumeral === '' ? chord : { ...chord, romanNumeral },
+    );
+    expect(annotations).toEqual(expected);
+    expect(annotations[0].romanNumeral).toBe('V7');
+    expect(annotations[1]).not.toHaveProperty('romanNumeral');
+    expect(annotations[2]).not.toHaveProperty('romanNumeral');
+    project.undo();
+    expect(project.chordAnnotations()).toEqual([]);
+    project.redo();
+    expect(project.chordAnnotations()).toEqual(expected);
+  } finally {
+    project.destroy();
+  }
+});
+
+it('writes overlapping section annotations as one undoable edit', () => {
+  const project = new Project();
+  try {
+    const sections = [
+      { startPpq: 4, endPpq: 12, label: `verse ${'x'.repeat(300)}` },
+      { startPpq: 0, endPpq: 8, label: '序章' },
+    ];
+    project.annotateSections(sections);
+    expect(project.sectionAnnotations()).toEqual(sections);
+    const annotated = JSON.parse(project.toJson()) as {
+      annotation: { sections: unknown[] };
+    };
+    expect(annotated.annotation.sections).toEqual(sections);
+    project.undo();
+    expect((JSON.parse(project.toJson()) as typeof annotated).annotation.sections).toEqual([]);
+    project.redo();
+    expect(project.sectionAnnotations()).toEqual(sections);
+    expect((JSON.parse(project.toJson()) as typeof annotated).annotation.sections).toEqual(
+      sections,
+    );
+    project.annotateSections([]);
+    expect(project.sectionAnnotations()).toEqual([]);
+    expect((JSON.parse(project.toJson()) as typeof annotated).annotation.sections).toEqual([]);
+  } finally {
+    project.destroy();
+  }
+});
+
+it('refuses malformed section records and text that cannot reach UTF-8 intact', () => {
+  const project = new Project();
+  try {
+    expect(() =>
+      project.annotateSections([{ startPpq: 0, endPpq: 1, label: 'bad\0label' }]),
+    ).toThrow(RangeError);
+    expect(() => project.annotateSections([{ startPpq: 0, endPpq: 1, label: '\ud800' }])).toThrow(
+      RangeError,
+    );
+    expect(() =>
+      project.annotateSections([{ startPpq: 0, endPpq: 1, label: 'ok', extra: 1 } as never]),
+    ).toThrow(TypeError);
+    expectRefusal(
+      () => project.annotateSections([{ startPpq: '0', endPpq: 1, label: 'ok' } as never]),
+      TypeError,
+      /sections\[0\]\.startPpq/,
+    );
+    expectRefusal(
+      () => project.annotateSections([{ startPpq: 0, endPpq: 1e12 + 1, label: 'ok' }]),
+      RangeError,
+      /sections\[0\]\.endPpq/,
+    );
+    expectRefusal(
+      () => project.annotateSections([{ startPpq: 1, endPpq: 1, label: 'ok' }]),
+      RangeError,
+      /sections\[0\]\.endPpq/,
+    );
+  } finally {
+    project.destroy();
+  }
+});
+
 it('reports no unresolved audio sources for a MIDI-only project', () => {
   const project = new Project();
   const trackId = project.addTrack({ kind: 'midi' });
@@ -508,6 +715,53 @@ describe('Project native binding', () => {
     );
 
     project.destroy();
+  });
+
+  it('queries and renders count-in with optional metronome configuration', () => {
+    const project = buildProject();
+    try {
+      project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+      project.setTimeSignatures([{ startPpq: 0, numerator: 4, denominator: 4 }]);
+      const countInFrames = project.countInFrames(1);
+      expect(countInFrames).toBe(96000);
+      expect(() => project.countInFrames(17)).toThrow(/countInBars/);
+
+      const options = {
+        totalFrames: countInFrames + 1024,
+        blockSize: 128,
+        numChannels: 2,
+        countInBars: 1,
+      };
+      const silentPreroll = project.bounce(options);
+      const musicOnly = project.bounce({ totalFrames: 1024, blockSize: 128, numChannels: 2 });
+      const disabled = project.bounce({ ...options, metronome: { enabled: false } });
+      expect(disabled.channels).toEqual(silentPreroll.channels);
+      expect(
+        silentPreroll.channels.every((channel) =>
+          channel.slice(0, countInFrames).every((v) => v === 0),
+        ),
+      ).toBe(true);
+      expect(musicOnly.channels.some((channel) => channel.some((v) => v !== 0))).toBe(true);
+      expect(silentPreroll.channels.map((channel) => channel.slice(countInFrames))).toEqual(
+        musicOnly.channels,
+      );
+      const enabled = project.bounce({ ...options, metronome: { enabled: true } });
+      const prerollPeak = enabled.channels.reduce((maximum, channel) => {
+        for (let i = 0; i < countInFrames; i++) {
+          maximum = Math.max(maximum, Math.abs(channel[i]));
+        }
+        return maximum;
+      }, 0);
+      expect(prerollPeak).toBeGreaterThan(0);
+      expectRefusal(
+        () =>
+          project.bounce({ ...options, metronome: { enabled: false, clickSample: 4 } as never }),
+        TypeError,
+        /metronome\.clickSample/,
+      );
+    } finally {
+      project.destroy();
+    }
   });
 
   it('undo() restores the serialized bytes after an edit', () => {
@@ -953,6 +1207,56 @@ describe('Project native binding', () => {
     restored.destroy();
   });
 
+  it('reads, copies, and writes MIDI event records with SysEx bytes', () => {
+    const project = new Project();
+    try {
+      const firstClip = project.addMidiClip(0, 2).clipId;
+      const secondClip = project.addMidiClip(0, 2).clipId;
+      const payload = Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]);
+      project.setMidiEvents(firstClip, [
+        { ppq: 0.75, word0: 0x30000000, word1: 0, sysex: payload },
+        { ppq: 0.25, word0: 0x20903c64, sysex: null } as unknown as ProjectMidiEvent,
+        { ppq: 0.5, word0: 0x40903c00, word1: 0xc0000000 },
+      ]);
+      payload.fill(0);
+
+      const read = project.midiEvents(firstClip);
+      expect(read).toEqual([
+        { ppq: 0.25, word0: 0x20903c64, word1: 0 },
+        { ppq: 0.5, word0: 0x40903c00, word1: 0xc0000000 },
+        {
+          ppq: 0.75,
+          word0: 0x30000000,
+          word1: 0,
+          sysex: Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]),
+        },
+      ]);
+      expect(Object.hasOwn(read[0], 'sysex')).toBe(false);
+
+      read[2].sysex?.fill(0);
+      const freshRead = project.midiEvents(firstClip);
+      expect(freshRead[2].sysex).toEqual(Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]));
+      project.setMidiEvents(secondClip, freshRead);
+      expect(project.midiEvents(secondClip)).toEqual(freshRead);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('preserves an explicitly empty SysEx view for the C setter to refuse', () => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 1);
+      expectRefusal(
+        () =>
+          project.setMidiEvents(clipId, [{ ppq: 0, word0: 0x20903c64, sysex: new Uint8Array(0) }]),
+        RangeError,
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('setProgram takes bank, group and channel as options', () => {
     const exportWith = (call: (project: Project, clipId: number) => void): Buffer => {
       const project = new Project();
@@ -1126,6 +1430,48 @@ describe('Project native binding', () => {
     expect(audio.channels[0]).toHaveLength(4096);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
+  });
+
+  it('applies controller profiles and articulations from bounce options', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      project.setMidiEvents(project.clips()[0].id, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiCc({ ppq: 0.125, group: 0, channel: 0, controller: 2, value: 127 }),
+        midiNoteOn({ ppq: 0.25, group: 0, channel: 0, note: 69, velocity: 100 }),
+        midiCc({ ppq: 0.375, group: 0, channel: 0, controller: 2, value: 32 }),
+        midiNoteOff({ ppq: 0.75, group: 0, channel: 0, note: 60, velocity: 0 }),
+        midiNoteOff({ ppq: 0.875, group: 0, channel: 0, note: 69, velocity: 0 }),
+      ]);
+      const options = {
+        totalFrames: 24000,
+        numChannels: 2,
+        synthInstruments: [{ instrument: { engineMode: 'reed' as const } }],
+      };
+      const plain = project.bounce(options);
+      const profiled = project.bounce({
+        ...options,
+        controllerProfiles: [{ destinationId: 0, presetName: 'breath' }],
+      });
+      const articulated = project.bounce({
+        ...options,
+        controllerProfiles: [{ destinationId: 0, presetName: 'breath' }],
+        articulations: [{ destinationId: 0, channel: 0, articulation: 'monoLegato' }],
+      });
+      const maximumDifference = (left: Float32Array[], right: Float32Array[]): number => {
+        let maximum = 0;
+        for (let channel = 0; channel < left.length; channel++) {
+          for (let frame = 0; frame < left[channel].length; frame++) {
+            maximum = Math.max(maximum, Math.abs(left[channel][frame] - right[channel][frame]));
+          }
+        }
+        return maximum;
+      };
+      expect(maximumDifference(plain.channels, profiled.channels)).toBeGreaterThan(1e-3);
+      expect(maximumDifference(profiled.channels, articulated.channels)).toBeGreaterThan(1e-3);
+    } finally {
+      project.destroy();
+    }
   });
 
   it('refuses builtin synth numeric fields that are explicitly zero', () => {
@@ -1394,6 +1740,63 @@ describe('Project value-model accessors', () => {
     project.destroy();
   });
 
+  it('reads effective tempo, seconds, meter, bar, and beat positions', () => {
+    const project = new Project();
+    try {
+      expect(project.ppqToSec(2)).toBe(1);
+      expect(project.secToPpq(1)).toBe(2);
+      expect(project.positionAtPpq(5.5)).toEqual({
+        bpm: 120,
+        timeSignature: { startPpq: 0, numerator: 4, denominator: 4 },
+        barStartPpq: 4,
+        barIndex: 1,
+        beat: 2,
+        beatFraction: 0.5,
+      });
+      expect(project.barStartPpq(1)).toBe(4);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads the end PPQ of the last audible clip', () => {
+    const project = new Project();
+    try {
+      expect(project.endPpq()).toBe(0);
+
+      const first = project.addMidiClip(1.25, 2.5);
+      project.setMidiEvents(first.clipId, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 2.5, group: 0, channel: 0, note: 60, velocity: 0 }),
+      ]);
+      expect(project.endPpq()).toBe(3.75);
+
+      const later = project.addMidiClip(6, 2);
+      project.setMidiEvents(later.clipId, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 64, velocity: 100 }),
+        midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 64, velocity: 0 }),
+      ]);
+      expect(project.endPpq()).toBe(8);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('routes effective-time reader domain refusals through the C API', () => {
+    const project = new Project();
+    try {
+      expectRefusal(() => project.ppqToSec(-1), RangeError, /ppq/);
+      expectRefusal(() => project.secToPpq(-1), RangeError, /sec/);
+      expectRefusal(() => project.positionAtPpq(-1), RangeError, /ppq/);
+      expectRefusal(() => project.barStartPpq(-1), RangeError, /barIndex/);
+      expectRefusal(() => project.midiEvents(0xffffffff), RangeError, /clipId/);
+      expectRefusal(() => project.barStartPpq(1.5), TypeError);
+      expectRefusal(() => project.barStartPpq(Number.MAX_SAFE_INTEGER + 1), RangeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('adds a marker and returns its id', () => {
     const project = new Project();
     const id = project.setMarker({ ppq: 1.5, name: 'verse' });
@@ -1634,6 +2037,51 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     });
     expect(muted.events).toHaveLength(0);
     expect(muted.overflowed).toBe(false);
+  });
+
+  it('routes SysEx payloads with owned copies and leaves absent fields absent', () => {
+    const payload = Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]);
+    const routed = midiRouteEvents({
+      events: [
+        { ppq: 0.25, word0: 0x30000000, word1: 0, sysex: payload },
+        { ppq: 0.5, word0: 0x20903c64 },
+      ],
+    });
+    payload.fill(0);
+    expect(routed.events[0]).toEqual({
+      ppq: 0.25,
+      word0: 0x30000000,
+      word1: 0,
+      sysex: Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]),
+    });
+    expect(Object.hasOwn(routed.events[1], 'sysex')).toBe(false);
+    routed.events[0].sysex?.fill(0);
+    const secondPayload = Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]);
+    const second = midiRouteEvents({
+      events: [{ ppq: 0, word0: 0x30000000, word1: 0, sysex: secondPayload }],
+    });
+    second.events[0].sysex?.fill(0);
+    expect(secondPayload).toEqual(Uint8Array.from([0xf0, 0x7e, 0x7f, 0xf7]));
+    const signedWord = midiRouteEvents({
+      events: [{ ppq: 0, word0: 0x40903c00, word1: -1 }],
+    });
+    expect(signedWord.events[0].word1).toBe(0xffff_ffff);
+    expectRefusal(
+      () =>
+        midiRouteEvents({
+          events: [{ ppq: 0, word0: 0x30000000, word1: 0, sysex: new Uint8Array(0) }],
+        }),
+      RangeError,
+      /events\[0\]\.sysex/,
+    );
+    expectRefusal(
+      () =>
+        midiRouteEvents({
+          events: [{ ppq: 0, word0: 0x30000000, word1: 0, sysex: [0xf0] as unknown as Uint8Array }],
+        }),
+      TypeError,
+      /events\[0\]\.sysex must be a Uint8Array/,
+    );
   });
 
   it('exposes native CcMap learn and CC/automation conversion helpers', () => {

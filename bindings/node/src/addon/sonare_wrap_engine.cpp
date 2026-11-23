@@ -252,6 +252,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
                                                                    napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::MidiCcBindingCount>("midiCcBindingCount",
                                                                   napi_default_method),
+          InstanceMethod<&RealtimeEngineWrap::MidiCcBindings>("midiCcBindings",
+                                                              napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::SetControllerProfile>("setControllerProfile",
                                                                     napi_default_method),
           InstanceMethod<&RealtimeEngineWrap::BindController>("bindController",

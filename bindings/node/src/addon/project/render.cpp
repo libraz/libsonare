@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/project_input_domains.h"
 #include "project/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
@@ -33,10 +34,9 @@ void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* opti
   options->block_size = IntProperty(obj, "blockSize", options->block_size);
   options->num_channels =
       IntProperty(obj, "numChannels", AbsentIsSentinel<int>{options->num_channels});
-  options->sample_rate =
-      IntProperty(obj, "sampleRate", AbsentIsSentinel<int>{options->sample_rate});
   options->instrument_latency_samples =
       IntProperty(obj, "instrumentLatencySamples", options->instrument_latency_samples);
+  options->count_in_bars = IntProperty(obj, "countInBars", options->count_in_bars);
 }
 
 // Parses a JS instrument descriptor into a built-in synth binding. Throws a
@@ -548,6 +548,75 @@ bool ReadCallbackBindings(Napi::Env env, const Napi::Value& value, JsThreadBridg
   return true;
 }
 
+bool ReadBounceMetronome(Napi::Env env, const Napi::Object& options,
+                         SonareEngineMetronomeConfig* config, bool* present) {
+  const Napi::Value value = options.Get("metronome");
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Object obj;
+  if (!RequiredObjectValue(env, value, "metronome", &obj)) return false;
+  sonare_engine_metronome_config_init(config);
+  bool enabled = false;
+  if (!sonare_node::RequiredBoolValue(env, obj.Get("enabled"), "metronome.enabled", &enabled))
+    return false;
+  config->enabled = enabled ? 1 : 0;
+  config->beat_gain = FloatProperty(obj, "beatGain", config->beat_gain);
+  config->accent_gain = FloatProperty(obj, "accentGain", config->accent_gain);
+  config->click_samples =
+      IntProperty(obj, "clickSamples", AbsentIsSentinel<int>{config->click_samples});
+  config->click_sec = DoubleProperty(obj, "clickSec", config->click_sec);
+  if (env.IsExceptionPending()) return false;
+  *present = true;
+  return true;
+}
+
+bool ReadBounceControllerProfiles(Napi::Env env, const Napi::Value& value,
+                                  std::vector<SonareProjectControllerProfileBinding>* bindings,
+                                  std::vector<std::string>* names) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Array array;
+  if (!RequiredArrayValue(env, value, "controllerProfiles", &array)) return false;
+  const uint32_t count = sonare_node::node_list_length(array, "controllerProfiles");
+  bindings->resize(count);
+  names->resize(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Object item;
+    std::string at;
+    if (!RequiredElementObject(env, array, i, "controllerProfiles", &item, &at) ||
+        !RequiredUint32Property(env, item, "destinationId", &(*bindings)[i].destination_id) ||
+        !RequiredStringProperty(env, item, "presetName", &(*names)[i])) {
+      return false;
+    }
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    (*bindings)[i].preset_name = (*names)[i].c_str();
+  }
+  return true;
+}
+
+bool ReadBounceArticulations(Napi::Env env, const Napi::Value& value,
+                             std::vector<SonareProjectArticulationBinding>* bindings) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::Array array;
+  if (!RequiredArrayValue(env, value, "articulations", &array)) return false;
+  const uint32_t count = sonare_node::node_list_length(array, "articulations");
+  bindings->resize(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Object item;
+    std::string at;
+    int articulation = SONARE_ARTICULATION_POLY;
+    if (!RequiredElementObject(env, array, i, "articulations", &item, &at) ||
+        !RequiredUint32Property(env, item, "destinationId", &(*bindings)[i].destination_id) ||
+        !RequiredUint32Property(env, item, "channel", &(*bindings)[i].channel) ||
+        !sonare_node::SynthEnumValue(
+            env, item.Get("articulation"), sonare_node::synth_names::kArticulations,
+            SONARE_ARTICULATION_COUNT, (at + ".articulation").c_str(), &articulation)) {
+      return false;
+    }
+    (*bindings)[i].articulation = static_cast<SonareArticulation>(articulation);
+  }
+  return true;
+}
+
 }  // namespace
 
 // Compiles the project. A truthy `withTimeline` also returns the compiled timeline
@@ -583,6 +652,29 @@ Napi::Value ProjectWrap::LastBounceCompileResult(const Napi::CallbackInfo& info)
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value ProjectWrap::CountInFrames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  int count_in_bars = 0;
+  if (!sonare_node::RequiredDomainArg(env, info, 0, "countInBars",
+                                      sonare_c_detail::kProjectCountInBarsDomain, &count_in_bars)) {
+    return env.Undefined();
+  }
+  int64_t frames = 0;
+  ThrowIfError(env, sonare_project_count_in_frames(project_, count_in_bars,
+                                                   SONARE_PROJECT_SAMPLE_RATE_PROJECT, &frames));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if (frames < 0 || static_cast<double>(frames) > sonare_node::kMaxSafeInteger) {
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_INVALID_FORMAT,
+        "countInFrames result is not exactly representable as a number");
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, static_cast<double>(frames));
+  SONARE_NODE_CATCH(env)
+}
+
 // Compiles + renders the project:
 //   bounce(options?, builtinInstruments?, synthInstruments?, sf2Instruments?, callbackInstruments?)
 // Each trailing list binds MIDI tracks to one kind of instrument and may be given together. A
@@ -594,8 +686,11 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
   sonare_project_bounce_options_init(&options);
-  if (info.Length() > 0 && info[0].IsObject() && !info[0].IsArray()) {
-    FillBounceOptions(info[0].As<Napi::Object>(), &options);
+  Napi::Object settings_obj;
+  const bool has_settings_obj = info.Length() > 0 && info[0].IsObject() && !info[0].IsArray();
+  if (has_settings_obj) {
+    settings_obj = info[0].As<Napi::Object>();
+    FillBounceOptions(settings_obj, &options);
     if (env.IsExceptionPending()) return env.Undefined();
   }
   std::vector<SonareBuiltinInstrumentBinding> builtin_bindings;
@@ -606,10 +701,20 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   JsThreadBridge bridge;
   std::vector<JsInstrumentSlot> slots;
   std::vector<SonareInstrumentBinding> callback_bindings;
+  SonareEngineMetronomeConfig metronome{};
+  bool has_metronome = false;
+  std::vector<SonareProjectControllerProfileBinding> controller_profiles;
+  std::vector<std::string> controller_profile_names;
+  std::vector<SonareProjectArticulationBinding> articulations;
   if (!ReadBuiltinBindings(env, info[1], &builtin_bindings) ||
       !ReadSynthBindings(env, info[2], &synth_bindings, &patch_storages) ||
       !ReadSf2Bindings(env, info[3], &sf2_bindings) ||
-      !ReadCallbackBindings(env, info[4], &bridge, &slots, &callback_bindings)) {
+      !ReadCallbackBindings(env, info[4], &bridge, &slots, &callback_bindings) ||
+      (has_settings_obj &&
+       (!ReadBounceMetronome(env, settings_obj, &metronome, &has_metronome) ||
+        !ReadBounceControllerProfiles(env, settings_obj.Get("controllerProfiles"),
+                                      &controller_profiles, &controller_profile_names) ||
+        !ReadBounceArticulations(env, settings_obj.Get("articulations"), &articulations)))) {
     return env.Undefined();
   }
   options.builtin_instruments = builtin_bindings.empty() ? nullptr : builtin_bindings.data();
@@ -620,6 +725,11 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   options.sf2_instrument_count = sf2_bindings.size();
   options.instruments = callback_bindings.empty() ? nullptr : callback_bindings.data();
   options.instrument_count = callback_bindings.size();
+  options.metronome = has_metronome ? &metronome : nullptr;
+  options.controller_profiles = controller_profiles.empty() ? nullptr : controller_profiles.data();
+  options.controller_profile_count = controller_profiles.size();
+  options.articulations = articulations.empty() ? nullptr : articulations.data();
+  options.articulation_count = articulations.size();
 
   if (callback_bindings.empty()) {
     float* interleaved = nullptr;

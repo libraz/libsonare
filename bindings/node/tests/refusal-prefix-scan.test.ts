@@ -26,7 +26,9 @@ const SHAPES: ReadonlyArray<() => unknown[]> = [
   () => [new Float32Array(0), 22050],
   () => [{ samples: signal(), sampleRate: 22050 }],
   () => [{ samples: new Float32Array(0), sampleRate: 22050 }],
-  () => [{ beats: [] }],
+  () => [
+    { observations: { accent: [], hasAttack: [], lowFrequencyEnergy: [], subdivisionAccent: [] } },
+  ],
 ];
 
 describe('refusal entry prefix', () => {

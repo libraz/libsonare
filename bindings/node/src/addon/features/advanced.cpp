@@ -1,5 +1,6 @@
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "c_api/inverse_input_domains.h"
@@ -486,6 +487,70 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   sonare::Audio result = sonare::mfcc_to_audio(sonare_node::ElementData(typed), n_mfcc, n_frames,
                                                config, n_iter, sr, lifter);
   return Float32ArrayFrom(env, result.data(), result.size());
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::Istft(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+
+  Napi::Float32Array magnitude;
+  if (!RequiredFloat32ArrayValue(env, info[0], "magnitude", &magnitude)) {
+    return env.Undefined();
+  }
+  int n_bins{};
+  if (!RequiredIntArg(env, info, 1, "magnitude.rows", &n_bins)) return env.Undefined();
+  int n_frames{};
+  if (!RequiredIntArg(env, info, 2, "magnitude.cols", &n_frames)) return env.Undefined();
+  if (!ValidateMatrixDims(env, n_bins, n_frames, magnitude.ElementLength())) {
+    return env.Undefined();
+  }
+
+  Napi::Float32Array phase;
+  if (!RequiredFloat32ArrayValue(env, info[3], "phase", &phase)) return env.Undefined();
+  int phase_bins{};
+  if (!RequiredIntArg(env, info, 4, "phase.rows", &phase_bins)) return env.Undefined();
+  int phase_frames{};
+  if (!RequiredIntArg(env, info, 5, "phase.cols", &phase_frames)) return env.Undefined();
+  if (!ValidateMatrixDims(env, phase_bins, phase_frames, phase.ElementLength())) {
+    return env.Undefined();
+  }
+  if (phase_bins != n_bins || phase_frames != n_frames) {
+    Napi::RangeError::New(env, "magnitude and phase must have the same dimensions")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  int n_fft{};
+  if (!RequiredIntArg(env, info, 6, "nFft", &n_fft)) return env.Undefined();
+  size_t hop_length{};
+  if (!NonNegativeSizeTArg(env, info, 7, "hopLength", &hop_length)) return env.Undefined();
+  const bool has_length = info.Length() > 8 && !info[8].IsUndefined() && !info[8].IsNull();
+  size_t length_samples{};
+  if (!OptionalSizeTArg(env, info, 8, "lengthSamples", 0, &length_samples)) {
+    return env.Undefined();
+  }
+  if (has_length && length_samples == 0) {
+    Napi::RangeError::New(env, "lengthSamples must not be 0; omit it for the natural length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SonareIstftOptions options{};
+  sonare_istft_options_init(&options);
+  if (has_length) options.length_samples = length_samples;
+
+  float* output = nullptr;
+  size_t output_length = 0;
+  const SonareError err =
+      sonare_istft(sonare_node::ElementData(magnitude), sonare_node::ElementData(phase), n_bins,
+                   n_frames, n_fft, hop_length, &options, &output, &output_length);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  std::unique_ptr<float, decltype(&sonare_free_floats)> guard(output, sonare_free_floats);
+  return Float32ArrayFrom(env, guard.get(), output_length);
   SONARE_NODE_CATCH(env)
 }
 

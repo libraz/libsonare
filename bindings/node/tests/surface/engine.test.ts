@@ -129,6 +129,7 @@ describe('RealtimeEngine transport and state reads', () => {
       ]) {
         expect(typeof anyEngine(engine)[name], name).toBe('number');
       }
+      expect(typeof anyEngine(engine).midiCcBindings).toBe('function');
     });
   });
 
@@ -971,6 +972,32 @@ describe('RealtimeEngine instruments and MIDI', () => {
       engine.addParameter({ id: 4, name: 'cutoff' });
       engine.bindMidiCc({ ccNumber: 74, paramId: 4, minValue: 0, maxValue: 1 });
       expect(engine.midiCcBindingCount).toBe(1);
+      const bindings = engine.midiCcBindings();
+      expect(bindings).toHaveLength(1);
+      expect('channel' in bindings[0]).toBe(false);
+      expect(bindings[0].channel).toBeUndefined();
+      expect(bindings[0]).toMatchObject({
+        ccNumber: 74,
+        kind: 'controlChange7',
+        paramId: 4,
+        consume: false,
+      });
+      engine.clearMidiCcBindings();
+      engine.bindMidiCc(bindings[0]);
+      expect(engine.midiCcBindings()).toEqual(bindings);
+
+      engine.clearMidiCcBindings();
+      engine.bindMidiCc({ ccNumber: 75, paramId: 4, consume: true });
+      const consumedBinding = engine.midiCcBindings();
+      expect(consumedBinding).toMatchObject([{ ccNumber: 75, consume: true }]);
+      engine.clearMidiCcBindings();
+      engine.bindMidiCc(consumedBinding[0]);
+      expect(engine.midiCcBindings()).toEqual(consumedBinding);
+      expect(
+        caught(() =>
+          engine.bindMidiCc({ ccNumber: 75, paramId: 4, consume: 'yes' as unknown as boolean }),
+        ),
+      ).toBeInstanceOf(TypeError);
       expect(anyEngine(engine).bindMidiCcBinding).toBeUndefined();
       expect(
         caught(() => (engine.bindMidiCc as (...a: unknown[]) => void)(0, 74, 4)),

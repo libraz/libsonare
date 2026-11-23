@@ -1,6 +1,12 @@
 import { withEntry } from './internal/entry.js';
 import { addon } from './native.js';
-import type { SynthEngineMode, SynthEnumTables, SynthParamInfo, SynthPatch } from './types.js';
+import type {
+  SynthEngineMode,
+  SynthEnumTables,
+  SynthParamInfo,
+  SynthPatch,
+  SynthPatchParamInfo,
+} from './types.js';
 import { SYNTH_ENGINE_MODES } from './types_instrument.js';
 import { assertClosedToken } from './validation.js';
 
@@ -114,7 +120,12 @@ export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInf
   });
 }
 
-/** Describe every numeric {@link SynthPatch} wrapper field: range, default and unit. */
-export function synthPatchParamInfo(): SynthParamInfo[] {
-  return JSON.parse(addon.synthPatchParamInfo()) as SynthParamInfo[];
+/**
+ * Describe every numeric, boolean, and enum {@link SynthPatch} wrapper field.
+ * Each numeric or boolean row follows {@link synthEngineParamInfo}.
+ * An enum row has `type` `"enum"`, `values` in ordinal order, and `default` set to
+ * the ordinal-0 token. The preset name and mod matrix are not described.
+ */
+export function synthPatchParamInfo(): SynthPatchParamInfo[] {
+  return JSON.parse(addon.synthPatchParamInfo()) as SynthPatchParamInfo[];
 }

@@ -1,8 +1,9 @@
 // Type-only, so the erased import adds no runtime edge: to the coercion module
 // below, and to the bank module, which names these types back.
 import type { ProjectTimeline } from './project.js';
-import type { MidiFxConfig } from './types_engine.js';
+import type { EngineMetronomeConfig, MidiFxConfig } from './types_engine.js';
 import type {
+  Articulation,
   BuiltinSynthConfig,
   ExternalInstrument,
   Sf2InstrumentConfig,
@@ -59,6 +60,10 @@ export interface ProjectTrack {
   readonly solo: boolean;
   /** Track name; empty when unnamed. */
   readonly name: string;
+  /** Mixer strip bound to the track; omitted when no route is set. */
+  readonly channelStripRef?: string;
+  /** Mixer output target; omitted when no route is set. */
+  readonly outputTarget?: string;
 }
 
 /** Read-only stored clip descriptor. */
@@ -377,14 +382,7 @@ export interface ProjectMidiClipResult {
   clipId: number;
 }
 
-/**
- * One MIDI event in a clip's list: a position plus the first two UMP words.
- *
- * Channel-voice messages only. A clip's SysEx payloads live beside the event
- * list and are reached by a handle this type does not carry — they survive
- * `Project.importSmf`, `Project.exportSmf` and project serialization, and are
- * destroyed by `Project.setMidiEvents`.
- */
+/** One MIDI event in a clip's list: a position, UMP words, and optional SysEx bytes. */
 export interface ProjectMidiEvent {
   /** Event position in PPQ, in [0, 1e12]. */
   ppq: number;
@@ -392,6 +390,8 @@ export interface ProjectMidiEvent {
   word0: number;
   /** Second UMP word of the message. Default `0`. */
   word1?: number;
+  /** Owned SysEx bytes for a Data64 event. Omitted for channel-voice messages. */
+  sysex?: Uint8Array;
 }
 
 /** Options for {@link midiRouteEvents}. Omitted filter fields mean any group/channel and no remap. */
@@ -439,6 +439,8 @@ export interface ProjectMidiCcBinding {
   minValue?: number;
   /** Upper end of the mapped parameter range. Default `1`. */
   maxValue?: number;
+  /** Suppress matching live input after automation. Default `false`. */
+  consume?: boolean;
 }
 
 /** Whether a {@link ProjectDiagnostic} blocks the timeline. */
@@ -537,6 +539,22 @@ export interface ProjectTimeSignatureSegment {
   numerator: number;
   /** Beat unit (e.g. `4` for quarter note). */
   denominator: number;
+}
+
+/** Effective tempo, meter, bar, and beat at one project PPQ position. */
+export interface ProjectPosition {
+  /** Instantaneous tempo in beats per minute. */
+  readonly bpm: number;
+  /** Normalized time-signature segment active at this position. */
+  readonly timeSignature: ProjectTimeSignatureSegment;
+  /** Start of the containing bar, in PPQ. */
+  readonly barStartPpq: number;
+  /** Zero-based bar index; exactly representable as a JavaScript number. */
+  readonly barIndex: number;
+  /** One-based beat within the bar. */
+  readonly beat: number;
+  /** Position within the beat, in [0, 1). */
+  readonly beatFraction: number;
 }
 
 /**
@@ -642,6 +660,14 @@ export interface ProjectBounceOptions {
   numChannels?: number;
   /** Host-instrument plugin delay compensation, in samples, fed to the compiler. Default 0. */
   instrumentLatencySamples?: number;
+  /** Optional click mixed after the master chain. A disabled config renders without clicks. */
+  metronome?: EngineMetronomeConfig;
+  /** Initial bars of count-in before the music, in [0, 16]. Default `0`. */
+  countInBars?: number;
+  /** Controller profiles to apply to hosted instruments by destination. */
+  controllerProfiles?: readonly ProjectControllerProfileBinding[];
+  /** Note articulations to apply to hosted instruments by destination and channel. */
+  articulations?: readonly ProjectArticulationBinding[];
   /** Instruments you implement in JavaScript, one {@link ExternalInstrument} per destination. */
   instruments?: readonly ProjectInstrumentBinding<ExternalInstrument>[];
   /** Built-in oscillator synth patches ({@link BuiltinSynthConfig}), one per destination. */
@@ -656,6 +682,24 @@ export interface ProjectBounceOptions {
    * ({@link Project.loadSoundFont}), one per destination.
    */
   sf2Instruments?: readonly ProjectInstrumentBinding<Sf2InstrumentConfig>[];
+}
+
+/** Controller profile bound to a hosted instrument destination during a bounce. */
+export interface ProjectControllerProfileBinding {
+  /** ID of a hosted instrument destination. */
+  destinationId: number;
+  /** Name returned by {@link controllerProfileNames}. */
+  presetName: string;
+}
+
+/** Articulation bound to one hosted instrument destination and MIDI channel during a bounce. */
+export interface ProjectArticulationBinding {
+  /** ID of a hosted instrument destination. */
+  destinationId: number;
+  /** MIDI channel in [0, 15]. */
+  channel: number;
+  /** Mode for overlapping notes on this channel. */
+  articulation: Articulation;
 }
 
 /** Planar audio rendered by {@link Project.bounce}. */
@@ -677,6 +721,49 @@ export interface ProjectInstrumentBinding<T> {
   instrument: T;
 }
 
+/** Persistent instrument selection for one MIDI destination. */
+export type ProjectInstrument =
+  | {
+      /** NativeSynth instrument variant. */
+      kind: 'synth';
+      /** Sparse NativeSynth patch overrides; omitted fields keep the selected preset or engine base. */
+      patch: SynthPatch;
+      /** Follow incoming GM bank/program events instead of the fixed patch. */
+      useGmPrograms?: boolean;
+    }
+  | {
+      /** Built-in oscillator synth variant. */
+      kind: 'builtin';
+      /** Built-in synth settings. */
+      config: BuiltinSynthConfig;
+    }
+  | {
+      /** SoundFont player variant. */
+      kind: 'sf2';
+      /** SoundFont player settings. */
+      config: Sf2InstrumentConfig;
+      /** URI of the SoundFont bytes this binding uses; omitted selects the default font. */
+      soundFontUri?: string;
+    };
+
+/** Bank and program overrides stored beside a destination's instrument. */
+export interface ProjectDestinationInstrumentOptions {
+  /** Bank Select MSB and LSB; omit both to use each clip's bank. */
+  bank?: MidiBank;
+  /** Program number in [0, 127]; omit it to use each clip's program. */
+  program?: number;
+}
+
+/** Stored destination instrument and its optional MIDI bank/program. */
+export interface ProjectDestinationInstrumentBinding<T> extends ProjectInstrumentBinding<T> {
+  /** MIDI destination id; always present in the stored-project reader. */
+  destinationId: number;
+  /** Stored Bank Select; absent when the clips supply their own bank. */
+  bank?: MidiBank;
+  /** Stored program number; absent when the clips supply their own program. */
+  program?: number;
+}
+
 /** Clip fade-curve names. */
 export type ProjectFadeCurve = 'linear' | 'equalPower' | 'exponential' | 'logarithmic';
 
@@ -684,10 +771,15 @@ export type ProjectFadeCurve = 'linear' | 'equalPower' | 'exponential' | 'logari
 export type ProjectLoopMode = 'off' | 'loop';
 
 /**
- * Persistent target classification for a project automation lane: a typed
- * lane drives its track's fader or pan; an `'opaque'` lane drives the exact `targetParamId` it carries — a host-registered engine parameter, a graph-node parameter binding or strip width (3) — and a reserved mixer, insert or instrument id is refused.
+ * Persistent target classification for a project automation lane.
  */
-export type ProjectAutomationTargetKind = 'opaque' | 'trackFaderDb' | 'trackPan';
+export type ProjectAutomationTargetKind =
+  | 'opaque'
+  | 'trackFaderDb'
+  | 'trackPan'
+  | 'trackSendDb'
+  | 'trackWidth'
+  | 'trackInsertParam';
 
 /**
  * Fade regions of {@link Project.setClipFade}. An omitted side, or an omitted
@@ -820,20 +912,142 @@ export interface ProjectAutomationPoint {
  * Descriptor for {@link Project.addAutomationLane} /
  * {@link Project.editAutomationLane}.
  */
-export interface ProjectAutomationLaneDesc {
-  /** Host-defined, non-zero target parameter id the lane drives (zero is reserved). */
-  targetParamId: number;
-  /**
-   * Persistent target classification. On add, omitted is `'opaque'`; on edit,
-   * omitted keeps the lane's current kind.
-   */
-  targetKind?: ProjectAutomationTargetKind;
-  /**
-   * Breakpoints (stored verbatim; need not be pre-sorted). Omitted is an empty lane, so on edit
-   * it clears every breakpoint.
-   */
-  points?: ProjectAutomationPoint[];
+export interface ProjectAutomationLanePoints {
+  /** Breakpoints. Omit to clear all breakpoints on edit. */
+  points?: ReadonlyArray<ProjectAutomationPoint>;
 }
+
+/** Automation-lane descriptor for {@link Project.addAutomationLane}. */
+export type ProjectAutomationLaneDesc = ProjectAutomationLanePoints &
+  (
+    | {
+        /** Host-defined, nonzero parameter id for an opaque target. */
+        targetParamId: number;
+        /** Omit to add an opaque target. */
+        targetKind?: 'opaque';
+        /** Omitted for this target kind. */
+        sendId?: never;
+        /** Omitted for this target kind. */
+        insertIndex?: never;
+        /** Omitted for this target kind. */
+        processor?: never;
+        /** Omitted for this target kind. */
+        paramName?: never;
+      }
+    | {
+        /** Target kind token published by the library. */
+        targetKind: 'trackFaderDb' | 'trackPan' | 'trackWidth';
+        /** Omitted for this target kind. */
+        targetParamId?: never;
+        /** Omitted for this target kind. */
+        sendId?: never;
+        /** Omitted for this target kind. */
+        insertIndex?: never;
+        /** Omitted for this target kind. */
+        processor?: never;
+        /** Omitted for this target kind. */
+        paramName?: never;
+      }
+    | {
+        /** Target kind token published by the library. */
+        targetKind: 'trackSendDb';
+        /** Omitted for this target kind. */
+        targetParamId?: never;
+        /** Send id for a track send target. */
+        sendId: string;
+        /** Omitted for this target kind. */
+        insertIndex?: never;
+        /** Omitted for this target kind. */
+        processor?: never;
+        /** Omitted for this target kind. */
+        paramName?: never;
+      }
+    | {
+        /** Target kind token published by the library. */
+        targetKind: 'trackInsertParam';
+        /** Omitted for this target kind. */
+        targetParamId?: never;
+        /** Omitted for this target kind. */
+        sendId?: never;
+        /** Zero-based strip insert position. */
+        insertIndex: number;
+        /** Processor catalog id for an insert target. */
+        processor: string;
+        /** Processor parameter name for an insert target. */
+        paramName: string;
+      }
+  );
+
+/** Descriptor of an existing lane when its target kind is unchanged. */
+export type ProjectAutomationLaneEditDesc =
+  | (ProjectAutomationLaneDesc & { targetKind: ProjectAutomationTargetKind })
+  | (ProjectAutomationLanePoints & {
+      /** Omit to keep the current target. */
+      targetKind?: undefined;
+      /** Omitted when keeping the current target. */
+      targetParamId?: never;
+      /** Omitted when keeping the current target. */
+      sendId?: never;
+      /** Omitted when keeping the current target. */
+      insertIndex?: never;
+      /** Omitted when keeping the current target. */
+      processor?: never;
+      /** Omitted when keeping the current target. */
+      paramName?: never;
+    });
+
+/** Read-only automation lane, flattened with its owning track and stable lane ids. */
+export type ProjectAutomationLane =
+  | {
+      /** Id of the track that owns the lane. */
+      readonly trackId: number;
+      /** Stable lane id allocated by the project. */
+      readonly laneId: number;
+      /** Target kind token published by the library. */
+      readonly targetKind: 'opaque';
+      /** Host-defined, nonzero parameter id for an opaque target. */
+      readonly targetParamId: number;
+      /** Breakpoints in PPQ order. */
+      readonly points: ReadonlyArray<Readonly<ProjectAutomationPoint>>;
+    }
+  | {
+      /** Id of the track that owns the lane. */
+      readonly trackId: number;
+      /** Stable lane id allocated by the project. */
+      readonly laneId: number;
+      /** Target kind token published by the library. */
+      readonly targetKind: 'trackFaderDb' | 'trackPan' | 'trackWidth';
+      /** Breakpoints in PPQ order. */
+      readonly points: ReadonlyArray<Readonly<ProjectAutomationPoint>>;
+    }
+  | {
+      /** Id of the track that owns the lane. */
+      readonly trackId: number;
+      /** Stable lane id allocated by the project. */
+      readonly laneId: number;
+      /** Target kind token published by the library. */
+      readonly targetKind: 'trackSendDb';
+      /** Send id for a track send target. */
+      readonly sendId: string;
+      /** Breakpoints in PPQ order. */
+      readonly points: ReadonlyArray<Readonly<ProjectAutomationPoint>>;
+    }
+  | {
+      /** Id of the track that owns the lane. */
+      readonly trackId: number;
+      /** Stable lane id allocated by the project. */
+      readonly laneId: number;
+      /** Target kind token published by the library. */
+      readonly targetKind: 'trackInsertParam';
+      /** Zero-based strip insert position. */
+      readonly insertIndex: number;
+      /** Processor catalog id for an insert target. */
+      readonly processor: string;
+      /** Processor parameter name for an insert target. */
+      readonly paramName: string;
+      /** Breakpoints in PPQ order. */
+      readonly points: ReadonlyArray<Readonly<ProjectAutomationPoint>>;
+    };
 
 /** Mode of a {@link ProjectKeySegment}. */
 export type ProjectKeyMode =
@@ -887,6 +1101,16 @@ export interface ProjectChordSymbol {
   romanNumeral?: string;
   /** Marks a modulation boundary. Default false. */
   modulationBoundary?: boolean;
+}
+
+/** One labeled project section supplied to {@link Project.annotateSections}. */
+export interface ProjectSection {
+  /** Section start in PPQ. */
+  startPpq: number;
+  /** Section end in PPQ, strictly after `startPpq`. */
+  endPpq: number;
+  /** Nonblank UTF-8 label. */
+  label: string;
 }
 
 /** Descriptor for {@link Project.setAssistSidecar}. */

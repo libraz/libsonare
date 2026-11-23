@@ -1,4 +1,4 @@
-import { withEntry } from './internal/entry.js';
+import { refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
@@ -329,6 +329,10 @@ export function fourierTempogram(...args: unknown[]): Matrix2D {
   return withEntry('fourierTempogram', () => {
     const r = requestOnly<FourierTempogramRequest>('fourierTempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
+    const center = r.center ?? true;
+    if (typeof center !== 'boolean') {
+      throw refuseType('center must be a boolean');
+    }
     const sampleRate = r.sampleRate ?? 22050;
     assertSampleRate(sampleRate);
     assertFiniteSamples(r.onsetEnvelope, true, 'onsetEnvelope');
@@ -337,7 +341,7 @@ export function fourierTempogram(...args: unknown[]): Matrix2D {
       sampleRate,
       r.hopLength ?? 512,
       r.winLength ?? 384,
-      r.center ?? true,
+      center,
       true,
     );
     return toMatrix2D(out.data, out.nBins, out.nFrames);

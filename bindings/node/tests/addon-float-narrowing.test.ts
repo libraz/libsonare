@@ -803,22 +803,13 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     name: 'analyzeBpm bpmMin',
     site: 'sonare_wrap_analysis.cpp AnalyzeBpm bpmMin',
     control: [60, 130],
-    call: (v) => JSON.stringify(native.analyzeBpm(PULSED, SAMPLE_RATE, v, 200, 120, 2048, 512, 3)),
+    call: (v) => JSON.stringify(native.analyzeBpm(PULSED, SAMPLE_RATE, v, 200, 2048, 512, 3)),
   },
   {
     name: 'analyzeBpm bpmMax',
     site: 'sonare_wrap_analysis.cpp AnalyzeBpm bpmMax',
     control: [200, 100],
-    call: (v) => JSON.stringify(native.analyzeBpm(PULSED, SAMPLE_RATE, 60, v, 120, 2048, 512, 3)),
-  },
-  {
-    name: 'analyzeBpm startBpm',
-    site: 'sonare_wrap_analysis.cpp AnalyzeBpm startBpm',
-    // The seed only steers the beat tracker; a tempo it cannot back is reported as not measured.
-    control: [90, 150],
-    controlUnobservable: true,
-    call: (v) =>
-      JSON.stringify(native.analyzeBpm(SHORT_TONE, SAMPLE_RATE, 60, 200, v, 2048, 512, 3)),
+    call: (v) => JSON.stringify(native.analyzeBpm(PULSED, SAMPLE_RATE, 60, v, 2048, 512, 3)),
   },
   {
     name: 'analyzeRhythm startBpm',

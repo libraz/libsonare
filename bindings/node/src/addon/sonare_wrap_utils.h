@@ -73,16 +73,19 @@ sonare::ErrorCode CodeFromCError(SonareError err);
 /// This is the single point a C code or SonareException becomes a JS error, so
 /// every Throw* helper below inherits the rule.
 /// A shape refusal (@ref IsShapeRefusal) under INVALID_PARAMETER is a TypeError instead; this
-/// overload is for a binding-composed message, which is never one.
-Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message);
+/// overload is for a binding-composed message, which is never one. @p reason is captured by the
+/// caller from the same C error record or exception as @p err.
+Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message,
+                            const char* reason = nullptr);
 
 /// @brief MakeSonareError with the refusal's shape stated by the caller: @ref IsShapeRefusal for a
 ///        caught exception, @ref LastRefusalIsShape for a message read from the last C-ABI error.
 Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message,
-                            bool shape_refusal);
+                            bool shape_refusal, const char* reason = nullptr);
 
-/// @brief Throw MakeSonareError(@p err, ...) unless an exception is already pending.
-///        The detail message is @p prefix + the thread-local / generic message.
+/// @brief Translate the just-failed C-ABI call through MakeSonareError.
+///        The detail and reason are read from that call's last-error record. Binding guards use
+///        ThrowSonareErrorMessage instead, so they never read or inherit thread-local reasons.
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "");
 
 /// @brief ThrowSonareError for an entry whose JS object flattens the C struct parameter @p c_root,
@@ -134,7 +137,7 @@ void MarkPendingForeign(Napi::Env env);
 /// synchronous path.
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal,
                          const std::optional<sonare::SonareParameterRefusal>& shown,
-                         const std::string& c_entry);
+                         const std::string& c_entry, const char* reason = nullptr);
 
 /// @brief Whether the calling thread's last C-ABI failure was a shape refusal; an async worker
 ///        records it on its own thread beside the code.
@@ -268,8 +271,8 @@ inline void ThrowIfErrorFlattening(Napi::Env env, SonareError err, const char* c
   if (err != SONARE_OK) ThrowSonareErrorFlattening(env, err, c_root);
 }
 
-/// @brief ThrowIfError's audio-thread counterpart: reports @p err from the code
-///        alone, never from the thread-local detail message.
+/// @brief ThrowIfError's audio-thread counterpart: reports @p err and an optional caller-supplied
+///        reason, never from the thread-local detail message.
 ///
 /// Audio-thread entry points — the ones carrying SONARE_C_RT_API_ENTRY, i.e. the
 /// engine block-render calls and the realtime voice changer's process / latency
@@ -281,10 +284,12 @@ inline void ThrowIfErrorFlattening(Napi::Env env, SonareError err, const char* c
 /// both wrong and intermittent, since it follows the call history rather than
 /// the failure. Every addon call into that set must use this instead, which
 /// mirrors the Python binding's _check_realtime.
-inline void ThrowIfRealtimeError(Napi::Env env, SonareError err) {
+inline void ThrowIfRealtimeError(Napi::Env env, SonareError err,
+                                 const char* invalid_state_reason = nullptr) {
   if (env.IsExceptionPending()) return;
   if (err != SONARE_OK) {
-    ThrowSonareErrorMessage(env, err, sonare_error_message(err));
+    const char* reason = err == SONARE_ERROR_INVALID_STATE ? invalid_state_reason : nullptr;
+    MakeSonareError(env, err, sonare_error_message(err), reason).ThrowAsJavaScriptException();
   }
 }
 

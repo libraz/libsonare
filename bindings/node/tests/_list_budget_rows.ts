@@ -195,7 +195,9 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
     withProject(api, (p) => p.addLoopRecordingTakes({ audio: l } as never)),
   ),
   row('Project.editAutomationLane', 'points', (api, l) =>
-    withProject(api, (p) => p.editAutomationLane(1, 1, { targetParamId: 1, points: l } as never)),
+    withProject(api, (p) =>
+      p.editAutomationLane(1, 1, { targetKind: 'opaque', targetParamId: 1, points: l } as never),
+    ),
   ),
   row('Project.bakeMidiFx', 'config', (api, l) =>
     withProject(api, (p) => p.bakeMidiFx({ clipId: 1, config: { chordIntervals: l } } as never)),
@@ -226,9 +228,61 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
   row('Audio.analyze', 'meterCandidateNumerators', (api, l) =>
     api.Audio.fromBuffer(X, SR).analyze({ meterCandidateNumerators: l } as never),
   ),
-  row('estimateMeter', 'beats', (api, l) => api.estimateMeter({ beats: l } as never)),
+  row('estimateMeter', 'observations.accent', (api, l) =>
+    api.estimateMeter({
+      observations: {
+        accent: l,
+        hasAttack: [],
+        lowFrequencyEnergy: [],
+        subdivisionAccent: [],
+        chordChange: [],
+      },
+    } as never),
+  ),
+  row('estimateMeter', 'observations.hasAttack', (api, l) =>
+    api.estimateMeter({
+      observations: {
+        accent: [1],
+        hasAttack: l,
+        lowFrequencyEnergy: [],
+        subdivisionAccent: [],
+        chordChange: [],
+      },
+    } as never),
+  ),
+  row('estimateMeter', 'observations.lowFrequencyEnergy', (api, l) =>
+    api.estimateMeter({
+      observations: {
+        accent: [1],
+        hasAttack: [],
+        lowFrequencyEnergy: l,
+        subdivisionAccent: [],
+        chordChange: [],
+      },
+    } as never),
+  ),
+  row('estimateMeter', 'observations.subdivisionAccent', (api, l) =>
+    api.estimateMeter({
+      observations: {
+        accent: [1],
+        hasAttack: [],
+        lowFrequencyEnergy: [],
+        subdivisionAccent: l,
+        chordChange: [],
+      },
+    } as never),
+  ),
   row('estimateMeter', 'candidateNumerators', (api, l) =>
-    api.estimateMeter({ beats: [], candidateNumerators: l } as never),
+    api.estimateMeter({
+      observations: {
+        accent: [1],
+        hasAttack: [],
+        lowFrequencyEnergy: [],
+        subdivisionAccent: [],
+        chordChange: [],
+      },
+      candidateNumerators: l,
+    } as never),
   ),
   row('synthesizeRir', 'bandAbsorption', (api, l) =>
     api.synthesizeRir({ sampleRate: SR, bandAbsorption: l } as never),

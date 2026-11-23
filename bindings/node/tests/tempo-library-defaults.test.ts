@@ -37,10 +37,8 @@ describe('tempo bounds default in the library', () => {
     );
   });
 
-  it('analyzeBpm and analyzeRhythm fill an omitted bound and start tempo from the library', () => {
-    expect(analyzeBpm(x, SR)).toEqual(
-      analyzeBpm(x, SR, { bpmMin: 60, bpmMax: 200, startBpm: 120 }),
-    );
+  it('analyzeBpm fills omitted bounds and analyzeRhythm starts tempo from the library', () => {
+    expect(analyzeBpm(x, SR)).toEqual(analyzeBpm(x, SR, { bpmMin: 60, bpmMax: 200 }));
     expect(analyzeRhythm(x, SR)).toEqual(
       analyzeRhythm(x, SR, { bpmMin: 60, bpmMax: 200, startBpm: 120 }),
     );

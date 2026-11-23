@@ -14,7 +14,9 @@ import type {
   PartRigMode,
   PartRigRequest,
   ProjectAutomationLaneDesc,
+  ProjectAutomationLaneEditDesc,
   ProjectAutomationPoint,
+  ProjectAutomationTargetKind,
   SendTiming,
   SynthPatch,
 } from './types.js';
@@ -107,17 +109,19 @@ export function automationPointValue(
   return { ...point, curveToNext };
 }
 
-export type NativeAutomationLaneDesc = Omit<ProjectAutomationLaneDesc, 'targetKind' | 'points'> & {
-  targetKind?: 0 | 1 | 2;
+export interface NativeAutomationLaneDesc {
+  targetKind?: ProjectAutomationTargetKind;
+  targetParamId?: number;
+  sendId?: string;
+  insertIndex?: number;
+  processor?: string;
+  paramName?: string;
   points: NativeAutomationPoint[];
-};
+}
 
 export function projectAutomationLaneValue(
-  desc: Omit<ProjectAutomationLaneDesc, 'targetKind'> & { targetKind?: 0 | 1 | 2 },
+  desc: ProjectAutomationLaneDesc | ProjectAutomationLaneEditDesc,
 ): NativeAutomationLaneDesc {
-  if (desc.targetParamId === 0) {
-    throw refuse('project automation lane targetParamId must be non-zero');
-  }
   const points: unknown = isAbsent(desc.points) ? [] : desc.points;
   if (!Array.isArray(points)) {
     throw refuseType('points must be an array');

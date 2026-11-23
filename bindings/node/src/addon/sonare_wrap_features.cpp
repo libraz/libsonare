@@ -38,24 +38,34 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   if (!ReadStftFrameArgs(env, info, &args)) return env.Undefined();
   bool db = false;
   if (!OptionalBoolArg(env, info, 4, "db", false, &db)) return env.Undefined();
+  bool phase = false;
+  if (!OptionalBoolArg(env, info, 5, "phase", false, &phase)) return env.Undefined();
 
-  sonare::validate_offline_audio_input("samples", data, length, args.sample_rate);
-  sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
-  sonare::StftConfig config;
-  config.n_fft = args.frame_length;
-  config.hop_length = args.hop_length;
-
-  sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config);
+  SonareStftOptions options{};
+  sonare_stft_options_init(&options);
+  options.db = db ? 1 : 0;
+  options.phase = phase ? 1 : 0;
+  SonareStftResult result{};
+  std::unique_ptr<SonareStftResult, decltype(&sonare_free_stft_result)> guard(
+      &result, sonare_free_stft_result);
+  const SonareError err = sonare_stft(data, length, args.sample_rate, args.frame_length,
+                                      args.hop_length, &options, &result);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("nBins", Napi::Number::New(env, spec.n_bins()));
-  out.Set("nFrames", Napi::Number::New(env, spec.n_frames()));
-  out.Set("nFft", Napi::Number::New(env, spec.n_fft()));
-  out.Set("hopLength", Napi::Number::New(env, spec.hop_length()));
-  out.Set("sampleRate", Napi::Number::New(env, spec.sample_rate()));
-  out.Set("magnitude", Float32ArrayFrom(env, spec.magnitude()));
-  out.Set("power", Float32ArrayFrom(env, spec.power()));
-  if (db) out.Set("db", Float32ArrayFrom(env, spec.to_db()));
+  const size_t count = static_cast<size_t>(result.n_bins) * static_cast<size_t>(result.n_frames);
+  out.Set("nBins", Napi::Number::New(env, result.n_bins));
+  out.Set("nFrames", Napi::Number::New(env, result.n_frames));
+  out.Set("nFft", Napi::Number::New(env, result.n_fft));
+  out.Set("hopLength", Napi::Number::New(env, result.hop_length));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("magnitude", Float32ArrayFrom(env, result.magnitude, count));
+  out.Set("power", Float32ArrayFrom(env, result.power, count));
+  if (db) out.Set("db", Float32ArrayFrom(env, result.db, count));
+  if (phase) out.Set("phase", Float32ArrayFrom(env, result.phase, count));
 
   return out;
   SONARE_NODE_CATCH(env)

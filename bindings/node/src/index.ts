@@ -1,6 +1,7 @@
 export * from './analysis.js';
 export * from './audio.js';
 export * from './audio_channels.js';
+export * from './audio_codec.js';
 export {
   abiVersion,
   capabilities,
@@ -21,6 +22,7 @@ export * from './effects_polyphony.js';
 export * from './errors.js';
 export * from './feature_resample.js';
 export * from './features.js';
+export { LiveSession } from './live_session.js';
 export * from './metering.js';
 export * from './midi_messages.js';
 export * from './mixer.js';
@@ -66,6 +68,7 @@ export type {
   AnalyzeTimbreOptions,
   Articulation,
   AssignNoteTargetsResult,
+  AudioFormatCapabilities,
   AutoGainOptions,
   AutomationCurve,
   AutoTuneKey,
@@ -191,6 +194,10 @@ export type {
   KeyDetectionOptions,
   KeyMode,
   KeyProfile,
+  LiveAudioDevice,
+  LiveMidiDevice,
+  LiveSessionConfig,
+  LiveSessionStatus,
   LoudnessMatchResult,
   LoudnessMatchStereoResult,
   LufsResult,
@@ -370,11 +377,15 @@ export type {
   PolyphonicRenderOptions,
   ProgressCallback,
   ProjectAnalyzeTempoRequest,
+  ProjectArticulationBinding,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
   ProjectAudioSourceMetadataRequest,
   ProjectAutomationCurve,
+  ProjectAutomationLane,
   ProjectAutomationLaneDesc,
+  ProjectAutomationLaneEditDesc,
+  ProjectAutomationLanePoints,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
   ProjectAutoTempoOptions,
@@ -393,10 +404,14 @@ export type {
   ProjectClipTakesOptions,
   ProjectCompileOptions,
   ProjectCompileResult,
+  ProjectControllerProfileBinding,
+  ProjectDestinationInstrumentBinding,
+  ProjectDestinationInstrumentOptions,
   ProjectDiagnostic,
   ProjectDiagnosticCode,
   ProjectDiagnosticSeverity,
   ProjectFadeCurve,
+  ProjectInstrument,
   ProjectInstrumentBinding,
   ProjectKeyMode,
   ProjectKeySegment,
@@ -418,7 +433,9 @@ export type {
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
   ProjectOverlapPolicy,
+  ProjectPosition,
   ProjectProgramOptions,
+  ProjectSection,
   ProjectSource,
   ProjectSourceAudioRequest,
   ProjectSourceKind,
@@ -516,6 +533,8 @@ export type {
   SynthParamCondition,
   SynthParamInfo,
   SynthPatch,
+  SynthPatchEnumParamInfo,
+  SynthPatchParamInfo,
   SynthRetrigger,
   SynthWaveform,
   SystemInfo,

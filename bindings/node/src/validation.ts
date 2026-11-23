@@ -195,7 +195,12 @@ const MAX_AUDIO_SAMPLE_RATE = 384000;
  * included), stated as the interval either way.
  */
 export function assertSampleRate(sampleRate: unknown, argName = 'sampleRate'): void {
-  assertBoundedInteger(sampleRate, argName, MIN_AUDIO_SAMPLE_RATE, MAX_AUDIO_SAMPLE_RATE);
+  assertIntegerType(sampleRate, argName);
+  assertSampleRateRange(sampleRate, argName);
+}
+
+function assertSampleRateRange(sampleRate: number, argName = 'sampleRate'): void {
+  assertIntegerRange(sampleRate, argName, MIN_AUDIO_SAMPLE_RATE, MAX_AUDIO_SAMPLE_RATE);
 }
 
 /**
@@ -294,9 +299,17 @@ export function assertBoundedInteger(
   min: number,
   max: number,
 ): asserts value is number {
+  assertIntegerType(value, argName);
+  assertIntegerRange(value, argName, min, max);
+}
+
+function assertIntegerType(value: unknown, argName: string): asserts value is number {
   if (typeof value !== 'number') {
     throw refuseType(`${argName} must be an integer`);
   }
+}
+
+function assertIntegerRange(value: number, argName: string, min: number, max: number): void {
   if (!Number.isInteger(value) || value < min || value > max) {
     throw refuse(`${argName} must be an integer in [${min}, ${max}]`);
   }
@@ -483,6 +496,19 @@ export function assertNonNegativeSafeInteger(value: number, argName: string): vo
   assertBoundedInteger(value, argName, 0, Number.MAX_SAFE_INTEGER);
 }
 
+/** A whole safe JS integer, with fractions refused as an argument shape. */
+export function assertSafeInteger(value: unknown, argName: string): asserts value is number {
+  if (typeof value !== 'number') {
+    throw refuseType(`${argName} must be a safe integer`);
+  }
+  if (!Number.isFinite(value) || !Number.isSafeInteger(value)) {
+    if (Number.isFinite(value) && !Number.isInteger(value)) {
+      throw refuseType(`${argName} must be a safe integer`);
+    }
+    throw refuse(`${argName} must be a safe integer`);
+  }
+}
+
 /**
  * {@link assertInt32}'s 64-bit sibling, for a field the addon reads as `int64`.
  *
@@ -503,7 +529,7 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
   events.forEach((event: unknown, index) => {
     const prefix = `events[${index}]`;
     if (event === null || typeof event !== 'object' || Array.isArray(event)) {
-      throw refuseType(`${prefix} must be a { ppq, word0, word1? } object`);
+      throw refuseType(`${prefix} must be a { ppq, word0, word1?, sysex? } object`);
     }
     const record = event as ProjectMidiEvent;
     if (typeof record.ppq !== 'number') {
@@ -515,6 +541,10 @@ export function assertProjectMidiEvents(events: ReadonlyArray<ProjectMidiEvent>)
     assertU32(record.word0, `${prefix}.word0`);
     if (record.word1 !== undefined) {
       assertU32(record.word1, `${prefix}.word1`);
+    }
+    const sysex = (event as { sysex?: unknown }).sysex;
+    if (sysex !== undefined && sysex !== null && !(sysex instanceof Uint8Array)) {
+      throw refuseType(`${prefix}.sysex must be a Uint8Array`);
     }
   });
 }
@@ -823,12 +853,11 @@ export function sampleOneShot<R extends SampleRequest>(
   args: readonly unknown[],
 ): R {
   const first = args[0];
-  if (first instanceof Float32Array) {
+  let request: Record<string, unknown>;
+  if (first instanceof Float32Array || !plainObject(first)) {
     if (args.length > 3) {
       throw refuseType(`expected (samples, sampleRate, options?)`);
     }
-    const sampleRate = args[1];
-    assertSampleRate(sampleRate);
     const options = args[2] ?? {};
     if (!plainObject(options)) {
       throw refuseType(`options must be an object`);
@@ -839,16 +868,23 @@ export function sampleOneShot<R extends SampleRequest>(
       }
     }
     optionsBag(requestName, options);
-    return { ...options, samples: first, sampleRate } as unknown as R;
-  }
-  if (plainObject(first)) {
+    request = { ...options, samples: first, sampleRate: args[1] };
+  } else {
     assertNoExtraArguments(args, 1);
     assertKnownRequestKeys(requestName, first);
-    assertSampleRate(first.sampleRate);
-    return first as unknown as R;
+    request = first;
   }
-  assertAudioSamples(first, {}, 'samples');
-  throw refuseType(`expected a request object or a Float32Array`);
+  // Percussive entries also accept plain arrays and convert them after normalization.
+  const samples = request.samples;
+  const acceptsSampleArray =
+    requestName === 'extractPercussiveEvents' || requestName === 'renderPercussiveEvents';
+  if (!acceptsSampleArray || !Array.isArray(samples)) {
+    assertFloat32Array(samples, 'samples');
+  }
+  const sampleRate = request.sampleRate;
+  assertIntegerType(sampleRate, 'sampleRate');
+  assertSampleRateRange(sampleRate);
+  return request as unknown as R;
 }
 
 /**

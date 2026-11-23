@@ -961,6 +961,7 @@ describe('RealtimeEngine native binding', () => {
     // undeclared either.
     const declared: Record<keyof MasteringProcessorCatalogEntry, true> = {
       id: true,
+      description: true,
       kind: true,
       forms: true,
       realtimeInsertable: true,

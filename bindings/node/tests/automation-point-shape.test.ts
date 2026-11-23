@@ -48,12 +48,16 @@ describe('automation breakpoint conversion', () => {
       const id = project.addAutomationLane(track, { targetParamId: 7 });
       const lanePoints = () =>
         JSON.parse(project.toJson()).tracks[0].automationLanes.find(
-          (lane: { targetParamId: number }) => lane.targetParamId === id,
+          (lane: { targetParamId: number }) => lane.targetParamId === 7,
         ).points;
       expect(lanePoints()).toEqual([]);
-      project.editAutomationLane(track, id, { targetParamId: id, points: [{ ppq: 0, value: 1 }] });
+      project.editAutomationLane(track, id, {
+        targetKind: 'opaque',
+        targetParamId: 7,
+        points: [{ ppq: 0, value: 1 }],
+      });
       expect(lanePoints()).toHaveLength(1);
-      project.editAutomationLane(track, id, { targetParamId: id });
+      project.editAutomationLane(track, id, {});
       expect(lanePoints()).toEqual([]);
     } finally {
       project.destroy();

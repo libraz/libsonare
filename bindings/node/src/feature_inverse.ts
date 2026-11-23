@@ -2,6 +2,7 @@ import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions, resolveResynthesisHop } from './internal/fft_options.js';
+import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -11,7 +12,9 @@ import {
   assertFiniteScalar,
   assertFloat32Array,
   assertFloatFields,
+  assertInt32,
   assertPositiveFloatValue,
+  assertSafeInteger,
   assertSampleRate,
   requestOnly,
   sampleOneShot,
@@ -77,6 +80,20 @@ export interface GriffinLimRequest {
   nIter?: number;
   /** Fast Griffin-Lim momentum. Default 0.99. */
   momentum?: number;
+}
+
+/** Request for {@link istft}. */
+export interface IstftRequest {
+  /** STFT magnitude matrix: rows = bins, cols = frames. */
+  magnitude: Matrix2D;
+  /** STFT phase matrix in radians, with the same shape as `magnitude`. */
+  phase: Matrix2D;
+  /** FFT size; omitted, it is inferred as `(magnitude.rows - 1) * 2`. */
+  nFft?: number;
+  /** Positive Hann-COLA hop in samples. Defaults to `nFft / 4`, rounded down and at least 1. */
+  hopLength?: number;
+  /** Output length in samples, up to 500,000,000. Omitted uses natural length; explicit 0 is refused. */
+  lengthSamples?: number;
 }
 
 /** Request for {@link mfccToMel}. */
@@ -315,6 +332,49 @@ export function griffinLim(...args: unknown[]): Float32Array {
       nIter,
       r.momentum ?? 0.99,
     );
+  });
+}
+
+/** Reconstruct centered audio from an STFT magnitude and phase. */
+export function istft(request: IstftRequest): Float32Array;
+export function istft(...args: unknown[]): Float32Array {
+  return withEntry('istft', () => {
+    const r = requestOnly<IstftRequest>('istft', args);
+    if (isAbsent(r.magnitude)) {
+      throw refuseType('magnitude is required');
+    }
+    if (isAbsent(r.phase)) {
+      throw refuseType('phase is required');
+    }
+    assertMatrix2D(r.magnitude, 'magnitude', false);
+    assertMatrix2D(r.phase, 'phase', false);
+    if (r.magnitude.rows !== r.phase.rows || r.magnitude.cols !== r.phase.cols) {
+      throw refuse('magnitude and phase must have the same shape');
+    }
+
+    const inferredNFft = (r.magnitude.rows - 1) * 2;
+    const nFft = isAbsent(r.nFft) ? inferredNFft : r.nFft;
+    assertInt32(nFft, 'nFft');
+    const hopLength = isAbsent(r.hopLength) ? Math.max(1, Math.floor(nFft / 4)) : r.hopLength;
+    assertSafeInteger(hopLength, 'hopLength');
+    if (!isAbsent(r.lengthSamples)) {
+      assertSafeInteger(r.lengthSamples, 'lengthSamples');
+      if (r.lengthSamples === 0) {
+        throw refuse('lengthSamples must not be 0; omit it for the natural length');
+      }
+    }
+
+    return addon.istft(
+      r.magnitude.data,
+      r.magnitude.rows,
+      r.magnitude.cols,
+      r.phase.data,
+      r.phase.rows,
+      r.phase.cols,
+      nFft,
+      hopLength,
+      isAbsent(r.lengthSamples) ? undefined : r.lengthSamples,
+    ) as Float32Array;
   });
 }
 

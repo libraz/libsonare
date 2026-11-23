@@ -192,10 +192,19 @@ describe('mixer strips', () => {
 
   it('stripMeter takes a tap token and refuses a number', () => {
     withPreset((mixer) => {
-      // Nothing has been processed, so no tap has measured a peak.
-      expect(mixer.stripMeter('vocal').peakDbL).toBeUndefined();
-      expect(mixer.stripMeter('vocal', 'preFader').peakDbL).toBeUndefined();
-      expect(mixer.stripMeter('vocal', 'postFader').peakDbL).toBeUndefined();
+      // Nothing has been processed, so the per-plane arrays are empty.
+      for (const meter of [
+        mixer.stripMeter('vocal'),
+        mixer.stripMeter('vocal', 'preFader'),
+        mixer.stripMeter('vocal', 'postFader'),
+      ]) {
+        expect(meter.numChannels).toBe(0);
+        expect(meter.peakDb).toEqual([]);
+        expect(meter.rmsDb).toEqual([]);
+        expect(meter.truePeakDbtp).toEqual([]);
+        expect(meter).not.toHaveProperty('peakDbL');
+        expect(meter).not.toHaveProperty('truePeakDbtpL');
+      }
       expect(thrown(() => mixer.stripMeter('vocal', 1 as never))).toBeInstanceOf(TypeError);
       expect(thrown(() => mixer.stripMeter('vocal', 'middle' as never))).toBeInstanceOf(RangeError);
     });

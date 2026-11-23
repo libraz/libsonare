@@ -373,6 +373,29 @@ describe('a Project request method refuses an unknown key', () => {
   });
 });
 
+describe('automation lane descriptions refuse unknown fields', () => {
+  it.each([
+    ['addAutomationLane', 'Project.addAutomationLane'],
+    ['editAutomationLane', 'Project.editAutomationLane'],
+  ] as const)('%s names an undeclared description field', (method, entry) => {
+    const project = new sonare.Project();
+    const desc = { targetParamId: 1, points: [], unexpected: true };
+    try {
+      expect(() =>
+        method === 'addAutomationLane'
+          ? project.addAutomationLane(1, desc as never)
+          : project.editAutomationLane(1, 1, desc as never),
+      ).toThrow(
+        new TypeError(
+          `${entry}: unknown key unexpected (expected insertIndex, paramName, points, processor, sendId, targetKind, targetParamId)`,
+        ),
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+});
+
 describe('record fields inside a request refuse an undeclared key by its path', () => {
   const samples = new Float32Array(22050).fill(0.1);
   const platform = { name: 'Unit Test', targetLufs: -14, ceilingDbtp: -1 };

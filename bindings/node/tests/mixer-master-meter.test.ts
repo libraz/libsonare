@@ -40,13 +40,17 @@ const SCENE = fixture.cases[0].scene;
 
 function expectReading(actual: MixMeterSnapshot, expected: Reading): void {
   const dB = {
-    peakDbL: actual.peakDbL,
-    peakDbR: actual.peakDbR,
-    rmsDbL: actual.rmsDbL,
-    rmsDbR: actual.rmsDbR,
-    truePeakDbL: actual.truePeakDbtpL,
-    truePeakDbR: actual.truePeakDbtpR,
+    peakDbL: actual.peakDb[0],
+    peakDbR: actual.peakDb[1],
+    rmsDbL: actual.rmsDb[0],
+    rmsDbR: actual.rmsDb[1],
+    truePeakDbL: actual.truePeakDbtp[0],
+    truePeakDbR: actual.truePeakDbtp[1],
   };
+  expect(actual.numChannels).toBe(2);
+  expect(actual.peakDb).toHaveLength(actual.numChannels);
+  expect(actual.rmsDb).toHaveLength(actual.numChannels);
+  expect(actual.truePeakDbtp).toHaveLength(actual.numChannels);
   for (const [field, value] of Object.entries(dB)) {
     expect(
       Math.abs(present(value, field) - expected[field as keyof Reading]),
@@ -138,7 +142,29 @@ describe('Mixer master meter', () => {
     const unmeasured = read({ enabled: true, measureLufs: false, measureTruePeak: false });
     expect('momentaryLufs' in unmeasured).toBe(false);
     expect('maxTruePeakDbtp' in unmeasured).toBe(false);
-    expect(unmeasured.peakDbL).toBeCloseTo(present(measured.peakDbL, 'peakDbL'), 3);
+    expect(unmeasured.peakDb[0]).toBeCloseTo(present(measured.peakDb[0], 'peakDb[0]'), 3);
+  });
+
+  it('keeps unmeasured channel planes undefined in arrays of the reported width', () => {
+    const mixer = Mixer.fromJson(SCENE, { sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      mixer.configureMeter({ enabled: true, measureTruePeak: false });
+      mixer.processStereo([new Float32Array(32).fill(0.5)], [new Float32Array(32)]);
+
+      const meter = mixer.meterSnapshot();
+      expect(meter.numChannels).toBe(2);
+      expect(meter.peakDb).toHaveLength(2);
+      expect(meter.rmsDb).toHaveLength(2);
+      expect(meter.truePeakDbtp).toHaveLength(2);
+      expect(meter.peakDb[0]).toBeGreaterThan(-10);
+      expect(meter.peakDb[1]).toBe(Number.NEGATIVE_INFINITY);
+      expect(meter.truePeakDbtp).toEqual([undefined, undefined]);
+      expect(
+        Object.values(meter).some((value) => typeof value === 'number' && Number.isNaN(value)),
+      ).toBe(false);
+    } finally {
+      mixer.destroy();
+    }
   });
 
   it('refuses a non-boolean measureLufs or measureTruePeak by name', () => {

@@ -118,6 +118,17 @@ describe('failure class follows the cause', () => {
     expect(isSonareError(caught)).toBe(true);
     expect((caught as SonareError).code).toBe(ErrorCode.InvalidState);
     expect((caught as SonareError).name).toBe('SonareError');
+    expect((caught as SonareError).reason).toBe('releasedHandle');
+    expect(Object.hasOwn(caught as object, 'reason')).toBe(true);
+  });
+
+  it('does not attach a reason to a refused caller argument', () => {
+    const caught = capture(() =>
+      analyze({ samples: sine(22050), sampleRate: 22050, hopLength: 0 }),
+    );
+    expect(caught).toBeInstanceOf(RangeError);
+    expect(caught).not.toBeInstanceOf(SonareError);
+    expect(Object.hasOwn(caught as object, 'reason')).toBe(false);
   });
 
   it('reports the same class for analyze and analyzeAsync on the same input', async () => {
@@ -171,6 +182,15 @@ describe('SonareError is a value class with brand-based instanceof', () => {
     expect(Object.getPrototypeOf(cloned)).toBe(Error.prototype);
     expect(cloned instanceof SonareError).toBe(true);
     expect(isSonareError(cloned)).toBe(true);
+  });
+
+  it('allows a newer reason token through structural narrowing', () => {
+    const future = Object.assign(new Error('future reason'), {
+      name: 'SonareError',
+      code: ErrorCode.InvalidState,
+      reason: 'futureReason',
+    });
+    expect(isSonareError(future)).toBe(true);
   });
 
   it('rejects a plain Error and a look-alike without a numeric code', () => {

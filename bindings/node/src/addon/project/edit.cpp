@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -134,46 +136,47 @@ bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
   return true;
 }
 
-// Reads a target kind given by name or ordinal; the edit-only "unchanged" value is never
-// spelled by a caller, so it is refused here like any other ordinal outside the closed set.
+std::vector<std::string> AutomationTargetKindTokens(Napi::Env env) {
+  const char* joined = sonare_automation_target_kind_names();
+  if (joined == nullptr) {
+    sonare_node::ThrowLastSonareError(env, "", SONARE_ERROR_UNKNOWN);
+    return {};
+  }
+  const std::string_view names(joined);
+  std::vector<std::string> tokens;
+  size_t start = 0;
+  for (;;) {
+    const size_t end = names.find('\n', start);
+    const auto token = names.substr(start, end == std::string_view::npos ? end : end - start);
+    if (token.empty()) {
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "automation target names contain an empty token");
+      return {};
+    }
+    tokens.emplace_back(token);
+    if (end == std::string_view::npos) return tokens;
+    start = end + 1;
+  }
+}
+
+// The C token table excludes the edit-only "unchanged" value.
 bool ParseAutomationTargetKind(Napi::Env env, const Napi::Value& value,
                                SonareAutomationTargetKind* out) {
   if (out == nullptr) return false;
-  if (value.IsString()) {
-    const std::string name = sonare_node::node_narrow_string(env, value, "targetKind");
-    if (name == "opaque") {
-      *out = SONARE_AUTOMATION_TARGET_OPAQUE;
-      return true;
-    }
-    if (name == "track-fader-db") {
-      *out = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
-      return true;
-    }
-    if (name == "track-pan") {
-      *out = SONARE_AUTOMATION_TARGET_TRACK_PAN;
-      return true;
-    }
-    Napi::RangeError::New(env, "Invalid automation target kind: " + name)
+  if (!value.IsString()) {
+    Napi::TypeError::New(env, "targetKind must be a string").ThrowAsJavaScriptException();
+    return false;
+  }
+  const std::string name = sonare_node::node_narrow_string(env, value, "targetKind");
+  const auto tokens = AutomationTargetKindTokens(env);
+  if (env.IsExceptionPending()) return false;
+  const auto token = std::find(tokens.begin(), tokens.end(), name);
+  if (token == tokens.end()) {
+    Napi::RangeError::New(env, "targetKind is not a declared token: " + name)
         .ThrowAsJavaScriptException();
     return false;
   }
-  if (!value.IsNumber()) {
-    Napi::TypeError::New(env, "automation target kind must be a string or number")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  // The int the ordinal has to be is the shared reader's; which ints name a
-  // target kind is this field's.
-  int ordinal = 0;
-  if (!Int32Value(env, value, "automation target kind", &ordinal)) return false;
-  constexpr int kTargetKindCount = SONARE_AUTOMATION_TARGET_TRACK_PAN + 1;
-  if (ordinal < SONARE_AUTOMATION_TARGET_OPAQUE || ordinal >= kTargetKindCount) {
-    Napi::RangeError::New(env, "automation target kind must be a name or an ordinal in [0, " +
-                                   std::to_string(kTargetKindCount) + ")")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = static_cast<SonareAutomationTargetKind>(ordinal);
+  *out = static_cast<SonareAutomationTargetKind>(token - tokens.begin());
   return true;
 }
 
@@ -185,19 +188,63 @@ bool ReadAutomationTargetKind(Napi::Env env, const Napi::Object& obj,
   *out = absent_kind;
   const Napi::Value value = obj.Get("targetKind");
   if (env.IsExceptionPending()) return false;
-  if (value.IsUndefined()) return true;
+  if (value.IsUndefined() || value.IsNull()) return true;
   return ParseAutomationTargetKind(env, value, out);
 }
 
-// Fills a SonareAutomationLaneDesc from a JS object {targetParamId, points}.
+bool RejectAutomationIdentityField(Napi::Env env, const Napi::Object& obj, const char* field) {
+  const Napi::Value value = obj.Get(field);
+  if (env.IsExceptionPending()) return false;
+  if (value.IsUndefined() || value.IsNull()) return true;
+  Napi::RangeError::New(env, std::string(field) + " must be omitted for this targetKind")
+      .ThrowAsJavaScriptException();
+  return false;
+}
+
+bool CheckAutomationTargetIdentity(Napi::Env env, const Napi::Object& obj,
+                                   SonareAutomationTargetKind kind, bool editing) {
+  if (editing && kind == SONARE_AUTOMATION_TARGET_UNCHANGED) {
+    for (const char* field : {"targetParamId", "sendId", "insertIndex", "processor", "paramName"}) {
+      if (!RejectAutomationIdentityField(env, obj, field)) return false;
+    }
+    return true;
+  }
+  if (kind != SONARE_AUTOMATION_TARGET_OPAQUE &&
+      !RejectAutomationIdentityField(env, obj, "targetParamId")) {
+    return false;
+  }
+  return true;
+}
+
+// Fills a SonareAutomationLaneDesc from the caller's lane descriptor.
 // The breakpoints are stored in `points` (which must outlive the C call).
 bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
                             std::vector<SonareAutomationPoint>* points,
+                            std::vector<std::string>* identity_strings,
                             SonareAutomationLaneDesc* desc) {
   const Napi::Value target_param_id = obj.Get("targetParamId");
-  if (!RequiredDomainValue(env, target_param_id, "targetParamId",
+  if (env.IsExceptionPending()) return false;
+  if (!target_param_id.IsUndefined() && !target_param_id.IsNull() &&
+      !RequiredDomainValue(env, target_param_id, "targetParamId",
                            sonare_c_detail::kAutomationTargetParamIdDomain,
                            &desc->target_param_id)) {
+    return false;
+  }
+  const auto read_string = [&](const char* key, const char** out) {
+    const Napi::Value value = obj.Get(key);
+    if (env.IsExceptionPending()) return false;
+    if (value.IsUndefined() || value.IsNull()) return true;
+    identity_strings->push_back(sonare_node::node_narrow_string(env, value, key));
+    if (env.IsExceptionPending()) return false;
+    *out = identity_strings->back().c_str();
+    return true;
+  };
+  if (!read_string("sendId", &desc->send_id) || !read_string("processor", &desc->processor) ||
+      !read_string("paramName", &desc->param_name)) {
+    return false;
+  }
+  if (!sonare_node::Int32Property(env, obj, "insertIndex", SONARE_AUTOMATION_INSERT_INDEX_NONE,
+                                  &desc->insert_index)) {
     return false;
   }
   if (!ParseAutomationPoints(env, obj.Get("points"), points)) {
@@ -892,21 +939,26 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::vector<SonareAutomationPoint> points;
+  std::vector<std::string> identity_strings;
+  identity_strings.reserve(3);
   SonareAutomationLaneDesc desc{};
+  sonare_automation_lane_desc_init(&desc);
   const Napi::Object input = info[1].As<Napi::Object>();
-  if (!FillAutomationLaneDesc(env, input, &points, &desc)) {
-    return env.Undefined();  // exception already pending
-  }
-  if (env.IsExceptionPending()) return env.Undefined();
   if (!ReadAutomationTargetKind(env, input, SONARE_AUTOMATION_TARGET_OPAQUE, &desc.target_kind)) {
     return env.Undefined();  // exception already pending
   }
-  uint32_t out_target_param_id = 0;
-  ThrowIfErrorFlattening(
-      env, sonare_project_add_automation_lane(project_, track_id, &desc, &out_target_param_id),
-      "desc");
+  if (!CheckAutomationTargetIdentity(env, input, desc.target_kind, false)) {
+    return env.Undefined();  // exception already pending
+  }
+  if (!FillAutomationLaneDesc(env, input, &points, &identity_strings, &desc)) {
+    return env.Undefined();  // exception already pending
+  }
   if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_target_param_id));
+  uint32_t out_lane_id = 0;
+  ThrowIfErrorFlattening(
+      env, sonare_project_add_automation_lane(project_, track_id, &desc, &out_lane_id), "desc");
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out_lane_id));
   SONARE_NODE_CATCH(env)
 }
 
@@ -915,11 +967,9 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t track_id = 0;
-  uint32_t target_param_id = 0;
+  uint32_t lane_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
-      !sonare_node::OptionalDomainArg<uint32_t>(env, info, 1, "targetParamId", 0,
-                                                sonare_c_detail::kAutomationTargetParamIdDomain,
-                                                &target_param_id)) {
+      !OptionalUint32Arg(env, info, 1, "laneId", 0, &lane_id)) {
     return env.Undefined();
   }
   if (info.Length() < 3 || !info[2].IsObject()) {
@@ -927,18 +977,24 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::vector<SonareAutomationPoint> points;
+  std::vector<std::string> identity_strings;
+  identity_strings.reserve(3);
   SonareAutomationLaneDesc desc{};
+  sonare_automation_lane_desc_init(&desc);
   const Napi::Object input = info[2].As<Napi::Object>();
-  if (!FillAutomationLaneDesc(env, input, &points, &desc)) {
-    return env.Undefined();  // exception already pending
-  }
-  if (env.IsExceptionPending()) return env.Undefined();
   if (!ReadAutomationTargetKind(env, input, SONARE_AUTOMATION_TARGET_UNCHANGED,
                                 &desc.target_kind)) {
     return env.Undefined();  // exception already pending
   }
-  ThrowIfError(env,
-               sonare_project_edit_automation_lane(project_, track_id, target_param_id, &desc));
+  if (!CheckAutomationTargetIdentity(env, input, desc.target_kind, true)) {
+    return env.Undefined();  // exception already pending
+  }
+  if (!FillAutomationLaneDesc(env, input, &points, &identity_strings, &desc)) {
+    return env.Undefined();  // exception already pending
+  }
+  if (env.IsExceptionPending()) return env.Undefined();
+  ThrowIfErrorFlattening(
+      env, sonare_project_edit_automation_lane(project_, track_id, lane_id, &desc), "desc");
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -948,15 +1004,65 @@ Napi::Value ProjectWrap::RemoveAutomationLane(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t track_id = 0;
-  uint32_t target_param_id = 0;
+  uint32_t lane_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
-      !sonare_node::OptionalDomainArg<uint32_t>(env, info, 1, "targetParamId", 0,
-                                                sonare_c_detail::kAutomationTargetParamIdDomain,
-                                                &target_param_id)) {
+      !OptionalUint32Arg(env, info, 1, "laneId", 0, &lane_id)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_project_remove_automation_lane(project_, track_id, target_param_id));
+  ThrowIfError(env, sonare_project_remove_automation_lane(project_, track_id, lane_id));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::AutomationLanes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
+  SonareProjectAutomationLaneList lanes{};
+  struct ListGuard {
+    SonareProjectAutomationLaneList* value;
+    ~ListGuard() { sonare_free_project_automation_lane_list(value); }
+  } guard{&lanes};
+  ThrowIfError(env, sonare_project_automation_lanes(project_, &lanes));
+  if (env.IsExceptionPending()) return env.Undefined();
+  const auto target_kinds = AutomationTargetKindTokens(env);
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Array out = Napi::Array::New(env, lanes.count);
+  for (size_t i = 0; i < lanes.count; ++i) {
+    const SonareProjectAutomationLane& lane = lanes.items[i];
+    const SonareAutomationLaneDesc& desc = lane.desc;
+    Napi::Object row = Napi::Object::New(env);
+    row.Set("trackId", lane.track_id);
+    row.Set("laneId", lane.lane_id);
+    const int32_t ordinal = static_cast<int32_t>(desc.target_kind);
+    if (ordinal < 0 || static_cast<size_t>(ordinal) >= target_kinds.size()) {
+      sonare_node::ThrowSonareErrorMessage(
+          env, SONARE_ERROR_INVALID_FORMAT,
+          "unknown automation target kind ordinal: " + std::to_string(ordinal));
+      return env.Undefined();
+    }
+    row.Set("targetKind", target_kinds[static_cast<size_t>(ordinal)]);
+    if (desc.target_kind == SONARE_AUTOMATION_TARGET_OPAQUE) {
+      row.Set("targetParamId", desc.target_param_id);
+    }
+    if (desc.send_id != nullptr) row.Set("sendId", desc.send_id);
+    if (desc.insert_index != SONARE_AUTOMATION_INSERT_INDEX_NONE) {
+      row.Set("insertIndex", desc.insert_index);
+    }
+    if (desc.processor != nullptr) row.Set("processor", desc.processor);
+    if (desc.param_name != nullptr) row.Set("paramName", desc.param_name);
+    Napi::Array points = Napi::Array::New(env, desc.point_count);
+    for (size_t j = 0; j < desc.point_count; ++j) {
+      Napi::Object point = Napi::Object::New(env);
+      point.Set("ppq", desc.points[j].ppq);
+      point.Set("value", desc.points[j].value);
+      point.Set("curveToNext", desc.points[j].curve_to_next);
+      points.Set(static_cast<uint32_t>(j), point);
+    }
+    row.Set("points", points);
+    out.Set(static_cast<uint32_t>(i), row);
+  }
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

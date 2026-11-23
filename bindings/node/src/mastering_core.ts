@@ -1,4 +1,4 @@
-import { refuse, withEntry } from './internal/entry.js';
+import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson, type ResultFamily } from './internal/record_json.js';
@@ -151,10 +151,10 @@ export interface MasteringAbMatchLoudnessStereoRequest {
 export interface MasteringAnalyzePairRequest<A extends PairAnalysis = PairAnalysis> {
   /** Name of the pair analysis to run (see `masteringPairAnalysisNames`). */
   analysis: A;
-  /** The take being analyzed. */
-  source: Float32Array;
-  /** The take it is compared against. */
-  reference: Float32Array;
+  /** The take being analyzed: one mono buffer or one or two planar channels. */
+  source: Float32Array | readonly Float32Array[];
+  /** The take it is compared against: one mono buffer or one or two planar channels. */
+  reference: Float32Array | readonly Float32Array[];
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /**
@@ -321,6 +321,68 @@ function assertPairAudio(
   return referenceRate;
 }
 
+interface PairAnalysisChannels {
+  left: Float32Array;
+  right?: Float32Array;
+}
+
+function normalizePairAnalysisAudio(
+  value: unknown,
+  sampleRate: number,
+  options: object,
+  name: string,
+): PairAnalysisChannels {
+  if (value instanceof Float32Array) {
+    assertAudioInput(value, sampleRate, options, name);
+    return { left: value };
+  }
+  if (!Array.isArray(value)) {
+    throw refuseType(`${name} must be a Float32Array or an array of Float32Array`);
+  }
+  if (value.length === 0 || value.length > 2) {
+    throw refuse(`${name} must hold 1 or 2 channels`);
+  }
+  for (let index = 0; index < value.length; index++) {
+    assertAudioInput(value[index], sampleRate, options, `${name}[${index}]`);
+  }
+  const planes = value as Float32Array[];
+  const left = planes[0] as Float32Array;
+  if (planes.length === 1) {
+    return { left };
+  }
+  const right = planes[1] as Float32Array;
+  if (left.length !== right.length) {
+    throw refuse(`${name}[1] must have the same length as ${name}[0]`);
+  }
+  return { left, right };
+}
+
+function assertPairAnalysisAudio(
+  r: { sampleRate: number; referenceSampleRate?: number },
+  source: unknown,
+  reference: unknown,
+  options: object,
+): {
+  source: PairAnalysisChannels;
+  reference: PairAnalysisChannels;
+  referenceRate: number;
+} {
+  assertSampleRate(r.sampleRate);
+  const referenceRate = r.referenceSampleRate ?? r.sampleRate;
+  assertSampleRate(referenceRate, 'referenceSampleRate');
+  const sourceChannels = normalizePairAnalysisAudio(source, r.sampleRate, options, 'source');
+  const referenceChannels = normalizePairAnalysisAudio(
+    reference,
+    referenceRate,
+    options,
+    'reference',
+  );
+  if ((sourceChannels.right === undefined) !== (referenceChannels.right === undefined)) {
+    throw refuse(`source and reference must have the same number of channels`);
+  }
+  return { source: sourceChannels, reference: referenceChannels, referenceRate };
+}
+
 /**
  * Apply a two-input `match.*` processor. `source` and `reference` may have
  * independent lengths and rates: a reference at `referenceSampleRate` is
@@ -405,13 +467,13 @@ const ANALYSIS_FAMILIES: Readonly<Record<PairAnalysis | StereoAnalysis, ResultFa
 };
 
 /**
- * Analyze a `source` against a `reference` with a two-input analysis. The two
- * buffers may have independent lengths and rates; a delay estimate is in
+ * Analyze mono buffers or planar mono/stereo `source` and `reference` inputs.
+ * The takes may have independent lengths and rates; a delay estimate is in
  * samples at `sampleRate`. Takes a request object only; the result type follows
  * `analysis` through {@link PairAnalysisResultMap}.
  *
  * @throws {TypeError} when `sampleRate` or `analysis` is missing or a field has the wrong type
- * @throws {RangeError} on audio out of domain or an unknown analysis
+ * @throws {RangeError} on audio out of domain, channel mismatch or an unknown analysis
  */
 export function masteringAnalyzePair<A extends PairAnalysis>(
   request: MasteringAnalyzePairRequest<A>,
@@ -419,18 +481,28 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
   return withEntry('masteringAnalyzePair', () => {
     const r = requestOnly<MasteringAnalyzePairRequest>('masteringAnalyzePair', [request]);
     assertString(r.analysis, 'analysis');
-    const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
-    return parseRecordJson(
-      addon.masteringPairAnalyze(
-        r.analysis,
-        r.source,
-        r.reference,
-        r.sampleRate,
-        referenceRate,
-        r.params ?? {},
-      ),
-      ANALYSIS_FAMILIES[r.analysis],
-    ) as PairAnalysisResultMap[A];
+    const audio = assertPairAnalysisAudio(r, r.source, r.reference, r);
+    const json =
+      audio.source.right === undefined
+        ? addon.masteringPairAnalyze(
+            r.analysis,
+            audio.source.left,
+            audio.reference.left,
+            r.sampleRate,
+            audio.referenceRate,
+            r.params ?? {},
+          )
+        : addon.masteringPairAnalyzeStereo(
+            r.analysis,
+            audio.source.left,
+            audio.source.right,
+            audio.reference.left,
+            audio.reference.right as Float32Array,
+            r.sampleRate,
+            audio.referenceRate,
+            r.params ?? {},
+          );
+    return parseRecordJson(json, ANALYSIS_FAMILIES[r.analysis]) as PairAnalysisResultMap[A];
   });
 }
 

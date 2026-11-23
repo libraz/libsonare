@@ -234,9 +234,9 @@ export interface BiquadFilterRequest {
 export function biquadFilter(request: BiquadFilterRequest): Float32Array {
   return withEntry('biquadFilter', () => {
     const r = requestOnly<BiquadFilterRequest>('biquadFilter', [request]);
+    const zeroPhase = r.zeroPhase === undefined ? false : requireBoolean(r.zeroPhase, 'zeroPhase');
     assertAudioInput(r.samples, r.sampleRate, r);
     assertClosedToken(r.type, BIQUAD_FILTER_TYPES, 'type');
-    const zeroPhase = r.zeroPhase === undefined ? false : requireBoolean(r.zeroPhase, 'zeroPhase');
     return addon.biquadFilter(
       r.samples,
       r.sampleRate,
