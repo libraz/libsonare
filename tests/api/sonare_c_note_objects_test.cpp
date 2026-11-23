@@ -409,24 +409,20 @@ TEST_CASE("sonare_extract_notes returns an empty segmentation as NULL and zero c
   REQUIRE(out.amplitude_count == 0);
 }
 
-TEST_CASE("sonare_extract_notes reads voiced_prob only when voiced is NULL",
+TEST_CASE("sonare_extract_notes takes exactly one of voiced_prob and voiced",
           "[c_api][note_objects]") {
   const std::vector<float> samples = sine(440.0f, 0.5f, 6400);
   const std::vector<float> f0(40, 440.0f);
 
-  SECTION("the flags win over the probabilities") {
-    const std::vector<float> silent_prob(40, 0.0f);
+  SECTION("both arrays together are refused rather than one silently winning") {
+    const std::vector<float> confident_prob(40, 1.0f);
     const std::vector<int32_t> voiced(40, 1);
     SonareNoteObjectsResult out{};
-    REQUIRE(extract_at(samples, f0, silent_prob.data(), voiced.data(), nullptr, &out) == SONARE_OK);
-    REQUIRE(out.count == 1);
-    REQUIRE(out.notes[0].frame_end == 40);
-    sonare_free_note_objects_result(&out);
-
-    const std::vector<float> confident_prob(40, 1.0f);
-    const std::vector<int32_t> unvoiced(40, 0);
-    REQUIRE(extract_at(samples, f0, confident_prob.data(), unvoiced.data(), nullptr, &out) ==
-            SONARE_OK);
+    REQUIRE(extract_at(samples, f0, confident_prob.data(), voiced.data(), nullptr, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "voiced must be NULL when voiced_prob is not NULL");
+    REQUIRE(out.notes == nullptr);
     REQUIRE(out.count == 0);
   }
 
@@ -1366,9 +1362,12 @@ TEST_CASE("sonare_extract_notes rejects malformed arguments and clears its outpu
                                 voiced.data(), f0.size(), kFrameRate, &unreachable, out);
   });
 
-  // Positive control: the same call with nothing poisoned succeeds.
+  // Positive controls: the same calls with nothing poisoned succeed.
   SonareNoteObjectsResult ok{};
-  REQUIRE(extract_at(samples, f0, prob.data(), voiced.data(), nullptr, &ok) == SONARE_OK);
+  REQUIRE(extract_at(samples, f0, nullptr, voiced.data(), nullptr, &ok) == SONARE_OK);
+  REQUIRE(ok.count == 1);
+  sonare_free_note_objects_result(&ok);
+  REQUIRE(extract_at(samples, f0, prob.data(), nullptr, nullptr, &ok) == SONARE_OK);
   REQUIRE(ok.count == 1);
   sonare_free_note_objects_result(&ok);
 }

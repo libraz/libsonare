@@ -779,7 +779,7 @@ def test_note_segments_takes_voiced_or_voiced_prob_by_keyword() -> None:
     assert [s.start_sec for s in by_flags] == pytest.approx([0.0, 0.06])
     assert [s.end_sec for s in by_flags] == pytest.approx([0.04, 0.10])
 
-    with pytest.raises(TypeError, match="voiced"):
+    with pytest.raises(SonareValueError, match="voiced_prob and voiced must not both be None$"):
         libsonare.note_segments(f0, 100.0)
     with pytest.raises(SonareValueError, match="f0_hz and voiced must have the same length$"):
         libsonare.note_segments(f0, 100.0, voiced=flags[:-1])
@@ -789,15 +789,12 @@ def test_note_segments_takes_voiced_or_voiced_prob_by_keyword() -> None:
         libsonare.note_segments(f0, 100.0, voiced_flags=flags)  # type: ignore[call-arg]
 
 
-def test_note_segments_voiced_wins_over_voiced_prob() -> None:
+def test_note_segments_refuses_both_voicing_arrays() -> None:
     f0 = [440.0, 441.0, 439.0, 440.0, 0.0, 0.0, 660.0, 661.0, 659.0, 660.0]
     flags = [1, 1, 1, 1, 0, 0, 1, 1, 1, 1]
     silent = [0.0] * len(f0)
-    by_flags = libsonare.note_segments(f0, 100.0, voiced=flags)
-    both = libsonare.note_segments(f0, 100.0, voiced=flags, voiced_prob=silent)
-    assert libsonare.note_segments(f0, 100.0, voiced_prob=silent) == []
-    assert [(s.frame_start, s.frame_end) for s in both] == [(0, 4), (6, 10)]
-    assert both == by_flags
+    with pytest.raises(SonareValueError, match="voiced must be None when voiced_prob is not None$"):
+        libsonare.note_segments(f0, 100.0, voiced=flags, voiced_prob=silent)
 
 
 def test_stream_names_carry_their_unit() -> None:

@@ -461,7 +461,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareRirSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_rir_synth_config_init, after which every field is read literally (seed 0, crossfade_ms 0, a 0 degC / 0 % climate are values, not defaults); source and listener stay all-NaN until set ("Spell an optional C float that has no _init default as NaN, seeded by _init") and then resolve to the default placement scaled to the room, so set all three components to place one, since a position only partly NaN is refused by component |
 | `SonareRoomMorphConfig` | leads with uint32_t struct_size; prepare it with sonare_room_morph_config_init, after which every field is read literally (receiver_spacing_m 0 is refused rather than read as 0.5); source and listener stay all-NaN until set and then resolve to the default placement scaled to the target room, so set all three components to place one, since a position only partly NaN is refused by component |
 | `SonareVoiceChangeConfig` | leads with uint32_t struct_size; prepare it with sonare_voice_change_config_init (pitch_semitones 0, formant_factor 1, formant_mode SONARE_FORMANT_MODE_RELATIVE), after which every field is read literally; a struct whose struct_size was not set is refused |
+| `sonare_extract_notes` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win |
+| `sonare_merge_notes` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win |
 | `sonare_phase_vocoder` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t |
+| `sonare_split_note` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win |
 | `sonare_streaming_retune_prepare` | max_block_size 0 is refused; pass the largest block the stream will process |
 
 #### A number outside its domain is refused, never passed through
@@ -2049,7 +2052,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamFrames.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `StreamFramesI16.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `StreamFramesU8.feature_flags` | removed: test the feature field itself; a feature not computed is None |
-| `note_segments` | voicing is voiced= (per-frame flags) or voiced_prob= by keyword, voiced winning when both are given and neither a TypeError; frame_rate follows f0_hz |
+| `note_segments` | voicing is voiced= (per-frame flags) or voiced_prob= by keyword, exactly one of them: both or neither raises SonareValueError; frame_rate follows f0_hz |
 | `pitch_yin(fill_na)` | removed: had no effect: YIN reads no fill flag |
 
 ### Python: Effects, separation, repair and room acoustics
@@ -2480,14 +2483,17 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `RealtimeVoiceChangerConfig.to_pod` | removed: the C struct mirror is internal; pass the record itself as RealtimeVoiceChanger(config=...) |
 | `auto_tune(reference_midi)` | `auto_tune(scale_reference_midi)` |
 | `auto_tune(strength)` | `auto_tune(retune_amount)` |
+| `extract_notes` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
 | `mastering_repair_declip(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `mastering_repair_declip_stereo(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); the new keyword link_channels=True restores the union |
 | `mastering_repair_detect_clipping(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
+| `merge_notes` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
 | `pitch_correct_timevarying(mode)` | `pitch_correct_timevarying(target_mode)`: renamed to target_mode (PitchTargetMode = 'midi' \| 'scale'); a non-string is a TypeError and an unknown name a SonareValueError |
 | `pitch_correct_timevarying(reference_midi)` | `pitch_correct_timevarying(scale_reference_midi)` |
 | `scale_correction_semitones(reference_midi)` | `scale_correction_semitones(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
 | `scale_quantize_midi(reference_midi)` | `scale_quantize_midi(scale_reference_midi)`: renamed to scale_reference_midi; None is A4 and an explicit 0 is MIDI note 0 (1.x read 0 as A4) |
+| `split_note` | voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one |
 | `voice_change_realtime` | `realtime_voice_changer_render`: a preset document must carry schemaVersion 4 (1.x wrote 2) and an earlier one raises SonareError InvalidFormat; dsp.retune.grainSize is renamed grainSizeSamples and is optional (absent = the automatic grain), an explicit 0 raises naming the key, and the old key raises as unknown |
 
 ### Python: Mastering, mixing and loudness

@@ -3161,10 +3161,34 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "function"
 old = "note_segments"
-changed = "voicing is voiced= (per-frame flags) or voiced_prob= by keyword, voiced winning when both are given and neither a TypeError; frame_rate follows f0_hz"
+changed = "voicing is voiced= (per-frame flags) or voiced_prob= by keyword, exactly one of them: both or neither raises SonareValueError; frame_rate follows f0_hz"
 domain = "analysis"
 rule = "individual"
 test = "bindings/python/tests/test_surface_analysis.py::test_note_segments_takes_voiced_or_voiced_prob_by_keyword"
+
+[[entry]]
+kind = "function"
+old = "extract_notes"
+changed = "voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_note_objects.py::test_note_apis_refuse_both_voicing_arrays"
+
+[[entry]]
+kind = "function"
+old = "split_note"
+changed = "voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_note_objects.py::test_note_apis_refuse_both_voicing_arrays"
+
+[[entry]]
+kind = "function"
+old = "merge_notes"
+changed = "voiced= and voiced_prob= together raise SonareValueError where voiced used to win; pass exactly one"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_note_objects.py::test_note_apis_refuse_both_voicing_arrays"
 
 [[entry]]
 kind = "option"

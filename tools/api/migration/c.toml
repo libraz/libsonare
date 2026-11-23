@@ -450,6 +450,30 @@ test = "tests/api/sonare_c_features_extra_test.cpp::sonare_note_segments reads v
 
 [[entry]]
 kind = "function"
+old = "sonare_extract_notes"
+changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_note_objects_test.cpp::sonare_extract_notes takes exactly one of voiced_prob and voiced"
+
+[[entry]]
+kind = "function"
+old = "sonare_split_note"
+changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the note extraction entries refuse both voicing arrays given together"
+
+[[entry]]
+kind = "function"
+old = "sonare_merge_notes"
+changed = "exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_daw_refusal_test.cpp::the note extraction entries refuse both voicing arrays given together"
+
+[[entry]]
+kind = "function"
 old = "sonare_vqt"
 changed = "gamma is NaN for the automatic ERB-derived value and otherwise finite and >= 0; a negative gamma, which selected the automatic value, is refused with SONARE_ERROR_INVALID_PARAMETER 'gamma must be finite and at least 0'"
 domain = "analysis"

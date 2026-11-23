@@ -414,8 +414,8 @@ typedef struct {
 ///        pitch is spelled as zero, a negative value or a non-finite one --
 ///        sonare_pitch_pyin emits NaN there unless asked to fill it -- and all
 ///        three read the same: that frame contributes no measurement.
-/// @param voiced_prob Per-frame voicing in [0, 1], or NULL. Read only when
-///        @p voiced is NULL, and then required.
+/// @param voiced_prob Per-frame voicing in [0, 1], or NULL. Exactly one of
+///        @p voiced_prob and @p voiced is given; both or neither is refused.
 /// @param voiced Per-frame voiced flags (non-zero = voiced), or NULL.
 /// @param n_frames Number of F0 frames; must be non-zero.
 /// @param frame_rate F0 frames per second; must be finite and > 0.

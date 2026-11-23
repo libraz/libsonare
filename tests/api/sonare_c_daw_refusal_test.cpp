@@ -395,6 +395,29 @@ TEST_CASE("the note extraction entries refuse the track and config by name",
   CHECK(last_message() == "config.voiced_threshold must be finite and in [0, 1]");
 }
 
+TEST_CASE("the note extraction entries refuse both voicing arrays given together",
+          "[c_api][engine_refusal]") {
+  const std::vector<float> samples = make_samples();
+  std::vector<float> f0(kFrames, 220.0f);
+  std::vector<int32_t> voiced(kFrames, 1);
+  std::vector<float> prob(kFrames, 0.9f);
+  const SonareNoteObject notes[2] = {};
+  SonareNoteObjectsResult result{};
+  const char* kBoth = "voiced must be NULL when voiced_prob is not NULL";
+
+  CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), prob.data(), voiced.data(),
+                             kFrames, 100.0f, nullptr, &result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kBoth);
+  CHECK(sonare_split_note(samples.data(), kLength, kRate, f0.data(), prob.data(), voiced.data(),
+                          kFrames, 100.0f, nullptr, notes, 1, nullptr, 0, 0, 1,
+                          &result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kBoth);
+  CHECK(sonare_merge_notes(samples.data(), kLength, kRate, f0.data(), prob.data(), voiced.data(),
+                           kFrames, 100.0f, nullptr, notes, 2, nullptr, 0, 0, 1,
+                           &result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == kBoth);
+}
+
 TEST_CASE("split and merge refuse their indices, notes and edits by name",
           "[c_api][engine_refusal]") {
   const std::vector<float> samples = make_samples();

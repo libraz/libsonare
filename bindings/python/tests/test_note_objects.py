@@ -348,62 +348,26 @@ def test_voiced_prob_selects_voicing_when_no_flags_are_given() -> None:
     ]
 
 
-def test_explicit_voiced_ignores_invalid_voiced_prob_for_note_apis() -> None:
+def test_note_apis_refuse_both_voicing_arrays() -> None:
     audio, f0_hz, voiced, notes = _gapped_notes()
-    invalid_probabilities = (
-        np.full(len(f0_hz) - 1, np.nan, dtype=np.float32),
+    prob = np.ones(len(f0_hz), dtype=np.float32)
+    both = "voiced must be None when voiced_prob is not None$"
+    with pytest.raises(SonareValueError, match=both):
+        libsonare.extract_notes(audio, SR, f0_hz, FRAME_RATE, voiced=voiced, voiced_prob=prob)
+    with pytest.raises(SonareValueError, match=both):
+        libsonare.split_note(
+            audio, SR, f0_hz, FRAME_RATE, notes, 1, 13, voiced=voiced, voiced_prob=prob
+        )
+    with pytest.raises(SonareValueError, match=both):
+        libsonare.merge_notes(
+            audio, SR, f0_hz, FRAME_RATE, notes, 0, 1, voiced=voiced, voiced_prob=prob
+        )
+
+    for invalid in (
         np.full(len(f0_hz), np.nan, dtype=np.float32),
         np.full(len(f0_hz), 1.5, dtype=np.float32),
-    )
-
-    def assert_same_notes(
-        actual: list[libsonare.NoteObject], expected: list[libsonare.NoteObject]
-    ) -> None:
-        assert actual == expected
-        for actual_note, expected_note in zip(actual, expected, strict=True):
-            np.testing.assert_array_equal(actual_note.amplitude, expected_note.amplitude)
-
-    expected_extract = libsonare.extract_notes(audio, SR, f0_hz, FRAME_RATE, voiced=voiced)
-    expected_split = libsonare.split_note(audio, SR, f0_hz, FRAME_RATE, notes, 1, 13, voiced=voiced)
-    expected_merge = libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 0, 1, voiced=voiced)
-    for invalid in invalid_probabilities:
-        assert_same_notes(
-            libsonare.extract_notes(
-                audio, SR, f0_hz, FRAME_RATE, voiced=voiced, voiced_prob=invalid
-            ),
-            expected_extract,
-        )
-        assert_same_notes(
-            libsonare.split_note(
-                audio,
-                SR,
-                f0_hz,
-                FRAME_RATE,
-                notes,
-                1,
-                13,
-                voiced=voiced,
-                voiced_prob=invalid,
-            ),
-            expected_split,
-        )
-        assert_same_notes(
-            libsonare.merge_notes(
-                audio,
-                SR,
-                f0_hz,
-                FRAME_RATE,
-                notes,
-                0,
-                1,
-                voiced=voiced,
-                voiced_prob=invalid,
-            ),
-            expected_merge,
-        )
-
-    for invalid in invalid_probabilities:
-        with pytest.raises(SonareError):
+    ):
+        with pytest.raises(SonareValueError):
             libsonare.extract_notes(audio, SR, f0_hz, FRAME_RATE, voiced_prob=invalid)
 
 

@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ._errors import _entry, _refuse, _refuse_type
+from ._errors import _entry, _refuse
 from ._ffi import (
     SonareNoteSegmenterConfig,
     SonareNoteSegmentsResult,
@@ -354,8 +354,8 @@ def note_segments(
     from ``voiced`` (per-frame voiced flags, non-zero = voiced, as
     :func:`pitch_pyin` reports ``voiced_flag``) or ``voiced_prob`` (a per-frame
     probability in ``[0, 1]``, thresholded at ``voiced_threshold``, default
-    0.5). ``voiced_prob`` is used only to derive voicing when ``voiced`` is
-    ``None``. The F0 and voicing arrays must have equal non-zero length.
+    0.5). Exactly one of the two is given. The F0 and voicing arrays must
+    have equal non-zero length.
 
     Do **not** pass :func:`pitch_pyin`'s ``voiced_prob``: that value is the
     frame's voiced observation mass and rises with F0 for a fixed
@@ -363,22 +363,21 @@ def note_segments(
     for low-register material. Pass its ``voiced_flag`` as ``voiced``.
 
     Raises:
-        TypeError: If neither ``voiced`` nor ``voiced_prob`` is given.
-        SonareValueError: If a voicing array's length differs from ``f0_hz``.
+        SonareValueError: If both or neither of ``voiced`` and ``voiced_prob``
+            are given, or a voicing array's length differs from ``f0_hz``.
     """
-    if voiced is None and voiced_prob is None:
-        raise _refuse_type("note_segments() requires voiced or voiced_prob")
     lib = _get_lib()
     f0_array, f0_count = _to_c_float_array(f0_hz)
     probability_array = None
     flags_array = None
     if voiced is not None:
         flags_array, voiced_count = _to_c_int_array(voiced, "voiced")
-    else:
-        probability_array, voiced_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
-    if voiced_count != f0_count:
-        voicing = "voiced" if voiced is not None else "voiced_prob"
-        raise _refuse(f"f0_hz and {voicing} must have the same length")
+        if voiced_count != f0_count:
+            raise _refuse("f0_hz and voiced must have the same length")
+    if voiced_prob is not None:
+        probability_array, prob_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
+        if prob_count != f0_count:
+            raise _refuse("f0_hz and voiced_prob must have the same length")
     config = SonareNoteSegmenterConfig._given(
         segmentation_threshold_cents=segmentation_threshold_cents,
         min_note_ms=min_note_ms,

@@ -272,6 +272,12 @@ SonareError validate_track_args(const float* f0_hz, const float* voiced_prob, co
                                    "{0} and {1} {must_not_both_be_absent}");
     });
   }
+  if (voiced != nullptr && voiced_prob != nullptr) {
+    return run_validation([&] {
+      util::check::refuse_relation({"voiced_prob", "voiced"},
+                                   "{1} {must_be_absent} when {0} {is_present}");
+    });
+  }
   const SonareError error = validate_f0_frames(f0_hz, n_frames, frame_rate);
   if (error != SONARE_OK) return error;
   if (voiced != nullptr) return SONARE_OK;

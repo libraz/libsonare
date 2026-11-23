@@ -225,10 +225,11 @@ def extract_notes(
         frame_rate: F0 frames per second; must be finite and greater than 0.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
             ``voiced_prob``; pass :func:`pitch_pyin`'s ``voiced_flag`` here.
-        voiced_prob: Per-frame voicing probability in ``[0, 1]``, read ONLY when
-            ``voiced`` is ``None``. pYIN's ``voiced_prob`` is a frame's voiced
-            observation mass and rises with F0 for a fixed frame length, so
-            thresholding it drops entire low registers — prefer ``voiced``.
+            Exactly one of ``voiced`` and ``voiced_prob`` is given.
+        voiced_prob: Per-frame voicing probability in ``[0, 1]``. pYIN's
+            ``voiced_prob`` is a frame's voiced observation mass and rises with
+            F0 for a fixed frame length, so thresholding it drops entire low
+            registers — prefer ``voiced``.
         segmentation_threshold_cents: Pitch jump that starts a new note;
             ``None`` keeps the library default (50 cents).
         min_note_ms: Shortest note kept; ``None`` keeps the default (30 ms).
@@ -243,11 +244,11 @@ def extract_notes(
         segments into no stable notes.
 
     Raises:
-        SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
-            the selected voicing array has a different length than ``f0_hz``
-            (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), or if a buffer is
-            empty. Positive finite ``f0_hz`` values carry pitch; zero, negative
-            and non-finite values carry no pitch.
+        SonareValueError: If both or neither of ``voiced`` and ``voiced_prob``
+            are given, if the given voicing array has a different length than
+            ``f0_hz``, or if a buffer is empty. Positive finite ``f0_hz``
+            values carry pitch; zero, negative and non-finite values carry no
+            pitch.
 
     Example:
         pYIN's default leaves an unvoiced frame as ``NaN`` and this function
@@ -556,9 +557,8 @@ def split_note(
         index: Note to split.
         frame: Track frame to cut at, strictly inside that note's own span.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
-            ``voiced_prob``.
-        voiced_prob: Per-frame voicing probability, read ONLY when ``voiced`` is
-            ``None``.
+            ``voiced_prob``; exactly one of the two is given.
+        voiced_prob: Per-frame voicing probability in ``[0, 1]``.
         segmentation_threshold_cents: Pitch jump that starts a new note;
             ``None`` keeps the library default (50 cents).
         min_note_ms: Shortest note kept; ``None`` keeps the default (30 ms).
@@ -572,9 +572,9 @@ def split_note(
         ``notes``.
 
     Raises:
-        SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
-            the selected voicing array has a different length than ``f0_hz``
-            (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), if ``index`` is not a
+        SonareValueError: If both or neither of ``voiced`` and ``voiced_prob``
+            are given, if the given voicing array has a different length than
+            ``f0_hz``, if ``index`` is not a
             integer from 0 to the ``size_t`` maximum, or if a buffer is empty or
             non-finite.
         SonareError: If the C call rejects the request (e.g. a frame on or
@@ -646,9 +646,8 @@ def merge_notes(
         first: Index of the first note to join; must be ``< last``.
         last: Index of the last note to join, inclusive.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
-            ``voiced_prob``.
-        voiced_prob: Per-frame voicing probability, read ONLY when ``voiced`` is
-            ``None``.
+            ``voiced_prob``; exactly one of the two is given.
+        voiced_prob: Per-frame voicing probability in ``[0, 1]``.
         segmentation_threshold_cents: Pitch jump that starts a new note;
             ``None`` keeps the library default (50 cents).
         min_note_ms: Shortest note kept; ``None`` keeps the default (30 ms).
@@ -662,9 +661,9 @@ def merge_notes(
         shorter than ``notes``.
 
     Raises:
-        SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
-            the selected voicing array has a different length than ``f0_hz``
-            (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), if ``first`` or
+        SonareValueError: If both or neither of ``voiced`` and ``voiced_prob``
+            are given, if the given voicing array has a different length than
+            ``f0_hz``, if ``first`` or
             ``last`` is not a integer from 0 to the ``size_t`` maximum, or if a
             buffer is empty. A non-finite ``f0_hz`` frame is read as carrying no
             pitch, not refused.
