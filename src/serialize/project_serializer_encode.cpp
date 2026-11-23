@@ -1,6 +1,7 @@
 // Copyright 2026 libsonare contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#include <limits>
 #include <string>
 #include <utility>
 #include <variant>
@@ -40,10 +41,46 @@ Value time_signature_to_json(const transport::TimeSignatureSegment& s) {
 }
 
 Value automation_lane_to_json(const automation::AutomationLane& lane) {
+  if (lane.lane_id() == 0 || lane.lane_id() == std::numeric_limits<uint32_t>::max()) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "automation lane must have a serializable lane id");
+  }
+  const bool opaque = lane.target_kind() == automation::AutomationTargetKind::kOpaque;
+  if ((opaque && lane.target_param_id() == 0) || (!opaque && lane.target_param_id() != 0)) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "automation lane target id does not match its target kind");
+  }
   Object o;
+  o["id"] = static_cast<double>(lane.lane_id());
   o["targetParamId"] = static_cast<double>(lane.target_param_id());
+  const auto& identity = lane.target_identity();
+  if (!lane.valid_target_identity()) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "automation lane target identity does not match its kind");
+  }
   if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
     o["targetKind"] = enum_token(lane.target_kind());
+  }
+  switch (lane.target_kind()) {
+    case automation::AutomationTargetKind::kTrackSendDb:
+      o["sendId"] = identity.send_id;
+      break;
+    case automation::AutomationTargetKind::kTrackInsertParam: {
+      const std::size_t insert_index = *identity.insert_index;
+      if (insert_index > static_cast<std::size_t>(std::numeric_limits<int32_t>::max())) {
+        throw SonareException(ErrorCode::InvalidState,
+                              "insertIndex exceeds the project JSON limit");
+      }
+      o["insertIndex"] = static_cast<double>(insert_index);
+      o["processor"] = identity.processor;
+      o["paramName"] = identity.param_name;
+      break;
+    }
+    case automation::AutomationTargetKind::kOpaque:
+    case automation::AutomationTargetKind::kTrackFaderDb:
+    case automation::AutomationTargetKind::kTrackPan:
+    case automation::AutomationTargetKind::kTrackWidth:
+      break;
   }
   Array points;
   for (const auto& p : lane.points()) {
@@ -54,6 +91,75 @@ Value automation_lane_to_json(const automation::AutomationLane& lane) {
     points.push_back(std::move(po));
   }
   o["points"] = std::move(points);
+  return o;
+}
+
+Value destination_instrument_to_json(uint32_t destination_id,
+                                     const arrangement::DestinationInstrumentBinding& binding) {
+  Object o;
+  o["destinationId"] = static_cast<double>(destination_id);
+  if (const auto* synth =
+          std::get_if<arrangement::DestinationSynthInstrument>(&binding.instrument)) {
+    o["kind"] = std::string("synth");
+    Object config;
+    config["preset"] = synth->preset;
+    if (!synth->engine_mode.empty()) config["engineMode"] = synth->engine_mode;
+    Object fields;
+    for (const auto& [name, value] : synth->fields) {
+      if (const auto* scalar = std::get_if<double>(&value)) {
+        fields[name] = *scalar;
+      } else {
+        fields[name] = std::get<std::string>(value);
+      }
+    }
+    config["fields"] = std::move(fields);
+    Object engine_params;
+    for (const auto& [name, value] : synth->engine_params) engine_params[name] = value;
+    config["engineParams"] = std::move(engine_params);
+    if (!synth->mod_routings.empty() || synth->clears_base_mod_routings) {
+      Array mod_routings;
+      for (const auto& route : synth->mod_routings) {
+        Object route_value;
+        route_value["source"] = route.source;
+        route_value["destination"] = route.destination;
+        route_value["depth"] = route.depth;
+        mod_routings.push_back(std::move(route_value));
+      }
+      config["modRoutings"] = std::move(mod_routings);
+    }
+    config["useGmPrograms"] = synth->use_gm_programs;
+    o["synth"] = std::move(config);
+  } else if (const auto* builtin =
+                 std::get_if<arrangement::DestinationBuiltinInstrument>(&binding.instrument)) {
+    o["kind"] = std::string("builtin");
+    Object config;
+    config["waveform"] = builtin->waveform;
+    config["gain"] = builtin->gain;
+    config["attackMs"] = builtin->attack_ms;
+    config["decayMs"] = builtin->decay_ms;
+    config["sustain"] = builtin->sustain;
+    config["releaseMs"] = builtin->release_ms;
+    config["polyphony"] = builtin->polyphony;
+    o["builtin"] = std::move(config);
+  } else {
+    const auto& sf2 = std::get<arrangement::DestinationSf2Instrument>(binding.instrument);
+    o["kind"] = std::string("sf2");
+    Object config;
+    config["gain"] = sf2.gain;
+    config["polyphony"] = sf2.polyphony;
+    config["preferModelForModeledFamilies"] = sf2.prefer_model_for_modeled_families;
+    config["clearBankRig"] = sf2.clear_bank_rig;
+    config["gsEfxRealization"] = sf2.gs_efx_realization;
+    if (sf2.sound_font_uri.has_value()) config["soundFontUri"] = *sf2.sound_font_uri;
+    o["sf2"] = std::move(config);
+  }
+  if (binding.bank.has_value()) {
+    Object bank;
+    bank["msb"] = binding.bank->msb;
+    bank["lsb"] = binding.bank->lsb;
+    o["bank"] = std::move(bank);
+  }
+  if (binding.program.has_value()) o["program"] = *binding.program;
   return o;
 }
 

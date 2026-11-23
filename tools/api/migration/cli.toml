@@ -751,6 +751,14 @@ rule = "mastering-names"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering needs a chain and leaves loudness-only work to its own command"
 
 [[entry]]
+kind = "command"
+old = "mastering-pair-analyze"
+changed = "analyzes two stereo files as stereo, preserving both channels; analyzes two mono files as mono; refuses unequal channel counts or either input above two channels with exit 3"
+domain = "mastering"
+rule = "stereo-pair"
+test = "tests/cli/cli_mastering_test.cpp::CLI mastering pair analysis dispatches by channel count"
+
+[[entry]]
 kind = "flag"
 old = "resample --target-sr"
 removed = "use --target-sample-rate"

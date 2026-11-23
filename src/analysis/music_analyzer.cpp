@@ -117,7 +117,6 @@ BpmAnalyzer& MusicAnalyzer::bpm_analyzer() {
     BpmConfig bpm_config;
     bpm_config.bpm_min = config_->bpm_min;
     bpm_config.bpm_max = config_->bpm_max;
-    bpm_config.start_bpm = config_->start_bpm;
     bpm_config.n_fft = config_->n_fft;
     bpm_config.hop_length = config_->hop_length;
     // Use cached onset strength to avoid recomputation
@@ -450,7 +449,6 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   result.beat_observations.has_attack.assign(accents.beat_has_attack.begin(),
                                              accents.beat_has_attack.end());
   result.beat_observations.subdivision_accent = accents.subdivision;
-  result.beat_observations.onset_strength = beat_analyzer().beat_onset_observations();
   result.beat_observations.low_frequency_energy = beat_analyzer().beat_low_frequency_observations();
   result.beat_observations.chord_change = beat_analyzer().beat_chord_change_observations();
 

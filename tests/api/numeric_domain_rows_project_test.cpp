@@ -446,9 +446,9 @@ SonareError probe_project_set_program(const std::string& param, double value) {
 /// A lane desc every check accepts; @p param sets its target or its one breakpoint's position.
 SonareAutomationLaneDesc lane_for(const std::string& param, double value,
                                   SonareAutomationPoint* point) {
-  SonareAutomationLaneDesc desc{};
+  SonareAutomationLaneDesc desc;
+  sonare_automation_lane_desc_init(&desc);
   desc.target_param_id = 1;
-  desc.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
   if (is_param(param, "desc.target_param_id")) desc.target_param_id = to_u32(value);
   if (is_param(param, "desc.points[].ppq")) {
     *point = SonareAutomationPoint{value, 0.0f, 0};
@@ -463,21 +463,22 @@ SonareError probe_add_automation_lane(const std::string& param, double value) {
   const uint32_t track = project.add_audio_track();
   SonareAutomationPoint point{};
   const SonareAutomationLaneDesc desc = lane_for(param, value, &point);
-  uint32_t out = 0;
-  return sonare_project_add_automation_lane(project.handle, track, &desc, &out);
+  uint32_t lane_id = 0;
+  return sonare_project_add_automation_lane(project.handle, track, &desc, &lane_id);
 }
 
 SonareError probe_edit_automation_lane(const std::string& param, double value) {
   Project project;
   const uint32_t track = project.add_audio_track();
-  SonareAutomationLaneDesc existing{};
+  SonareAutomationLaneDesc existing;
+  sonare_automation_lane_desc_init(&existing);
   existing.target_param_id = 1;
-  existing.target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
-  uint32_t out = 0;
-  REQUIRE(sonare_project_add_automation_lane(project.handle, track, &existing, &out) == SONARE_OK);
+  uint32_t lane_id = 0;
+  REQUIRE(sonare_project_add_automation_lane(project.handle, track, &existing, &lane_id) ==
+          SONARE_OK);
   SonareAutomationPoint point{};
   const SonareAutomationLaneDesc desc = lane_for(param, value, &point);
-  return sonare_project_edit_automation_lane(project.handle, track, 1, &desc);
+  return sonare_project_edit_automation_lane(project.handle, track, lane_id, &desc);
 }
 
 /// Four frames of mono silence the audio-payload probes point at.
@@ -555,6 +556,24 @@ SonareError probe_annotate_keys(const std::string& param, double value) {
   if (is_param(param, "keys[].end_ppq")) key.end_ppq = value;
   const size_t count = is_param(param, "count") ? to_count(value) : 1;
   return sonare_project_annotate_keys(project.handle, &key, count);
+}
+
+SonareError probe_annotate_sections(const std::string& param, double value) {
+  Project project;
+  SonareProjectSection section{0.0, 1.0, "section"};
+  if (is_param(param, "sections[].start_ppq")) section.start_ppq = value;
+  if (is_param(param, "sections[].end_ppq")) section.end_ppq = value;
+  const size_t count = is_param(param, "count") ? to_count(value) : 1;
+  return sonare_project_annotate_sections(project.handle, &section, count);
+}
+
+SonareError probe_count_in_frames(const std::string& param, double value) {
+  Project project;
+  REQUIRE(sonare_project_set_sample_rate(project.handle, 48000) == SONARE_OK);
+  const int sample_rate = is_param(param, "sample_rate") ? static_cast<int>(value) : 48000;
+  int64_t frames = 0;
+  const int32_t count_in_bars = is_param(param, "count_in_bars") ? static_cast<int32_t>(value) : 0;
+  return sonare_project_count_in_frames(project.handle, count_in_bars, sample_rate, &frames);
 }
 
 SonareError probe_snap_to_grid(const std::string& param, double value) {
@@ -730,6 +749,21 @@ SonareError bounce_options_with(const std::string& param, double value, Bounce&&
   if (is_param(param, "options.instrument_latency_samples")) {
     options.instrument_latency_samples = static_cast<int>(value);
   }
+  if (is_param(param, "options.count_in_bars")) {
+    options.count_in_bars = static_cast<int32_t>(value);
+  }
+  SonareSynthInstrumentBinding synth{};
+  SonareProjectArticulationBinding articulation{};
+  if (is_param(param, "options.articulations[].channel")) {
+    sonare_synth_patch_init(&synth.patch);
+    synth.patch.engine_mode = SONARE_SYNTH_ENGINE_REED;
+    options.synth_instruments = &synth;
+    options.synth_instrument_count = 1;
+    articulation.channel = to_u32(value);
+    articulation.articulation = SONARE_ARTICULATION_MONO_LEGATO;
+    options.articulations = &articulation;
+    options.articulation_count = 1;
+  }
   float* out = nullptr;
   size_t out_len = 0;
   int channels = 0;
@@ -867,6 +901,30 @@ SonareError probe_project_transcribe_to_clip(const std::string& param, double va
 
 #endif  // SONARE_WITH_PITCH_EDITOR
 
+SonareError probe_bar_start_ppq(const std::string&, double value) {
+  Project project;
+  double ppq = 0;
+  return sonare_project_bar_start_ppq(project.handle, static_cast<int64_t>(value), &ppq);
+}
+
+SonareError probe_position_at_ppq(const std::string&, double value) {
+  Project project;
+  SonareProjectPosition position{};
+  return sonare_project_position_at_ppq(project.handle, value, &position);
+}
+
+SonareError probe_ppq_to_sec(const std::string&, double value) {
+  Project project;
+  double sec = 0;
+  return sonare_project_ppq_to_sec(project.handle, value, &sec);
+}
+
+SonareError probe_sec_to_ppq(const std::string&, double value) {
+  Project project;
+  double ppq = 0;
+  return sonare_project_sec_to_ppq(project.handle, value, &ppq);
+}
+
 #endif  // SONARE_WITH_ARRANGEMENT
 
 const std::map<std::string, Probe>& probes() {
@@ -927,12 +985,18 @@ const std::map<std::string, Probe>& probes() {
       {"project_add_midi_clip", probe_add_midi_clip},
       {"project_annotate_chords", probe_annotate_chords},
       {"project_annotate_keys", probe_annotate_keys},
+      {"project_annotate_sections", probe_annotate_sections},
+      {"project_bar_start_ppq", probe_bar_start_ppq},
       {"project_bounce", probe_bounce},
+      {"project_count_in_frames", probe_count_in_frames},
       {"project_duplicate_clip", probe_duplicate_clip},
       {"project_edit_automation_lane", probe_edit_automation_lane},
       {"project_import_external_stems", probe_import_external_stems},
       {"project_load_soundfont", probe_load_soundfont},
       {"project_move_clip", probe_move_clip},
+      {"project_position_at_ppq", probe_position_at_ppq},
+      {"project_ppq_to_sec", probe_ppq_to_sec},
+      {"project_sec_to_ppq", probe_sec_to_ppq},
       {"project_set_assist_sidecar", probe_set_assist_sidecar},
       {"project_set_clip_comp_segments", probe_set_clip_comp_segments},
       {"project_set_clip_fade", probe_set_clip_fade},

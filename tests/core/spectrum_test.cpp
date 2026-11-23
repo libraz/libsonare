@@ -254,6 +254,24 @@ TEST_CASE("Spectrogram magnitude and power", "[spectrum]") {
   }
 }
 
+TEST_CASE("Spectrogram phase writes positive zero for zero bins", "[spectrum]") {
+  const std::vector<std::complex<float>> bins{
+      {0.0f, 0.0f}, {-0.0f, 0.0f}, {0.0f, -0.0f}, {-0.0f, -0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f},
+  };
+  const auto spectrum = Spectrogram::from_complex(bins.data(), 3, 2, 4, 1,
+                                                  constants::kDefaultSampleRate, WindowType::Hann);
+  std::vector<float> phase(bins.size());
+  spectrum.phase(phase.data());
+
+  for (size_t i = 0; i < 4; ++i) {
+    CAPTURE(i);
+    CHECK(phase[i] == 0.0f);
+    CHECK_FALSE(std::signbit(phase[i]));
+  }
+  CHECK_THAT(phase[4], WithinAbs(0.5f * constants::kPi, 1e-6f));
+  CHECK_THAT(phase[5], WithinAbs(-0.5f * constants::kPi, 1e-6f));
+}
+
 TEST_CASE("Spectrogram to_db", "[spectrum]") {
   constexpr int sr = 22050;
   std::vector<float> sine = generate_sine(sr / 4, 440.0f, sr);

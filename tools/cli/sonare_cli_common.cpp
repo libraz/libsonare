@@ -14,6 +14,7 @@
 #include <unistd.h>
 #endif
 
+#include "core/audio_tags.h"
 #include "sonare_cli.h"
 
 int print_name_catalog(const CliArgs& args, std::string_view key,
@@ -78,21 +79,24 @@ std::vector<int> parse_int_list(const std::string& text) {
   return values;
 }
 
+namespace {
+
 // The seek/tell probe only sizes the allocation: it is a snapshot the read
 // cannot rely on, because the file may grow between the two calls and a
 // non-regular input (a FIFO, a character device) has no size to report at all.
 // The cap is therefore enforced on the bytes as they arrive, so nothing past it
 // is ever buffered.
-bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
-  const auto reject_oversized = [&path]() {
-    throw std::invalid_argument("input file exceeds " + std::to_string(kMaxCliInputBytes) +
+bool read_binary_file_bounded(const std::string& path, std::vector<uint8_t>* out,
+                              size_t max_bytes) {
+  const auto reject_oversized = [&path, max_bytes]() {
+    throw std::invalid_argument("input file exceeds " + std::to_string(max_bytes) +
                                 " byte limit: " + path);
   };
   std::ifstream file(path, std::ios::binary);
   if (!file.is_open()) return false;
   file.seekg(0, std::ios::end);
   const std::streamoff size = file.tellg();
-  if (size > static_cast<std::streamoff>(kMaxCliInputBytes)) reject_oversized();
+  if (size > static_cast<std::streamoff>(max_bytes)) reject_oversized();
   // An input with no size to probe fails the seek rather than reporting one, and
   // a failed stream reads nothing. Clearing on both sides of the rewind keeps
   // such an input readable from where it was opened, which is also the case the
@@ -111,10 +115,16 @@ bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
     if (read_bytes == 0) break;
     // Subtraction rather than addition: the sum of two size_t operands can wrap
     // where the remaining budget cannot.
-    if (read_bytes > kMaxCliInputBytes - out->size()) reject_oversized();
+    if (read_bytes > max_bytes - out->size()) reject_oversized();
     out->insert(out->end(), chunk.data(), chunk.data() + read_bytes);
   }
   return true;
+}
+
+}  // namespace
+
+bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
+  return read_binary_file_bounded(path, out, kMaxCliInputBytes);
 }
 
 std::string read_plain_text_file(const std::string& path) {
@@ -741,8 +751,19 @@ int cmd_info(const CliArgs& args, const Audio& audio) {
   const double rms_db = 20.0 * std::log10(std::max(rms, 1e-10));
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    std::vector<uint8_t> bytes;
+    if (!read_binary_file_bounded(args.input_file, &bytes, sonare::resource::kMaxAudioFileBytes)) {
+      throw SonareException(ErrorCode::FileNotFound, "cannot open audio file: " + args.input_file);
+    }
+    AudioTags tags;
+    try {
+      tags = read_audio_tags(bytes.data(), bytes.size());
+    } catch (const SonareException& error) {
+      // A playable container without a tag reader still has audio information.
+      if (error.code() != ErrorCode::InvalidFormat) throw;
+    }
+    JsonBuilder json;
+    json.begin_object()
         .kv("path", args.input_file)
         .kv("duration", audio.duration())
         .kv("sample_rate", audio.sample_rate())
@@ -750,8 +771,10 @@ int cmd_info(const CliArgs& args, const Audio& audio) {
         .kv("samples", audio.size())
         .kv("peak_db", peak_db)
         .kv("rms_db", rms_db)
-        .end_object()
-        .print();
+        .key("tags")
+        .begin_object();
+    for (const auto& [key, value] : tags) json.kv(key, value);
+    json.end_object().end_object().print();
   } else {
     int mins = static_cast<int>(audio.duration()) / 60;
     int secs = static_cast<int>(audio.duration()) % 60;

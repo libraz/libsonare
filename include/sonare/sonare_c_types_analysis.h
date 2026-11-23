@@ -59,8 +59,16 @@ typedef struct {
   int sample_rate;    ///< Sample rate in Hz.
   float* magnitude;   ///< n_bins * n_frames, caller frees with sonare_free_floats
   float* power;       ///< n_bins * n_frames, caller frees with sonare_free_floats
-  float* db;  ///< n_bins * n_frames magnitude in dB; NULL unless SonareStftOptions::db is non-zero
+  float* db;          ///< n_bins * n_frames magnitude in dB; NULL unless requested.
+  float* phase;       ///< n_bins * n_frames phase in radians; NULL unless requested.
 } SonareStftResult;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareStftResult, phase) == offsetof(SonareStftResult, db) + sizeof(float*),
+              "SonareStftResult.phase offset");
+static_assert(sizeof(SonareStftResult) == offsetof(SonareStftResult, phase) + sizeof(float*),
+              "SonareStftResult layout");
+#endif
 
 /** Layout version of SonareMelResult and SonareMfccResult, written by the
    function that fills them. */

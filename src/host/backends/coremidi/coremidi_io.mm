@@ -10,7 +10,11 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <limits>
+#include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 #include "host/backends/coremidi/coremidi_output_state.h"
@@ -32,6 +36,47 @@ constexpr size_t kDrainScratch = 256;
 constexpr size_t kInjectedDrainScratch = 64;
 constexpr size_t kMaxInputSysExBytes = 64 * 1024;
 constexpr size_t kSysExStageDepth = 8;
+
+bool source_unique_id(MIDIEndpointRef source, MIDIUniqueID* out) noexcept {
+  if (source == 0 || out == nullptr) return false;
+  SInt32 value = 0;
+  if (MIDIObjectGetIntegerProperty(source, kMIDIPropertyUniqueID, &value) != noErr) return false;
+  *out = static_cast<MIDIUniqueID>(value);
+  return true;
+}
+
+bool source_display_name(MIDIEndpointRef source, std::string* out) {
+  if (source == 0 || out == nullptr) return false;
+  CFStringRef name = nullptr;
+  if (MIDIObjectGetStringProperty(source, kMIDIPropertyDisplayName, &name) != noErr ||
+      name == nullptr) {
+    return false;
+  }
+  const CFIndex max_bytes =
+      CFStringGetMaximumSizeForEncoding(CFStringGetLength(name), kCFStringEncodingUTF8);
+  if (max_bytes < 0) {
+    CFRelease(name);
+    return false;
+  }
+  std::string value(static_cast<size_t>(max_bytes) + 1u, '\0');
+  const bool copied = CFStringGetCString(name, value.data(), static_cast<CFIndex>(value.size()),
+                                         kCFStringEncodingUTF8);
+  CFRelease(name);
+  if (!copied) return false;
+  value.resize(std::char_traits<char>::length(value.c_str()));
+  *out = std::move(value);
+  return true;
+}
+
+bool parse_source_uid(std::string_view text, MIDIUniqueID* out) noexcept {
+  if (text.empty() || out == nullptr) return false;
+  int32_t value = 0;
+  const char* const end = text.data() + text.size();
+  const auto parsed = std::from_chars(text.data(), end, value, 10);
+  if (parsed.ec != std::errc{} || parsed.ptr != end) return false;
+  *out = static_cast<MIDIUniqueID>(value);
+  return true;
+}
 
 /// Backing storage for a MIDIEventList sized for kDrainScratch packets
 /// (~68 KB). A CoreMidiOutput::Impl member (constructed/zeroed once) rather
@@ -162,6 +207,7 @@ struct CoreMidiInput::Impl {
   MIDIClientRef client = 0;
   MIDIPortRef port = 0;
   MIDIEndpointRef source = 0;
+  bool source_is_midi1 = false;
   // Fed ONLY by the OS-registered read_trampoline while a live source is
   // connected — never by push_event()/push_event_at_host_time(), which target
   // `injected` below instead. Keeps this ring strictly single-producer
@@ -190,6 +236,35 @@ struct CoreMidiInput::Impl {
   std::atomic<midi::SysExHandle> next_input_handle{1};
   std::atomic<uint32_t> sysex_overflow_count{0};
   std::atomic<uint32_t> sysex_interleave_count{0};
+
+  bool open_source(MIDIEndpointRef endpoint) {
+    if (client != 0 || endpoint == 0) return false;
+    SInt32 protocol = 0;
+    // Unknown native protocols stay untouched.
+    source_is_midi1 =
+        MIDIObjectGetIntegerProperty(endpoint, kMIDIPropertyProtocolID, &protocol) == noErr &&
+        protocol == kMIDIProtocol_1_0;
+    source = endpoint;
+    mach_timebase_info(&timebase);
+
+    if (MIDIClientCreate(CFSTR("sonare.host.input"), nullptr, nullptr, &client) != noErr) {
+      source = 0;
+      source_is_midi1 = false;
+      return false;
+    }
+    if (MIDIInputPortCreateWithProtocol(client, CFSTR("sonare.in"), kMIDIProtocol_2_0, &port,
+                                        ^(const MIDIEventList* list, void* srcRef) {
+                                          Impl::read_trampoline(list, this, srcRef);
+                                        }) != noErr) {
+      close();
+      return false;
+    }
+    if (MIDIPortConnectSource(port, source, nullptr) != noErr) {
+      close();
+      return false;
+    }
+    return true;
+  }
 
   static void read_trampoline(const MIDIEventList* list, void* ref, void* /*srcRef*/) {
     static_cast<Impl*>(ref)->on_event_list(list);
@@ -389,7 +464,13 @@ struct CoreMidiInput::Impl {
         midi::Ump ump;
         const size_t consumed = ump_from_words(&packet->words[i], n - i, ump);
         if (consumed == 0) break;
-        if (ump.word_count > 0 && !consume_sysex7(buffer, live_sysex, ump, packet)) {
+        // CoreMIDI delivers a MIDI 1.0 endpoint to this port as MIDI 2.0 UMP.
+        if (source_is_midi1 && ump.message_type() == midi::UmpMessageType::kMidi2ChannelVoice) {
+          const midi::Midi1MessageList converted = midi::midi2_to_midi1_messages(ump);
+          for (uint8_t message_index = 0; message_index < converted.count; ++message_index) {
+            enqueue_ump(buffer, converted.messages[message_index], packet);
+          }
+        } else if (ump.word_count > 0 && !consume_sysex7(buffer, live_sysex, ump, packet)) {
           enqueue_ump(buffer, ump, packet);
         }
         i += consumed;
@@ -448,12 +529,44 @@ struct CoreMidiInput::Impl {
     while (j < n2 && n < capacity) out[n++] = injected_scratch[j++];
     return n;
   }
+
+  void close() noexcept {
+    if (port != 0 && source != 0) MIDIPortDisconnectSource(port, source);
+    if (port != 0) MIDIPortDispose(port);
+    if (client != 0) MIDIClientDispose(client);
+    port = 0;
+    client = 0;
+    source = 0;
+    source_is_midi1 = false;
+    buffer.clear();
+    injected.clear();
+    live_sysex.reset();
+    injected_sysex.reset();
+    sysex_store.clear();
+  }
 };
 
 CoreMidiInput::CoreMidiInput() : impl_(std::make_unique<Impl>()) {}
 CoreMidiInput::~CoreMidiInput() { close(); }
 
 size_t CoreMidiInput::source_count() { return MIDIGetNumberOfSources(); }
+
+std::vector<CoreMidiInput::SourceInfo> CoreMidiInput::sources() {
+  std::vector<SourceInfo> result;
+  const ItemCount count = MIDIGetNumberOfSources();
+  result.reserve(count);
+  for (ItemCount index = 0; index < count; ++index) {
+    const MIDIEndpointRef endpoint = MIDIGetSource(index);
+    MIDIUniqueID unique_id = kMIDIInvalidUniqueID;
+    if (!source_unique_id(endpoint, &unique_id) || unique_id == kMIDIInvalidUniqueID) continue;
+
+    SourceInfo info;
+    info.uid = std::to_string(unique_id);
+    source_display_name(endpoint, &info.name);
+    result.push_back(std::move(info));
+  }
+  return result;
+}
 
 bool CoreMidiInput::source_name(size_t index, char* out, size_t capacity) {
   if (out == nullptr || capacity == 0 || index >= MIDIGetNumberOfSources()) return false;
@@ -466,38 +579,39 @@ bool CoreMidiInput::source_name(size_t index, char* out, size_t capacity) {
       name == nullptr) {
     return false;
   }
-  const bool copied =
-      CFStringGetCString(name, out, static_cast<CFIndex>(capacity), kCFStringEncodingUTF8);
+  const size_t available =
+      std::min(capacity - 1, static_cast<size_t>(std::numeric_limits<CFIndex>::max()));
+  CFIndex used = 0;
+  CFStringGetBytes(name, CFRangeMake(0, CFStringGetLength(name)), kCFStringEncodingUTF8, 0, false,
+                   reinterpret_cast<UInt8*>(out), static_cast<CFIndex>(available), &used);
+  if (used < 0) used = 0;
+  if (static_cast<size_t>(used) > available) used = static_cast<CFIndex>(available);
+  out[static_cast<size_t>(used)] = '\0';
   CFRelease(name);
-  return copied;
+  return true;
 }
 
 bool CoreMidiInput::open(size_t source_index) {
   if (impl_->client != 0) return false;
   if (source_index >= MIDIGetNumberOfSources()) return false;
-  impl_->source = MIDIGetSource(source_index);
-  if (impl_->source == 0) return false;
-  mach_timebase_info(&impl_->timebase);
+  const MIDIEndpointRef endpoint = MIDIGetSource(source_index);
+  return impl_->open_source(endpoint);
+}
 
-  if (MIDIClientCreate(CFSTR("sonare.host.input"), nullptr, nullptr, &impl_->client) != noErr) {
-    return false;
+bool CoreMidiInput::open_uid(std::string_view uid) {
+  if (impl_->client != 0) return false;
+  MIDIUniqueID wanted = kMIDIInvalidUniqueID;
+  if (!parse_source_uid(uid, &wanted) || wanted == kMIDIInvalidUniqueID) return false;
+
+  const ItemCount count = MIDIGetNumberOfSources();
+  for (ItemCount index = 0; index < count; ++index) {
+    const MIDIEndpointRef endpoint = MIDIGetSource(index);
+    MIDIUniqueID candidate = kMIDIInvalidUniqueID;
+    if (source_unique_id(endpoint, &candidate) && candidate == wanted) {
+      return impl_->open_source(endpoint);
+    }
   }
-  if (MIDIInputPortCreateWithProtocol(impl_->client, CFSTR("sonare.in"), kMIDIProtocol_2_0,
-                                      &impl_->port, ^(const MIDIEventList* list, void* srcRef) {
-                                        Impl::read_trampoline(list, impl_.get(), srcRef);
-                                      }) != noErr) {
-    close();
-    return false;
-  }
-  if (MIDIPortConnectSource(impl_->port, impl_->source, nullptr) != noErr) {
-    close();
-    return false;
-  }
-  // From here the OS-registered read_trampoline is the sole producer into
-  // `buffer` and `live_sysex`. push_event()/push_event_at_host_time() keep
-  // working while the source is live because they produce into `injected` and
-  // `injected_sysex` instead, so each ring still has exactly one writer.
-  return true;
+  return false;
 }
 
 void CoreMidiInput::set_time_mapper(const MidiHostTimeMapper* mapper) noexcept {
@@ -535,24 +649,7 @@ bool CoreMidiInput::push_event_at_host_time(const midi::Ump& ump, uint64_t host_
   return impl_->injected.push_event(ump, 0);
 }
 
-void CoreMidiInput::close() noexcept {
-  if (impl_->port != 0 && impl_->source != 0) MIDIPortDisconnectSource(impl_->port, impl_->source);
-  if (impl_->port != 0) MIDIPortDispose(impl_->port);
-  if (impl_->client != 0) MIDIClientDispose(impl_->client);
-  impl_->port = 0;
-  impl_->client = 0;
-  impl_->source = 0;
-  // Disposing the port/client above is synchronous, so read_trampoline cannot
-  // fire again once it returns and this control-thread reset races nothing on
-  // the live side. `injected` and `injected_sysex` are reset too: close() ends
-  // the timeline both rings were stamped against, so anything still queued
-  // there would surface against the next device's frame numbering.
-  impl_->buffer.clear();
-  impl_->injected.clear();
-  impl_->live_sysex.reset();
-  impl_->injected_sysex.reset();
-  impl_->sysex_store.clear();
-}
+void CoreMidiInput::close() noexcept { impl_->close(); }
 
 bool CoreMidiInput::push_event(const midi::Ump& ump, int64_t port_time_samples) noexcept {
   // Manual injection (an on-screen keyboard, a step-entry pad) produces into

@@ -876,6 +876,12 @@ CliOptionSpec library_default(CliOptionSpec option, std::string library_value) {
   return option;
 }
 
+/// An option with a short description shown beside it in command help.
+CliOptionSpec described(CliOptionSpec option, std::string text) {
+  option.description = std::move(text);
+  return option;
+}
+
 /// An option whose library value depends on another option, stated as prose rather than a value.
 CliOptionSpec with_stated_default(CliOptionSpec option, std::string statement) {
   option.stated_default = std::move(statement);
@@ -1044,10 +1050,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "dynamics", true,
                 {library_default(with_domain(number_value("window-sec"), greater_than(0.0)), "0.4"),
                  library_default(with_domain(global_int("hop-length"), at_least(1.0)), "512")});
-    // Neither RhythmAnalyzer nor the BeatAnalyzer it forwards to validates any of
-    // the three tempo bounds; the derived periods are merely floored at 1.
     add_command(commands, "rhythm", true,
-                {library_default(tempo(number_value("start-bpm")), "120.0"),
+                {described(library_default(tempo(number_value("start-bpm")), "120.0"),
+                           "Finite, positive BPM prior for beat tracking when the tempo search "
+                           "finds none. Output reports only measured tempo."),
                  library_default(tempo(number_value("bpm-min")), "60.0"),
                  library_default(tempo(number_value("bpm-max")), "200.0"),
                  library_default(global_int("n-fft"), "2048"),
@@ -1370,7 +1376,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {with_domain(required_string("analysis"),
                              choices_of(mastering::api::pair_analysis_names())),
                  required_path("reference"), string_value("params")},
-                {}, validate_params_grammar);
+                {}, validate_params_grammar, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mastering-stereo-analyze", true,
                 {with_domain(required_string("analysis"),
                              choices_of(mastering::api::stereo_analysis_names())),

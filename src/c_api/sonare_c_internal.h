@@ -5,6 +5,7 @@
 #include <deque>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -38,6 +39,8 @@ struct SonareAudio {
 // other C API translation units can access engine internals without ODR or
 // linker fragility. The public header keeps the opaque forward-declaration.
 struct SonareEngine {
+  ~SonareEngine() noexcept;
+
   sonare::engine::RealtimeEngine engine;
   sonare::automation::ParameterRegistry parameters;
   std::deque<std::string> parameter_strings;
@@ -50,8 +53,7 @@ struct SonareEngine {
   /// Loaded SoundFont (sonare_engine_load_soundfont); shared read-only with the
   /// SF2 players bound through sonare_engine_set_sf2_instrument.
   std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;
-  sonare::host::FixedMidiInputSource<512> midi_input_source;
-  bool midi_input_source_enabled = false;
+  std::shared_ptr<sonare::host::FixedMidiInputSource<512>> midi_input_source;
   /// Last timeline applied by sonare_engine_apply_project_timeline; the engine's
   /// markers point into its name storage, so it is held until the next successful apply.
   std::shared_ptr<const void> applied_timeline;
@@ -92,10 +94,13 @@ SonareError& last_error_code_storage() noexcept;
 ///          so a caught exception cannot escape while its error code is being
 ///          recorded.
 const char* last_error_message() noexcept;
+/// @brief Returns the thread-local lower-camel-case reason token, or NULL when none was recorded.
+const char* last_error_reason() noexcept;
 /// @brief Records @p code and @p msg as the calling thread's last error.
 /// @details @p code is the SonareError the failing call returns, or would have
-///          returned had it not reported failure through a NULL handle.
-void set_last_error(SonareError code, const char* msg) noexcept;
+///          returned had it not reported failure through a NULL handle. @p reason is optional.
+void set_last_error(SonareError code, const char* msg,
+                    std::optional<sonare::ErrorReason> reason = std::nullopt) noexcept;
 /// @brief Refuses a @c struct_size below the struct this library was built with,
 ///        naming the struct in the recorded message.
 inline bool struct_size_accepted(uint32_t struct_size, size_t expected, const char* name) {
@@ -187,7 +192,8 @@ auto with_c_pair_names(const std::array<CPairName, N>& names, Call&& call) -> de
 /// @details Never allocates: the message is read through the fallback pointer
 ///          instead of being copied, so a refusal made before any buffer exists
 ///          can still carry its reason.
-void set_last_error_static(SonareError code, const char* msg) noexcept;
+void set_last_error_static(SonareError code, const char* msg,
+                           std::optional<sonare::ErrorReason> reason = std::nullopt) noexcept;
 /// @brief Clears the thread-local detailed-error message and its code.
 /// @details Called at the entry of every public C-ABI call (via SONARE_C_TRY and
 ///          the run_offline / run_mono_offline helpers) so a message recorded by
@@ -429,6 +435,7 @@ enum class Feature {
   kMixingAssistant,
   kPitchEditor,
   kPlayback,
+  kLiveDevices,
   kVoiceChanger,
 };
 
@@ -453,6 +460,8 @@ constexpr const char* not_compiled_in_message(Feature feature) noexcept {
       return "pitch editor support is not compiled in";
     case Feature::kPlayback:
       return "playback support is not compiled in";
+    case Feature::kLiveDevices:
+      return "live device support is not compiled in";
     case Feature::kVoiceChanger:
       return "voice changer support is not compiled in";
   }
@@ -460,7 +469,7 @@ constexpr const char* not_compiled_in_message(Feature feature) noexcept {
 }
 
 /// @brief Whether this build carries @p feature.
-constexpr bool is_compiled_in(Feature feature) noexcept {
+static constexpr bool is_compiled_in(Feature feature) noexcept {
   switch (feature) {
     case Feature::kAcousticSim:
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
@@ -516,6 +525,12 @@ constexpr bool is_compiled_in(Feature feature) noexcept {
 #else
       return false;
 #endif
+    case Feature::kLiveDevices:
+#if defined(SONARE_WITH_LIVE_DEVICES)
+      return true;
+#else
+      return false;
+#endif
     case Feature::kVoiceChanger:
 #if defined(SONARE_WITH_VOICE_CHANGER)
       return true;
@@ -528,7 +543,7 @@ constexpr bool is_compiled_in(Feature feature) noexcept {
 
 /// @brief For an entry gated on both @p first and @p second: the one this build lacks,
 ///        @p first when both are missing.
-constexpr Feature first_missing(Feature first, Feature second) noexcept {
+static constexpr Feature first_missing(Feature first, Feature second) noexcept {
   return is_compiled_in(first) ? second : first;
 }
 
@@ -538,7 +553,8 @@ constexpr Feature first_missing(Feature first, Feature second) noexcept {
 template <typename... T>
 [[nodiscard]] SonareError refuse_not_compiled_in(Feature feature, const T&... unused) noexcept {
   ignore_args(unused...);
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature));
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature),
+                        sonare::ErrorReason::NotCompiledIn);
   return SONARE_ERROR_NOT_SUPPORTED;
 }
 
@@ -547,7 +563,8 @@ template <typename... T>
 template <typename Handle, typename... T>
 [[nodiscard]] Handle* refuse_not_compiled_in_handle(Feature feature, const T&... unused) noexcept {
   ignore_args(unused...);
-  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature));
+  set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature),
+                        sonare::ErrorReason::NotCompiledIn);
   return nullptr;
 }
 
@@ -557,9 +574,11 @@ template <typename Handle, typename... T>
                                                               const char* subject) noexcept {
   try {
     set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                   (std::string(subject) + ": " + not_compiled_in_message(feature)).c_str());
+                   (std::string(subject) + ": " + not_compiled_in_message(feature)).c_str(),
+                   sonare::ErrorReason::NotCompiledIn);
   } catch (...) {
-    set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature));
+    set_last_error_static(SONARE_ERROR_NOT_SUPPORTED, not_compiled_in_message(feature),
+                          sonare::ErrorReason::NotCompiledIn);
   }
   return SONARE_ERROR_NOT_SUPPORTED;
 }

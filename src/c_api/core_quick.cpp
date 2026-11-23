@@ -452,6 +452,11 @@ const std::array<CName, 6> kMeterOptionNames{
      {"subdivision_weight", "options.subdivision_weight"},
      {"compound_subdivision_threshold", "options.compound_subdivision_threshold"}}};
 
+const std::array<CName, 4> kMeterBeatsNames{{{"accent", "beats.accent"},
+                                             {"has_attack", "beats.has_attack"},
+                                             {"low_frequency_energy", "beats.low_frequency_energy"},
+                                             {"subdivision_accent", "beats.subdivision_accent"}}};
+
 }  // namespace
 
 SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
@@ -529,18 +534,27 @@ void sonare_meter_options_init(SonareMeterOptions* options) {
   options->candidate_numerator_count = count;
 }
 
-SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
-                                       size_t beat_count, const SonareMeterOptions* options,
-                                       char** out_json) {
+void sonare_meter_beats_init(SonareMeterBeats* beats) {
+  if (beats == nullptr) return;
+  *beats = {};
+  beats->struct_size = sizeof(*beats);
+}
+
+SonareError sonare_estimate_meter_json(const SonareMeterBeats* beats,
+                                       const SonareMeterOptions* options, char** out_json) {
   SONARE_C_API_ENTRY;
-  // Value rules live in validate_meter_config, which estimate_meter_from_beats
-  // applies; this entry point only checks what the core cannot see (the
-  // pointers and the length of the flat candidate array it never receives).
   SONARE_C_ZERO_OUTS(out_json);
-  // A zero count with null pointers is an empty beat series, not a null-pointer
-  // mistake: the core's own empty-series refusal answers it.
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(beat_times, beat_count);
-  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(beat_strengths, beat_count);
+  SONARE_C_REQUIRE_NONNULL(beats);
+  if (const SonareError err = run_validation([&] {
+        sonare_c_detail::require_struct_size(beats->struct_size, sizeof(SonareMeterBeats), "beats",
+                                             "sonare_meter_beats_init");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  if (beats->accent == nullptr && beats->beat_count != 0) {
+    return sonare_c_detail::refuse_null_when_count("beats.accent", "beats.beat_count");
+  }
   SONARE_C_REQUIRE_NONNULL(options);
   if (const SonareError err = run_validation([&] {
         sonare_c_detail::require_struct_size(options->struct_size, sizeof(SonareMeterOptions),
@@ -555,6 +569,16 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
   SONARE_C_REQUIRE_NONNULL(out_json);
 
   SONARE_C_TRY
+  MeterBeats observations;
+  const size_t max_count =
+      std::min(std::min(observations.accent.max_size(), observations.has_attack.max_size()),
+               std::min(observations.low_frequency_energy.max_size(),
+                        observations.subdivision_accent.max_size()));
+  if (beats->beat_count > max_count) {
+    // Check before adding the count to any caller-owned pointer or allocating a copy.
+    util::check::refuse("beats.beat_count", "must be at most " + std::to_string(max_count));
+  }
+
   MeterConfig config;
   config.candidate_numerators.assign(
       options->candidate_numerators,
@@ -565,17 +589,24 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
   config.subdivision_weight = options->subdivision_weight;
   config.compound_subdivision_threshold = options->compound_subdivision_threshold;
 
-  // Built only when there is something to copy: a (null, null) iterator pair is
-  // not a valid empty range, and an empty series has to reach the core guard
-  // rather than trip over its own construction on the way there.
-  std::vector<float> times;
-  std::vector<float> strengths;
-  if (beat_count > 0) {
-    times.assign(beat_times, beat_times + beat_count);
-    strengths.assign(beat_strengths, beat_strengths + beat_count);
+  if (beats->beat_count > 0 && beats->accent != nullptr) {
+    observations.accent.assign(beats->accent, beats->accent + beats->beat_count);
+    if (beats->has_attack != nullptr) {
+      observations.has_attack.assign(beats->has_attack, beats->has_attack + beats->beat_count);
+    }
+    if (beats->low_frequency_energy != nullptr) {
+      observations.low_frequency_energy.assign(beats->low_frequency_energy,
+                                               beats->low_frequency_energy + beats->beat_count);
+    }
+    if (beats->subdivision_accent != nullptr && beats->beat_count > 1) {
+      observations.subdivision_accent.assign(beats->subdivision_accent,
+                                             beats->subdivision_accent + (beats->beat_count - 1));
+    }
   }
-  *out_json = copy_string(meter_result_to_json(with_c_names(
-      kMeterOptionNames, [&] { return estimate_meter_from_beats(times, strengths, config); })));
+  *out_json = copy_string(meter_result_to_json(with_c_names(kMeterOptionNames, [&] {
+    return with_c_names(kMeterBeatsNames,
+                        [&] { return estimate_meter_from_observations(observations, config); });
+  })));
   return SONARE_OK;
   SONARE_C_CATCH
 }

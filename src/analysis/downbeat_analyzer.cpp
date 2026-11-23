@@ -290,48 +290,4 @@ std::vector<float> low_frequency_energy_observations(const std::vector<Beat>& be
   return observations;
 }
 
-// Frame-0 beats are often underestimated due to center-padding of the onset
-// envelope, so when the first beat is near-silent (below this fraction of the
-// second beat's strength) it inherits the second beat's strength.
-constexpr float kSilentFirstBeatRatio = 0.1f;
-
-std::vector<float> onset_strength_observations(const std::vector<Beat>& beats,
-                                               const std::vector<float>& onset_strength, int sr,
-                                               int hop_length, float window_seconds) {
-  SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(window_seconds > 0.0f, ErrorCode::InvalidParameter);
-
-  std::vector<float> observations(beats.size(), 0.0f);
-  if (beats.empty() || onset_strength.empty()) {
-    return observations;
-  }
-
-  const int half_window = std::max(
-      1, static_cast<int>(std::round(0.5f * window_seconds * sr / static_cast<float>(hop_length))));
-  const int n_frames = static_cast<int>(onset_strength.size());
-  for (size_t beat_index = 0; beat_index < beats.size(); ++beat_index) {
-    const int center = std::clamp(beats[beat_index].frame, 0, n_frames - 1);
-
-    const int first = std::max(0, center - half_window);
-    const int last = std::min(n_frames, center + half_window + 1);
-    float max_value = 0.0f;
-    float sum = 0.0f;
-    for (int frame = first; frame < last; ++frame) {
-      const float value = std::max(0.0f, onset_strength[static_cast<size_t>(frame)]);
-      max_value = std::max(max_value, value);
-      sum += value;
-    }
-
-    const float mean = sum / static_cast<float>(std::max(1, last - first));
-    observations[beat_index] = 0.7f * max_value + 0.3f * mean;
-  }
-  if (observations.size() >= 2 && beats.front().frame == 0 &&
-      observations.front() < observations[1] * kSilentFirstBeatRatio) {
-    observations.front() = observations[1];
-  }
-
-  return observations;
-}
-
 }  // namespace sonare

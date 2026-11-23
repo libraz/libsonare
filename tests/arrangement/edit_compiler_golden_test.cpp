@@ -1226,7 +1226,8 @@ TEST_CASE("compiler expands audio comp segments into take-specific schedules", "
   REQUIRE(rendered[25000 * 2] < 0.71f);
 }
 
-TEST_CASE("compiler rejects a multi-source comp carrying pre-baked warped audio", "[arrangement]") {
+TEST_CASE("compiler selects pre-baked warped audio per source within a multi-source comp",
+          "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
   REQUIRE(clip != nullptr);
@@ -1237,13 +1238,17 @@ TEST_CASE("compiler rejects a multi-source comp carrying pre-baked warped audio"
   const arr::SourceId take_source = f.project.add_audio_source(take_ref);
   arr::AudioSourceSamples take_samples;
   take_samples.sample_rate = kProjectSr;
-  take_samples.channels.assign(2, std::vector<float>(48000, 0.7f));
+  take_samples.channels.assign(2, std::vector<float>(48000, 0.9f));
   f.audio.sources.emplace(take_source, std::move(take_samples));
 
   arr::AudioSourceSamples warped;
   warped.sample_rate = kProjectSr;
   warped.channels.assign(2, std::vector<float>(48000, 0.3f));
-  f.audio.warped_sources.emplace(77, std::move(warped));
+  f.audio.warped_sources.emplace(arr::WarpedAudioKey{f.source_id, 77}, std::move(warped));
+  arr::AudioSourceSamples warped_take;
+  warped_take.sample_rate = kProjectSr;
+  warped_take.channels.assign(2, std::vector<float>(48000, 0.7f));
+  f.audio.warped_sources.emplace(arr::WarpedAudioKey{take_source, 77}, std::move(warped_take));
 
   clip->warp_ref_id = 77;
   clip->warp_mode = arr::WarpMode::kRepitch;
@@ -1251,25 +1256,18 @@ TEST_CASE("compiler rejects a multi-source comp carrying pre-baked warped audio"
   clip->active_take_id = 1;
   clip->comp_segments = {{0.0, 1.0, 1}, {1.0, 2.0, 2}};
 
-  const auto has_dangling_source_ref = [](const arr::CompileResult& result) {
-    return std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& diag) {
-      return diag.code == arr::Diagnostic::Code::kDanglingSourceRef &&
-             diag.severity == arr::Diagnostic::Severity::kError;
-    });
-  };
-
-  const arr::CompileResult multi_source = arr::compile(f.project, f.midi, f.audio);
-  REQUIRE(multi_source.has_errors());
-  REQUIRE(has_dangling_source_ref(multi_source));
-  REQUIRE_FALSE(multi_source.timeline.has_value());
-
-  // Only the spread across sources is ambiguous: one source under the same baked
-  // rendition still compiles.
-  clip->comp_segments = {{0.0, 1.0, 1}, {1.0, 2.0, 1}};
-  const arr::CompileResult single_source = arr::compile(f.project, f.midi, f.audio);
-  REQUIRE_FALSE(single_source.has_errors());
-  REQUIRE_FALSE(has_dangling_source_ref(single_source));
-  REQUIRE(single_source.timeline.has_value());
+  const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(result.has_errors());
+  REQUIRE(result.timeline.has_value());
+  REQUIRE(result.timeline->audio_clips.size() == 2);
+  const auto first_samples = result.timeline->audio_clips[0].storage;
+  const auto second_samples = result.timeline->audio_clips[1].storage;
+  REQUIRE(first_samples != nullptr);
+  REQUIRE(second_samples != nullptr);
+  CHECK(result.timeline->audio_clips[0].warp_mode == sonare::engine::WarpMode::kOff);
+  CHECK(result.timeline->audio_clips[1].warp_mode == sonare::engine::WarpMode::kOff);
+  CHECK(first_samples->channels[0][0] == Catch::Approx(0.3f));
+  CHECK(second_samples->channels[0][0] == Catch::Approx(0.7f));
 }
 
 TEST_CASE("a comp seam crossfades instead of stepping", "[arrangement]") {
@@ -1422,7 +1420,7 @@ TEST_CASE("compiler uses pre-baked warped audio when a warp reference is registe
   warped.sample_rate = kProjectSr;
   warped.channels.push_back({0.75f, 0.5f, 0.25f});
   warped.channels.push_back({-0.25f, -0.5f, -0.75f});
-  f.audio.warped_sources.emplace(77, std::move(warped));
+  f.audio.warped_sources.emplace(arr::WarpedAudioKey{f.source_id, 77}, std::move(warped));
 
   arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
   REQUIRE_FALSE(r.has_errors());
@@ -1452,7 +1450,7 @@ TEST_CASE("compiler ignores a pre-baked warp cache while warp mode is off", "[ar
   arr::AudioSourceSamples warped;
   warped.sample_rate = kProjectSr;
   warped.channels.assign(2, std::vector<float>(48000, 0.75f));
-  f.audio.warped_sources.emplace(77, std::move(warped));
+  f.audio.warped_sources.emplace(arr::WarpedAudioKey{f.source_id, 77}, std::move(warped));
 
   const arr::CompileResult off = arr::compile(f.project, f.midi, f.audio);
   REQUIRE_FALSE(off.has_errors());
@@ -1509,7 +1507,7 @@ TEST_CASE("compiler bakes tempo-sync warp clips when warped audio is absent", "[
   arr::AudioSourceSamples warped;
   warped.sample_rate = kProjectSr;
   warped.channels.push_back({0.25f, 0.5f, 0.75f});
-  f.audio.warped_sources.emplace(77, std::move(warped));
+  f.audio.warped_sources.emplace(arr::WarpedAudioKey{f.source_id, 77}, std::move(warped));
 
   arr::CompileResult baked = arr::compile(f.project, f.midi, f.audio);
   REQUIRE_FALSE(baked.has_errors());
@@ -1989,25 +1987,23 @@ TEST_CASE("a track's controls never reach a channel strip it shares", "[arrangem
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("typed track automation resolves by project lane and target kind", "[arrangement]") {
   SharedStripFixture s = make_shared_strip_fixture();
-  // The persistent id is deliberately identical on both tracks.  It is an
-  // edit-model value, not the playback route, so the compiler must resolve the
-  // lanes to project-indexed reserved ids without dropping either owner.
-  const auto make_lane = [](uint32_t target, sonare::automation::AutomationTargetKind kind,
-                            float value) {
-    sonare::automation::AutomationLane lane(target, kind);
+  // Typed targets have no authored parameter ID. The compiler resolves each
+  // route from the owning track and target kind.
+  const auto make_lane = [](sonare::automation::AutomationTargetKind kind, float value) {
+    sonare::automation::AutomationLane lane(0, kind);
     lane.set_points({{0.0, value, sonare::automation::CurveType::Hold}});
     return lane;
   };
+  REQUIRE(
+      arr::AddAutomationLane(
+          s.track_a, make_lane(sonare::automation::AutomationTargetKind::kTrackFaderDb, -6.0206f))
+          .apply(s.f.project, s.f.midi));
+  REQUIRE(
+      arr::AddAutomationLane(
+          s.track_b, make_lane(sonare::automation::AutomationTargetKind::kTrackFaderDb, -12.0412f))
+          .apply(s.f.project, s.f.midi));
   REQUIRE(arr::AddAutomationLane(
-              s.track_a,
-              make_lane(900, sonare::automation::AutomationTargetKind::kTrackFaderDb, -6.0206f))
-              .apply(s.f.project, s.f.midi));
-  REQUIRE(arr::AddAutomationLane(
-              s.track_b,
-              make_lane(900, sonare::automation::AutomationTargetKind::kTrackFaderDb, -12.0412f))
-              .apply(s.f.project, s.f.midi));
-  REQUIRE(arr::AddAutomationLane(
-              s.track_b, make_lane(901, sonare::automation::AutomationTargetKind::kTrackPan, 1.0f))
+              s.track_b, make_lane(sonare::automation::AutomationTargetKind::kTrackPan, 1.0f))
               .apply(s.f.project, s.f.midi));
 
   // Make the signal constant so the two independent lane values are directly
@@ -2048,10 +2044,9 @@ TEST_CASE("typed track automation resolves by project lane and target kind", "[a
     right.fill(0.0f);
     engine.process(io, 2, kBlock);
   }
-  // Both fader lanes use persistent id 900, yet resolve to distinct lane
-  // indices. Track B additionally uses a pan lane (id 901), so a mutant that
-  // packs every typed kind as fader would collide with B's fader and fail the
-  // image expectation. A contributes 0.5 to both planes; B contributes 0.25
+  // The faders resolve to distinct track lanes. Track B also has a pan lane;
+  // packing every typed kind as fader would collide with B's fader and fail
+  // the image expectation. A contributes 0.5 to both planes; B contributes 0.25
   // only to the right plane after its hard-right pan.
   REQUIRE(left.back() == Catch::Approx(0.5f).margin(0.05f));
   REQUIRE(right.back() == Catch::Approx(0.75f).margin(0.05f));
@@ -2066,7 +2061,7 @@ TEST_CASE("apply_to_engine refuses a rejected lane vector before installing anyt
   // that refused vector, so the whole timeline is refused and the engine keeps its prior state.
   arr::CompiledTimeline timeline;
   timeline.track_lanes = {{5}, {5}};
-  sonare::automation::AutomationLane typed(900,
+  sonare::automation::AutomationLane typed(0,
                                            sonare::automation::AutomationTargetKind::kTrackFaderDb);
   typed.set_points({{0.0, -6.0f, sonare::automation::CurveType::Hold}});
   sonare::automation::AutomationLane opaque(77);
@@ -2099,10 +2094,10 @@ TEST_CASE("compiler reports typed lane and reserved-route diagnostics", "[arrang
     auto* track = f.project.find_track_mutable(f.track_id);
     REQUIRE(track != nullptr);
     sonare::automation::AutomationLane first(
-        101, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+        0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
     first.set_points({{0.0, -3.0f, sonare::automation::CurveType::Hold}});
     sonare::automation::AutomationLane second(
-        102, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+        0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
     second.set_points({{0.0, -6.0f, sonare::automation::CurveType::Hold}});
     track->automation_lanes.push_back(first);
     track->automation_lanes.push_back(second);
@@ -2233,8 +2228,8 @@ TEST_CASE("compiler reports adopted opaque lanes without a built-in route", "[ar
     Fixture f = make_fixture(128);
     auto* track = f.project.find_track_mutable(f.track_id);
     REQUIRE(track != nullptr);
-    add_lane(track, 101, sonare::automation::AutomationTargetKind::kTrackFaderDb);
-    add_lane(track, 102, sonare::automation::AutomationTargetKind::kTrackPan);
+    add_lane(track, 0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+    add_lane(track, 0, sonare::automation::AutomationTargetKind::kTrackPan);
 
     const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
     REQUIRE(result.timeline.has_value());

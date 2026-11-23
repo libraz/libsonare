@@ -2,6 +2,7 @@
 /// @brief MIDI-content, assist, and internal inverse-only edit-command definitions.
 
 #include <algorithm>
+#include <limits>
 #include <map>
 #include <utility>
 #include <vector>
@@ -259,17 +260,24 @@ EditCommandPtr RemoveMarkerInternal::invert(const Project& before,
 
 bool InsertAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
   Track* t = project.find_track_mutable(track_id_);
-  if (t == nullptr || lane_index_ > t->automation_lanes.size()) {
+  if (t == nullptr || lane_index_ > t->automation_lanes.size() || lane_.lane_id() == 0 ||
+      lane_.lane_id() == std::numeric_limits<uint32_t>::max()) {
     return false;
+  }
+  for (const Track& track : project.tracks()) {
+    for (const automation::AutomationLane& lane : track.automation_lanes) {
+      if (lane.lane_id() == lane_.lane_id()) return false;
+    }
   }
   t->automation_lanes.insert(t->automation_lanes.begin() + static_cast<std::ptrdiff_t>(lane_index_),
                              lane_);
+  project.ensure_next_automation_lane_id(lane_.lane_id());
   return true;
 }
 
 EditCommandPtr InsertAutomationLane::invert(const Project& /*before*/,
                                             const MidiContentStore& /*store_before*/) const {
-  return std::make_unique<RemoveAutomationLane>(track_id_, lane_index_);
+  return std::make_unique<RemoveAutomationLane>(track_id_, lane_.lane_id());
 }
 
 bool RemoveAssistSidecarInternal::apply(Project& project, MidiContentStore& /*store*/) {

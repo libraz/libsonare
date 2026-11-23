@@ -190,6 +190,25 @@ typedef struct {
       first_time_signature;  ///< First detected time-signature segment.
 } SonareProjectTempoCandidate;
 
+/// Result of applying one tempo candidate with @ref sonare_project_auto_tempo_with_result.
+/// This is a library-filled record with no version field.
+typedef struct {
+  float bpm;                           ///< BPM of the first installed tempo segment.
+  float bpm_confidence;                ///< Confidence of the selected tempo candidate, in [0, 1].
+  SonareTimeSignature time_signature;  ///< Detected meter, regardless of whether it was applied.
+} SonareProjectAutoTempoResult;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectAutoTempoResult, bpm) == 0, "AutoTempoResult.bpm offset");
+static_assert(offsetof(SonareProjectAutoTempoResult, bpm_confidence) == sizeof(float),
+              "AutoTempoResult.bpm_confidence offset");
+static_assert(offsetof(SonareProjectAutoTempoResult, time_signature) == 2u * sizeof(float),
+              "AutoTempoResult.time_signature offset");
+static_assert(sizeof(SonareProjectAutoTempoResult) ==
+                  2u * sizeof(float) + sizeof(SonareTimeSignature),
+              "SonareProjectAutoTempoResult layout drift");
+#endif
+
 /// Maximum number of ranked tempo candidates emitted by
 /// @ref sonare_project_analyze_tempo (primary, half, and double tempo).
 /// Callers can allocate this fixed-size array and complete analysis in one
@@ -257,6 +276,17 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
                                       size_t candidate_index, uint8_t apply_time_signatures,
                                       float* out_bpm);
 
+/// @brief Applies one ranked tempo candidate and returns its tempo and detected meter.
+/// @details The arguments and project edits match @ref sonare_project_auto_tempo. Unlike its
+///          optional @p out_bpm, @p out is required. The detected time signature is returned even
+///          when @p apply_time_signatures is zero. On failure, @p out is zeroed.
+SonareError sonare_project_auto_tempo_with_result(SonareProject* project, const float* audio,
+                                                  size_t len, int sample_rate,
+                                                  const SonareProjectTempoOptions* options,
+                                                  size_t candidate_index,
+                                                  uint8_t apply_time_signatures,
+                                                  SonareProjectAutoTempoResult* out);
+
 /// Options for @ref sonare_project_snap_to_grid. Start from
 /// @ref sonare_project_snap_to_grid_options_init.
 typedef struct {
@@ -295,6 +325,84 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
 ///   nothing is applied in that case.
 SonareError sonare_project_annotate_chords(SonareProject* project,
                                            const SonareProjectChordSymbol* chords, size_t count);
+
+/// @brief A labeled section on the project timeline.
+typedef struct {
+  double start_ppq;   ///< Section start, in quarter notes.
+  double end_ppq;     ///< Section end, strictly after @p start_ppq.
+  const char* label;  ///< Nonblank UTF-8 label, copied by the setter.
+} SonareProjectSection;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectSection, label) == 2 * sizeof(double),
+              "SonareProjectSection.label offset");
+#endif
+
+/// @brief Replaces the section annotations as one undoable edit.
+/// @details Sections may overlap. Pass NULL and zero to clear the stream.
+SonareError sonare_project_annotate_sections(SonareProject* project,
+                                             const SonareProjectSection* sections, size_t count);
+
+/// @brief Owned copy of the project's key annotations.
+typedef struct {
+  SonareProjectKeySegment* items;  ///< Stored-order keys owned by this list.
+  size_t count;                    ///< Number of entries in items.
+} SonareProjectKeySegmentList;
+
+/// @brief Owned copy of the project's chord annotations, including extensions and Roman numerals.
+typedef struct {
+  SonareProjectChordSymbol* items;  ///< Stored-order chords owned by this list.
+  size_t count;                     ///< Number of entries in items.
+} SonareProjectChordSymbolList;
+
+/// @brief Owned copy of the project's section annotations, including their labels.
+typedef struct {
+  SonareProjectSection* items;  ///< Stored-order sections owned by this list.
+  size_t count;                 ///< Number of entries in items.
+} SonareProjectSectionList;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectKeySegmentList, items) == 0, "KeySegmentList.items offset");
+static_assert(offsetof(SonareProjectKeySegmentList, count) == sizeof(void*),
+              "KeySegmentList.count offset");
+static_assert(sizeof(SonareProjectKeySegmentList) == sizeof(void*) + sizeof(size_t),
+              "SonareProjectKeySegmentList layout drift");
+static_assert(offsetof(SonareProjectChordSymbolList, items) == 0, "ChordSymbolList.items offset");
+static_assert(offsetof(SonareProjectChordSymbolList, count) == sizeof(void*),
+              "ChordSymbolList.count offset");
+static_assert(sizeof(SonareProjectChordSymbolList) == sizeof(void*) + sizeof(size_t),
+              "SonareProjectChordSymbolList layout drift");
+static_assert(offsetof(SonareProjectSectionList, items) == 0, "SectionList.items offset");
+static_assert(offsetof(SonareProjectSectionList, count) == sizeof(void*),
+              "SectionList.count offset");
+static_assert(sizeof(SonareProjectSectionList) == sizeof(void*) + sizeof(size_t),
+              "SonareProjectSectionList layout drift");
+#endif
+
+/// @brief Copies the stored key annotations. An empty result has NULL items and zero count.
+/// @details Release the copy with @ref sonare_free_project_key_segment_list.
+SonareError sonare_project_key_annotations(const SonareProject* project,
+                                           SonareProjectKeySegmentList* out);
+
+/// @brief Releases a key annotation list and clears it. NULL is safe.
+void sonare_free_project_key_segment_list(SonareProjectKeySegmentList* list);
+
+/// @brief Copies the stored chord annotations. An empty result has NULL items and zero count.
+/// @details An unset or empty Roman numeral reads back as NULL. Release the copy with
+///          @ref sonare_free_project_chord_symbol_list.
+SonareError sonare_project_chord_annotations(const SonareProject* project,
+                                             SonareProjectChordSymbolList* out);
+
+/// @brief Releases a chord annotation list and clears it. NULL is safe.
+void sonare_free_project_chord_symbol_list(SonareProjectChordSymbolList* list);
+
+/// @brief Copies the stored section annotations. An empty result has NULL items and zero count.
+/// @details Release the copy with @ref sonare_free_project_section_list.
+SonareError sonare_project_section_annotations(const SonareProject* project,
+                                               SonareProjectSectionList* out);
+
+/// @brief Releases a section annotation list and clears it. NULL is safe.
+void sonare_free_project_section_list(SonareProjectSectionList* list);
 
 /// @brief Converts an analysis chord into the fields of a
 ///        @ref SonareProjectChordSymbol.

@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cctype>
+
 #include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
@@ -171,6 +174,64 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
 #endif
 }
 
+SonareError sonare_project_auto_tempo_with_result(SonareProject* project, const float* audio,
+                                                  size_t len, int sample_rate,
+                                                  const SonareProjectTempoOptions* options,
+                                                  size_t candidate_index,
+                                                  uint8_t apply_time_signatures,
+                                                  SonareProjectAutoTempoResult* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SonareError err = validate_audio_params("audio", audio, len, sample_rate);
+  if (err != SONARE_OK) return err;
+  SonareProjectTempoOptions defaults{};
+  const SonareProjectTempoOptions* supplied_options = options;
+  if (supplied_options == nullptr) {
+    sonare_project_tempo_options_init(&defaults);
+    supplied_options = &defaults;
+  }
+  if (err = run_validation([&] { check_tempo_options(*supplied_options); }); err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_TRY
+  const std::vector<sonare::mir::TempoEstimate> estimates =
+      analyze_tempo_candidates(audio, len, sample_rate, *supplied_options);
+  check_tempo_candidate(estimates, candidate_index);
+  const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
+  SonareProjectAutoTempoResult result{};
+  result.bpm = static_cast<float>(selected.segments.front().bpm);
+  result.bpm_confidence = selected.confidence;
+  result.time_signature = {selected.meter.numerator, selected.meter.denominator,
+                           selected.meter.confidence};
+
+  auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
+  if (!project->history.apply(std::move(command))) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE,
+                                    "the tempo candidate could not be applied");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
+    auto time_signature_command =
+        std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs);
+    if (!project->history.apply(std::move(time_signature_command))) {
+      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE,
+                                      "the detected time signatures could not be applied");
+      return SONARE_ERROR_INVALID_STATE;
+    }
+  }
+  *out = result;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 audio, len, sample_rate, options, candidate_index,
+                                                 apply_time_signatures, out);
+#endif
+}
+
 void sonare_project_snap_to_grid_options_init(SonareProjectSnapToGridOptions* options) {
   if (options == nullptr) return;
   *options = {};
@@ -253,6 +314,14 @@ void check_ppq_span(double start, double end, const std::string& start_subject,
   check::within(end, sonare_c_detail::kPublicPpqDomain, end_subject.c_str());
   if (!(end > start)) {
     check::refuse_relation({end_subject, start_subject}, "{0} must be greater than {1}");
+  }
+}
+
+void check_section_label(const char* label, const std::string& subject) {
+  check::non_null(label, subject.c_str());
+  const std::string value(label);
+  if (std::all_of(value.begin(), value.end(), [](unsigned char ch) { return std::isspace(ch); })) {
+    check::refuse(subject.c_str(), "must not be blank");
   }
 }
 
@@ -353,6 +422,162 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  chords, count);
+#endif
+}
+
+SonareError sonare_project_annotate_sections(SonareProject* project,
+                                             const SonareProjectSection* sections, size_t count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(sections, count);
+  if (const SonareError err = run_validation([&] {
+        check::integer_within(static_cast<long long>(count), kAnnotationCountDomain, "count");
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_TRY
+  arr::ProjectAnnotation annotation = project->history.project().annotation();
+  annotation.sections.clear();
+  annotation.sections.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    const SonareProjectSection& in = sections[i];
+    const auto subject = [i](const char* field) {
+      return check::indexed_subject("sections", i, field);
+    };
+    check_ppq_span(in.start_ppq, in.end_ppq, subject("start_ppq"), subject("end_ppq"));
+    check_section_label(in.label, subject("label"));
+    annotation.sections.push_back({in.start_ppq, in.end_ppq, in.label});
+  }
+  auto command = std::make_unique<arr::SetAnnotation>(std::move(annotation));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 sections, count);
+#endif
+}
+
+void sonare_free_project_key_segment_list(SonareProjectKeySegmentList* list) {
+  if (list == nullptr) return;
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_project_key_annotations(const SonareProject* project,
+                                           SonareProjectKeySegmentList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  const auto& keys = project->history.project().annotation().keys;
+  if (keys.empty()) return SONARE_OK;
+
+  sonare_c_detail::StagedOutput<SonareProjectKeySegmentList, &sonare_free_project_key_segment_list>
+      staged;
+  staged->items = new SonareProjectKeySegment[keys.size()]{};
+  staged->count = keys.size();
+  for (size_t i = 0; i < keys.size(); ++i) {
+    const auto& key = keys[i];
+    staged->items[i] = {key.start_ppq, key.end_ppq, key.tonic_pc, static_cast<uint32_t>(key.mode)};
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out);
+#endif
+}
+
+void sonare_free_project_chord_symbol_list(SonareProjectChordSymbolList* list) {
+  if (list == nullptr) return;
+  for (size_t i = 0; i < list->count; ++i) {
+    delete[] list->items[i].extensions;
+    delete[] list->items[i].roman_numeral;
+  }
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_project_chord_annotations(const SonareProject* project,
+                                             SonareProjectChordSymbolList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  const auto& chords = project->history.project().annotation().chords;
+  if (chords.empty()) return SONARE_OK;
+
+  sonare_c_detail::StagedOutput<SonareProjectChordSymbolList,
+                                &sonare_free_project_chord_symbol_list>
+      staged;
+  staged->items = new SonareProjectChordSymbol[chords.size()]{};
+  staged->count = chords.size();
+  for (size_t i = 0; i < chords.size(); ++i) {
+    const auto& chord = chords[i];
+    auto& item = staged->items[i];
+    item.start_ppq = chord.start_ppq;
+    item.end_ppq = chord.end_ppq;
+    item.root_pc = chord.root_pc;
+    item.quality = static_cast<uint32_t>(chord.quality);
+    item.extensions = sonare_c_detail::copy_vector(chord.extensions);
+    item.extension_count = chord.extensions.size();
+    item.slash_bass_pc = chord.slash_bass_pc;
+    if (!chord.roman_numeral.empty()) {
+      item.roman_numeral = sonare_c_detail::copy_string(chord.roman_numeral);
+    }
+    item.modulation_boundary = chord.modulation_boundary;
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out);
+#endif
+}
+
+void sonare_free_project_section_list(SonareProjectSectionList* list) {
+  if (list == nullptr) return;
+  for (size_t i = 0; i < list->count; ++i) {
+    delete[] list->items[i].label;
+  }
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_project_section_annotations(const SonareProject* project,
+                                               SonareProjectSectionList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  const auto& sections = project->history.project().annotation().sections;
+  if (sections.empty()) return SONARE_OK;
+
+  sonare_c_detail::StagedOutput<SonareProjectSectionList, &sonare_free_project_section_list> staged;
+  staged->items = new SonareProjectSection[sections.size()]{};
+  staged->count = sections.size();
+  for (size_t i = 0; i < sections.size(); ++i) {
+    const auto& section = sections[i];
+    staged->items[i] = {section.start_ppq, section.end_ppq,
+                        sonare_c_detail::copy_string(section.label)};
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out);
 #endif
 }
 

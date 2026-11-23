@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -207,7 +208,8 @@ InsertTiming insert_timing(const std::string& name, const std::string& json_para
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown insert processor: " + name + retired_processor_note(name));
   }
-  processor->prepare(sample_rate, kInsertProbeBlockSize, 1);
+  // The default width, so the timing is the one a host gets from an insert it prepares plainly.
+  processor->prepare(sample_rate, kInsertProbeBlockSize);
   return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
 }
 
@@ -307,6 +309,169 @@ const char* catalog_category(const std::string& id) {
   return "other";
 }
 
+const std::string& catalog_description(const std::string& id) {
+  static const std::map<std::string, std::string> descriptions = {
+      {"dynamics.brickwallLimiter", "Keeps sample peaks at or below the configured ceiling."},
+      {"dynamics.compressor", "Reduces gain above a threshold with a soft knee and makeup gain."},
+      {"dynamics.deesser",
+       "Uses a split-band detector to attenuate sibilant high-frequency energy."},
+      {"dynamics.expander", "Reduces quieter signals with a downward expansion ratio."},
+      {"dynamics.gate", "Attenuates signals below a threshold using an expander curve."},
+      {"dynamics.limiter", "Uses lookahead to limit peaks above the configured threshold."},
+      {"dynamics.parallelComp",
+       "Blends compressed audio with the dry signal using the configured mix."},
+      {"dynamics.sidechainRouter",
+       "Applies linked gain reduction from the main or an external detector."},
+      {"dynamics.duckingProcessor", "Ducks programme audio from a separately supplied key signal."},
+      {"dynamics.transientShaper",
+       "Adjusts attack and sustain separately from their envelope difference."},
+      {"dynamics.upwardCompressor",
+       "Raises quieter material below its threshold with bounded gain."},
+      {"dynamics.upwardExpander",
+       "Emphasizes material above its threshold with an upward expansion curve."},
+      {"dynamics.vocalRider", "Moves signal level toward a target with bounded boost and cut."},
+      {"eq.tilt",
+       "Raises one side of the spectrum while lowering the other around a pivot frequency."},
+      {"eq.steppedProportionalQ",
+       "Uses stepped frequency and gain controls with narrower bands at larger boosts or cuts."},
+      {"eq.parametric", "Applies configurable biquad bands using RBJ or matched-Z coefficients."},
+      {"eq.minimumPhase", "Applies a low-latency IIR equalizer with a matched-Z phase response."},
+      {"eq.linearPhase", "Applies an FFT-designed FIR equalizer with linear phase."},
+      {"eq.dynamic",
+       "Changes an equalizer band's gain when its level detector crosses the threshold."},
+      {"eq.equalizer",
+       "Applies a configurable collection of equalizer sections through one processor."},
+      {"eq.passiveTube",
+       "Applies a passive-style program equalizer with low and high section controls."},
+      {"eq.cutFilter",
+       "Attenuates frequencies below a high-pass cutoff or above a low-pass cutoff."},
+      {"eq.bandPass", "Passes a selected frequency band and attenuates frequencies on both sides."},
+      {"eq.shelving", "Applies a low- or high-shelf filter at a selected corner frequency."},
+      {"eq.graphic", "Adjusts gain across 31 fixed frequency bands."},
+      {"eq.midSide",
+       "Applies independent parametric equalizer settings to the mid and side signals."},
+      {"final.bitDepth",
+       "Quantizes samples to an integer grid at the configured output bit depth."},
+      {"final.dither", "Adds the selected dither before quantizing to the configured bit depth."},
+      {"final.outputChain",
+       "Either dithers the signal or quantizes it directly to the configured bit depth."},
+      {"maximizer.adaptiveRelease",
+       "Sets limiter release from the input envelope and configured recovery range."},
+      {"maximizer.loudnessOptimize",
+       "Adjusts integrated loudness toward a target while limiting true peaks."},
+      {"maximizer.maximizer",
+       "Raises programme level and limits its peaks to the configured ceiling."},
+      {"maximizer.softKneeMax", "Limits peaks above a threshold with a soft-knee gain curve."},
+      {"maximizer.truePeakLimiter",
+       "Oversamples the signal to limit reconstructed peaks at the dBTP ceiling."},
+      {"multiband.compressor",
+       "Compresses each crossover band with its own threshold and timing controls."},
+      {"multiband.expander", "Expands each crossover band independently below its threshold."},
+      {"multiband.limiter", "Limits peaks independently in each crossover band."},
+      {"multiband.imager",
+       "Adjusts stereo width separately across crossover bands using mid and side levels."},
+      {"multiband.saturation",
+       "Applies the selected saturation curve independently in each crossover band."},
+      {"multiband.dynamicEq",
+       "Applies threshold-controlled equalization independently in each crossover band."},
+      {"repair.declick",
+       "Interpolates short click runs using neighboring samples and an LPC model."},
+      {"repair.declip",
+       "Reconstructs clipped runs from the surrounding waveform within solver limits."},
+      {"repair.decrackle",
+       "Suppresses short crackle transients with the selected median or wavelet method."},
+      {"repair.dehum", "Attenuates a configured or tracked fundamental and its harmonic series."},
+      {"repair.denoiseClassical",
+       "Estimates a noise spectrum and reduces it with a frequency-dependent gain mask."},
+      {"repair.dereverbClassical",
+       "Estimates late reverberation from spectral decay and suppresses its contribution."},
+      {"repair.trimSilence",
+       "Finds and removes low-level leading and trailing audio using a gated level estimate."},
+      {"saturation.bitcrusher",
+       "Quantizes sample amplitude and holds samples at a lower rate, with optional filters and "
+       "noise."},
+      {"saturation.distortion",
+       "Runs two hard-clipping stages with coupling and tone filters between the gain controls."},
+      {"saturation.exciter",
+       "Generates harmonics in a selected band and blends them with the direct signal."},
+      {"saturation.hardClipper",
+       "Clamps samples at the selected ceiling with a hard clipping curve."},
+      {"saturation.multibandExciter",
+       "Generates harmonics independently in each configured frequency band."},
+      {"saturation.overdrive", "Blends a filtered, soft-clipped path with the direct signal."},
+      {"saturation.ampSim",
+       "Runs the selected guitar amplifier model with its tone stack and cabinet response."},
+      {"saturation.softClipper", "Rounds waveform peaks with a smooth saturation curve."},
+      {"saturation.tape", "Models tape saturation with a Jiles-Atherton hysteresis loop."},
+      {"saturation.transformer",
+       "Models transformer magnetization with configurable drive and asymmetry."},
+      {"saturation.tube", "Models a tube stage with configurable drive, bias, and harmonic level."},
+      {"saturation.waveshaper",
+       "Maps each sample through a selected static nonlinear transfer curve."},
+      {"spectral.airBand",
+       "Adds a dynamic high-shelf boost and blends in high-frequency harmonics."},
+      {"spectral.lowEndFocus",
+       "Shapes low-frequency energy and stereo width below a crossover frequency."},
+      {"spectral.presenceEnhancer", "Adds driven harmonics inside a configurable presence band."},
+      {"spectral.spectralShaper",
+       "Changes gain in a selected spectral band according to its envelope."},
+      {"stereo.autoPan", "Sweeps the stereo image left and right with a low-frequency oscillator."},
+      {"stereo.binaural",
+       "Places a folded mono source on the horizontal plane using measured head-related "
+       "responses."},
+      {"stereo.haasEnhancer", "Widens a stereo signal by delaying one side relative to the other."},
+      {"stereo.imager", "Changes stereo width by adjusting the mid-to-side balance."},
+      {"stereo.monoMaker",
+       "Reduces stereo width below a crossover by bringing low frequencies toward mono."},
+      {"stereo.phaseAlign",
+       "Delays one stereo channel by the configured whole and fractional sample offset."},
+      {"stereo.stereoBalance", "Changes left and right gain with a selectable balance law."},
+      {"utility.gain", "Applies a constant gain to every sample."},
+      {"match.applyMatchEq",
+       "Applies an equalizer curve derived from the reference signal to the source."},
+      {"match.alignReferenceToSource",
+       "Shifts the reference by its estimated delay relative to the source."},
+      {"match.abSwitch", "Selects either the source or reference signal for A/B comparison."},
+      {"match.abCrossfade", "Crossfades between equal-length source and reference signals."},
+      {"effects.gsEfx", "Applies the selected GS insert effect to a stereo signal."},
+      {"effects.reverb.plate",
+       "Uses a modulated Dattorro plate tank with input diffusion and a wet-output gate."},
+      {"effects.reverb.fdn",
+       "Uses a four-line feedback delay network with frequency-dependent decay."},
+      {"effects.reverb.velvet",
+       "Builds a sparse velvet-noise impulse response with a configurable decay time."},
+      {"effects.reverb.convolution",
+       "Convolves each channel with a supplied or synthesized impulse response."},
+      {"effects.reverb.room",
+       "Synthesizes a room impulse response from room geometry and material settings."},
+      {"effects.acoustic.roomMorph",
+       "Morphs room response as its acoustic geometry and surface materials change."},
+      {"effects.filter.vowel",
+       "Moves three resonant formant bands to shape the signal into vowel sounds."},
+      {"effects.modulation.chorus",
+       "Mixes modulated fractional-delay voices with the stereo input."},
+      {"effects.modulation.ensemble",
+       "Combines three phase-offset delay taps for a string-machine ensemble sound."},
+      {"effects.modulation.flanger",
+       "Feeds a modulated delay back into the input to create moving comb notches."},
+      {"effects.modulation.phaser",
+       "Sweeps first-order allpass stages to create moving spectral notches."},
+      {"effects.modulation.wah", "Sweeps a resonant filter with a low-frequency oscillator."},
+      {"effects.modulation.autoWah", "Sweeps a resonant filter from the input envelope."},
+      {"effects.modulation.rotary",
+       "Simulates a rotating speaker with dual-rotor Doppler shift and tremolo."},
+      {"effects.modulation.ringModulator",
+       "Multiplies the input by a sinusoidal carrier to create sidebands."},
+      {"effects.modulation.pitchShifter",
+       "Shifts pitch in real time with two crossfaded delay taps."},
+      {"effects.delay.stereo",
+       "Feeds independent stereo delay lines with selectable cross-routing and four output taps."},
+      {"voice.changer",
+       "Changes vocal pitch and formants using the selected realtime voice configuration."},
+  };
+  return descriptions.at(id);
+}
+
 // Whether the stage has a causal configuration: its output at a sample depends only on the
 // input up to it plus the latency it reports. Declick and declip need the far side of a defect
 // to reconstruct it, and a trim chooses its range from the whole signal; the other repair
@@ -380,7 +545,9 @@ std::string build_processor_catalog_json() {
         realtime_insertable && runs_offline ? separate_offline_params(id, params) : std::string();
     out += "{\"id\":\"";
     out += id;
-    out += "\",\"kind\":\"";
+    out += "\",\"description\":";
+    out += sonare::util::json::dump(sonare::util::json::Value(catalog_description(id)));
+    out += ",\"kind\":\"";
     out += kind;
     out += "\",\"realtimeInsertable\":";
     out += realtime_insertable ? "true" : "false";
@@ -435,6 +602,7 @@ std::string processor_catalog_json() {
 const std::vector<std::string>& processor_catalog_schema_paths() {
   static const std::vector<std::string> paths = {
       "[].id",
+      "[].description",
       "[].kind",
       "[].realtimeInsertable",
       "[].forms",

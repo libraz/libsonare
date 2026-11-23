@@ -32,6 +32,15 @@ inline constexpr sonare::util::check::NumericDomain kProjectBounceSampleRateDoma
 /// @brief What the instrument latency of a project bounce accepts.
 inline constexpr sonare::util::check::NumericDomain kProjectBounceInstrumentLatencyDomain =
     sonare::util::check::integer_domain_of<int>(0);
+/// @brief What the initial count-in bars of a project query or bounce accept.
+inline constexpr sonare::util::check::NumericDomain kProjectCountInBarsDomain =
+    sonare::util::check::integer_domain(0, 16);
+/// @brief The lower bound of a project position in seconds. The tempo map supplies the upper bound.
+inline constexpr sonare::util::check::NumericDomain kProjectPositionSecDomain =
+    sonare::util::check::real_domain_above(0.0, true);
+/// @brief The base domain of a zero-based bar index. Its PPQ start must also be representable.
+inline constexpr sonare::util::check::NumericDomain kProjectBarIndexDomain =
+    sonare::util::check::integer_domain_at_least(0);
 
 /// @brief What the frame count of an inline audio payload accepts.
 inline constexpr sonare::util::check::NumericDomain kAudioPayloadFramesDomain =

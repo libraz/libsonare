@@ -410,8 +410,9 @@ TEST_CASE("automation set after apply keeps the applied lanes audible", "[timeli
   // A ramp, so a lost lane is audible: the fader would hold its value at the moment of loss.
   const SonareAutomationPoint ramp[] = {{0.0, 0.0f, SONARE_CURVE_LINEAR},
                                         {1.5, -24.0f, SONARE_CURVE_LINEAR}};
-  SonareAutomationLaneDesc fader{};
-  fader.target_param_id = 1;
+  SonareAutomationLaneDesc fader;
+  sonare_automation_lane_desc_init(&fader);
+  fader.target_param_id = 0;
   fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   fader.points = ramp;
   fader.point_count = std::size(ramp);
@@ -611,5 +612,26 @@ TEST_CASE("compile refuses a NULL pointer by its header name", "[project][timeli
   CHECK(message() == "out must not be NULL");
 
   sonare_project_destroy(project);
+}
+#else
+TEST_CASE("project annotation readers report a compiled-out arrangement",
+          "[c_api][project][readers][annotations][refusal]") {
+  const auto check_not_compiled_in = [](auto& item, auto read) {
+    REQUIRE(read(nullptr, &item) == SONARE_ERROR_NOT_SUPPORTED);
+    CHECK(item.items == nullptr);
+    CHECK(item.count == 0);
+    const char* reason = sonare_last_error_reason();
+    REQUIRE(reason != nullptr);
+    CHECK(std::string(reason) == "notCompiledIn");
+  };
+  SonareProjectKeySegment key{};
+  SonareProjectChordSymbol chord{};
+  SonareProjectSection section{};
+  SonareProjectKeySegmentList keys{&key, 1};
+  SonareProjectChordSymbolList chords{&chord, 1};
+  SonareProjectSectionList sections{&section, 1};
+  check_not_compiled_in(keys, sonare_project_key_annotations);
+  check_not_compiled_in(chords, sonare_project_chord_annotations);
+  check_not_compiled_in(sections, sonare_project_section_annotations);
 }
 #endif

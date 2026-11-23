@@ -100,7 +100,7 @@ arr::CompiledTimeline make_timeline(const ProjectSpec& spec) {
   }
   if (spec.fader_automation_db != 0.0f) {
     sonare::automation::AutomationLane lane(
-        900, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+        0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
     lane.set_points({{0.0, spec.fader_automation_db, sonare::automation::CurveType::Hold}});
     REQUIRE(arr::AddAutomationLane(tracks.front(), lane).apply(project, midi));
   }
@@ -541,6 +541,76 @@ TEST_CASE("apply refuses a strip with an unacceptable EQ when binding strips",
   options.bind_strips = true;
   require_refused_unchanged(bad, options, ErrorCode::InvalidParameter);
 }
+
+TEST_CASE("live timeline apply preserves host buses and refuses scene send lanes atomically",
+          "[arrangement][timeline-apply][track-send]") {
+  constexpr uint32_t kHostBusId = 31;
+  constexpr float kBusGainDb = -3.0f;
+  constexpr float kSendGainDb = -6.0f;
+  const auto original = timeline_b();
+  REQUIRE(original.track_lanes.size() == 1);
+  const auto track_id = original.track_lanes.front().track_id;
+  const auto prepare_host = [&](RealtimeEngine& engine, bool with_send) {
+    REQUIRE(arr::apply_to_engine(original, *prepared(engine)).ok());
+    REQUIRE(engine.set_track_buses({{kHostBusId, kBusGainDb}}));
+    sonare::engine::TrackLaneConfig lane{track_id};
+    if (with_send) lane.sends.push_back({kHostBusId, kSendGainDb});
+    REQUIRE(engine.set_track_lanes({lane}));
+    REQUIRE(engine.set_track_strip(track_id, {}));
+  };
+  const auto check_host_bus = [&](RealtimeEngine& engine) {
+    const auto& buses = engine.track_mixer().bus_configs();
+    REQUIRE(buses.size() == 1);
+    CHECK(buses.front().bus_id == kHostBusId);
+    CHECK(buses.front().gain_db == kBusGainDb);
+  };
+
+  RealtimeEngine engine;
+  prepare_host(engine, true);
+  arr::ApplyOptions live;
+  live.bind_strips = true;
+
+  SECTION("refusal preserves the host send and its audio") {
+    auto incoming = original;
+    const std::string send_id = "scene-room";
+    sonare::mixing::api::Strip strip;
+    strip.id = "scene-strip";
+    strip.sends.push_back({send_id, "room"});
+    incoming.mixer.scene.strips.push_back(strip);
+    incoming.mixer.scene.buses.emplace_back("room");
+    incoming.mixer.bindings.push_back({track_id, strip.id});
+    sonare::automation::AutomationTargetIdentity identity;
+    identity.send_id = send_id;
+    sonare::automation::AutomationLane lane(
+        0, sonare::automation::AutomationTargetKind::kTrackSendDb, std::move(identity));
+    lane.set_points({{0.0, -12.0f}});
+    incoming.mixer.automation_bindings.push_back({track_id, std::move(lane)});
+
+    const auto* lanes = engine.track_mixer().control_lanes();
+    REQUIRE(lanes != nullptr);
+    REQUIRE(lanes->front().sends.size() == 1);
+    const auto result = arr::apply_to_engine(incoming, engine, live);
+    REQUIRE(result.code == ErrorCode::NotSupported);
+    REQUIRE(result.outcome == arr::ApplyOutcome::kUnchanged);
+    check_host_bus(engine);
+    REQUIRE(engine.track_mixer().control_lanes() == lanes);
+    CHECK(lanes->front().sends.front().bus_id == kHostBusId);
+    CHECK(lanes->front().sends.front().level_db == kSendGainDb);
+
+    RealtimeEngine wet_reference;
+    RealtimeEngine dry_reference;
+    prepare_host(wet_reference, true);
+    prepare_host(dry_reference, false);
+    const auto wet = render(wet_reference);
+    REQUIRE(wet != render(dry_reference));
+    CHECK(render(engine) == wet);
+  }
+
+  SECTION("an accepted timeline leaves the host bus configured") {
+    REQUIRE(arr::apply_to_engine(original, engine, live).ok());
+    check_host_bus(engine);
+  }
+}
 #endif  // SONARE_WITH_MIXING
 
 TEST_CASE("re-applying B over A leaves nothing of A", "[arrangement][timeline-apply]") {
@@ -708,11 +778,11 @@ arr::CompiledTimeline with_lane(const arr::CompiledTimeline& b, AutomatedTarget 
   AutomationLane lane;
   switch (target) {
     case AutomatedTarget::kFader:
-      lane = AutomationLane(900, AutomationTargetKind::kTrackFaderDb);
+      lane = AutomationLane(0, AutomationTargetKind::kTrackFaderDb);
       lane.set_points({{0.0, 0.0f, CurveType::Linear}, {0.05, -12.0f, CurveType::Linear}});
       break;
     case AutomatedTarget::kPan:
-      lane = AutomationLane(901, AutomationTargetKind::kTrackPan);
+      lane = AutomationLane(0, AutomationTargetKind::kTrackPan);
       lane.set_points({{0.0, 0.0f, CurveType::Linear}, {0.05, 0.8f, CurveType::Linear}});
       break;
     case AutomatedTarget::kInsert:

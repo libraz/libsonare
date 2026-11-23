@@ -1,9 +1,10 @@
 # macOS host backends — concrete sonare::host seam implementations that include
 # OS / plugin-SDK headers. Kept out of core (invariant 6): each is an
 # independent leaf static library that links the core/engine targets but is
-# NEVER reverse-depended by them, is default OFF, and is excluded from the
-# default distribution and every language binding. This directory is only added
-# on APPLE with at least one backend enabled (see the top-level CMakeLists.txt).
+# NEVER reverse-depended by them. When live devices are enabled, the C API in
+# sonare_shared (also used by Python ctypes) links these backends. The Node addon
+# and WASM surfaces leave them disabled. This directory is only added on APPLE
+# with at least one backend enabled (see the top-level CMakeLists.txt).
 
 # The .mm translation units are Objective-C++. No other part of the tree uses
 # Objective-C++, so the language is enabled locally here rather than at project
@@ -12,9 +13,8 @@ enable_language(OBJCXX)
 
 # SONARE_WARNING_FLAGS applies to OBJCXX here just as it does to CXX elsewhere,
 # and it is what makes a system-header deprecation from a new SDK fail the build
-# rather than scroll past. These units need it more than the rest of the tree,
-# not less: no CI job enables these backends, so a local build is the only thing
-# that ever compiles them.
+# rather than scroll past. macOS CI enables these backends, so these flags are
+# required there as well.
 
 # Frameworks shared by the audio backends.
 find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)

@@ -1,3 +1,5 @@
+#include <array>
+
 #include "c_api/midi_input_domains.h"
 #include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
@@ -23,15 +25,39 @@ SonareError refuse_unknown_midi_clip() {
                 "must describe a chain the clip's events pass through without overflowing");
 }
 
-// Refuses an event whose position is out of range or that is not a channel voice message.
-void check_midi_event_pod(const SonareMidiEventPod& event, const std::string& ppq_subject,
-                          const std::string& word0_subject) {
+// Refuses an event whose position, UMP type, or SysEx view cannot be represented by the POD.
+bool check_midi_event_pod(const SonareMidiEventPod& event, const std::string& ppq_subject,
+                          const std::string& sysex_subject, const std::string& word0_subject,
+                          const std::string& word1_subject) {
   check::within(event.ppq, sonare_c_detail::kPublicPpqDomain, ppq_subject.c_str());
   const uint8_t mt = static_cast<uint8_t>((event.word0 >> 28u) & 0x0Fu);
-  if (mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) &&
-      mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
-    check::refuse(word0_subject.c_str(), "must be a MIDI 1.0 or MIDI 2.0 channel voice message");
+  if (mt == static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) ||
+      mt == static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
+    if (event.sysex != nullptr || event.sysex_size != 0) {
+      check::refuse(sysex_subject.c_str(), "must be NULL and empty for a channel-voice event");
+    }
+    return false;
   }
+  if (mt == static_cast<uint8_t>(sonare::midi::UmpMessageType::kData64)) {
+    if (event.sysex == nullptr || event.sysex_size == 0) {
+      check::refuse(sysex_subject.c_str(), "must point to non-empty SysEx data");
+    }
+    if ((event.word0 & 0x00FF0000u) != 0u) {
+      check::refuse(word0_subject.c_str(), "must have zero bits 16 through 23 for a SysEx event");
+    }
+    if (event.word1 != 0u) {
+      check::refuse(word1_subject.c_str(), "must be 0 for a SysEx event");
+    }
+    return true;
+  }
+  check::refuse(word0_subject.c_str(), "must be a MIDI 1.0 or MIDI 2.0 channel voice message");
+}
+
+SonareError refuse_malformed_stored_midi_event(uint32_t clip_id, size_t index, const char* reason) {
+  const std::string message =
+      "MIDI clip " + std::to_string(clip_id) + " event " + std::to_string(index) + " " + reason;
+  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, message.c_str());
+  return SONARE_ERROR_INVALID_STATE;
 }
 
 void check_u7(uint8_t value, const char* subject) {
@@ -69,6 +95,7 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_TRY
   if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(events, count);
   if (const SonareError err = run_validation([&] {
@@ -78,25 +105,146 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_TRY
+  const size_t sysex_byte_limit =
+      sonare::resource::kProjectMidiImportResourceLimits.max_sysex_bytes;
+  size_t sysex_bytes = 0;
+  size_t sysex_count = 0;
+  for (size_t i = 0; i < count; ++i) {
+    const bool is_sysex = check_midi_event_pod(
+        events[i], check::indexed_subject("events", i, "ppq"),
+        check::indexed_subject("events", i, "sysex"), check::indexed_subject("events", i, "word0"),
+        check::indexed_subject("events", i, "word1"));
+    if (!is_sysex) continue;
+    ++sysex_count;
+    if (!sonare::resource::bounded_accumulate(events[i].sysex_size, sysex_byte_limit,
+                                              &sysex_bytes)) {
+      check::refuse(check::indexed_subject("events", i, "sysex_size").c_str(),
+                    "must keep the total SysEx payload within the MIDI import byte limit");
+    }
+  }
+
+  const auto& stored_payloads = project->history.midi_content().sysex_payloads;
+  uint64_t next_sysex_handle =
+      stored_payloads.empty() ? 1u : static_cast<uint64_t>(stored_payloads.rbegin()->first) + 1u;
+  if (sysex_count != 0 &&
+      (next_sysex_handle >= std::numeric_limits<uint32_t>::max() ||
+       sysex_count > std::numeric_limits<uint32_t>::max() - next_sysex_handle)) {
+    return refuse_malformed_stored_midi_event(clip_id, 0,
+                                              "exhausts the project SysEx handle range");
+  }
+
+  // Validate the complete caller array and aggregate payload budget before copying any bytes.
   arr::MidiClipEventList list;
+  std::map<uint32_t, std::vector<uint8_t>> sysex_payloads;
   list.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    check_midi_event_pod(events[i], check::indexed_subject("events", i, "ppq"),
-                         check::indexed_subject("events", i, "word0"));
     arr::MidiClipEvent event;
     event.ppq = events[i].ppq;
     event.word0 = events[i].word0;
     event.word1 = events[i].word1;
+    if (events[i].sysex != nullptr) {
+      const uint32_t handle = static_cast<uint32_t>(next_sysex_handle++);
+      event.sysex_handle = handle;
+      sysex_payloads.emplace(
+          handle, std::vector<uint8_t>(events[i].sysex, events[i].sysex + events[i].sysex_size));
+    }
     list.push_back(event);
   }
-  auto command = std::make_unique<arr::ReplaceMidiClipEvents>(clip_id, std::move(list));
+  auto command = std::make_unique<arr::ReplaceMidiClipEvents>(clip_id, std::move(list),
+                                                              std::move(sysex_payloads));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
                                                  clip_id, events, count);
+#endif
+}
+
+void sonare_free_midi_event_list(SonareMidiEventList* list) {
+  if (list == nullptr) return;
+  if (list->items != nullptr) {
+    for (size_t i = 0; i < list->count; ++i) {
+      delete[] list->items[i].sysex;
+    }
+  }
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_project_midi_events(const SonareProject* project, uint32_t clip_id,
+                                       SonareMidiEventList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  if (find_midi_clip(project, clip_id) == nullptr) return refuse_unknown_midi_clip();
+  const arr::MidiContentStore& midi = project->history.midi_content();
+  const auto stored = midi.events.find(clip_id);
+  if (stored == midi.events.end() || stored->second.empty()) return SONARE_OK;
+
+  const arr::MidiClipEventList& events = stored->second;
+  std::vector<size_t> order;
+  order.reserve(events.size());
+  for (size_t i = 0; i < events.size(); ++i) {
+    const arr::MidiClipEvent& event = events[i];
+    if (!sonare::transport::valid_public_ppq(event.ppq)) {
+      return refuse_malformed_stored_midi_event(clip_id, i, "has an invalid PPQ position");
+    }
+    const uint8_t mt = static_cast<uint8_t>((event.word0 >> 28u) & 0x0Fu);
+    if (mt == static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) ||
+        mt == static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
+      if (event.sysex_handle != 0) {
+        return refuse_malformed_stored_midi_event(clip_id, i,
+                                                  "has a SysEx handle on a channel-voice UMP");
+      }
+    } else if (mt == static_cast<uint8_t>(sonare::midi::UmpMessageType::kData64)) {
+      if (event.sysex_handle == 0) {
+        return refuse_malformed_stored_midi_event(clip_id, i, "has no stored SysEx payload handle");
+      }
+      const auto payload = midi.sysex_payloads.find(event.sysex_handle);
+      if (payload == midi.sysex_payloads.end() || payload->second.empty()) {
+        return refuse_malformed_stored_midi_event(clip_id, i,
+                                                  "has no non-empty stored SysEx payload");
+      }
+      if ((event.word0 & 0x00FF0000u) != 0u || event.word1 != 0u) {
+        return refuse_malformed_stored_midi_event(clip_id, i,
+                                                  "has an unrepresentable stored SysEx UMP");
+      }
+    } else {
+      return refuse_malformed_stored_midi_event(clip_id, i,
+                                                "has an unrepresentable stored UMP message type");
+    }
+    order.push_back(i);
+  }
+  std::stable_sort(order.begin(), order.end(),
+                   [&events](size_t a, size_t b) { return events[a].ppq < events[b].ppq; });
+
+  sonare_c_detail::StagedOutput<SonareMidiEventList, &sonare_free_midi_event_list> staged;
+  staged->items = new SonareMidiEventPod[order.size()]{};
+  staged->count = order.size();
+  for (size_t output_index = 0; output_index < order.size(); ++output_index) {
+    const arr::MidiClipEvent& event = events[order[output_index]];
+    SonareMidiEventPod& pod = staged->items[output_index];
+    pod.ppq = event.ppq;
+    pod.word0 = event.word0;
+    pod.word1 = event.word1;
+    if (event.sysex_handle != 0) {
+      const std::vector<uint8_t>& payload = midi.sysex_payloads.at(event.sysex_handle);
+      std::unique_ptr<uint8_t[]> bytes(new uint8_t[payload.size()]);
+      std::memcpy(bytes.get(), payload.data(), payload.size());
+      pod.sysex = bytes.release();
+      pod.sysex_size = payload.size();
+    }
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 clip_id, out);
 #endif
 }
 
@@ -675,6 +823,10 @@ void check_cc_binding(const SonareMidiCcBinding& src, size_t index) {
   const auto subject = [index](const char* field) {
     return check::indexed_subject("bindings", index, field);
   };
+  check::one_of(src.consume, std::array<int, 2>{0, 1}, subject("consume").c_str());
+  if (src.reserved != 0) {
+    check::refuse(subject("reserved").c_str(), "must be 0");
+  }
   check::integer_within(src.cc_number, sonare_c_detail::kMidiDataByteDomain,
                         subject("cc_number").c_str());
   check::integer_within(src.param_id, sonare_c_detail::kMidiTargetParamIdDomain,
@@ -972,10 +1124,14 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
   ppq_by_index.reserve(count);
   for (size_t i = 0; i < count; ++i) {
     check_midi_event_pod(events[i], check::indexed_subject("events", i, "ppq"),
-                         check::indexed_subject("events", i, "word0"));
+                         check::indexed_subject("events", i, "sysex"),
+                         check::indexed_subject("events", i, "word0"),
+                         check::indexed_subject("events", i, "word1"));
     sonare::midi::MidiEvent event{};
     event.render_frame = static_cast<int64_t>(i);
     event.ump = ump_from_pod(events[i]);
+    event.sysex_payload = events[i].sysex;
+    event.sysex_payload_size = events[i].sysex_size;
     input.push_back(event);
     ppq_by_index.push_back(events[i].ppq);
   }
@@ -1001,8 +1157,11 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
   for (size_t i = 0; i < copied; ++i) {
     const sonare::midi::MidiEvent& event = routed.events[i];
     const size_t source_index = static_cast<size_t>(event.render_frame);
-    out_events[i] = pod_from_ump(
+    SonareMidiEventPod pod = pod_from_ump(
         source_index < ppq_by_index.size() ? ppq_by_index[source_index] : 0.0, event.ump);
+    pod.sysex = event.sysex_payload;
+    pod.sysex_size = event.sysex_payload_size;
+    out_events[i] = pod;
   }
   const uint32_t capacity_overflow =
       routed.size > out_capacity ? static_cast<uint32_t>(routed.size - out_capacity) : 0u;
@@ -1047,7 +1206,13 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
   sonare::midi::CcBinding learned{};
   for (size_t i = 0; i < count; ++i) {
     check_midi_event_pod(events[i], check::indexed_subject("events", i, "ppq"),
-                         check::indexed_subject("events", i, "word0"));
+                         check::indexed_subject("events", i, "sysex"),
+                         check::indexed_subject("events", i, "word0"),
+                         check::indexed_subject("events", i, "word1"));
+    if (((events[i].word0 >> 28u) & 0x0Fu) ==
+        static_cast<uint8_t>(sonare::midi::UmpMessageType::kData64)) {
+      continue;
+    }
     if (map.observe_for_learn(ump_from_pod(events[i]), &learned)) {
       *out_binding = binding_to_c(learned);
       return SONARE_OK;
@@ -1074,13 +1239,18 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(event);
-  if (const SonareError err =
-          run_validation([&] { check_midi_event_pod(*event, "event.ppq", "event.word0"); });
+  if (const SonareError err = run_validation([&] {
+        check_midi_event_pod(*event, "event.ppq", "event.sysex", "event.word0", "event.word1");
+      });
       err != SONARE_OK) {
     return err;
   }
   SONARE_C_REQUIRE_NONNULL(out_point);
   SONARE_C_TRY
+  if (((event->word0 >> 28u) & 0x0Fu) ==
+      static_cast<uint8_t>(sonare::midi::UmpMessageType::kData64)) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
   sonare::midi::CcMap map;
   populate_cc_map(bindings, binding_count, &map);
   std::vector<sonare::automation::Breakpoint> points;

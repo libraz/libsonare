@@ -195,26 +195,3 @@ TEST_CASE("low_frequency_energy_observations extracts beat-level bass energy",
   REQUIRE(observations[6] > observations[5] * 5.0f);
   REQUIRE(observations[10] > observations[9] * 5.0f);
 }
-
-TEST_CASE("onset_strength_observations aggregates frame-level activation around beats",
-          "[downbeat_analyzer]") {
-  auto beats = make_beats(4);
-  beats[0].frame = 10;
-  beats[1].frame = 20;
-  beats[2].frame = 30;
-  beats[3].frame = 40;
-
-  std::vector<float> onset_strength(64, 0.0f);
-  onset_strength[9] = 0.2f;
-  onset_strength[10] = 0.3f;
-  onset_strength[19] = 0.9f;
-  onset_strength[20] = 0.1f;
-  onset_strength[31] = 0.6f;
-  onset_strength[40] = 0.05f;
-
-  const auto observations = onset_strength_observations(beats, onset_strength, 1000, 10, 0.04f);
-
-  REQUIRE(observations.size() == beats.size());
-  REQUIRE(observations[1] > observations[0]);
-  REQUIRE(observations[2] > observations[3]);
-}

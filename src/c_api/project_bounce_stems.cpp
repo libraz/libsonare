@@ -40,6 +40,7 @@ bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
     }
     hosted.instrument->reset();
     if (!engine.set_midi_instrument(hosted.destination_id, hosted.instrument)) return false;
+    if (!hosted.apply_controls()) return false;
   }
   // The engine's current source render bank is intentionally selected only for
   // zero-latency instruments. A per-source PDC bank would otherwise be needed

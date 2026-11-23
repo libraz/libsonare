@@ -27,9 +27,7 @@ struct Beat {
   /// @brief Onset-envelope value sampled at @ref frame.
   /// @details A single raw frame, neither windowed nor normalized, so it is
   ///          sensitive to beat-position jitter and its scale depends on the
-  ///          material. For accent scoring prefer the beat-local window exposed
-  ///          as BeatAnalyzer::beat_onset_observations(), and keep this for
-  ///          cheap per-beat magnitude readouts.
+  ///          material. Keep this for cheap per-beat magnitude readouts.
   float strength;
 };
 
@@ -150,11 +148,6 @@ class BeatAnalyzer {
   /// @brief Publishes per-beat chord-change evidence without touching the downbeats.
   void set_chord_change_observations(std::vector<float> chord_changes);
 
-  /// @brief Returns the beat-local onset-strength window around each beat.
-  /// @details One value per beat, aggregated over a window around the beat
-  ///          rather than sampled at a single frame like Beat::strength.
-  const std::vector<float>& beat_onset_observations() const { return onset_observations_; }
-
   /// @brief Returns the per-beat accents the meter estimate scores.
   /// @details Empty until refine_beat_times() has read them from the audio, as for the
   ///          onset-envelope constructor; the meter estimate then reads Beat::strength.
@@ -210,10 +203,6 @@ class BeatAnalyzer {
   std::vector<int> downbeat_indices_;
   std::vector<Beat> downbeats_;
   std::vector<float> onset_strength_;
-  // Published per-beat evidence, kept so callers doing their own meter or
-  // downbeat work can reuse it instead of recomputing a weaker approximation
-  // from the frame-level envelope.
-  std::vector<float> onset_observations_;
   std::vector<float> low_frequency_observations_;
   std::vector<float> chord_change_observations_;
   BeatAccents accents_;

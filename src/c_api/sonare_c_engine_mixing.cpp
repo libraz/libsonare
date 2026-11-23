@@ -324,6 +324,7 @@ SonareError sonare_engine_set_track_lanes(SonareEngine* engine, const SonareEngi
     }
     configs.push_back(std::move(lane));
   }
+  engine->engine.require_quiescent();
   return engine->engine.set_track_lanes(std::move(configs))
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kLanes);
@@ -437,6 +438,7 @@ SonareError sonare_engine_set_lane_sidechain(SonareEngine* engine, uint32_t trac
 #if !defined(SONARE_WITH_MIXING)
   return refuse_not_compiled_in(Feature::kMixing, insert_index, source_track_id);
 #else
+  engine->engine.require_quiescent();
   if (engine->engine.set_lane_sidechain(track_id, insert_index, source_track_id)) return SONARE_OK;
   const SidechainWording wording{"track_id", "a track",
                                  "must be less than the number of inserts on the track",
@@ -555,6 +557,7 @@ SonareError sonare_engine_set_track_buses(SonareEngine* engine, const SonareEngi
     }
     configs.push_back(std::move(bus));
   }
+  engine->engine.require_quiescent();
   return engine->engine.set_track_buses(std::move(configs))
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kBuses);
@@ -573,6 +576,7 @@ SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_
 #else
   SONARE_C_TRY
   const mixing::api::Bus settings = mixing::api::bus_settings_from_json(settings_json, "settings");
+  engine->engine.require_quiescent();
   return engine->engine.set_bus_strip(bus_id, settings)
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
@@ -592,6 +596,7 @@ SonareError sonare_engine_set_track_strip_json(SonareEngine* engine, uint32_t tr
   SONARE_C_TRY
   const mixing::api::Strip settings =
       mixing::api::strip_settings_from_json(settings_json, "settings");
+  engine->engine.require_quiescent();
   return engine->engine.set_track_strip(track_id, settings)
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
@@ -657,6 +662,7 @@ SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char
   SONARE_C_TRY
   const mixing::api::Strip settings =
       mixing::api::strip_settings_from_json(settings_json, "settings");
+  engine->engine.require_quiescent();
   return engine->engine.set_master_strip(settings)
              ? SONARE_OK
              : mixer_edit_error(engine->engine, MixerEditScope::kStrip);

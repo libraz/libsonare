@@ -25,23 +25,41 @@ extern "C" {
 /// (matching @ref make_midi1_note_on word[0], where status is the 0x9 note-on
 /// nibble). The core stores these words in
 /// the project and the compiler / SMF exporter interpret valid UMP channel-voice
-/// packets as MIDI events. SysEx payloads imported from SMF are carried by an
-/// internal side store and are preserved by project serialization / SMF export;
-/// they are not constructible through this flat C event POD. @p ppq is the event
-/// position within the clip source timeline (quarter notes). Prefer the
-/// sonare_midi_* helpers below over hand-packing words.
-typedef struct {
-  double ppq;      ///< Position in quarter notes within the clip source timeline.
-  uint32_t word0;  ///< First UMP word of the channel-voice message.
-  uint32_t word1;  ///< Second UMP word; 0 for a MIDI 1.0 channel-voice message.
+/// packets as MIDI events. A SysEx event uses Data64 with its group, bits 16–23
+/// of @p word0 and all of @p word1 clear, and a non-empty payload in @p sysex.
+/// The bytes include any framing carried by the
+/// stored event. @p ppq is the event position within the clip source timeline
+/// (quarter notes). Prefer the sonare_midi_* helpers below over hand-packing
+/// channel voice words.
+#ifdef __cplusplus
+// C++ callers can continue to initialize a channel-voice event with the first three fields.
+struct SonareMidiEventPod {
+  double ppq;
+  uint32_t word0;
+  uint32_t word1;
+  const uint8_t* sysex = nullptr;
+  size_t sysex_size = 0;
+};
+#else
+/// @brief An event position and UMP words, with an optional SysEx payload.
+typedef struct SonareMidiEventPod {
+  double ppq;            ///< Position in quarter notes within the clip source timeline.
+  uint32_t word0;        ///< First UMP word.
+  uint32_t word1;        ///< Second UMP word; 0 for MIDI 1.0 channel voice or SysEx.
+  const uint8_t* sysex;  ///< SysEx bytes, or NULL for a channel-voice message.
+  size_t sysex_size;     ///< Number of SysEx bytes, or 0 for a channel-voice message.
 } SonareMidiEventPod;
+#endif
 
 #ifdef __cplusplus
-static_assert(sizeof(SonareMidiEventPod) == sizeof(double) + 2u * sizeof(uint32_t),
+static_assert(sizeof(SonareMidiEventPod) == 16u + sizeof(void*) + sizeof(size_t),
               "SonareMidiEventPod layout drift");
 static_assert(offsetof(SonareMidiEventPod, ppq) == 0, "MidiEventPod.ppq offset");
 static_assert(offsetof(SonareMidiEventPod, word0) == 8, "MidiEventPod.word0 offset");
 static_assert(offsetof(SonareMidiEventPod, word1) == 12, "MidiEventPod.word1 offset");
+static_assert(offsetof(SonareMidiEventPod, sysex) == 16, "MidiEventPod.sysex offset");
+static_assert(offsetof(SonareMidiEventPod, sysex_size) == 16u + sizeof(void*),
+              "MidiEventPod.sysex_size offset");
 #endif
 
 /// The route accepts any group or channel. Outside the group and channel domain [0, 15].
@@ -104,7 +122,8 @@ typedef struct {
   uint8_t cc_lsb_number;  ///< LSB controller of a 14-bit binding; must be cc_number + 32.
   uint8_t selector_msb;   ///< RPN/NRPN selector MSB; 0 for plain controller kinds.
   uint8_t selector_lsb;   ///< RPN/NRPN selector LSB; 0 for plain controller kinds.
-  uint16_t reserved;      ///< Padding; set to 0.
+  uint8_t consume;        ///< 0 or 1. Suppress matching live input after automation when 1.
+  uint8_t reserved;       ///< Must be 0.
   uint32_t param_id;      ///< Automation parameter id the binding drives; must be nonzero.
   float min_value;        ///< Parameter value at controller minimum; finite.
   float max_value;        ///< Parameter value at controller maximum; finite, not below min_value.
@@ -120,11 +139,27 @@ static_assert(offsetof(SonareMidiCcBinding, selector_msb) == 4,
               "MidiCcBinding.selector_msb offset");
 static_assert(offsetof(SonareMidiCcBinding, selector_lsb) == 5,
               "MidiCcBinding.selector_lsb offset");
+static_assert(offsetof(SonareMidiCcBinding, consume) == 6, "MidiCcBinding.consume offset");
+static_assert(offsetof(SonareMidiCcBinding, reserved) == 7, "MidiCcBinding.reserved offset");
 static_assert(offsetof(SonareMidiCcBinding, param_id) == 8, "MidiCcBinding.param_id offset");
 static_assert(offsetof(SonareMidiCcBinding, min_value) == 12, "MidiCcBinding.min_value offset");
 static_assert(offsetof(SonareMidiCcBinding, max_value) == 16, "MidiCcBinding.max_value offset");
 static_assert(sizeof(SonareMidiCcBinding) == 20, "SonareMidiCcBinding layout drift");
 #endif
+
+/// @brief Snapshot of an engine's live MIDI CC binding table.
+typedef struct {
+  SonareMidiCcBinding* items;  ///< Owned by this list.
+  size_t count;                ///< Number of bindings.
+} SonareMidiCcBindingList;
+
+/// @brief Copies live MIDI CC bindings in unspecified order. CONTROL thread.
+/// @param[out] out Receives a list to free with @ref sonare_free_midi_cc_binding_list.
+///                 Zeroed on entry. An empty table yields NULL items and zero count.
+SonareError sonare_engine_midi_cc_bindings(SonareEngine* engine, SonareMidiCcBindingList* out);
+
+/// @brief Frees and zeroes the owned list. NULL is ignored.
+void sonare_free_midi_cc_binding_list(SonareMidiCcBindingList* list);
 
 /// @brief Result of @ref sonare_project_validate_midi_notes. @p ok is 1 when
 ///        every note-on in the clip has a matching note-off and vice versa, else
@@ -145,34 +180,47 @@ typedef struct {
 ///        half-open window [0, length_ppq) (after the source offset); a note
 ///        still sounding at the clip end, including one whose note-off sits at or
 ///        past length_ppq, is closed with a note-off at the clip end.
-/// @warning Drops the clip's SysEx, which import and export both keep. The
-///          payloads are reached by a handle on the core's own event record and
-///          @ref SonareMidiEventPod carries none, so replacing the list leaves
-///          nothing referring to them: a GS setup block that survives
-///          @ref sonare_project_import_smf and @ref sonare_project_export_smf
-///          byte for byte is gone after one call here. No entry point reads the
-///          handles back, so a caller that must keep the SysEx edits the
-///          exported file rather than the event list.
+/// @details Copies SysEx payloads from the caller. The payload does not include an internal handle.
 SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip_id,
                                            const SonareMidiEventPod* events, size_t count);
 
+/// @brief Owned event list returned by @ref sonare_project_midi_events.
+typedef struct {
+  SonareMidiEventPod* items;  ///< Events and their SysEx payloads are owned by this list.
+  size_t count;               ///< Number of entries in items.
+} SonareMidiEventList;
+
+/// @brief Reads a MIDI clip's events in stable PPQ order, including owned SysEx payloads.
+/// @details An empty list has NULL items and zero count. Free the list with
+///          @ref sonare_free_midi_event_list.
+SonareError sonare_project_midi_events(const SonareProject* project, uint32_t clip_id,
+                                       SonareMidiEventList* out);
+
+/// @brief Releases the events and their SysEx payloads and clears the list. NULL is safe.
+void sonare_free_midi_event_list(SonareMidiEventList* list);
+
 /// @brief Packs a MIDI 1.0 note-on event POD at @p ppq.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_note_on(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                 uint8_t velocity, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 1.0 note-off event POD at @p ppq.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_note_off(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                  uint8_t velocity, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 1.0 control-change event POD at @p ppq.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_cc(double ppq, uint8_t group, uint8_t channel, uint8_t controller,
                            uint8_t value, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 1.0 poly-pressure event POD at @p ppq.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_poly_pressure(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                       uint8_t pressure, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 1.0 program-change event POD at @p ppq.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint8_t program,
                                 SonareMidiEventPod* out);
 
@@ -185,33 +233,39 @@ SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint
 /// @param velocity16 Full 16-bit velocity. 0 is a sounding note-on in MIDI 2.0.
 /// @param attribute_type Note attribute type (0 = none, 3 = pitch 7.9).
 /// @param attribute_data 16-bit attribute value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_note_on(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                  uint16_t velocity16, uint8_t attribute_type,
                                  uint16_t attribute_data, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 2.0 note-off event POD at @p ppq.
 /// @param velocity16 Full 16-bit release velocity.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_note_off(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                   uint16_t velocity16, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 2.0 control-change event POD at @p ppq.
 /// @param controller Controller number (0..127).
 /// @param value32 Full 32-bit controller value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_cc(double ppq, uint8_t group, uint8_t channel, uint8_t controller,
                             uint32_t value32, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 2.0 poly-pressure event POD at @p ppq.
 /// @param pressure32 Full 32-bit key pressure.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_poly_pressure(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                        uint32_t pressure32, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 2.0 channel-pressure event POD at @p ppq.
 /// @param pressure32 Full 32-bit channel pressure.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_channel_pressure(double ppq, uint8_t group, uint8_t channel,
                                           uint32_t pressure32, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 2.0 pitch-bend event POD at @p ppq.
 /// @param bend32 Unsigned 32-bit bend, centre 0x80000000.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_pitch_bend(double ppq, uint8_t group, uint8_t channel, uint32_t bend32,
                                     SonareMidiEventPod* out);
 
@@ -222,6 +276,7 @@ SonareError sonare_midi2_pitch_bend(double ppq, uint8_t group, uint8_t channel, 
 /// @param bank_valid Non-zero to select @p bank_msb / @p bank_lsb with the program.
 /// @param bank_msb Bank select MSB (0..127); must be 0 when @p bank_valid is zero.
 /// @param bank_lsb Bank select LSB (0..127); must be 0 when @p bank_valid is zero.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uint8_t program,
                                  int bank_valid, uint8_t bank_msb, uint8_t bank_lsb,
                                  SonareMidiEventPod* out);
@@ -230,6 +285,7 @@ SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uin
 /// @param bank Controller bank (0..127).
 /// @param index Controller index within the bank (0..127).
 /// @param value32 Full 32-bit controller value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_registered_controller(double ppq, uint8_t group, uint8_t channel,
                                                uint8_t bank, uint8_t index, uint32_t value32,
                                                SonareMidiEventPod* out);
@@ -238,6 +294,7 @@ SonareError sonare_midi2_registered_controller(double ppq, uint8_t group, uint8_
 /// @param bank Controller bank (0..127).
 /// @param index Controller index within the bank (0..127).
 /// @param value32 Full 32-bit controller value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_assignable_controller(double ppq, uint8_t group, uint8_t channel,
                                                uint8_t bank, uint8_t index, uint32_t value32,
                                                SonareMidiEventPod* out);
@@ -246,6 +303,7 @@ SonareError sonare_midi2_assignable_controller(double ppq, uint8_t group, uint8_
 /// @param bank Controller bank (0..127).
 /// @param index Controller index within the bank (0..127).
 /// @param delta32 Signed change to apply to the addressed value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_relative_registered_controller(double ppq, uint8_t group, uint8_t channel,
                                                         uint8_t bank, uint8_t index,
                                                         int32_t delta32, SonareMidiEventPod* out);
@@ -254,6 +312,7 @@ SonareError sonare_midi2_relative_registered_controller(double ppq, uint8_t grou
 /// @param bank Controller bank (0..127).
 /// @param index Controller index within the bank (0..127).
 /// @param delta32 Signed change to apply to the addressed value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_relative_assignable_controller(double ppq, uint8_t group, uint8_t channel,
                                                         uint8_t bank, uint8_t index,
                                                         int32_t delta32, SonareMidiEventPod* out);
@@ -262,6 +321,7 @@ SonareError sonare_midi2_relative_assignable_controller(double ppq, uint8_t grou
 /// @param index Per-note controller index (0..255; see
 ///        @ref sonare_midi_per_note_controller_name).
 /// @param value32 Full 32-bit controller value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_registered_per_note_controller(double ppq, uint8_t group, uint8_t channel,
                                                         uint8_t note, uint8_t index,
                                                         uint32_t value32, SonareMidiEventPod* out);
@@ -269,12 +329,14 @@ SonareError sonare_midi2_registered_per_note_controller(double ppq, uint8_t grou
 /// @brief Packs a MIDI 2.0 assignable per-note controller event POD at @p ppq.
 /// @param index Per-note controller index (0..255).
 /// @param value32 Full 32-bit controller value.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_assignable_per_note_controller(double ppq, uint8_t group, uint8_t channel,
                                                         uint8_t note, uint8_t index,
                                                         uint32_t value32, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 2.0 per-note pitch-bend event POD at @p ppq.
 /// @param bend32 Unsigned 32-bit bend, centre 0x80000000.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_per_note_pitch_bend(double ppq, uint8_t group, uint8_t channel,
                                              uint8_t note, uint32_t bend32,
                                              SonareMidiEventPod* out);
@@ -283,6 +345,7 @@ SonareError sonare_midi2_per_note_pitch_bend(double ppq, uint8_t group, uint8_t 
 /// @param detach Non-zero sets the D flag: detach per-note controllers from
 ///        voices already sounding on @p note.
 /// @param reset Non-zero sets the S flag: reset @p note's per-note controllers.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi2_per_note_management(double ppq, uint8_t group, uint8_t channel,
                                              uint8_t note, int detach, int reset,
                                              SonareMidiEventPod* out);
@@ -407,6 +470,7 @@ const char* sonare_midi_per_note_controller_name(int index);
 ///        @p out_count entries are written, and only on success: the array is left untouched on
 ///        failure, so a rejected call cannot clobber events the caller already holds.
 /// @param out_count Always written, including on failure, where it is 0.
+/// @details The call does not transfer ownership of the output array or its contents.
 SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel, int bank_msb,
                                      int bank_lsb, int program, SonareMidiEventPod* out_events,
                                      size_t out_capacity, size_t* out_count);
@@ -417,9 +481,12 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
 ///          the router fixed capacity or caller capacity is reported through
 ///          `out_overflowed` / `out_overflow_count` when those pointers are not
 ///          NULL. `out_count` is always required.
+///          SysEx passes the group filter and ignores channel filtering and remapping.
 /// @param out_events Caller-owned array. Only the first @p out_count entries are written, and only
-///        on success: the array is left untouched on failure.
+///        on success: the array is left untouched on failure. Output SysEx pointers borrow the
+///        bytes of the input events, which the caller must keep alive for as long as they are read.
 /// @param out_count Always written, including on failure, where it is 0.
+/// @details The call does not transfer ownership of the output array or its contents.
 SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t count,
                                      const SonareMidiRouteConfig* config,
                                      SonareMidiEventPod* out_events, size_t out_capacity,
@@ -427,6 +494,7 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
                                      size_t* out_overflow_count);
 
 /// @brief Runs MIDI learn over an event stream and returns the learned binding.
+/// @details The returned binding has consume set to 0.
 /// @details Observes events in order using the native CcMap learn logic,
 ///          including 14-bit CC pair and RPN/NRPN selector assembly. Returns
 ///          SONARE_ERROR_INVALID_STATE if no binding is learned.
@@ -437,11 +505,13 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
                                  SonareMidiCcBinding* out_binding);
 
 /// @brief Converts a CC event to one automation breakpoint using a binding table.
+/// @details Validates consume without applying it to this conversion.
 SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, size_t binding_count,
                                          const SonareMidiEventPod* event,
                                          SonareAutomationPoint* out_point);
 
 /// @brief Converts an automation parameter value back to a controller UMP event.
+/// @details Validates consume without applying it to this conversion.
 /// @details Every binding kind this table accepts round-trips: a
 ///          SONARE_MIDI_CC_CONTROL_CHANGE_7 binding produces a 7-bit MIDI 1.0
 ///          control-change, SONARE_MIDI_CC_CONTROL_CHANGE_14 a MIDI 2.0
@@ -453,16 +523,19 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
 /// @return SONARE_ERROR_INVALID_STATE only when no binding in @p bindings
 ///         targets @p param_id. A supported binding never fails, so this code
 ///         means "not bound" and nothing else.
+/// @param out_event Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t binding_count,
                                     uint32_t param_id, float unit_value, uint8_t group, double ppq,
                                     SonareMidiEventPod* out_event);
 
 /// @brief Packs a MIDI 1.0 channel-pressure event POD at @p ppq.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_channel_pressure(double ppq, uint8_t group, uint8_t channel,
                                          uint8_t pressure, SonareMidiEventPod* out);
 
 /// @brief Packs a MIDI 1.0 pitch-bend event POD at @p ppq. @p bend is 0..16383,
 ///        center = 8192.
+/// @param out Caller-provided event storage. The call does not transfer ownership.
 SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, uint16_t bend,
                                    SonareMidiEventPod* out);
 

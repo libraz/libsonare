@@ -1558,9 +1558,10 @@ TEST_CASE("assist protects every outside track field and accepts inside controls
   auto* outside_track = f.history.project().find_track_mutable(extra.track_id);
   REQUIRE(outside_track != nullptr);
   sonare::automation::AutomationLane outside_lane(
-      77, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+      0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
   outside_lane.set_points({{0.0, -3.0f, sonare::automation::CurveType::Linear},
                            {480.0, 2.0f, sonare::automation::CurveType::Hold}});
+  outside_lane.set_lane_id(f.history.project().allocate_automation_lane_id());
   outside_track->automation_lanes.push_back(outside_lane);
   const std::string before = serialize(f.history);
 
@@ -1604,7 +1605,7 @@ TEST_CASE("assist protects every outside track field and accepts inside controls
       {"automation",
        [&] {
          sonare::automation::AutomationLane lane(
-             78, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+             0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
          lane.set_points({{0.0, -9.0f, sonare::automation::CurveType::Linear},
                           {960.0, 4.0f, sonare::automation::CurveType::Linear}});
          return std::make_unique<AddAutomationLane>(extra.track_id, std::move(lane));

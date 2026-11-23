@@ -213,7 +213,21 @@ TEST_CASE("every enumerator of every serialized enum survives a project round-tr
 
   check_every_enumerator<aut::AutomationTargetKind>(
       [](Fixture* f, aut::AutomationTargetKind value) {
-        f->project.find_track_mutable(f->track_id)->automation_lanes.front().set_target_kind(value);
+        // Each kind carries the target id and identity the encoder requires of it.
+        aut::AutomationLane& lane =
+            f->project.find_track_mutable(f->track_id)->automation_lanes.front();
+        aut::AutomationTargetIdentity identity;
+        if (value == aut::AutomationTargetKind::kTrackSendDb) identity.send_id = "send";
+        if (value == aut::AutomationTargetKind::kTrackInsertParam) {
+          identity.insert_index = 0;
+          identity.processor = "eq";
+          identity.param_name = "gain";
+        }
+        const bool opaque = value == aut::AutomationTargetKind::kOpaque;
+        aut::AutomationLane replaced(opaque ? lane.target_param_id() : 0, value, identity);
+        replaced.set_lane_id(lane.lane_id());
+        replaced.set_points(lane.points());
+        lane = replaced;
       },
       [](const Fixture& f) {
         return f.project.tracks().front().automation_lanes.front().target_kind();

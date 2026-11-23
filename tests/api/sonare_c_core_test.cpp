@@ -192,11 +192,12 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
   result.beats.push_back({0.75f, 22, 0.4f});
   result.downbeat_indices = {0};
   result.downbeat_phase = 2;
-  // Deliberately distinct from the beats' own strengths above: the windowed
-  // onset observation is a different quantity, so a serializer that reused
-  // Beat::strength here has to show up as a red test.
-  result.beat_observations.onset_strength = {0.62f, 0.37f};
+  // Deliberately distinct from the beats' own strengths above so the analysis
+  // record proves it carries the per-beat evidence used by meter estimation.
+  result.beat_observations.accent = {0.62f, 0.37f};
+  result.beat_observations.has_attack = {1, 0};
   result.beat_observations.low_frequency_energy = {0.31f, 0.12f};
+  result.beat_observations.subdivision_accent = {0.15f};
   result.beat_observations.chord_change = {1.0f, 0.0f};
   // Two beats half a second apart is 120 BPM, but the curve is a decoded value
   // rather than a restatement of the beat spacing, so the fixture carries
@@ -567,6 +568,14 @@ TEST_CASE("C pitch shift rejects an unsupported shifted rate before allocating",
     REQUIRE(out_length == 0);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()) == sonare::kPitchShiftPlanError);
+    // The static text is the one the core refuses the same plan with.
+    const sonare::Audio audio = sonare::Audio::from_buffer(samples, 4, 48000);
+    try {
+      (void)sonare::pitch_shift(audio, semitones);
+      FAIL("expected the core to refuse the plan");
+    } catch (const sonare::SonareException& refusal) {
+      CHECK(std::string(refusal.what()) == sonare::kPitchShiftPlanError);
+    }
   }
 }
 
@@ -711,8 +720,7 @@ TEST_CASE("silence leaves tempo, rhythm, timbre, melody and pitch summaries not 
   CHECK(std::isnan(bpm));
 
   SonareBpmAnalysisResult tempo{};
-  REQUIRE(sonare_analyze_bpm(x, n, 22050, 60.0f, 200.0f, 120.0f, 2048, 512, 5, &tempo) ==
-          SONARE_OK);
+  REQUIRE(sonare_analyze_bpm(x, n, 22050, 60.0f, 200.0f, 2048, 512, 5, &tempo) == SONARE_OK);
   CHECK(std::isnan(tempo.bpm));
   CHECK(tempo.candidate_count == 0);
   sonare_free_bpm_analysis_result(&tempo);
@@ -1906,19 +1914,34 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
 
 namespace {
 
-/// @brief A beat series accented once every @p numerator beats.
-struct CBeatSeries {
-  std::vector<float> times;
-  std::vector<float> strengths;
-};
-
-CBeatSeries make_beat_series(int numerator, int measures) {
-  CBeatSeries series;
+/// @brief Beat evidence accented once every @p numerator beats.
+sonare::MeterBeats make_beat_series(int numerator, int measures) {
+  sonare::MeterBeats series;
   for (int i = 0; i < numerator * measures; ++i) {
-    series.times.push_back(static_cast<float>(i) * 0.5f);
-    series.strengths.push_back(i % numerator == 0 ? 1.0f : 0.35f);
+    series.accent.push_back(i % numerator == 0 ? 1.0f : 0.35f);
+    series.has_attack.push_back(1);
   }
   return series;
+}
+
+SonareMeterBeats to_c_meter_beats(const sonare::MeterBeats& observations) {
+  SonareMeterBeats beats;
+  sonare_meter_beats_init(&beats);
+  beats.accent = observations.accent.empty() ? nullptr : observations.accent.data();
+  beats.has_attack = observations.has_attack.empty() ? nullptr : observations.has_attack.data();
+  beats.low_frequency_energy = observations.low_frequency_energy.empty()
+                                   ? nullptr
+                                   : observations.low_frequency_energy.data();
+  beats.subdivision_accent =
+      observations.subdivision_accent.empty() ? nullptr : observations.subdivision_accent.data();
+  beats.beat_count = observations.accent.size();
+  return beats;
+}
+
+SonareError call_meter_json(const sonare::MeterBeats& observations,
+                            const SonareMeterOptions* options, char** out_json) {
+  const SonareMeterBeats beats = to_c_meter_beats(observations);
+  return sonare_estimate_meter_json(&beats, options, out_json);
 }
 
 }  // namespace
@@ -1930,26 +1953,33 @@ TEST_CASE("analysis_result_to_json emits beat-parallel observation streams",
 
   REQUIRE(root.contains("beatObservations"));
   const auto& observations = root["beatObservations"];
-  for (const char* key : {"onsetStrength", "lowFrequencyEnergy", "chordChange"}) {
+  for (const char* key :
+       {"accent", "hasAttack", "lowFrequencyEnergy", "subdivisionAccent", "chordChange"}) {
     CAPTURE(key);
     REQUIRE(observations.contains(key));
     REQUIRE(observations[key].is_array());
-    REQUIRE(observations[key].size() == fixture.beats.size());
   }
+
+  REQUIRE(observations["accent"].size() == fixture.beats.size());
+  REQUIRE(observations["hasAttack"].size() == fixture.beats.size());
+  REQUIRE(observations["lowFrequencyEnergy"].size() == fixture.beats.size());
+  REQUIRE(observations["subdivisionAccent"].size() + 1 == fixture.beats.size());
 
   for (std::size_t i = 0; i < fixture.beats.size(); ++i) {
     CAPTURE(i);
-    REQUIRE(observations["onsetStrength"][i].as_number() ==
-            Catch::Approx(fixture.beat_observations.onset_strength[i]));
+    REQUIRE(observations["accent"][i].as_number() ==
+            Catch::Approx(fixture.beat_observations.accent[i]));
+    REQUIRE(observations["hasAttack"][i].as_bool() ==
+            (fixture.beat_observations.has_attack[i] != 0));
     REQUIRE(observations["lowFrequencyEnergy"][i].as_number() ==
             Catch::Approx(fixture.beat_observations.low_frequency_energy[i]));
     REQUIRE(observations["chordChange"][i].as_number() ==
             Catch::Approx(fixture.beat_observations.chord_change[i]));
-    // The windowed observation is a different quantity from the beat's own
-    // single-frame strength, so a serializer reading the latter has to fail.
-    REQUIRE(observations["onsetStrength"][i].as_number() !=
+    REQUIRE(observations["accent"][i].as_number() !=
             Catch::Approx(root["beats"][i]["strength"].as_number()));
   }
+  REQUIRE(observations["subdivisionAccent"][0].as_number() ==
+          Catch::Approx(fixture.beat_observations.subdivision_accent[0]));
 
   // Beat-indexed alongside the streams above, and serialized from the result
   // rather than re-derived from the beat spacing.
@@ -1965,7 +1995,8 @@ TEST_CASE("analysis_result_to_json emits beat-parallel observation streams",
   // extra the snapshot comparison would not police.
   const auto& paths = sonare::analysis_result_schema_paths();
   for (const char* path :
-       {"beatObservations", "beatObservations.onsetStrength", "beatObservations.lowFrequencyEnergy",
+       {"beatObservations", "beatObservations.accent", "beatObservations.hasAttack",
+        "beatObservations.lowFrequencyEnergy", "beatObservations.subdivisionAccent",
         "beatObservations.chordChange", "beatLocalBpm"}) {
     CAPTURE(path);
     REQUIRE(std::find(paths.begin(), paths.end(), std::string(path)) != paths.end());
@@ -1975,7 +2006,7 @@ TEST_CASE("analysis_result_to_json emits beat-parallel observation streams",
 TEST_CASE("meter_result_to_json matches its schema snapshot", "[c_api][analysis_json]") {
   const auto series = make_beat_series(4, 8);
   const sonare::MeterResult result =
-      sonare::estimate_meter_from_beats(series.times, series.strengths);
+      sonare::estimate_meter_from_observations(series, sonare::MeterConfig{});
 
   // The schema walk only descends into a populated array, so empty candidate
   // lists would drop the candidates[] paths instead of comparing them.
@@ -2054,8 +2085,7 @@ TEST_CASE("sonare_meter_options_init mirrors the core defaults", "[c_api]") {
   // mistake the rejection below guards against.
   const auto series = make_beat_series(4, 8);
   char* json = nullptr;
-  REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                     series.times.size(), &options, &json) == SONARE_OK);
+  REQUIRE(call_meter_json(series, &options, &json) == SONARE_OK);
   REQUIRE(json != nullptr);
   sonare_free_string(json);
 }
@@ -2071,8 +2101,7 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
 
   SECTION("emits parseable JSON a caller releases with sonare_free_string") {
     char* json = nullptr;
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &defaults, &json) == SONARE_OK);
+    REQUIRE(call_meter_json(series, &defaults, &json) == SONARE_OK);
     REQUIRE(json != nullptr);
 
     const auto root = sonare::util::json::parse(json);
@@ -2094,8 +2123,7 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     widened.candidate_numerators[2] = 5;
     widened.denominator = 8;
     char* json = nullptr;
-    REQUIRE(sonare_estimate_meter_json(odd.times.data(), odd.strengths.data(), odd.times.size(),
-                                       &widened, &json) == SONARE_OK);
+    REQUIRE(call_meter_json(odd, &widened, &json) == SONARE_OK);
     REQUIRE(json != nullptr);
     const auto root = sonare::util::json::parse(json);
     REQUIRE(root["timeSignature"]["numerator"].as_number() == 5.0);
@@ -2105,16 +2133,12 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     // The default set cannot reach 5, so the result above came from the options
     // rather than from the accent pattern alone.
     char* default_json = nullptr;
-    REQUIRE(sonare_estimate_meter_json(odd.times.data(), odd.strengths.data(), odd.times.size(),
-                                       &defaults, &default_json) == SONARE_OK);
+    REQUIRE(call_meter_json(odd, &defaults, &default_json) == SONARE_OK);
     const auto default_root = sonare::util::json::parse(default_json);
     const double default_numerator = default_root["timeSignature"]["numerator"].as_number();
     CAPTURE(default_numerator);
     REQUIRE(default_numerator != 5.0);
-    // A resolved compound meter is the one case the estimator reports in
-    // eighths on its own; any other numerator keeps the requested unit.
-    REQUIRE(default_root["timeSignature"]["denominator"].as_number() ==
-            (default_numerator == 6.0 ? 8.0 : 4.0));
+    REQUIRE(default_root["timeSignature"]["denominator"].as_number() == 4.0);
     sonare_free_string(default_json);
   }
 
@@ -2122,9 +2146,7 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     SonareMeterOptions zeroed = {};
     zeroed.struct_size = sizeof(zeroed);
     char* json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &zeroed,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(series, &zeroed, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
   }
 
@@ -2132,17 +2154,13 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     char* json = sentinel();
     SonareMeterOptions too_many = defaults;
     too_many.candidate_numerator_count = SONARE_MAX_METER_CANDIDATE_NUMERATORS + 1;
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &too_many,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(series, &too_many, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
     SonareMeterOptions largest = defaults;
     largest.candidate_numerator_count = std::numeric_limits<std::size_t>::max();
     json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &largest,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(series, &largest, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
     // The full array is still accepted, so the guard is a bound and not a
@@ -2153,8 +2171,7 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
       full.candidate_numerators[i] = 2 + i;
     }
     json = nullptr;
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &full, &json) == SONARE_OK);
+    REQUIRE(call_meter_json(series, &full, &json) == SONARE_OK);
     REQUIRE(json != nullptr);
     sonare_free_string(json);
   }
@@ -2163,78 +2180,56 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     char* json = sentinel();
     SonareMeterOptions too_small = defaults;
     too_small.candidate_numerators[1] = 1;
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &too_small,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(series, &too_small, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
     SonareMeterOptions too_large = defaults;
     too_large.candidate_numerators[1] = 33;
     json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &too_large,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(series, &too_large, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
     SonareMeterOptions odd_unit = defaults;
     odd_unit.denominator = 3;
     json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &odd_unit,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(series, &odd_unit, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
   }
 
   SECTION("rejects a beat series the core cannot score") {
     char* json = sentinel();
-    std::vector<float> backwards = series.times;
-    backwards[5] = backwards[4] - 0.25f;
-    REQUIRE(sonare_estimate_meter_json(backwards.data(), series.strengths.data(),
-                                       series.times.size(), &defaults,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare::MeterBeats nan_accents = series;
+    nan_accents.accent[2] = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(call_meter_json(nan_accents, &defaults, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
-    std::vector<float> nan_strengths = series.strengths;
-    nan_strengths[2] = std::numeric_limits<float>::quiet_NaN();
+    sonare::MeterBeats negative_accents = series;
+    negative_accents.accent[3] = -1.0f;
     json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), nan_strengths.data(),
-                                       series.times.size(), &defaults,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(negative_accents, &defaults, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
-    std::vector<float> negative_times = series.times;
-    negative_times[3] = -1.0f;
+    sonare::MeterBeats invalid_flags = series;
+    invalid_flags.has_attack[4] = 2;
     json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(negative_times.data(), series.strengths.data(),
-                                       series.times.size(), &defaults,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(invalid_flags, &defaults, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
   }
 
   SECTION("rejects an empty beat series however the caller spells it") {
-    // A zero count is nothing to score, so it is rejected rather than answered
-    // with the estimator's fixed low-confidence default. Both spellings have to
-    // reach the same core guard: null pointers with a zero count are an empty
-    // series, not a null-pointer mistake, so this surface must not answer them
-    // with its own generic rejection before the core sees them.
+    // A zero count is nothing to score, so it reaches the core's empty-accent
+    // refusal rather than being answered with the fixed low-confidence default.
+    const sonare::MeterBeats empty;
     char* json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(), 0, &defaults,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(call_meter_json(empty, &defaults, &json) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
+    REQUIRE(std::string(sonare_last_error_message()).find("beats.accent") != std::string::npos);
 
-    json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(nullptr, nullptr, 0, &defaults, &json) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(json == nullptr);
-    // The core's own guard is what answered, so its specific message reaches
-    // this surface instead of the generic pointer complaint.
-    REQUIRE(std::string(sonare_last_error_message()).find("beat_times") != std::string::npos);
-
-    // One beat is not empty: the line is drawn at nothing to score, not at
-    // "short", so the shortest non-empty series still gets an answer.
+    // One beat is not empty: it gets the fixed fallback rather than an error.
     json = nullptr;
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(), 1, &defaults,
-                                       &json) == SONARE_OK);
+    sonare::MeterBeats one_beat;
+    one_beat.accent = {0.8f};
+    REQUIRE(call_meter_json(one_beat, &defaults, &json) == SONARE_OK);
     REQUIRE(json != nullptr);
     const auto root = sonare::util::json::parse(json);
     REQUIRE(root["timeSignature"]["numerator"].as_number() == 4.0);
@@ -2244,35 +2239,29 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     sonare_free_string(json);
   }
 
-  SECTION("rejects a null pointer only where one would be read") {
+  SECTION("rejects null records, required fields, and options") {
     char* json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(nullptr, series.strengths.data(), series.times.size(),
-                                       &defaults, &json) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(json == nullptr);
-
-    json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), nullptr, series.times.size(), &defaults,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(json == nullptr);
-
-    json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(nullptr, nullptr, series.times.size(), &defaults, &json) ==
+    REQUIRE(sonare_estimate_meter_json(nullptr, &defaults, &json) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
-    // A null options struct is rejected too, and still clears the out pointer:
-    // the entry point validates out_json first and clears it before every
-    // other early return, so "null on error" holds for this path as well.
     json = sentinel();
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), nullptr,
-                                       &json) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareMeterBeats no_accent = to_c_meter_beats(series);
+    no_accent.accent = nullptr;
+    REQUIRE(sonare_estimate_meter_json(&no_accent, &defaults, &json) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("beats.accent") != std::string::npos);
+    REQUIRE(json == nullptr);
+
+    json = sentinel();
+    const SonareMeterBeats c_series = to_c_meter_beats(series);
+    REQUIRE(sonare_estimate_meter_json(&c_series, nullptr, &json) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(json == nullptr);
 
     // A null out pointer has nothing to clear and must not be written through.
-    REQUIRE(sonare_estimate_meter_json(series.times.data(), series.strengths.data(),
-                                       series.times.size(), &defaults,
-                                       nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_estimate_meter_json(&c_series, &defaults, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
@@ -2393,32 +2382,22 @@ TEST_CASE("C analysis ranges reject non-finite bounds", "[c_api][validation]") {
 
   SECTION("sonare_analyze_bpm") {
     SonareBpmAnalysisResult result = {};
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, 120.0f, 1024,
-                               256, 5, &result) == SONARE_OK);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, 1024, 256, 5,
+                               &result) == SONARE_OK);
     sonare_free_bpm_analysis_result(&result);
 
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, nan, 200.0f, 120.0f, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, nan, 120.0f, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, inf, 200.0f, 120.0f, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, inf, 120.0f, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, -inf, 200.0f, 120.0f, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 200.0f, 60.0f, 120.0f, 1024,
-                               256, 5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    // start_bpm is published as the reported BPM when no tempo peak survives, so
-    // a non-positive prior would leave a bpm of 0 rather than mean "no prior".
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, nan, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, inf, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, -inf, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, 0.0f, 1024, 256,
-                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, nan, 200.0f, 1024, 256, 5,
+                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, nan, 1024, 256, 5,
+                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, inf, 200.0f, 1024, 256, 5,
+                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, inf, 1024, 256, 5,
+                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, -inf, 200.0f, 1024, 256, 5,
+                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 200.0f, 60.0f, 1024, 256, 5,
+                               &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(result.candidates == nullptr);
     REQUIRE(result.autocorrelation == nullptr);
     REQUIRE(result.tempogram == nullptr);
@@ -2442,8 +2421,7 @@ TEST_CASE("C analysis ranges reject non-finite bounds", "[c_api][validation]") {
                                   256, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 200.0f, 60.0f, 120.0f, 1024,
                                   256, &result) == SONARE_ERROR_INVALID_PARAMETER);
-    // RhythmAnalyzer seeds its reported bpm from start_bpm, so the same
-    // non-positive prior would surface as a bpm of 0.
+    // The prior seeds beat tracking when the search finds no tempo.
     REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, nan, 1024,
                                   256, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, inf, 1024,
@@ -2633,8 +2611,8 @@ TEST_CASE("C result emitters publish nothing when an allocation fails",
     SonareBpmAnalysisResult r{};
     sweep(
         [&] {
-          return sonare_analyze_bpm(tone.data(), tone.size(), rate, 60.0f, 200.0f, 120.0f, 1024,
-                                    256, 4, &r);
+          return sonare_analyze_bpm(tone.data(), tone.size(), rate, 60.0f, 200.0f, 1024, 256, 4,
+                                    &r);
         },
         [&] {
           return r.candidates == nullptr && r.candidate_count == 0 &&
@@ -2815,8 +2793,8 @@ TEST_CASE("C BPM and rhythm entries agree with detect_bpm across input rates",
             SONARE_OK);
 
     SonareBpmAnalysisResult detailed = {};
-    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), rate, 60.0f, 200.0f, 120.0f, 2048, 512,
-                               5, &detailed) == SONARE_OK);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), rate, 60.0f, 200.0f, 2048, 512, 5,
+                               &detailed) == SONARE_OK);
     CHECK(detailed.bpm == Catch::Approx(quick).margin(2.5f));
     sonare_free_bpm_analysis_result(&detailed);
 

@@ -17,6 +17,7 @@
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
 #include "c_api/feature_input_domains.h"
+#include "c_api/inverse_input_domains.h"
 #include "c_api/numeric_domain_row.h"
 #include "c_api/transcribe_input_domains.h"
 #include "core/convert.h"
@@ -130,6 +131,13 @@ inline const NumericDomainRow kAnalysisDomainRows[] = {
     {"hybrid_cqt", "bins_per_octave", sonare::kCqtCountDomain, nullptr},
     {"hybrid_cqt", "hop_length", sonare::kCqtHopLengthDomain, "within_work_size_limit"},
     {"hybrid_cqt", "n_bins", sonare::kCqtCountDomain, "within_work_size_limit"},
+    {"istft", "hop_length", sonare::kStftHopDomain, "hann_cola_pair"},
+    {"istft", "length_samples",
+     sonare::util::check::integer_domain(0, static_cast<long long>(sonare::kMaxAudioBufferSize)),
+     nullptr},
+    {"istft", "n_bins", kInverseSpectrogramExtentDomain, nullptr},
+    {"istft", "n_fft", sonare::kColaNFftDomain, "even"},
+    {"istft", "n_frames", kInverseSpectrogramExtentDomain, nullptr},
     {"mel_delta", "n_features", sonare_c_detail::kMelDeltaShapeDomain, nullptr},
     {"mel_delta", "n_frames", sonare_c_detail::kMelDeltaShapeDomain, nullptr},
     {"mel_delta", "width", sonare::kMelDeltaWidthDomain, "odd"},

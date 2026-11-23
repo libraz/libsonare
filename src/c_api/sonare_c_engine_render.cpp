@@ -99,6 +99,7 @@ SonareError sonare_engine_process(SonareEngine* engine, float* const* channels,
                                   float* const* monitor_out, int num_channels, int num_frames) {
   SONARE_C_RT_API_ENTRY;
   if (!engine || num_channels < 0 || num_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (engine->engine.live_driver()) return SONARE_ERROR_INVALID_STATE;
   if (monitor_out == nullptr) {
     engine->engine.process(channels, num_channels, num_frames);
   } else {
@@ -121,6 +122,7 @@ SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out
   SONARE_C_TRY
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(out);
+  engine->engine.require_quiescent();
   int finalize = 1;
   if (options != nullptr) {
     if (const SonareError err = run_validation([&] {
@@ -178,6 +180,8 @@ SonareError sonare_engine_render_offline(SonareEngine* engine, float* const* out
 SonareError sonare_engine_finish_offline_render(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   // Same never-prepared rule as the render entry points: with no reserved
   // telemetry ring there is nothing to release and nothing that could report,
   // so say so rather than returning OK for a no-op.
@@ -187,6 +191,7 @@ SonareError sonare_engine_finish_offline_render(SonareEngine* engine) {
   }
   engine->engine.finish_offline_render();
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 #if defined(SONARE_WITH_MASTERING)
@@ -223,6 +228,7 @@ SonareError sonare_engine_bounce_offline(SonareEngine* engine,
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(options);
+  engine->engine.require_quiescent();
   if (const SonareError err = run_validation([&] {
         require_struct_size(options->struct_size, sizeof(SonareEngineBounceOptions), "options",
                             "sonare_engine_bounce_options_init");
@@ -388,6 +394,7 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
   SONARE_C_ZERO_OUTS(out);
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(options);
+  engine->engine.require_quiescent();
   if (const SonareError err = run_validation([&] {
         require_struct_size(options->struct_size, sizeof(SonareEngineFreezeOptions), "options",
                             "sonare_engine_freeze_options_init");
@@ -535,6 +542,7 @@ SonareError sonare_engine_configure_scope_telemetry(SonareEngine* engine, int in
   SONARE_C_REQUIRE_NONNULL(engine);
 #if defined(SONARE_WITH_MIXING)
   SONARE_C_TRY
+  engine->engine.require_quiescent();
   const uint32_t applied = engine->engine.configure_scope_telemetry(
       interval_frames, static_cast<uint32_t>(std::min<size_t>(band_count, UINT32_MAX)));
   if (out_band_count) *out_band_count = applied;

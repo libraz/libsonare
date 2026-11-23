@@ -761,6 +761,7 @@ TEST_CASE("synth patch param info describes every numeric patch field", "[projec
            name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
   };
   for (const auto& d : info.as_array()) {
+    if (d["type"].as_string() == "enum") continue;
     require_descriptor_shape(d);
     const std::string& name = d["name"].as_string();
     const std::string& unit = d["unit"].as_string();
@@ -770,11 +771,61 @@ TEST_CASE("synth patch param info describes every numeric patch field", "[projec
     if (ends_with(name, "Ms")) REQUIRE(unit == "ms");
     if (ends_with(name, "Cents")) REQUIRE(unit == "cents");
   }
-  REQUIRE(names.size() == info.size());
+  REQUIRE(names.size() == fields.size());
   REQUIRE(names == fields);
   // The automation table's names are this table's names.
   for (size_t i = 0; i < sonare::midi::synth::native_synth_param_count(); ++i) {
     REQUIRE(fields.count(sonare::midi::synth::native_synth_param_name_at(i)) == 1);
+  }
+}
+
+TEST_CASE("synth patch enum catalog rows use the shared C vocabularies",
+          "[project][synth_patch][catalog]") {
+  const std::vector<std::pair<std::string, int>> fields = {
+      {"waveform", SONARE_SYNTH_ENUM_OSC_WAVEFORM},
+      {"filterModel", SONARE_SYNTH_ENUM_FILTER_MODEL},
+      {"filterOutput", SONARE_SYNTH_ENUM_FILTER_OUTPUT},
+      {"body", SONARE_SYNTH_ENUM_BODY_TYPE},
+      {"retrigger", SONARE_SYNTH_ENUM_RETRIGGER},
+      {"lfoShape", SONARE_SYNTH_ENUM_LFO_SHAPE},
+      {"sampleLoop", SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE},
+      {"sampleKeyTrack", SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK},
+  };
+  const sonare::util::json::Value info =
+      parse_info(sonare_test::c_string(sonare_synth_patch_param_info));
+  std::map<std::string, const sonare::util::json::Value*> rows;
+  for (const auto& d : info.as_array()) {
+    if (d["type"].as_string() == "enum") {
+      REQUIRE(rows.emplace(d["name"].as_string(), &d).second);
+    }
+  }
+  REQUIRE(rows.size() == fields.size());
+
+  for (const auto& [name, kind] : fields) {
+    CAPTURE(name, kind);
+    const auto row = rows.find(name);
+    REQUIRE(row != rows.end());
+    const sonare::util::json::Value& d = *row->second;
+    REQUIRE(d["type"].as_string() == "enum");
+    REQUIRE(d["values"].is_array());
+    REQUIRE(d["values"].size() > 0);
+    REQUIRE(d["default"].is_string());
+    REQUIRE(d["values"][0].as_string() == "default");
+    REQUIRE(d["default"].as_string() == d["values"][0].as_string());
+
+    const std::string joined = sonare_synth_enum_names(kind);
+    size_t start = 0;
+    size_t i = 0;
+    while (start < joined.size()) {
+      const size_t end = joined.find('\n', start);
+      const size_t length = end == std::string::npos ? joined.size() - start : end - start;
+      REQUIRE(i < d["values"].size());
+      REQUIRE(d["values"][i].as_string() == joined.substr(start, length));
+      ++i;
+      if (end == std::string::npos) break;
+      start = end + 1;
+    }
+    REQUIRE(i == d["values"].size());
   }
 }
 

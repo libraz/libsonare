@@ -17,6 +17,8 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
+#include "midi/controller_profile.h"
+
 namespace sonare_c_bounce_detail {
 
 inline bool checked_nonnegative_add(int64_t lhs, int64_t rhs, int64_t* out) noexcept {
@@ -174,6 +176,18 @@ struct HostedInstrument {
   // null. Naming the concrete type here keeps the drain a compile-time fact
   // rather than a downcast at the end of every render.
   CallbackInstrument* callback = nullptr;
+  std::optional<sonare::midi::ControllerProfile> controller_profile{};
+  std::vector<std::pair<uint8_t, sonare::midi::ArticulationMode>> articulations{};
+
+  bool apply_controls() const noexcept {
+    if (controller_profile && !instrument->set_controller_profile(*controller_profile)) {
+      return false;
+    }
+    for (const auto& [channel, mode] : articulations) {
+      if (!instrument->set_articulation(channel, mode)) return false;
+    }
+    return true;
+  }
 };
 
 // A scheduled MIDI event with the destination its clip is bound for.
@@ -242,6 +256,7 @@ inline bool render_timeline(const arr::CompiledTimeline& timeline,
     hosted.instrument->reset();
     // A refused bind (e.g. a scheduled SysEx the instrument cannot prepare) fails the bounce.
     if (!engine.set_midi_instrument(hosted.destination_id, hosted.instrument)) return false;
+    if (!hosted.apply_controls()) return false;
   }
 
   // Prime the parameter smoothers before the audible render so a non-default

@@ -200,6 +200,8 @@ struct MidiClipSchedule {
   int64_t length_samples = 0;
   /// Loop policy.
   MidiLoopMode loop_mode = MidiLoopMode::kOneShot;
+  /// At frame zero, dispatch this schedule in stream order before ordinary clips.
+  bool frame_zero_prelude = false;
   /// Loop length in samples (used when loop_mode == kLoop and > 0).
   int64_t loop_length_samples = 0;
   /// Repeat starts (render frames, ascending, first repeat excluded) of a loop
@@ -234,7 +236,8 @@ struct MidiClipSchedule {
   bool operator==(const MidiClipSchedule& o) const noexcept {
     return id == o.id && track_id == o.track_id && start_sample == o.start_sample &&
            start_ppq == o.start_ppq && length_samples == o.length_samples &&
-           loop_mode == o.loop_mode && loop_length_samples == o.loop_length_samples &&
+           loop_mode == o.loop_mode && frame_zero_prelude == o.frame_zero_prelude &&
+           loop_length_samples == o.loop_length_samples &&
            loop_iteration_starts == o.loop_iteration_starts && destination_id == o.destination_id &&
            events == o.events && gain == o.gain && fade_in_samples == o.fade_in_samples &&
            fade_out_samples == o.fade_out_samples && fade_in_curve == o.fade_in_curve &&

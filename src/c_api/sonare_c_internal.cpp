@@ -28,6 +28,11 @@ std::optional<sonare::SonareParameterRefusal>& last_refusal_storage() noexcept {
   return refusal;
 }
 
+std::optional<sonare::ErrorReason>& last_error_reason_storage() noexcept {
+  static thread_local std::optional<sonare::ErrorReason> reason;
+  return reason;
+}
+
 const char*& current_entry_storage() noexcept {
   static thread_local const char* entry = nullptr;
   return entry;
@@ -71,9 +76,16 @@ const char* last_error_message() noexcept {
   return fallback != nullptr ? fallback : last_error_storage().c_str();
 }
 
-void set_last_error(SonareError code, const char* msg) noexcept {
+const char* last_error_reason() noexcept {
+  const std::optional<sonare::ErrorReason>& reason = last_error_reason_storage();
+  return reason.has_value() ? sonare::error_reason_token(*reason) : nullptr;
+}
+
+void set_last_error(SonareError code, const char* msg,
+                    std::optional<sonare::ErrorReason> reason) noexcept {
   last_error_code_storage() = code;
   last_refusal_storage().reset();
+  last_error_reason_storage() = reason;
   last_error_fallback_storage() = nullptr;
   try {
     last_error_storage().assign(msg != nullptr ? msg : "");
@@ -82,9 +94,11 @@ void set_last_error(SonareError code, const char* msg) noexcept {
   }
 }
 
-void set_last_error_static(SonareError code, const char* msg) noexcept {
+void set_last_error_static(SonareError code, const char* msg,
+                           std::optional<sonare::ErrorReason> reason) noexcept {
   last_error_code_storage() = code;
   last_refusal_storage().reset();
+  last_error_reason_storage() = reason;
   last_error_fallback_storage() = msg;
 }
 
@@ -100,6 +114,7 @@ void leave_c_api() noexcept { current_entry_storage() = nullptr; }
 void clear_last_error() noexcept {
   last_error_code_storage() = SONARE_OK;
   last_refusal_storage().reset();
+  last_error_reason_storage().reset();
   last_error_storage().clear();
   last_error_fallback_storage() = nullptr;
 }
@@ -254,7 +269,7 @@ SonareError record_current_exception() noexcept {
     throw;
   } catch (const sonare::SonareParameterRefusal& e) {
     const SonareError code = map_sonare_exception(e);
-    set_last_error(code, e.what());
+    set_last_error(code, e.what(), e.reason());
     try {
       last_refusal_entry_storage() = c_entry_key(current_entry_storage());
       last_refusal_storage() = e;
@@ -265,7 +280,7 @@ SonareError record_current_exception() noexcept {
     return code;
   } catch (const SonareException& e) {
     const SonareError code = map_sonare_exception(e);
-    set_last_error(code, e.what());
+    set_last_error(code, e.what(), e.reason());
     return code;
   } catch (const std::exception& e) {
     const SonareError code = static_cast<SonareError>(sonare::error_code_for_std_exception(e));

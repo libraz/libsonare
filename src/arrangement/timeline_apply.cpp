@@ -1,5 +1,6 @@
 #include <array>
 #include <cmath>
+#include <limits>
 #include <new>
 #include <string>
 #include <utility>
@@ -7,6 +8,9 @@
 
 #include "arrangement/edit_compiler.h"
 #include "engine/mixing_runtime.h"
+#if defined(SONARE_WITH_MIXING)
+#include "engine/strip_spec.h"
+#endif
 #include "midi/midi_clip.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -41,7 +45,8 @@ bool has_track_lane(const CompiledTimeline& timeline, TrackId track_id) noexcept
 // compiler already applied project-order first-wins filtering to them, and
 // set_lanes() defensively preserves that contract for a hand-built snapshot.
 std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTimeline& timeline,
-                                                               std::vector<TrackId>* lane_tracks) {
+                                                               std::vector<TrackId>* lane_tracks,
+                                                               bool bind_strips) {
   std::vector<automation::AutomationLane> playback_lanes;
   playback_lanes.reserve(timeline.mixer.automation_bindings.empty()
                              ? timeline.automation_lanes.size()
@@ -60,8 +65,13 @@ std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTim
     return playback_lanes;
   }
   for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
+    const auto kind = binding.lane.target_kind();
+    if (!bind_strips && (kind == automation::AutomationTargetKind::kTrackInsertParam ||
+                         kind == automation::AutomationTargetKind::kTrackSendDb)) {
+      continue;
+    }
     TrackId track_id = 0;
-    if (binding.lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
+    if (kind != automation::AutomationTargetKind::kOpaque) {
 #if defined(SONARE_WITH_MIXING)
       if (has_track_lane(timeline, binding.track_id)) track_id = binding.track_id;
 #endif
@@ -75,15 +85,42 @@ std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTim
 }
 
 #if defined(SONARE_WITH_MIXING)
-// Points each typed lane at its track's fader/pan id, minted by set_track_lanes.
-bool bind_playback_lane_targets(const engine::RealtimeEngine& engine,
-                                const std::vector<TrackId>& lane_tracks,
+// Points each typed lane at its reserved runtime id, minted by the installed lane/strip set.
+bool bind_playback_lane_targets(engine::RealtimeEngine& engine,
+                                const std::vector<TrackId>& lane_tracks, bool bind_strips,
                                 std::vector<automation::AutomationLane>* lanes) noexcept {
   for (size_t i = 0; i < lane_tracks.size() && i < lanes->size(); ++i) {
     if (lane_tracks[i] == 0) continue;
     automation::AutomationLane& lane = (*lanes)[i];
-    const int64_t id = engine.track_lane_automation_id(
-        lane_tracks[i], static_cast<unsigned int>(lane.target_kind()));
+    int64_t id = -1;
+    switch (lane.target_kind()) {
+      case automation::AutomationTargetKind::kTrackFaderDb:
+        id = engine.track_lane_automation_id(lane_tracks[i],
+                                             sonare::engine::TrackMixerRuntime::kFaderDb);
+        break;
+      case automation::AutomationTargetKind::kTrackPan:
+        id = engine.track_lane_automation_id(lane_tracks[i],
+                                             sonare::engine::TrackMixerRuntime::kPan);
+        break;
+      case automation::AutomationTargetKind::kTrackWidth:
+        id = engine.track_lane_automation_id(lane_tracks[i],
+                                             sonare::engine::TrackMixerRuntime::kWidth);
+        break;
+      case automation::AutomationTargetKind::kTrackInsertParam: {
+        if (!bind_strips) return false;
+        const automation::AutomationTargetIdentity& identity = lane.target_identity();
+        if (!identity.insert_index.has_value() ||
+            *identity.insert_index > std::numeric_limits<unsigned int>::max()) {
+          return false;
+        }
+        id = engine.resolve_track_insert_automation_id(
+            lane_tracks[i], static_cast<unsigned int>(*identity.insert_index), identity.param_name);
+        break;
+      }
+      case automation::AutomationTargetKind::kOpaque:
+      default:
+        return false;
+    }
     if (id < 0) return false;
     lane.set_target_param_id(static_cast<uint32_t>(id));
   }
@@ -105,6 +142,39 @@ bool has_strip_binding(const CompiledTimeline& timeline, TrackId track_id) noexc
     if (binding.track_id == track_id) return true;
   }
   return false;
+}
+
+const MixerStripBinding* find_track_strip_binding(const MixerRequest& mixer,
+                                                  TrackId track_id) noexcept {
+  const MixerStripBinding* found = nullptr;
+  for (const MixerStripBinding& binding : mixer.bindings) {
+    if (binding.track_id != track_id) continue;
+    if (found != nullptr) return nullptr;
+    found = &binding;
+  }
+  return found;
+}
+
+bool insert_lane_targets_match_scene(const CompiledTimeline& timeline) noexcept {
+  for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
+    if (binding.lane.target_kind() != automation::AutomationTargetKind::kTrackInsertParam) {
+      continue;
+    }
+    const MixerStripBinding* strip_binding =
+        find_track_strip_binding(timeline.mixer, binding.track_id);
+    if (strip_binding == nullptr) return false;
+    const mixing::api::Strip* strip = find_scene_strip(timeline.mixer, strip_binding->strip_id);
+    if (strip == nullptr) return false;
+    const automation::AutomationTargetIdentity& identity = binding.lane.target_identity();
+    if (!identity.insert_index.has_value() ||
+        *identity.insert_index > std::numeric_limits<unsigned int>::max()) {
+      return false;
+    }
+    const std::string* processor = engine::strip_insert_processor_name_at(
+        *strip, static_cast<unsigned int>(*identity.insert_index));
+    if (processor == nullptr || *processor != identity.processor) return false;
+  }
+  return true;
 }
 #endif
 
@@ -229,6 +299,19 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
                                "scene strip \"" + bindings[i].strip_id + "\" cannot be built");
         }
       }
+      for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
+        if (binding.lane.target_kind() == automation::AutomationTargetKind::kTrackSendDb) {
+          return apply_refused(ErrorCode::NotSupported,
+                               "automation of scene send \"" +
+                                   binding.lane.target_identity().send_id + "\" on track " +
+                                   std::to_string(binding.track_id) +
+                                   " is realized only by the offline bounce");
+        }
+      }
+      if (!insert_lane_targets_match_scene(timeline)) {
+        return apply_refused(ErrorCode::InvalidParameter,
+                             "track insert automation does not match its bound scene strip insert");
+      }
     }
 #endif
     // A tempo the capture setup refuses is refused here, before the first mutation.
@@ -236,7 +319,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
         timeline.tempo_segments.empty()
             ? std::vector<transport::TempoSegment>{transport::kDefaultTempoSegment}
             : timeline.tempo_segments);
-    playback_lanes = resolve_playback_lanes(timeline, &playback_lane_tracks);
+    playback_lanes = resolve_playback_lanes(timeline, &playback_lane_tracks, options.bind_strips);
     result.installed_automation = playback_lanes;
 
     // (2) Own and prepare every SysEx payload without publishing.
@@ -266,9 +349,26 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
                                "the engine refuses the track-lane vector");
       }
     }
-    if (!bind_playback_lane_targets(engine, playback_lane_tracks, &playback_lanes)) {
+    if (options.bind_strips) {
+      for (const CompiledTrackLane& lane : timeline.track_lanes) {
+        if (has_strip_binding(timeline, lane.track_id)) continue;
+        if (!engine.release_track_strip(lane.track_id)) {
+          return apply_cleared(engine, ErrorCode::InvalidState,
+                               "the engine refused to release a track strip");
+        }
+      }
+      for (const MixerStripBinding& binding : timeline.mixer.bindings) {
+        if (!engine.set_track_strip(binding.track_id,
+                                    *find_scene_strip(timeline.mixer, binding.strip_id))) {
+          return apply_cleared(engine, ErrorCode::InvalidState,
+                               "the engine refused a validated track strip");
+        }
+      }
+    }
+    if (!bind_playback_lane_targets(engine, playback_lane_tracks, options.bind_strips,
+                                    &playback_lanes)) {
       return apply_cleared(engine, ErrorCode::InvalidState,
-                           "the engine holds no fader/pan id for a track lane");
+                           "the engine cannot resolve a typed track automation target");
     }
     // Both lists started as the same resolved lanes, so the bound result is shared.
     result.installed_automation = playback_lanes;
@@ -293,24 +393,6 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
     engine.set_clips(timeline.audio_clips);
 #if defined(SONARE_WITH_ARRANGEMENT)
     engine.publish_midi_clips(std::move(prepared_midi));
-#endif
-#if defined(SONARE_WITH_MIXING)
-    if (options.bind_strips) {
-      for (const CompiledTrackLane& lane : timeline.track_lanes) {
-        if (has_strip_binding(timeline, lane.track_id)) continue;
-        if (!engine.release_track_strip(lane.track_id)) {
-          return apply_cleared(engine, ErrorCode::InvalidState,
-                               "the engine refused to release a track strip");
-        }
-      }
-      for (const MixerStripBinding& binding : timeline.mixer.bindings) {
-        if (!engine.set_track_strip(binding.track_id,
-                                    *find_scene_strip(timeline.mixer, binding.strip_id))) {
-          return apply_cleared(engine, ErrorCode::InvalidState,
-                               "the engine refused a validated track strip");
-        }
-      }
-    }
 #endif
   } catch (const SonareException& e) {
     return apply_cleared(engine, e.code(), e.what());

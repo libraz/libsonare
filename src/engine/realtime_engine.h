@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "automation/automation_engine.h"
@@ -621,19 +622,38 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// Replacing, clearing or retargeting the source releases what the previous
   /// stream holds on its destination (its notes, and each pedal or bend it wrote
   /// last), since that stream's own releases will never arrive.
+  /// Control-thread only, while processing is stopped. This raw registration
+  /// retains no lifetime; the caller must keep the source alive until replaced.
   void set_midi_input_source(host::MidiInputSource* source, uint32_t destination_id = 0) noexcept {
     midi_input_destination_id_.store(destination_id, std::memory_order_relaxed);
     // Bumped before the source is published, so the audio thread that adopts the
     // source also sees a new generation and drops the old stream's partial gestures.
     midi_input_source_generation_.fetch_add(1, std::memory_order_relaxed);
     midi_input_source_.store(source, std::memory_order_release);
+    if (source != midi_input_source_owner_.get()) midi_input_source_owner_.reset();
+  }
+  /// Control-thread registration for a source whose lifetime the engine must retain.
+  /// Processing must be stopped while changing the binding; unlike the raw
+  /// overload, this retains the source so a live session can restore it safely.
+  void set_midi_input_source_owned(std::shared_ptr<host::MidiInputSource> source,
+                                   uint32_t destination_id = 0) noexcept {
+    host::MidiInputSource* const raw_source = source.get();
+    midi_input_source_owner_ = std::move(source);
+    midi_input_destination_id_.store(destination_id, std::memory_order_relaxed);
+    midi_input_source_generation_.fetch_add(1, std::memory_order_relaxed);
+    midi_input_source_.store(raw_source, std::memory_order_release);
   }
   struct MidiInputBinding {
     host::MidiInputSource* source = nullptr;
     uint32_t destination_id = 0;
+    std::shared_ptr<host::MidiInputSource> owner;
   };
   /// Reads the binding on the control thread while processing and source changes are stopped.
   MidiInputBinding midi_input_binding() const noexcept;
+  /// Audio-side source pointer snapshot for control helpers; does not copy its owner.
+  host::MidiInputSource* active_midi_input_source() const noexcept {
+    return midi_input_source_.load(std::memory_order_acquire);
+  }
   // Control-thread: enqueue a live MIDI SysEx message for `destination_id`. The
   // bytes are copied into a bounded payload slot (preparation may allocate) and a
   // kMidiSysExImmediate command carrying only a scalar slot reference is pushed,
@@ -1705,6 +1725,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   midi::ClockGenerator midi_clock_{};
   std::atomic<MidiSyncSink*> midi_sync_sink_{nullptr};
   std::atomic<host::MidiInputSource*> midi_input_source_{nullptr};
+  std::shared_ptr<host::MidiInputSource> midi_input_source_owner_;
   std::atomic<uint64_t> midi_input_source_generation_{0};
   // AUDIO thread: the source generation whose controller decode state is live.
   uint64_t adopted_midi_input_source_generation_ = 0;

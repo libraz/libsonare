@@ -26,6 +26,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "arrangement/edit_command.h"  // MidiContentStore
@@ -69,25 +70,36 @@ struct AudioSourceSamples {
   double sample_rate = 0.0;
 };
 
+struct WarpedAudioKey {
+  SourceId source_id = 0;
+  WarpRefId warp_ref_id = 0;
+
+  bool operator<(const WarpedAudioKey& other) const noexcept {
+    return source_id < other.source_id ||
+           (source_id == other.source_id && warp_ref_id < other.warp_ref_id);
+  }
+};
+static_assert(std::is_trivially_copyable_v<WarpedAudioKey>);
+
 /// Registry mapping source id -> decoded audio samples. Plain value data,
 /// control-thread only. A clip whose audio source has no entry here compiles to
 /// an ERROR diagnostic (dangling/unavailable), not a crash.
 struct AudioContentStore {
   std::map<SourceId, AudioSourceSamples> sources;
-  /// Optional pre-baked warped audio, keyed by warp_ref_id. The MIR/host layer
-  /// creates these offline from a WarpMap and registers them before compile().
+  /// Optional pre-baked warped audio, keyed by source and warp reference. The
+  /// MIR/host layer creates these offline from a WarpMap before compile().
   /// The arrangement compiler can then select already-warped samples without
   /// depending on mir/ (which would create a dependency cycle).
-  std::map<WarpRefId, AudioSourceSamples> warped_sources;
+  std::map<WarpedAudioKey, AudioSourceSamples> warped_sources;
 
   const AudioSourceSamples* find(SourceId id) const noexcept {
     const auto it = sources.find(id);
     return it == sources.end() ? nullptr : &it->second;
   }
 
-  const AudioSourceSamples* find_warped(WarpRefId id) const noexcept {
-    if (id == 0) return nullptr;
-    const auto it = warped_sources.find(id);
+  const AudioSourceSamples* find_warped(SourceId source_id, WarpRefId warp_ref_id) const noexcept {
+    if (source_id == 0 || warp_ref_id == 0) return nullptr;
+    const auto it = warped_sources.find({source_id, warp_ref_id});
     return it == warped_sources.end() ? nullptr : &it->second;
   }
 };
@@ -150,7 +162,7 @@ struct MixerAutomationBinding {
 
   bool operator==(const MixerAutomationBinding& o) const {
     return track_id == o.track_id && lane.target_param_id() == o.lane.target_param_id() &&
-           lane.target_kind() == o.lane.target_kind() && lane.points() == o.lane.points();
+           lane.same_target_identity(o.lane) && lane.points() == o.lane.points();
   }
 };
 
@@ -308,7 +320,7 @@ struct Diagnostic {
     kInvalidAutomationTargetKind = 15,
     kAutomationLaneCapacity = 16,
     kReservedAutomationRouteConflict = 17,
-    kAutomationTargetUnrouted = 18,  // non-empty opaque lane has no built-in route
+    kAutomationTargetUnrouted = 18,  // lane's target is not reachable on its routed strip
   };
   // Severity ordinals are a FROZEN WIRE VALUE: they are exposed numerically as
   // SonareProjectDiagnostic.severity through the C ABI (see
@@ -379,6 +391,12 @@ struct CompileConfig {
 // compile / apply
 // ===========================================================================
 
+/// Returns whether a track is silent under its mute, solo, and gain settings.
+bool track_is_silenced(const Track& track, bool any_solo) noexcept;
+
+/// Returns the greatest end PPQ among valid, audible clips, or 0 when none.
+double arrangement_end_ppq(const Project& project);
+
 /// Compiles `project` into a CompiledTimeline. Reads `midi` for clip event data
 /// and `audio` for clip sample data. Never throws; returns diagnostics instead.
 CompileResult compile(const Project& project, const MidiContentStore& midi,
@@ -421,8 +439,9 @@ struct ApplyResult {
 ///
 /// The graph request has no Project authoring surface yet and is not acted on. With
 /// @c bind_strips off the mixer bindings are left to the caller; with it on, a strip bound to
-/// several tracks is refused (@c NotSupported), because the live runtime is one strip per track
-/// and only the offline bounce realizes the sum-then-process grouping.
+/// several tracks or a lane automating a scene send is refused (@c NotSupported). The live
+/// runtime is one strip per track. Offline bounce realizes strip grouping and scene send
+/// automation.
 ///
 /// The engine keeps pointers into @p timeline's marker names, so the timeline must outlive the
 /// engine's use of its markers. CONTROL thread, not concurrent with process().

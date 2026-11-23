@@ -59,6 +59,24 @@ class PreparedEngine {
 // Effects
 // ---------------------------------------------------------------------------------------------
 
+SonareError probe_encode_audio(const std::string& param, double value) {
+  const float sample = 0.25f;
+  int sample_rate = 48000;
+  SonareEncodeOptions options{};
+  sonare_encode_options_init(&options);
+  if (is_param(param, "sample_rate")) sample_rate = static_cast<int>(value);
+  if (is_param(param, "options.quality")) {
+    options.format = "mp3";
+    options.quality = static_cast<float>(value);
+  }
+  uint8_t* out = nullptr;
+  size_t out_size = 0;
+  const SonareError err =
+      sonare_encode_audio(&sample, 1, 1, sample_rate, &options, &out, &out_size);
+  if (err == SONARE_OK) sonare_free_bytes(out);
+  return err;
+}
+
 SonareError probe_decompose(const std::string& param, double value) {
   int n_features = 2;
   int n_frames = 2;
@@ -959,6 +977,7 @@ const std::map<std::string, Probe>& probes() {
       {"decompose", probe_decompose},
       {"decompose_stems", probe_decompose_stems},
       {"decompose_stems_linked", probe_decompose_stems_linked},
+      {"encode_audio", probe_encode_audio},
       {"engine_add_parameter", probe_engine_add_parameter},
       {"engine_articulation", probe_engine_articulation},
       {"engine_bind_midi_cc", probe_engine_bind_midi_cc},

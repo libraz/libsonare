@@ -1017,6 +1017,8 @@ SonareError sonare_engine_graph_connection_count(SonareEngine* engine, size_t* o
 /// @param monitor_out NULL folds the cue (monitor) bus into @p channels. Non-NULL copies the cue
 ///   bus to @p monitor_out instead of folding it: @p num_channels planes of @p num_frames
 ///   floats, a NULL plane skipped.
+/// @return SONARE_ERROR_INVALID_STATE only when a live device drives the engine
+///   (engineDeviceDriven). This realtime call leaves the thread-local error record untouched.
 SonareError sonare_engine_process(SonareEngine* engine, float* const* channels,
                                   float* const* monitor_out, int num_channels, int num_frames);
 /// @brief Fills @p options with sizeof and the defaults for sonare_engine_render_offline
@@ -1155,9 +1157,10 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
 SonareError sonare_engine_drain_telemetry(SonareEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written);
 /// @brief Drains meter telemetry as per-plane records with pre-trim input peaks.
-/// @details Every target's record carries all its num_channels planes, and a stereo target's L/R
-///   are planes 0 and 1. Every meter drain pops from one shared queue and consumes the records of
-///   all targets, so an engine reads its meters through one drain only.
+/// @details In each SonareMeterTelemetryRecord, only the first num_channels entries of peak_db,
+///   rms_db, true_peak_dbtp and input_peak_db carry measurements. Entries past num_channels stay
+///   at -120. A stereo target's L/R are planes 0 and 1. Every meter drain pops from one shared
+///   queue and consumes the records of all targets.
 /// @param out Caller-owned array receiving up to @p max_records entries; written only on success.
 /// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
 ///   nothing is copied or drained and @p out_count is always set to 0. This
@@ -1728,26 +1731,6 @@ SonareError sonare_engine_set_controller_note_tracking(SonareEngine* engine,
 SonareError sonare_engine_controller_note_tracking(SonareEngine* engine, uint32_t destination_id,
                                                    int dimension, int* out_tracking);
 
-/// @brief Articulation ordinals. Mirrors midi::ArticulationMode.
-/// @details What a channel does with a note-on while another note on the same
-///          channel is still held.
-typedef enum SONARE_ENUM_BASE {
-  /// Every note-on takes its own voice.
-  SONARE_ARTICULATION_POLY = 0,
-  /// One note at a time; a new note-on stops the previous note and starts over.
-  /// This is what GS MONO MODE and CC126 mean, and it is all they can reach.
-  SONARE_ARTICULATION_MONO_RETRIGGER = 1,
-  /// One note at a time, carried: a new note-on re-tunes the sounding voice
-  /// instead of starting one, so the exciter and the amplitude envelope never
-  /// restart. This is a wind player's slur, and it is deliberately unreachable
-  /// from a spec-compliant GS file — no standard names it, and reading CC126 as
-  /// this one would change what such a file sounds like.
-  SONARE_ARTICULATION_MONO_LEGATO = 2
-} SonareArticulation;
-
-/// @brief Values in @ref SonareArticulation.
-#define SONARE_ARTICULATION_COUNT 3
-
 /// @brief Sets how one channel of a destination's instrument treats a note-on
 ///        while another note on that channel is still held.
 /// @details Control-thread API. Returns SONARE_ERROR_NOT_SUPPORTED for a
@@ -1837,6 +1820,8 @@ SonareError sonare_engine_clear_midi_fx(SonareEngine* engine, uint32_t destinati
 ///          Each push takes an offset into the next block drained, not a clock
 ///          position: an absolute timestamp from a running clock lands every
 ///          event on the last frame of that block.
+///          A live device session selects its own source. Source registration
+///          and clearing require any live device session to be stopped.
 SonareError sonare_engine_set_midi_input_source(SonareEngine* engine, uint32_t destination_id);
 /// @brief Clears the engine-owned live MIDI input source.
 SonareError sonare_engine_clear_midi_input_source(SonareEngine* engine);
@@ -2121,6 +2106,122 @@ SonareError sonare_engine_drain_external_midi(SonareEngine* engine, SonareExtern
                                               size_t max_events, size_t* out_count);
 /// @brief Reads the current engine transport state (playing/position/ppq/tempo).
 SonareError sonare_engine_get_transport_state(SonareEngine* engine, SonareTransportState* out);
+
+/// @brief Manages a running CoreAudio or CoreMIDI connection to an engine.
+typedef struct SonareLiveSession SonareLiveSession;
+
+/// @brief Returns 1 when the live-device family is compiled in and 0 otherwise.
+/// @details Callable without a handle. Facades report it as @c features.liveDevices
+///          or @c features.live_devices.
+int32_t sonare_has_live_devices(void);
+
+/// @brief Audio device identified by its stable UID.
+typedef struct {
+  char uid[256];               ///< NUL-terminated device UID.
+  char name[256];              ///< UTF-8 display name, shortened at a character boundary.
+  int32_t input_channels;      ///< Available input channels.
+  int32_t output_channels;     ///< Available output channels.
+  int32_t is_default_input;    ///< Nonzero for the current default input.
+  int32_t is_default_output;   ///< Nonzero for the current default output.
+  double nominal_sample_rate;  ///< Nominal device rate in Hz.
+} SonareLiveAudioDevice;
+
+/// @brief Snapshot of available audio devices.
+typedef struct {
+  SonareLiveAudioDevice* items;  ///< Owned array, or NULL when empty.
+  size_t count;                  ///< Number of audio devices.
+} SonareLiveAudioDeviceList;
+
+/// @brief MIDI source identified by its stable CoreMIDI UID.
+typedef struct {
+  char uid[256];   ///< Unique ID in decimal, NUL terminated.
+  char name[256];  ///< UTF-8 display name, shortened at a character boundary.
+} SonareLiveMidiDevice;
+
+/// @brief Snapshot of available MIDI sources.
+typedef struct {
+  SonareLiveMidiDevice* items;  ///< Owned array, or NULL when empty.
+  size_t count;                 ///< Number of MIDI sources.
+} SonareLiveMidiDeviceList;
+
+/// @brief Enumerates audio devices. Release with @ref sonare_free_live_audio_device_list.
+SonareError sonare_live_audio_devices(SonareLiveAudioDeviceList* out);
+/// @brief Enumerates MIDI sources. Release with @ref sonare_free_live_midi_device_list.
+SonareError sonare_live_midi_sources(SonareLiveMidiDeviceList* out);
+/// @brief Frees and empties an audio device list. NULL is ignored.
+void sonare_free_live_audio_device_list(SonareLiveAudioDeviceList* list);
+/// @brief Frees and empties a MIDI device list. NULL is ignored.
+void sonare_free_live_midi_device_list(SonareLiveMidiDeviceList* list);
+
+/// @brief Selects a device for one leg of a live session.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_LIVE_DEVICE_NONE = 0,     ///< Leave this leg disconnected.
+  SONARE_LIVE_DEVICE_DEFAULT = 1,  ///< Resolve the default audio device at creation.
+  SONARE_LIVE_DEVICE_BY_UID = 2,   ///< Resolve the supplied stable UID.
+} SonareLiveDeviceSelect;
+
+/// @brief Live session settings. Start with @ref sonare_live_session_config_init.
+typedef struct {
+  uint32_t struct_size;                 ///< sizeof(SonareLiveSessionConfig).
+  SonareLiveDeviceSelect audio_output;  ///< Output selection.
+  const char* audio_output_uid;         ///< Nonempty UID for BY_UID, NULL otherwise.
+  SonareLiveDeviceSelect audio_input;   ///< Input selection.
+  const char* audio_input_uid;          ///< Nonempty UID for BY_UID, NULL otherwise.
+  SonareLiveDeviceSelect midi_input;    ///< MIDI selection. DEFAULT is unavailable for MIDI.
+  const char* midi_input_uid;           ///< Nonempty UID for BY_UID, NULL otherwise.
+  int sample_rate;                      ///< Rate in Hz, or 0 for the device's nominal rate.
+  int block_size;                       ///< Requested block size in frames. Default 128.
+  uint32_t destination_id;              ///< Engine destination for received MIDI.
+} SonareLiveSessionConfig;
+
+/// @brief Current state and counters of a live session.
+typedef struct {
+  int32_t running;                 ///< Nonzero while a device is driving the engine.
+  int32_t device_lost;             ///< Nonzero if an audio device disappeared.
+  int32_t rate_changed;            ///< Nonzero if an audio device changed its nominal rate.
+  int sample_rate;                 ///< Negotiated sample rate in Hz.
+  int output_block_size;           ///< Negotiated output frames per block, or 0.
+  int input_block_size;            ///< Negotiated input frames per block, or 0.
+  double output_latency_ms;        ///< Device-reported output latency.
+  double input_latency_ms;         ///< Device-reported input latency.
+  uint64_t xrun_count;             ///< Audio device dropouts.
+  uint64_t input_overrun_frames;   ///< Input frames discarded at capacity or at high water.
+  uint64_t input_underrun_frames;  ///< Low-water repeats and missing output frames after startup.
+  uint64_t dropped_midi_events;    ///< MIDI events dropped because capture was full.
+} SonareLiveSessionStatus;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareLiveAudioDevice, nominal_sample_rate) == 528,
+              "SonareLiveAudioDevice layout drift");
+static_assert(offsetof(SonareLiveSessionConfig, audio_output) == sizeof(uint32_t),
+              "SonareLiveSessionConfig selector layout drift");
+static_assert(offsetof(SonareLiveSessionConfig, sample_rate) ==
+                  offsetof(SonareLiveSessionConfig, midi_input_uid) + sizeof(const char*),
+              "SonareLiveSessionConfig format layout drift");
+static_assert(offsetof(SonareLiveSessionStatus, output_latency_ms) == 6u * sizeof(int32_t),
+              "SonareLiveSessionStatus layout drift");
+#endif
+
+/// @brief Initializes all selectors to NONE and writes the default block size.
+/// @details Initializes caller-provided storage and does not transfer ownership.
+void sonare_live_session_config_init(SonareLiveSessionConfig* config);
+/// @brief Opens selected devices and starts driving @p engine.
+/// @details Requires audio input or output. MIDI capture requires audio output.
+///   Default devices are resolved once. If startup fails after engine preparation,
+///   the negotiated format and reset transport remain on the engine.
+///   macOS provides CoreAudio and CoreMIDI. Other platforms report NOT_SUPPORTED.
+///   Destroy the engine and its session on the control thread, without concurrent calls.
+/// @param out Receives the owned session. Release it with @ref sonare_live_session_destroy.
+SonareError sonare_live_session_create(SonareEngine* engine, const SonareLiveSessionConfig* config,
+                                       SonareLiveSession** out);
+/// @brief Stops and frees the session. NULL is ignored.
+/// @details May block while closing devices. Never call from a device callback.
+void sonare_live_session_destroy(SonareLiveSession* session);
+/// @brief Reads session status. A session whose engine was destroyed reports stopped.
+SonareError sonare_live_session_status(const SonareLiveSession* session,
+                                       SonareLiveSessionStatus* out);
+/// @brief Drains captured channel-voice MIDI. Release with @ref sonare_free_midi_event_list.
+SonareError sonare_live_session_captured_midi(SonareLiveSession* session, SonareMidiEventList* out);
 
 #ifdef __cplusplus
 }

@@ -77,14 +77,13 @@ SonareError check_chord_detection_options(const SonareChordDetectionOptions& opt
 }  // namespace
 
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
-                               float bpm_max, float start_bpm, int n_fft, size_t hop_length,
-                               int max_candidates, SonareBpmAnalysisResult* out) {
+                               float bpm_max, int n_fft, size_t hop_length, int max_candidates,
+                               SonareBpmAnalysisResult* out) {
   SONARE_C_API_ENTRY;
   SONARE_C_ZERO_OUTS(out);
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
-  config.start_bpm = start_bpm;
   config.n_fft = n_fft;
   config.hop_length = core_length(hop_length);
   if (const SonareError err = run_validation([&] {

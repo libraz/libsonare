@@ -50,6 +50,7 @@
 
 #include "arrangement/edit_command.h"  // MidiContentStore
 #include "arrangement/edit_model.h"
+#include "util/error_reason.h"
 #include "util/resource_limits.h"
 
 namespace sonare::serialize {
@@ -94,11 +95,14 @@ struct Diagnostic {
 
 /// @brief Result of @ref project_from_json. On success `project` and `midi` hold
 ///        the rebuilt model; on failure `project` is empty and `diagnostics`
-///        explains why. `diagnostics` may also carry warnings on success.
+///        explains why. `reason` carries a machine-readable cause when one
+///        applies. `diagnostics` may also carry warnings on success.
 struct DeserializeResult {
   std::optional<arrangement::Project> project;
   arrangement::MidiContentStore midi;
   std::vector<Diagnostic> diagnostics;
+  /// Machine-readable reason for refusals that share an error code.
+  std::optional<ErrorReason> reason;
 
   /// @brief True when a project was successfully rebuilt.
   bool ok() const noexcept { return project.has_value(); }
@@ -142,21 +146,20 @@ ProjectDocumentShape measure_project_document(const arrangement::Project& projec
 ///        exact boundary can be exercised without building a document of the
 ///        production size.
 /// @throws sonare::SonareException with @c ErrorCode::InvalidState when the
-///         document would exceed @p limits, i.e. when it could not be read
-///         back. Nothing is emitted in that case.
+///         document would exceed @p limits or an automation target cannot
+///         round-trip. Nothing is emitted in either case.
+/// @throws sonare::SonareException with @c ErrorCode::NotSupported and
+///         @c ErrorReason::NotPersistable for a sample-engine synth binding.
 std::string project_to_json(const arrangement::Project& project,
                             const arrangement::MidiContentStore& midi,
                             const resource::ProjectImportResourceLimits& limits =
                                 resource::kDefaultProjectImportResourceLimits);
 
-/// @brief Non-throwing form of @ref project_to_json, for callers that must tell
-///        "this document does not fit the persistence budget" apart from an
-///        error and report it in their own terms (the MIDI import preflight,
-///        which rejects such an import as invalid input rather than as a broken
-///        project state).
+/// @brief Reports a persistence budget refusal as false so the caller can
+///        report the budget in its own terms. Other errors propagate.
 /// @param out_json Receives the encoded document on success; cleared on failure.
-/// @return False when the document would exceed @p limits, i.e. exactly when
-///         @ref project_to_json would throw. Nothing is emitted in that case.
+/// @return False when the document would exceed @p limits. Nothing is emitted
+///         in that case.
 bool try_project_to_json(const arrangement::Project& project,
                          const arrangement::MidiContentStore& midi, std::string* out_json,
                          const resource::ProjectImportResourceLimits& limits =

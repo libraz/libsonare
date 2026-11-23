@@ -6,8 +6,10 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <map>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -17,8 +19,10 @@
 #include "arrangement/harmonic_limits.h"
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
+#include "c_api/synth_patch_fields.h"
 #include "mixing/api/scene.h"
 #include "mixing/panner.h"
+#include "mixing/stereo_width.h"
 #include "serialize/project_serializer_internal.h"
 #include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
@@ -51,6 +55,13 @@ namespace schema = sonare::util::json::schema;
 
 namespace {
 
+void require_present(const Value& value, const std::string& path, const char* key) {
+  if (value.find(key) == nullptr) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          schema::missing_key(schema::child_path(path, key)));
+  }
+}
+
 uint8_t pitch_class_or(const Value& value, const std::string& path, const char* key) {
   const uint32_t pitch_class = uint_or(value, path, key, arrangement::kUnknownPitchClass);
   if (pitch_class > 11 && pitch_class != arrangement::kUnknownPitchClass) {
@@ -69,6 +80,91 @@ float float_or(const Value& value, const std::string& path, const char* key, flo
                                                                     schema::kFloatRangePredicate));
   }
   return converted;
+}
+
+std::string required_string(const Value& value, const std::string& path, const char* key) {
+  const std::string field_path = schema::child_path(path, key);
+  const Value* field = value.find(key);
+  if (field == nullptr) {
+    throw SonareException(ErrorCode::InvalidFormat, schema::missing_key(field_path));
+  }
+  if (!field->is_string()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          schema::must_be(field_path, schema::Kind::String));
+  }
+  return field->as_string();
+}
+
+void double_map_from_json(const Value& value, const std::string& path, const char* key,
+                          std::map<std::string, double>* out) {
+  require_present(value, path, key);
+  const std::string map_path = schema::child_path(path, key);
+  const Object* values = object_at(value, path, key);
+  if (values == nullptr) return;
+  for (const auto& [name, field] : *values) {
+    const std::string field_path = schema::child_path(map_path, name);
+    if (!field.is_number()) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::must_be(field_path, schema::Kind::Number));
+    }
+    out->emplace(name, field.as_number());
+  }
+}
+
+void patch_field_map_from_json(const Value& value, const std::string& path, const char* key,
+                               std::map<std::string, arrangement::DestinationPatchField>* out) {
+  require_present(value, path, key);
+  const std::string map_path = schema::child_path(path, key);
+  const Object* fields = object_at(value, path, key);
+  if (fields == nullptr) return;
+  for (const auto& entry : *fields) {
+    const auto& name = entry.first;
+    const auto& field = entry.second;
+    const std::string field_path = schema::child_path(map_path, name);
+    const auto& enum_rows = sonare_c_detail::kSynthPatchEnumFields;
+    const auto enum_row = std::find_if(std::begin(enum_rows), std::end(enum_rows),
+                                       [&](const auto& row) { return name == row.name; });
+    if (enum_row != std::end(enum_rows)) {
+      if (!field.is_string()) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              schema::must_be(field_path, schema::Kind::String));
+      }
+      const auto& token = field.as_string();
+      const auto* end = enum_row->values.names + enum_row->values.count;
+      if (std::find(enum_row->values.names, end, token) == end) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(field_path, "must name a declared synth patch value"));
+      }
+      out->emplace(name, token);
+      continue;
+    }
+    const auto& numeric_rows = sonare_c_detail::kSynthPatchNumericFields;
+    const auto numeric_row = std::find_if(std::begin(numeric_rows), std::end(numeric_rows),
+                                          [&](const auto& row) { return name == row.name; });
+    if (numeric_row == std::end(numeric_rows)) {
+      throw SonareException(ErrorCode::InvalidFormat, schema::unknown_key(field_path));
+    }
+    if (!field.is_number()) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::must_be(field_path, schema::Kind::Number));
+    }
+    const double number = field.as_number();
+    if (std::holds_alternative<int SonareSynthPatch::*>(numeric_row->member)) {
+      int converted = 0;
+      if (!numeric::checked_integral_cast(number, &converted)) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              schema::refusal(field_path, "must fit a signed 32-bit integer"));
+      }
+    } else {
+      float converted = 0.0f;
+      if (!numeric::checked_float_cast(number, &converted)) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              schema::refusal(field_path, schema::kFloatRangePredicate));
+      }
+    }
+    out->emplace(name, number);
+  }
 }
 
 }  // namespace
@@ -99,7 +195,86 @@ transport::TimeSignatureSegment time_signature_from_json(const Value& v, const s
 automation::AutomationLane automation_lane_from_json(const Value& v, const std::string& path) {
   const auto target_kind =
       enum_or(v, path, "targetKind", automation::AutomationTargetKind::kOpaque);
-  automation::AutomationLane lane(uint_or(v, path, "targetParamId", 0), target_kind);
+  const uint32_t target_param_id = uint_or(v, path, "targetParamId", 0);
+  const Value* lane_id_value = v.find("id");
+  const uint32_t lane_id = lane_id_value != nullptr ? uint_or(v, path, "id", 0) : 0;
+  if (lane_id_value != nullptr && !valid_entity_id(lane_id)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          schema::refusal(schema::child_path(path, "id"),
+                                          schema::integer_range_predicate(
+                                              1, std::numeric_limits<uint32_t>::max() - 1u)));
+  }
+  if (lane_id_value != nullptr && target_kind != automation::AutomationTargetKind::kOpaque &&
+      target_param_id != 0) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          schema::refusal(schema::child_path(path, "targetParamId"),
+                                          "must be 0 for a typed automation lane"));
+  }
+  automation::AutomationTargetIdentity identity;
+  const auto refuse_identity_key = [&](const char* key) {
+    if (v.find(key) != nullptr) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::refusal(schema::child_path(path, key), "must be absent"));
+    }
+  };
+  switch (target_kind) {
+    case automation::AutomationTargetKind::kTrackSendDb:
+      refuse_identity_key("insertIndex");
+      refuse_identity_key("processor");
+      refuse_identity_key("paramName");
+      identity.send_id = required_string(v, path, "sendId");
+      if (identity.send_id.empty()) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(path, "sendId"), "must not be empty"));
+      }
+      break;
+    case automation::AutomationTargetKind::kTrackInsertParam: {
+      refuse_identity_key("sendId");
+      const std::string insert_index_path = schema::child_path(path, "insertIndex");
+      const Value* insert_index = v.find("insertIndex");
+      if (insert_index == nullptr) {
+        throw SonareException(ErrorCode::InvalidFormat, schema::missing_key(insert_index_path));
+      }
+      if (!insert_index->is_number()) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              schema::must_be(insert_index_path, schema::Kind::Number));
+      }
+      int32_t parsed_index = 0;
+      if (!numeric::checked_integral_cast(insert_index->as_number(), &parsed_index) ||
+          parsed_index < 0) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(insert_index_path, schema::integer_range_predicate(
+                                                   0, std::numeric_limits<int32_t>::max())));
+      }
+      identity.insert_index = static_cast<std::size_t>(parsed_index);
+      identity.processor = required_string(v, path, "processor");
+      identity.param_name = required_string(v, path, "paramName");
+      if (identity.processor.empty()) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(path, "processor"), "must not be empty"));
+      }
+      if (identity.param_name.empty()) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(path, "paramName"), "must not be empty"));
+      }
+      break;
+    }
+    case automation::AutomationTargetKind::kOpaque:
+    case automation::AutomationTargetKind::kTrackFaderDb:
+    case automation::AutomationTargetKind::kTrackPan:
+    case automation::AutomationTargetKind::kTrackWidth:
+      refuse_identity_key("sendId");
+      refuse_identity_key("insertIndex");
+      refuse_identity_key("processor");
+      refuse_identity_key("paramName");
+      break;
+  }
+  automation::AutomationLane lane(target_param_id, target_kind, std::move(identity));
+  if (lane_id_value != nullptr) lane.set_lane_id(lane_id);
   std::vector<automation::Breakpoint> points;
   if (const auto* arr = array_at(v, path, "points")) {
     const std::string points_path = schema::child_path(path, "points");
@@ -111,11 +286,180 @@ automation::AutomationLane automation_lane_from_json(const Value& v, const std::
       bp.ppq = num_or(pv, point_path, "ppq", 0.0);
       bp.value = float_or(pv, point_path, "value", 0.0f);
       bp.curve_to_next = enum_or(pv, point_path, "curveToNext", automation::CurveType::Linear);
+      if (!std::isfinite(bp.ppq)) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(point_path, "ppq"), "must be finite"));
+      }
+      if (!std::isfinite(bp.value)) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(point_path, "value"), "must be finite"));
+      }
+      if (target_kind == automation::AutomationTargetKind::kTrackWidth &&
+          !mixing::width_in_range(bp.value)) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(point_path, "value"),
+                            schema::range_predicate(mixing::kWidthMin, mixing::kWidthMax)));
+      }
       points.push_back(bp);
     }
   }
   lane.set_points(std::move(points));
   return lane;
+}
+
+void restore_destination_instrument_from_json(const Value& v, const std::string& path,
+                                              arrangement::Project* project) {
+  const std::string destination_id_path = schema::child_path(path, "destinationId");
+  if (v.find("destinationId") == nullptr) {
+    throw SonareException(ErrorCode::InvalidFormat, schema::missing_key(destination_id_path));
+  }
+  const uint32_t destination_id = uint_or(v, path, "destinationId", 0);
+  const std::string kind_path = schema::child_path(path, "kind");
+  const std::string kind = required_string(v, path, "kind");
+
+  arrangement::DestinationInstrument instrument;
+  const auto refuse_unrelated = [&](const char* key) {
+    if (v.find(key) != nullptr) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::refusal(schema::child_path(path, key), "must be absent"));
+    }
+  };
+  if (kind == "synth") {
+    refuse_unrelated("builtin");
+    refuse_unrelated("sf2");
+    const Value* config = object_value_at(v, path, "synth");
+    if (config == nullptr) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::missing_key(schema::child_path(path, "synth")));
+    }
+    const std::string config_path = schema::child_path(path, "synth");
+    arrangement::DestinationSynthInstrument synth;
+    synth.preset = required_string(*config, config_path, "preset");
+    if (synth.preset.size() >= sizeof(SonareSynthPatch::preset)) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::refusal(schema::child_path(config_path, "preset"),
+                                            "must fit in the synth preset name field"));
+    }
+    synth.engine_mode = str_or(*config, config_path, "engineMode", "");
+    const auto& modes = c_api::synth_names::kEngineModes;
+    if (!synth.engine_mode.empty() &&
+        std::find(std::begin(modes), std::end(modes), synth.engine_mode) == std::end(modes)) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::refusal(schema::child_path(config_path, "engineMode"),
+                                            "must name a declared synth engine mode"));
+    }
+    if (synth.engine_mode == "sample") {
+      throw SonareException(
+          ErrorCode::InvalidFormat,
+          schema::refusal(schema::child_path(schema::child_path(path, "synth"), "engineMode"),
+                          "must not select a non-persistable sample engine"));
+    }
+    patch_field_map_from_json(*config, config_path, "fields", &synth.fields);
+    double_map_from_json(*config, config_path, "engineParams", &synth.engine_params);
+    require_present(*config, config_path, "useGmPrograms");
+    synth.use_gm_programs = bool_or(*config, config_path, "useGmPrograms", false);
+    if (const auto* routes = array_at(*config, config_path, "modRoutings")) {
+      const std::string routes_path = schema::child_path(config_path, "modRoutings");
+      if (routes->size() > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              schema::refusal(routes_path, "contains too many modulation routes"));
+      }
+      synth.clears_base_mod_routings = routes->empty();
+      std::size_t index = 0;
+      for (const auto& route_value : *routes) {
+        const std::string route_path = schema::index_path(routes_path, index++);
+        const Value& route = object_element(route_value, route_path);
+        synth.mod_routings.push_back({int_or(route, route_path, "source", 0),
+                                      int_or(route, route_path, "destination", 0),
+                                      float_or(route, route_path, "depth", 0.0f)});
+      }
+    }
+    instrument = std::move(synth);
+  } else if (kind == "builtin") {
+    refuse_unrelated("synth");
+    refuse_unrelated("sf2");
+    const Value* config = object_value_at(v, path, "builtin");
+    if (config == nullptr) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::missing_key(schema::child_path(path, "builtin")));
+    }
+    const std::string config_path = schema::child_path(path, "builtin");
+    arrangement::DestinationBuiltinInstrument builtin;
+    for (const char* key :
+         {"waveform", "gain", "attackMs", "decayMs", "sustain", "releaseMs", "polyphony"}) {
+      require_present(*config, config_path, key);
+    }
+    builtin.waveform = int_or(*config, config_path, "waveform", builtin.waveform);
+    builtin.gain = float_or(*config, config_path, "gain", builtin.gain);
+    builtin.attack_ms = float_or(*config, config_path, "attackMs", builtin.attack_ms);
+    builtin.decay_ms = float_or(*config, config_path, "decayMs", builtin.decay_ms);
+    builtin.sustain = float_or(*config, config_path, "sustain", builtin.sustain);
+    builtin.release_ms = float_or(*config, config_path, "releaseMs", builtin.release_ms);
+    builtin.polyphony = int_or(*config, config_path, "polyphony", builtin.polyphony);
+    instrument = builtin;
+  } else if (kind == "sf2") {
+    refuse_unrelated("synth");
+    refuse_unrelated("builtin");
+    const Value* config = object_value_at(v, path, "sf2");
+    if (config == nullptr) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::missing_key(schema::child_path(path, "sf2")));
+    }
+    const std::string config_path = schema::child_path(path, "sf2");
+    arrangement::DestinationSf2Instrument sf2;
+    for (const char* key : {"gain", "polyphony", "preferModelForModeledFamilies", "clearBankRig",
+                            "gsEfxRealization"}) {
+      require_present(*config, config_path, key);
+    }
+    sf2.gain = float_or(*config, config_path, "gain", sf2.gain);
+    sf2.polyphony = int_or(*config, config_path, "polyphony", sf2.polyphony);
+    sf2.prefer_model_for_modeled_families =
+        int_or(*config, config_path, "preferModelForModeledFamilies",
+               sf2.prefer_model_for_modeled_families);
+    sf2.clear_bank_rig = int_or(*config, config_path, "clearBankRig", sf2.clear_bank_rig);
+    sf2.gs_efx_realization =
+        int_or(*config, config_path, "gsEfxRealization", sf2.gs_efx_realization);
+    if (config->find("soundFontUri") != nullptr) {
+      sf2.sound_font_uri = required_string(*config, config_path, "soundFontUri");
+      if (sf2.sound_font_uri->empty()) {
+        throw SonareException(
+            ErrorCode::InvalidFormat,
+            schema::refusal(schema::child_path(config_path, "soundFontUri"), "must not be empty"));
+      }
+    }
+    instrument = std::move(sf2);
+  } else {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          schema::refusal(kind_path, "must be one of synth, builtin, sf2"));
+  }
+
+  arrangement::DestinationInstrumentBinding binding;
+  binding.instrument = std::move(instrument);
+  if (v.find("bank") != nullptr) {
+    const Value* bank_value = object_value_at(v, path, "bank");
+    const std::string bank_path = schema::child_path(path, "bank");
+    if (bank_value->find("msb") == nullptr) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::missing_key(schema::child_path(bank_path, "msb")));
+    }
+    if (bank_value->find("lsb") == nullptr) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            schema::missing_key(schema::child_path(bank_path, "lsb")));
+    }
+    binding.bank = arrangement::DestinationMidiBank{int_or(*bank_value, bank_path, "msb", 0),
+                                                    int_or(*bank_value, bank_path, "lsb", 0)};
+  }
+  if (v.find("program") != nullptr) {
+    binding.program = int_or(v, path, "program", 0);
+  }
+  try {
+    project->restore_destination_instrument(destination_id, std::move(binding));
+  } catch (const SonareParameterRefusal& error) {
+    schema::rethrow_under(error, path, ErrorCode::InvalidFormat);
+  }
 }
 
 arrangement::Track track_from_json(const Value& v, const std::string& path) {
@@ -403,7 +747,7 @@ mixing::api::Scene scene_from_value(const Value& v) {
   } catch (const SonareException& error) {
     // A scene nested in a project is malformed persisted input, while the
     // standalone control-thread API reports InvalidParameter.
-    throw SonareException(ErrorCode::InvalidFormat, error.what());
+    throw SonareException(ErrorCode::InvalidFormat, error.what(), error.reason());
   }
 }
 
@@ -745,10 +1089,7 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
   }
 
   // ---- Automation lane identity / target invariants ------------------------
-  // AddAutomationLane refuses a second lane for a target, and remove/edit
-  // address a lane by its target id alone, so a duplicate is unaddressable.
-  // Typed mixer targets have one slot per kind on a track; opaque lanes do not
-  // participate in that typed-target uniqueness rule.
+  // Persistent ids identify edits; typed lane identities identify their playback targets.
   for (arrangement::Track& track : arrangement::detail::ProjectSerializerAccess::tracks(*project)) {
     const arrangement::TrackId track_id = track.id;
     std::vector<automation::AutomationLane> kept;
@@ -760,12 +1101,9 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
     for (size_t source_index = 0; source_index < track.automation_lanes.size(); ++source_index) {
       automation::AutomationLane& lane = track.automation_lanes[source_index];
       const uint32_t target = lane.target_param_id();
-      if (target == 0) {
-        // Target id 0 predates the non-zero requirement, so documents carrying
-        // such a lane exist. It is unaddressable now — edit and remove look a
-        // lane up by target id, and the compiler rejects it — so the lane is
-        // dropped rather than failing the whole document, which would strand
-        // every other edit the project holds.
+      if (target == 0 && lane.target_kind() == automation::AutomationTargetKind::kOpaque) {
+        // Opaque target id 0 predates the non-zero requirement, so documents
+        // carrying such a lane exist. It remains unaddressable and is dropped.
         if (diagnostics != nullptr) {
           diagnostics->warn("dropped_automation_lane_target_id",
                             "track " + std::to_string(track_id) +
@@ -778,7 +1116,14 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
                                   "track " + std::to_string(track_id) +
                                       " contains an automation lane with an invalid target kind"};
       }
-      const auto existing = first_lane_by_target.find(target);
+      if (!lane.valid_target_identity()) {
+        return InvariantViolation{
+            "invalid_automation_target_identity",
+            "track " + std::to_string(track_id) +
+                " contains an automation lane with an invalid target identity"};
+      }
+      const auto existing =
+          target != 0 ? first_lane_by_target.find(target) : first_lane_by_target.end();
       if (existing != first_lane_by_target.end()) {
         const size_t existing_index = existing->second;
         kept[existing_index] = std::move(lane);  // Last writer wins, in the first slot.
@@ -791,20 +1136,38 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
         }
         continue;
       }
-      first_lane_by_target.emplace(target, kept.size());
+      if (target != 0) first_lane_by_target.emplace(target, kept.size());
       kept.push_back(std::move(lane));
       kept_order.push_back(source_index);
+    }
+
+    std::vector<size_t> lane_id_order(kept.size());
+    for (size_t i = 0; i < lane_id_order.size(); ++i) lane_id_order[i] = i;
+    std::stable_sort(lane_id_order.begin(), lane_id_order.end(),
+                     [&kept_order](size_t a, size_t b) { return kept_order[a] < kept_order[b]; });
+    for (const size_t index : lane_id_order) {
+      automation::AutomationLane& lane = kept[index];
+      if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
+        lane.set_target_param_id(0);
+      }
+      if (lane.lane_id() == 0) {
+        const uint32_t lane_id = project->allocate_automation_lane_id();
+        if (lane_id == 0) {
+          return InvariantViolation{
+              "automation_lane_id_exhausted",
+              "project automation lanes exceed the range of persistent lane ids"};
+        }
+        lane.set_lane_id(lane_id);
+      }
     }
 
     std::vector<automation::AutomationLane> normalized;
     std::vector<size_t> normalized_order;
     normalized.reserve(kept.size());
     normalized_order.reserve(kept.size());
-    constexpr size_t kAutomationTargetKindSlotCount =
-        static_cast<size_t>(kMaxSerializedOrdinal<automation::AutomationTargetKind>) + 1;
-    constexpr size_t kNoAutomationTargetKindSlot = std::numeric_limits<size_t>::max();
-    std::array<size_t, kAutomationTargetKindSlotCount> typed_lane_slots;
-    typed_lane_slots.fill(kNoAutomationTargetKindSlot);
+    using TypedLaneKey =
+        std::tuple<uint32_t, std::string, std::optional<std::size_t>, std::string, std::string>;
+    std::map<TypedLaneKey, size_t> typed_lane_slots;
     for (size_t kept_index = 0; kept_index < kept.size(); ++kept_index) {
       automation::AutomationLane& lane = kept[kept_index];
       if (lane.target_kind() == automation::AutomationTargetKind::kOpaque) {
@@ -813,23 +1176,36 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
         continue;
       }
       const automation::AutomationTargetKind kind = lane.target_kind();
-      const size_t kind_slot = static_cast<size_t>(kind);
-      const size_t existing_index = typed_lane_slots[kind_slot];
-      if (existing_index != kNoAutomationTargetKindSlot) {
+      const auto& identity = lane.target_identity();
+      const TypedLaneKey key{static_cast<uint32_t>(kind), identity.send_id, identity.insert_index,
+                             identity.processor, identity.param_name};
+      const auto existing = typed_lane_slots.find(key);
+      if (existing != typed_lane_slots.end()) {
+        const size_t existing_index = existing->second;
         if (kept_order[kept_index] > normalized_order[existing_index]) {
           normalized[existing_index] = std::move(lane);  // Last writer wins, in the first slot.
           normalized_order[existing_index] = kept_order[kept_index];
         }
         if (diagnostics != nullptr) {
-          diagnostics->warn("duplicate_automation_target_kind",
-                            "track " + std::to_string(track_id) +
-                                " carries more than one automation lane for target kind " +
-                                std::to_string(static_cast<uint32_t>(kind)) +
-                                "; kept the last one");
+          if (kind == automation::AutomationTargetKind::kTrackFaderDb ||
+              kind == automation::AutomationTargetKind::kTrackPan ||
+              kind == automation::AutomationTargetKind::kTrackWidth) {
+            diagnostics->warn("duplicate_automation_target_kind",
+                              "track " + std::to_string(track_id) +
+                                  " carries more than one automation lane for target kind " +
+                                  std::to_string(static_cast<uint32_t>(kind)) +
+                                  "; kept the last one");
+          } else {
+            diagnostics->warn("duplicate_automation_target_identity",
+                              "track " + std::to_string(track_id) +
+                                  " carries more than one automation lane for target identity " +
+                                  std::to_string(static_cast<uint32_t>(kind)) +
+                                  "; kept the last one");
+          }
         }
         continue;
       }
-      typed_lane_slots[kind_slot] = normalized.size();
+      typed_lane_slots.emplace(key, normalized.size());
       normalized.push_back(std::move(lane));
       normalized_order.push_back(kept_order[kept_index]);
     }

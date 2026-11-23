@@ -115,7 +115,8 @@ class RetainedBudgetCommand final : public EditCommand {
 
 bool lane_equal(const sonare::automation::AutomationLane& a,
                 const sonare::automation::AutomationLane& b) {
-  if (a.target_param_id() != b.target_param_id() || a.target_kind() != b.target_kind())
+  if (a.lane_id() != b.lane_id() || a.target_param_id() != b.target_param_id() ||
+      a.target_kind() != b.target_kind())
     return false;
   if (a.points().size() != b.points().size()) return false;
   for (size_t i = 0; i < a.points().size(); ++i) {
@@ -1532,31 +1533,112 @@ TEST_CASE("Automation command round-trips", "[arrangement]") {
                      std::make_unique<AddAutomationLane>(f.audio_track, make_lane(10)));
 
     // Seed a lane then remove it.
-    f.project.find_track_mutable(f.audio_track)->automation_lanes.push_back(make_lane(11));
-    check_round_trip(f.project, store, std::make_unique<RemoveAutomationLane>(f.audio_track, 11));
+    auto seeded = make_lane(11);
+    seeded.set_lane_id(50);
+    f.project.ensure_next_automation_lane_id(50);
+    f.project.find_track_mutable(f.audio_track)->automation_lanes.push_back(seeded);
+    check_round_trip(f.project, store, std::make_unique<RemoveAutomationLane>(f.audio_track, 50));
   }
   SECTION("EditAutomationLane") {
-    f.project.find_track_mutable(f.audio_track)->automation_lanes.push_back(make_lane(20));
-    auto edited = make_lane(20);
+    auto original = make_lane(20);
+    original.set_lane_id(60);
+    f.project.ensure_next_automation_lane_id(60);
+    f.project.find_track_mutable(f.audio_track)->automation_lanes.push_back(original);
+    auto edited = make_lane(21);
     edited.set_points({{0.0, 0.25f, sonare::automation::CurveType::Hold}});
     check_round_trip(f.project, store,
-                     std::make_unique<EditAutomationLane>(f.audio_track, 20, std::move(edited)));
+                     std::make_unique<EditAutomationLane>(f.audio_track, 60, std::move(edited)));
   }
   SECTION("typed target equality and per-kind conflicts") {
-    auto fader = make_lane(30);
+    auto fader = make_lane(0);
     fader.set_target_kind(sonare::automation::AutomationTargetKind::kTrackFaderDb);
     check_round_trip(f.project, store,
                      std::make_unique<AddAutomationLane>(f.audio_track, std::move(fader)));
 
     sonare::automation::AutomationLane existing(
-        31, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+        0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
     REQUIRE(AddAutomationLane(f.audio_track, existing).apply(f.project, store));
     const Project before = f.project;
     sonare::automation::AutomationLane conflicting(
-        32, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+        0, sonare::automation::AutomationTargetKind::kTrackFaderDb);
     CHECK_FALSE(AddAutomationLane(f.audio_track, conflicting).apply(f.project, store));
     CHECK(project_equal(f.project, before));
   }
+}
+
+TEST_CASE("automation lane ids are project-wide and survive undo, redo, and edits",
+          "[arrangement]") {
+  Fixture f;
+  EditHistory history(f.project);
+
+  sonare::automation::AutomationLane first(10);
+  REQUIRE(history.apply(std::make_unique<AddAutomationLane>(f.audio_track, first)));
+  const uint32_t first_id =
+      history.project().find_track(f.audio_track)->automation_lanes.front().lane_id();
+  REQUIRE(first_id == 1);
+  CHECK(history.project().next_automation_lane_id() == 2);
+  REQUIRE(history.undo());
+  CHECK(history.project().next_automation_lane_id() == 2);
+  REQUIRE(history.redo());
+  REQUIRE(history.project().find_track(f.audio_track)->automation_lanes.size() == 1);
+  CHECK(history.project().find_track(f.audio_track)->automation_lanes.front().lane_id() ==
+        first_id);
+
+  sonare::automation::AutomationLane second(11);
+  REQUIRE(history.apply(std::make_unique<AddAutomationLane>(f.midi_track, second)));
+  const uint32_t second_id =
+      history.project().find_track(f.midi_track)->automation_lanes.front().lane_id();
+  CHECK(second_id == first_id + 1);
+
+  sonare::automation::AutomationLane edited(12);
+  edited.set_points({{0.0, 0.5f, sonare::automation::CurveType::Hold}});
+  REQUIRE(history.apply(
+      std::make_unique<EditAutomationLane>(f.audio_track, first_id, std::move(edited))));
+  const auto* audio_lane = history.project().find_track(f.audio_track)->automation_lanes.data();
+  REQUIRE(audio_lane != nullptr);
+  CHECK(audio_lane->lane_id() == first_id);
+  CHECK(audio_lane->target_param_id() == 12);
+  REQUIRE(history.undo());
+  CHECK(history.project().find_track(f.audio_track)->automation_lanes.front().lane_id() ==
+        first_id);
+  CHECK(history.project().find_track(f.audio_track)->automation_lanes.front().target_param_id() ==
+        10);
+  REQUIRE(history.redo());
+  CHECK(history.project().find_track(f.audio_track)->automation_lanes.front().lane_id() ==
+        first_id);
+
+  REQUIRE(history.apply(std::make_unique<RemoveAutomationLane>(f.audio_track, first_id)));
+  REQUIRE(history.undo());
+  REQUIRE(history.project().find_track(f.audio_track)->automation_lanes.size() == 1);
+  CHECK(history.project().find_track(f.audio_track)->automation_lanes.front().lane_id() ==
+        first_id);
+  REQUIRE(history.redo());
+  CHECK(history.project().find_track(f.audio_track)->automation_lanes.empty());
+  CHECK(history.project().find_track(f.midi_track)->automation_lanes.front().lane_id() ==
+        second_id);
+}
+
+TEST_CASE("track add redo preserves allocated automation lane ids", "[arrangement]") {
+  Fixture f;
+  EditHistory history(f.project);
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  track.automation_lanes.emplace_back(42);
+  REQUIRE(history.apply(std::make_unique<AddTrack>(track)));
+  const TrackId track_id = history.project().tracks().back().id;
+  REQUIRE(history.project().tracks().back().automation_lanes.size() == 1);
+  const uint32_t lane_id = history.project().tracks().back().automation_lanes.front().lane_id();
+  REQUIRE(lane_id == 1);
+
+  REQUIRE(history.undo());
+  CHECK(history.project().find_track(track_id) == nullptr);
+  CHECK(history.project().next_automation_lane_id() == 2);
+  REQUIRE(history.redo());
+  const Track* restored = history.project().find_track(track_id);
+  REQUIRE(restored != nullptr);
+  REQUIRE(restored->automation_lanes.size() == 1);
+  CHECK(restored->automation_lanes.front().lane_id() == lane_id);
+  CHECK(history.project().next_automation_lane_id() == 2);
 }
 
 TEST_CASE("MIDI content command round-trips", "[arrangement]") {
@@ -2004,7 +2086,7 @@ TEST_CASE("decoded audio is accounted through the shared retained-bytes helpers"
   AudioContentStore store;
   store.sources.emplace(1, samples);
   const size_t sources_only = retained::dynamic_bytes(store);
-  store.warped_sources.emplace(7, samples);
+  store.warped_sources.emplace(WarpedAudioKey{1, 7}, samples);
   const size_t with_warped = retained::dynamic_bytes(store);
   REQUIRE(sources_only >= sample_bytes);
   REQUIRE(with_warped >= sources_only + sample_bytes);

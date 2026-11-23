@@ -68,6 +68,62 @@ static_assert(sizeof(SonareProjectTimeSignatureSegment) == 2u * sizeof(double),
               "SonareProjectTimeSignatureSegment layout drift");
 #endif
 
+/// @brief Owned copy of the project's stored tempo segments.
+typedef struct {
+  SonareProjectTempoSegment* items;  ///< Stored-order segments owned by this list.
+  size_t count;                      ///< Number of entries in items.
+} SonareProjectTempoSegmentList;
+
+/// @brief Owned copy of the project's stored time-signature segments.
+typedef struct {
+  SonareProjectTimeSignatureSegment* items;  ///< Stored-order segments owned by this list.
+  size_t count;                              ///< Number of entries in items.
+} SonareProjectTimeSignatureList;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectTempoSegmentList, items) == 0, "TempoSegmentList.items offset");
+static_assert(offsetof(SonareProjectTempoSegmentList, count) == sizeof(void*),
+              "TempoSegmentList.count offset");
+static_assert(sizeof(SonareProjectTempoSegmentList) == sizeof(void*) + sizeof(size_t),
+              "SonareProjectTempoSegmentList layout drift");
+static_assert(offsetof(SonareProjectTimeSignatureList, items) == 0,
+              "TimeSignatureList.items offset");
+static_assert(offsetof(SonareProjectTimeSignatureList, count) == sizeof(void*),
+              "TimeSignatureList.count offset");
+static_assert(sizeof(SonareProjectTimeSignatureList) == sizeof(void*) + sizeof(size_t),
+              "SonareProjectTimeSignatureList layout drift");
+#endif
+
+/// @brief Effective project position at one PPQ coordinate.
+/// @details @c bar_index is zero-based; @c beat is one-based and
+///          @c beat_fraction lies in [0, 1). @c time_signature is the normalized
+///          segment active at the position.
+typedef struct {
+  double bpm;                                        ///< Instantaneous tempo at this position.
+  SonareProjectTimeSignatureSegment time_signature;  ///< Effective normalized time signature.
+  double bar_start_ppq;                              ///< Start of the bar containing the position.
+  int64_t bar_index;                                 ///< Zero-based bar index.
+  int64_t beat;                                      ///< One-based beat within the bar.
+  double beat_fraction;                              ///< Position within the beat, in [0, 1).
+} SonareProjectPosition;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectPosition, bpm) == 0u, "ProjectPosition.bpm offset");
+static_assert(offsetof(SonareProjectPosition, time_signature) == sizeof(double),
+              "ProjectPosition.time_signature offset");
+static_assert(offsetof(SonareProjectPosition, bar_start_ppq) ==
+                  sizeof(double) + sizeof(SonareProjectTimeSignatureSegment),
+              "ProjectPosition.bar_start_ppq offset");
+static_assert(offsetof(SonareProjectPosition, bar_index) == 4u * sizeof(double),
+              "ProjectPosition.bar_index offset");
+static_assert(offsetof(SonareProjectPosition, beat) == 5u * sizeof(double),
+              "ProjectPosition.beat offset");
+static_assert(offsetof(SonareProjectPosition, beat_fraction) == 6u * sizeof(double),
+              "ProjectPosition.beat_fraction offset");
+static_assert(sizeof(SonareProjectPosition) == 7u * sizeof(double),
+              "SonareProjectPosition layout drift");
+#endif
+
 /// @brief One compile diagnostic surfaced by @ref sonare_project_compile.
 ///        Mirrors sonare::arrangement::Diagnostic (code / severity / target_id).
 ///        Human-readable messages are stored in the same order in
@@ -175,6 +231,16 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
                                                                size_t index,
                                                                uint32_t* out_source_id);
 
+/// @brief Adds an unresolved audio source and returns its new ID.
+/// @details The project copies the nonempty URI. Repeated URIs receive distinct IDs.
+SonareError sonare_project_add_audio_source(SonareProject* project, const char* uri,
+                                            uint32_t* out_source_id);
+
+/// @brief Sets an audio source's URI and makes it unresolved as one undoable edit.
+/// @details Clips keep their source ID. Undo restores the previous metadata and decoded PCM.
+SonareError sonare_project_relink_source(SonareProject* project, uint32_t source_id,
+                                         const char* uri);
+
 /// @brief Registers decoded interleaved PCM for an existing audio source.
 ///
 /// The edit is undoable. @p frames must be positive, @p channels positive, and
@@ -227,6 +293,34 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
 SonareError sonare_project_set_time_signatures(SonareProject* project,
                                                const SonareProjectTimeSignatureSegment* segments,
                                                size_t segment_count);
+
+/// @brief Converts a project PPQ position to seconds from PPQ zero.
+/// @details @p ppq must be in [0, 1e12]. The result is independent of the
+///          project's sample rate.
+SonareError sonare_project_ppq_to_sec(const SonareProject* project, double ppq, double* out_sec);
+
+/// @brief Converts seconds from PPQ zero to a project PPQ position.
+/// @details @p sec must be in [0, the time at PPQ 1e12] for this project's
+///          tempo map. The endpoint maps exactly to 1e12.
+SonareError sonare_project_sec_to_ppq(const SonareProject* project, double sec, double* out_ppq);
+
+/// @brief Reads the effective tempo, meter, bar, and beat at @p ppq.
+/// @details @p ppq must be in [0, 1e12]. The bar index must fit in int64_t and
+///          its start must round-trip through double PPQ. Otherwise the call
+///          returns SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_position_at_ppq(const SonareProject* project, double ppq,
+                                           SonareProjectPosition* out);
+
+/// @brief Reads the PPQ start of a zero-based bar.
+/// @details The requested bar must have a representable PPQ start in [0, 1e12]
+///          and round-trip to the same bar index; otherwise the call returns
+///          SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_bar_start_ppq(const SonareProject* project, int64_t bar_index,
+                                         double* out_ppq);
+
+/// @brief Reads the end in PPQ of the last audible audio or MIDI clip.
+/// @details Returns zero for an arrangement with no audible clips. Render tails are excluded.
+SonareError sonare_project_end_ppq(const SonareProject* project, double* out_end_ppq);
 
 /// @brief Reads a project tempo segment by index (0-based, in stored order).
 /// @details Pairs with @ref sonare_project_tempo_segment_count, which is the
@@ -371,6 +465,13 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
 SonareError sonare_project_track_name_by_index(const SonareProject* project, size_t index,
                                                char** out_name);
 
+/// @brief Reads the route of a track by zero-based index.
+/// @details An unset route field is returned as NULL. Release each returned string with
+///          @ref sonare_free_string. The two output pointers must be distinct.
+SonareError sonare_project_track_route_by_index(const SonareProject* project, size_t index,
+                                                char** out_channel_strip_ref,
+                                                char** out_output_target);
+
 /// @brief Returns the complete UTF-8 name (MIDI) or URI (audio) of a source by 0-based stored
 ///        index.
 /// @details Free @p out_name_or_uri with sonare_free_string.
@@ -413,7 +514,12 @@ void sonare_free_project_audio_source_metadata(SonareProjectAudioSourceMetadata*
 ///   (schemas/mixer-scene.schema.json). A key the scene reader does not consume (other than `$`-
 ///   and `x-`-prefixed ones) fails the call with SONARE_ERROR_INVALID_FORMAT naming it, e.g.
 ///   `unknown key strips[2].faderDB`; the project's scene is left unchanged.
+///   Pass NULL to clear the scene.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* document);
+
+/// @brief Reads the project's mixer scene as a scene document.
+/// @details An unset scene returns NULL. Release a returned document with @ref sonare_free_string.
+SonareError sonare_project_mixer_scene_json(const SonareProject* project, char** out_json);
 
 /// @brief Reads the project sample rate (Hz).
 SonareError sonare_project_get_sample_rate(const SonareProject* project, double* out_sample_rate);
@@ -436,6 +542,26 @@ SonareError sonare_project_tempo_segment_count(const SonareProject* project, siz
 /// @brief Counts time-signature segments; the valid index range for
 ///        @ref sonare_project_time_signature_by_index.
 SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count);
+
+/// @brief Reads the project's stored tempo segments in stored order.
+/// @details This returns only stored segments, without inserting a default. An empty list has
+///          NULL items and zero count. Release the copy with
+///          @ref sonare_free_project_tempo_segment_list.
+SonareError sonare_project_tempo_segments(const SonareProject* project,
+                                          SonareProjectTempoSegmentList* out);
+
+/// @brief Releases a tempo-segment list and clears it. NULL is safe.
+void sonare_free_project_tempo_segment_list(SonareProjectTempoSegmentList* list);
+
+/// @brief Reads the project's stored time-signature segments in stored order.
+/// @details This returns only stored segments, without inserting a default. An empty list has
+///          NULL items and zero count. Release the copy with
+///          @ref sonare_free_project_time_signature_list.
+SonareError sonare_project_time_signatures(const SonareProject* project,
+                                           SonareProjectTimeSignatureList* out);
+
+/// @brief Releases a time-signature list and clears it. NULL is safe.
+void sonare_free_project_time_signature_list(SonareProjectTimeSignatureList* list);
 
 /// @brief Opaque compiled-timeline handle. Create with @ref sonare_project_compile, destroy
 ///        with @ref sonare_project_timeline_destroy.

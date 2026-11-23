@@ -14,6 +14,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "arrangement/edit_model.h"
@@ -155,6 +156,8 @@ const Value& object_element(const Value& element, const std::string& element_pat
 Value tempo_segment_to_json(const transport::TempoSegment& s);
 Value time_signature_to_json(const transport::TimeSignatureSegment& s);
 Value automation_lane_to_json(const automation::AutomationLane& lane);
+Value destination_instrument_to_json(uint32_t destination_id,
+                                     const arrangement::DestinationInstrumentBinding& binding);
 Value track_to_json(const arrangement::Track& t);
 Value fade_to_json(const arrangement::ClipFade& f);
 Value take_to_json(const arrangement::ClipTake& take);
@@ -178,6 +181,8 @@ Value scene_to_value(const mixing::api::Scene& scene);
 transport::TempoSegment tempo_segment_from_json(const Value& v, const std::string& path);
 transport::TimeSignatureSegment time_signature_from_json(const Value& v, const std::string& path);
 automation::AutomationLane automation_lane_from_json(const Value& v, const std::string& path);
+void restore_destination_instrument_from_json(const Value& v, const std::string& path,
+                                              arrangement::Project* project);
 arrangement::Track track_from_json(const Value& v, const std::string& path);
 
 // ===========================================================================

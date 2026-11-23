@@ -78,7 +78,6 @@ TEST_CASE("tempo detection reference compatibility", "[tempo][reference]") {
       BpmConfig config;
       config.bpm_min = 30.0f;
       config.bpm_max = 300.0f;
-      config.start_bpm = 120.0f;
 
       float detected = detect_bpm(audio, config);
 

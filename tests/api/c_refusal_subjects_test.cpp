@@ -751,6 +751,12 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          float* out = nullptr;
          sonare_downmix(samples, 2, 0, 0, nullptr, &out);
        }}},
+      {"encode_audio.num_channels", {[] {
+         const float samples[2] = {0.1f, 0.1f};
+         uint8_t* out = nullptr;
+         size_t out_size = 0;
+         sonare_encode_audio(samples, 2, 0, 44100, nullptr, &out, &out_size);
+       }}},
       {"engine_drain_external_midi.max_events", {[] {
          // A buffer shorter than one lowered record is refused.
          const EnginePtr engine = prepared_engine();

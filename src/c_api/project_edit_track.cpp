@@ -1,8 +1,10 @@
 #include <algorithm>
+#include <limits>
 
 #include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
 #include "c_api/project_internal.h"
+#include "engine/track_mixer.h"
 #include "mixing/panner.h"
 #include "mixing/stereo_width.h"
 #include "util/parameter_checks.h"
@@ -32,6 +34,15 @@ static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kTrackF
 static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kTrackPan) ==
                   SONARE_AUTOMATION_TARGET_TRACK_PAN,
               "SonareAutomationTargetKind pan ordinal drift");
+static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kTrackSendDb) ==
+                  SONARE_AUTOMATION_TARGET_TRACK_SEND_DB,
+              "SonareAutomationTargetKind send ordinal drift");
+static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kTrackWidth) ==
+                  SONARE_AUTOMATION_TARGET_TRACK_WIDTH,
+              "SonareAutomationTargetKind width ordinal drift");
+static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kTrackInsertParam) ==
+                  SONARE_AUTOMATION_TARGET_TRACK_INSERT_PARAM,
+              "SonareAutomationTargetKind insert ordinal drift");
 static_assert(static_cast<int>(arr::Track::Kind::kAudio) == SONARE_TRACK_AUDIO,
               "SonareProjectTrackKind audio ordinal drift");
 static_assert(static_cast<int>(arr::Track::Kind::kMidi) == SONARE_TRACK_MIDI,
@@ -59,6 +70,15 @@ void check_lane_value(sonare::automation::AutomationTargetKind kind, uint32_t pa
     check::in_range(value, sonare::mixing::kPanMin, sonare::mixing::kPanMax, subject);
     return;
   }
+  if (kind == sonare::automation::AutomationTargetKind::kTrackWidth) {
+    check::in_range(value, sonare::mixing::kWidthMin, sonare::mixing::kWidthMax, subject);
+    return;
+  }
+  if (kind == sonare::automation::AutomationTargetKind::kTrackSendDb) {
+    check::in_range(value, sonare::constants::kFloorDb,
+                    sonare::engine::TrackMixerRuntime::kMaxGainDb, subject);
+    return;
+  }
 #if defined(SONARE_WITH_MIXING)
   if (kind == sonare::automation::AutomationTargetKind::kOpaque) {
     if (param_id == sonare::engine::MixingRuntime::kPan) {
@@ -77,29 +97,110 @@ void check_lane_value(sonare::automation::AutomationTargetKind kind, uint32_t pa
 }
 
 // Validates lane descriptor fields and builds an automation::AutomationLane, refusing by throwing.
-// The target parameter id must be non-zero; each breakpoint's ppq must be finite and >= 0, its
-// value finite (and inside the pan or width domain for such lanes), and its curve ordinal in range.
-// A non-null @p current_kind is the edited lane's kind, which SONARE_AUTOMATION_TARGET_UNCHANGED
-// keeps.
-void automation_lane_from_values(uint32_t target_param_id, int32_t target_kind,
-                                 const SonareAutomationPoint* point_data, size_t point_count,
-                                 const sonare::automation::AutomationTargetKind* current_kind,
-                                 sonare::automation::AutomationLane* out) {
+// A non-null @p current preserves the target identity when the descriptor uses UNCHANGED.
+void automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
+                               const sonare::automation::AutomationLane* current,
+                               sonare::automation::AutomationLane* out) {
   namespace check = sonare::util::check;
-  check::integer_within(target_param_id, kAutomationTargetParamIdDomain, "desc.target_param_id");
+  sonare_c_detail::require_struct_size(desc->struct_size, sizeof(SonareAutomationLaneDesc), "desc",
+                                       "sonare_automation_lane_desc_init");
+  if (desc->reserved != 0) check::refuse("desc.reserved", "must be 0");
+
   sonare::automation::AutomationTargetKind kind{};
-  if (current_kind != nullptr && target_kind == SONARE_AUTOMATION_TARGET_UNCHANGED) {
-    kind = *current_kind;
-  } else if (!ordinal_to_enum(target_kind, 0, SONARE_AUTOMATION_TARGET_TRACK_PAN, &kind)) {
+  uint32_t target_param_id = desc->target_param_id;
+  sonare::automation::AutomationTargetIdentity identity;
+  const bool unchanged =
+      current != nullptr && desc->target_kind == SONARE_AUTOMATION_TARGET_UNCHANGED;
+  if (unchanged) {
+    kind = current->target_kind();
+    target_param_id = current->target_param_id();
+    identity = current->target_identity();
+  } else if (!ordinal_to_enum(static_cast<int32_t>(desc->target_kind), 0,
+                              SONARE_AUTOMATION_TARGET_TRACK_INSERT_PARAM, &kind)) {
     check::refuse("desc.target_kind", sonare::util::refusal::kDeclaredValuePredicate);
   }
-  check::non_null_when_count(point_data, point_count, "desc.points", "desc.point_count");
-  check::integer_in_range(static_cast<long long>(point_count), 0,
+
+  if (!unchanged) {
+    switch (kind) {
+      case sonare::automation::AutomationTargetKind::kOpaque:
+        check::integer_within(target_param_id, kAutomationTargetParamIdDomain,
+                              "desc.target_param_id");
+        if (desc->send_id != nullptr) {
+          check::refuse("desc.send_id", "must be NULL for an opaque target");
+        }
+        if (desc->insert_index != SONARE_AUTOMATION_INSERT_INDEX_NONE) {
+          check::refuse("desc.insert_index", "must be NONE for an opaque target");
+        }
+        if (desc->processor != nullptr) {
+          check::refuse("desc.processor", "must be NULL for an opaque target");
+        }
+        if (desc->param_name != nullptr) {
+          check::refuse("desc.param_name", "must be NULL for an opaque target");
+        }
+        break;
+      case sonare::automation::AutomationTargetKind::kTrackFaderDb:
+      case sonare::automation::AutomationTargetKind::kTrackPan:
+      case sonare::automation::AutomationTargetKind::kTrackWidth:
+        if (target_param_id != 0) {
+          check::refuse("desc.target_param_id", "must be 0 for a typed target");
+        }
+        if (desc->send_id != nullptr) {
+          check::refuse("desc.send_id", "must be NULL for this target kind");
+        }
+        if (desc->insert_index != SONARE_AUTOMATION_INSERT_INDEX_NONE) {
+          check::refuse("desc.insert_index", "must be NONE for this target kind");
+        }
+        if (desc->processor != nullptr) {
+          check::refuse("desc.processor", "must be NULL for this target kind");
+        }
+        if (desc->param_name != nullptr) {
+          check::refuse("desc.param_name", "must be NULL for this target kind");
+        }
+        break;
+      case sonare::automation::AutomationTargetKind::kTrackSendDb:
+        if (target_param_id != 0) {
+          check::refuse("desc.target_param_id", "must be 0 for a typed target");
+        }
+        check::non_null(desc->send_id, "desc.send_id");
+        check::non_empty(desc->send_id, "desc.send_id");
+        if (desc->insert_index != SONARE_AUTOMATION_INSERT_INDEX_NONE) {
+          check::refuse("desc.insert_index", "must be NONE for a send target");
+        }
+        if (desc->processor != nullptr) {
+          check::refuse("desc.processor", "must be NULL for a send target");
+        }
+        if (desc->param_name != nullptr) {
+          check::refuse("desc.param_name", "must be NULL for a send target");
+        }
+        identity.send_id = desc->send_id;
+        break;
+      case sonare::automation::AutomationTargetKind::kTrackInsertParam:
+        if (target_param_id != 0) {
+          check::refuse("desc.target_param_id", "must be 0 for a typed target");
+        }
+        if (desc->send_id != nullptr) {
+          check::refuse("desc.send_id", "must be NULL for an insert target");
+        }
+        check::integer_in_range(desc->insert_index, 0, std::numeric_limits<int32_t>::max(),
+                                "desc.insert_index");
+        check::non_null(desc->processor, "desc.processor");
+        check::non_empty(desc->processor, "desc.processor");
+        check::non_null(desc->param_name, "desc.param_name");
+        check::non_empty(desc->param_name, "desc.param_name");
+        identity.insert_index = static_cast<size_t>(desc->insert_index);
+        identity.processor = desc->processor;
+        identity.param_name = desc->param_name;
+        break;
+    }
+  }
+
+  check::non_null_when_count(desc->points, desc->point_count, "desc.points", "desc.point_count");
+  check::integer_in_range(static_cast<long long>(desc->point_count), 0,
                           static_cast<long long>(kMaxBufferSize), "desc.point_count");
   std::vector<sonare::automation::Breakpoint> breakpoints;
-  breakpoints.reserve(point_count);
-  for (size_t i = 0; i < point_count; ++i) {
-    const SonareAutomationPoint& p = point_data[i];
+  breakpoints.reserve(desc->point_count);
+  for (size_t i = 0; i < desc->point_count; ++i) {
+    const SonareAutomationPoint& p = desc->points[i];
     check::within(p.ppq, sonare_c_detail::kPublicPpqDomain,
                   check::indexed_subject("desc.points", i, "ppq").c_str());
     check_lane_value(kind, target_param_id, p.value,
@@ -114,16 +215,10 @@ void automation_lane_from_values(uint32_t target_param_id, int32_t target_kind,
     bp.value = p.value;
     breakpoints.push_back(bp);
   }
-  out->set_target_param_id(target_param_id);
-  out->set_target_kind(kind);
-  out->set_points(std::move(breakpoints));
-}
-
-void automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
-                               const sonare::automation::AutomationTargetKind* current_kind,
-                               sonare::automation::AutomationLane* out) {
-  automation_lane_from_values(desc->target_param_id, static_cast<int32_t>(desc->target_kind),
-                              desc->points, desc->point_count, current_kind, out);
+  sonare::automation::AutomationLane lane(target_param_id, kind, std::move(identity));
+  if (current != nullptr) lane.set_lane_id(current->lane_id());
+  lane.set_points(std::move(breakpoints));
+  *out = std::move(lane);
 }
 
 // Refuses a track_id that names no track of the project.
@@ -133,16 +228,13 @@ SonareError require_track(const SonareProject* project, uint32_t track_id) {
       [] { sonare::util::check::refuse_unknown_id("track_id", "a track", "project"); });
 }
 
-// Refuses a target_param_id that names no automation lane of @p track.
-void require_lane(const arr::Track& track, uint32_t target_param_id) {
-  if (target_param_id != 0 &&
-      std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
-                  [target_param_id](const auto& lane) {
-                    return lane.target_param_id() == target_param_id;
-                  })) {
-    return;
-  }
-  sonare::util::check::refuse_unknown_id("target_param_id", "an automation lane", "track");
+// Refuses a lane_id that names no automation lane of @p track.
+const sonare::automation::AutomationLane& require_lane(const arr::Track& track, uint32_t lane_id) {
+  const auto found =
+      std::find_if(track.automation_lanes.begin(), track.automation_lanes.end(),
+                   [lane_id](const auto& lane) { return lane.lane_id() == lane_id; });
+  if (lane_id != 0 && found != track.automation_lanes.end()) return *found;
+  sonare::util::check::refuse_unknown_id("lane_id", "an automation lane", "track");
 }
 
 // Refuses an entity id the arrangement reserves as its exhausted-counter sentinel.
@@ -368,10 +460,14 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   // made a documented mixing-OFF-available API unreachable in exactly that
   // build.
   SONARE_C_REQUIRE_NONNULL(project);
-  SONARE_C_REQUIRE_NONNULL(document);
   SONARE_C_TRY
-  sonare::mixing::api::Scene scene;
   sonare_c_detail::clear_last_diagnostics();
+  if (document == nullptr) {
+    auto command = std::make_unique<arr::SetScene>(std::nullopt);
+    if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+    return SONARE_OK;
+  }
+  sonare::mixing::api::Scene scene;
   try {
     scene = sonare::mixing::api::scene_from_json(document);
   } catch (const sonare::util::json::JsonError& ex) {
@@ -646,32 +742,164 @@ SonareError sonare_project_set_track_route(SonareProject* project, uint32_t trac
 #endif
 }
 
-SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t track_id,
-                                               const SonareAutomationLaneDesc* desc,
-                                               uint32_t* out_target_param_id) {
+void sonare_automation_lane_desc_init(SonareAutomationLaneDesc* desc) {
+  if (desc == nullptr) return;
+  *desc = {};
+  desc->struct_size = sizeof(SonareAutomationLaneDesc);
+  desc->target_kind = SONARE_AUTOMATION_TARGET_OPAQUE;
+  desc->insert_index = SONARE_AUTOMATION_INSERT_INDEX_NONE;
+}
+
+void sonare_free_project_automation_lane_list(SonareProjectAutomationLaneList* list) {
+  if (list == nullptr) return;
+  if (list->items != nullptr) {
+    for (size_t i = 0; i < list->count; ++i) {
+      SonareAutomationLaneDesc& desc = list->items[i].desc;
+      delete[] desc.points;
+      delete[] desc.send_id;
+      delete[] desc.processor;
+      delete[] desc.param_name;
+    }
+  }
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_project_automation_lanes(const SonareProject* project,
+                                            SonareProjectAutomationLaneList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  const arr::Project& model = project->history.project();
+  struct LaneRef {
+    uint32_t track_id;
+    const sonare::automation::AutomationLane* lane;
+  };
+  std::vector<LaneRef> ordered;
+  for (const arr::Track& track : model.tracks()) {
+    for (const sonare::automation::AutomationLane& lane : track.automation_lanes) {
+      ordered.push_back({track.id, &lane});
+    }
+  }
+  std::sort(ordered.begin(), ordered.end(), [](const LaneRef& left, const LaneRef& right) {
+    if (left.track_id != right.track_id) return left.track_id < right.track_id;
+    const auto left_kind = static_cast<uint32_t>(left.lane->target_kind());
+    const auto right_kind = static_cast<uint32_t>(right.lane->target_kind());
+    if (left_kind != right_kind) return left_kind < right_kind;
+    const auto& left_identity = left.lane->target_identity();
+    const auto& right_identity = right.lane->target_identity();
+    if (left_identity.send_id != right_identity.send_id) {
+      return left_identity.send_id < right_identity.send_id;
+    }
+    if (left_identity.insert_index != right_identity.insert_index) {
+      return left_identity.insert_index < right_identity.insert_index;
+    }
+    if (left_identity.processor != right_identity.processor) {
+      return left_identity.processor < right_identity.processor;
+    }
+    if (left_identity.param_name != right_identity.param_name) {
+      return left_identity.param_name < right_identity.param_name;
+    }
+    return left.lane->target_param_id() < right.lane->target_param_id();
+  });
+
+  StagedOutput<SonareProjectAutomationLaneList, &sonare_free_project_automation_lane_list> staged;
+  if (!ordered.empty()) {
+    staged->items = new SonareProjectAutomationLane[ordered.size()]{};
+    staged->count = ordered.size();
+  }
+  for (size_t output_index = 0; output_index < ordered.size(); ++output_index) {
+    const LaneRef& entry = ordered[output_index];
+    const sonare::automation::AutomationLane& lane = *entry.lane;
+    SonareProjectAutomationLane& row = staged->items[output_index];
+    row.track_id = entry.track_id;
+    row.lane_id = lane.lane_id();
+    sonare_automation_lane_desc_init(&row.desc);
+    row.desc.target_param_id = lane.target_param_id();
+    row.desc.target_kind = static_cast<SonareAutomationTargetKind>(lane.target_kind());
+
+    const sonare::automation::AutomationTargetIdentity& identity = lane.target_identity();
+    if (!identity.send_id.empty()) row.desc.send_id = copy_string(identity.send_id);
+    if (identity.insert_index.has_value()) {
+      if (*identity.insert_index > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                      "automation lane insert index exceeds int32 range");
+      }
+      row.desc.insert_index = static_cast<int32_t>(*identity.insert_index);
+    }
+    if (!identity.processor.empty()) row.desc.processor = copy_string(identity.processor);
+    if (!identity.param_name.empty()) row.desc.param_name = copy_string(identity.param_name);
+
+    const std::vector<sonare::automation::Breakpoint>& points = lane.points();
+    if (!points.empty()) {
+      std::unique_ptr<SonareAutomationPoint[]> copied(new SonareAutomationPoint[points.size()]{});
+      row.desc.point_count = points.size();
+      for (size_t i = 0; i < points.size(); ++i) {
+        copied[i].ppq = points[i].ppq;
+        copied[i].value = points[i].value;
+        copied[i].curve_to_next = static_cast<int>(points[i].curve_to_next);
+      }
+      row.desc.points = copied.release();
+    }
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out);
+#endif
+}
+
+const char* sonare_automation_target_kind_names(void) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (out_target_param_id) *out_target_param_id = 0;
+  SONARE_C_TRY
+  static const std::vector<std::string> values = {
+      "opaque", "trackFaderDb", "trackPan", "trackSendDb", "trackWidth", "trackInsertParam"};
+  static thread_local std::string names;
+  return sonare_c_detail::join_names(values, names);
+  SONARE_C_CATCH_RETURN(nullptr)
+#else
+  return sonare_c_detail::refuse_not_compiled_in_handle<const char>(
+      sonare_c_detail::Feature::kArrangement);
+#endif
+}
+
+SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t track_id,
+                                               const SonareAutomationLaneDesc* desc,
+                                               uint32_t* out_lane_id) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_lane_id) *out_lane_id = 0;
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(desc);
   if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   sonare::automation::AutomationLane lane;
   automation_lane_from_desc(desc, nullptr, &lane);
+  const uint32_t lane_id = project->history.project().next_automation_lane_id();
   auto command = std::make_unique<arr::AddAutomationLane>(track_id, std::move(lane));
-  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (out_target_param_id) *out_target_param_id = desc->target_param_id;
+  if (!project->history.apply(std::move(command))) {
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   "desc target conflicts with an automation lane already on this track");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  if (out_lane_id) *out_lane_id = lane_id;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  if (out_target_param_id) *out_target_param_id = {};
+  if (out_lane_id) *out_lane_id = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 track_id, desc, out_target_param_id);
+                                                 track_id, desc, out_lane_id);
 #endif
 }
 
 SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
-                                                uint32_t target_param_id,
+                                                uint32_t lane_id,
                                                 const SonareAutomationLaneDesc* desc) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -680,43 +908,42 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
   if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
   const arr::Track* track = project->history.project().find_track(track_id);
-  require_lane(*track, target_param_id);
-  const auto current = std::find_if(
-      track->automation_lanes.begin(), track->automation_lanes.end(),
-      [target_param_id](const auto& l) { return l.target_param_id() == target_param_id; });
-  const sonare::automation::AutomationTargetKind current_kind = current->target_kind();
+  const sonare::automation::AutomationLane& current = require_lane(*track, lane_id);
   sonare::automation::AutomationLane lane;
-  automation_lane_from_desc(desc, &current_kind, &lane);
-  if (lane.target_param_id() != target_param_id) {
-    sonare::util::check::refuse_relation({"target_param_id", "desc.target_param_id"},
-                                         "{0} must equal {1}");
+  automation_lane_from_desc(desc, &current, &lane);
+  if (lane.target_param_id() == current.target_param_id() && lane.same_target_identity(current) &&
+      lane.points() == current.points()) {
+    return SONARE_OK;
   }
-  auto command =
-      std::make_unique<arr::EditAutomationLane>(track_id, target_param_id, std::move(lane));
-  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  auto command = std::make_unique<arr::EditAutomationLane>(track_id, lane_id, std::move(lane));
+  if (!project->history.apply(std::move(command))) {
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   "desc target conflicts with an automation lane already on this track");
+    return SONARE_ERROR_INVALID_STATE;
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 track_id, target_param_id, desc);
+                                                 track_id, lane_id, desc);
 #endif
 }
 
 SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32_t track_id,
-                                                  uint32_t target_param_id) {
+                                                  uint32_t lane_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   if (const SonareError err = require_track(project, track_id); err != SONARE_OK) return err;
   SONARE_C_TRY
-  require_lane(*project->history.project().find_track(track_id), target_param_id);
-  auto command = std::make_unique<arr::RemoveAutomationLane>(track_id, target_param_id);
+  require_lane(*project->history.project().find_track(track_id), lane_id);
+  auto command = std::make_unique<arr::RemoveAutomationLane>(track_id, lane_id);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
-                                                 track_id, target_param_id);
+                                                 track_id, lane_id);
 #endif
 }
 

@@ -48,6 +48,18 @@ TEST_CASE("CLI sections threshold registry follows the core default", "[cli][sec
   CHECK(std::stof(threshold->stated_default) == kSectionBoundaryThreshold);
 }
 
+TEST_CASE("CLI rhythm help describes the beat-tracking prior", "[cli][rhythm]") {
+  const auto options = cli_options_for_command("rhythm");
+  const auto prior = std::find_if(options.begin(), options.end(), [](const auto& option) {
+    return option.rfind("--start-bpm", 0) == 0;
+  });
+  REQUIRE(prior != options.end());
+  CHECK_THAT(*prior,
+             ContainsSubstring("BPM prior for beat tracking when the tempo search finds none"));
+  CHECK_THAT(*prior, ContainsSubstring("Output reports only measured tempo"));
+  CHECK_THAT(*prior, ContainsSubstring("(default: 120.0)"));
+}
+
 TEST_CASE("CLI rhythm and bpm report no tempo on silence whatever the start tempo",
           "[cli][rhythm]") {
   const std::string silent = unique_temp_path("_silent_tempo.wav");

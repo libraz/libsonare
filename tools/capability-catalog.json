@@ -744,6 +744,12 @@
       }
     ]
   },
+  "encode": {
+    "builtin": [
+      "wav"
+    ],
+    "ffmpeg": []
+  },
   "masteringPresets": [
     {
       "kind": "mastering",
@@ -1093,6 +1099,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Keeps sample peaks at or below the configured ceiling.",
       "forms": [
         "realtime",
         "offline"
@@ -1172,6 +1179,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Reduces gain above a threshold with a soft knee and makeup gain.",
       "forms": [
         "realtime",
         "offline"
@@ -1430,6 +1438,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Uses a split-band detector to attenuate sibilant high-frequency energy.",
       "forms": [
         "realtime",
         "offline"
@@ -1589,6 +1598,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Ducks programme audio from a separately supplied key signal.",
       "forms": [
         "realtime",
         "offline"
@@ -1728,6 +1738,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Reduces quieter signals with a downward expansion ratio.",
       "forms": [
         "realtime",
         "offline"
@@ -1847,6 +1858,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Attenuates signals below a threshold using an expander curve.",
       "forms": [
         "realtime",
         "offline"
@@ -2018,6 +2030,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Uses lookahead to limit peaks above the configured threshold.",
       "forms": [
         "realtime",
         "offline"
@@ -2137,6 +2150,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Blends compressed audio with the dry signal using the configured mix.",
       "forms": [
         "realtime",
         "offline"
@@ -2336,6 +2350,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies linked gain reduction from the main or an external detector.",
       "forms": [
         "realtime",
         "offline"
@@ -2535,6 +2550,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Adjusts attack and sustain separately from their envelope difference.",
       "forms": [
         "realtime",
         "offline"
@@ -2754,6 +2770,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Raises quieter material below its threshold with bounded gain.",
       "forms": [
         "realtime",
         "offline"
@@ -2873,6 +2890,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Emphasizes material above its threshold with an upward expansion curve.",
       "forms": [
         "realtime",
         "offline"
@@ -2992,6 +3010,7 @@
       "category": "dynamics",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Moves signal level toward a target with bounded boost and cut.",
       "forms": [
         "realtime",
         "offline"
@@ -3203,6 +3222,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Morphs room response as its acoustic geometry and surface materials change.",
       "forms": [
         "realtime",
         "offline"
@@ -3819,6 +3839,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Feeds independent stereo delay lines with selectable cross-routing and four output taps.",
       "forms": [
         "realtime",
         "offline"
@@ -4329,6 +4350,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Moves three resonant formant bands to shape the signal into vowel sounds.",
       "forms": [
         "realtime",
         "offline"
@@ -4448,6 +4470,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Applies the selected GS insert effect to a stereo signal.",
       "forms": [
         "realtime",
         "offline"
@@ -4936,6 +4959,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Sweeps a resonant filter from the input envelope.",
       "forms": [
         "realtime",
         "offline"
@@ -5222,6 +5246,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Mixes modulated fractional-delay voices with the stereo input.",
       "forms": [
         "realtime",
         "offline"
@@ -5472,6 +5497,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Combines three phase-offset delay taps for a string-machine ensemble sound.",
       "forms": [
         "realtime",
         "offline"
@@ -5769,6 +5795,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Feeds a modulated delay back into the input to create moving comb notches.",
       "forms": [
         "realtime",
         "offline"
@@ -6039,6 +6066,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Sweeps first-order allpass stages to create moving spectral notches.",
       "forms": [
         "realtime",
         "offline"
@@ -6227,6 +6255,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Shifts pitch in real time with two crossfaded delay taps.",
       "forms": [
         "realtime",
         "offline"
@@ -6564,6 +6593,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Multiplies the input by a sinusoidal carrier to create sidebands.",
       "forms": [
         "realtime",
         "offline"
@@ -6733,6 +6763,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Simulates a rotating speaker with dual-rotor Doppler shift and tremolo.",
       "forms": [
         "realtime",
         "offline"
@@ -7150,6 +7181,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Sweeps a resonant filter with a low-frequency oscillator.",
       "forms": [
         "realtime",
         "offline"
@@ -7327,6 +7359,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Convolves each channel with a supplied or synthesized impulse response.",
       "forms": [
         "realtime",
         "offline"
@@ -7446,6 +7479,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Uses a four-line feedback delay network with frequency-dependent decay.",
       "forms": [
         "realtime",
         "offline"
@@ -7565,6 +7599,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Uses a modulated Dattorro plate tank with input diffusion and a wet-output gate.",
       "forms": [
         "realtime",
         "offline"
@@ -7870,6 +7905,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Synthesizes a room impulse response from room geometry and material settings.",
       "forms": [
         "realtime",
         "offline"
@@ -8346,6 +8382,7 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Builds a sparse velvet-noise impulse response with a configurable decay time.",
       "forms": [
         "realtime",
         "offline"
@@ -8485,6 +8522,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Passes a selected frequency band and attenuates frequencies on both sides.",
       "forms": [
         "realtime",
         "offline"
@@ -8648,6 +8686,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Attenuates frequencies below a high-pass cutoff or above a low-pass cutoff.",
       "forms": [
         "realtime",
         "offline"
@@ -8965,6 +9004,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Changes an equalizer band's gain when its level detector crosses the threshold.",
       "forms": [
         "realtime",
         "offline"
@@ -11377,6 +11417,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies a configurable collection of equalizer sections through one processor.",
       "forms": [
         "realtime",
         "offline"
@@ -24955,6 +24996,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Adjusts gain across 31 fixed frequency bands.",
       "forms": [
         "realtime",
         "offline"
@@ -25614,6 +25656,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies an FFT-designed FIR equalizer with linear phase.",
       "forms": [
         "realtime",
         "offline"
@@ -38791,6 +38834,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Applies independent parametric equalizer settings to the mid and side signals.",
       "forms": [
         "realtime",
         "offline"
@@ -65019,6 +65063,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies a low-latency IIR equalizer with a matched-Z phase response.",
       "forms": [
         "realtime",
         "offline"
@@ -78143,6 +78188,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies configurable biquad bands using RBJ or matched-Z coefficients.",
       "forms": [
         "realtime",
         "offline"
@@ -91267,6 +91313,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies a passive-style program equalizer with low and high section controls.",
       "forms": [
         "realtime",
         "offline"
@@ -91495,6 +91542,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies a low- or high-shelf filter at a selected corner frequency.",
       "forms": [
         "realtime",
         "offline"
@@ -91698,6 +91746,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Uses stepped frequency and gain controls with narrower bands at larger boosts or cuts.",
       "forms": [
         "realtime",
         "offline"
@@ -91877,6 +91926,7 @@
       "category": "eq",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Raises one side of the spectrum while lowering the other around a pivot frequency.",
       "forms": [
         "realtime",
         "offline"
@@ -91936,6 +91986,7 @@
       "category": "final",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Quantizes samples to an integer grid at the configured output bit depth.",
       "forms": [
         "offline"
       ],
@@ -91953,6 +92004,7 @@
       "category": "final",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Adds the selected dither before quantizing to the configured bit depth.",
       "forms": [
         "offline"
       ],
@@ -91970,6 +92022,7 @@
       "category": "final",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Either dithers the signal or quantizes it directly to the configured bit depth.",
       "forms": [
         "offline"
       ],
@@ -91987,6 +92040,7 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Crossfades between equal-length source and reference signals.",
       "forms": [
         "offline"
       ],
@@ -92004,6 +92058,7 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Selects either the source or reference signal for A/B comparison.",
       "forms": [
         "offline"
       ],
@@ -92021,6 +92076,7 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Shifts the reference by its estimated delay relative to the source.",
       "forms": [
         "offline"
       ],
@@ -92038,6 +92094,7 @@
       "category": "reference",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Applies an equalizer curve derived from the reference signal to the source.",
       "forms": [
         "offline"
       ],
@@ -92055,6 +92112,7 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Sets limiter release from the input envelope and configured recovery range.",
       "forms": [
         "realtime",
         "offline"
@@ -92258,6 +92316,7 @@
       "category": "maximizer",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Adjusts integrated loudness toward a target while limiting true peaks.",
       "forms": [
         "offline"
       ],
@@ -92275,6 +92334,7 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Raises programme level and limits its peaks to the configured ceiling.",
       "forms": [
         "realtime",
         "offline"
@@ -92374,6 +92434,7 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Limits peaks above a threshold with a soft-knee gain curve.",
       "forms": [
         "realtime",
         "offline"
@@ -92473,6 +92534,7 @@
       "category": "maximizer",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Oversamples the signal to limit reconstructed peaks at the dBTP ceiling.",
       "forms": [
         "realtime",
         "offline"
@@ -92613,6 +92675,7 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Compresses each crossover band with its own threshold and timing controls.",
       "forms": [
         "realtime",
         "offline"
@@ -94103,6 +94166,7 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies threshold-controlled equalization independently in each crossover band.",
       "forms": [
         "realtime",
         "offline"
@@ -116041,6 +116105,7 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Expands each crossover band independently below its threshold.",
       "forms": [
         "realtime",
         "offline"
@@ -117351,6 +117416,7 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Adjusts stereo width separately across crossover bands using mid and side levels.",
       "forms": [
         "realtime",
         "offline"
@@ -118481,6 +118547,7 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Limits peaks independently in each crossover band.",
       "forms": [
         "realtime",
         "offline"
@@ -119431,6 +119498,7 @@
       "category": "multiband",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies the selected saturation curve independently in each crossover band.",
       "forms": [
         "realtime",
         "offline"
@@ -120894,6 +120962,7 @@
       "category": "repair",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Interpolates short click runs using neighboring samples and an LPC model.",
       "forms": [
         "offline"
       ],
@@ -121012,6 +121081,7 @@
       "category": "repair",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Reconstructs clipped runs from the surrounding waveform within solver limits.",
       "forms": [
         "offline"
       ],
@@ -121110,6 +121180,7 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Suppresses short crackle transients with the selected median or wavelet method.",
       "forms": [
         "realtime",
         "offline"
@@ -121265,6 +121336,7 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Attenuates a configured or tracked fundamental and its harmonic series.",
       "forms": [
         "realtime",
         "offline"
@@ -121473,6 +121545,7 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Estimates a noise spectrum and reduces it with a frequency-dependent gain mask.",
       "forms": [
         "realtime",
         "offline"
@@ -122160,6 +122233,7 @@
       "category": "repair",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Estimates late reverberation from spectral decay and suppresses its contribution.",
       "forms": [
         "realtime",
         "offline"
@@ -122504,6 +122578,7 @@
       "category": "repair",
       "causal": false,
       "channelPolicy": "multichannel",
+      "description": "Finds and removes low-level leading and trailing audio using a gated level estimate.",
       "forms": [
         "offline"
       ],
@@ -122631,6 +122706,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Runs the selected guitar amplifier model with its tone stack and cabinet response.",
       "forms": [
         "realtime",
         "offline"
@@ -124196,6 +124272,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Quantizes sample amplitude and holds samples at a lower rate, with optional filters and noise.",
       "forms": [
         "realtime",
         "offline"
@@ -124780,6 +124857,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Runs two hard-clipping stages with coupling and tone filters between the gain controls.",
       "forms": [
         "realtime",
         "offline"
@@ -124859,6 +124937,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Generates harmonics in a selected band and blends them with the direct signal.",
       "forms": [
         "realtime",
         "offline"
@@ -125007,6 +125086,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Clamps samples at the selected ceiling with a hard clipping curve.",
       "forms": [
         "realtime",
         "offline"
@@ -125083,6 +125163,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Generates harmonics independently in each configured frequency band.",
       "forms": [
         "realtime",
         "offline"
@@ -126393,6 +126474,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Blends a filtered, soft-clipped path with the direct signal.",
       "forms": [
         "realtime",
         "offline"
@@ -126472,6 +126554,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Rounds waveform peaks with a smooth saturation curve.",
       "forms": [
         "realtime",
         "offline"
@@ -126584,6 +126667,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Models tape saturation with a Jiles-Atherton hysteresis loop.",
       "forms": [
         "realtime",
         "offline"
@@ -126796,6 +126880,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Models transformer magnetization with configurable drive and asymmetry.",
       "forms": [
         "realtime",
         "offline"
@@ -126875,6 +126960,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Models a tube stage with configurable drive, bias, and harmonic level.",
       "forms": [
         "realtime",
         "offline"
@@ -127031,6 +127117,7 @@
       "category": "saturation",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Maps each sample through a selected static nonlinear transfer curve.",
       "forms": [
         "realtime",
         "offline"
@@ -127200,6 +127287,7 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Adds a dynamic high-shelf boost and blends in high-frequency harmonics.",
       "forms": [
         "realtime",
         "offline"
@@ -127299,6 +127387,7 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Shapes low-frequency energy and stereo width below a crossover frequency.",
       "forms": [
         "realtime",
         "offline"
@@ -127398,6 +127487,7 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Adds driven harmonics inside a configurable presence band.",
       "forms": [
         "realtime",
         "offline"
@@ -127530,6 +127620,7 @@
       "category": "spectral",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Changes gain in a selected spectral band according to its envelope.",
       "forms": [
         "realtime",
         "offline"
@@ -127701,6 +127792,7 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Sweeps the stereo image left and right with a low-frequency oscillator.",
       "forms": [
         "realtime",
         "offline"
@@ -127821,6 +127913,7 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Places a folded mono source on the horizontal plane using measured head-related responses.",
       "forms": [
         "realtime",
         "offline"
@@ -127969,6 +128062,7 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Widens a stereo signal by delaying one side relative to the other.",
       "forms": [
         "realtime",
         "offline"
@@ -128048,6 +128142,7 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Changes stereo width by adjusting the mid-to-side balance.",
       "forms": [
         "realtime",
         "offline"
@@ -128147,6 +128242,7 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Reduces stereo width below a crossover by bringing low frequencies toward mono.",
       "forms": [
         "realtime",
         "offline"
@@ -128206,6 +128302,7 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Delays one stereo channel by the configured whole and fractional sample offset.",
       "forms": [
         "realtime",
         "offline"
@@ -128285,6 +128382,7 @@
       "category": "stereo",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Changes left and right gain with a selectable balance law.",
       "forms": [
         "realtime",
         "offline"
@@ -128393,6 +128491,7 @@
       "category": "utility",
       "causal": true,
       "channelPolicy": "multichannel",
+      "description": "Applies a constant gain to every sample.",
       "forms": [
         "realtime",
         "offline"
@@ -128432,6 +128531,7 @@
       "category": "voice",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
+      "description": "Changes vocal pitch and formants using the selected realtime voice configuration.",
       "forms": [
         "realtime",
         "offline"

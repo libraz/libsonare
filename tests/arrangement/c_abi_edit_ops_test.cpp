@@ -1340,7 +1340,7 @@ TEST_CASE("C-ABI automation lane refuses out-of-domain pan and width breakpoints
   point.ppq = 0.0;
   point.curve_to_next = SONARE_CURVE_LINEAR;
   SonareAutomationLaneDesc desc{};
-  desc.target_param_id = 7;
+  sonare_automation_lane_desc_init(&desc);
   desc.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   desc.points = &point;
   desc.point_count = 1;
@@ -1349,10 +1349,13 @@ TEST_CASE("C-ABI automation lane refuses out-of-domain pan and width breakpoints
   point.value = 1.5f;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &out_id) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)).find("points") != std::string::npos);
   REQUIRE(serialize(project) == before);
 
   point.value = 1.0f;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &out_id) == SONARE_OK);
+  REQUIRE(out_id == 1);
 
   sonare_project_destroy(project);
 }
@@ -1375,20 +1378,22 @@ TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-ab
   points[2].curve_to_next = SONARE_CURVE_HOLD;
 
   SonareAutomationLaneDesc desc{};
+  sonare_automation_lane_desc_init(&desc);
   desc.target_param_id = 42;
   desc.points = points;
   desc.point_count = 3;
 
-  uint32_t target_param_id = 999;
-  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &target_param_id) ==
-          SONARE_OK);
-  REQUIRE(target_param_id == 42);
+  uint32_t lane_id = 999;
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &lane_id) == SONARE_OK);
+  REQUIRE(lane_id == 1);
   const std::string with_lane = serialize(project);
   REQUIRE(with_lane != empty);
 
-  // Target id zero is reserved as the invalid/unset value. Descriptor
-  // validation rejects it before either add or edit can mutate the project.
+  // Opaque target id zero is invalid, and descriptor rejection is atomic.
   SonareAutomationLaneDesc zero_target = desc;
+  sonare_automation_lane_desc_init(&zero_target);
+  zero_target.points = points;
+  zero_target.point_count = 3;
   zero_target.target_param_id = 0;
   uint32_t zero_target_out = 999;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &zero_target, &zero_target_out) ==
@@ -1405,21 +1410,22 @@ TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-ab
   edited[1].value = 0.75f;
   edited[1].curve_to_next = SONARE_CURVE_LINEAR;
   SonareAutomationLaneDesc edit_desc{};
+  sonare_automation_lane_desc_init(&edit_desc);
   edit_desc.target_param_id = 42;
   edit_desc.points = edited;
   edit_desc.point_count = 2;
   SonareAutomationLaneDesc zero_target_edit = edit_desc;
   zero_target_edit.target_param_id = 0;
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 42, &zero_target_edit) ==
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, lane_id, &zero_target_edit) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(serialize(project) == with_lane);
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 42, &edit_desc) == SONARE_OK);
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, lane_id, &edit_desc) == SONARE_OK);
   REQUIRE(serialize(project) != with_lane);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == with_lane);
 
   // Remove the lane; undo restores it.
-  REQUIRE(sonare_project_remove_automation_lane(project, fx.track, 42) == SONARE_OK);
+  REQUIRE(sonare_project_remove_automation_lane(project, fx.track, lane_id) == SONARE_OK);
   REQUIRE(serialize(project) == empty);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == with_lane);
@@ -1427,26 +1433,30 @@ TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-ab
   // Target ids remain valid after a preceding lane is removed; array position
   // must not redirect this edit to a different parameter.
   SonareAutomationLaneDesc second_lane{};
+  sonare_automation_lane_desc_init(&second_lane);
   second_lane.target_param_id = 7;
   uint32_t second_target = 0;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &second_lane, &second_target) ==
           SONARE_OK);
-  REQUIRE(second_target == 7);
-  REQUIRE(sonare_project_remove_automation_lane(project, fx.track, 42) == SONARE_OK);
+  REQUIRE(second_target == 2);
+  REQUIRE(sonare_project_remove_automation_lane(project, fx.track, lane_id) == SONARE_OK);
   SonareAutomationPoint second_points[1] = {{0.0, 0.75f, SONARE_CURVE_HOLD}};
   SonareAutomationLaneDesc second_edit{};
+  sonare_automation_lane_desc_init(&second_edit);
   second_edit.target_param_id = 7;
   second_edit.points = second_points;
   second_edit.point_count = 1;
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 7, &second_edit) == SONARE_OK);
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, second_target, &second_edit) ==
+          SONARE_OK);
 
   // A lane with zero breakpoints is valid (empty desc.points / count 0).
   SonareAutomationLaneDesc empty_lane{};
+  sonare_automation_lane_desc_init(&empty_lane);
   empty_lane.target_param_id = 1;
   uint32_t empty_target = 999;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &empty_lane, &empty_target) ==
           SONARE_OK);
-  REQUIRE(empty_target == 1);
+  REQUIRE(empty_target == 3);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
 
   // Invalid: bad track, missing target id, null desc, bad point fields.
@@ -1464,6 +1474,7 @@ TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-ab
   bad[0].value = 0.0f;
   bad[0].curve_to_next = SONARE_CURVE_LINEAR;
   SonareAutomationLaneDesc bad_desc{};
+  sonare_automation_lane_desc_init(&bad_desc);
   bad_desc.target_param_id = 123;
   bad_desc.points = bad;
   bad_desc.point_count = 1;
@@ -1485,13 +1496,14 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
 
   SonareAutomationPoint points[1] = {{0.0, -3.0f, SONARE_CURVE_LINEAR}};
   SonareAutomationLaneDesc fader{};
-  fader.target_param_id = 100;
+  sonare_automation_lane_desc_init(&fader);
   fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   fader.points = points;
   fader.point_count = 1;
-  uint32_t out_target = 0;
-  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &fader, &out_target) == SONARE_OK);
-  REQUIRE(out_target == 100);
+  uint32_t fader_lane_id = 0;
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &fader, &fader_lane_id) ==
+          SONARE_OK);
+  REQUIRE(fader_lane_id == 1);
   const std::string with_fader = serialize(project);
   REQUIRE(with_fader.find("\"version\":7") != std::string::npos);
   REQUIRE(with_fader.find("\"targetKind\":\"trackFaderDb\"") != std::string::npos);
@@ -1499,11 +1511,11 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   // An edit that restates the kind keeps the lane typed.
   SonareAutomationPoint edited[1] = {{0.0, -6.0f, SONARE_CURVE_HOLD}};
   SonareAutomationLaneDesc kept_kind_edit{};
-  kept_kind_edit.target_param_id = 100;
+  sonare_automation_lane_desc_init(&kept_kind_edit);
   kept_kind_edit.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   kept_kind_edit.points = edited;
   kept_kind_edit.point_count = 1;
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &kept_kind_edit) ==
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, fader_lane_id, &kept_kind_edit) ==
           SONARE_OK);
   const std::string after_edit = serialize(project);
   REQUIRE(after_edit.find("\"targetKind\":\"trackFaderDb\"") != std::string::npos);
@@ -1513,19 +1525,19 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   SonareAutomationLaneDesc unchanged_edit = kept_kind_edit;
   unchanged_edit.target_kind = SONARE_AUTOMATION_TARGET_UNCHANGED;
   unchanged_edit.points = unchanged_points;
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &unchanged_edit) ==
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, fader_lane_id, &unchanged_edit) ==
           SONARE_OK);
   const std::string after_unchanged = serialize(project);
   REQUIRE(after_unchanged != after_edit);
   REQUIRE(after_unchanged.find("\"targetKind\":\"trackFaderDb\"") != std::string::npos);
   SonareAutomationLaneDesc unchanged_add = unchanged_edit;
-  unchanged_add.target_param_id = 104;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &unchanged_add, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(serialize(project) == after_unchanged);
 
   // Opaque lanes continue to coexist with typed mixer lanes.
   SonareAutomationLaneDesc opaque{};
+  sonare_automation_lane_desc_init(&opaque);
   opaque.target_param_id = 200;
   opaque.points = edited;
   opaque.point_count = 1;
@@ -1534,7 +1546,7 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   // Pan breakpoints are refused outside [-1, 1], so the pan lanes carry a value of their own.
   SonareAutomationPoint pan_points[1] = {{0.0, 0.25f, SONARE_CURVE_LINEAR}};
   SonareAutomationLaneDesc pan = fader;
-  pan.target_param_id = 101;
+  sonare_automation_lane_desc_init(&pan);
   pan.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   pan.points = pan_points;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &pan, nullptr) == SONARE_OK);
@@ -1543,13 +1555,15 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
   // A second lane of the same typed kind is a command conflict and must not
   // partially mutate the project or history.
   SonareAutomationLaneDesc duplicate_fader = fader;
-  duplicate_fader.target_param_id = 102;
+  sonare_automation_lane_desc_init(&duplicate_fader);
+  duplicate_fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &duplicate_fader, nullptr) ==
           SONARE_ERROR_INVALID_STATE);
   REQUIRE(serialize(project) == with_fader_and_pan);
 
   SonareAutomationLaneDesc unknown = fader;
-  unknown.target_param_id = 103;
+  sonare_automation_lane_desc_init(&unknown);
+  unknown.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   unknown.target_kind = static_cast<SonareAutomationTargetKind>(3);
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &unknown, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -1557,18 +1571,22 @@ TEST_CASE("C-ABI typed automation lane add/edit applies the descriptor kind",
 
   // Editing the fader into the already occupied pan slot is also atomic.
   SonareAutomationLaneDesc conflicting_edit = fader;
+  sonare_automation_lane_desc_init(&conflicting_edit);
   conflicting_edit.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   conflicting_edit.points = pan_points;
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 100, &conflicting_edit) ==
-          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, fader_lane_id,
+                                              &conflicting_edit) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(serialize(project) == with_fader_and_pan);
 
-  // IDs are track-local: the same typed id is valid on another track.
+  // Typed target identity is track-local while stable lane IDs are project-wide.
   SonareProjectTrackDesc track_desc{};
   track_desc.kind = SONARE_TRACK_AUDIO;
   uint32_t second_track = 0;
   REQUIRE(sonare_project_add_track(project, &track_desc, &second_track) == SONARE_OK);
-  REQUIRE(sonare_project_add_automation_lane(project, second_track, &fader, nullptr) == SONARE_OK);
+  uint32_t second_fader_lane_id = 0;
+  REQUIRE(sonare_project_add_automation_lane(project, second_track, &fader,
+                                             &second_fader_lane_id) == SONARE_OK);
+  REQUIRE(second_fader_lane_id == 4);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo second-track lane
   REQUIRE(sonare_project_undo(project) == SONARE_OK);  // undo second track
@@ -2356,6 +2374,10 @@ TEST_CASE("C-ABI audio clip payloads name the member they refuse", "[project][c-
   CHECK(sonare_project_set_source_audio(project, 1, samples.data(), 0, 2, 48000) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "frames must be an integer of at least 1");
+  // No buffer and no frames is not an empty payload here: the source needs PCM.
+  CHECK(sonare_project_set_source_audio(project, 1, nullptr, 0, -1, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "interleaved must not be NULL");
   CHECK(sonare_project_set_source_audio(project, 9999, samples.data(), 64, 2, 48000) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "source_id must be the id of a source in this project");

@@ -34,6 +34,92 @@ SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareA
 SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** out_samples,
                                    size_t* out_frames, int* out_channels, int* out_sample_rate);
 
+/// @brief Audio metadata copied from a decoded container.
+/// @details @c keys and @c values each hold @c count separately allocated
+///          NUL-terminated strings. An empty result has both pointers NULL.
+///          Release both arrays and their strings with
+///          @ref sonare_free_audio_tags.
+typedef struct {
+  char** keys;    ///< Heap strings for the metadata keys; count entries.
+  char** values;  ///< Heap strings for the metadata values; count entries.
+  size_t count;   ///< Number of key/value pairs.
+} SonareAudioTags;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareAudioTags, keys) == 0, "SonareAudioTags.keys offset");
+static_assert(offsetof(SonareAudioTags, values) == sizeof(char**), "SonareAudioTags.values offset");
+static_assert(offsetof(SonareAudioTags, count) ==
+                  ((2u * sizeof(char**) + alignof(size_t) - 1u) / alignof(size_t)) *
+                      alignof(size_t),
+              "SonareAudioTags.count offset");
+#endif
+
+/// @brief Reads container metadata without decoding the audio samples.
+/// @details Tags use the normalized names documented by the audio codec
+///          contract. Malformed individual tag frames are skipped. On failure,
+///          @p out is cleared. A NULL or empty @p data buffer is refused.
+SonareError sonare_read_audio_tags(const uint8_t* data, size_t size, SonareAudioTags* out);
+/// @brief Releases every key and value in @p tags, then clears it; NULL is ignored.
+void sonare_free_audio_tags(SonareAudioTags* tags);
+
+/// @brief Options for @ref sonare_encode_audio.
+/// @details Start from @ref sonare_encode_options_init. A NULL options pointer
+///          selects its defaults. Pointer members remain caller-owned and are
+///          copied by the call. The format tokens are lowercase. WAV and FLAC
+///          accept bit depths 16 or 24, and WAV also accepts 32-bit float;
+///          lossy formats accept quality in [0, 1] and reject bit_depth.
+typedef struct {
+  uint32_t struct_size;         ///< sizeof this struct; set by sonare_encode_options_init.
+  const char* format;           ///< Exact lowercase token: wav, flac, mp3, ogg, opus, or m4a.
+  int32_t bit_depth;            ///< 0 selects the format default; otherwise format-specific.
+  float quality;                ///< NaN selects the format default; otherwise in [0, 1].
+  const SonareAudioTags* tags;  ///< Optional tags to write; NULL writes no tags.
+} SonareEncodeOptions;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareEncodeOptions, struct_size) == 0,
+              "SonareEncodeOptions.struct_size offset");
+static_assert(offsetof(SonareEncodeOptions, format) ==
+                  ((sizeof(uint32_t) + alignof(const char*) - 1u) / alignof(const char*)) *
+                      alignof(const char*),
+              "SonareEncodeOptions.format offset");
+static_assert(offsetof(SonareEncodeOptions, bit_depth) ==
+                  offsetof(SonareEncodeOptions, format) + sizeof(const char*),
+              "SonareEncodeOptions.bit_depth offset");
+static_assert(offsetof(SonareEncodeOptions, quality) ==
+                  offsetof(SonareEncodeOptions, bit_depth) + sizeof(int32_t),
+              "SonareEncodeOptions.quality offset");
+static_assert(offsetof(SonareEncodeOptions, tags) ==
+                  ((offsetof(SonareEncodeOptions, quality) + sizeof(float) +
+                    alignof(const SonareAudioTags*) - 1u) /
+                   alignof(const SonareAudioTags*)) *
+                      alignof(const SonareAudioTags*),
+              "SonareEncodeOptions.tags offset");
+static_assert(sizeof(SonareEncodeOptions) ==
+                  ((offsetof(SonareEncodeOptions, tags) + sizeof(const SonareAudioTags*) +
+                    alignof(const SonareAudioTags*) - 1u) /
+                   alignof(const SonareAudioTags*)) *
+                      alignof(const SonareAudioTags*),
+              "SonareEncodeOptions layout");
+#endif
+
+/// @brief Writes the defaults and sizeof into @p options; NULL is ignored.
+/// @details Defaults are WAV, bit_depth 0 (the format default), NaN quality
+///          (the format default), and no tags.
+///          Initialization does not transfer ownership.
+void sonare_encode_options_init(SonareEncodeOptions* options);
+
+/// @brief Encodes planar samples into an in-memory audio file.
+/// @details @p samples contains @p num_channels contiguous planes of @p frames
+///          samples each. A NULL @p options selects 16-bit WAV defaults. WAV
+///          is built in; optional formats require the corresponding FFmpeg
+///          encoder and muxer and return @c SONARE_ERROR_NOT_SUPPORTED when
+///          unavailable. Outputs are cleared on failure.
+/// @note Release @p out with @ref sonare_free_bytes.
+SonareError sonare_encode_audio(const float* samples, size_t frames, int num_channels,
+                                int sample_rate, const SonareEncodeOptions* options, uint8_t** out,
+                                size_t* out_size);
+
 /// @brief Fold options for @ref sonare_downmix.
 /// @details Fill with @ref sonare_downmix_options_init before setting fields.
 typedef struct {
@@ -316,7 +402,8 @@ typedef struct {
   float bpm_min;
   /// Upper bound of the tempo search in BPM. Default 200.
   float bpm_max;
-  /// Prior tempo estimate in BPM. Default 120.
+  /// Finite, positive BPM prior that seeds beat tracking if the tempo search finds none.
+  /// Analysis reports measured tempo or absence. Default 120.
   float start_bpm;
   /// Non-zero restricts chord detection to triads, with no seventh chords. Default 1.
   int use_triads_only;
@@ -402,10 +489,6 @@ typedef struct {
   /// Number of entries of candidate_numerators that are read; at least 1.
   size_t candidate_numerator_count;
   /// Beat unit reported for the detected meter; a power of two in [1, 32]. Default 4.
-  /// Reported as requested: whether a beat divides into three is measured from
-  /// energy between the beats, which per-beat accents do not carry, so a
-  /// compound meter is not resolvable on this path. A six whose beats accent
-  /// 3+3 comes back with this denominator and the grouping {3, 3}.
   int denominator;
   /// Weight of the downbeat accent in a candidate's score. Default 1.
   float downbeat_weight;
@@ -415,45 +498,39 @@ typedef struct {
   float subdivision_weight;
   /// Mean accent between the beats, as a fraction of the mean accent on them, at and above
   /// which a six (or a three) is read as compound; only a midpoint holding an attack
-  /// contributes. Default 0.5. Consulted only where there is a subdivision to measure, so it
-  /// has no effect on sonare_estimate_meter_json.
+  /// contributes. Default 0.5. Consulted when subdivision accents are supplied.
   float compound_subdivision_threshold;
 } SonareMeterOptions;
 
 /// @brief Fills @p options with sizeof and the library defaults. A NULL @p options is ignored.
 void sonare_meter_options_init(SonareMeterOptions* options);
 
-/// @brief Estimates meter over a caller-supplied beat series, without audio and
-///   without re-running analysis.
-/// @details beat_times and beat_strengths are parallel
-/// arrays of beat_count entries; beat_times must be non-decreasing.
-/// AnalysisResult beatObservations.onsetStrength is the intended strength
-/// source, being the windowed value the library's own downbeat pass scores;
-/// beats[].strength also works but is a single unwindowed envelope frame.
-/// Neither needs pre-scaling: the series is divided by its own maximum before
-/// scoring, so only the accent contrast within it is read.
-/// A series assembled by hand from an onset envelope -- one frame read at each
-/// beat time -- is neither of those, and it carries a sample-rate dependence
-/// neither of them has: a hop counted in samples frames a different amount of
-/// time at each rate, so one waveform sampled at 32000, 44100 and 48000 Hz has
-/// produced three different winning numerators off beat times identical to the
-/// sample. Widening the read to a window around the beat does not remove it.
-/// The result carries a grouping alongside the numerator: how the bar divides
-/// into accent groups of two and three beats, so a seven comes back as 3+2+2 or
-/// 2+2+3 rather than as a bare seven.
-/// Read "searched" before treating any field as a detection: a beat series too
-/// short to score any candidate reports a fixed fallback instead, whose
-/// confidence is 0 rather than a middling value a caller could mistake for a
-/// measurement.
-/// The name "confidence" covers two quantities: on "timeSignature" it is the
-/// margin over the runner-up, on a "candidates" entry the candidate's share of
-/// the summed support. They are not comparable.
-/// Emits the schema documented on meter_result_to_json. On any error *out_json
-/// is set to NULL, so a caller may check it instead of the return code.
-/// Free *out_json with sonare_free_string.
-SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
-                                       size_t beat_count, const SonareMeterOptions* options,
-                                       char** out_json);
+/// @brief Caller-supplied evidence for meter estimation.
+typedef struct {
+  uint32_t struct_size;               ///< Set by sonare_meter_beats_init.
+  const float* accent;                ///< One nonnegative accent per beat, required.
+  const uint8_t* has_attack;          ///< Optional zero-or-one flag per beat.
+  const float* low_frequency_energy;  ///< Optional energy per beat for masked-beat scoring.
+  const float* subdivision_accent;    ///< Optional accent per interval between beats.
+  size_t beat_count;                  ///< Length of accent and the two optional per-beat arrays.
+} SonareMeterBeats;
+
+/// @brief Initializes @p beats to an empty record with its size set. NULL is ignored.
+/// @details Initialization does not transfer ownership.
+void sonare_meter_beats_init(SonareMeterBeats* beats);
+
+/// @brief Estimates meter over beat observations without re-running audio analysis.
+/// @details Use the accent, hasAttack, lowFrequencyEnergy and subdivisionAccent streams from
+///   analysis JSON. A NULL has_attack treats every beat as attacked. A NULL low_frequency_energy
+///   skips masked-beat detection. A NULL subdivision_accent leaves subdivision unmeasured.
+///   When supplied for two or more beats, subdivision_accent contains beat_count - 1 entries.
+///   The JSON includes the grouping and a searched flag. For too few beats to score a candidate,
+///   searched is false and the fallback has zero confidence. The timeSignature confidence is the
+///   margin over the runner-up. Each candidate's confidence is its share of the summed support.
+/// @param options Required scoring options, initialized by sonare_meter_options_init.
+/// @param[out] out_json Receives JSON on success or NULL on error. Free with sonare_free_string.
+SonareError sonare_estimate_meter_json(const SonareMeterBeats* beats,
+                                       const SonareMeterOptions* options, char** out_json);
 
 /// @brief Releases a float buffer the library allocated; NULL is ignored.
 void sonare_free_floats(float* ptr);
@@ -525,6 +602,12 @@ const char* sonare_last_error_message(void);
 ///   sonare_last_* accessor, it records no error.
 /// @return The recorded SonareError, or SONARE_OK.
 SonareError sonare_last_error_code(void);
+
+/// @brief Returns the lower-camel-case reason token attached to the last error, or NULL.
+/// @details The reason is part of the thread-local last-error record and is cleared or replaced
+///          together with @ref sonare_last_error_code. The returned token has static storage.
+///          Like every sonare_last_* accessor, this records no error.
+const char* sonare_last_error_reason(void);
 
 /// @brief One entry of the structured diagnostic channel. Caller-allocated: fill
 ///        it with @ref sonare_diagnostic_init before passing it to
@@ -631,8 +714,10 @@ uint32_t sonare_engine_abi_version(void);
 
 /// @brief Builds a JSON document describing the capabilities of this build.
 /// @details The document contains the library version, project and engine ABI
-///   versions, platform, enabled feature families, available decode backends,
-///   SIMD mode, and reported hardware concurrency.
+///   versions, platform, enabled feature families, available decode and encode
+///   backends, SIMD mode, and reported hardware concurrency.
+///   Live-device support ships outside the core archive and is reported separately by
+///   @ref sonare_has_live_devices.
 /// @param[out] out_json Receives a NUL-terminated UTF-8 document the caller
 ///   releases with @ref sonare_free_string; set to NULL on failure.
 /// @return SONARE_OK, or an error code with the reason in the last error.

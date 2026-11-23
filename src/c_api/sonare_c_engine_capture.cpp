@@ -373,6 +373,7 @@ SonareError sonare_engine_set_graph(SonareEngine* engine, const SonareEngineGrap
     parameter_bindings.push_back(
         {binding.param_id, fixed_text(binding.node_id, sizeof(binding.node_id))});
   }
+  engine->engine.require_quiescent();
   if (!engine->engine.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(),
                                  spec->num_channels, std::move(parameter_bindings))) {
     return graph_swap_error(engine->engine.last_graph_swap_fault());

@@ -1,6 +1,7 @@
 #include "analysis/analysis_json.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include "util/constants.h"
 #include "util/json.h"
@@ -73,8 +74,10 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "downbeats[].strength",
       "downbeatPhase",
       "beatObservations",
-      "beatObservations.onsetStrength",
+      "beatObservations.accent",
+      "beatObservations.hasAttack",
       "beatObservations.lowFrequencyEnergy",
+      "beatObservations.subdivisionAccent",
       "beatObservations.chordChange",
       "beatLocalBpm",
       "chords",
@@ -207,9 +210,6 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   }
   root["downbeatPhase"] = Value(result.downbeat_phase);
 
-  // Beat-level evidence behind the downbeat and meter decisions. Each stream is
-  // beat-indexed, and an empty stream means the analysis could not produce it
-  // rather than that every beat scored zero.
   {
     const auto to_array = [](const std::vector<float>& values) {
       Array out;
@@ -219,10 +219,21 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
       }
       return out;
     };
+    const auto to_bool_array = [](const std::vector<std::uint8_t>& values) {
+      Array out;
+      out.reserve(values.size());
+      for (std::uint8_t value : values) {
+        out.push_back(Value(value != 0));
+      }
+      return out;
+    };
     Object observations;
-    observations["onsetStrength"] = Value(to_array(result.beat_observations.onset_strength));
+    observations["accent"] = Value(to_array(result.beat_observations.accent));
+    observations["hasAttack"] = Value(to_bool_array(result.beat_observations.has_attack));
     observations["lowFrequencyEnergy"] =
         Value(to_array(result.beat_observations.low_frequency_energy));
+    observations["subdivisionAccent"] =
+        Value(to_array(result.beat_observations.subdivision_accent));
     observations["chordChange"] = Value(to_array(result.beat_observations.chord_change));
     root["beatObservations"] = Value(std::move(observations));
 

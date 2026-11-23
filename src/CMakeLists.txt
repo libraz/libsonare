@@ -260,7 +260,6 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_part_rig.cpp
   c_api/project_tempo.cpp
   c_api/project_instruments.cpp
-  c_api/project_automation_validate.cpp
   c_api/sonare_c_transcribe.cpp
   c_api/sonare_c_assist.cpp
   c_api/project_soundfont.cpp

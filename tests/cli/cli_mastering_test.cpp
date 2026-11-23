@@ -811,6 +811,34 @@ TEST_CASE("CLI pair analysis takes a reference at its own rate", "[cli][masterin
   std::remove(reference.c_str());
 }
 
+TEST_CASE("CLI mastering pair analysis dispatches by channel count", "[cli][mastering]") {
+  constexpr int kSourceRate = 22050;
+  constexpr int kReferenceRate = 44100;
+  const std::string mono_source = unique_temp_path("_pair_mono_source.wav");
+  const std::string mono_reference = unique_temp_path("_pair_mono_reference.wav");
+  create_test_wav(mono_source, 1.0f, 440.0f, kSourceRate);
+  create_test_wav(mono_reference, 1.0f, 880.0f, kReferenceRate);
+  auto [mono_code, mono_output] =
+      exec_command(CLI + " mastering-pair-analyze " + mono_source + " --reference " +
+                   mono_reference + " --analysis match.referenceLoudness --json -q");
+  INFO(mono_output);
+  CHECK(mono_code == 0);
+  CHECK(sonare::util::json::parse_strict(mono_output)["source_lufs"].is_number());
+
+  const std::string stereo_short = unique_temp_path("_pair_stereo_short.wav");
+  create_test_stereo_wav(stereo_short, kSourceRate);
+  auto [mismatch_code, mismatch_output] =
+      exec_command(CLI + " mastering-pair-analyze " + mono_source + " --reference " + stereo_short +
+                   " --analysis match.referenceLoudness -q 2>&1");
+  CHECK(mismatch_code == 3);
+  CHECK_THAT(
+      mismatch_output,
+      ContainsSubstring("source and reference must have the same number of channels, got 1 and 2"));
+  std::remove(mono_source.c_str());
+  std::remove(mono_reference.c_str());
+  std::remove(stereo_short.c_str());
+}
+
 TEST_CASE("CLI mastering reads a chain config and --params as one list", "[cli][mastering]") {
   create_test_wav(TEST_WAV, 1.0f);
   const auto write_config = [](const std::string& params) {

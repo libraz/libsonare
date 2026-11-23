@@ -66,8 +66,6 @@ struct BpmCandidateHypothesis {
 ///          value. These are evidence rather than decision outputs, so callers
 ///          can score the same measurements the library used.
 struct BeatObservations {
-  /// @brief Beat-local onset-strength window, aggregated rather than sampled at one frame.
-  std::vector<float> onset_strength;
   /// @brief Beat-local low-frequency energy, the accent evidence a log-spectral
   ///        difference discards. Empty when analysis ran without audio.
   std::vector<float> low_frequency_energy;

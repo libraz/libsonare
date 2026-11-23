@@ -323,7 +323,6 @@ void BeatAnalyzer::track_beats() {
   BpmConfig bpm_config;
   bpm_config.bpm_min = config_.bpm_min;
   bpm_config.bpm_max = config_.bpm_max;
-  bpm_config.start_bpm = config_.start_bpm;
 
   BpmAnalyzer bpm_analyzer(onset_strength_, sr_, hop_length_, bpm_config);
   // The tracker needs a tempo; the prior stands in for it but is never reported.
@@ -586,7 +585,6 @@ void BeatAnalyzer::track_beats() {
     }
   }
 
-  onset_observations_ = onset_strength_observations(beats_, onset_strength_, sr_, hop_length_);
   // Estimate time signature; it seeds the downbeats at phase 0.
   estimate_time_signature();
 }

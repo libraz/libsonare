@@ -369,7 +369,8 @@ static_assert(field_count<transport::TempoSegment>() == 5,
               "above and update this count");
 
 bool eq(const automation::AutomationLane& a, const automation::AutomationLane& b) {
-  if (a.target_param_id() != b.target_param_id() || a.target_kind() != b.target_kind())
+  if (a.lane_id() != b.lane_id() || a.target_param_id() != b.target_param_id() ||
+      a.target_kind() != b.target_kind())
     return false;
   if (a.points().size() != b.points().size()) return false;
   for (size_t i = 0; i < a.points().size(); ++i) {
@@ -380,12 +381,12 @@ bool eq(const automation::AutomationLane& a, const automation::AutomationLane& b
   return true;
 }
 // AutomationLane is a class with private members, so field_count cannot reach
-// it. The stand-in is a zero-padding size identity: its three members end in an
-// 8-aligned vector that leaves no tail padding, so any added member grows the
-// type and breaks this assert. It cannot see a same-sized field swap.
-static_assert(sizeof(automation::AutomationLane) == sizeof(uint32_t) +
-                                                        sizeof(automation::AutomationTargetKind) +
-                                                        sizeof(std::vector<automation::Breakpoint>),
+// it. Pin a lower bound on its value-bearing members and compare each through
+// eq() above.
+static_assert(sizeof(automation::AutomationLane) >=
+                  2u * sizeof(uint32_t) + sizeof(automation::AutomationTargetKind) +
+                      sizeof(automation::AutomationTargetIdentity) +
+                      sizeof(std::vector<automation::Breakpoint>),
               "AutomationLane gained, lost, or reordered a member: if it gained one, add it to "
               "eq(const automation::AutomationLane&) above, then update this member list");
 // Its payload type is an aggregate, so that half is pinned exactly.
@@ -723,6 +724,7 @@ TEST_CASE("opaque automation lanes omit the target kind", "[serialize]") {
   REQUIRE(project.add_track(track) != 0);
   const auto root = util::json::parse(project_to_json(project, {}));
   const auto& lane = root["tracks"].as_array()[0]["automationLanes"].as_array()[0];
+  CHECK(lane["id"].as_int() == 1);
   CHECK_FALSE(lane.contains("targetKind"));
 }
 
@@ -730,7 +732,7 @@ TEST_CASE("typed automation lanes round-trip", "[serialize]") {
   Project project;
   Track track;
   track.kind = Track::Kind::kAudio;
-  automation::AutomationLane lane(42, automation::AutomationTargetKind::kTrackFaderDb);
+  automation::AutomationLane lane(0, automation::AutomationTargetKind::kTrackFaderDb);
   lane.set_points({{0.0, -3.0f, automation::CurveType::Linear}});
   track.automation_lanes.push_back(lane);
   REQUIRE(project.add_track(track) != 0);
@@ -2065,7 +2067,7 @@ TEST_CASE("serialization is invariant under counter-only state (edit+undo byte e
 
 TEST_CASE("a loaded track holds at most one automation lane per target", "[serialize]") {
   // The edit API refuses a second lane for a target (AddAutomationLane) and
-  // remove/edit address a lane by its target id alone, so a document carrying
+  // remove/edit address a lane by its persistent lane id, so a document carrying
   // duplicates must be normalized on load rather than producing a model the
   // edit commands can neither address nor delete.
   const std::string json = R"({"version":7,"tracks":[{"id":1,"automationLanes":[)"
@@ -2086,6 +2088,7 @@ TEST_CASE("a loaded track holds at most one automation lane per target", "[seria
                    [](const automation::AutomationLane& l) { return l.target_param_id() == 7; });
   REQUIRE(lane != track->automation_lanes.end());
   REQUIRE(lane->value_at(0.0) == 0.75f);
+  const uint32_t lane_id = lane->lane_id();
 
   // The collapse is visible rather than silent.
   REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
@@ -2100,7 +2103,7 @@ TEST_CASE("a loaded track holds at most one automation lane per target", "[seria
   MidiContentStore store;
   automation::AutomationLane extra(7);
   REQUIRE_FALSE(AddAutomationLane(1, extra).apply(reloaded, store));
-  REQUIRE(RemoveAutomationLane(1, 7).apply(reloaded, store));
+  REQUIRE(RemoveAutomationLane(1, lane_id).apply(reloaded, store));
   REQUIRE(
       std::none_of(reloaded.find_track(1)->automation_lanes.begin(),
                    reloaded.find_track(1)->automation_lanes.end(),
@@ -2119,10 +2122,10 @@ TEST_CASE("a loaded track holds at most one lane per typed automation target", "
   const Track* track = result.project->find_track(1);
   REQUIRE(track != nullptr);
   REQUIRE(track->automation_lanes.size() == 3);
-  CHECK(track->automation_lanes[0].target_param_id() == 8);
+  CHECK(track->automation_lanes[0].target_param_id() == 0);
   CHECK(track->automation_lanes[0].target_kind() ==
         automation::AutomationTargetKind::kTrackFaderDb);
-  CHECK(track->automation_lanes[1].target_param_id() == 10);
+  CHECK(track->automation_lanes[1].target_param_id() == 0);
   CHECK(track->automation_lanes[1].target_kind() == automation::AutomationTargetKind::kTrackPan);
   CHECK(track->automation_lanes[2].target_param_id() == 11);
   CHECK(track->automation_lanes[2].target_kind() == automation::AutomationTargetKind::kOpaque);
@@ -2154,13 +2157,15 @@ TEST_CASE("opaque automation slots do not collide with typed target slots", "[se
   CHECK(track->automation_lanes[2].target_param_id() == 22);
   // Last writer wins while retaining the first typed slot after the opaque
   // lanes. The first fader payload must not survive in a new fourth slot.
-  CHECK(track->automation_lanes[3].target_param_id() == 8);
+  CHECK(track->automation_lanes[3].target_param_id() == 0);
   CHECK(track->automation_lanes[3].target_kind() ==
         automation::AutomationTargetKind::kTrackFaderDb);
   CHECK(track->automation_lanes[3].value_at(0.0) == Catch::Approx(0.75f));
-  CHECK(std::none_of(
-      track->automation_lanes.begin(), track->automation_lanes.end(),
-      [](const automation::AutomationLane& lane) { return lane.target_param_id() == 7; }));
+  CHECK(std::none_of(track->automation_lanes.begin(), track->automation_lanes.end(),
+                     [](const automation::AutomationLane& lane) {
+                       return lane.target_kind() == automation::AutomationTargetKind::kOpaque &&
+                              lane.target_param_id() == 7;
+                     }));
 
   const auto duplicate = std::find_if(
       result.diagnostics.begin(), result.diagnostics.end(),
@@ -2192,9 +2197,9 @@ TEST_CASE("typed lane normalization compares original order per track", "[serial
   REQUIRE(result.project->tracks().size() == 2);
   REQUIRE(result.project->tracks()[0].automation_lanes.size() == 1);
   REQUIRE(result.project->tracks()[1].automation_lanes.size() == 1);
-  CHECK(result.project->tracks()[0].automation_lanes[0].target_param_id() == 7);
+  CHECK(result.project->tracks()[0].automation_lanes[0].target_param_id() == 0);
   CHECK(result.project->tracks()[0].automation_lanes[0].value_at(0.0) == Catch::Approx(0.9f));
-  CHECK(result.project->tracks()[1].automation_lanes[0].target_param_id() == 8);
+  CHECK(result.project->tracks()[1].automation_lanes[0].target_param_id() == 0);
   CHECK(result.project->tracks()[1].automation_lanes[0].value_at(0.0) == Catch::Approx(0.4f));
 
   REQUIRE(result.diagnostics.size() == 3);

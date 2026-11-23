@@ -164,6 +164,10 @@ SonareError sonare_engine_create(SonareEngine** out) {
   SONARE_C_CATCH
 }
 
+SonareEngine::~SonareEngine() noexcept {
+  if (auto* driver = engine.live_driver()) driver->stop();
+}
+
 void sonare_engine_destroy(SonareEngine* engine) { delete engine; }
 
 SonareError sonare_engine_prepare(SonareEngine* engine, int sample_rate, int max_block_size,
@@ -189,6 +193,7 @@ SonareError sonare_engine_prepare(SonareEngine* engine, int sample_rate, int max
     return err;
   }
   SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.prepare(static_cast<double>(sample_rate), max_block_size, command_capacity,
                          telemetry_capacity, max_channels);
   return SONARE_OK;
@@ -261,29 +266,41 @@ SonareError sonare_engine_reset_master_loudness_meter(SonareEngine* engine, int6
 SonareError sonare_engine_settle_parameters(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.settle_parameters();
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_flush_control_commands(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.flush_control_commands();
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_settle_insert_parameters(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.settle_insert_parameters();
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_apply_commands_due_now_preserving_future(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.apply_commands_due_now_preserving_future();
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_tempo(SonareEngine* engine, double bpm) {
@@ -296,6 +313,7 @@ SonareError sonare_engine_set_tempo(SonareEngine* engine, double bpm) {
     return err;
   }
   SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.set_tempo(bpm);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -313,6 +331,7 @@ SonareError sonare_engine_set_time_signature(SonareEngine* engine, int numerator
     return err;
   }
   SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.set_time_signature(numerator, denominator);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -345,6 +364,7 @@ SonareError sonare_engine_set_tempo_segments(SonareEngine* engine,
     seg.end_bpm = in.end_bpm;
     out.push_back(seg);
   }
+  engine->engine.require_quiescent();
   engine->engine.set_tempo_segments(std::move(out));
   return SONARE_OK;
   SONARE_C_CATCH
@@ -375,6 +395,7 @@ SonareError sonare_engine_set_time_signature_segments(
     seg.time_sig.denominator = in.denominator;
     out.push_back(seg);
   }
+  engine->engine.require_quiescent();
   engine->engine.set_time_signature_segments(std::move(out));
   return SONARE_OK;
   SONARE_C_CATCH
@@ -621,6 +642,7 @@ SonareError sonare_engine_set_markers(SonareEngine* engine, const SonareEngineMa
   // (a deque, so the move preserves element addresses). Replacing
   // `engine->marker_strings` first would free the old storage while its snapshot
   // is still the published one, dangling any audio-thread reader's `.name`.
+  engine->engine.require_quiescent();
   engine->engine.set_markers(std::move(prepared));
   engine->marker_strings = std::move(staged_strings);
   return SONARE_OK;
@@ -725,8 +747,11 @@ SonareError sonare_engine_set_metronome(SonareEngine* engine,
       err != SONARE_OK) {
     return err;
   }
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.set_metronome_config(metronome_from_c(*config));
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_metronome(SonareEngine* engine, SonareEngineMetronomeConfig* out) {
@@ -863,6 +888,8 @@ SonareError sonare_engine_prime_offline_parameters(SonareEngine* engine, int num
                                                    int block_size) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   if (const SonareError err = run_validation([&] {
         util::check::integer_within(block_size, kEngineRenderBlockSizeDomain, "block_size");
       });
@@ -881,7 +908,6 @@ SonareError sonare_engine_prime_offline_parameters(SonareEngine* engine, int num
       err != SONARE_OK) {
     return err;
   }
-  SONARE_C_TRY
   engine->engine.prime_offline_parameters(num_channels, block_size);
   return SONARE_OK;
   SONARE_C_CATCH

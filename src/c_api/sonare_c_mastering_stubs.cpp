@@ -204,6 +204,18 @@ SonareError sonare_mastering_analyze_pair(const char* analysis, const float* sou
                                 param_count);
 }
 
+SonareError sonare_mastering_analyze_pair_stereo(
+    const char* analysis, const float* source_left, const float* source_right, size_t source_length,
+    const float* reference_left, const float* reference_right, size_t reference_length,
+    int reference_sample_rate, int sample_rate, const SonareMasteringParam* params,
+    size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  return refuse_not_compiled_in(Feature::kMastering, analysis, source_left, source_right,
+                                source_length, reference_left, reference_right, reference_length,
+                                reference_sample_rate, sample_rate, params, param_count);
+}
+
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,

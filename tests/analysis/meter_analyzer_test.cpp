@@ -56,26 +56,26 @@ BeatAccents make_accents(const std::vector<Beat>& beats, float subdivision_ratio
   return accents;
 }
 
-/// @brief A beat series in the two parallel arrays estimate_meter_from_beats takes.
-struct BeatSeries {
-  std::vector<float> times;
-  std::vector<float> strengths;
-};
-
-BeatSeries make_beat_series(int numerator, int measures) {
-  BeatSeries series;
-  for (const auto& beat : make_beats(numerator, measures)) {
-    series.times.push_back(beat.time);
-    series.strengths.push_back(beat.strength);
+MeterBeats make_meter_beats(int numerator, int measures) {
+  MeterBeats observations;
+  for (int i = 0; i < numerator * measures; ++i) {
+    const int position = i % numerator;
+    float accent = 0.35f;
+    if (position == 0) {
+      accent = 1.0f;
+    } else if ((numerator == 4 && position == 2) || (numerator == 6 && position == 3)) {
+      accent = 0.65f;
+    }
+    observations.accent.push_back(accent);
   }
-  return series;
+  return observations;
 }
 
 /// @brief A beat series whose bars divide exactly as @p grouping says.
 /// @details The downbeat is the loudest beat, each following group starts on a
 ///          middling one, and the rest are quiet, which is the accent shape an
 ///          additive meter is notated for.
-BeatSeries make_grouped_series(const std::vector<int>& grouping, int measures) {
+MeterBeats make_grouped_observations(const std::vector<int>& grouping, int measures) {
   std::vector<int> accent_positions;
   int position = 0;
   for (size_t i = 0; i + 1 < grouping.size(); ++i) {
@@ -84,7 +84,7 @@ BeatSeries make_grouped_series(const std::vector<int>& grouping, int measures) {
   }
   const int numerator = std::accumulate(grouping.begin(), grouping.end(), 0);
 
-  BeatSeries series;
+  MeterBeats observations;
   for (int i = 0; i < numerator * measures; ++i) {
     const int pos = i % numerator;
     float strength = 0.35f;
@@ -94,10 +94,9 @@ BeatSeries make_grouped_series(const std::vector<int>& grouping, int measures) {
                accent_positions.end()) {
       strength = 0.65f;
     }
-    series.times.push_back(static_cast<float>(i) * 0.5f);
-    series.strengths.push_back(strength);
+    observations.accent.push_back(strength);
   }
-  return series;
+  return observations;
 }
 
 }  // namespace
@@ -400,129 +399,91 @@ TEST_CASE("validate_meter_config rejects a config the estimator cannot answer",
   rejects([](MeterConfig& c) { c.compound_subdivision_threshold = -0.5f; });
 }
 
-TEST_CASE("estimate_meter_from_beats applies the config guards before scoring",
+TEST_CASE("estimate_meter_from_observations applies config guards before scoring",
           "[meter_analyzer]") {
-  const BeatSeries series = make_beat_series(4, 8);
+  const MeterBeats observations = make_meter_beats(4, 8);
 
   MeterConfig empty_candidates;
   empty_candidates.candidate_numerators.clear();
-  REQUIRE_THROWS_AS(estimate_meter_from_beats(series.times, series.strengths, empty_candidates),
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(observations, empty_candidates),
                     SonareException);
 
   MeterConfig odd_denominator;
   odd_denominator.denominator = 3;
-  REQUIRE_THROWS_AS(estimate_meter_from_beats(series.times, series.strengths, odd_denominator),
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(observations, odd_denominator),
                     SonareException);
 
   MeterConfig negative_weight;
   negative_weight.measure_weight = -1.0f;
-  REQUIRE_THROWS_AS(estimate_meter_from_beats(series.times, series.strengths, negative_weight),
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(observations, negative_weight),
                     SonareException);
 }
 
-TEST_CASE("estimate_meter_from_beats rejects an unusable beat series", "[meter_analyzer]") {
-  const BeatSeries series = make_beat_series(4, 8);
+TEST_CASE("estimate_meter_from_observations validates evidence shape and values",
+          "[meter_analyzer]") {
+  MeterConfig config;
+  MeterBeats observations = make_meter_beats(4, 8);
+  REQUIRE_NOTHROW(estimate_meter_from_observations(observations, config));
 
-  // Mismatched lengths mean the caller paired the wrong two arrays; scoring the
-  // shorter prefix would answer a question nobody asked.
-  // Every refusal is the bare structured form, naming the core member and no function.
-  const std::vector<float> short_strengths(series.strengths.begin(), series.strengths.end() - 1);
-  REQUIRE_THROWS_WITH(estimate_meter_from_beats(series.times, short_strengths),
-                      "beat_strengths must have the same length as beat_times");
-  const std::vector<float> short_times(series.times.begin(), series.times.end() - 1);
-  REQUIRE_THROWS_WITH(estimate_meter_from_beats(short_times, series.strengths),
-                      "beat_strengths must have the same length as beat_times");
+  MeterBeats no_accents;
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(no_accents, config), SonareException);
 
-  const auto rejects_times = [&series](void (*mutate)(std::vector<float>&), const char* text) {
-    std::vector<float> times = series.times;
-    mutate(times);
-    REQUIRE_THROWS_WITH(estimate_meter_from_beats(times, series.strengths), text);
-  };
-  const auto rejects_strengths = [&series](void (*mutate)(std::vector<float>&)) {
-    std::vector<float> strengths = series.strengths;
-    mutate(strengths);
-    REQUIRE_THROWS_WITH(estimate_meter_from_beats(series.times, strengths),
-                        "beat_strengths must hold only finite values");
-  };
+  MeterBeats wrong_attacks = observations;
+  wrong_attacks.has_attack = {1};
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(wrong_attacks, config), SonareException);
 
-  constexpr const char* kTimeDomain = "beat_times must hold only finite values of at least 0";
-  rejects_times([](std::vector<float>& t) { t[5] = t[4] - 0.25f; },
-                "beat_times must be non-decreasing");
-  rejects_times([](std::vector<float>& t) { t[3] = -0.5f; }, kTimeDomain);
-  rejects_times([](std::vector<float>& t) { t[3] = std::nanf(""); }, kTimeDomain);
-  rejects_times([](std::vector<float>& t) { t[3] = std::numeric_limits<float>::infinity(); },
-                kTimeDomain);
-  rejects_strengths([](std::vector<float>& s) { s[2] = std::nanf(""); });
-  rejects_strengths([](std::vector<float>& s) { s[2] = std::numeric_limits<float>::infinity(); });
-  rejects_strengths([](std::vector<float>& s) { s[2] = -std::numeric_limits<float>::infinity(); });
+  MeterBeats wrong_subdivision = observations;
+  wrong_subdivision.subdivision_accent.assign(observations.accent.size(), 0.0f);
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(wrong_subdivision, config), SonareException);
 
-  // The guards stop where the contract does: a repeated beat time is still
-  // non-decreasing, and a negative strength is still finite.
-  std::vector<float> repeated = series.times;
-  repeated[5] = repeated[4];
-  REQUIRE_NOTHROW(estimate_meter_from_beats(repeated, series.strengths));
-  std::vector<float> negative = series.strengths;
-  negative[2] = -1.0f;
-  REQUIRE_NOTHROW(estimate_meter_from_beats(series.times, negative));
+  MeterBeats negative_accent = observations;
+  negative_accent.accent[2] = -1.0f;
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(negative_accent, config), SonareException);
 
-  // No beats is not a short search but nothing to search, so it is rejected
-  // rather than answered with the fixed low-confidence default.
-  try {
-    (void)estimate_meter_from_beats({}, {});
-    FAIL("expected a refusal");
-  } catch (const SonareParameterRefusal& e) {
-    REQUIRE(e.code() == ErrorCode::InvalidParameter);
-    REQUIRE(e.subject() == "beat_times");
-    REQUIRE(std::string(e.what()) == "beat_times must not be empty");
-  }
+  MeterBeats non_finite_energy = observations;
+  non_finite_energy.low_frequency_energy.assign(observations.accent.size(),
+                                                std::numeric_limits<float>::infinity());
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(non_finite_energy, config), SonareException);
+
+  MeterBeats invalid_flag = observations;
+  invalid_flag.has_attack.assign(observations.accent.size(), 1);
+  invalid_flag.has_attack.front() = 2;
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(invalid_flag, config), SonareException);
 }
 
-TEST_CASE("estimate_meter_from_beats draws the line at empty, not at short", "[meter_analyzer]") {
-  const BeatSeries series = make_beat_series(4, 8);
+TEST_CASE("estimate_meter_from_observations distinguishes empty from short evidence",
+          "[meter_analyzer]") {
+  MeterConfig config;
+  MeterBeats empty;
+  REQUIRE_THROWS_AS(estimate_meter_from_observations(empty, config), SonareException);
 
-  // Nothing to score is rejected: answering it would report a 4/4 the caller
-  // supplied no evidence for, the same objection validate_meter_config makes to
-  // an empty candidate list and through the same code path.
-  const std::vector<float> empty;
-  REQUIRE_THROWS_AS(estimate_meter_from_beats(empty, empty), SonareException);
-  REQUIRE_THROWS_AS(estimate_meter_from_beats({}, {}), SonareException);
-
-  // One beat is a series, so it is answered — with the low-confidence default
-  // rather than a search result. Without this the rejection above would be
-  // equally consistent with a guard that swallowed every short series, which is
-  // not where the line is drawn.
-  const std::vector<float> one_time(series.times.begin(), series.times.begin() + 1);
-  const std::vector<float> one_strength(series.strengths.begin(), series.strengths.begin() + 1);
-  MeterResult one;
-  REQUIRE_NOTHROW(one = estimate_meter_from_beats(one_time, one_strength));
+  MeterBeats one_beat;
+  one_beat.accent = {1.0f};
+  const MeterResult one = estimate_meter_from_observations(one_beat, config);
+  REQUIRE_FALSE(one.searched);
   REQUIRE(one.time_signature.numerator == 4);
   REQUIRE(one.time_signature.denominator == 4);
   REQUIRE(one.downbeat_phase == 0);
   REQUIRE(one.candidates.size() == 1);
   REQUIRE(one.time_signature.confidence == 0.0f);
 
-  // A full series scores higher, so the value above is the short-series report
-  // and not the estimator's ceiling.
-  const MeterResult searched = estimate_meter_from_beats(series.times, series.strengths);
+  const MeterBeats full = make_meter_beats(4, 8);
+  const MeterResult searched = estimate_meter_from_observations(full, config);
   REQUIRE(searched.time_signature.confidence > one.time_signature.confidence);
 }
 
-TEST_CASE("estimate_meter_from_beats reports the default for a series below the search floor",
+TEST_CASE("estimate_meter_from_observations reports the fallback below the search floor",
           "[meter_analyzer]") {
-  // Fewer than eight beats gives the comb nothing to score, so the answer is
-  // the documented default rather than a detection. What separates the two is
-  // the searched flag, which says so outright instead of leaving a caller to
-  // recognize the fallback by its confidence.
-  const BeatSeries full = make_beat_series(4, 8);
-  const MeterResult searched = estimate_meter_from_beats(full.times, full.strengths);
+  MeterConfig config;
+  const MeterBeats full = make_meter_beats(4, 8);
+  const MeterResult searched = estimate_meter_from_observations(full, config);
   REQUIRE(searched.searched);
   REQUIRE(searched.time_signature.confidence > 0.5f);
 
   for (int count = 1; count < 8; ++count) {
-    const auto end = static_cast<std::ptrdiff_t>(count);
-    const std::vector<float> times(full.times.begin(), full.times.begin() + end);
-    const std::vector<float> strengths(full.strengths.begin(), full.strengths.begin() + end);
-    const MeterResult result = estimate_meter_from_beats(times, strengths);
+    MeterBeats short_evidence;
+    short_evidence.accent.assign(full.accent.begin(), full.accent.begin() + count);
+    const MeterResult result = estimate_meter_from_observations(short_evidence, config);
 
     CAPTURE(count, result.time_signature.numerator, result.time_signature.confidence);
     REQUIRE_FALSE(result.searched);
@@ -530,79 +491,65 @@ TEST_CASE("estimate_meter_from_beats reports the default for a series below the 
     REQUIRE(result.time_signature.denominator == 4);
     REQUIRE(result.downbeat_phase == 0);
     REQUIRE(result.candidates.size() == 1);
-    // Every score belongs to the fallback rather than to a candidate, so none
-    // of them ranks anything.
     REQUIRE(std::all_of(result.candidate_scores.begin(), result.candidate_scores.end(),
                         [](float score) { return score == 0.0f; }));
-    // The short-span answer has to be distinguishable from a real detection.
-    REQUIRE(result.time_signature.confidence < searched.time_signature.confidence);
-    // Zero rather than any middling value: a caller who reads the confidence
-    // without the flag lands on "no idea" instead of on a weak detection, and
-    // the single candidate carries the same zero as the scores beside it.
     REQUIRE(result.time_signature.confidence == 0.0f);
     REQUIRE(result.candidates.front().confidence == 0.0f);
   }
 }
 
-TEST_CASE("estimate_meter_from_beats cannot resolve a compound meter from accents alone",
+TEST_CASE("estimate_meter_from_observations reads compound evidence only when measured",
           "[meter_analyzer]") {
-  // Whether a beat divides into three is answered from energy between the
-  // beats, which a per-beat accent series does not carry. A six accented 3+3
-  // therefore keeps the beat unit the caller asked for and says how its bar
-  // divides through the grouping, rather than being promoted to a 6/8 that
-  // nothing measured.
-  std::vector<float> times;
-  std::vector<float> strengths;
-  for (int bar = 0; bar < 16; ++bar) {
-    for (int position = 0; position < 6; ++position) {
-      times.push_back(0.5f * static_cast<float>(bar * 6 + position));
-      strengths.push_back(position == 0 ? 1.0f : (position == 3 ? 0.7f : 0.3f));
-    }
-  }
-
   MeterConfig config;
   config.candidate_numerators = {3, 4, 6};
-  const MeterResult result = estimate_meter_from_beats(times, strengths, config);
+  MeterBeats observations = make_grouped_observations({3, 3}, 16);
 
-  REQUIRE(result.searched);
-  REQUIRE(result.time_signature.numerator == 6);
-  REQUIRE(result.time_signature.denominator == 4);
-  REQUIRE(result.grouping == std::vector<int>{3, 3});
-  // Every listed six agrees with the primary result about the beat unit.
-  for (const TimeSignature& candidate : result.candidates) {
+  const MeterResult absent = estimate_meter_from_observations(observations, config);
+  REQUIRE(absent.searched);
+  REQUIRE(absent.time_signature.numerator == 6);
+  REQUIRE(absent.time_signature.denominator == 4);
+  REQUIRE(absent.grouping == std::vector<int>{3, 3});
+  REQUIRE_FALSE(absent.compound_score.has_value());
+  for (const TimeSignature& candidate : absent.candidates) {
     CAPTURE(candidate.numerator, candidate.denominator);
     if (candidate.numerator == 6) REQUIRE(candidate.denominator == 4);
   }
 
-  // A caller who asks for eighths gets eighths, and still gets the grouping
-  // rather than an inferred compound reading.
   MeterConfig eighths = config;
   eighths.denominator = 8;
-  const MeterResult in_eighths = estimate_meter_from_beats(times, strengths, eighths);
+  const MeterResult in_eighths = estimate_meter_from_observations(observations, eighths);
   REQUIRE(in_eighths.time_signature.numerator == 6);
   REQUIRE(in_eighths.time_signature.denominator == 8);
   REQUIRE(in_eighths.grouping == std::vector<int>{3, 3});
 
-  // A threshold of zero would make an unmeasured subdivision compare as
-  // satisfied against a score that is zero because nothing was measured.
   MeterConfig permissive = config;
   permissive.compound_subdivision_threshold = 0.0f;
-  const MeterResult permissive_result = estimate_meter_from_beats(times, strengths, permissive);
-  REQUIRE(permissive_result.time_signature.denominator == 4);
+  const MeterResult without_subdivisions =
+      estimate_meter_from_observations(observations, permissive);
+  REQUIRE(without_subdivisions.time_signature.denominator == 4);
+  REQUIRE_FALSE(without_subdivisions.compound_score.has_value());
+
+  observations.subdivision_accent.assign(observations.accent.size() - 1, 0.0f);
+  const MeterResult measured_zero = estimate_meter_from_observations(observations, config);
+  REQUIRE(measured_zero.time_signature.denominator == 4);
+  REQUIRE(measured_zero.compound_score.has_value());
+  REQUIRE(*measured_zero.compound_score == 0.0f);
+
+  std::fill(observations.subdivision_accent.begin(), observations.subdivision_accent.end(), 0.8f);
+  const MeterResult measured = estimate_meter_from_observations(observations, config);
+  REQUIRE(measured.time_signature.numerator == 6);
+  REQUIRE(measured.time_signature.denominator == 8);
+  REQUIRE(measured.compound_score.has_value());
+  REQUIRE(*measured.compound_score > 0.5f);
 }
 
-TEST_CASE("estimate_meter_from_beats scores are not comparable across span lengths",
-          "[meter_analyzer]") {
-  // The documented reason a segmentation search cannot rank spans by raw score:
-  // evidence for a repeating accent accumulates with the number of beats
-  // carrying it, so the same meter over more beats scores higher. Pinning the
-  // growth keeps the docs honest about what the number is.
+TEST_CASE("meter scores grow with the length of the evidence span", "[meter_analyzer]") {
   MeterConfig config;
   config.candidate_numerators = {3, 4, 6};
 
   const auto top_score = [&config](int bars) {
-    const BeatSeries series = make_beat_series(4, bars);
-    const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
+    const MeterBeats observations = make_meter_beats(4, bars);
+    const MeterResult result = estimate_meter_from_observations(observations, config);
     REQUIRE(result.searched);
     REQUIRE(result.time_signature.numerator == 4);
     return *std::max_element(result.candidate_scores.begin(), result.candidate_scores.end());
@@ -611,30 +558,25 @@ TEST_CASE("estimate_meter_from_beats scores are not comparable across span lengt
   const float short_span = top_score(4);
   const float long_span = top_score(16);
   CAPTURE(short_span, long_span);
-  // Four times the beats, so about twice the score: same meter, same accents,
-  // a score that ranks by length as much as by meter.
   REQUIRE(long_span > short_span * 1.5f);
   REQUIRE(long_span < short_span * 2.5f);
 }
 
-TEST_CASE("estimate_meter_from_beats detects 4/4 from a caller-supplied series",
-          "[meter_analyzer]") {
-  const BeatSeries series = make_beat_series(4, 8);
-  const MeterResult result = estimate_meter_from_beats(series.times, series.strengths);
+TEST_CASE("estimate_meter_from_observations detects 4/4 from accents", "[meter_analyzer]") {
+  const MeterBeats observations = make_meter_beats(4, 8);
+  const MeterConfig config;
+  const MeterResult result = estimate_meter_from_observations(observations, config);
 
   REQUIRE(result.time_signature.numerator == 4);
   REQUIRE(result.time_signature.denominator == 4);
   REQUIRE(result.time_signature.confidence > 0.5f);
   REQUIRE(result.downbeat_phase == 0);
-  REQUIRE(result.candidate_scores.size() == MeterConfig().candidate_numerators.size());
+  REQUIRE(result.candidate_scores.size() == config.candidate_numerators.size());
   REQUIRE_FALSE(result.candidates.empty());
   REQUIRE(result.candidates.front().numerator == 4);
   REQUIRE(result.candidates.front().denominator == 4);
 
-  // This entry point differs from estimate_meter only in how the beats are
-  // packed, and the frame index it synthesizes goes unread, so the two results
-  // must agree exactly.
-  const MeterResult direct = estimate_meter(make_beats(4, 8));
+  const MeterResult direct = estimate_meter(make_beats(4, 8), config);
   REQUIRE(result.time_signature.numerator == direct.time_signature.numerator);
   REQUIRE(result.time_signature.denominator == direct.time_signature.denominator);
   REQUIRE(result.time_signature.confidence == direct.time_signature.confidence);
@@ -643,27 +585,15 @@ TEST_CASE("estimate_meter_from_beats detects 4/4 from a caller-supplied series",
   REQUIRE(result.candidates.size() == direct.candidates.size());
 }
 
-TEST_CASE("estimate_meter_from_beats reads accent contrast, not absolute level",
-          "[meter_analyzer]") {
-  const BeatSeries unit = make_beat_series(4, 8);
-
-  // The stream this entry point documents as its input --
-  // AnalysisResult::beat_observations.onset_strength -- is a windowed aggregate
-  // of the onset envelope in the envelope's own units, so every value in it
-  // routinely exceeds 1 on ordinary material. Scoring must divide the series by
-  // its own maximum; clamping it instead flattens every beat to the same value
-  // and leaves the candidates tied, which reads as a detection of whichever one
-  // was listed first.
-  BeatSeries scaled = unit;
-  for (float& strength : scaled.strengths) {
-    strength *= 20.0f;
-  }
+TEST_CASE("meter scores depend on accent contrast rather than absolute level", "[meter_analyzer]") {
+  const MeterBeats unit = make_meter_beats(4, 8);
+  MeterBeats scaled = unit;
+  for (float& accent : scaled.accent) accent *= 20.0f;
 
   MeterConfig config;
   config.candidate_numerators = {3, 4, 5, 6, 7};
-  const MeterResult unit_result = estimate_meter_from_beats(unit.times, unit.strengths, config);
-  const MeterResult scaled_result =
-      estimate_meter_from_beats(scaled.times, scaled.strengths, config);
+  const MeterResult unit_result = estimate_meter_from_observations(unit, config);
+  const MeterResult scaled_result = estimate_meter_from_observations(scaled, config);
 
   REQUIRE(scaled_result.time_signature.numerator == 4);
   REQUIRE(scaled_result.time_signature.numerator == unit_result.time_signature.numerator);
@@ -672,37 +602,22 @@ TEST_CASE("estimate_meter_from_beats reads accent contrast, not absolute level",
   REQUIRE(scaled_result.downbeat_phase == unit_result.downbeat_phase);
   REQUIRE(scaled_result.candidate_scores == unit_result.candidate_scores);
 
-  // A tie across every candidate is what saturation produces, so name it: the
-  // winning candidate has to stand above the rest on its own score.
   const auto& scores = scaled_result.candidate_scores;
   const size_t best = static_cast<size_t>(
       std::distance(scores.begin(), std::max_element(scores.begin(), scores.end())));
   REQUIRE(config.candidate_numerators[best] == 4);
   for (size_t i = 0; i < scores.size(); ++i) {
-    if (i != best) {
-      REQUIRE(scores[i] < scores[best]);
-    }
+    if (i != best) REQUIRE(scores[i] < scores[best]);
   }
 }
 
-TEST_CASE("estimate_meter_from_beats does not favour a wide numerator on unmetred beats",
-          "[meter_analyzer]") {
-  // A candidate keeps the best of its own phases, so a wide numerator has more
-  // phases to win that maximum from noise and fewer beats on each downbeat to
-  // average it over. Left uncorrected both push the same way, and on beats
-  // carrying no meter at all the widest candidate wins several times as often as
-  // the narrowest -- which makes a wide candidate list unusable on material
-  // whose accents are only mildly contrasted, as a real onset stream's are.
-  // Scoring unmetred series is the direct measurement of that, so it is what
-  // this asserts. The series are deterministic, so the counts below are fixed.
+TEST_CASE("meter does not favour a wide numerator on unaccented patterns", "[meter_analyzer]") {
   const std::vector<int> numerators = {3, 4, 5, 7, 9, 11, 13};
   MeterConfig config;
   config.candidate_numerators = numerators;
 
   std::map<int, int> wins;
-  for (int numerator : numerators) {
-    wins[numerator] = 0;
-  }
+  for (int numerator : numerators) wins[numerator] = 0;
 
   constexpr int kTrials = 200;
   constexpr int kBeats = 32;
@@ -713,13 +628,10 @@ TEST_CASE("estimate_meter_from_beats does not favour a wide numerator on unmetre
   };
 
   for (int trial = 0; trial < kTrials; ++trial) {
-    std::vector<float> times;
-    std::vector<float> strengths;
-    for (int beat = 0; beat < kBeats; ++beat) {
-      times.push_back(static_cast<float>(beat) * 0.5f);
-      strengths.push_back(next_unit());
-    }
-    ++wins[estimate_meter_from_beats(times, strengths, config).time_signature.numerator];
+    MeterBeats observations;
+    observations.accent.reserve(kBeats);
+    for (int beat = 0; beat < kBeats; ++beat) observations.accent.push_back(next_unit());
+    ++wins[estimate_meter_from_observations(observations, config).time_signature.numerator];
   }
 
   const auto extremes = std::minmax_element(
@@ -728,35 +640,26 @@ TEST_CASE("estimate_meter_from_beats does not favour a wide numerator on unmetre
         return lhs.second < rhs.second;
       });
   CAPTURE(wins[3], wins[4], wins[5], wins[7], wins[9], wins[11], wins[13]);
-
-  // An even split is 200 / 7 ~= 29 each. The bound is loose enough that ordinary
-  // sampling spread cannot trip it and tight enough that the bias it guards
-  // against -- which took more than half the trials for the widest candidate --
-  // cannot pass.
   REQUIRE(extremes.second->second <= kTrials / 2);
   REQUIRE(wins[13] * 3 >= wins[3]);
   REQUIRE(wins[3] * 3 >= wins[13]);
 }
 
-TEST_CASE("estimate_meter_from_beats reports an odd meter only when it is a candidate",
+TEST_CASE("estimate_meter_from_observations reports odd numerators only when requested",
           "[meter_analyzer]") {
   for (int numerator : {5, 7}) {
-    const BeatSeries series = make_beat_series(numerator, 5);
-
+    const MeterBeats observations = make_meter_beats(numerator, 5);
     MeterConfig widened;
     widened.candidate_numerators = {3, 4, 5, 6, 7};
-    const MeterResult widened_result =
-        estimate_meter_from_beats(series.times, series.strengths, widened);
+    const MeterResult widened_result = estimate_meter_from_observations(observations, widened);
 
     CAPTURE(numerator, widened_result.candidate_scores);
     REQUIRE(widened_result.time_signature.numerator == numerator);
     REQUIRE(widened_result.time_signature.denominator == 4);
     REQUIRE(widened_result.time_signature.confidence > 0.5f);
 
-    // The same series under the default candidate set cannot reach that
-    // numerator, so the detection above came from the config rather than from
-    // the accent pattern alone.
-    const MeterResult default_result = estimate_meter_from_beats(series.times, series.strengths);
+    const MeterConfig defaults;
+    const MeterResult default_result = estimate_meter_from_observations(observations, defaults);
     const int default_numerator = default_result.time_signature.numerator;
     CAPTURE(default_numerator);
     REQUIRE(default_numerator != numerator);
@@ -764,45 +667,37 @@ TEST_CASE("estimate_meter_from_beats reports an odd meter only when it is a cand
   }
 }
 
-TEST_CASE("estimate_meter_from_beats reports the requested beat unit", "[meter_analyzer]") {
-  // A 4-beat accent pattern never reaches the compound branch, the one place
-  // the estimator overrides the requested unit.
-  const BeatSeries series = make_beat_series(4, 8);
-
+TEST_CASE("estimate_meter_from_observations reports the requested beat unit", "[meter_analyzer]") {
+  const MeterBeats observations = make_meter_beats(4, 8);
   MeterConfig eighth;
   eighth.denominator = 8;
-  const MeterResult eighth_result =
-      estimate_meter_from_beats(series.times, series.strengths, eighth);
-  REQUIRE(eighth_result.time_signature.numerator == 4);
-  REQUIRE(eighth_result.time_signature.denominator == 8);
-  for (const auto& candidate : eighth_result.candidates) {
+  const MeterResult result = estimate_meter_from_observations(observations, eighth);
+  REQUIRE(result.time_signature.numerator == 4);
+  REQUIRE(result.time_signature.denominator == 8);
+  for (const TimeSignature& candidate : result.candidates) {
     CAPTURE(candidate.numerator, candidate.denominator);
     REQUIRE(candidate.denominator == 8);
   }
 }
 
-TEST_CASE("estimate_meter_from_beats keeps the downbeat phase inside the numerator",
+TEST_CASE("estimate_meter_from_observations keeps the downbeat phase in range",
           "[meter_analyzer]") {
   std::vector<MeterConfig> configs(2);
   configs[1].candidate_numerators = {3, 4, 5, 6, 7};
 
   bool saw_non_zero_phase = false;
   for (int numerator : {3, 4, 5, 6, 7}) {
-    const BeatSeries base = make_beat_series(numerator, 6);
-    const size_t count = base.strengths.size();
+    const MeterBeats base = make_meter_beats(numerator, 6);
     for (int shift = 0; shift < numerator; ++shift) {
-      // Rotating the accents moves the true measure start off beat 0, so the
-      // best-scoring phase is non-zero for at least some of these.
-      BeatSeries rotated;
-      rotated.times = base.times;
-      for (size_t i = 0; i < count; ++i) {
-        rotated.strengths.push_back(
-            base.strengths[(i + count - static_cast<size_t>(shift)) % count]);
+      MeterBeats rotated;
+      rotated.accent.reserve(base.accent.size());
+      for (size_t i = 0; i < base.accent.size(); ++i) {
+        rotated.accent.push_back(base.accent[(i + base.accent.size() - static_cast<size_t>(shift)) %
+                                             base.accent.size()]);
       }
 
       for (const MeterConfig& config : configs) {
-        const MeterResult result =
-            estimate_meter_from_beats(rotated.times, rotated.strengths, config);
+        const MeterResult result = estimate_meter_from_observations(rotated, config);
         CAPTURE(numerator, shift, config.candidate_numerators, result.time_signature.numerator,
                 result.downbeat_phase);
         REQUIRE(result.downbeat_phase >= 0);
@@ -811,26 +706,18 @@ TEST_CASE("estimate_meter_from_beats keeps the downbeat phase inside the numerat
       }
     }
   }
-
-  // Without a non-zero phase somewhere the range check above would hold for a
-  // constant-zero implementation.
   REQUIRE(saw_non_zero_phase);
 }
 
-TEST_CASE("estimate_meter_from_beats reports how the bar divides", "[meter_analyzer]") {
-  // Two sevens carrying the same numerator and the same number of accents, laid
-  // out differently. Reporting the numerator alone cannot tell them apart, which
-  // is the whole point of the grouping.
+TEST_CASE("estimate_meter_from_observations reports the accent grouping", "[meter_analyzer]") {
   MeterConfig config;
   config.candidate_numerators = {3, 4, 5, 6, 7, 9, 11, 13};
-
   const std::vector<std::vector<int>> layouts = {
       {3, 2, 2}, {2, 3, 2}, {2, 2, 3}, {3, 2}, {2, 3}, {2, 2, 2, 3}, {3, 3, 3, 2, 2},
   };
   for (const std::vector<int>& grouping : layouts) {
-    const BeatSeries series = make_grouped_series(grouping, 12);
-    const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
-
+    const MeterBeats observations = make_grouped_observations(grouping, 12);
+    const MeterResult result = estimate_meter_from_observations(observations, config);
     CAPTURE(grouping, result.time_signature.numerator, result.grouping);
     REQUIRE(result.time_signature.numerator ==
             std::accumulate(grouping.begin(), grouping.end(), 0));
@@ -838,126 +725,88 @@ TEST_CASE("estimate_meter_from_beats reports how the bar divides", "[meter_analy
   }
 }
 
-TEST_CASE("estimate_meter_from_beats always reports a grouping that sums to the numerator",
-          "[meter_analyzer]") {
-  // The invariant every consumer of the field relies on, checked over the whole
-  // candidate range including the numerators too wide to search and the spans
-  // too short to search at all.
+TEST_CASE("estimate_meter_from_observations groups every reported numerator", "[meter_analyzer]") {
   MeterConfig config;
   for (int numerator = kMinMeterCandidateNumerator; numerator <= kMaxMeterCandidateNumerator;
        ++numerator) {
     config.candidate_numerators = {numerator};
     for (const int measures : {1, 3, 12}) {
-      const BeatSeries series = make_beat_series(numerator, measures);
-      const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
-
+      const MeterBeats observations = make_meter_beats(numerator, measures);
+      const MeterResult result = estimate_meter_from_observations(observations, config);
       CAPTURE(numerator, measures, result.time_signature.numerator, result.grouping);
       REQUIRE_FALSE(result.grouping.empty());
       REQUIRE(std::accumulate(result.grouping.begin(), result.grouping.end(), 0) ==
               result.time_signature.numerator);
-      for (const int part : result.grouping) {
-        REQUIRE(part > 0);
-      }
+      for (const int part : result.grouping) REQUIRE(part > 0);
     }
   }
 }
 
-TEST_CASE("estimate_meter_from_beats divides only the numerators it can search",
-          "[meter_analyzer]") {
+TEST_CASE("estimate_meter_from_observations divides only searched numerators", "[meter_analyzer]") {
   MeterConfig config;
   bool saw_divided = false;
   for (int numerator = kMinMeterCandidateNumerator; numerator <= kMaxMeterCandidateNumerator;
        ++numerator) {
     config.candidate_numerators = {numerator};
-    const BeatSeries series = make_beat_series(numerator, 12);
-    const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
+    const MeterBeats observations = make_meter_beats(numerator, 12);
+    const MeterResult result = estimate_meter_from_observations(observations, config);
     if (result.time_signature.numerator != numerator) continue;
 
     CAPTURE(numerator, result.grouping);
     if (numerator > kMaxGroupedMeterNumerator) {
-      // Too wide to search: one undivided group rather than a guess.
       REQUIRE(result.grouping == std::vector<int>{numerator});
     } else {
-      // Inside the searched range every part is a two or a three, and 2 and 3
-      // are the two numerators that legitimately come back undivided.
-      for (const int part : result.grouping) {
-        REQUIRE((part == 2 || part == 3));
-      }
+      for (const int part : result.grouping) REQUIRE((part == 2 || part == 3));
       saw_divided = saw_divided || result.grouping.size() > 1;
     }
   }
   REQUIRE(saw_divided);
 }
 
-TEST_CASE("estimate_meter_from_beats leaves a six undivided until its beats divide it",
+TEST_CASE("estimate_meter_from_observations keeps a six in its measured grouping",
           "[meter_analyzer]") {
-  // A six that groups into two threes reports that grouping; a six that groups
-  // into three twos reports its own -- it used to be pushed through the
-  // compound branch and come back out as a three or a four. Neither changes the
-  // beat unit here: this entry point has no subdivision to measure, so the
-  // grouping is the whole of what separates the two readings.
   MeterConfig config;
   config.candidate_numerators = {3, 4, 6};
 
-  const BeatSeries compound = make_grouped_series({3, 3}, 12);
-  const MeterResult compound_result =
-      estimate_meter_from_beats(compound.times, compound.strengths, config);
+  const MeterBeats compound = make_grouped_observations({3, 3}, 12);
+  const MeterResult compound_result = estimate_meter_from_observations(compound, config);
   REQUIRE(compound_result.time_signature.numerator == 6);
   REQUIRE(compound_result.time_signature.denominator == config.denominator);
   REQUIRE(compound_result.grouping == std::vector<int>{3, 3});
 
-  const BeatSeries simple = make_grouped_series({2, 2, 2}, 12);
-  const MeterResult simple_result =
-      estimate_meter_from_beats(simple.times, simple.strengths, config);
+  const MeterBeats simple = make_grouped_observations({2, 2, 2}, 12);
+  const MeterResult simple_result = estimate_meter_from_observations(simple, config);
   REQUIRE(simple_result.time_signature.numerator == 6);
   REQUIRE(simple_result.time_signature.denominator == config.denominator);
   REQUIRE(simple_result.grouping == std::vector<int>{2, 2, 2});
 }
 
-TEST_CASE("estimate_meter_from_beats does not favour a divisible numerator on unmetred beats",
-          "[meter_analyzer]") {
-  // Picking the best of a numerator's groupings is a second search on top of the
-  // phase search, and a maximum over more alternatives is worth more on noise
-  // alone. Numerators divide into wildly different numbers of groupings -- 4 has
-  // one, 13 has sixteen -- so an uncorrected grouping search hands the divisible
-  // numerators a lead that has nothing to do with the beats.
+TEST_CASE("meter grouping scores do not favour divisible numerators on noise", "[meter_analyzer]") {
   constexpr int kTrials = 200;
   constexpr int kBeats = 32;
   const std::vector<int> candidates = {4, 5, 7, 9, 11, 13};
 
   MeterConfig config;
   config.candidate_numerators = candidates;
-  // At the default 0.15 the grouping term is a small part of the score and its
-  // bias hides inside the phase search's own noise at any trial count a test can
-  // afford. Weighting it like the downbeat brings the effect into view, which is
-  // what makes the thresholds below able to fail.
   config.subdivision_weight = 1.0f;
 
-  std::vector<float> times(kBeats);
-  for (int i = 0; i < kBeats; ++i) {
-    times[static_cast<size_t>(i)] = static_cast<float>(i) * 0.5f;
-  }
-
   std::map<int, int> wins;
-  for (int candidate : candidates) {
-    wins[candidate] = 0;
-  }
+  for (int candidate : candidates) wins[candidate] = 0;
   uint32_t state = 20260821u;
   for (int trial = 0; trial < kTrials; ++trial) {
-    std::vector<float> strengths(kBeats);
+    MeterBeats observations;
+    observations.accent.reserve(kBeats);
     for (int i = 0; i < kBeats; ++i) {
       state = state * 1664525u + 1013904223u;
-      strengths[static_cast<size_t>(i)] = static_cast<float>(state >> 8) / 16777216.0f;
+      observations.accent.push_back(static_cast<float>(state >> 8) / 16777216.0f);
     }
-    const MeterResult result = estimate_meter_from_beats(times, strengths, config);
+    const MeterResult result = estimate_meter_from_observations(observations, config);
     const auto best =
         std::max_element(result.candidate_scores.begin(), result.candidate_scores.end());
     ++wins[candidates[static_cast<size_t>(std::distance(result.candidate_scores.begin(), best))]];
   }
 
   CAPTURE(wins);
-  // Thirteen divides sixteen ways and four divides one way, so if the grouping
-  // search went uncorrected this is where it would show.
   REQUIRE(wins[13] * 3 >= wins[4]);
   REQUIRE(wins[4] * 3 >= wins[13]);
   const auto extremes = std::minmax_element(

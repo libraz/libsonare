@@ -6,9 +6,9 @@
 /// Every insert id names one entry: the strip (track, bus or master) by identity,
 /// the insert slot, and the parameter layout of the processor in that slot (its
 /// dynamic type plus ProcessorBase::parameter_layout_variant()). A track lane's
-/// fader and pan, and a bus's fader, share the table as one slot-less entry per
-/// track or bus. Entries are minted when the mixer is configured, in a canonical
-/// order (each lane's fader/pan entry then its slots, each bus's fader entry then
+/// fader, pan and width share one slot-less entry per track, and a bus's fader
+/// has one entry per bus. Mixer configuration mints entries in canonical order
+/// (each lane's control entry then its slots, each bus's fader entry then
 /// its slots, then master, slots in index order), so two engines that receive
 /// the same configuration sequence number them identically; resolving an id only
 /// looks one up. An entry is retired when its track or bus leaves the mixer or
@@ -34,7 +34,7 @@
 namespace sonare::engine {
 
 /// Which strip family an insert-automation entry addresses. kTrackLane (a track
-/// lane's fader and pan) and kBusLane (a bus's fader) are not insert slots: their
+/// lane's fader, pan and width) and kBusLane (a bus's fader) are not insert slots: their
 /// insert index is 0, their processor layout empty, and the id's param field a
 /// TrackMixerRuntime::ParamId.
 enum class InsertStripKind : uint8_t { kTrack, kBus, kMaster, kTrackLane, kBusLane };

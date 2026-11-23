@@ -26,7 +26,11 @@ bool AddTrack::apply(Project& project, MidiContentStore& /*store*/) {
     return true;
   }
   allocated_id_ = project.add_track(track_);
-  return allocated_id_ != 0;
+  if (allocated_id_ == 0) return false;
+  const Track* inserted = project.find_track(allocated_id_);
+  if (inserted == nullptr) return false;
+  track_ = *inserted;
+  return true;
 }
 
 EditCommandPtr AddTrack::invert(const Project& /*before*/,

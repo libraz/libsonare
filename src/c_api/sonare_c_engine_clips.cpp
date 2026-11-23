@@ -266,6 +266,7 @@ SonareError sonare_engine_set_clips(SonareEngine* engine, const SonareEngineClip
         build_clip_schedule(*engine, clips[i], "clips[" + std::to_string(i) + "].", &schedules[i]);
     if (status != SONARE_OK) return status;
   }
+  engine->engine.require_quiescent();
   engine->engine.set_clips(std::move(schedules));
   return SONARE_OK;
   SONARE_C_CATCH

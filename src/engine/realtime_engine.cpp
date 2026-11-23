@@ -61,7 +61,7 @@ void RealtimeEngine::require_quiescent() const {
 #if defined(SONARE_WITH_ARRANGEMENT)
 RealtimeEngine::MidiInputBinding RealtimeEngine::midi_input_binding() const noexcept {
   return {midi_input_source_.load(std::memory_order_acquire),
-          midi_input_destination_id_.load(std::memory_order_relaxed)};
+          midi_input_destination_id_.load(std::memory_order_relaxed), midi_input_source_owner_};
 }
 
 std::vector<midi::CcBinding> RealtimeEngine::midi_cc_bindings() const {

@@ -304,6 +304,10 @@ class Spectrogram {
   /// @details Computed lazily and cached.
   const std::vector<float>& magnitude() const;
 
+  /// @brief Writes phase in radians, with zero bins written as positive zero.
+  /// @param out Buffer of n_bins() * n_frames() floats in magnitude order.
+  void phase(float* out) const;
+
   /// @brief Returns power spectrum [n_bins x n_frames].
   /// @details Computed lazily and cached.
   const std::vector<float>& power() const;

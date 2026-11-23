@@ -627,7 +627,7 @@ TEST_CASE("parameterInfo describes a compressor insert on a track, bus and maste
   }
 }
 
-TEST_CASE("parameterInfo describes the lane fader and master width targets",
+TEST_CASE("parameterInfo describes lane fader, lane width and master width targets",
           "[engine][automation]") {
   RealtimeEngine engine;
   engine.prepare(48000.0, 256);
@@ -653,10 +653,17 @@ TEST_CASE("parameterInfo describes the lane fader and master width targets",
   REQUIRE(width.max_value == 2.0f);
   REQUIRE(width.default_value == 1.0f);
 
-  // Width is a master-only control, not a track-lane target.
   sonare::automation::ParameterDescription lane_width{};
-  const uint32_t lane_width_id = (fader_id & ~0xFFu) | sonare::engine::TrackMixerRuntime::kWidth;
-  REQUIRE_FALSE(engine.describe_reserved_parameter(lane_width_id, &lane_width));
+  const int64_t lane_width_id =
+      engine.track_lane_automation_id(10, sonare::engine::TrackMixerRuntime::kWidth);
+  REQUIRE(lane_width_id >= 0);
+  REQUIRE(engine.describe_reserved_parameter(static_cast<uint32_t>(lane_width_id), &lane_width));
+  CHECK(lane_width.name == width.name);
+  CHECK(lane_width.unit == width.unit);
+  CHECK(lane_width.min_value == width.min_value);
+  CHECK(lane_width.max_value == width.max_value);
+  CHECK(lane_width.default_value == width.default_value);
+  CHECK(engine.resolve_track_lane_automation_id(10, "width") == -1);
   // A lane position in the master/bus namespace names no track.
   REQUIRE_FALSE(engine.describe_reserved_parameter(
       0x4D580000u | sonare::engine::TrackMixerRuntime::kFaderDb, &lane_width));

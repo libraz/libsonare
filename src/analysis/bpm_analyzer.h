@@ -107,9 +107,6 @@ struct BpmConfig {
   /// preferred when it lies inside it.
   float bpm_min = bpm_constants::kDefaultBpmMin;  ///< Minimum BPM to consider (inclusive)
   float bpm_max = bpm_constants::kDefaultBpmMax;  ///< Maximum BPM to consider (inclusive)
-  /// Finite, positive beat-tracking prior in BPM. Standalone tempo detection ignores it
-  /// and reports NaN when it finds no tempo.
-  float start_bpm = 120.0f;
   int n_fft = 2048;      ///< Window length in samples at 22050 Hz, rescaled to the input rate
   int hop_length = 512;  ///< Hop length in samples of the input buffer
 };
@@ -118,27 +115,25 @@ struct BpmConfig {
 inline constexpr util::check::NumericDomain kBpmCountDomain =
     util::check::integer_domain_of<int>(1);
 
-/// @brief Refuses a tempo search outside the argument domain every public surface shares.
-/// @details The rule @ref validate_bpm_config and validate_rhythm_config both apply.
-/// @throws SonareParameterRefusal(InvalidParameter) unless bpm_min is finite and positive, bpm_max
-///         is finite and above bpm_min, start_bpm is finite and positive, n_fft is even and in
-///         @ref kStftNFftDomain, and hop_length is positive.
-inline void validate_tempo_search(float bpm_min, float bpm_max, float start_bpm, int n_fft,
-                                  int hop_length) {
+/// @brief Requires a finite, positive minimum and a finite maximum above it.
+inline void validate_tempo_range(float bpm_min, float bpm_max) {
   util::check::greater_than(bpm_min, 0.0, "bpm_min");
   if (!numeric::finite_ordered_range(bpm_min, bpm_max)) {
     util::check::refuse_relation({"bpm_max", "bpm_min"}, "{0} must be finite and greater than {1}");
   }
-  util::check::greater_than(start_bpm, 0.0, "start_bpm");
+}
+
+/// @brief Requires an even FFT length in @ref kStftNFftDomain and a positive hop.
+inline void validate_tempo_geometry(int n_fft, int hop_length) {
   util::check::even_within(n_fft, kStftNFftDomain, "n_fft");
   util::check::integer_within<int>(hop_length, kBpmCountDomain, "hop_length");
 }
 
 /// @brief Refuses a BpmConfig outside the argument domain every public surface shares.
-/// @throws SonareException(InvalidParameter) as @ref validate_tempo_search describes.
+/// @throws SonareException(InvalidParameter) for an invalid tempo range or analysis geometry.
 inline void validate_bpm_config(const BpmConfig& config) {
-  validate_tempo_search(config.bpm_min, config.bpm_max, config.start_bpm, config.n_fft,
-                        config.hop_length);
+  validate_tempo_range(config.bpm_min, config.bpm_max);
+  validate_tempo_geometry(config.n_fft, config.hop_length);
 }
 
 /// @brief Refuses a negative candidate count for BpmAnalyzer::candidates, which would clamp it.

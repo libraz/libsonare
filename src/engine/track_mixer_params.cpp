@@ -72,12 +72,10 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
       if (!mixing::pan_in_range(value)) return false;
       lane.pan.set_target(value);
       return true;
-    // Width is deliberately not part of the arrangement typed-target
-    // contract.  It remains available through the standalone mixer API, but
-    // accepting it here would make an id that the compiler must never emit
-    // look successfully automated while no lane state owns it.
     case kWidth:
-      return false;
+      if (!mixing::width_in_range(value)) return false;
+      lane.width.set_target(value);
+      return true;
     default:
       return false;
   }
@@ -95,9 +93,16 @@ bool TrackMixerRuntime::set_track_parameter(uint32_t track_id, unsigned int para
 }
 
 bool TrackMixerRuntime::restore_track_parameter(uint32_t track_id, unsigned int param_id) noexcept {
-  // The rest values prepare() and reset() seed: unity gain, centre pan.
-  if (param_id != kFaderDb && param_id != kPan) return false;
-  return set_track_parameter(track_id, param_id, 0.0f);
+  // The rest values prepare() and reset() seed: unity gain, centre pan, unity width.
+  switch (param_id) {
+    case kFaderDb:
+    case kPan:
+      return set_track_parameter(track_id, param_id, 0.0f);
+    case kWidth:
+      return set_track_parameter(track_id, param_id, 1.0f);
+    default:
+      return false;
+  }
 }
 
 bool TrackMixerRuntime::set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept {
@@ -377,6 +382,9 @@ bool TrackMixerRuntime::track_lane_parameter_value(uint32_t track_id, unsigned i
       return true;
     case kPan:
       *out_value = lane.pan.target();
+      return true;
+    case kWidth:
+      *out_value = lane.width.target();
       return true;
     default:
       return false;

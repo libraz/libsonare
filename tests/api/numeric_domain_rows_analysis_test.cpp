@@ -5,6 +5,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <limits>
 #include <map>
@@ -151,7 +152,7 @@ SonareError probe_analyze_bpm(const std::string& param, double value) {
   const Frame f = frame_of(param, value);
   SonareBpmAnalysisResult out{};
   const SonareError err = sonare_analyze_bpm(pcm(), pcm_length(), kAnalysisRate, 60.0f, 200.0f,
-                                             120.0f, f.n_fft, f.hop_length, 3, &out);
+                                             f.n_fft, f.hop_length, 3, &out);
   if (err == SONARE_OK) sonare_free_bpm_analysis_result(&out);
   return err;
 }
@@ -278,10 +279,13 @@ SonareError probe_estimate_meter_json(const std::string& param, double value) {
   SonareMeterOptions options{};
   sonare_meter_options_init(&options);
   if (is_param(param, "options.denominator")) options.denominator = static_cast<int>(value);
-  const float times[8] = {0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 3.5f};
-  const float strengths[8] = {1.0f, 0.4f, 0.6f, 0.4f, 1.0f, 0.4f, 0.6f, 0.4f};
+  const float accent[8] = {1.0f, 0.4f, 0.6f, 0.4f, 1.0f, 0.4f, 0.6f, 0.4f};
+  SonareMeterBeats beats{};
+  sonare_meter_beats_init(&beats);
+  beats.accent = accent;
+  beats.beat_count = 8;
   char* json = nullptr;
-  const SonareError err = sonare_estimate_meter_json(times, strengths, 8, &options, &json);
+  const SonareError err = sonare_estimate_meter_json(&beats, &options, &json);
   if (err == SONARE_OK) sonare_free_string(json);
   return err;
 }
@@ -435,6 +439,43 @@ SonareError probe_stft(const std::string& param, double value) {
   const SonareError err =
       sonare_stft(pcm(), pcm_length(), kAnalysisRate, f.n_fft, f.hop_length, nullptr, &out);
   if (err == SONARE_OK) sonare_free_stft_result(&out);
+  return err;
+}
+
+SonareError probe_istft(const std::string& param, double value) {
+  int n_fft = 16;
+  int n_bins = n_fft / 2 + 1;
+  int n_frames = 2;
+  size_t hop_length = 4;
+  SonareIstftOptions options{};
+  sonare_istft_options_init(&options);
+  if (is_param(param, "n_fft")) {
+    n_fft = static_cast<int>(value);
+    n_bins = n_fft / 2 + 1;
+    hop_length = static_cast<size_t>(std::max(1, n_fft / 2));
+  }
+  if (is_param(param, "n_bins")) {
+    n_bins = static_cast<int>(value);
+    if (n_bins >= 3) {
+      n_fft = 2 * (n_bins - 1);
+      hop_length = static_cast<size_t>(n_fft / 2);
+    }
+  }
+  if (is_param(param, "n_frames")) n_frames = static_cast<int>(value);
+  if (is_param(param, "hop_length")) {
+    n_fft = 128;
+    n_bins = n_fft / 2 + 1;
+    hop_length = as_size(value);
+  }
+  if (is_param(param, "length_samples")) options.length_samples = as_size(value);
+
+  const std::vector<float> magnitude(4096, 1.0f);
+  const std::vector<float> phase(4096, 0.0f);
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError err = sonare_istft(magnitude.data(), phase.data(), n_bins, n_frames, n_fft,
+                                       hop_length, &options, &out, &out_length);
+  if (err == SONARE_OK) sonare_free_floats(out);
   return err;
 }
 
@@ -1006,6 +1047,7 @@ const std::map<std::string, Probe>& probes() {
       {"cqt_to_audio", probe_cqt_to_audio},
       {"vqt_to_audio", probe_vqt_to_audio},
       {"stft", probe_stft},
+      {"istft", probe_istft},
       {"mel_filterbank", probe_mel_filterbank},
       {"mel_frequencies", probe_mel_frequencies},
       {"mel_spectrogram", probe_mel_spectrogram},
@@ -1104,4 +1146,24 @@ TEST_CASE("an analysis value outside its row's domain is refused under the row's
 TEST_CASE("an analysis value inside its row's domain is not refused under the row's subject",
           "[numeric_domains][c_api]") {
   require_inside_accepted(built_table(), probes(), analysis_inside_value);
+}
+
+TEST_CASE("ISTFT keeps the Hann COLA hop refusal on the n_fft and hop_length pair",
+          "[numeric_domains][c_api]") {
+  constexpr int n_fft = 16;
+  constexpr int n_bins = n_fft / 2 + 1;
+  const std::vector<float> magnitude(static_cast<size_t>(n_bins) * 2, 1.0f);
+  const std::vector<float> phase(magnitude.size(), 0.0f);
+  SonareIstftOptions options{};
+  sonare_istft_options_init(&options);
+  float* out = nullptr;
+  size_t out_length = 0;
+
+  CHECK(sonare_istft(magnitude.data(), phase.data(), n_bins, 2, n_fft, n_fft / 2 + 1, &options,
+                     &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 2);
+  CHECK(last_refusal_has_subject("n_fft"));
+  CHECK(last_refusal_has_subject("hop_length"));
+  CHECK(std::string(sonare_last_error_message()).find("hop_length must be at most n_fft / 2") !=
+        std::string::npos);
 }

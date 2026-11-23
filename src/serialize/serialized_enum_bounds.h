@@ -215,7 +215,7 @@ struct SerializedEnum<arrangement::KeyMode> {
 template <>
 struct SerializedEnum<automation::AutomationTargetKind> {
   using Enum = automation::AutomationTargetKind;
-  static constexpr Enum kLast = Enum::kTrackPan;
+  static constexpr Enum kLast = Enum::kTrackInsertParam;
   static constexpr const char* name(Enum value) noexcept {
     switch (value) {
       case Enum::kOpaque:
@@ -224,6 +224,12 @@ struct SerializedEnum<automation::AutomationTargetKind> {
         return "trackFaderDb";
       case Enum::kTrackPan:
         return "trackPan";
+      case Enum::kTrackSendDb:
+        return "trackSendDb";
+      case Enum::kTrackWidth:
+        return "trackWidth";
+      case Enum::kTrackInsertParam:
+        return "trackInsertParam";
     }
     return nullptr;
   }

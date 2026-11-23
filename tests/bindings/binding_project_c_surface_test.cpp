@@ -145,7 +145,12 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
       "{\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[],\"strips\":[{"
       "\"id\":\"lead\",\"faderDb\":-3.0}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
-  CHECK(sonare_project_set_mixer_scene_json(project, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  // NULL clears the scene.
+  REQUIRE(sonare_project_set_mixer_scene_json(project, nullptr) == SONARE_OK);
+  char* cleared_scene = reinterpret_cast<char*>(1);
+  REQUIRE(sonare_project_mixer_scene_json(project, &cleared_scene) == SONARE_OK);
+  CHECK(cleared_scene == nullptr);
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
 
   uint32_t track_id = 0;
   uint32_t clip_id = 0;
@@ -878,20 +883,21 @@ TEST_CASE("project track edit entries refuse by the parameter the header spells"
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "marker.id must be an integer in [0, 4294967294]");
 
-  SonareAutomationLaneDesc lane{0, SONARE_AUTOMATION_TARGET_OPAQUE, nullptr, 0};
-  uint32_t lane_param = 0;
-  CHECK(sonare_project_add_automation_lane(project, track_id, &lane, &lane_param) ==
+  SonareAutomationLaneDesc lane;
+  sonare_automation_lane_desc_init(&lane);
+  uint32_t lane_id = 0;
+  CHECK(sonare_project_add_automation_lane(project, track_id, &lane, &lane_id) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_refusal() == "desc.target_param_id must be an integer in [1, 4294967295]");
   lane.target_param_id = 7;
   CHECK(sonare_project_remove_automation_lane(project, track_id, 7) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "target_param_id must be the id of an automation lane in this track");
-  REQUIRE(sonare_project_add_automation_lane(project, track_id, &lane, &lane_param) == SONARE_OK);
+  CHECK(last_refusal() == "lane_id must be the id of an automation lane in this track");
+  REQUIRE(sonare_project_add_automation_lane(project, track_id, &lane, &lane_id) == SONARE_OK);
+  CHECK(lane_id != 0);
   lane.target_param_id = 8;
-  CHECK(sonare_project_edit_automation_lane(project, track_id, 7, &lane) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_refusal() == "target_param_id must equal desc.target_param_id");
+  CHECK(sonare_project_edit_automation_lane(project, track_id, lane_id, &lane) == SONARE_OK);
+  CHECK(sonare_project_remove_automation_lane(project, track_id, lane_id) == SONARE_OK);
 
   SonareProjectWarpMapDesc warp{};
   warp.anchor_count = 2;

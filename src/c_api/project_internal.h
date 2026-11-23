@@ -53,6 +53,10 @@ using namespace sonare_c_detail;
 namespace arr = sonare::arrangement;
 namespace json = sonare::util::json;
 
+/// Converts a model patch to the C descriptor, borrowing keys from the model.
+SonareSynthPatch project_synth_patch(const arr::DestinationSynthInstrument& model,
+                                     std::vector<SonareSynthEngineParam>& params);
+
 // Pin the C track-kind ordinals to the C++ enum so a reorder is caught.
 static_assert(static_cast<int>(arr::Track::Kind::kAudio) == SONARE_TRACK_AUDIO,
               "SonareProjectTrackKind audio ordinal drift");
@@ -66,9 +70,15 @@ struct SonareProject {
   arr::AudioContentStore audio;
   std::vector<arr::Diagnostic> last_bounce_diagnostics;
   bool last_bounce_has_timeline = false;
-  /// Loaded SoundFont (sonare_project_load_soundfont); shared read-only with
-  /// the SF2 players a bounce creates. Null until a load succeeds.
-  std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;
+  /// Loaded fonts shared by the project's SF2 players. No URI names the default font.
+  std::map<std::optional<std::string>, std::shared_ptr<const sonare::midi::synth::Sf2File>>
+      sound_fonts;
+
+  std::shared_ptr<const sonare::midi::synth::Sf2File> sound_font(
+      const std::optional<std::string>& uri = std::nullopt) const {
+    const auto found = sound_fonts.find(uri);
+    return found == sound_fonts.end() ? nullptr : found->second;
+  }
 };
 
 // Compound public removals keep decoded PCM outside the arrangement model.

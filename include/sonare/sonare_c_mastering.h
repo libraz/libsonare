@@ -677,6 +677,16 @@ SonareError sonare_mastering_analyze_pair(const char* analysis, const float* sou
                                           size_t reference_length, int reference_sample_rate,
                                           int sample_rate, const SonareMasteringParam* params,
                                           size_t param_count, char** json_out);
+/// @brief Stereo counterpart of @ref sonare_mastering_analyze_pair.
+/// @details Measures source and reference as separate planar stereo pairs. A reference at
+///          another rate is resampled onto @p sample_rate first, so a delay estimate is in
+///          source-rate samples. Each left/right pair shares its own frame count.
+/// @note Free @p json_out with @ref sonare_free_string.
+SonareError sonare_mastering_analyze_pair_stereo(
+    const char* analysis, const float* source_left, const float* source_right, size_t source_length,
+    const float* reference_left, const float* reference_right, size_t reference_length,
+    int reference_sample_rate, int sample_rate, const SonareMasteringParam* params,
+    size_t param_count, char** json_out);
 /// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_stereo(const char* analysis, const float* left,
                                             const float* right, size_t length, int sample_rate,

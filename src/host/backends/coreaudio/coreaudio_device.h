@@ -2,9 +2,8 @@
 
 /// @file coreaudio_device.h
 /// @brief CoreAudio (AUHAL) implementation of the sonare::host::AudioDevice
-///        seam. This is a concrete out-of-core backend: it owns a real output
-///        device and pumps an AudioDeviceCallback on the CoreAudio render
-///        thread. macOS only; built behind BUILD_COREAUDIO.
+///        seam. It owns a real input and/or output device and pumps an
+///        AudioDeviceCallback on the CoreAudio I/O thread. macOS only.
 ///
 /// This public header intentionally includes NO CoreAudio / AudioToolbox
 /// headers — the SDK types live entirely behind a pimpl in the .mm so a host
@@ -13,6 +12,7 @@
 /// the implementation is not).
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "host/audio_device.h"
@@ -20,9 +20,9 @@
 
 namespace sonare::host::backends {
 
-/// AUHAL-backed output device. Construct, then open()/start() from the control
-/// thread; the bound AudioDeviceCallback::render runs on the CoreAudio audio
-/// thread. close()/stop() return only once the render thread is quiesced.
+/// AUHAL-backed input and/or output device. Construct, then open()/start() from
+/// the control thread; AudioDeviceCallback::render runs on the CoreAudio I/O
+/// thread. close()/stop() return only once the I/O thread is quiesced.
 ///
 /// Latency and xrun figures are queried from the live device after open(), so
 /// input_latency_samples()/output_latency_samples()/xrun_count() report the
@@ -30,6 +30,9 @@ namespace sonare::host::backends {
 class CoreAudioDevice final : public AudioDevice {
  public:
   CoreAudioDevice();
+  explicit CoreAudioDevice(uint32_t device_id);
+  /// Binds an enumerated ID to its UID so a recycled ID cannot open a new device.
+  CoreAudioDevice(uint32_t device_id, std::string uid);
   ~CoreAudioDevice() override;
 
   CoreAudioDevice(const CoreAudioDevice&) = delete;
@@ -37,11 +40,43 @@ class CoreAudioDevice final : public AudioDevice {
 
   bool open(const AudioStreamConfig& config, AudioDeviceCallback* callback) override;
 
-  /// CONTROL thread: binds the device @p device_id names rather than the system
-  /// default. 0 selects the default, so open() is this with 0. Allocates while
+  /// CONTROL thread: binds the device @p device_id names rather than the
+  /// direction's system default. 0 selects that default. Allocates while
   /// resolving the device; never called from the audio thread.
   bool open_device(uint32_t device_id, const AudioStreamConfig& config,
                    AudioDeviceCallback* callback);
+
+  /// One system audio device as observed by a single point-in-time snapshot.
+  struct DeviceInfo {
+    uint32_t id = 0;
+    std::string uid;
+    std::string name;
+    int input_channels = 0;
+    int output_channels = 0;
+    bool is_default_input = false;
+    bool is_default_output = false;
+    double nominal_sample_rate = 0.0;
+    uint32_t clock_domain = 0;
+  };
+
+  /// CONTROL thread: every device with at least one input or output channel.
+  /// The snapshot is point-in-time; use the UID to resolve a fresh ID after a
+  /// hardware-list change.
+  static std::vector<DeviceInfo> devices();
+
+  /// CONTROL thread: request a nominal device rate and wait up to 500 ms for a
+  /// serial property listener to observe it. False means the device refused or
+  /// did not settle on the requested rate.
+  static bool set_nominal_sample_rate(uint32_t device_id, double rate);
+  /// UID-checked version for a device selected from a prior enumeration.
+  static bool set_nominal_sample_rate(uint32_t device_id, double rate,
+                                      const std::string& expected_uid);
+
+  /// Latched until the next open attempt. These readers remain valid after a
+  /// failed open has released its CoreAudio resources.
+  bool device_lost() const noexcept;
+  bool rate_changed() const noexcept;
+  bool format_refused() const noexcept;
 
   /// CONTROL thread: how many devices expose at least one output channel. The
   /// index the two accessors below take is into that filtered list, not into

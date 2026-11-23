@@ -24,8 +24,8 @@ extern "C" {
 ///          is searched as given, and the 60-200 estimate is kept when it lies inside it.
 /// @param out Receives heap-owned arrays; free with sonare_free_bpm_analysis_result.
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
-                               float bpm_max, float start_bpm, int n_fft, size_t hop_length,
-                               int max_candidates, SonareBpmAnalysisResult* out);
+                               float bpm_max, int n_fft, size_t hop_length, int max_candidates,
+                               SonareBpmAnalysisResult* out);
 /// @brief Options for @ref sonare_analyze_impulse_response.
 /// @details Fill with @ref sonare_analyze_impulse_response_options_init before setting fields.
 typedef struct {
@@ -59,6 +59,8 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
 ///          either. Analyses at the caller's @p sample_rate. @p n_fft is the
 ///          analysis window length in samples at 22050 Hz, rescaled to
 ///          @p sample_rate; @p hop_length is in samples of the caller's buffer.
+/// @param start_bpm Finite, positive BPM prior that seeds beat tracking if the tempo search
+///                  finds none. The result reports measured tempo or NaN.
 /// @param out Receives heap-owned arrays; free with sonare_free_rhythm_result.
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
@@ -315,15 +317,57 @@ typedef struct {
   uint32_t struct_size;
   /// Non-zero also fills SonareStftResult::db with the magnitude in dB. Default 0.
   int32_t db;
+  /// Non-zero also fills SonareStftResult::phase with the phase in radians. Default 0.
+  int32_t phase;
 } SonareStftOptions;
+
+#ifdef __cplusplus
+static_assert(sizeof(SonareStftOptions) == 3u * sizeof(uint32_t), "SonareStftOptions layout");
+#endif
 
 /// @brief Writes the defaults and @c struct_size into @p options; a NULL @p options is ignored.
 void sonare_stft_options_init(SonareStftOptions* options);
 
-/// @details A NULL @p options takes the defaults (no dB plane).
+/// @details A NULL @p options takes the defaults (no dB or phase plane).
 /// @param out Receives heap-owned arrays; free with sonare_free_stft_result.
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
                         size_t hop_length, const SonareStftOptions* options, SonareStftResult* out);
+
+/// @brief Options for @ref sonare_istft.
+/// @details Fill with @ref sonare_istft_options_init before setting fields.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_istft_options_init.
+  uint32_t struct_size;
+  /// Reserved for future use; initialized to 0.
+  uint32_t reserved;
+  /// Requested output length in samples; 0 uses the natural centered reconstruction length.
+  /// Values above 500000000 are refused.
+  size_t length_samples;
+} SonareIstftOptions;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareIstftOptions, length_samples) == 8u,
+              "SonareIstftOptions length_samples offset");
+static_assert(sizeof(SonareIstftOptions) == 8u + sizeof(size_t), "SonareIstftOptions layout");
+#endif
+
+/// @brief Writes defaults and @c struct_size into @p options; a NULL @p options is ignored.
+void sonare_istft_options_init(SonareIstftOptions* options);
+
+/// @brief Reconstructs centered audio from its one-sided STFT magnitude and phase.
+/// @details Uses the same periodic Hann analysis and centered framing as @ref sonare_stft. A
+///          NULL @p options uses the natural output length. @p hop_length must be positive and
+///          the n_fft / hop_length pair must pass the shared Hann COLA validator.
+/// @param magnitude n_bins * n_frames magnitudes at index bin * n_frames + frame, as sonare_stft
+/// writes them.
+/// @param phase Phase in radians, with the same shape and order as @p magnitude.
+/// @param options NULL for the natural output length; otherwise start from
+///   @ref sonare_istft_options_init. A requested length is limited to 500000000 samples.
+/// @param out Receives a heap-owned array; free with @ref sonare_free_floats.
+/// @param out_length Receives the number of output samples.
+SonareError sonare_istft(const float* magnitude, const float* phase, int n_bins, int n_frames,
+                         int n_fft, size_t hop_length, const SonareIstftOptions* options,
+                         float** out, size_t* out_length);
 
 // ============================================================================
 // Features - Mel

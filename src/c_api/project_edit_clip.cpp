@@ -3,6 +3,7 @@
 #include <set>
 #include <string>
 
+#include "arrangement/relink_source.h"
 #include "arrangement/vocal_edit_sidecar.h"
 #include "c_api/ppq_domains.h"
 #include "c_api/project_input_domains.h"
@@ -499,6 +500,72 @@ std::vector<arr::SourceId> sonare_project_collect_orphaned_sources_for_track(
 // Edit
 // ============================================================================
 
+SonareError sonare_project_add_audio_source(SonareProject* project, const char* uri,
+                                            uint32_t* out_source_id) {
+  SONARE_C_API_ENTRY;
+  if (out_source_id) *out_source_id = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(uri);
+  SONARE_C_REQUIRE_NONNULL(out_source_id);
+  SONARE_C_TRY
+  if (const SonareError err = run_validation([&] { util::check::non_empty(uri, "uri"); });
+      err != SONARE_OK) {
+    return err;
+  }
+  const arr::SourceId source_id = project->history.project().next_source_id();
+  if (!valid_next_id(source_id)) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "the project has no source id left to assign");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  arr::AudioSourceRef source;
+  source.uri = uri;
+  auto command = std::make_unique<arr::AttachAudioSource>(std::move(source));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  *out_source_id = source_id;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 uri, out_source_id);
+#endif
+}
+
+SonareError sonare_project_relink_source(SonareProject* project, uint32_t source_id,
+                                         const char* uri) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_TRY
+  arr::RelinkSourceCommands relink =
+      arr::make_relink_source_commands(project->history.project(), &project->audio, source_id, uri);
+  switch (relink.error) {
+    case arr::RelinkSourceError::kNone:
+      break;
+    case arr::RelinkSourceError::kNullUri:
+      return run_validation([&] { util::check::non_null(uri, "uri"); });
+    case arr::RelinkSourceError::kEmptyUri:
+      return run_validation([&] { util::check::non_empty(uri, "uri"); });
+    case arr::RelinkSourceError::kUnknownSource:
+      return refuse_unknown("source_id", "a source");
+    case arr::RelinkSourceError::kNotAudioSource:
+      return refuse_unknown("source_id", "an audio source");
+    case arr::RelinkSourceError::kNullAudioContentStore:
+      set_last_error(SONARE_ERROR_INVALID_STATE, "the source relink edit could not be built");
+      return SONARE_ERROR_INVALID_STATE;
+  }
+  if (!project->history.apply_transaction(std::move(relink.commands))) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "the edit was not applied");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 source_id, uri);
+#endif
+}
+
 SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectClipDesc* desc,
                                     uint32_t* out_clip_id) {
   SONARE_C_API_ENTRY;
@@ -615,6 +682,8 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
   desc.audio_channels = channels;
   desc.audio_sample_rate = sample_rate;
   if (const SonareError err = run_validation([&] {
+        // Unlike a clip descriptor, this entry has no empty payload: the source needs PCM.
+        sonare::util::check::non_null(interleaved, "interleaved");
         check_audio_payload({"interleaved", "frames", "channels", "sample_rate"}, &desc);
       });
       err != SONARE_OK) {

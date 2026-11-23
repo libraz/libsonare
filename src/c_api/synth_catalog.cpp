@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "c_api/project_internal.h"
+#include "c_api/synth_patch_fields.h"
 #include "util/parameter_checks.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -230,6 +231,22 @@ std::string descriptor_array(
   return json;
 }
 
+void append_patch_enum_descriptor(const sonare_c_detail::SynthPatchEnumField& field,
+                                  std::string* out) {
+  *out += "{\"name\":\"";
+  *out += field.name;
+  *out += "\",\"type\":\"enum\",\"values\":[";
+  for (size_t i = 0; i < field.values.count; ++i) {
+    if (i > 0) *out += ',';
+    *out += '\"';
+    *out += field.values.names[i];
+    *out += '\"';
+  }
+  *out += "],\"default\":\"";
+  *out += field.values.names[0];
+  *out += "\"}";
+}
+
 /// The SonareSynthPatch numeric fields the instrument automation table names,
 /// with the unit each carries in the param_meta vocabulary.
 struct AutomatedWrapperField {
@@ -308,7 +325,14 @@ std::string synth_patch_param_info_json() {
                   sample.start_offset_hi, init.patch.sample.start_offset01, Unit::None});
   rows.push_back(
       {"oneShot", false, true, false, 0.0f, 0.0f, init.patch.one_shot ? 1.0f : 0.0f, Unit::None});
-  return descriptor_array(rows);
+  std::string json = descriptor_array(rows);
+  json.pop_back();
+  for (size_t i = 0; i < std::size(sonare_c_detail::kSynthPatchEnumFields); ++i) {
+    if (i > 0 || !rows.empty()) json += ',';
+    append_patch_enum_descriptor(sonare_c_detail::kSynthPatchEnumFields[i], &json);
+  }
+  json += ']';
+  return json;
 }
 
 }  // namespace

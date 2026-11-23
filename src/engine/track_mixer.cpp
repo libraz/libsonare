@@ -484,6 +484,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   for (LaneState& lane : lane_states_) {
     lane.fader_gain.prepare(sample_rate_, rt::kClickGuardMs);
     lane.pan.prepare(sample_rate_, rt::kClickGuardMs);
+    lane.width.prepare(sample_rate_, rt::kClickGuardMs);
     lane.gate.prepare(sample_rate_, kLaneGateSmoothingMs);
     lane.clip_pdc_delay.set_prepared_channels(kMaxLaneChannels);
     lane.clip_pdc_delay.prepare(sample_rate_, max_block_size_);
@@ -641,6 +642,7 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
   for (LaneState& lane : lane_states_) {
     lane.fader_gain.reset(lane.fader_gain.target());
     lane.pan.reset(lane.pan.target());
+    lane.width.reset(lane.width.target());
     lane.gate.reset(lane.gate.target());
     // The surround placement glides too, so a pre-roll settle quiesces it for
     // the same reason it quiesces the fader: otherwise the first audible block
@@ -770,6 +772,7 @@ void TrackMixerRuntime::commit_staged_lane_strips(
 void TrackMixerRuntime::reset_lane_controls(LaneState& lane) noexcept {
   lane.fader_gain.reset(1.0f);
   lane.pan.reset(0.0f);
+  lane.width.reset(1.0f);
   lane.gate.reset(1.0f);
   lane.solo = false;
   lane.mute = false;
@@ -970,6 +973,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.track_id = track_id;
     lane.fader_gain.prepare(sample_rate_, rt::kClickGuardMs);
     lane.pan.prepare(sample_rate_, rt::kClickGuardMs);
+    lane.width.prepare(sample_rate_, rt::kClickGuardMs);
     lane.gate.prepare(sample_rate_, kLaneGateSmoothingMs);
     lane.surround_glide.prepare(sample_rate_, rt::kClickGuardMs);
     reset_lane_controls(lane);

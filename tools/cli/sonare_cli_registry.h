@@ -78,6 +78,8 @@ struct CliOptionSpec {
   /// What the library takes when the option is left out, as `--help` states it. Set only on an
   /// option with no registry default, whose handler then keeps the library's own value.
   std::string stated_default;
+  /// Short description shown beside the option in command help.
+  std::string description;
 };
 
 /// A command-level check for a constraint that spans two options (for example

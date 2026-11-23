@@ -469,6 +469,12 @@ const std::vector<float>& Spectrogram::magnitude() const {
   return magnitude_cache_;
 }
 
+void Spectrogram::phase(float* out) const {
+  std::transform(data_.begin(), data_.end(), out, [](const std::complex<float>& bin) {
+    return bin == std::complex<float>{} ? 0.0f : std::arg(bin);
+  });
+}
+
 const std::vector<float>& Spectrogram::power() const {
   if (power_cache_.empty() && !data_.empty()) {
     detail::fill_power_cache(data_, magnitude_cache_, power_cache_);
@@ -621,7 +627,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
                    "nIter must be in [0, " + std::to_string(resource::kMaxGriffinLimIterations) +
                        "], got " + std::to_string(config.n_iter));
 
-  // Element count in size_t so the n_bins*n_frames multiply and the column-major
+  // Element count in size_t so the n_bins*n_frames multiply and the bin * n_frames + frame
   // index cannot overflow int for large caller-supplied n_frames.
   size_t total = 0;
   SONARE_CHECK(numeric::checked_matrix_element_count(n_bins, n_frames, &total),

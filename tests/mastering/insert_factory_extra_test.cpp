@@ -1210,52 +1210,75 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   REQUIRE(convolution_engine_inserts >= 1);
 #endif  // SONARE_WITH_FX
 
+  const auto entry_of = [&catalog](const std::string& id) -> const sonare::util::json::Value& {
+    const auto found =
+        std::find_if(catalog.as_array().begin(), catalog.as_array().end(),
+                     [&id](const auto& entry) { return entry["id"].as_string() == id; });
+    REQUIRE(found != catalog.as_array().end());
+    return *found;
+  };
+  const auto forms_of = [&entry_of](const std::string& id) {
+    std::vector<std::string> forms;
+    for (const auto& form : entry_of(id)["forms"].as_array()) forms.push_back(form.as_string());
+    return forms;
+  };
+  const std::vector<std::string> realtime_and_offline{"realtime", "offline"};
+
   // Every realtime-insertable id is reported as kind "realtime" with the flag set
   // (none of the insert ids are pair processors, so the precedence resolves to
   // realtime). This is the invariant the host relies on to avoid offering an id
   // the realtime strip would reject.
   for (const auto& id : sonare::mastering::api::insert_factory_names()) {
-    const std::string entry =
-        "{\"id\":\"" + id + "\",\"kind\":\"realtime\",\"realtimeInsertable\":true";
-    REQUIRE(json.find(entry) != std::string::npos);
+    INFO(id);
+    CHECK(entry_of(id)["kind"].as_string() == "realtime");
+    CHECK(entry_of(id)["realtimeInsertable"].as_bool());
   }
 
   // Pair processors are reported as kind "pair" and are never realtime-insertable.
   for (const auto& id : sonare::mastering::api::pair_processor_names()) {
-    const std::string entry =
-        "{\"id\":\"" + id + "\",\"kind\":\"pair\",\"realtimeInsertable\":false";
-    REQUIRE(json.find(entry) != std::string::npos);
+    INFO(id);
+    CHECK(entry_of(id)["kind"].as_string() == "pair");
+    CHECK_FALSE(entry_of(id)["realtimeInsertable"].as_bool());
   }
 
   // A whole-file processor that is not built as a streaming insert is offline and
   // not realtime-insertable (loudnessOptimize needs the full signal).
-  REQUIRE(json.find(
-              "{\"id\":\"maximizer.loudnessOptimize\",\"kind\":\"offline\",\"realtimeInsertable\":"
-              "false") != std::string::npos);
+  CHECK(entry_of("maximizer.loudnessOptimize")["kind"].as_string() == "offline");
+  CHECK_FALSE(entry_of("maximizer.loudnessOptimize")["realtimeInsertable"].as_bool());
 
   // stereoOnly is surfaced independently of kind: eq.midSide is realtime-insertable
   // yet has no mono implementation, so it is realtime + stereoOnly. It is also an
   // inherently-stereo processor, so its channelPolicy is "stereoPairOnly".
-  REQUIRE(
-      json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
-                "\"forms\":[\"realtime\",\"offline\"],\"stereoOnly\":true,\"latencySamples\":0,"
-                "\"tailSamples\":0,"
-                "\"realtimeCost\":\"low\",\"channelPolicy\":\"stereoPairOnly\",\"category\":\"eq\","
-                "\"causal\":true,\"params\":") != std::string::npos);
+  {
+    const auto& mid_side = entry_of("eq.midSide");
+    CHECK(mid_side["kind"].as_string() == "realtime");
+    CHECK(mid_side["realtimeInsertable"].as_bool());
+    CHECK(forms_of("eq.midSide") == realtime_and_offline);
+    CHECK(mid_side["stereoOnly"].as_bool());
+    CHECK(mid_side["latencySamples"].as_int() == 0);
+    CHECK(mid_side["tailSamples"].as_int() == 0);
+    CHECK(mid_side["realtimeCost"].as_string() == "low");
+    CHECK(mid_side["channelPolicy"].as_string() == "stereoPairOnly");
+    CHECK(mid_side["category"].as_string() == "eq");
+    CHECK(mid_side["causal"].as_bool());
+    CHECK(mid_side["params"].is_array());
+  }
 
   // Delay-like stereo tools publish their prepared audible tail through the
   // same probe used for latency. Default Haas is 12 ms at 48 kHz; default
   // PhaseAlign has no delay.
-  REQUIRE(json.find("{\"id\":\"stereo.haasEnhancer\",\"kind\":\"realtime\","
-                    "\"realtimeInsertable\":true,\"forms\":[\"realtime\",\"offline\"],"
-                    "\"stereoOnly\":true,"
-                    "\"latencySamples\":0,\"tailSamples\":576,\"realtimeCost\":\"low\",") !=
-          std::string::npos);
-  REQUIRE(json.find("{\"id\":\"stereo.phaseAlign\",\"kind\":\"realtime\","
-                    "\"realtimeInsertable\":true,\"forms\":[\"realtime\",\"offline\"],"
-                    "\"stereoOnly\":true,"
-                    "\"latencySamples\":0,\"tailSamples\":0,\"realtimeCost\":\"low\",") !=
-          std::string::npos);
+  for (const auto& [id, tail] : {std::pair<std::string, int>{"stereo.haasEnhancer", 576},
+                                 std::pair<std::string, int>{"stereo.phaseAlign", 0}}) {
+    INFO(id);
+    const auto& entry = entry_of(id);
+    CHECK(entry["kind"].as_string() == "realtime");
+    CHECK(entry["realtimeInsertable"].as_bool());
+    CHECK(forms_of(id) == realtime_and_offline);
+    CHECK(entry["stereoOnly"].as_bool());
+    CHECK(entry["latencySamples"].as_int() == 0);
+    CHECK(entry["tailSamples"].as_int() == tail);
+    CHECK(entry["realtimeCost"].as_string() == "low");
+  }
 
 #ifdef SONARE_WITH_FX
   // Velvet's bounded multi-tap work is explicitly distinguishable from a
@@ -1286,12 +1309,8 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   REQUIRE(true_peak != catalog.as_array().end());
   REQUIRE((*true_peak)["realtimeCost"].as_string() == "moderate");
 
-  const auto cost_of = [&catalog](const std::string& id) {
-    const auto found =
-        std::find_if(catalog.as_array().begin(), catalog.as_array().end(),
-                     [&id](const auto& entry) { return entry["id"].as_string() == id; });
-    REQUIRE(found != catalog.as_array().end());
-    return (*found)["realtimeCost"].as_string();
+  const auto cost_of = [&entry_of](const std::string& id) {
+    return entry_of(id)["realtimeCost"].as_string();
   };
 
   // An id whose engine embeds one that is already tiered up inherits that tier
@@ -1329,9 +1348,8 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   // The room-simulation reverb is only built when the acoustic feature is on, so
   // it is reported exactly when the insert factory can construct it.
   if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {
-    REQUIRE(
-        json.find("{\"id\":\"effects.reverb.room\",\"kind\":\"realtime\",\"realtimeInsertable\":"
-                  "true") != std::string::npos);
+    CHECK(entry_of("effects.reverb.room")["kind"].as_string() == "realtime");
+    CHECK(entry_of("effects.reverb.room")["realtimeInsertable"].as_bool());
   }
 }
 
@@ -1689,15 +1707,22 @@ TEST_CASE("offline->realtime candidate processors are already realtime-insertabl
   // insert and the catalog classifies it kind "realtime". No promotion work is
   // required; realtime-insertability is distinct from per-parameter realtime
   // safety (the latter is reported by sonare_mastering_insert_param_info).
-  const std::string json = sonare::mastering::api::processor_catalog_json();
+  const auto catalog = sonare::util::json::parse(sonare::mastering::api::processor_catalog_json());
+  const auto catalog_entry = [&](const std::string& id) -> const sonare::util::json::Value* {
+    for (const auto& entry : catalog.as_array()) {
+      if (entry["id"].as_string() == id) return &entry;
+    }
+    return nullptr;
+  };
   for (const char* id : {"eq.dynamic", "multiband.dynamicEq", "eq.midSide", "eq.linearPhase",
                          "dynamics.vocalRider", "dynamics.parallelComp"}) {
     DYNAMIC_SECTION(id) {
       REQUIRE(ListContains(insert_factory_names(), id));
       REQUIRE(make_insert(id, "{}") != nullptr);
-      const std::string entry =
-          std::string("{\"id\":\"") + id + "\",\"kind\":\"realtime\",\"realtimeInsertable\":true";
-      REQUIRE(json.find(entry) != std::string::npos);
+      const auto* entry = catalog_entry(id);
+      REQUIRE(entry != nullptr);
+      CHECK((*entry)["kind"].as_string() == "realtime");
+      CHECK((*entry)["realtimeInsertable"].as_bool());
     }
   }
 
@@ -1705,8 +1730,9 @@ TEST_CASE("offline->realtime candidate processors are already realtime-insertabl
   for (const char* id : {"maximizer.loudnessOptimize", "repair.declick", "final.dither"}) {
     DYNAMIC_SECTION(id) {
       REQUIRE_FALSE(ListContains(insert_factory_names(), id));
-      const std::string entry = std::string("{\"id\":\"") + id + "\",\"kind\":\"offline\"";
-      REQUIRE(json.find(entry) != std::string::npos);
+      const auto* entry = catalog_entry(id);
+      REQUIRE(entry != nullptr);
+      CHECK((*entry)["kind"].as_string() == "offline");
     }
   }
 }

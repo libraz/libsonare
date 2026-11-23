@@ -4,7 +4,10 @@
 /// @brief Persistent PPQ breakpoint automation lane.
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "automation/parameter.h"
@@ -13,13 +16,14 @@ namespace sonare::automation {
 
 /// Persistent target classification for a project automation lane.
 ///
-/// Opaque lanes retain the historical host-defined target semantics.  The two
-/// typed targets are the only mixer targets currently part of the arrangement
-/// contract; values outside this set are never valid serialized or C-ABI input.
+/// Opaque lanes retain host-defined target semantics.
 enum class AutomationTargetKind : uint32_t {
   kOpaque = 0,
   kTrackFaderDb = 1,
   kTrackPan = 2,
+  kTrackSendDb = 3,
+  kTrackWidth = 4,
+  kTrackInsertParam = 5,
 };
 
 static_assert(static_cast<uint32_t>(AutomationTargetKind::kOpaque) == 0u,
@@ -30,9 +34,21 @@ static_assert(static_cast<uint32_t>(AutomationTargetKind::kTrackPan) == 2u,
               "AutomationTargetKind pan ordinal drift");
 
 constexpr bool valid_automation_target_kind(AutomationTargetKind kind) noexcept {
-  return kind == AutomationTargetKind::kOpaque || kind == AutomationTargetKind::kTrackFaderDb ||
-         kind == AutomationTargetKind::kTrackPan;
+  return static_cast<uint32_t>(kind) <=
+         static_cast<uint32_t>(AutomationTargetKind::kTrackInsertParam);
 }
+
+struct AutomationTargetIdentity {
+  std::string send_id;
+  std::optional<std::size_t> insert_index;
+  std::string processor;
+  std::string param_name;
+
+  bool operator==(const AutomationTargetIdentity& other) const noexcept {
+    return send_id == other.send_id && insert_index == other.insert_index &&
+           processor == other.processor && param_name == other.param_name;
+  }
+};
 
 struct Breakpoint {
   double ppq = 0.0;
@@ -59,11 +75,20 @@ class AutomationLane {
   AutomationLane() = default;
   explicit AutomationLane(uint32_t target_param_id,
                           AutomationTargetKind target_kind = AutomationTargetKind::kOpaque);
+  AutomationLane(uint32_t target_param_id, AutomationTargetKind target_kind,
+                 AutomationTargetIdentity identity);
 
+  uint32_t lane_id() const noexcept { return lane_id_; }
+  void set_lane_id(uint32_t id) noexcept { lane_id_ = id; }
   uint32_t target_param_id() const noexcept { return target_param_id_; }
   void set_target_param_id(uint32_t id) noexcept { target_param_id_ = id; }
   AutomationTargetKind target_kind() const noexcept { return target_kind_; }
   void set_target_kind(AutomationTargetKind kind) noexcept { target_kind_ = kind; }
+  const AutomationTargetIdentity& target_identity() const noexcept { return identity_; }
+  bool valid_target_identity() const noexcept;
+  bool same_target_identity(const AutomationLane& other) const noexcept {
+    return target_kind_ == other.target_kind_ && identity_ == other.identity_;
+  }
   /// Sorts by ppq (stable) and drops duplicate-ppq points, keeping the FIRST
   /// occurrence in the supplied list. A lane therefore cannot represent an
   /// instantaneous jump as two points at the same ppq — place the second point
@@ -75,14 +100,16 @@ class AutomationLane {
   double next_breakpoint_after(double ppq) const noexcept;
 
   bool operator==(const AutomationLane& o) const noexcept {
-    return target_param_id_ == o.target_param_id_ && target_kind_ == o.target_kind_ &&
-           points_ == o.points_;
+    return lane_id_ == o.lane_id_ && target_param_id_ == o.target_param_id_ &&
+           target_kind_ == o.target_kind_ && identity_ == o.identity_ && points_ == o.points_;
   }
   bool operator!=(const AutomationLane& o) const noexcept { return !(*this == o); }
 
  private:
+  uint32_t lane_id_ = 0;
   uint32_t target_param_id_ = 0;
   AutomationTargetKind target_kind_ = AutomationTargetKind::kOpaque;
+  AutomationTargetIdentity identity_;
   std::vector<Breakpoint> points_;
 };
 

@@ -138,7 +138,10 @@ int64_t RealtimeEngine::insert_automation_id(const InsertAutomationTarget& targe
 
 int64_t RealtimeEngine::track_lane_automation_id(uint32_t track_id,
                                                  unsigned int param_id) const noexcept {
-  if (param_id != TrackMixerRuntime::kFaderDb && param_id != TrackMixerRuntime::kPan) return -1;
+  if (param_id != TrackMixerRuntime::kFaderDb && param_id != TrackMixerRuntime::kPan &&
+      param_id != TrackMixerRuntime::kWidth) {
+    return -1;
+  }
   return insert_automation_id({InsertStripKind::kTrackLane, track_id, 0, {}}, param_id);
 }
 
@@ -233,7 +236,6 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
         return track_mixer_runtime_.route_track_insert_param_smoothed_by_id(
             target->owner_id, target->insert_index, param_id, value);
       case InsertStripKind::kTrackLane:
-        // Width is not a track lane control; set_lane_parameter refuses it.
         return track_mixer_runtime_.set_track_parameter(target->owner_id, param_id, value);
       case InsertStripKind::kBusLane:
         if (param_id != TrackMixerRuntime::kFaderDb) return false;
@@ -329,13 +331,15 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
   const uint32_t kind = insert_id ? insert_param_param(id) : id & kEngineParamKindMask;
   const bool is_master = !insert_id && lane == kEngineParamLaneMaster;
   const bool is_bus = insert_id && target->strip == InsertStripKind::kBusLane;
-  // Mirrors route_engine_parameter's own per-scope kind restriction: a bus
-  // owns only its fader, a track lane owns fader and pan, and width is a
-  // master-only control.
+  // Mirrors route_engine_parameter's own per-scope kind restriction.
   if (is_bus) {
     if (kind != TrackMixerRuntime::kFaderDb) return false;
   } else if (insert_id) {
-    if (kind != TrackMixerRuntime::kFaderDb && kind != TrackMixerRuntime::kPan) return false;
+    const bool track_lane = target->strip == InsertStripKind::kTrackLane;
+    if (kind != TrackMixerRuntime::kFaderDb && kind != TrackMixerRuntime::kPan &&
+        !(track_lane && kind == TrackMixerRuntime::kWidth)) {
+      return false;
+    }
   } else if (!is_master) {
     return false;
   }

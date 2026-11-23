@@ -554,55 +554,48 @@ TEST_CASE("BeatAnalyzer downbeat phase and indices address its own beats", "[bea
   }
 }
 
-TEST_CASE("BeatAnalyzer retains the beat-level evidence the downbeat pass scored",
-          "[beat_analyzer]") {
+TEST_CASE("BeatAnalyzer retains audio-backed beat accents", "[beat_analyzer]") {
   Audio audio = create_drum_pattern(120.0f, 4, 22050, 4.0f);
   BeatAnalyzer analyzer(audio);
 
   const size_t beat_count = analyzer.beats().size();
   REQUIRE(beat_count >= 4);
 
-  // Every populated stream indexes in parallel with beats().
-  REQUIRE(analyzer.beat_onset_observations().size() == beat_count);
+  const BeatAccents& accents = analyzer.beat_accents();
+  REQUIRE(accents.beat.size() == beat_count);
+  REQUIRE(accents.beat_has_attack.size() == beat_count);
+  REQUIRE(accents.subdivision.size() == beat_count - 1);
   REQUIRE(analyzer.beat_low_frequency_observations().size() == beat_count);
-  // Chord changes only arrive from a caller that has analyzed chords, which
-  // BeatAnalyzer never does on its own.
   REQUIRE(analyzer.beat_chord_change_observations().empty());
 
   for (size_t i = 0; i < beat_count; ++i) {
-    CAPTURE(i, analyzer.beat_onset_observations()[i],
+    CAPTURE(i, accents.beat[i], accents.beat_has_attack[i],
             analyzer.beat_low_frequency_observations()[i]);
-    REQUIRE(std::isfinite(analyzer.beat_onset_observations()[i]));
-    REQUIRE(analyzer.beat_onset_observations()[i] >= 0.0f);
+    REQUIRE(std::isfinite(accents.beat[i]));
+    REQUIRE(accents.beat[i] >= 0.0f);
+    REQUIRE((accents.beat_has_attack[i] == 0 || accents.beat_has_attack[i] == 1));
     REQUIRE(std::isfinite(analyzer.beat_low_frequency_observations()[i]));
     REQUIRE(analyzer.beat_low_frequency_observations()[i] >= 0.0f);
   }
-
-  // The exposed onset observation is a beat-local window; Beat::strength is a
-  // single unwindowed envelope frame. Being able to read the windowed quantity
-  // is the reason the accessor exists, so the two must not collapse into one.
-  bool differs = false;
-  for (size_t i = 0; i < beat_count && !differs; ++i) {
-    differs = analyzer.beat_onset_observations()[i] != analyzer.beats()[i].strength;
+  for (float accent : accents.subdivision) {
+    REQUIRE(std::isfinite(accent));
+    REQUIRE(accent >= 0.0f);
   }
-  REQUIRE(differs);
 }
 
-TEST_CASE("BeatAnalyzer without audio scores onsets but has no low-frequency evidence",
-          "[beat_analyzer]") {
+TEST_CASE("BeatAnalyzer omits audio observations without audio", "[beat_analyzer]") {
   Audio audio = create_drum_pattern(120.0f, 4, 22050, 4.0f);
   BeatAnalyzer audio_backed(audio);
   BeatAnalyzer onset_backed(audio_backed.onset_strength(), audio.sample_rate(), 512);
 
   REQUIRE_FALSE(onset_backed.beats().empty());
-  REQUIRE(onset_backed.beat_onset_observations().size() == onset_backed.beats().size());
-  // Low-frequency energy is measured on the waveform, which this constructor
-  // never receives, and chord changes need an analysis this class does not run.
+  REQUIRE(onset_backed.beat_accents().beat.empty());
+  REQUIRE(onset_backed.beat_accents().beat_has_attack.empty());
+  REQUIRE(onset_backed.beat_accents().subdivision.empty());
   REQUIRE(onset_backed.beat_low_frequency_observations().empty());
   REQUIRE(onset_backed.beat_chord_change_observations().empty());
 
-  // The audio-backed constructor does fill it, so the emptiness above is the
-  // absent audio rather than an accessor that never populates.
+  REQUIRE(audio_backed.beat_accents().beat.size() == audio_backed.beats().size());
   REQUIRE_FALSE(audio_backed.beat_low_frequency_observations().empty());
 }
 
@@ -614,7 +607,9 @@ TEST_CASE("BeatAnalyzer publishes chord changes without moving the downbeats", "
   const size_t beat_count = analyzer.beats().size();
   REQUIRE(beat_count >= 4);
   const std::vector<float> initial_low_frequency = analyzer.beat_low_frequency_observations();
-  const std::vector<float> initial_onset = analyzer.beat_onset_observations();
+  const std::vector<float> initial_accents = analyzer.beat_accents().beat;
+  const std::vector<char> initial_attacks = analyzer.beat_accents().beat_has_attack;
+  const std::vector<float> initial_subdivision = analyzer.beat_accents().subdivision;
   const std::vector<int> initial_indices = analyzer.downbeat_indices();
   const int initial_phase = analyzer.downbeat_phase();
   REQUIRE(analyzer.beat_chord_change_observations().empty());
@@ -630,7 +625,9 @@ TEST_CASE("BeatAnalyzer publishes chord changes without moving the downbeats", "
   REQUIRE(analyzer.downbeat_indices() == initial_indices);
   REQUIRE(analyzer.downbeat_phase() == initial_phase);
   REQUIRE(analyzer.beat_low_frequency_observations() == initial_low_frequency);
-  REQUIRE(analyzer.beat_onset_observations() == initial_onset);
+  REQUIRE(analyzer.beat_accents().beat == initial_accents);
+  REQUIRE(analyzer.beat_accents().beat_has_attack == initial_attacks);
+  REQUIRE(analyzer.beat_accents().subdivision == initial_subdivision);
 }
 
 TEST_CASE("BeatAnalyzer re-estimating the meter publishes its energy and re-seeds phase 0",
@@ -641,11 +638,17 @@ TEST_CASE("BeatAnalyzer re-estimating the meter publishes its energy and re-seed
   const size_t beat_count = analyzer.beats().size();
   REQUIRE(beat_count >= 8);
   const std::vector<float> low_frequency(beat_count, 0.25f);
+  const std::vector<float> accents = analyzer.beat_accents().beat;
+  const std::vector<char> attacks = analyzer.beat_accents().beat_has_attack;
+  const std::vector<float> subdivisions = analyzer.beat_accents().subdivision;
   REQUIRE(analyzer.beat_low_frequency_observations() != low_frequency);
 
   analyzer.estimate_time_signature(low_frequency);
 
   REQUIRE(analyzer.beat_low_frequency_observations() == low_frequency);
+  REQUIRE(analyzer.beat_accents().beat == accents);
+  REQUIRE(analyzer.beat_accents().beat_has_attack == attacks);
+  REQUIRE(analyzer.beat_accents().subdivision == subdivisions);
   REQUIRE(analyzer.downbeat_phase() == 0);
   REQUIRE(analyzer.downbeat_indices().front() == 0);
 }

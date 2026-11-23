@@ -130,6 +130,7 @@ void TrackMixerRuntime::finish_block(float* const* channels, int num_channels, i
     const size_t lane_index = lane_at(position, lanes->size());
     if (!source_mix_lane_active_[lane_index]) continue;
     process_lane_strip(lane_index, render_channels, num_samples, timeline_sample);
+    process_lane_width(lane_index, render_channels, num_samples);
     advance_lane_gain(lane_index, num_samples, any_solo);
     mix_lane_sends(lane_index, render_channels, num_samples, timeline_sample);
   }
@@ -309,6 +310,7 @@ void TrackMixerRuntime::finish_source_mix(float* const* channels, int num_channe
     const size_t lane_index = lane_at(position, lanes->size());
     if (!source_mix_lane_active_[lane_index]) continue;
     process_lane_strip(lane_index, render_channels, num_samples, 0);
+    process_lane_width(lane_index, render_channels, num_samples);
     advance_lane_gain(lane_index, num_samples, any_solo);
     mix_lane_sends(lane_index, render_channels, num_samples, 0);
     apply_lane_to_mix(lane_index, channels, render_channels, num_samples, meter_tap, render_frame,
@@ -431,6 +433,22 @@ void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, 
   // the lane fader/gate/pan stage in apply_lane_to_mix(). It therefore remains
   // audible when the lane is muted or solo-gated, matching the cue tap point.
   add_lane_monitor_pfl(lane_index, num_channels, num_samples);
+}
+
+void TrackMixerRuntime::process_lane_width(size_t lane_index, int num_channels,
+                                           int num_samples) noexcept {
+  LaneState& lane = lane_states_[lane_index];
+  if (lane.width.target() == 1.0f && lane.width.current() == 1.0f) return;
+  float* const left = num_channels >= 2 ? lane_channel(lane_index, 0) : nullptr;
+  float* const right = num_channels >= 2 ? lane_channel(lane_index, 1) : nullptr;
+  for (int i = 0; i < num_samples; ++i) {
+    const float width = lane.width.process();
+    if (left == nullptr || width == 1.0f) continue;
+    const float mid = 0.5f * (left[i] + right[i]);
+    const float side = 0.5f * (left[i] - right[i]) * width;
+    left[i] = mid + side;
+    right[i] = mid - side;
+  }
 }
 
 void TrackMixerRuntime::add_lane_monitor_pfl(size_t lane_index, int num_channels,

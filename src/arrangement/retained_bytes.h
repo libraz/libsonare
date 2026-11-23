@@ -66,6 +66,11 @@ inline std::size_t dynamic_bytes(const std::string& value) noexcept {
   return saturating_add(value.capacity(), std::size_t{1});
 }
 
+inline std::size_t dynamic_bytes(const DestinationPatchField& value) noexcept {
+  const auto* token = std::get_if<std::string>(&value);
+  return token != nullptr ? dynamic_bytes(*token) : 0;
+}
+
 inline std::size_t dynamic_bytes(const AudioSourceRef& value) noexcept {
   std::size_t total = dynamic_bytes(value.uri);
   total = saturating_add(total, dynamic_bytes(value.content_hash));
@@ -135,7 +140,11 @@ std::size_t dynamic_bytes(const AudioContentStore& value) noexcept;
 inline std::size_t dynamic_bytes(const automation::Breakpoint&) noexcept { return 0; }
 
 inline std::size_t dynamic_bytes(const automation::AutomationLane& value) noexcept {
-  return dynamic_bytes(value.points());
+  const auto& identity = value.target_identity();
+  std::size_t total = dynamic_bytes(value.points());
+  total = saturating_add(total, dynamic_bytes(identity.send_id));
+  total = saturating_add(total, dynamic_bytes(identity.processor));
+  return saturating_add(total, dynamic_bytes(identity.param_name));
 }
 
 inline std::size_t dynamic_bytes(const mixing::api::Insert& value) noexcept {
@@ -188,6 +197,33 @@ inline std::size_t dynamic_bytes(const ProjectPartRig& value) noexcept {
   return dynamic_bytes(value.rig.stages);
 }
 
+inline std::size_t dynamic_bytes(const DestinationSynthInstrument& value) noexcept {
+  std::size_t total = dynamic_bytes(value.preset);
+  total = saturating_add(total, dynamic_bytes(value.engine_mode));
+  total = saturating_add(total, dynamic_bytes(value.fields));
+  total = saturating_add(total, dynamic_bytes(value.engine_params));
+  return saturating_add(total, dynamic_bytes(value.mod_routings));
+}
+
+inline std::size_t dynamic_bytes(const DestinationBuiltinInstrument&) noexcept { return 0; }
+
+inline std::size_t dynamic_bytes(const DestinationSf2Instrument& value) noexcept {
+  return value.sound_font_uri.has_value() ? dynamic_bytes(*value.sound_font_uri) : 0;
+}
+
+inline std::size_t dynamic_bytes(const DestinationInstrument& value) noexcept {
+  return std::visit([](const auto& instrument) noexcept { return dynamic_bytes(instrument); },
+                    value);
+}
+
+inline std::size_t dynamic_bytes(const DestinationMidiBank&) noexcept { return 0; }
+
+inline std::size_t dynamic_bytes(const DestinationInstrumentBinding& value) noexcept {
+  std::size_t total = dynamic_bytes(value.instrument);
+  if (value.bank.has_value()) total = saturating_add(total, dynamic_bytes(*value.bank));
+  return total;
+}
+
 /// Account all project-owned dynamic containers. The Project object itself is
 /// counted by bytes(Project); this helper only describes its dynamic payload.
 inline std::size_t dynamic_bytes(const Project& value) noexcept {
@@ -198,10 +234,11 @@ inline std::size_t dynamic_bytes(const Project& value) noexcept {
   total = saturating_add(total, dynamic_bytes(value.clips()));
   total = saturating_add(total, dynamic_bytes(value.markers()));
   total = saturating_add(total, dynamic_bytes(value.annotation()));
-  total = saturating_add(total, dynamic_bytes(value.scene()));
+  if (const auto* scene = value.find_scene()) total = saturating_add(total, dynamic_bytes(*scene));
   total = saturating_add(total, dynamic_bytes(value.assist_sidecars()));
   total = saturating_add(total, dynamic_bytes(value.warp_maps()));
-  return saturating_add(total, dynamic_bytes(value.part_rigs()));
+  total = saturating_add(total, dynamic_bytes(value.part_rigs()));
+  return saturating_add(total, dynamic_bytes(value.destination_instruments()));
 }
 
 template <typename T>

@@ -18,6 +18,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "host/midi_io.h"
 
@@ -32,6 +35,11 @@ namespace sonare::host::backends {
 /// it plugs straight into the engine's MIDI input wiring.
 class CoreMidiInput final : public MidiInputSource {
  public:
+  struct SourceInfo {
+    std::string uid;
+    std::string name;
+  };
+
   CoreMidiInput();
   ~CoreMidiInput() override;
 
@@ -43,13 +51,22 @@ class CoreMidiInput final : public MidiInputSource {
   /// if there is no such source or the port could not be created.
   bool open(size_t source_index);
 
+  /// CONTROL thread: connect to the source with the decimal CoreMIDI unique ID
+  /// in @p uid. Returns false for an invalid or unavailable UID, or when the
+  /// port could not be created.
+  bool open_uid(std::string_view uid);
+
+  /// CONTROL thread: enumerate source endpoints with their stable decimal UIDs
+  /// and display names.
+  static std::vector<SourceInfo> sources();
+
   /// CONTROL thread: number of CoreMIDI source endpoints currently present.
   static size_t source_count();
 
   /// CONTROL thread: writes source @p index's display name into @p out as
-  /// NUL-terminated UTF-8, truncated to @p capacity. False on a bad index, a
-  /// zero capacity, or an endpoint that publishes no name; @p out is left
-  /// untouched in that case.
+  /// NUL-terminated UTF-8, truncated at a complete code point to @p capacity.
+  /// A bad index, zero capacity, or an endpoint without a name returns false
+  /// and leaves @p out untouched.
   static bool source_name(size_t index, char* out, size_t capacity);
 
   /// CONTROL thread: attach CoreAudioDevice::midi_time_mapper() (or another

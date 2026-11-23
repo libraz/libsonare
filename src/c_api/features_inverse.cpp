@@ -1,9 +1,14 @@
 #include <cmath>
+#include <complex>
+#include <cstdint>
+#include <limits>
 #include <string>
+#include <utility>
 
 #include "c_api/features_internal.h"
 #include "c_api/inverse_input_domains.h"
 #include "core/spectrum.h"
+#include "util/constants.h"
 #include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
@@ -87,6 +92,39 @@ SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, in
     check::integer_within(n_iter, sonare_c_detail::kGriffinLimIterationsDomain, "n_iter");
     check_inverse_input_length(input_length, n_bins, n_frames, "n_bins");
   });
+}
+
+// Keeps every Hann resynthesis-geometry refusal rooted at the C caller's FFT/hop pair.
+int validate_istft_geometry(int n_fft, size_t hop_length) {
+  try {
+    check_stft_hop(hop_length, "hop_length");
+    const int checked_hop = core_stft_hop(hop_length);
+    validate_cola_geometry(n_fft, checked_hop, WindowType::Hann, n_fft);
+    return checked_hop;
+  } catch (const SonareParameterRefusal& refusal) {
+    bool names_n_fft = false;
+    bool names_hop_length = false;
+    for (const std::string& subject : refusal.subjects()) {
+      names_n_fft = names_n_fft || subject == "n_fft";
+      names_hop_length = names_hop_length || subject == "hop_length";
+    }
+    if (names_n_fft && names_hop_length) throw;
+
+    if (refusal.subject() == "n_fft") {
+      check::refuse_relation({"n_fft", "hop_length"},
+                             "{0} " + refusal.predicate() + " when paired with {1}");
+    }
+    if (refusal.subject() == "hop_length") {
+      check::refuse_relation({"n_fft", "hop_length"},
+                             "{1} " + refusal.predicate() + " when paired with {0}");
+    }
+    if (refusal.subject() == "win_length") {
+      check::refuse_relation({"n_fft", "hop_length"},
+                             "the Hann window with {0} and {1} " + refusal.predicate());
+    }
+    check::refuse_relation({"n_fft", "hop_length"},
+                           "{0} and {1} must satisfy the Hann COLA geometry");
+  }
 }
 
 }  // namespace
@@ -274,6 +312,86 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
   return fill_audio_samples(griffin_lim(magnitude, n_bins, n_frames, n_fft,
                                         core_stft_hop(hop_length), sample_rate, config),
                             out, out_length);
+  SONARE_C_CATCH
+}
+
+void sonare_istft_options_init(SonareIstftOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
+}
+
+SonareError sonare_istft(const float* magnitude, const float* phase, int n_bins, int n_frames,
+                         int n_fft, size_t hop_length, const SonareIstftOptions* options,
+                         float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out, out_length);
+  SonareIstftOptions resolved;
+  if (const SonareError err = resolve_options(options, sonare_istft_options_init,
+                                              "sonare_istft_options_init", &resolved);
+      err != SONARE_OK) {
+    return err;
+  }
+  SONARE_C_REQUIRE_NONNULL(magnitude);
+  SONARE_C_REQUIRE_NONNULL(phase);
+
+  size_t total = 0;
+  int checked_hop = 0;
+  if (const SonareError err = run_validation([&] {
+        check::integer_within(n_bins, sonare_c_detail::kInverseSpectrogramExtentDomain, "n_bins");
+        check::integer_within(n_frames, sonare_c_detail::kInverseSpectrogramExtentDomain,
+                              "n_frames");
+        checked_hop = validate_istft_geometry(n_fft, hop_length);
+        if (n_bins != n_fft / 2 + 1) {
+          check::refuse_relation({"n_bins", "n_fft"}, "{0} must equal {1} / 2 + 1");
+        }
+        check::integer_within(
+            resolved.length_samples,
+            check::integer_domain(0, static_cast<long long>(sonare::kMaxAudioBufferSize)),
+            "length_samples");
+
+        const size_t bins = static_cast<size_t>(n_bins);
+        const size_t frames = static_cast<size_t>(n_frames);
+        if (bins > sonare_c_detail::kMaxBufferSize / frames) {
+          check::refuse_relation(
+              {"n_bins", "n_frames"},
+              "{0} * {1} must be at most " + std::to_string(sonare_c_detail::kMaxBufferSize));
+        }
+        total = bins * frames;
+
+        const std::uint64_t full_length =
+            static_cast<std::uint64_t>(n_frames - 1) * static_cast<std::uint64_t>(checked_hop) +
+            static_cast<std::uint64_t>(n_fft);
+        if (full_length > static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
+          check::refuse_relation({"n_frames", "hop_length", "n_fft"},
+                                 "({0} - 1) * {1} + {2} must fit in int");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+
+  if (const SonareError err = run_validation([&] {
+        for (size_t i = 0; i < total; ++i) {
+          check::finite_float(magnitude[i], "magnitude");
+          check::finite_float(phase[i], "phase");
+          check::at_least(magnitude[i], 0.0, "magnitude");
+        }
+      });
+      err != SONARE_OK) {
+    return err;
+  }
+
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_REQUIRE_NONNULL(out_length);
+  SONARE_C_TRY
+  std::vector<std::complex<float>> spectrum(total);
+  for (size_t i = 0; i < total; ++i) spectrum[i] = std::polar(magnitude[i], phase[i]);
+  Spectrogram spec =
+      Spectrogram::from_complex(std::move(spectrum), n_bins, n_frames, n_fft, checked_hop,
+                                sonare::constants::kDefaultSampleRate, WindowType::Hann);
+  const Audio audio = spec.to_audio(static_cast<int>(resolved.length_samples));
+  return fill_audio_samples(audio, out, out_length);
   SONARE_C_CATCH
 }
 

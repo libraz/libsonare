@@ -4,6 +4,7 @@
 /// @brief Numeric-domain rows of the project, editing, MIDI, mixing and vocal-edit C entries.
 
 #include "c_api/editing_input_domains.h"
+#include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "c_api/midi_input_domains.h"
 #include "c_api/mixing_input_domains.h"
@@ -171,6 +172,9 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"project_annotate_keys", "count", kAnnotationCountDomain, nullptr},
     {"project_annotate_keys", "keys[].end_ppq", kPublicPpqDomain, nullptr},
     {"project_annotate_keys", "keys[].start_ppq", kPublicPpqDomain, nullptr},
+    {"project_annotate_sections", "count", kAnnotationCountDomain, nullptr},
+    {"project_annotate_sections", "sections[].end_ppq", kPublicPpqDomain, nullptr},
+    {"project_annotate_sections", "sections[].start_ppq", kPublicPpqDomain, nullptr},
     {"project_apply_vocal_edit", "desc.clip_id", kVocalClipIdDomain, nullptr},
     {"project_apply_vocal_edit", "desc.expected_clip_length_ppq", kPublicPpqLengthDomain, nullptr},
     {"project_apply_vocal_edit", "desc.expected_source_offset_ppq", kPublicPpqDomain, nullptr},
@@ -179,12 +183,17 @@ inline const NumericDomainRow kProjectDomainRows[] = {
     {"project_apply_vocal_edit", "desc.expected_source_sample_rate", sonare::kAudioSampleRateDomain,
      nullptr},
     {"project_apply_vocal_edit", "desc.take_id", kVocalTakeIdDomain, nullptr},
+    {"project_bar_start_ppq", "bar_index", kProjectBarIndexDomain, "representable_bar_start"},
+    {"project_bounce", "options.articulations[].channel", kEngineMidiChannelDomain, nullptr},
     {"project_bounce", "options.block_size", kProjectBounceBlockSizeDomain, nullptr},
+    {"project_bounce", "options.count_in_bars", kProjectCountInBarsDomain, nullptr},
     {"project_bounce", "options.instrument_latency_samples", kProjectBounceInstrumentLatencyDomain,
      nullptr},
     {"project_bounce", "options.num_channels", kProjectBounceChannelCountDomain, nullptr},
     {"project_bounce", "options.sample_rate", kProjectBounceSampleRateDomain, nullptr},
     {"project_bounce", "options.total_frames", kProjectBounceTotalFramesDomain, nullptr},
+    {"project_count_in_frames", "count_in_bars", kProjectCountInBarsDomain, nullptr},
+    {"project_count_in_frames", "sample_rate", kProjectBounceSampleRateDomain, nullptr},
     {"project_duplicate_clip", "new_start_ppq", kPublicPpqDomain, nullptr},
     {"project_edit_automation_lane", "desc.points[].ppq", kPublicPpqDomain, nullptr},
     {"project_edit_automation_lane", "desc.target_param_id", kAutomationTargetParamIdDomain,
@@ -195,11 +204,14 @@ inline const NumericDomainRow kProjectDomainRows[] = {
      nullptr},
     {"project_load_soundfont", "size", kSoundFontSizeDomain, nullptr},
     {"project_move_clip", "new_start_ppq", kPublicPpqDomain, nullptr},
+    {"project_position_at_ppq", "ppq", kPublicPpqDomain, "representable_bar_start"},
+    {"project_ppq_to_sec", "ppq", kPublicPpqDomain, nullptr},
     {"project_rehydrate_vocal_edits", "originals[].sample_count", kVocalSourceSampleCountDomain,
      nullptr},
     {"project_rehydrate_vocal_edits", "originals[].sample_rate", sonare::kAudioSampleRateDomain,
      nullptr},
     {"project_rehydrate_vocal_edits", "originals[].source_id", kVocalSourceIdDomain, nullptr},
+    {"project_sec_to_ppq", "sec", kProjectPositionSecDomain, "tempo_map_upper_bound"},
     {"project_set_assist_sidecar", "region_end_ppq", kPublicPpqDomain, nullptr},
     {"project_set_assist_sidecar", "region_start_ppq", kPublicPpqDomain, nullptr},
     {"project_set_clip_comp_segments", "segments[].crossfade_ppq", kPublicPpqDomain, nullptr},

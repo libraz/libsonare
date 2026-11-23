@@ -877,27 +877,36 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
     if (clips != nullptr) chase_clip_state(*clips, clock);
   }
 
-  // Pending output and clip events at this frame merge by same_time_rank.
+  // After any prelude, pending output and clip events merge by same_time_rank.
   const int64_t timeline = clock.timeline.value;
-  for (int rank = 0; rank <= kMaxSameTimeRank; ++rank) {
+  constexpr int kPreludeRank = -1;
+  const bool has_prelude =
+      timeline == 0 && clock.rolling && clips != nullptr &&
+      std::any_of(clips->begin(), clips->end(),
+                  [](const MidiClipSchedule& clip) { return clip.frame_zero_prelude; });
+  for (int rank = has_prelude ? kPreludeRank : 0; rank <= kMaxSameTimeRank; ++rank) {
     dispatch_pending_at_rank(now, rank);
     if (!clock.rolling || clips == nullptr) continue;
-    visit_scheduled(*clips, timeline, timeline,
-                    [&](const MidiClipSchedule& clip, const MidiEvent* event, int64_t frame,
-                        bool clear_pending) noexcept {
-                      const int scheduled_rank = event == nullptr ? 0 : same_time_rank(event->ump);
-                      if (scheduled_rank != rank) return;
-                      if (event == nullptr) {
-                        release_notes_for_clip(clip.id, clock.device, clear_pending);
-                        return;
-                      }
-                      MidiEvent scheduled = *event;
-                      // The one timeline-to-device conversion a clip event goes through.
-                      scheduled.render_frame =
-                          timeline_to_device(TimelineFrame{frame}, clock).value;
-                      scheduled.source_track_id = clip.track_id;
-                      process_event(clip.destination_id, scheduled, /*from_clip=*/true, clip.id);
-                    });
+    visit_scheduled(
+        *clips, timeline, timeline,
+        [&](const MidiClipSchedule& clip, const MidiEvent* event, int64_t frame,
+            bool clear_pending) noexcept {
+          int scheduled_rank = 0;
+          if (event != nullptr) {
+            scheduled_rank =
+                has_prelude && clip.frame_zero_prelude ? kPreludeRank : same_time_rank(event->ump);
+          }
+          if (scheduled_rank != rank) return;
+          if (event == nullptr) {
+            release_notes_for_clip(clip.id, clock.device, clear_pending);
+            return;
+          }
+          MidiEvent scheduled = *event;
+          // The one timeline-to-device conversion a clip event goes through.
+          scheduled.render_frame = timeline_to_device(TimelineFrame{frame}, clock).value;
+          scheduled.source_track_id = clip.track_id;
+          process_event(clip.destination_id, scheduled, /*from_clip=*/true, clip.id);
+        });
   }
   compact_pending();
 }

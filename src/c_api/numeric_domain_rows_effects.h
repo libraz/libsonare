@@ -10,6 +10,7 @@
 #include "c_api/numeric_domain_row.h"
 #include "c_api/playback_domains.h"
 #include "c_api/ppq_domains.h"
+#include "core/audio.h"
 #include "core/spectrum.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/scale_quantizer.h"
@@ -36,6 +37,8 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"decompose_stems_linked", "config.n_fft", sonare::kColaNFftDomain, "even"},
     {"decompose_stems_linked", "config.n_iter", sonare::kDecomposeStemsIterDomain, nullptr},
     {"decompose_stems_linked", "num_channels", kDecomposeStemsLinkedChannelsDomain, nullptr},
+    {"encode_audio", "options.quality", sonare::util::check::real_domain(0.0, 1.0), nullptr},
+    {"encode_audio", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
     {"engine_add_parameter", "info.id", kEngineParameterIdDomain, nullptr},
     {"engine_articulation", "channel", kEngineMidiChannelDomain, nullptr},
     {"engine_bind_controller", "binding.index", kEngineControllerBindingIndexDomain, nullptr},

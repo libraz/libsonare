@@ -784,7 +784,6 @@ target_sources(sonare_tests PRIVATE
   ${PROJECT_SOURCE_DIR}/src/c_api/project_part_rig.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_tempo.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_instruments.cpp
-  ${PROJECT_SOURCE_DIR}/src/c_api/project_automation_validate.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_assist.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp

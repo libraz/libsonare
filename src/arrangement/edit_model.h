@@ -16,19 +16,21 @@
 /// clip has to survive a tempo change; the legacy PPQ value remains serialized
 /// for compatibility and is used when the optional physical value is absent.
 ///
-/// Ids are stable and allocated by a deterministic monotonic counter on the
-/// Project (no rand / no clock). Track, clip, and source ids share independent
-/// counters but each is monotonic and never reused within a Project instance.
+/// Ids are stable and allocated by deterministic monotonic counters on the
+/// Project (no rand / no clock). Each entity kind has an independent counter;
+/// ids are monotonic and never reused within a Project instance.
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "arrangement/destination_instrument.h"
 #include "arrangement/edit_source.h"
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
@@ -535,7 +537,7 @@ inline constexpr ProjectMemberMask kTempo = 1u << 1;
 inline constexpr ProjectMemberMask kTimeSignatures = 1u << 2;
 /// sources and the next source id.
 inline constexpr ProjectMemberMask kSources = 1u << 3;
-/// tracks and the next track id.
+/// tracks and the next track and automation-lane ids.
 inline constexpr ProjectMemberMask kTracks = 1u << 4;
 /// clips and the next clip id.
 inline constexpr ProjectMemberMask kClips = 1u << 5;
@@ -546,7 +548,8 @@ inline constexpr ProjectMemberMask kScene = 1u << 8;
 inline constexpr ProjectMemberMask kAssistSidecars = 1u << 9;
 inline constexpr ProjectMemberMask kWarpMaps = 1u << 10;
 inline constexpr ProjectMemberMask kPartRigs = 1u << 11;
-inline constexpr ProjectMemberMask kAll = (1u << 12) - 1u;
+inline constexpr ProjectMemberMask kDestinationInstruments = 1u << 12;
+inline constexpr ProjectMemberMask kAll = (1u << 13) - 1u;
 }  // namespace project_member
 
 // ===========================================================================
@@ -657,8 +660,13 @@ class Project {
 
   // ---- Mixer scene (pure data; held even when mixing runtime is disabled) --
 
-  const mixing::api::Scene& scene() const noexcept { return scene_; }
-  mixing::api::Scene& scene() noexcept { return scene_; }
+  const mixing::api::Scene* find_scene() const noexcept { return scene_ ? &*scene_ : nullptr; }
+  const mixing::api::Scene& scene() const noexcept;
+  mixing::api::Scene& scene() noexcept {
+    if (!scene_) scene_.emplace();
+    return *scene_;
+  }
+  void set_scene(std::optional<mixing::api::Scene> scene) { scene_ = std::move(scene); }
 
   // ---- Assist sidecars (opaque) --------------------------------------------
 
@@ -677,6 +685,24 @@ class Project {
   /// Entries in canonical (destination_id, part) order.
   const std::vector<ProjectPartRig>& part_rigs() const noexcept { return part_rigs_; }
   const ProjectPartRig* find_part_rig(uint32_t destination_id, uint8_t part) const noexcept;
+
+  // ---- Destination instruments -------------------------------------------
+
+  /// Bindings are kept in ascending destination id order. A binding can remain
+  /// after its destination stops being referenced by any track.
+  const std::map<uint32_t, DestinationInstrumentBinding>& destination_instruments() const noexcept {
+    return destination_instruments_;
+  }
+  const DestinationInstrumentBinding* find_destination_instrument(
+      uint32_t destination_id) const noexcept;
+  /// Sets a binding only when at least one track references its destination.
+  /// Throws InvalidParameter naming destination_id otherwise.
+  void set_destination_instrument(uint32_t destination_id, DestinationInstrumentBinding binding);
+  /// Removes a binding. Returns false when none exists.
+  bool remove_destination_instrument(uint32_t destination_id);
+  /// Restores a previous binding without requiring its destination to be live.
+  void restore_destination_instrument(uint32_t destination_id,
+                                      std::optional<DestinationInstrumentBinding> binding);
 
   // ---- Member groups --------------------------------------------------------
 
@@ -749,11 +775,14 @@ class Project {
   void ensure_next_track_id(TrackId id) noexcept;
   void ensure_next_clip_id(ClipId id) noexcept;
   void ensure_next_marker_id(uint32_t id) noexcept;
+  void ensure_next_automation_lane_id(uint32_t id) noexcept;
 
   SourceId next_source_id() const noexcept { return next_source_id_; }
   TrackId next_track_id() const noexcept { return next_track_id_; }
   ClipId next_clip_id() const noexcept { return next_clip_id_; }
   uint32_t next_marker_id() const noexcept { return next_marker_id_; }
+  uint32_t next_automation_lane_id() const noexcept { return next_automation_lane_id_; }
+  uint32_t allocate_automation_lane_id() noexcept;
 
   /// Mutable markers / sidecars / tempo for command use.
   std::vector<ProjectMarker>& markers_mutable() noexcept { return markers_; }
@@ -795,10 +824,11 @@ class Project {
   std::vector<EditClip> clips_;
   std::vector<ProjectMarker> markers_;
   ProjectAnnotation annotation_;
-  mixing::api::Scene scene_;
+  std::optional<mixing::api::Scene> scene_;
   std::vector<AssistSidecar> assist_sidecars_;
   std::vector<WarpMapRef> warp_maps_;
   std::vector<ProjectPartRig> part_rigs_;
+  std::map<uint32_t, DestinationInstrumentBinding> destination_instruments_;
 
   // Independent, monotonic, never-reused id counters (deterministic; no rand).
   // Never-reused holds WITHIN a project lifetime only: the counters are not
@@ -809,6 +839,7 @@ class Project {
   TrackId next_track_id_ = 1;
   ClipId next_clip_id_ = 1;
   uint32_t next_marker_id_ = 1;
+  uint32_t next_automation_lane_id_ = 1;
 };
 
 }  // namespace sonare::arrangement

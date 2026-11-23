@@ -17,16 +17,36 @@ bool automation_lane_kind_conflicts(const Track& track, const automation::Automa
   if (candidate.target_kind() == automation::AutomationTargetKind::kOpaque) return false;
   return std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
                      [&candidate, replaced](const automation::AutomationLane& lane) {
-                       return &lane != replaced && lane.target_kind() == candidate.target_kind();
+                       return &lane != replaced && lane.same_target_identity(candidate);
                      });
 }
 
-// Finds the automation lane of `track` targeting `target_param_id`, or end().
+bool opaque_lane_target_conflicts(const Track& track, const automation::AutomationLane& candidate,
+                                  const automation::AutomationLane* replaced = nullptr) {
+  if (candidate.target_kind() != automation::AutomationTargetKind::kOpaque) return false;
+  return std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
+                     [&candidate, replaced](const auto& lane) {
+                       return &lane != replaced &&
+                              lane.target_kind() == automation::AutomationTargetKind::kOpaque &&
+                              lane.target_param_id() == candidate.target_param_id();
+                     });
+}
+
+bool lane_id_in_use(const Project& project, uint32_t lane_id) {
+  for (const Track& track : project.tracks()) {
+    if (std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
+                    [lane_id](const auto& lane) { return lane.lane_id() == lane_id; })) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Finds the automation lane of `track` with `lane_id`, or end().
 template <typename TrackT>
-auto find_lane(TrackT& track, uint32_t target_param_id) {
-  return std::find_if(
-      track.automation_lanes.begin(), track.automation_lanes.end(),
-      [target_param_id](const auto& lane) { return lane.target_param_id() == target_param_id; });
+auto find_lane(TrackT& track, uint32_t lane_id) {
+  return std::find_if(track.automation_lanes.begin(), track.automation_lanes.end(),
+                      [lane_id](const auto& lane) { return lane.lane_id() == lane_id; });
 }
 
 }  // namespace
@@ -135,13 +155,15 @@ EditCommandPtr SetOverlapPolicy::invert(const Project& before,
 }
 
 bool SetScene::apply(Project& project, MidiContentStore& /*store*/) {
-  project.scene() = scene_;
+  project.set_scene(scene_);
   return true;
 }
 
 EditCommandPtr SetScene::invert(const Project& before,
                                 const MidiContentStore& /*store_before*/) const {
-  return std::make_unique<SetScene>(before.scene());
+  const auto* scene = before.find_scene();
+  if (scene == nullptr) return std::make_unique<SetScene>(std::nullopt);
+  return std::make_unique<SetScene>(*scene);
 }
 
 bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
@@ -263,24 +285,39 @@ bool AddAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
     return false;
   }
   const uint32_t target = lane_.target_param_id();
-  if (target == 0 || !automation::valid_automation_target_kind(lane_.target_kind())) return false;
-  if (find_lane(*t, target) != t->automation_lanes.end()) return false;
-  if (automation_lane_kind_conflicts(*t, lane_)) return false;
+  const bool opaque = lane_.target_kind() == automation::AutomationTargetKind::kOpaque;
+  if ((opaque && target == 0) || (!opaque && target != 0) || !lane_.valid_target_identity()) {
+    return false;
+  }
+  if (opaque_lane_target_conflicts(*t, lane_) || automation_lane_kind_conflicts(*t, lane_)) {
+    return false;
+  }
+  if (lane_.lane_id() == 0) {
+    const uint32_t id = project.allocate_automation_lane_id();
+    if (id == 0) return false;
+    lane_.set_lane_id(id);
+  } else {
+    if (lane_.lane_id() == std::numeric_limits<uint32_t>::max() ||
+        lane_id_in_use(project, lane_.lane_id())) {
+      return false;
+    }
+    project.ensure_next_automation_lane_id(lane_.lane_id());
+  }
   t->automation_lanes.push_back(lane_);
   return true;
 }
 
 EditCommandPtr AddAutomationLane::invert(const Project& /*before*/,
                                          const MidiContentStore& /*store_before*/) const {
-  return std::make_unique<RemoveAutomationLane>(track_id_, lane_.target_param_id());
+  return std::make_unique<RemoveAutomationLane>(track_id_, lane_.lane_id());
 }
 
 bool RemoveAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
   Track* t = project.find_track_mutable(track_id_);
-  if (t == nullptr || target_param_id_ == 0) {
+  if (t == nullptr || lane_id_ == 0) {
     return false;
   }
-  const auto found = find_lane(*t, target_param_id_);
+  const auto found = find_lane(*t, lane_id_);
   if (found == t->automation_lanes.end()) return false;
   t->automation_lanes.erase(found);
   return true;
@@ -292,7 +329,7 @@ EditCommandPtr RemoveAutomationLane::invert(const Project& before,
   if (t == nullptr) {
     return nullptr;
   }
-  const auto found = find_lane(*t, target_param_id_);
+  const auto found = find_lane(*t, lane_id_);
   if (found == t->automation_lanes.end()) return nullptr;
   // Re-insert the removed lane at its original index.
   return std::make_unique<InsertAutomationLane>(
@@ -301,14 +338,18 @@ EditCommandPtr RemoveAutomationLane::invert(const Project& before,
 
 bool EditAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
   Track* t = project.find_track_mutable(track_id_);
-  if (t == nullptr || target_param_id_ == 0 || lane_.target_param_id() != target_param_id_ ||
-      !automation::valid_automation_target_kind(lane_.target_kind())) {
+  if (t == nullptr || lane_id_ == 0 || !lane_.valid_target_identity()) return false;
+  const auto found = find_lane(*t, lane_id_);
+  if (found == t->automation_lanes.end()) return false;
+  const bool opaque = lane_.target_kind() == automation::AutomationTargetKind::kOpaque;
+  if ((opaque && lane_.target_param_id() == 0) || (!opaque && lane_.target_param_id() != 0) ||
+      opaque_lane_target_conflicts(*t, lane_, &*found) ||
+      automation_lane_kind_conflicts(*t, lane_, &*found)) {
     return false;
   }
-  const auto found = find_lane(*t, target_param_id_);
-  if (found == t->automation_lanes.end()) return false;
-  if (automation_lane_kind_conflicts(*t, lane_, &*found)) return false;
-  *found = lane_;
+  automation::AutomationLane replacement = lane_;
+  replacement.set_lane_id(lane_id_);
+  *found = std::move(replacement);
   return true;
 }
 
@@ -318,9 +359,9 @@ EditCommandPtr EditAutomationLane::invert(const Project& before,
   if (t == nullptr) {
     return nullptr;
   }
-  const auto found = find_lane(*t, target_param_id_);
+  const auto found = find_lane(*t, lane_id_);
   if (found == t->automation_lanes.end()) return nullptr;
-  return std::make_unique<EditAutomationLane>(track_id_, target_param_id_, *found);
+  return std::make_unique<EditAutomationLane>(track_id_, lane_id_, *found);
 }
 
 }  // namespace sonare::arrangement

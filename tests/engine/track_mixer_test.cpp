@@ -912,15 +912,16 @@ TEST_CASE("TrackMixerRuntime validates lane snapshots", "[engine][track_mixer]")
   REQUIRE_FALSE(mixer.set_track_lanes(std::move(too_many)));
 }
 
-TEST_CASE("TrackMixerRuntime rejects width and unknown typed lane parameters",
+TEST_CASE("TrackMixerRuntime accepts width in range and rejects unknown typed lane parameters",
           "[engine][track_mixer]") {
   sonare::engine::TrackMixerRuntime mixer;
   mixer.prepare(48000.0, 64);
   REQUIRE(mixer.set_track_lanes({{10}}));
 
-  // Width remains a standalone strip control. Arrangement typed lanes own only
-  // fader and pan, so width=3 must not look like a successful lane route.
-  REQUIRE_FALSE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kWidth, 1.0f));
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kWidth, 0.0f));
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kWidth, 2.0f));
+  REQUIRE_FALSE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kWidth, -0.1f));
+  REQUIRE_FALSE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kWidth, 2.1f));
   REQUIRE_FALSE(mixer.set_lane_parameter(0, 99u, 0.0f));
   REQUIRE_FALSE(mixer.set_lane_parameter(1, sonare::engine::TrackMixerRuntime::kFaderDb, 0.0f));
 }

@@ -1,16 +1,14 @@
 #pragma once
 
 /// @file live_session.h
-/// @brief Binds a live audio output and a live MIDI input to a RealtimeEngine.
+/// @brief Binds live audio devices and an optional MIDI input to a RealtimeEngine.
 ///
 /// This class owns no DSP and decides nothing about sound: it resolves the
 /// devices a performance needs, hands the audio backend's clock mapper to the
 /// MIDI input so incoming timestamps land on render frames, points the engine
-/// at that input, and pumps engine.process() from the device's render callback.
-/// Everything it does is available piecemeal from the backends; what it adds is
-/// that the bindings cannot be done in the wrong order. The audio output is
-/// required and the MIDI input is not, so a playback-only host is one Config
-/// field rather than a second class.
+/// at that input, and pumps the engine from the device callback that owns the
+/// audio clock. A session may use output, input, or both directions. The
+/// index-based Config keeps its original output-only behavior.
 ///
 /// macOS only, behind BUILD_COREAUDIO and BUILD_COREMIDI. Like the backends it
 /// sits on, this is an out-of-core leaf: no language binding links it and it is
@@ -20,15 +18,21 @@
 /// Threading follows the seam contract: open()/close() are control-thread and
 /// may allocate; render() runs on the device's audio thread and does not.
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <vector>
 
+#include "engine/realtime_engine.h"
 #include "host/audio_device.h"
 #include "host/backends/coreaudio/coreaudio_device.h"
 #include "host/backends/coremidi/coremidi_io.h"
+#include "host/live_input_ring.h"
+#include "host/midi_io.h"
 #include "util/constants.h"
 
 namespace sonare::engine {
@@ -39,7 +43,8 @@ namespace sonare::host {
 
 /// What a device enumeration returns for one entry. Fixed storage so listing
 /// devices costs no allocation past the call itself; a longer name is truncated
-/// rather than refused, because a display string is not an identifier.
+/// at a complete UTF-8 code point rather than refused, because a display string
+/// is not an identifier.
 struct LiveDeviceInfo {
   char name[128] = {};
 };
@@ -53,16 +58,26 @@ enum class LiveOpenResult : uint8_t {
   kInvalidArgument,
   /// The named MIDI source could not be opened.
   kMidiInputUnavailable,
+  /// A selected MIDI source is currently registered without an owned lifetime.
+  kMidiInputSourceNotOwned,
   /// The named audio device could not be opened at the requested format.
   kAudioOutputUnavailable,
-  /// The device opened but would not start streaming.
-  kAudioStartFailed,
+  /// The selected audio output opened but would not start streaming.
+  kAudioOutputStartFailed,
+  /// Starting MIDI capture failed while reserving its bounded event queue.
+  kOutOfMemory,
   /// The engine refused the format the device negotiated, e.g. a sample rate other
   /// than the one an installed project timeline is locked to.
   kEngineRefusedFormat,
+  /// Another live driver already owns the engine.
+  kEngineAlreadyDriven,
+  /// The selected audio input is absent or unavailable.
+  kAudioInputUnavailable,
+  /// The selected devices could not reach a shared native sample rate.
+  kAudioFormatRefused,
 };
 
-class LiveSession final {
+class LiveSession final : public engine::LiveDriver {
  public:
   LiveSession();
   ~LiveSession();
@@ -109,22 +124,87 @@ class LiveSession final {
     bool use_midi_input = true;
   };
 
+  enum class DeviceSelection : uint8_t { kNone, kDefault, kByUid };
+
+  struct DeviceSelector {
+    DeviceSelection selection = DeviceSelection::kNone;
+    std::string uid;
+  };
+
+  /// UID-based selection used by hosts that need independent input and output
+  /// devices. A zero rate uses the selected device's current nominal rate.
+  struct SelectorConfig {
+    DeviceSelector audio_output{};
+    DeviceSelector audio_input{};
+    DeviceSelector midi_input{};
+    double sample_rate = 0.0;
+    int block_size = 128;
+    uint32_t destination_id = 0;
+  };
+
+  /// Replaces one selected CoreAudio device with an SDK-free seam. The metadata
+  /// still participates in UID/default resolution and rate matching.
+  struct AudioDeviceOverride {
+    backends::CoreAudioDevice::DeviceInfo info{};
+    std::unique_ptr<AudioDevice> device;
+  };
+
+  struct Status {
+    bool running = false;
+    bool device_lost = false;
+    bool rate_changed = false;
+    int sample_rate = 0;
+    int output_block_size = 0;
+    int input_block_size = 0;
+    double output_latency_ms = 0.0;
+    double input_latency_ms = 0.0;
+    uint64_t xrun_count = 0;
+    /// Input frames dropped at the producer or discarded above high water.
+    uint64_t input_overrun_frames = 0;
+    /// Aggregate of low-water repeats and actual input starvation after priming.
+    uint64_t input_underrun_frames = 0;
+    /// Frames missing after the first successful prime, including silence while reprime waits.
+    uint64_t input_starvation_frames = 0;
+    /// Frames intentionally repeated to compensate for low-water clock drift.
+    uint64_t input_drift_repeat_frames = 0;
+    uint64_t dropped_midi_events = 0;
+  };
+
   /// CONTROL thread: resolves both devices, wires them to @p engine and starts
   /// streaming. The engine is prepared for the format the device negotiated,
   /// which is not necessarily the one requested. On any result other than kOk
   /// no device is left open, but @p engine is not restored. Once the device has
   /// negotiated a format the engine is prepared for it -- resetting its transport
   /// and dropping queued commands -- even when a later step fails, and
-  /// kEngineRefusedFormat means that prepare itself threw. kAudioStartFailed
-  /// also leaves the engine's MIDI input source unbound rather than returned to
-  /// the source it had before.
+  /// kEngineRefusedFormat means that prepare itself threw.
   LiveOpenResult open(engine::RealtimeEngine* engine, const Config& config);
 
-  /// CONTROL thread: stops streaming, unbinds the engine's MIDI input and
-  /// closes both devices. Safe to call on a session that never opened.
+  /// CONTROL thread: resolve stable selectors, open independent input/output
+  /// devices, prepare the engine once, and then start the active units. A MIDI
+  /// selector requires an output; NONE leaves an existing engine source alone.
+  LiveOpenResult open(engine::RealtimeEngine* engine, const SelectorConfig& config);
+  LiveOpenResult open(engine::RealtimeEngine* engine, const SelectorConfig& config,
+                      AudioDeviceOverride input_override, AudioDeviceOverride output_override);
+  /// Uses an already-open source in place of the selected MIDI device.
+  LiveOpenResult open(engine::RealtimeEngine* engine, const SelectorConfig& config,
+                      AudioDeviceOverride input_override, AudioDeviceOverride output_override,
+                      std::unique_ptr<MidiInputSource> midi_override);
+
+  /// CONTROL thread: stops output before input and closes both devices. Restores
+  /// an owned prior MIDI input binding only while this session's source remains
+  /// active; an intervening replacement is preserved. Safe before open().
   void close() noexcept;
+  void stop() noexcept override { close(); }
 
   bool is_running() const noexcept;
+
+  Status status() const noexcept;
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  /// CONTROL thread: drains MIDI events captured by the engine since the last
+  /// call. Calls from multiple readers are serialized.
+  std::vector<engine::CapturedMidiEvent> captured_midi();
+#endif
 
   /// The format the device actually settled on, which a driver may round up or
   /// substitute for the one requested. 0 before a successful open().
@@ -132,9 +212,8 @@ class LiveSession final {
   double actual_sample_rate() const noexcept;
 
   /// The output latency the driver reports, in milliseconds at the negotiated
-  /// rate. This is what the device claims, not a measured round trip: only a
-  /// loopback from the output back into an input can check the claim, and this
-  /// session opens no input. 0 means the driver reported nothing.
+  /// rate. This is the device's claim rather than a measured round trip. 0 means
+  /// the driver reported nothing or the session has no output.
   double output_latency_ms() const noexcept;
 
   /// Dropouts the device has reported since it opened, not since it last
@@ -163,16 +242,64 @@ class LiveSession final {
     LiveSession* owner_;
   };
 
+  struct ResolvedAudioDevice {
+    backends::CoreAudioDevice::DeviceInfo info{};
+    std::unique_ptr<AudioDevice> device;
+  };
+
+  LiveOpenResult open_devices(engine::RealtimeEngine* engine, const SelectorConfig& config,
+                              ResolvedAudioDevice input, ResolvedAudioDevice output,
+                              std::unique_ptr<MidiInputSource> midi_override);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  void bind_midi_input() noexcept;
+#endif
+  bool prepare_from_callback(const AudioStreamConfig& config);
+  void close_devices() noexcept;
+  void publish_mapper_anchor(const AudioBufferView& buffers) noexcept;
+
   Pump pump_{this};
   engine::RealtimeEngine* engine_ = nullptr;
   uint32_t destination_id_ = 0;
-  std::unique_ptr<backends::CoreAudioDevice> audio_;
-  std::unique_ptr<backends::CoreMidiInput> midi_;
+  std::unique_ptr<AudioDevice> audio_;
+  std::unique_ptr<AudioDevice> input_audio_;
+  std::unique_ptr<AudioDevice> output_audio_;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  std::shared_ptr<MidiInputSource> midi_;
+  engine::RealtimeEngine::MidiInputBinding previous_midi_{};
+#else
+  std::unique_ptr<MidiInputSource> midi_;
+#endif
   AudioStreamConfig negotiated_{};
+  AudioStreamConfig input_negotiated_{};
+  AudioStreamConfig output_negotiated_{};
+  MidiHostTimeMapper midi_time_mapper_{};
+  LiveInputRing input_ring_{};
+  std::vector<float> input_scratch_left_;
+  std::vector<float> input_scratch_right_;
+  std::array<float*, 2> input_scratch_{};
+  std::mutex captured_midi_mutex_;
   std::atomic<uint64_t> render_calls_{0};
+  bool input_opened_ = false;
+  bool output_opened_ = false;
+  bool audio_device_open_ = false;
+  bool input_device_open_ = false;
+  bool output_device_open_ = false;
+  bool input_requested_ = false;
+  bool output_requested_ = false;
+  bool engine_prepared_ = false;
+  bool driver_attached_ = false;
+  bool midi_selected_ = false;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  bool midi_bound_ = false;
+#endif
+  bool midi_capture_started_ = false;
+  bool input_uses_ring_ = false;
+  bool clock_locked_ = false;
   bool open_ = false;
   /// Set by Pump::open() when the engine, not the device, refused the format.
   bool engine_refused_format_ = false;
+  bool device_format_refused_ = false;
+  bool require_exact_rate_ = false;
 };
 
 }  // namespace sonare::host

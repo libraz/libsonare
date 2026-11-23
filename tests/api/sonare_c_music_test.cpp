@@ -925,8 +925,11 @@ TEST_CASE("analysis option structs are refused until their init sets struct_size
 
   SonareMeterOptions meter{};
   const float beats[] = {0.5f, 1.0f};
-  CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, &json) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  SonareMeterBeats observations{};
+  sonare_meter_beats_init(&observations);
+  observations.accent = beats;
+  observations.beat_count = 2;
+  CHECK(sonare_estimate_meter_json(&observations, &meter, &json) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.struct_size must be set by sonare_meter_options_init");
 
   SonareChordDetectionOptions chord{};
@@ -1117,26 +1120,28 @@ TEST_CASE("onset, analysis JSON and meter entries name the refused argument",
   const float beats[] = {0.5f, 1.0f};
   SonareMeterOptions meter;
   sonare_meter_options_init(&meter);
-  CHECK(sonare_estimate_meter_json(nullptr, beats, 2, &meter, &json) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "beat_times must not be NULL when beat_count is not 0");
-  CHECK(sonare_estimate_meter_json(beats, nullptr, 2, &meter, &json) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "beat_strengths must not be NULL when beat_count is not 0");
-  CHECK(sonare_estimate_meter_json(beats, beats, 2, nullptr, &json) ==
+  SonareMeterBeats observations{};
+  sonare_meter_beats_init(&observations);
+  observations.accent = beats;
+  observations.beat_count = 2;
+  CHECK(sonare_estimate_meter_json(nullptr, &meter, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "beats must not be NULL");
+  SonareMeterBeats no_accent = observations;
+  no_accent.accent = nullptr;
+  CHECK(sonare_estimate_meter_json(&no_accent, &meter, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "beats.accent must not be NULL when beats.beat_count is not 0");
+  CHECK(sonare_estimate_meter_json(&observations, nullptr, &json) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options must not be NULL");
   meter.candidate_numerator_count = std::numeric_limits<size_t>::max();
-  CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, &json) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_estimate_meter_json(&observations, &meter, &json) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "options.candidate_numerator_count must be an integer in [0, " +
                          std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) + "]");
   sonare_meter_options_init(&meter);
-  CHECK(sonare_estimate_meter_json(beats, beats, 2, &meter, nullptr) ==
+  CHECK(sonare_estimate_meter_json(&observations, &meter, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(message() == "out_json must not be NULL");
-  // Two NULLs name the earlier one in header order.
-  CHECK(sonare_estimate_meter_json(nullptr, beats, 2, nullptr, nullptr) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(message() == "beat_times must not be NULL when beat_count is not 0");
+  // Two NULLs name the required record before the options struct.
+  CHECK(sonare_estimate_meter_json(nullptr, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(message() == "beats must not be NULL");
 }

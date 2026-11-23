@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "c_api/engine_config_domains.h"
+#include "c_api/instrument_config_domains.h"
 #include "engine/realtime_engine.h"
 #include "host/midi_io.h"
 #include "midi/live_push_args.h"
@@ -81,6 +82,7 @@ SonareError midi_cc_bind_error(const sonare::engine::RealtimeEngine& engine) noe
 // built-in synth and SF2 instrument entries.
 SonareError bind_engine_instrument(SonareEngine* engine, uint32_t destination_id,
                                    std::unique_ptr<sonare::midi::MidiInstrument> instrument) {
+  engine->engine.require_quiescent();
   for (auto& entry : engine->builtin_instruments) {
     if (entry.first == destination_id) {
       sonare::midi::MidiInstrument* raw = instrument.get();
@@ -138,22 +140,15 @@ SonareError refuse_live_push_arg(const char* error) noexcept {
   return SONARE_ERROR_INVALID_PARAMETER;
 }
 
-// The input-source family's state check, applied after its arguments.
-SonareError require_midi_input_source(const SonareEngine* engine) noexcept {
-  if (engine->midi_input_source_enabled) return SONARE_OK;
-  set_last_error(SONARE_ERROR_INVALID_STATE, "the MIDI input source is not enabled");
-  return SONARE_ERROR_INVALID_STATE;
-}
-
-// Queues @p ump on the engine-owned input source after the state check.
+// Queues @p ump on the active source, including the injection queue of a live session.
 SonareError push_midi_input_event(SonareEngine* engine, const midi::Ump& ump,
                                   int64_t offset_in_block_samples) {
-  if (const SonareError state = require_midi_input_source(engine); state != SONARE_OK) {
-    return state;
+  auto* source = engine->engine.active_midi_input_source();
+  if (source == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "the MIDI input source is not enabled");
+    return SONARE_ERROR_INVALID_STATE;
   }
-  return engine->midi_input_source.push_event(ump, offset_in_block_samples)
-             ? SONARE_OK
-             : SONARE_ERROR_OUT_OF_MEMORY;
+  return source->push_event(ump, offset_in_block_samples) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
 // Queues one single-word MIDI 1.0 channel-voice UMP to a destination. The three
@@ -491,6 +486,7 @@ SonareError sonare_engine_clear_midi_instrument(SonareEngine* engine, uint32_t d
   return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
   SONARE_C_TRY
+  engine->engine.require_quiescent();
   if (!engine->engine.set_midi_instrument(destination_id, nullptr)) {
     return midi_instrument_bind_error(engine->engine);
   }
@@ -661,6 +657,10 @@ SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, const SonareMidiCcB
           util::check::refuse("binding.channel", "must be an integer in [0, 15] or 255");
         }
         util::check::one_of(binding->kind, std::array<int, 4>{0, 1, 2, 3}, "binding.kind");
+        util::check::one_of(binding->consume, std::array<int, 2>{0, 1}, "binding.consume");
+        if (binding->reserved != 0) {
+          util::check::refuse("binding.reserved", "must be 0");
+        }
         util::check::integer_within(binding->param_id, kEngineParameterIdDomain,
                                     "binding.param_id");
         util::check::finite_float(binding->min_value, "binding.min_value");
@@ -699,6 +699,7 @@ SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, const SonareMidiCcB
   native.param_id = binding->param_id;
   native.min_value = binding->min_value;
   native.max_value = binding->max_value;
+  native.consume = binding->consume != 0;
   if (engine->engine.bind_midi_cc(native)) return SONARE_OK;
   return midi_cc_bind_error(engine->engine);
 #endif
@@ -725,6 +726,46 @@ SonareError sonare_engine_midi_cc_binding_count(SonareEngine* engine, size_t* ou
 #else
   *out_count = engine->engine.midi_cc_binding_count();
   return SONARE_OK;
+#endif
+}
+
+void sonare_free_midi_cc_binding_list(SonareMidiCcBindingList* list) {
+  if (list == nullptr) return;
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_engine_midi_cc_bindings(SonareEngine* engine, SonareMidiCcBindingList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
+  const auto bindings = engine->engine.midi_cc_bindings();
+  if (bindings.empty()) return SONARE_OK;
+  StagedOutput<SonareMidiCcBindingList, &sonare_free_midi_cc_binding_list> staged;
+  staged->items = new SonareMidiCcBinding[bindings.size()]{};
+  staged->count = bindings.size();
+  for (size_t i = 0; i < bindings.size(); ++i) {
+    const auto& binding = bindings[i];
+    auto& item = staged->items[i];
+    item.cc_number = binding.cc_number;
+    item.channel = binding.channel;
+    item.kind = static_cast<uint8_t>(binding.kind);
+    item.cc_lsb_number = binding.cc_lsb_number;
+    item.selector_msb = binding.selector_msb;
+    item.selector_lsb = binding.selector_lsb;
+    item.consume = binding.consume ? 1 : 0;
+    item.param_id = binding.param_id;
+    item.min_value = binding.min_value;
+    item.max_value = binding.max_value;
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return refuse_not_compiled_in(Feature::kArrangement);
 #endif
 }
 
@@ -761,9 +802,14 @@ SonareError sonare_engine_set_midi_input_source(SonareEngine* engine, uint32_t d
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement, destination_id);
 #else
-  engine->engine.set_midi_input_source(&engine->midi_input_source, destination_id);
-  engine->midi_input_source_enabled = true;
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
+  if (!engine->midi_input_source) {
+    engine->midi_input_source = std::make_shared<sonare::host::FixedMidiInputSource<512> >();
+  }
+  engine->engine.set_midi_input_source_owned(engine->midi_input_source, destination_id);
   return SONARE_OK;
+  SONARE_C_CATCH
 #endif
 }
 
@@ -773,9 +819,11 @@ SonareError sonare_engine_clear_midi_input_source(SonareEngine* engine) {
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement);
 #else
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   engine->engine.set_midi_input_source(nullptr, 0);
-  engine->midi_input_source_enabled = false;
   return SONARE_OK;
+  SONARE_C_CATCH
 #endif
 }
 
@@ -787,7 +835,9 @@ SonareError sonare_engine_midi_input_pending_count(SonareEngine* engine, size_t*
   *out_count = 0;
   return refuse_not_compiled_in(Feature::kArrangement);
 #else
-  *out_count = engine->midi_input_source.pending_count();
+  const auto* source = engine->engine.active_midi_input_source();
+  if (source == nullptr) source = engine->midi_input_source.get();
+  *out_count = source != nullptr ? source->pending_count() : 0;
   return SONARE_OK;
 #endif
 }

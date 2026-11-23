@@ -137,7 +137,7 @@ std::size_t SetSampleRate::retained_bytes() const noexcept {
 std::size_t SetOverlapPolicy::retained_bytes() const noexcept { return sizeof(*this); }
 
 std::size_t SetScene::retained_bytes() const noexcept {
-  return add(sizeof(*this), retained::dynamic_bytes(scene_));
+  return add(sizeof(*this), scene_ ? retained::dynamic_bytes(*scene_) : 0);
 }
 
 std::size_t SetMarker::retained_bytes() const noexcept {

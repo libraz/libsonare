@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 
+#include "mixing/stereo_width.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 
@@ -19,15 +21,43 @@ float interpolate(const Breakpoint& a, const Breakpoint& b, double ppq) noexcept
 }  // namespace
 
 AutomationLane::AutomationLane(uint32_t target_param_id, AutomationTargetKind target_kind)
-    : target_param_id_(target_param_id), target_kind_(target_kind) {
+    : AutomationLane(target_param_id, target_kind, {}) {}
+
+AutomationLane::AutomationLane(uint32_t target_param_id, AutomationTargetKind target_kind,
+                               AutomationTargetIdentity identity)
+    : target_param_id_(target_param_id), target_kind_(target_kind), identity_(std::move(identity)) {
   SONARE_CHECK_MSG(valid_automation_target_kind(target_kind), ErrorCode::InvalidParameter,
                    "automation target kind is invalid");
+  SONARE_CHECK_MSG(valid_target_identity(), ErrorCode::InvalidParameter,
+                   "automation target identity does not match its kind");
+}
+
+bool AutomationLane::valid_target_identity() const noexcept {
+  const bool has_insert = identity_.insert_index.has_value() || !identity_.processor.empty() ||
+                          !identity_.param_name.empty();
+  switch (target_kind_) {
+    case AutomationTargetKind::kTrackSendDb:
+      return !identity_.send_id.empty() && !has_insert;
+    case AutomationTargetKind::kTrackInsertParam:
+      return identity_.send_id.empty() && identity_.insert_index.has_value() &&
+             !identity_.processor.empty() && !identity_.param_name.empty();
+    case AutomationTargetKind::kOpaque:
+    case AutomationTargetKind::kTrackFaderDb:
+    case AutomationTargetKind::kTrackPan:
+    case AutomationTargetKind::kTrackWidth:
+      return identity_.send_id.empty() && !has_insert;
+  }
+  return false;
 }
 
 void AutomationLane::set_points(std::vector<Breakpoint> points) {
   for (const Breakpoint& point : points) {
     SONARE_CHECK_MSG(valid_public_breakpoint(point), ErrorCode::InvalidParameter,
                      "automation breakpoint values must be finite and curve must be valid");
+    if (target_kind_ == AutomationTargetKind::kTrackWidth) {
+      SONARE_CHECK_MSG(mixing::width_in_range(point.value), ErrorCode::InvalidParameter,
+                       "track width breakpoint is outside its range");
+    }
   }
   // A stable sort so the duplicate-ppq policy below ("first occurrence in the
   // supplied list wins") is deterministic; std::sort leaves the relative order

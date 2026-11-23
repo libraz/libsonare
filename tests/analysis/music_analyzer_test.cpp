@@ -13,10 +13,12 @@
 #include <random>
 #include <vector>
 
+#include "analysis/analysis_json.h"
 #include "analysis/beat_analyzer.h"
 #include "support/rate_material.h"
 #include "support/section_form.h"
 #include "util/constants.h"
+#include "util/json.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -809,8 +811,10 @@ TEST_CASE("MusicAnalyzer publishes the beat observations behind the downbeat dec
 
   const size_t beat_count = result.beats.size();
   REQUIRE(beat_count >= 8);
-  REQUIRE(result.beat_observations.onset_strength.size() == beat_count);
+  REQUIRE(result.beat_observations.accent.size() == beat_count);
+  REQUIRE(result.beat_observations.has_attack.size() == beat_count);
   REQUIRE(result.beat_observations.low_frequency_energy.size() == beat_count);
+  REQUIRE(result.beat_observations.subdivision_accent.size() == beat_count - 1);
 
   // Chord-change evidence exists only once the chord analyzer has run, and the
   // result reads the observations after it. Reading them next to the beats
@@ -831,26 +835,74 @@ TEST_CASE("MusicAnalyzer publishes the beat observations behind the downbeat dec
   REQUIRE(staged.beat_analyzer().beat_chord_change_observations().size() == beat_count);
 
   // What the result carries is what the analyzer holds after chord analysis.
-  REQUIRE(result.beat_observations.onset_strength ==
-          analyzer.beat_analyzer().beat_onset_observations());
+  REQUIRE(result.beat_observations.accent == analyzer.beat_analyzer().beat_accents().beat);
+  const auto& attack_flags = analyzer.beat_analyzer().beat_accents().beat_has_attack;
+  REQUIRE(std::equal(result.beat_observations.has_attack.begin(),
+                     result.beat_observations.has_attack.end(), attack_flags.begin(),
+                     attack_flags.end()));
+  REQUIRE(result.beat_observations.subdivision_accent ==
+          analyzer.beat_analyzer().beat_accents().subdivision);
   REQUIRE(result.beat_observations.low_frequency_energy ==
           analyzer.beat_analyzer().beat_low_frequency_observations());
   REQUIRE(chord_change == analyzer.beat_analyzer().beat_chord_change_observations());
 
-  // Same distinction the accessors exist for: the windowed observation is not
-  // the single unwindowed envelope frame Beat::strength samples.
-  bool differs = false;
-  for (size_t i = 0; i < beat_count && !differs; ++i) {
-    differs = result.beat_observations.onset_strength[i] != result.beats[i].strength;
-  }
-  REQUIRE(differs);
-
   for (size_t i = 0; i < beat_count; ++i) {
     CAPTURE(i);
-    REQUIRE(std::isfinite(result.beat_observations.onset_strength[i]));
+    REQUIRE(std::isfinite(result.beat_observations.accent[i]));
+    REQUIRE(result.beat_observations.accent[i] >= 0.0f);
+    REQUIRE((result.beat_observations.has_attack[i] == 0 ||
+             result.beat_observations.has_attack[i] == 1));
     REQUIRE(std::isfinite(result.beat_observations.low_frequency_energy[i]));
     REQUIRE(std::isfinite(chord_change[i]));
   }
+  for (float accent : result.beat_observations.subdivision_accent) {
+    REQUIRE(std::isfinite(accent));
+    REQUIRE(accent >= 0.0f);
+  }
+}
+
+TEST_CASE("analysis JSON encodes beat observations", "[music_analyzer][analysis_json]") {
+  AnalysisResult populated{};
+  populated.beat_observations.accent = {0.8f, 0.25f};
+  populated.beat_observations.has_attack = {1, 0};
+  populated.beat_observations.subdivision_accent = {0.1f};
+
+  const auto root = util::json::parse(analysis_result_to_json(populated));
+  const auto& observations = root["beatObservations"];
+  REQUIRE(observations["accent"].is_array());
+  REQUIRE(observations["accent"].size() == 2);
+  REQUIRE(observations["accent"][0].as_float() == 0.8f);
+  REQUIRE(observations["accent"][1].as_float() == 0.25f);
+  REQUIRE(observations["hasAttack"].is_array());
+  REQUIRE(observations["hasAttack"].size() == 2);
+  REQUIRE(observations["hasAttack"][0].is_bool());
+  REQUIRE(observations["hasAttack"][0].as_bool());
+  REQUIRE(observations["hasAttack"][1].is_bool());
+  REQUIRE_FALSE(observations["hasAttack"][1].as_bool());
+  REQUIRE(observations["subdivisionAccent"].is_array());
+  REQUIRE(observations["subdivisionAccent"].size() == 1);
+  REQUIRE(observations["subdivisionAccent"][0].as_float() == 0.1f);
+  REQUIRE_FALSE(observations.contains("onsetStrength"));
+
+  AnalysisResult empty{};
+  const auto empty_root = util::json::parse(analysis_result_to_json(empty));
+  const auto& empty_observations = empty_root["beatObservations"];
+  for (const char* key :
+       {"accent", "hasAttack", "lowFrequencyEnergy", "subdivisionAccent", "chordChange"}) {
+    CAPTURE(key);
+    REQUIRE(empty_observations.contains(key));
+    REQUIRE(empty_observations[key].is_array());
+    REQUIRE(empty_observations[key].size() == 0);
+  }
+  REQUIRE_FALSE(empty_observations.contains("onsetStrength"));
+
+  const auto& paths = analysis_result_schema_paths();
+  for (const char* path : {"beatObservations.accent", "beatObservations.hasAttack",
+                           "beatObservations.subdivisionAccent"}) {
+    CAPTURE(path);
+    REQUIRE(std::find(paths.begin(), paths.end(), path) != paths.end());
+  }
+  REQUIRE(std::find(paths.begin(), paths.end(), "beatObservations.onsetStrength") == paths.end());
 }
 
 TEST_CASE("MusicAnalyzer keeps the time signature when one loud burst sits mid-track",

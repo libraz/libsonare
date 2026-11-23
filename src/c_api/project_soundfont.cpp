@@ -143,7 +143,7 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
-  project->soundfont = std::move(soundfont);
+  project->sound_fonts.insert_or_assign(std::nullopt, std::move(soundfont));
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -157,7 +157,7 @@ SonareError sonare_project_clear_soundfont(SonareProject* project) {
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
-  project->soundfont.reset();
+  project->sound_fonts.erase(std::nullopt);
   return SONARE_OK;
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project);
@@ -171,8 +171,11 @@ SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t
   if (out_count) *out_count = 0;
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out_count);
-  *out_count = project->soundfont ? project->soundfont->presets().size() : 0;
+  SONARE_C_TRY
+  const auto soundfont = project->sound_font();
+  *out_count = soundfont ? soundfont->presets().size() : 0;
   return SONARE_OK;
+  SONARE_C_CATCH
 #else
   if (out_count) *out_count = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
@@ -193,7 +196,7 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
       arr::compile(project->history.project(), project->history.midi_content(), project->audio, {});
   if (!compiled.timeline.has_value()) return SONARE_ERROR_INVALID_STATE;
   const std::vector<SonareSf2ProgramStatus> manifest = build_manifest(
-      *compiled.timeline, project->soundfont, project->history.project().sample_rate());
+      *compiled.timeline, project->sound_font(), project->history.project().sample_rate());
   *out_count = manifest.size();
   const size_t to_write = std::min(max_entries, manifest.size());
   for (size_t i = 0; i < to_write; ++i) out[i] = manifest[i];

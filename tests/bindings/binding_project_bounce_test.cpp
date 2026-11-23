@@ -457,10 +457,9 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
   pan_a_point.ppq = 0.0;
   pan_a_point.value = -1.0f;
   pan_a_point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDesc pan_a{};
-  // Persistent ids intentionally use the legacy mixer values. The typed kind,
-  // not this edit-time id, selects the reserved per-track playback route.
-  pan_a.target_param_id = 2;  // TrackMixerRuntime::kPan
+  SonareAutomationLaneDesc pan_a;
+  sonare_automation_lane_desc_init(&pan_a);
+  pan_a.target_param_id = 0;
   pan_a.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
   pan_a.points = &pan_a_point;
   pan_a.point_count = 1;
@@ -484,8 +483,9 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
   fader_point.ppq = 0.0;
   fader_point.value = -6.0206f;
   fader_point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDesc fader{};
-  fader.target_param_id = 1;  // TrackMixerRuntime::kFaderDb
+  SonareAutomationLaneDesc fader;
+  sonare_automation_lane_desc_init(&fader);
+  fader.target_param_id = 0;
   fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
   fader.points = &fader_point;
   fader.point_count = 1;
@@ -570,7 +570,8 @@ TEST_CASE("shared opaque automation keeps the first project-order owner", "[proj
   first_point.ppq = 0.0;
   first_point.value = -6.0206f;
   first_point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDesc first_lane{};
+  SonareAutomationLaneDesc first_lane;
+  sonare_automation_lane_desc_init(&first_lane);
   first_lane.target_param_id = 1;  // legacy opaque fader target
   first_lane.points = &first_point;
   first_lane.point_count = 1;
@@ -739,7 +740,8 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
       points[i].value = -6.0f * static_cast<float>(i % 2);
       points[i].curve_to_next = SONARE_CURVE_LINEAR;
     }
-    SonareAutomationLaneDesc lane{};
+    SonareAutomationLaneDesc lane;
+    sonare_automation_lane_desc_init(&lane);
     lane.target_param_id = 1;  // legacy opaque fader target
     lane.points = points.data();
     lane.point_count = points.size();
@@ -955,6 +957,88 @@ TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed
   sonare_free_floats(out2);
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("per-call project bounce instruments override persistent destination instruments",
+          "[project][bounce][instruments]") {
+  constexpr uint32_t kDestination = 5;
+  constexpr int64_t kFrames = 12000;
+
+  SonareBuiltinInstrumentBinding quiet_override{};
+  sonare_builtin_synth_config_init(&quiet_override.config);
+  quiet_override.destination_id = kDestination;
+  quiet_override.config.gain = 0.0001f;
+
+  const auto render = [&](bool with_persistent_instrument,
+                          const SonareBuiltinInstrumentBinding* per_call) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000) == SONARE_OK);
+
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+    const SonareMidiEventPod events[] = {
+        {0.0, 0x20903C7Fu, 0u},  // note-on, C4, velocity 127
+        {0.5, 0x20803C00u, 0u},  // note-off, C4
+    };
+    REQUIRE(sonare_project_set_midi_events(project, clip, events, std::size(events)) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
+
+    if (with_persistent_instrument) {
+      SonareSynthPatch patch{};
+      REQUIRE(sonare_synth_preset_patch("sine", &patch) == SONARE_OK);
+      SonareProjectInstrument instrument{};
+      sonare_project_instrument_init(&instrument);
+      instrument.kind = SONARE_PROJECT_INSTRUMENT_SYNTH;
+      instrument.synth = &patch;
+      REQUIRE(sonare_project_set_destination_instrument(project, kDestination, &instrument) ==
+              SONARE_OK);
+    }
+
+    SonareProjectBounceOptions options;
+    sonare_project_bounce_options_init(&options);
+    options.total_frames = kFrames;
+    options.num_channels = 2;
+    options.sample_rate = 48000;
+
+    float* audio = nullptr;
+    size_t audio_len = 0;
+    int channels = 0;
+    SonareError status = SONARE_OK;
+    if (per_call == nullptr) {
+      status = sonare_test::bounce_interleaved(project, &options, &audio, &audio_len, &channels);
+    } else {
+      status = bounce_with_builtin_instruments(project, &options, per_call, 1, &audio, &audio_len,
+                                               &channels);
+    }
+    REQUIRE(status == SONARE_OK);
+    REQUIRE(audio != nullptr);
+    REQUIRE(audio_len == static_cast<size_t>(kFrames) * 2);
+    std::vector<float> result(audio, audio + audio_len);
+    sonare_free_floats(audio);
+    sonare_project_destroy(project);
+    return result;
+  };
+
+  const std::vector<float> persistent_audio = render(true, nullptr);
+  const std::vector<float> overridden_audio = render(true, &quiet_override);
+  const std::vector<float> per_call_baseline = render(false, &quiet_override);
+  const auto peak = [](const std::vector<float>& audio) {
+    float result = 0.0f;
+    for (const float sample : audio) result = std::max(result, std::abs(sample));
+    return result;
+  };
+
+  CHECK(peak(persistent_audio) > 0.0f);
+  CHECK(peak(overridden_audio) > 0.0f);
+  CHECK(peak(overridden_audio) < peak(persistent_audio) * 0.01f);
+  REQUIRE(overridden_audio.size() == per_call_baseline.size());
+  float max_difference = 0.0f;
+  for (size_t i = 0; i < overridden_audio.size(); ++i) {
+    max_difference = std::max(max_difference, std::abs(overridden_audio[i] - per_call_baseline[i]));
+  }
+  CHECK(max_difference <= 1.0e-7f);
 }
 
 TEST_CASE("project bounce refuses a built-in waveform outside the enum", "[project]") {
@@ -1495,7 +1579,8 @@ TEST_CASE("project bounce exposes unrouted opaque automation diagnostics", "[pro
   point.ppq = 0.0;
   point.value = 0.25f;
   point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDesc lane{};
+  SonareAutomationLaneDesc lane;
+  sonare_automation_lane_desc_init(&lane);
   lane.target_param_id = 99;  // host-defined opaque target
   lane.points = &point;
   lane.point_count = 1;
@@ -1598,13 +1683,15 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   fader_point.ppq = 0.0;
   fader_point.value = -80.0f;
   fader_point.curve_to_next = SONARE_CURVE_HOLD;
-  SonareAutomationLaneDesc fader_lane{};
+  SonareAutomationLaneDesc fader_lane;
+  sonare_automation_lane_desc_init(&fader_lane);
   fader_lane.target_param_id = 1;  // engine::MixingRuntime::kFaderDb
   fader_lane.points = &fader_point;
   fader_lane.point_count = 1;
-  uint32_t target_param_id = 0;
-  REQUIRE(sonare_project_add_automation_lane(base, track, &fader_lane, &target_param_id) ==
-          SONARE_OK);
+  uint32_t lane_id = 0;
+  REQUIRE(sonare_project_add_automation_lane(base, track, &fader_lane, &lane_id) == SONARE_OK);
+  // An empty scene is written as `"strips":[]`, which the strip variants below replace.
+  REQUIRE(sonare_project_set_mixer_scene_json(base, "{\"version\":2}") == SONARE_OK);
   const std::string json_plain = serialize(base);
   sonare_project_destroy(base);
 
@@ -2775,7 +2862,8 @@ TEST_CASE("legacy opaque fader automation stays on musical time after channel PD
         {0.0, 0.0f, SONARE_CURVE_HOLD},
         {0.02, -12.0f, SONARE_CURVE_HOLD},
     };
-    SonareAutomationLaneDesc lane{};
+    SonareAutomationLaneDesc lane;
+    sonare_automation_lane_desc_init(&lane);
     lane.target_param_id = 1;  // MixingRuntime::kFaderDb, legacy opaque route.
     lane.points = points;
     lane.point_count = std::size(points);
@@ -2864,7 +2952,8 @@ TEST_CASE("legacy opaque automation follows the pre-fader insert clock",
         {0.0, 0.0f, SONARE_CURVE_HOLD},
         {0.02, -12.0f, SONARE_CURVE_HOLD},
     };
-    SonareAutomationLaneDesc lane{};
+    SonareAutomationLaneDesc lane;
+    sonare_automation_lane_desc_init(&lane);
     lane.target_param_id = 1;
     lane.points = points;
     lane.point_count = std::size(points);
@@ -2946,7 +3035,8 @@ TEST_CASE("legacy opaque automation ignores master-only latency for its stage cl
       {0.0, 0.0f, SONARE_CURVE_HOLD},
       {0.02, -12.0f, SONARE_CURVE_HOLD},
   };
-  SonareAutomationLaneDesc lane{};
+  SonareAutomationLaneDesc lane;
+  sonare_automation_lane_desc_init(&lane);
   lane.target_param_id = 1;
   lane.points = points;
   lane.point_count = std::size(points);
@@ -3007,8 +3097,9 @@ TEST_CASE("typed track fader automation remains a single gain stage in bounce",
 
     if (with_typed_lane) {
       const SonareAutomationPoint point = {0.0, -6.0206f, SONARE_CURVE_HOLD};
-      SonareAutomationLaneDesc lane{};
-      lane.target_param_id = 1;  // TrackMixerRuntime::kFaderDb.
+      SonareAutomationLaneDesc lane;
+      sonare_automation_lane_desc_init(&lane);
+      lane.target_param_id = 0;
       lane.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
       lane.points = &point;
       lane.point_count = 1;
@@ -3445,7 +3536,8 @@ TEST_CASE(
         {0.0, 1.0f, SONARE_CURVE_HOLD},
         {0.02, 0.0f, SONARE_CURVE_HOLD},
     };
-    SonareAutomationLaneDesc lane{};
+    SonareAutomationLaneDesc lane;
+    sonare_automation_lane_desc_init(&lane);
     lane.target_param_id = 3;  // MixingRuntime::kWidth, after fader and pan.
     lane.points = points;
     lane.point_count = std::size(points);

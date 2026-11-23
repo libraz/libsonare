@@ -1,6 +1,7 @@
 #include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
 #include "c_api/project_timeline_internal.h"
+#include "mixing/api/scene.h"
 #include "util/parameter_checks.h"
 #include "util/resource_limits.h"
 
@@ -151,7 +152,7 @@ SonareError sonare_project_deserialize(const char* document, size_t len, SonareP
       *out_diag = copy_string(serialize_deserialize_diagnostics(result.diagnostics));
     }
     const std::string message = serialize_deserialize_diagnostics(result.diagnostics, false);
-    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str(), result.reason);
     return SONARE_ERROR_INVALID_FORMAT;
   }
   auto handle = std::make_unique<SonareProject>();
@@ -190,6 +191,7 @@ SonareError sonare_project_unresolved_audio_source_count(const SonareProject* pr
   if (out_count) *out_count = 0;
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out_count);
+  SONARE_C_TRY
   size_t count = 0;
   for (const arr::ClipSource& source : project->history.project().sources()) {
     if (const auto* audio = std::get_if<arr::AudioSourceRef>(&source);
@@ -199,6 +201,7 @@ SonareError sonare_project_unresolved_audio_source_count(const SonareProject* pr
   }
   *out_count = count;
   return SONARE_OK;
+  SONARE_C_CATCH
 #else
   if (out_count) *out_count = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
@@ -214,6 +217,7 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
   if (out_source_id) *out_source_id = 0;
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out_source_id);
+  SONARE_C_TRY
   size_t current = 0;
   for (const arr::ClipSource& source : project->history.project().sources()) {
     const auto* audio = std::get_if<arr::AudioSourceRef>(&source);
@@ -224,6 +228,7 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
     }
   }
   return refuse_index_past("unresolved audio sources");
+  SONARE_C_CATCH
 #else
   if (out_source_id) *out_source_id = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
@@ -239,6 +244,7 @@ SonareError sonare_project_unresolved_audio_source_by_index(const SonareProject*
   if (out) *out = {};
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
   size_t current = 0;
   for (const arr::ClipSource& source : project->history.project().sources()) {
     const auto* audio = std::get_if<arr::AudioSourceRef>(&source);
@@ -249,6 +255,7 @@ SonareError sonare_project_unresolved_audio_source_by_index(const SonareProject*
     }
   }
   return refuse_index_past("unresolved audio sources");
+  SONARE_C_CATCH
 #else
   if (out) *out = {};
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
@@ -520,6 +527,54 @@ SonareError sonare_project_track_name_by_index(const SonareProject* project, siz
 #endif
 }
 
+SonareError sonare_project_track_route_by_index(const SonareProject* project, size_t index,
+                                                char** out_channel_strip_ref,
+                                                char** out_output_target) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_channel_strip_ref, out_output_target);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_channel_strip_ref);
+  SONARE_C_REQUIRE_NONNULL(out_output_target);
+  const auto& tracks = project->history.project().tracks();
+  if (index >= tracks.size()) return refuse_index_past("tracks");
+  SONARE_C_TRY
+  if (out_channel_strip_ref == out_output_target) {
+    sonare::util::check::refuse_relation({"out_channel_strip_ref", "out_output_target"},
+                                         "{0} and {1} must point to different outputs");
+  }
+  const arr::Track& track = tracks[index];
+  std::unique_ptr<char[]> channel_strip_ref(
+      track.channel_strip_ref.empty() ? nullptr : copy_string(track.channel_strip_ref));
+  std::unique_ptr<char[]> output_target(
+      track.output_target.empty() ? nullptr : copy_string(track.output_target));
+  *out_channel_strip_ref = channel_strip_ref.release();
+  *out_output_target = output_target.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 index, out_channel_strip_ref, out_output_target);
+#endif
+}
+
+SonareError sonare_project_mixer_scene_json(const SonareProject* project, char** out_json) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_json);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out_json);
+  SONARE_C_TRY
+  const sonare::mixing::api::Scene* scene = project->history.project().find_scene();
+  if (scene != nullptr) *out_json = copy_string(sonare::mixing::api::scene_to_json(*scene));
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out_json);
+#endif
+}
+
 SonareError sonare_project_source_name_or_uri_by_index(const SonareProject* project, size_t index,
                                                        char** out_name_or_uri) {
   SONARE_C_API_ENTRY;
@@ -527,9 +582,9 @@ SonareError sonare_project_source_name_or_uri_by_index(const SonareProject* proj
   if (out_name_or_uri) *out_name_or_uri = nullptr;
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(out_name_or_uri);
+  SONARE_C_TRY
   const auto& sources = project->history.project().sources();
   if (index >= sources.size()) return refuse_index_past("sources");
-  SONARE_C_TRY
   const arr::ClipSource& source = sources[index];
   if (const auto* audio = std::get_if<arr::AudioSourceRef>(&source)) {
     *out_name_or_uri = copy_string(audio->uri);
@@ -676,6 +731,77 @@ SonareError sonare_project_time_signature_count(const SonareProject* project, si
                                                  out_count);
 #endif
   SONARE_C_CATCH
+}
+
+void sonare_free_project_tempo_segment_list(SonareProjectTempoSegmentList* list) {
+  if (list == nullptr) return;
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_project_tempo_segments(const SonareProject* project,
+                                          SonareProjectTempoSegmentList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  const auto& segments = project->history.project().tempo_segments();
+  sonare_c_detail::StagedOutput<SonareProjectTempoSegmentList,
+                                &sonare_free_project_tempo_segment_list>
+      staged;
+  if (!segments.empty()) {
+    staged->items = new SonareProjectTempoSegment[segments.size()]{};
+    staged->count = segments.size();
+    for (size_t i = 0; i < segments.size(); ++i) {
+      const auto& segment = segments[i];
+      staged->items[i] = {segment.start_ppq, segment.bpm, segment.end_bpm};
+    }
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out);
+#endif
+}
+
+void sonare_free_project_time_signature_list(SonareProjectTimeSignatureList* list) {
+  if (list == nullptr) return;
+  delete[] list->items;
+  *list = {};
+}
+
+SonareError sonare_project_time_signatures(const SonareProject* project,
+                                           SonareProjectTimeSignatureList* out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_REQUIRE_NONNULL(project);
+  SONARE_C_REQUIRE_NONNULL(out);
+  SONARE_C_TRY
+  const auto& segments = project->history.project().time_signatures();
+  sonare_c_detail::StagedOutput<SonareProjectTimeSignatureList,
+                                &sonare_free_project_time_signature_list>
+      staged;
+  if (!segments.empty()) {
+    staged->items = new SonareProjectTimeSignatureSegment[segments.size()]{};
+    staged->count = segments.size();
+    for (size_t i = 0; i < segments.size(); ++i) {
+      const auto& segment = segments[i];
+      staged->items[i] = {segment.start_ppq, segment.time_sig.numerator,
+                          segment.time_sig.denominator};
+    }
+  }
+  staged.publish(out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, project,
+                                                 out);
+#endif
 }
 
 const char* sonare_project_diagnostic_code_name(int code) {

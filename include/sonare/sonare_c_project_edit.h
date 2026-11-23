@@ -293,11 +293,17 @@ typedef enum SONARE_ENUM_BASE {
 /// typed mixer targets. @ref SONARE_AUTOMATION_TARGET_UNCHANGED is accepted only by
 /// @ref sonare_project_edit_automation_lane, where it keeps the lane's current kind.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_AUTOMATION_TARGET_UNCHANGED = -1,      ///< Edit only: keep the lane's current kind.
-  SONARE_AUTOMATION_TARGET_OPAQUE = 0,          ///< Host-defined target id.
-  SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1,  ///< The track's mixer fader, in dB.
-  SONARE_AUTOMATION_TARGET_TRACK_PAN = 2,       ///< The track's mixer pan.
+  SONARE_AUTOMATION_TARGET_UNCHANGED = -1,          ///< Edit only: keep the lane's current kind.
+  SONARE_AUTOMATION_TARGET_OPAQUE = 0,              ///< Host-defined target id.
+  SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1,      ///< The track's mixer fader, in dB.
+  SONARE_AUTOMATION_TARGET_TRACK_PAN = 2,           ///< The track's mixer pan.
+  SONARE_AUTOMATION_TARGET_TRACK_SEND_DB = 3,       ///< Gain of a named send on the track's strip.
+  SONARE_AUTOMATION_TARGET_TRACK_WIDTH = 4,         ///< The track's stereo width.
+  SONARE_AUTOMATION_TARGET_TRACK_INSERT_PARAM = 5,  ///< A named parameter of a strip insert.
 } SonareAutomationTargetKind;
+
+/// No insert index is supplied for this target.
+#define SONARE_AUTOMATION_INSERT_INDEX_NONE (-1)
 
 /// @brief One clip fade region for @ref sonare_project_set_clip_fade.
 ///        @p length_ppq must be in [0, 1e12] (0 = no fade). @p curve is a
@@ -375,35 +381,50 @@ static_assert(sizeof(SonareProjectClipCompSegment) == 4u * sizeof(double),
 /// @brief Description for @ref sonare_project_add_automation_lane and
 ///        @ref sonare_project_edit_automation_lane.
 ///
-/// @p target_param_id identifies the parameter the lane drives (host-defined,
-/// e.g. a mixer-strip volume parameter id) and must be non-zero; zero is
-/// reserved as the invalid / unset id. @p target_kind must be one of
-/// @ref SonareAutomationTargetKind. @p points is an array of @p point_count
-/// breakpoints (the shared @ref SonareAutomationPoint POD whose
-/// @c curve_to_next uses the @ref SonareProjectAutomationCurve ordinals). It may
-/// be NULL only when @p point_count is 0. The breakpoints are copied; the core
-/// does not require them pre-sorted but stores them verbatim.
+/// @details Start from @ref sonare_automation_lane_desc_init. The points are
+/// copied, sorted by PPQ, and deduplicated by keeping the first point at each PPQ.
 typedef struct {
-  uint32_t target_param_id;                ///< Target parameter id; non-zero.
+  uint32_t struct_size;      ///< sizeof(SonareAutomationLaneDesc).
+  uint32_t target_param_id;  ///< Nonzero opaque target ID, or zero for a typed target.
   SonareAutomationTargetKind target_kind;  ///< A @ref SonareAutomationTargetKind.
   const SonareAutomationPoint* points;  ///< Breakpoints, copied; may be NULL only when count is 0.
   size_t point_count;                   ///< Number of entries in @p points.
+  const char* send_id;                  ///< Send ID for a send target, NULL otherwise.
+  const char* processor;                ///< Processor catalog name for an insert target.
+  const char* param_name;               ///< Processor parameter name for an insert target.
+  int32_t insert_index;  ///< Insert position, or SONARE_AUTOMATION_INSERT_INDEX_NONE.
+  uint32_t reserved;     ///< Reserved for future use, set to zero.
 } SonareAutomationLaneDesc;
+
+/// @brief Initializes the descriptor for an opaque target. NULL is ignored.
+/// @details Initializes caller-provided storage and does not transfer ownership.
+void sonare_automation_lane_desc_init(SonareAutomationLaneDesc* desc);
+
+/// @brief A project automation lane with separate track and lane IDs.
+typedef struct {
+  uint32_t track_id;              ///< Owning track ID.
+  uint32_t lane_id;               ///< Stable project-allocated lane ID.
+  SonareAutomationLaneDesc desc;  ///< Target and points, owned by the list.
+} SonareProjectAutomationLane;
+
+/// @brief An owned snapshot of project automation lanes.
+typedef struct {
+  SonareProjectAutomationLane* items;  ///< Lanes and all nested pointers owned by this list.
+  size_t count;                        ///< Number of lanes in @p items.
+} SonareProjectAutomationLaneList;
 
 #ifdef __cplusplus
 static_assert(sizeof(SonareAutomationTargetKind) == sizeof(uint32_t),
               "SonareAutomationTargetKind ABI width drift");
-static_assert(offsetof(SonareAutomationLaneDesc, target_param_id) == 0,
+static_assert(offsetof(SonareAutomationLaneDesc, target_param_id) == sizeof(uint32_t),
               "AutomationLaneDesc.target_param_id offset");
-static_assert(offsetof(SonareAutomationLaneDesc, target_kind) == sizeof(uint32_t),
+static_assert(offsetof(SonareAutomationLaneDesc, target_kind) == 2u * sizeof(uint32_t),
               "AutomationLaneDesc.target_kind offset");
-static_assert(offsetof(SonareAutomationLaneDesc, points) == 2u * sizeof(uint32_t),
-              "AutomationLaneDesc.points offset");
 static_assert(offsetof(SonareAutomationLaneDesc, point_count) ==
-                  2u * sizeof(uint32_t) + sizeof(void*),
+                  offsetof(SonareAutomationLaneDesc, points) + sizeof(void*),
               "AutomationLaneDesc.point_count offset");
-static_assert(sizeof(SonareAutomationLaneDesc) == 2u * sizeof(uint32_t) + 2u * sizeof(void*),
-              "SonareAutomationLaneDesc layout drift");
+static_assert(offsetof(SonareProjectAutomationLane, desc) == 2u * sizeof(uint32_t),
+              "SonareProjectAutomationLane.desc offset");
 #endif
 
 // ============================================================================
@@ -688,28 +709,38 @@ SonareError sonare_project_set_track_route(SonareProject* project, uint32_t trac
 /// @brief Appends an automation lane to a track via an undoable edit command.
 ///        @p track_id must reference an existing track; @p desc describes the
 ///        target parameter id and breakpoints (see @ref SonareAutomationLaneDesc).
-///        @p out_target_param_id receives the lane's stable target parameter id
+///        @p out_lane_id receives the project-allocated lane ID
 ///        (may be NULL). A track may contain at most one lane per target.
 SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t track_id,
                                                const SonareAutomationLaneDesc* desc,
-                                               uint32_t* out_target_param_id);
+                                               uint32_t* out_lane_id);
 
 /// @brief Replaces an existing automation lane in place via an undoable edit
 ///        command. @p track_id must reference an existing track and
-///        @p target_param_id identifies an existing lane on it. The descriptor
-///        must retain the same target id; changing a lane's identity requires
-///        remove then add. The descriptor's target kind is applied, or the
-///        lane's current kind kept when it is @ref SONARE_AUTOMATION_TARGET_UNCHANGED,
-///        and typed-target conflicts are rejected atomically.
+///        @p lane_id identifies an existing lane on it. The descriptor may
+///        change its target. @ref SONARE_AUTOMATION_TARGET_UNCHANGED preserves the
+///        current target kind and typed identity. Conflicts are refused atomically.
 SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
-                                                uint32_t target_param_id,
+                                                uint32_t lane_id,
                                                 const SonareAutomationLaneDesc* desc);
 
 /// @brief Removes an automation lane from a track via an undoable edit command.
-///        @p track_id must reference an existing track and @p target_param_id
+///        @p track_id must reference an existing track and @p lane_id
 ///        an existing lane on it.
 SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32_t track_id,
-                                                  uint32_t target_param_id);
+                                                  uint32_t lane_id);
+
+/// @brief Copies the project's automation lanes, including their target and points.
+/// @details Release the snapshot with @ref sonare_free_project_automation_lane_list.
+SonareError sonare_project_automation_lanes(const SonareProject* project,
+                                            SonareProjectAutomationLaneList* out);
+
+/// @brief Releases an owned automation lane list and empties it. NULL is ignored.
+void sonare_free_project_automation_lane_list(SonareProjectAutomationLaneList* list);
+
+/// @brief Newline-separated automation target tokens in ordinal order.
+/// @return A string in static storage, or NULL when arrangement support is unavailable.
+const char* sonare_automation_target_kind_names(void);
 
 /// @brief Undoes the most recent edit. Returns SONARE_ERROR_INVALID_STATE when
 ///        the undo stack is empty.

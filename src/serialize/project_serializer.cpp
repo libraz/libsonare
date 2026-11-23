@@ -260,13 +260,41 @@ void check_midi_content_keys(const Value& content, const std::string& path) {
   }
 }
 
+void check_destination_instrument_keys(const Value& instrument, const std::string& path) {
+  refuse_unknown_keys(instrument, path,
+                      {"destinationId", "kind", "synth", "builtin", "sf2", "bank", "program"});
+  with_object(instrument, "synth", path, [](const Value& synth, const std::string& synth_path) {
+    refuse_unknown_keys(
+        synth, synth_path,
+        {"preset", "engineMode", "fields", "engineParams", "modRoutings", "useGmPrograms"});
+    each_record(synth, "modRoutings", synth_path,
+                [](const Value& route, const std::string& route_path) {
+                  refuse_unknown_keys(route, route_path, {"source", "destination", "depth"});
+                });
+  });
+  with_object(
+      instrument, "builtin", path, [](const Value& builtin, const std::string& builtin_path) {
+        refuse_unknown_keys(
+            builtin, builtin_path,
+            {"waveform", "gain", "attackMs", "decayMs", "sustain", "releaseMs", "polyphony"});
+      });
+  with_object(instrument, "sf2", path, [](const Value& sf2, const std::string& sf2_path) {
+    refuse_unknown_keys(sf2, sf2_path,
+                        {"gain", "polyphony", "preferModelForModeledFamilies", "clearBankRig",
+                         "gsEfxRealization", "soundFontUri"});
+  });
+  with_object(instrument, "bank", path, [](const Value& bank, const std::string& bank_path) {
+    refuse_unknown_keys(bank, bank_path, {"msb", "lsb"});
+  });
+}
+
 // Refuses a key no record of the document reads, before any of the model is built. The scene
 // subtree is checked by the scene reader itself, and insert `params` bags are not walked.
 void check_project_keys(const Value& root) {
   refuse_unknown_keys(root, "",
                       {"version", "sampleRate", "overlapPolicy", "tempoSegments", "timeSignatures",
                        "sources", "tracks", "clips", "warpMaps", "partRigs", "markers",
-                       "annotation", "midiContent", "scene", "assistSidecars"});
+                       "annotation", "midiContent", "scene", "instruments", "assistSidecars"});
   each_record(root, "tempoSegments", "", [](const Value& v, const std::string& p) {
     refuse_unknown_keys(v, p, {"startPpq", "bpm", "startSample", "endBpm"});
   });
@@ -289,7 +317,9 @@ void check_project_keys(const Value& root) {
                         {"id", "name", "kind", "gain", "mute", "solo", "pan", "channelStripRef",
                          "outputTarget", "midiDestinationId", "automationLanes"});
     each_record(v, "automationLanes", p, [](const Value& lane, const std::string& lane_path) {
-      refuse_unknown_keys(lane, lane_path, {"targetKind", "targetParamId", "points"});
+      refuse_unknown_keys(lane, lane_path,
+                          {"id", "targetKind", "targetParamId", "sendId", "insertIndex",
+                           "processor", "paramName", "points"});
       each_record(lane, "points", lane_path, [](const Value& point, const std::string& pp) {
         refuse_unknown_keys(point, pp, {"ppq", "value", "curveToNext"});
       });
@@ -308,6 +338,7 @@ void check_project_keys(const Value& root) {
       refuse_unknown_keys(insert, ip, {"processor", "params"});
     });
   });
+  each_record(root, "instruments", "", check_destination_instrument_keys);
   each_record(root, "markers", "", [](const Value& v, const std::string& p) {
     refuse_unknown_keys(v, p, {"id", "ppq", "name", "kind", "keyFifths", "keyMinor"});
   });
@@ -431,7 +462,25 @@ Value project_to_value(const arrangement::Project& project,
   // by project ids across save/load boundaries.
   root["annotation"] = annotation_to_json(project.annotation());
   root["midiContent"] = midi_content_to_json(midi);
-  root["scene"] = scene_to_value(project.scene());
+  if (const auto* scene = project.find_scene()) root["scene"] = scene_to_value(*scene);
+
+  Array instruments;
+  std::size_t instrument_index = 0;
+  for (const auto& [destination_id, binding] : project.destination_instruments()) {
+    if (const auto* synth =
+            std::get_if<arrangement::DestinationSynthInstrument>(&binding.instrument);
+        synth != nullptr && synth->engine_mode == "sample") {
+      const std::string field_path = schema::child_path(
+          schema::child_path(schema::index_path("instruments", instrument_index), "synth"),
+          "engineMode");
+      throw SonareException(ErrorCode::NotSupported,
+                            schema::refusal(field_path, "cannot be persisted"),
+                            ErrorReason::NotPersistable);
+    }
+    instruments.push_back(destination_instrument_to_json(destination_id, binding));
+    ++instrument_index;
+  }
+  root["instruments"] = std::move(instruments);
 
   Array sidecars;
   for (const auto& s : project.assist_sidecars()) sidecars.push_back(sidecar_to_json(s));
@@ -534,10 +583,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
     result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded", e.what()});
     return result;
   } catch (const json::JsonError& e) {
+    result.reason = ErrorReason::MalformedJson;
     result.diagnostics.push_back({DiagnosticSeverity::kError, "malformed_json", e.what()});
     return result;
   } catch (...) {
     // Defensive: parse() only throws JsonError, but never let anything escape.
+    result.reason = ErrorReason::MalformedJson;
     result.diagnostics.push_back(
         {DiagnosticSeverity::kError, "malformed_json", "unknown parse failure"});
     return result;
@@ -575,6 +626,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
       return result;
     }
     if (schema_version != SONARE_PROJECT_SCHEMA_VERSION) {
+      result.reason = ErrorReason::UnsupportedSchemaVersion;
       result.diagnostics.push_back(
           {DiagnosticSeverity::kError, "unsupported_schema_version",
            "project schema version " + std::to_string(schema_version) + " is " +
@@ -712,11 +764,14 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Tracks.
     uint32_t max_track_id = 0;
+    uint32_t max_automation_lane_id = 0;
     std::unordered_set<arrangement::TrackId> track_ids;
+    std::unordered_set<uint32_t> automation_lane_ids;
     if (const auto* arr = array_at(root, "", "tracks")) {
       std::size_t index = 0;
       for (const auto& tv : *arr) {
-        const std::string at = schema::index_path("tracks", index++);
+        const std::size_t track_index = index++;
+        const std::string at = schema::index_path("tracks", track_index);
         arrangement::Track t = track_from_json(object_element(tv, at), at);
         if (!valid_entity_id(t.id)) {
           reject_entity_id(at, false);
@@ -729,9 +784,29 @@ DeserializeResult project_from_json(const std::string& json_text) {
           reject_entity_id(at, true);
           return result;
         }
+        const arrangement::Track& inserted = project.tracks().back();
+        for (std::size_t lane_index = 0; lane_index < inserted.automation_lanes.size();
+             ++lane_index) {
+          const uint32_t lane_id = inserted.automation_lanes[lane_index].lane_id();
+          if (lane_id == 0) continue;
+          const std::string lane_path =
+              schema::index_path(schema::child_path(at, "automationLanes"), lane_index);
+          if (!valid_entity_id(lane_id)) {
+            reject_entity_id(lane_path, false);
+            return result;
+          }
+          if (!automation_lane_ids.insert(lane_id).second) {
+            reject_entity_id(lane_path, true);
+            return result;
+          }
+          max_automation_lane_id = std::max(max_automation_lane_id, lane_id);
+        }
       }
     }
     if (max_track_id > 0) project.ensure_next_track_id(max_track_id);
+    if (max_automation_lane_id > 0) {
+      project.ensure_next_automation_lane_id(max_automation_lane_id);
+    }
 
     // Clips (insert verbatim; bypasses overlap validation to preserve the saved
     // arrangement exactly, including comp lanes that intentionally overlap).
@@ -791,6 +866,14 @@ DeserializeResult project_from_json(const std::string& json_text) {
                                 e.code() == ErrorCode::NotSupported ? ErrorCode::NotSupported
                                                                     : ErrorCode::InvalidFormat);
         }
+      }
+    }
+
+    if (const auto* arr = array_at(root, "", "instruments")) {
+      std::size_t index = 0;
+      for (const auto& instrument : *arr) {
+        const std::string at = schema::index_path("instruments", index++);
+        restore_destination_instrument_from_json(object_element(instrument, at), at, &project);
       }
     }
 
@@ -928,7 +1011,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Mixer scene.
     if (const auto* sv = object_value_at(root, "", "scene")) {
-      project.scene() = scene_from_value(*sv);
+      project.set_scene(scene_from_value(*sv));
     }
 
     // Assist sidecars (lossless, even for unregistered modules). The payload
@@ -1065,6 +1148,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     return result;
   } catch (const SonareException& e) {
     result.project.reset();
+    result.reason = e.reason();
     result.diagnostics.push_back(
         {DiagnosticSeverity::kError,
          e.code() == ErrorCode::InvalidFormat ? "invalid_format" : "deserialize_failed", e.what()});

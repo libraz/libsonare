@@ -671,6 +671,39 @@ class ClearPartRig final : public EditCommand {
   uint8_t part_;
 };
 
+/// Sets or clears an instrument binding for a referenced MIDI destination.
+/// Clearing a destination without a binding is a successful no-op.
+class SetDestinationInstrument final : public EditCommand {
+ public:
+  SetDestinationInstrument(uint32_t destination_id,
+                           std::optional<DestinationInstrumentBinding> binding)
+      : destination_id_(destination_id), binding_(std::move(binding)) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetDestinationInstrument"; }
+  std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override {
+    return project_member::kDestinationInstruments;
+  }
+  ProjectMemberMask invert_reads_members() const noexcept override {
+    return project_member::kDestinationInstruments;
+  }
+  bool mutates_midi_store() const noexcept override { return false; }
+
+ private:
+  SetDestinationInstrument(uint32_t destination_id,
+                           std::optional<DestinationInstrumentBinding> binding,
+                           bool restore_dangling)
+      : destination_id_(destination_id),
+        binding_(std::move(binding)),
+        restore_dangling_(restore_dangling) {}
+
+  uint32_t destination_id_;
+  std::optional<DestinationInstrumentBinding> binding_;
+  bool restore_dangling_ = false;
+};
+
 class RestoreWarpMap final : public EditCommand {
  public:
   RestoreWarpMap(WarpMapRef map, std::vector<ClipId> clip_ids)
@@ -827,15 +860,17 @@ class SetOverlapPolicy final : public EditCommand {
 class SetScene final : public EditCommand {
  public:
   explicit SetScene(mixing::api::Scene scene) : scene_(std::move(scene)) {}
+  explicit SetScene(std::nullopt_t) noexcept {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetScene"; }
   std::size_t retained_bytes() const noexcept override;
   bool mutates_midi_store() const noexcept override { return false; }
+  ProjectMemberMask affected_members() const noexcept override { return project_member::kScene; }
 
  private:
-  mixing::api::Scene scene_;
+  std::optional<mixing::api::Scene> scene_;
 };
 
 /// Adds or replaces a marker. When `id` is 0 a new marker is allocated; when
@@ -966,8 +1001,8 @@ class AddAutomationLane final : public EditCommand {
   std::size_t retained_bytes() const noexcept override;
   bool mutates_midi_store() const noexcept override { return false; }
 
-  /// Index of the appended lane within the track (valid after apply).
-  uint32_t target_param_id() const noexcept { return lane_.target_param_id(); }
+  /// Project-wide id of the appended lane (valid after apply).
+  uint32_t lane_id() const noexcept { return lane_.lane_id(); }
 
  private:
   TrackId track_id_;
@@ -976,8 +1011,8 @@ class AddAutomationLane final : public EditCommand {
 
 class RemoveAutomationLane final : public EditCommand {
  public:
-  RemoveAutomationLane(TrackId track_id, uint32_t target_param_id)
-      : track_id_(track_id), target_param_id_(target_param_id) {}
+  RemoveAutomationLane(TrackId track_id, uint32_t lane_id)
+      : track_id_(track_id), lane_id_(lane_id) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
@@ -987,14 +1022,14 @@ class RemoveAutomationLane final : public EditCommand {
 
  private:
   TrackId track_id_;
-  uint32_t target_param_id_;
+  uint32_t lane_id_;
 };
 
-/// Replaces an existing automation lane (target param id + breakpoints) in place.
+/// Replaces an existing automation lane (lane id + descriptor) in place.
 class EditAutomationLane final : public EditCommand {
  public:
-  EditAutomationLane(TrackId track_id, uint32_t target_param_id, automation::AutomationLane lane)
-      : track_id_(track_id), target_param_id_(target_param_id), lane_(std::move(lane)) {}
+  EditAutomationLane(TrackId track_id, uint32_t lane_id, automation::AutomationLane lane)
+      : track_id_(track_id), lane_id_(lane_id), lane_(std::move(lane)) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
@@ -1004,7 +1039,7 @@ class EditAutomationLane final : public EditCommand {
 
  private:
   TrackId track_id_;
-  uint32_t target_param_id_;
+  uint32_t lane_id_;
   automation::AutomationLane lane_;
 };
 

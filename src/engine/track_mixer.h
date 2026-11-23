@@ -300,8 +300,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// set_lane_parameter for the lane @p track_id holds in this block's snapshot;
   /// false when no lane holds it.
   bool set_track_parameter(uint32_t track_id, unsigned int param_id, float value) noexcept;
-  /// Glides a track lane's fader (kFaderDb) or pan (kPan) back to the value it holds with
-  /// no automation: 0 dB, centre. Same thread contract as set_lane_parameter.
+  /// Glides a track lane's fader, pan, or width back to the value it holds with no automation:
+  /// 0 dB, centre, or unity width. Same thread contract as set_lane_parameter.
   bool restore_track_parameter(uint32_t track_id, unsigned int param_id) noexcept;
   bool set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept;
   /// AUDIO thread: applies a queued lane monitor mode. The mode is deliberately
@@ -422,7 +422,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// its construction value. False when @p track_id has no prepared lane or the value is unknown.
   bool track_insert_parameter_value(uint32_t track_id, unsigned int insert_index,
                                     unsigned int param_id, float* out_value) const noexcept;
-  /// AUDIO thread: a track lane's kFaderDb (dB) or kPan as last requested.
+  /// AUDIO thread: a track lane's kFaderDb (dB), kPan, or kWidth as last requested.
   bool track_lane_parameter_value(uint32_t track_id, unsigned int param_id,
                                   float* out_value) const noexcept;
   // Audio-thread application of a resolved insert-parameter change. Allocation
@@ -799,6 +799,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     // control rate matches ChannelStrip's gain ramp and avoids pow() per sample.
     rt::ParamSmoother fader_gain{1.0f, rt::kClickGuardMs, sonare::constants::kDefaultDawSampleRate};
     rt::ParamSmoother pan{0.0f, rt::kClickGuardMs, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother width{1.0f, rt::kClickGuardMs, sonare::constants::kDefaultDawSampleRate};
     rt::ParamSmoother gate{1.0f, kLaneGateSmoothingMs, sonare::constants::kDefaultDawSampleRate};
     bool solo = false;
     bool mute = false;
@@ -1151,6 +1152,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void configure_strip_sends(const TrackLaneConfig& config, mixing::ChannelStrip& strip) const;
   void process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                           int64_t timeline_sample) noexcept;
+  void process_lane_width(size_t lane_index, int num_channels, int num_samples) noexcept;
   void add_lane_monitor_pfl(size_t lane_index, int num_channels, int num_samples) noexcept;
   void deliver_lane_sidechains(size_t lane_index, int num_channels, int num_samples) noexcept;
   void snapshot_sidechain_key(size_t lane_index, int num_channels, int num_samples) noexcept;

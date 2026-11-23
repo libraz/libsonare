@@ -178,41 +178,4 @@ void validate_meter_config(const MeterConfig& config);
 /// @brief Validates and scores caller-supplied beat observations.
 MeterResult estimate_meter_from_observations(const MeterBeats& beats, const MeterConfig& config);
 
-/// @brief Estimates meter over a caller-supplied beat series.
-/// @param beat_times Beat positions in seconds, ascending.
-/// @param beat_strengths Per-beat accent value, the same length as @p beat_times.
-///        AnalysisResult::beat_observations.onset_strength is the intended
-///        source; Beat::strength also works but is a single unwindowed frame.
-///        Neither needs pre-scaling: the series is divided by its own maximum
-///        before scoring, so only the accent contrast within it is read and the
-///        absolute units it arrives in do not matter.
-///        A series assembled by hand from onset_envelope() — one frame read at
-///        each beat time — is not equivalent to either, and it carries a sample
-///        rate dependence neither of them has: a hop counted in samples frames
-///        a different amount of time at each rate, so one waveform sampled at
-///        32000, 44100 and 48000 Hz has produced three different winning
-///        numerators off beat times that were identical to the sample. Widening
-///        the read to a window around the beat does not remove it.
-/// @param config Scoring configuration; validated before use.
-/// @details The scoring reads only the per-beat strengths, so no audio or
-///          frame-level onset envelope is needed and a caller can score an
-///          arbitrary span of an existing analysis without re-running it.
-///          The audio path scores level accents read from the signal
-///          (BeatAccents) instead, so the two can disagree over the same beats.
-///          An empty beat series is rejected: there is nothing to score, and
-///          answering it with the fixed default would read as a detection.
-///          One to seven beats is accepted but is not a search either — it
-///          reports that same fixed default with MeterResult::searched false,
-///          which is what to read before treating a short span's answer as a
-///          detection.
-///
-///          Per-beat accents cannot say how a beat subdivides, so a compound
-///          meter is not resolvable on this path: a six whose beats accent
-///          3+3 keeps the requested denominator and reports the grouping
-///          {3, 3}, rather than being promoted to the 6/8 that the audio path
-///          reaches by measuring energy between the beats.
-MeterResult estimate_meter_from_beats(const std::vector<float>& beat_times,
-                                      const std::vector<float>& beat_strengths,
-                                      const MeterConfig& config = MeterConfig());
-
 }  // namespace sonare

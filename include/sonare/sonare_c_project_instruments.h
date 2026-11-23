@@ -246,16 +246,17 @@ void sonare_synth_patch_init(SonareSynthPatch* patch);
 ///   support.
 SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json);
 
-/// @brief Describes every numeric @ref SonareSynthPatch field and the
-///        @c one_shot switch, one descriptor per field in the layout of
+/// @brief Describes every numeric and enum @ref SonareSynthPatch field and the
+///        @c one_shot switch, one descriptor per field; numeric rows take the layout of
 ///        @ref sonare_synth_engine_param_info.
 /// @details `name` is the field's binding spelling (the name
 ///          @ref sonare_engine_resolve_instrument_automation_id takes where the
 ///          field is automatable); `min` / `max` are the range the field is
 ///          accepted in (a value outside it, or a non-finite one, is refused
 ///          when the patch is applied), and `default` is the init patch's value, which a zero
-///          left in the field keeps when no preset is named. Enum fields, the
-///          preset name and the mod matrix are not described here.
+///          left in the field keeps when no preset is named. An enum field follows the numeric
+///          rows with `type` "enum", `values` its tokens in ordinal order and `default` the
+///          token of ordinal 0. The preset name and the mod matrix are not described here.
 /// @param[out] out_json Receives the document; the caller releases it with
 ///   @ref sonare_free_string. Set to NULL on failure.
 /// @return SONARE_OK, or SONARE_ERROR_NOT_SUPPORTED in a build without
@@ -415,13 +416,92 @@ typedef struct {
   SonareSf2InstrumentConfig config;  ///< Player patch for that destination.
 } SonareSf2InstrumentBinding;
 
+/// @brief Configuration kind persisted for a project MIDI destination.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_PROJECT_INSTRUMENT_SYNTH = 0,    ///< NativeSynth patch.
+  SONARE_PROJECT_INSTRUMENT_BUILTIN = 1,  ///< Built-in oscillator patch.
+  SONARE_PROJECT_INSTRUMENT_SF2 = 2,      ///< SoundFont player configuration.
+} SonareProjectInstrumentKind;
+
+/// Resolve this MIDI bank member or program from the clip events.
+#define SONARE_PROJECT_INSTRUMENT_FROM_CLIP (-1)
+
+/// @brief Instrument and optional MIDI bank/program for a project destination.
+/// @details Initialize with @ref sonare_project_instrument_init. Only the config
+/// corresponding to @p kind may be non-null. Settings are copied by the setter.
+typedef struct {
+  uint32_t struct_size;                     ///< sizeof(SonareProjectInstrument).
+  SonareProjectInstrumentKind kind;         ///< Configuration kind.
+  const SonareSynthPatch* synth;            ///< Patch for a NativeSynth binding.
+  const SonareBuiltinSynthConfig* builtin;  ///< Configuration for a built-in binding.
+  const SonareSf2InstrumentConfig* sf2;     ///< Configuration for a SoundFont binding.
+  const char* sound_font_uri;               ///< URI for a SoundFont binding, or NULL for default.
+  int32_t use_gm_programs;                  ///< Nonzero enables GM programs for NativeSynth.
+  int32_t bank_msb;                         ///< MIDI bank MSB in [0, 127], or FROM_CLIP.
+  int32_t bank_lsb;                         ///< MIDI bank LSB in [0, 127], or FROM_CLIP.
+  int32_t program;                          ///< MIDI program in [0, 127], or FROM_CLIP.
+} SonareProjectInstrument;
+
+/// @brief Initializes @p instrument with the default kind and no config or bank/program.
+/// @details Initializes caller-provided storage and does not transfer ownership.
+void sonare_project_instrument_init(SonareProjectInstrument* instrument);
+
+/// @brief Sets a destination's persistent instrument as one undoable edit.
+/// @details A NULL instrument clears the binding. A destination must be referenced by a track.
+SonareError sonare_project_set_destination_instrument(SonareProject* project,
+                                                      uint32_t destination_id,
+                                                      const SonareProjectInstrument* instrument);
+
+/// @brief An instrument and the ID of the destination it serves.
+typedef struct {
+  uint32_t destination_id;             ///< MIDI destination ID.
+  uint32_t reserved;                   ///< Reserved for future use, written as zero.
+  SonareProjectInstrument instrument;  ///< Config and nested pointers owned by the list.
+} SonareProjectInstrumentBinding;
+
+/// @brief Ordered snapshot of destination instruments.
+typedef struct {
+  SonareProjectInstrumentBinding* items;  ///< Bindings in ascending destination ID order.
+  size_t count;                           ///< Number of bindings in @p items.
+} SonareProjectInstrumentList;
+
+/// @brief Copies the project's persistent destination instrument bindings.
+/// @details Release @p out with @ref sonare_free_project_instrument_list.
+SonareError sonare_project_destination_instruments(const SonareProject* project,
+                                                   SonareProjectInstrumentList* out);
+
+/// @brief Releases all bindings and clears the list. NULL is ignored.
+void sonare_free_project_instrument_list(SonareProjectInstrumentList* list);
+
+/// @brief A list of owned UTF-8 strings.
+typedef struct {
+  char** items;  ///< Owned pointers to owned NUL-terminated strings.
+  size_t count;  ///< Number of strings in @p items.
+} SonareStringList;
+
+/// @brief Copies distinct unresolved SoundFont URIs used by persistent instrument bindings.
+/// @details Release @p out with @ref sonare_free_string_list.
+SonareError sonare_project_unresolved_sound_font_uris(const SonareProject* project,
+                                                      SonareStringList* out);
+
+/// @brief Releases every string and the array, and clears the list. NULL is ignored.
+void sonare_free_string_list(SonareStringList* list);
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectInstrument, synth) == 2u * sizeof(uint32_t),
+              "SonareProjectInstrument.synth offset");
+static_assert(sizeof(SonareProjectInstrument) == 6u * sizeof(uint32_t) + 4u * sizeof(void*),
+              "SonareProjectInstrument layout drift");
+#endif
+
 // ============================================================================
 // Bounce (compile + offline render, with hosted instruments)
 // ============================================================================
 
 /// The render length derived from the compiled arrangement (its musical end plus the longest
-/// hosted-instrument release tail). Outside the length's real domain (a positive frame count), so
-/// it never reads as a length.
+/// hosted-instrument tail: a sounded voice's release followed by the instrument's effect ring-out;
+/// an SF2 / GM instrument reserves its system and part effect ring-out even when no note sounds).
+/// Outside the length's real domain (a positive frame count), so it never reads as a length.
 #define SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1)
 
 /// The output width of the scene master's layout (2 with no master). Outside the channel count's
@@ -430,6 +510,41 @@ typedef struct {
 
 /// The project's own sample rate. Outside the rate's real domain, so it never reads as a rate.
 #define SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1)
+
+/// @brief Articulation ordinals. Mirrors midi::ArticulationMode.
+/// @details What a channel does with a note-on while another note on the same
+///          channel is still held.
+typedef enum SONARE_ENUM_BASE {
+  /// Every note-on takes its own voice.
+  SONARE_ARTICULATION_POLY = 0,
+  /// One note at a time; a new note-on stops the previous note and starts over.
+  /// This is what GS MONO MODE and CC126 mean, and it is all they can reach.
+  SONARE_ARTICULATION_MONO_RETRIGGER = 1,
+  /// One note at a time, carried: a new note-on re-tunes the sounding voice
+  /// instead of starting one, so the exciter and the amplitude envelope never
+  /// restart. This is a wind player's slur, and it is deliberately unreachable
+  /// from a spec-compliant GS file — no standard names it, and reading CC126 as
+  /// this one would change what such a file sounds like.
+  SONARE_ARTICULATION_MONO_LEGATO = 2
+} SonareArticulation;
+
+/// @brief Values in @ref SonareArticulation.
+#define SONARE_ARTICULATION_COUNT 3
+
+/// @brief Applies a named controller profile to a hosted MIDI destination.
+typedef struct {
+  uint32_t destination_id;  ///< ID of a hosted instrument destination.
+  uint32_t reserved;        ///< Reserved for future use, set to zero.
+  const char* preset_name;  ///< Name returned by @ref sonare_controller_profile_names.
+} SonareProjectControllerProfileBinding;
+
+/// @brief Applies a note articulation on a hosted MIDI destination and channel.
+typedef struct {
+  uint32_t destination_id;          ///< ID of a hosted instrument destination.
+  uint32_t channel;                 ///< MIDI channel in [0, 15].
+  SonareArticulation articulation;  ///< Mode for overlapping notes on this channel.
+  uint32_t reserved;                ///< Reserved for future use, set to zero.
+} SonareProjectArticulationBinding;
 
 /// @brief Options for @ref sonare_project_bounce. Start from
 ///        @ref sonare_project_bounce_options_init; every field is then read literally and
@@ -479,12 +594,26 @@ typedef struct {
   /// @ref sonare_project_soundfont_manifest reports default SF2-first coverage. Default NULL.
   const SonareSf2InstrumentBinding* sf2_instruments;
   size_t sf2_instrument_count;  ///< Entries in @p sf2_instruments. Default 0.
+  /// Optional click, mixed after the master chain when enabled is nonzero.
+  /// NULL and a disabled config both render without clicks.
+  const SonareEngineMetronomeConfig* metronome;
+  const SonareProjectControllerProfileBinding*
+      controller_profiles;                                ///< Profiles, or NULL if empty.
+  size_t controller_profile_count;                        ///< One profile per destination.
+  const SonareProjectArticulationBinding* articulations;  ///< Articulations, or NULL if empty.
+  size_t articulation_count;  ///< One articulation per destination and MIDI channel.
+  int32_t count_in_bars;      ///< Bars of pre-roll in [0, 16], silent without a click.
+  uint32_t reserved;          ///< Reserved for future use, set to zero.
 } SonareProjectBounceOptions;
 
 /// @brief Writes every default into @p options and sets its @c struct_size; NULL is ignored.
 void sonare_project_bounce_options_init(SonareProjectBounceOptions* options);
 
 #ifdef __cplusplus
+static_assert(sizeof(SonareProjectControllerProfileBinding) == 2 * sizeof(uint32_t) + sizeof(void*),
+              "SonareProjectControllerProfileBinding layout drift");
+static_assert(sizeof(SonareProjectArticulationBinding) == 4 * sizeof(uint32_t),
+              "SonareProjectArticulationBinding layout drift");
 static_assert(offsetof(SonareProjectBounceOptions, struct_size) == 0,
               "BounceOptions.struct_size offset");
 static_assert(offsetof(SonareProjectBounceOptions, total_frames) == sizeof(int64_t),
@@ -492,10 +621,23 @@ static_assert(offsetof(SonareProjectBounceOptions, total_frames) == sizeof(int64
 static_assert(offsetof(SonareProjectBounceOptions, instruments) ==
                   2 * sizeof(int64_t) + 4 * sizeof(int),
               "BounceOptions.instruments offset");
+static_assert(offsetof(SonareProjectBounceOptions, count_in_bars) ==
+                  2 * sizeof(int64_t) + 4 * sizeof(int) + 13 * sizeof(void*),
+              "BounceOptions.count_in_bars offset");
+// The tail is padded to the int64_t alignment where pointers are 4 bytes (wasm32).
 static_assert(sizeof(SonareProjectBounceOptions) ==
-                  2 * sizeof(int64_t) + 4 * sizeof(int) + 8 * sizeof(void*),
+                  (offsetof(SonareProjectBounceOptions, count_in_bars) + 2 * sizeof(uint32_t) +
+                   alignof(int64_t) - 1) /
+                      alignof(int64_t) * alignof(int64_t),
               "SonareProjectBounceOptions layout drift");
 #endif
+
+/// @brief Returns the count-in length at the project's initial tempo and meter.
+/// @param count_in_bars Number of initial bars, in [0, 16].
+/// @param sample_rate The project sample rate, or @ref SONARE_PROJECT_SAMPLE_RATE_PROJECT.
+/// @param out_frames Receives the count-in length in frames.
+SonareError sonare_project_count_in_frames(const SonareProject* project, int32_t count_in_bars,
+                                           int sample_rate, int64_t* out_frames);
 
 /// @brief Compiles + renders the project offline to interleaved float audio.
 /// @param options Render options, started from @ref sonare_project_bounce_options_init. May be
@@ -510,9 +652,12 @@ static_assert(sizeof(SonareProjectBounceOptions) ==
 ///        defined on every return.
 /// @details Deterministic: the same project + options + instrument behavior yields
 ///          bit-identical output within one build. Each instrument list in @p options is
-///          optional; with none, MIDI tracks render silence. A destination named twice, within
-///          one list or across lists, is refused with SONARE_ERROR_INVALID_PARAMETER.
-///          When options->total_frames is positive, that explicit length is used as-is; mixer FX /
+///          optional. A per-call instrument takes precedence over a persistent instrument for
+///          the same destination. Part rigs apply afterwards. MIDI destinations without an
+///          instrument render silence. A destination named twice within the per-call lists
+///          is refused with SONARE_ERROR_INVALID_PARAMETER.
+///          The render window includes the count-in. A positive total_frames sets
+///          the length from the start of the count-in; mixer FX /
 ///          instrument tails are auto-extended only when total_frames is
 ///          @ref SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a refused option;

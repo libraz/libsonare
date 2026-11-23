@@ -18,13 +18,14 @@ SonareError sonare_engine_apply_project_timeline(SonareEngine* engine,
   namespace arr = sonare::arrangement;
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(timeline);
+  SONARE_C_TRY
+  engine->engine.require_quiescent();
   if (!timeline->timeline) return refuse_null("timeline.timeline");
   if (engine->engine.transport_state_control().playing) {
     set_last_error(SONARE_ERROR_INVALID_STATE,
                    "a project timeline can only be applied while the transport is stopped");
     return SONARE_ERROR_INVALID_STATE;
   }
-  SONARE_C_TRY
   arr::ApplyOptions options;
   options.bind_strips = true;
   arr::ApplyResult result = arr::apply_to_engine(*timeline->timeline, engine->engine, options);

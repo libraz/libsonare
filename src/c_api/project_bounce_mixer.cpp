@@ -68,6 +68,14 @@ bool bus_has_authored_processing(const sonare::mixing::api::Bus& bus) noexcept {
 
 bool timeline_requires_mixer(const arr::CompiledTimeline& timeline, const MixerRouting& routing) {
   if (!routing.bound_tracks.empty()) return true;
+  if (std::any_of(timeline.mixer.automation_bindings.begin(),
+                  timeline.mixer.automation_bindings.end(), [](const auto& binding) {
+                    using Kind = sonare::automation::AutomationTargetKind;
+                    const auto kind = binding.lane.target_kind();
+                    return kind == Kind::kTrackSendDb || kind == Kind::kTrackInsertParam;
+                  })) {
+    return true;
+  }
   return std::any_of(timeline.mixer.scene.buses.begin(), timeline.mixer.scene.buses.end(),
                      bus_has_authored_processing);
 }
@@ -156,13 +164,132 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
   if (!timeline.time_signatures.empty()) {
     tempo_map.set_time_signatures(timeline.time_signatures);
   }
+  const auto schedule_lane = [&](const auto& lane, int stage_latency_q8, const auto& schedule) {
+    const auto& points = lane.points();
+    const float initial_value = lane.value_at(0.0);
+    const int64_t stage_latency_samples =
+        stage_latency_q8 > 0 ? (static_cast<int64_t>(stage_latency_q8) + 255) / 256 : 0;
+    bool lane_full = schedule(0, initial_value, sonare::mixing::AutomationCurveType::Hold) ==
+                     sonare::mixing::AutomationPushResult::Full;
+    for (const auto& point : points) {
+      if (lane_full) break;
+      int64_t sample = std::max<int64_t>(0, tempo_map.ppq_to_sample(point.ppq));
+      if (stage_latency_samples > 0 &&
+          sample <= std::numeric_limits<int64_t>::max() - stage_latency_samples) {
+        sample += stage_latency_samples;
+      } else if (stage_latency_samples > 0) {
+        sample = std::numeric_limits<int64_t>::max();
+      }
+      if (schedule(sample, point.value, to_mixing_curve(point.curve_to_next)) ==
+          sonare::mixing::AutomationPushResult::Full) {
+        lane_full = true;
+      }
+    }
+    return lane_full;
+  };
 
   for (const auto& binding : timeline.mixer.automation_bindings) {
     const auto route = strip_for_track.find(binding.track_id);
+    const auto& lane = binding.lane;
+    if (lane.target_kind() == sonare::automation::AutomationTargetKind::kTrackInsertParam) {
+      if (lane.points().empty() || route == strip_for_track.end()) continue;
+      SonareStrip* strip = sonare_c_mixing_detail::find_strip(mixer, route->second.c_str());
+      if (strip == nullptr) continue;
+      const auto& target = lane.target_identity();
+      const auto index = static_cast<unsigned int>(*target.insert_index);
+      const int id = strip->strip.insert_parameter_id_for_key(index, target.param_name);
+      const auto latency = strip->strip.insert_input_latency_samples_q8(index);
+      bool refused = id < 0 || !latency;
+      if (!refused) {
+        using Result = sonare::mixing::InsertAutomationScheduleResult;
+        const auto param = static_cast<unsigned int>(id);
+        const auto schedule = [&](int64_t sample, float value,
+                                  sonare::mixing::AutomationCurveType curve) {
+          const auto result =
+              strip->strip.schedule_insert_automation_result(index, param, sample, value, curve);
+          // Stop at the first refused point so the caller never renders a partial lane.
+          return result == Result::Success ? sonare::mixing::AutomationPushResult::Success
+                                           : sonare::mixing::AutomationPushResult::Full;
+        };
+        refused = schedule_lane(lane, *latency, schedule);
+      }
+      if (refused && out_diagnostics != nullptr) {
+        out_diagnostics->push_back({arr::Diagnostic::Code::kAutomationTargetUnrouted,
+                                    arr::Diagnostic::Severity::kError, binding.track_id,
+                                    "could not schedule insert parameter '" + target.param_name +
+                                        "' on channel strip '" + route->second + "'"});
+      }
+      continue;
+    }
+    if (lane.target_kind() == sonare::automation::AutomationTargetKind::kTrackSendDb) {
+      const std::string& send_id = lane.target_identity().send_id;
+      const auto refuse_send = [&](std::string message) {
+        if (out_diagnostics == nullptr) return;
+        arr::Diagnostic diagnostic;
+        diagnostic.code = arr::Diagnostic::Code::kAutomationTargetUnrouted;
+        diagnostic.severity = arr::Diagnostic::Severity::kError;
+        diagnostic.target_id = binding.track_id;
+        diagnostic.message = std::move(message);
+        out_diagnostics->push_back(std::move(diagnostic));
+      };
+      if (route == strip_for_track.end()) {
+        refuse_send("send automation target '" + send_id +
+                    "' has no routed channel strip for track " + std::to_string(binding.track_id));
+        continue;
+      }
+      const auto scene_strip =
+          std::find_if(timeline.mixer.scene.strips.begin(), timeline.mixer.scene.strips.end(),
+                       [&](const auto& candidate) { return candidate.id == route->second; });
+      if (scene_strip == timeline.mixer.scene.strips.end()) {
+        refuse_send("send automation target '" + send_id + "' could not resolve channel strip '" +
+                    route->second + "' for track " + std::to_string(binding.track_id));
+        continue;
+      }
+      const auto send =
+          std::find_if(scene_strip->sends.begin(), scene_strip->sends.end(),
+                       [&](const auto& candidate) { return candidate.id == send_id; });
+      if (send == scene_strip->sends.end()) {
+        refuse_send("send automation target '" + send_id + "' is missing from channel strip '" +
+                    route->second + "' for track " + std::to_string(binding.track_id));
+        continue;
+      }
+      const auto& points = lane.points();
+      if (points.empty()) continue;
+
+      SonareStrip* strip = sonare_c_mixing_detail::find_strip(mixer, route->second.c_str());
+      if (strip == nullptr) {
+        refuse_send("send automation target '" + send_id + "' could not resolve channel strip '" +
+                    route->second + "' for track " + std::to_string(binding.track_id));
+        continue;
+      }
+      const size_t send_index = static_cast<size_t>(send - scene_strip->sends.begin());
+      if (send_index >= strip->strip.num_sends()) {
+        refuse_send("send automation target '" + send_id + "' is missing from channel strip '" +
+                    route->second + "' for track " + std::to_string(binding.track_id));
+        continue;
+      }
+
+      const float initial_value = lane.value_at(0.0);
+      strip->strip.set_send_db(send_index, initial_value);
+      const auto schedule = [&](int64_t sample, float value,
+                                sonare::mixing::AutomationCurveType curve) {
+        return strip->strip.schedule_send_automation_result(send_index, sample, value, curve);
+      };
+      // A send's PDC follows its own pre/post-fader tap. Shift the authored
+      // events by that stage's arrival latency before the mixer trims its fill.
+      const int stage_latency_q8 = strip->strip.send_latency_samples_q8(send_index);
+      const bool lane_full = schedule_lane(lane, stage_latency_q8, schedule);
+      if (lane_full) {
+        refuse_send("send '" + send_id + "' automation lane on channel strip '" + route->second +
+                    "' has " + std::to_string(points.size()) +
+                    " breakpoints, more than the strip's automation lane holds");
+      }
+      continue;
+    }
+
     if (route == strip_for_track.end()) continue;
     SonareStrip* strip = sonare_c_mixing_detail::find_strip(mixer, route->second.c_str());
     if (strip == nullptr) continue;
-    const auto& lane = binding.lane;
     // Typed track fader/pan lanes are applied once by TrackMixerRuntime through
     // the reserved engine namespace. Scheduling them on the scene strip too
     // would apply the same automation a second time (notably -6 dB -> -12 dB).
@@ -201,32 +328,10 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
       }
     };
 
-    // Fader, pan and width are all applied before the post-insert chain. Shift
-    // authored breakpoints by the pre-fader arrival latency before PDC
-    // trimming. The initial value at zero establishes the baseline.
+    // Fader, pan and width are all applied before the post-insert chain. Their
+    // authored breakpoints use the pre-fader arrival latency before PDC trim.
     const int stage_latency_q8 = strip->strip.pre_fader_latency_samples_q8();
-    const int64_t stage_latency_samples =
-        stage_latency_q8 > 0 ? (static_cast<int64_t>(stage_latency_q8) + 255) / 256 : 0;
-
-    bool lane_full = false;
-    if (schedule(0, initial_value, sonare::mixing::AutomationCurveType::Hold) ==
-        sonare::mixing::AutomationPushResult::Full) {
-      lane_full = true;
-    }
-    for (const auto& point : points) {
-      if (lane_full) break;
-      int64_t sample = std::max<int64_t>(0, tempo_map.ppq_to_sample(point.ppq));
-      if (stage_latency_samples > 0 &&
-          sample <= std::numeric_limits<int64_t>::max() - stage_latency_samples) {
-        sample += stage_latency_samples;
-      } else if (stage_latency_samples > 0) {
-        sample = std::numeric_limits<int64_t>::max();
-      }
-      if (schedule(sample, point.value, to_mixing_curve(point.curve_to_next)) ==
-          sonare::mixing::AutomationPushResult::Full) {
-        lane_full = true;
-      }
-    }
+    const bool lane_full = schedule_lane(lane, stage_latency_q8, schedule);
     if (lane_full && out_diagnostics != nullptr) {
       const char* parameter = "automation";
       switch (lane.target_param_id()) {

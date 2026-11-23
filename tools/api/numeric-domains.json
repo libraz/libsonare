@@ -1123,6 +1123,28 @@
       "sentinel": null
     },
     {
+      "entry": "encode_audio",
+      "param": "options.quality",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "encode_audio",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_add_parameter",
       "param": "info.id",
       "kind": "integer",
@@ -2506,6 +2528,61 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": "within_work_size_limit",
+      "sentinel": null
+    },
+    {
+      "entry": "istft",
+      "param": "hop_length",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "hann_cola_pair",
+      "sentinel": null
+    },
+    {
+      "entry": "istft",
+      "param": "length_samples",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 500000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "istft",
+      "param": "n_bins",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "istft",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 4,
+      "hi": 524288,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "even",
+      "sentinel": null
+    },
+    {
+      "entry": "istft",
+      "param": "n_frames",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
       "sentinel": null
     },
     {
@@ -5655,6 +5732,39 @@
       "sentinel": null
     },
     {
+      "entry": "project_annotate_sections",
+      "param": "count",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 500000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_annotate_sections",
+      "param": "sections[].end_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_annotate_sections",
+      "param": "sections[].start_ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_apply_vocal_edit",
       "param": "desc.clip_id",
       "kind": "integer",
@@ -5726,6 +5836,28 @@
       "kind": "integer",
       "lo": 1,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bar_start_ppq",
+      "param": "bar_index",
+      "kind": "integer",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "representable_bar_start",
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.articulations[].channel",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 15,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -5810,11 +5942,66 @@
     },
     {
       "entry": "project_bounce",
+      "param": "options.count_in_bars",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 16,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
       "param": "options.instrument_latency_samples",
       "kind": "integer",
       "lo": 0,
       "hi": 2147483647,
       "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.metronome.accent_gain",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.metronome.beat_gain",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.metronome.click_samples",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.metronome.click_sec",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1,
+      "lo_included": false,
       "hi_included": true,
       "stricter": null,
       "sentinel": null
@@ -5941,6 +6128,28 @@
       "sentinel": -1
     },
     {
+      "entry": "project_count_in_frames",
+      "param": "count_in_bars",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 16,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_count_in_frames",
+      "param": "sample_rate",
+      "kind": "integer",
+      "lo": 8000,
+      "hi": 384000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": -1
+    },
+    {
       "entry": "project_duplicate_clip",
       "param": "new_start_ppq",
       "kind": "real",
@@ -6018,6 +6227,28 @@
       "sentinel": null
     },
     {
+      "entry": "project_position_at_ppq",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "representable_bar_start",
+      "sentinel": null
+    },
+    {
+      "entry": "project_ppq_to_sec",
+      "param": "ppq",
+      "kind": "real",
+      "lo": 0,
+      "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_rehydrate_vocal_edits",
       "param": "originals[].sample_count",
       "kind": "integer",
@@ -6048,6 +6279,17 @@
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_sec_to_ppq",
+      "param": "sec",
+      "kind": "real",
+      "lo": 0,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "tempo_map_upper_bound",
       "sentinel": null
     },
     {

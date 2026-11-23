@@ -4526,10 +4526,17 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_add_automation_lane"
-changed = "takes the descriptor that carries target_kind; set target_kind to SONARE_AUTOMATION_TARGET_OPAQUE for a host-defined lane"
+changed = "returns the project-allocated lane ID through out_lane_id. Initialize desc with sonare_automation_lane_desc_init and describe the lane target in desc"
 domain = "project"
 rule = "options-struct"
 test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI automation lane add / edit / remove with undo"
+
+[[entry]]
+kind = "option"
+old = "sonare_project_add_automation_lane(out_target_param_id)"
+new = "sonare_project_add_automation_lane(out_lane_id)"
+domain = "project"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
@@ -4541,10 +4548,17 @@ rule = "options-struct"
 [[entry]]
 kind = "function"
 old = "sonare_project_edit_automation_lane"
-changed = "takes the descriptor that carries target_kind, which is applied to the lane instead of retaining the existing kind; restate the lane's kind in the descriptor"
+changed = "takes the lane_id returned by add or the lane reader. The desc supplies the target and breakpoints"
 domain = "project"
 rule = "options-struct"
 test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI typed automation lane add/edit applies the descriptor kind"
+
+[[entry]]
+kind = "option"
+old = "sonare_project_edit_automation_lane(target_param_id)"
+new = "sonare_project_edit_automation_lane(lane_id)"
+domain = "project"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
@@ -4563,10 +4577,33 @@ rule = "options-struct"
 [[entry]]
 kind = "type"
 old = "SonareAutomationLaneDesc"
-changed = "gains target_kind between target_param_id and points; the layout is the former SonareAutomationLaneDescEx"
+changed = "initialize with sonare_automation_lane_desc_init. The versioned descriptor carries target_kind and typed target fields, and project-assigned lane IDs are separate"
 domain = "project"
 rule = "options-struct"
 test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI typed automation lane add/edit applies the descriptor kind"
+
+[[entry]]
+kind = "field"
+old = "SonareAutomationLaneDesc.target_param_id"
+changed = "set to zero for a typed lane. For an opaque lane, set it to the nonzero engine parameter ID"
+domain = "project"
+rule = "options-struct"
+test = "tests/api/project_writers_test.cpp::project automation lane descriptors name invalid fields"
+
+[[entry]]
+kind = "function"
+old = "sonare_project_remove_automation_lane"
+changed = "takes the lane_id returned by add or the lane reader"
+domain = "project"
+rule = "options-struct"
+test = "tests/arrangement/c_abi_edit_ops_test.cpp::C-ABI automation lane add / edit / remove with undo"
+
+[[entry]]
+kind = "option"
+old = "sonare_project_remove_automation_lane(target_param_id)"
+new = "sonare_project_remove_automation_lane(lane_id)"
+domain = "project"
+rule = "options-struct"
 
 [[entry]]
 kind = "function"
@@ -5723,3 +5760,39 @@ changed = "a in_channels that would make the input samples larger than 500000000
 domain = "engine"
 rule = "work-size-limit"
 test = "tests/api/c_refusal_subjects_test.cpp::the playback render entries refuse an in_channels"
+
+[[entry]]
+kind = "function"
+old = "sonare_estimate_meter_json"
+changed = "takes (const SonareMeterBeats*, const SonareMeterOptions*, char**). Initialize the evidence with sonare_meter_beats_init."
+domain = "analysis"
+rule = "typed-results"
+test = "tests/api/meter_beats_test.cpp::sonare_estimate_meter_json reproduces the meter in analysis JSON"
+
+[[entry]]
+kind = "option"
+old = "sonare_estimate_meter_json(beat_count)"
+removed = "Set SonareMeterBeats.beat_count."
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "sonare_estimate_meter_json(beat_strengths)"
+removed = "Set SonareMeterBeats.accent to the per-beat accents."
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "sonare_estimate_meter_json(beat_times)"
+removed = "The evidence record uses beat order and needs no timestamps."
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "sonare_analyze_bpm(start_bpm)"
+removed = "omit start_bpm and move n_fft, hop_length, max_candidates and out one position earlier. The result reports NaN when no tempo is measured. Apply any fallback in the caller."
+domain = "analysis"
+rule = "individual"

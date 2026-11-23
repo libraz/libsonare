@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/audio_encode.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
@@ -263,6 +264,18 @@ std::string build_capability_catalog_json() {
   abi["project"] = static_cast<int>(SONARE_PROJECT_ABI_VERSION);
   abi["engine"] = static_cast<int>(sonare_engine_abi_version());
   catalog["abi"] = std::move(abi);
+  json::Array encode_builtin;
+  encode_builtin.emplace_back("wav");
+  json::Array encode_ffmpeg;
+  for (const std::string_view format : sonare::kOptionalAudioEncodeFormats) {
+    if (sonare::audio_encode_format_available(format)) {
+      encode_ffmpeg.emplace_back(std::string(format));
+    }
+  }
+  json::Object encode;
+  encode["builtin"] = std::move(encode_builtin);
+  encode["ffmpeg"] = std::move(encode_ffmpeg);
+  catalog["encode"] = std::move(encode);
   catalog["processors"] = json::parse_strict(sonare::mastering::api::processor_catalog_json());
   catalog["chain"] = json::parse_strict(sonare::mastering::api::chain_catalog_json());
 
@@ -340,6 +353,9 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "abi",
       "abi.project",
       "abi.engine",
+      "encode",
+      "encode.builtin",
+      "encode.ffmpeg",
       "presets",
       "presets.mastering",
       "presets.synth",
@@ -354,6 +370,7 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "masteringPresets[].maxLimiterGainReductionDb",
       "processors",
       "processors[].id",
+      "processors[].description",
       "processors[].kind",
       "processors[].realtimeInsertable",
       "processors[].forms",
@@ -626,6 +643,35 @@ SonareError sonare_mastering_analyze_pair(const char* analysis, const float* sou
   auto json = sonare::mastering::api::analyze_named_pair(
       analysis, source, reference, source_length, reference_length, sample_rate,
       reference_sample_rate, to_params(params, param_count));
+  *json_out = copy_string(json);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_analyze_pair_stereo(
+    const char* analysis, const float* source_left, const float* source_right, size_t source_length,
+    const float* reference_left, const float* reference_right, size_t reference_length,
+    int reference_sample_rate, int sample_rate, const SonareMasteringParam* params,
+    size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(json_out);
+  SONARE_C_REQUIRE_NONNULL(analysis);
+  SonareError err = validate_stereo_audio_params("source_left", "source_right", source_left,
+                                                 source_right, source_length, sample_rate);
+  if (err != SONARE_OK) return err;
+  SONARE_C_TRY
+  constexpr std::array<CName, 1> kReferenceRateNames{{{"sample_rate", "reference_sample_rate"}}};
+  with_c_names(kReferenceRateNames, [&] {
+    validate_offline_audio_input("reference_left", reference_left, reference_length,
+                                 reference_sample_rate);
+    validate_offline_audio_input("reference_right", reference_right, reference_length,
+                                 reference_sample_rate);
+  });
+  SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(params, param_count);
+  SONARE_C_REQUIRE_NONNULL(json_out);
+  auto json = sonare::mastering::api::analyze_named_pair(
+      analysis, source_left, source_right, source_length, reference_left, reference_right,
+      reference_length, sample_rate, reference_sample_rate, to_params(params, param_count));
   *json_out = copy_string(json);
   return SONARE_OK;
   SONARE_C_CATCH

@@ -918,6 +918,42 @@ TEST_CASE("the processor catalog schema list matches what the writer emits",
   REQUIRE(slot_interior == slot_prefixed);
 }
 
+TEST_CASE("each processor catalog entry has one specific description", "[mastering][catalog]") {
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  std::set<std::string> actual_ids;
+  for (const json::Value& entry : catalog.as_array()) {
+    const std::string id = field(entry, "id").as_string();
+    INFO(id);
+    REQUIRE(actual_ids.insert(id).second);
+    const json::Value* description_value = entry.find("description");
+    REQUIRE(description_value != nullptr);
+    REQUIRE(description_value->is_string());
+    const std::string& description = description_value->as_string();
+    REQUIRE_FALSE(description.empty());
+    CHECK(description.back() == '.');
+    CHECK(std::count(description.begin(), description.end(), '.') == 1);
+    CHECK(description.find(id) == std::string::npos);
+
+    for (const json::Value& parameter : field(entry, "params").as_array()) {
+      CHECK_FALSE(parameter.contains("description"));
+    }
+    const json::Value* offline_params = entry.find("offlineParams");
+    if (offline_params != nullptr) {
+      for (const json::Value& parameter : offline_params->as_array()) {
+        CHECK_FALSE(parameter.contains("description"));
+      }
+    }
+  }
+
+  std::set<std::string> expected_ids;
+  for (const std::string& id : sonare::mastering::api::processor_names()) expected_ids.insert(id);
+  for (const std::string& id : sonare::mastering::api::pair_processor_names()) {
+    expected_ids.insert(id);
+  }
+  for (const std::string& id : insert_factory_names()) expected_ids.insert(id);
+  CHECK(actual_ids == expected_ids);
+}
+
 TEST_CASE("the slot info schema list matches what the writer emits", "[mastering][catalog]") {
   std::set<std::string> actual;
   for (const auto& name : insert_factory_names()) {

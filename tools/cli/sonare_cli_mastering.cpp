@@ -813,12 +813,51 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: --analysis is required" << color::reset << "\n";
     return 1;
   }
-  const Audio reference = load_pair_reference_audio(args);
+
+  const int source_channels = args.source_channels;
+  if (source_channels != 1 && source_channels != 2) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "source must hold one or two channels, got " + std::to_string(source_channels));
+  }
+
+  const std::string reference_path = args.get_string("reference");
+  if (reference_path.empty()) throw std::invalid_argument("--reference is required");
+  auto [reference_interleaved, reference_sample_rate, reference_channels] =
+      load_audio_interleaved(reference_path);
+  if (reference_channels != 1 && reference_channels != 2) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "reference must hold one or two channels, got " + std::to_string(reference_channels));
+  }
+  if (source_channels != reference_channels) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "source and reference must have the same number of channels, got " +
+                              std::to_string(source_channels) + " and " +
+                              std::to_string(reference_channels));
+  }
+
   const auto params = parse_mastering_params(args.get_string("params"));
-  std::cout << analysis_json_for_cli(mastering::api::analyze_named_pair(
-                   analysis, audio.data(), reference.data(), audio.size(), reference.size(),
-                   audio.sample_rate(), reference.sample_rate(), params))
-            << "\n";
+  if (source_channels == 1) {
+    std::cout << analysis_json_for_cli(mastering::api::analyze_named_pair(
+                     analysis, audio.data(), reference_interleaved.data(), audio.size(),
+                     reference_interleaved.size(), audio.sample_rate(), reference_sample_rate,
+                     params))
+              << "\n";
+  } else {
+    const StereoPlanes source = load_stereo_planes(args, audio);
+    std::vector<float> reference_left(reference_interleaved.size() / 2);
+    std::vector<float> reference_right(reference_interleaved.size() / 2);
+    for (size_t frame = 0; frame < reference_left.size(); ++frame) {
+      reference_left[frame] = reference_interleaved[2 * frame];
+      reference_right[frame] = reference_interleaved[2 * frame + 1];
+    }
+    std::cout << analysis_json_for_cli(mastering::api::analyze_named_pair(
+                     analysis, source.left.data(), source.right.data(), source.left.size(),
+                     reference_left.data(), reference_right.data(), reference_left.size(),
+                     audio.sample_rate(), reference_sample_rate, params))
+              << "\n";
+  }
   return 0;
 }
 

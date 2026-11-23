@@ -4,12 +4,14 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
 #include <new>
 #include <set>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -18,6 +20,7 @@
 #include "core/resample.h"
 #include "engine/mixing_runtime.h"
 #include "engine/tempo_sync.h"
+#include "midi/controller_numbers.h"
 #include "midi/midi_clip.h"
 #include "mixing/panner.h"
 #include "rt/pan_law.h"
@@ -29,7 +32,19 @@
 #include "util/refusal_predicates.h"
 #include "util/resource_limits.h"
 
+#if defined(SONARE_WITH_MIXING)
+#include "engine/strip_spec.h"
+#if defined(SONARE_WITH_MASTERING)
+#include "mastering/api/insert_factory.h"
+#include "util/json.h"
+#endif
+#endif
+
 namespace sonare::arrangement {
+
+bool track_is_silenced(const Track& track, bool any_solo) noexcept {
+  return track.mute || (any_solo && !track.solo) || track.gain <= 0.0f;
+}
 
 namespace {
 
@@ -92,9 +107,7 @@ bool any_track_soloed(const Project& project) noexcept {
 // non-soloed track while any track is soloed, is silent (0). Missing track -> 1.
 float effective_track_gain(const Track* track, bool any_solo) noexcept {
   if (track == nullptr) return 1.0f;
-  if (track->mute) return 0.0f;
-  if (any_solo && !track->solo) return 0.0f;
-  return track->gain;
+  return track_is_silenced(*track, any_solo) ? 0.0f : track->gain;
 }
 
 // Stereo balance a track contributes (the player applies it per output channel).
@@ -106,12 +119,6 @@ float effective_track_pan(const Track* track) noexcept {
 }
 
 #if defined(SONARE_WITH_MIXING)
-// True when a track produces no sound: explicitly muted, soloed out, or its gain
-// has been pulled to silence.
-bool track_is_silenced(const Track& track, bool any_solo) noexcept {
-  return track.mute || (any_solo && !track.solo) || track.gain <= 0.0f;
-}
-
 // Generates a scene-unique strip id for a track that carries gain/pan/mute/solo
 // but is not bound to an explicit channel strip (mirrors the bounce path's
 // synthetic-strip naming).
@@ -140,7 +147,7 @@ MixerAutomationBinding& track_lane_binding(TrackId track_id, automation::Automat
   }
   MixerAutomationBinding fresh;
   fresh.track_id = track_id;
-  fresh.lane = automation::AutomationLane(static_cast<uint32_t>(kind), kind);
+  fresh.lane = automation::AutomationLane(0, kind);
   bindings->push_back(std::move(fresh));
   return bindings->back();
 }
@@ -358,21 +365,103 @@ void add_diag(CompileResult* result, Diagnostic::Code code, Diagnostic::Severity
 // final scene carried by the timeline. In a mixing-off build the value binding
 // is still preserved for round-trip/reporting, but no realtime ChannelStrip is
 // available to consume an opaque lane.
-bool has_resolved_mixer_strip(const CompiledTimeline& timeline, TrackId track_id) noexcept {
+const mixing::api::Strip* resolved_mixer_strip(const CompiledTimeline& timeline,
+                                               TrackId track_id) noexcept {
 #if defined(SONARE_WITH_MIXING)
   for (const MixerStripBinding& binding : timeline.mixer.bindings) {
     if (binding.track_id != track_id) continue;
     const auto strip = std::find_if(
         timeline.mixer.scene.strips.begin(), timeline.mixer.scene.strips.end(),
         [&](const mixing::api::Strip& candidate) { return candidate.id == binding.strip_id; });
-    if (strip != timeline.mixer.scene.strips.end()) return true;
+    if (strip != timeline.mixer.scene.strips.end()) return &*strip;
   }
 #else
   (void)timeline;
   (void)track_id;
 #endif
-  return false;
+  return nullptr;
 }
+
+#if defined(SONARE_WITH_MIXING)
+void validate_mix_automation(const CompiledTimeline& timeline, CompileResult* result) {
+  using automation::AutomationTargetKind;
+  for (const auto& binding : timeline.mixer.automation_bindings) {
+    const auto& lane = binding.lane;
+    const bool send = lane.target_kind() == AutomationTargetKind::kTrackSendDb;
+    if (!send && lane.target_kind() != AutomationTargetKind::kTrackInsertParam) continue;
+
+    const auto& identity = lane.target_identity();
+    const std::string subject =
+        send ? "send '" + identity.send_id + "'" : "insert parameter '" + identity.param_name + "'";
+    const auto diagnose = [&](const std::string& message) {
+      add_diag(result, Diagnostic::Code::kAutomationTargetUnrouted, Diagnostic::Severity::kError,
+               binding.track_id,
+               subject + " on track " + std::to_string(binding.track_id) + ": " + message);
+    };
+    const auto* strip = resolved_mixer_strip(timeline, binding.track_id);
+    if (strip == nullptr) {
+      diagnose("there is no routed channel strip");
+      continue;
+    }
+    if (send) {
+      if (std::none_of(strip->sends.begin(), strip->sends.end(),
+                       [&](const auto& item) { return item.id == identity.send_id; })) {
+        diagnose("is missing from channel strip '" + strip->id + "'");
+      }
+      continue;
+    }
+
+    const size_t index = *identity.insert_index;
+    const auto* processor =
+        index <= std::numeric_limits<unsigned int>::max()
+            ? engine::strip_insert_processor_name_at(*strip, static_cast<unsigned int>(index))
+            : nullptr;
+    if (processor == nullptr || *processor != identity.processor) {
+      diagnose("insert[" + std::to_string(index) + "] on channel strip '" + strip->id +
+               "' must be processor '" + identity.processor + "'");
+      continue;
+    }
+#if defined(SONARE_WITH_MASTERING)
+    const auto catalog = util::json::parse(
+        sonare::mastering::api::insert_param_info_json_at_rate(*processor, timeline.sample_rate));
+    const auto& params = catalog.as_array();
+    const auto param = std::find_if(params.begin(), params.end(), [&](const auto& item) {
+      const auto* name = item.find("name");
+      return name != nullptr && name->is_string() && name->as_string() == identity.param_name;
+    });
+    if (param == params.end()) {
+      diagnose("is absent from the '" + *processor + "' parameter catalog");
+      continue;
+    }
+    const auto* id = param->find("id");
+    const auto* rt_safe = param->find("rtSafe");
+    if (id == nullptr || !id->is_number() || rt_safe == nullptr || !rt_safe->as_bool()) {
+      diagnose("the '" + *processor + "' parameter is not automatable");
+      continue;
+    }
+    const auto below_or_above = [&](float value, const char* bound, const char* exclusive,
+                                    bool lower) {
+      const auto* limit = param->find(bound);
+      if (limit == nullptr || !limit->is_number()) return false;
+      const auto* strict = param->find(exclusive);
+      const double edge = limit->as_number();
+      return (lower ? value < edge : value > edge) ||
+             (strict != nullptr && strict->as_bool() && value == edge);
+    };
+    for (size_t i = 0; i < lane.points().size(); ++i) {
+      const float value = lane.points()[i].value;
+      if (below_or_above(value, "min", "minExclusive", true) ||
+          below_or_above(value, "max", "maxExclusive", false)) {
+        diagnose("points[" + std::to_string(i) + "].value is outside the '" + *processor +
+                 "' parameter range");
+      }
+    }
+#else
+    diagnose("insert parameter metadata is unavailable without mastering support");
+#endif
+  }
+}
+#endif
 
 // Validates tempo segments: bpm/end_bpm must be > 0 and start_ppq monotonic and
 // non-negative. Returns false (with diagnostics appended) on any violation.
@@ -497,6 +586,93 @@ void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& 
 
 }  // namespace
 
+double arrangement_end_ppq(const Project& project) {
+  const bool any_solo = any_track_soloed(project);
+  double end_ppq = 0.0;
+  for (const EditClip& clip : project.clips()) {
+    const Track* track = project.find_track(clip.track_id);
+    if (track == nullptr || track_is_silenced(*track, any_solo)) continue;
+
+    const ClipSource* source = project.find_source(clip.source_id);
+    if (source == nullptr || !clip_matches_track_kind(project, clip, *source) ||
+        !valid_clip_ppq(clip) || !std::isfinite(clip.end_ppq())) {
+      continue;
+    }
+
+    if (source_kind(*source) == SourceKind::kAudio) {
+      if (!valid_comp_segments(clip) || !valid_clip_render_parts(clip)) continue;
+      bool parts_ok = true;
+      const std::vector<AudioClipPart> parts = build_audio_clip_parts(clip, &parts_ok);
+      if (!parts_ok || parts.empty()) continue;
+
+      const bool all_sources_valid =
+          std::all_of(parts.begin(), parts.end(), [&project, &clip](const AudioClipPart& part) {
+            const ClipSource* part_source = project.find_source(part.source_id);
+            return part_source != nullptr && clip_matches_track_kind(project, clip, *part_source) &&
+                   source_kind(*part_source) == SourceKind::kAudio;
+          });
+      if (!all_sources_valid) continue;
+    }
+
+    end_ppq = std::max(end_ppq, clip.end_ppq());
+  }
+  return end_ppq;
+}
+
+namespace {
+
+void add_destination_programs(const Project& project, CompileResult& result,
+                              CompiledTimeline& timeline) {
+  if (project.destination_instruments().empty()) return;
+  std::set<uint32_t> track_destinations;
+  for (const Track& track : project.tracks()) track_destinations.insert(track.midi_destination_id);
+  for (const auto& entry : project.destination_instruments()) {
+    if (track_destinations.count(entry.first) == 0) {
+      add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kWarning, 0,
+               "instrument destination " + std::to_string(entry.first) +
+                   " is not referenced by any track");
+    }
+  }
+
+  std::set<std::tuple<TrackId, uint8_t, uint8_t>> addressed;
+  std::vector<midi::MidiClipSchedule> startup;
+  for (const auto& clip : timeline.midi_clips) {
+    const auto* binding = project.find_destination_instrument(clip.destination_id);
+    if (binding == nullptr || !binding->program) continue;
+    midi::MidiClipSchedule setup;
+    setup.length_samples = 1;
+    setup.destination_id = clip.destination_id;
+    setup.track_id = clip.track_id;
+    setup.frame_zero_prelude = true;
+    for (const auto& event : clip.events) {
+      if (!midi::is_channel_voice(event.ump)) continue;
+      const uint8_t group = event.ump.group;
+      const uint8_t channel = event.ump.channel();
+      if (!addressed.emplace(clip.track_id, group, channel).second) continue;
+      if (binding->bank) {
+        setup.events.push_back(
+            {0, midi::make_midi1_control_change(group, channel, midi::cc::kBankSelectMsb,
+                                                static_cast<uint8_t>(binding->bank->msb))});
+        setup.events.push_back(
+            {0, midi::make_midi1_control_change(group, channel, midi::cc::kBankSelectLsb,
+                                                static_cast<uint8_t>(binding->bank->lsb))});
+      }
+      setup.events.push_back({0, midi::make_midi1_program_change(
+                                     group, channel, static_cast<uint8_t>(*binding->program))});
+    }
+    if (setup.events.empty()) continue;
+    startup.push_back(std::move(setup));
+  }
+  if (startup.empty()) return;
+
+  // Keep setup ahead of authored events in timeline readers that merge by frame.
+  startup.insert(startup.end(), std::make_move_iterator(timeline.midi_clips.begin()),
+                 std::make_move_iterator(timeline.midi_clips.end()));
+  timeline.midi_clips = std::move(startup);
+}
+
+}  // namespace
+
 void CompiledTimeline::copy_from(const CompiledTimeline& other) {
   copy_selected_from(other, {}, true, true);
 }
@@ -609,15 +785,15 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   }
 #endif
 
-  // Persistent target ids are editing values.  Opaque lanes retain their exact
-  // ids, but keep the legacy engine-wide first-wins rule: the first occurrence
+  // Opaque lanes retain their target ids and the legacy engine-wide
+  // first-wins rule: the first occurrence
   // in deterministic project order is compiled and later occurrences produce
-  // a warning.  Typed lanes are unique by (track, target-kind), then become
-  // distinct reserved ids from the project-order lane index during
+  // a warning. Typed lanes are unique by complete target identity on each
+  // track, then become distinct reserved ids from the project-order lane index during
   // apply_to_engine().
   std::map<uint32_t, TrackId> opaque_lane_owners;
-  std::set<std::pair<TrackId, uint32_t>> typed_lane_keys;
   for (const auto& track : project.tracks()) {
+    std::vector<const automation::AutomationLane*> typed_lanes;
     for (const auto& lane : track.automation_lanes) {
       const auto kind = lane.target_kind();
       if (!automation::valid_automation_target_kind(kind)) {
@@ -626,24 +802,34 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                  "automation lane has an unknown target kind");
         continue;
       }
-      if (lane.target_param_id() == 0) {
+      const bool opaque = kind == automation::AutomationTargetKind::kOpaque;
+      if ((lane.target_param_id() != 0) != opaque) {
         add_diag(&result, Diagnostic::Code::kInvalidAutomationTargetKind,
                  Diagnostic::Severity::kError, track.id,
-                 "automation lane target_param_id must be non-zero");
+                 opaque ? "opaque automation lane target_param_id must be non-zero"
+                        : "typed automation lane target_param_id must be zero");
         continue;
       }
-      if (kind != automation::AutomationTargetKind::kOpaque) {
+      if (!opaque) {
 #if !defined(SONARE_WITH_MIXING)
         add_diag(&result, Diagnostic::Code::kUnsupportedMixing, Diagnostic::Severity::kError,
                  track.id, "typed track automation requires SONARE_WITH_MIXING");
 #endif
-        const auto key = std::make_pair(track.id, static_cast<uint32_t>(kind));
-        if (!typed_lane_keys.insert(key).second) {
-          add_diag(&result, Diagnostic::Code::kAutomationLaneConflict, Diagnostic::Severity::kError,
-                   track.id,
-                   "track contains more than one automation lane for target kind " +
-                       std::to_string(static_cast<uint32_t>(kind)));
+        if (!lane.valid_target_identity()) {
+          add_diag(&result, Diagnostic::Code::kInvalidAutomationTargetKind,
+                   Diagnostic::Severity::kError, track.id,
+                   "typed automation lane has an invalid target identity");
+          continue;
         }
+        const bool duplicate_target = std::any_of(
+            typed_lanes.begin(), typed_lanes.end(),
+            [&lane](const auto* existing) { return existing->same_target_identity(lane); });
+        if (duplicate_target) {
+          add_diag(&result, Diagnostic::Code::kAutomationLaneConflict, Diagnostic::Severity::kError,
+                   track.id, "track contains more than one automation lane for a target identity");
+          continue;
+        }
+        typed_lanes.push_back(&lane);
       } else if (engine::RealtimeEngine::parameter_target_reserved(lane.target_param_id())) {
         // An opaque id in the engine namespace would be reinterpreted as a
         // mixer/insert route after publication. Reject it instead of silently
@@ -769,6 +955,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   }
 #endif
 
+#if defined(SONARE_WITH_MIXING)
+  validate_mix_automation(timeline, &result);
+#endif
+
   // Opaque lanes are retained for host-defined targets, but the project
   // compiler/bounce can only apply the legacy ChannelStrip ids when the lane's
   // track has a resolved scene strip. Diagnose only lanes that were adopted
@@ -779,7 +969,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     if (lane.target_kind() != automation::AutomationTargetKind::kOpaque || lane.points().empty()) {
       continue;
     }
-    const bool has_strip = has_resolved_mixer_strip(timeline, binding.track_id);
+    const bool has_strip = resolved_mixer_strip(timeline, binding.track_id) != nullptr;
     const bool is_legacy_builtin =
         engine::MixingRuntime::is_supported_parameter(lane.target_param_id());
     if (has_strip && is_legacy_builtin) continue;
@@ -875,18 +1065,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       continue;
     }
 
-    // A baked warped rendition is keyed on the clip, not on a take, so selecting
-    // it for a comp that spans several sources would render one take's audio for
-    // all of them.
     const bool warp_enabled = clip.warp_mode != WarpMode::kOff;
-    if (warp_enabled && clip.warp_ref_id != 0 && audio.find_warped(clip.warp_ref_id) != nullptr &&
-        std::any_of(parts.begin(), parts.end(), [&parts](const AudioClipPart& part) {
-          return part.source_id != parts.front().source_id;
-        })) {
-      add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError, clip.id,
-               "clip comp lane spans several sources but carries pre-baked warped audio");
-      continue;
-    }
 
     const int64_t clip_start_sample = tempo_map.ppq_to_sample(clip.start_ppq);
     const int64_t clip_end_sample = tempo_map.ppq_to_sample(clip.end_ppq());
@@ -906,8 +1085,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         continue;
       }
 
-      const AudioSourceSamples* samples =
-          warp_enabled && clip.warp_ref_id != 0 ? audio.find_warped(clip.warp_ref_id) : nullptr;
+      const AudioSourceSamples* samples = warp_enabled && clip.warp_ref_id != 0
+                                              ? audio.find_warped(part.source_id, clip.warp_ref_id)
+                                              : nullptr;
       const WarpRefId baked_warp_ref = samples != nullptr ? clip.warp_ref_id : 0;
       const WarpMapRef* rt_warp_map =
           (baked_warp_ref == 0 &&
@@ -1278,7 +1458,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     // / brightness, not linear level, and cannot express gain > 1), so non-mixer
     // MIDI honors mute/solo only — continuous gain and pan require
     // SONARE_WITH_MIXING.
-    if (effective_track_gain(project.find_track(clip.track_id), any_solo) <= 0.0f) {
+    const Track* track = project.find_track(clip.track_id);
+    if (track == nullptr || track_is_silenced(*track, any_solo)) {
       continue;
     }
 
@@ -1369,6 +1550,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       timeline.latency.per_source_samples[clip.source_id] = config.instrument_latency_samples;
     }
   }
+
+  add_destination_programs(project, result, timeline);
 
   // Re-own SysEx views: the caller's MidiContentStore may die right after compile().
   midi::MidiSysExPayloadError payload_error = midi::MidiSysExPayloadError::kNone;

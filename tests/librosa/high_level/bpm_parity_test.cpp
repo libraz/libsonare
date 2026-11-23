@@ -55,7 +55,6 @@ TEST_CASE("high-level BPM parity matches librosa tempo within two BPM",
   BpmConfig config;
   config.bpm_min = 30.0f;
   config.bpm_max = 300.0f;
-  config.start_bpm = 120.0f;
 
   for (const auto& item : data) {
     const float true_tempo = item["true_tempo"].as_float();

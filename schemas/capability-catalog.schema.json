@@ -4,7 +4,15 @@
   "title": "libsonare Capability Catalog",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "abi", "processors", "presets", "masteringPresets", "chain"],
+  "required": [
+    "version",
+    "abi",
+    "encode",
+    "processors",
+    "presets",
+    "masteringPresets",
+    "chain"
+  ],
   "properties": {
     "version": { "type": "string", "minLength": 1 },
     "abi": {
@@ -14,6 +22,19 @@
       "properties": {
         "project": { "type": "integer", "minimum": 0 },
         "engine": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "encode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["builtin", "ffmpeg"],
+      "properties": {
+        "builtin": { "const": ["wav"] },
+        "ffmpeg": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["flac", "mp3", "ogg", "opus", "m4a"] }
+        }
       }
     },
     "masteringPresets": {
@@ -38,6 +59,7 @@
         "additionalProperties": false,
         "required": [
           "id",
+          "description",
           "kind",
           "realtimeInsertable",
           "stereoOnly",
@@ -52,6 +74,7 @@
         ],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
           "kind": { "enum": ["realtime", "offline", "pair"] },
           "realtimeInsertable": { "type": "boolean" },
           "stereoOnly": { "type": "boolean" },

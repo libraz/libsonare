@@ -39,6 +39,11 @@ void ensure_next_entity_id(Id id, Id& next) noexcept {
 
 }  // namespace
 
+const mixing::api::Scene& Project::scene() const noexcept {
+  static const mixing::api::Scene kDefaultScene;
+  return scene_ ? *scene_ : kDefaultScene;
+}
+
 bool valid_comp_render_geometry(const std::vector<ClipCompRenderPart>& parts,
                                 double clip_length_ppq) noexcept {
   if (!(std::isfinite(clip_length_ppq) && clip_length_ppq > 0.0)) return false;
@@ -135,6 +140,30 @@ const ClipSource* Project::find_source(SourceId id) const noexcept {
 }
 
 TrackId Project::add_track(Track track) {
+  uint32_t max_lane_id = 0;
+  for (size_t i = 0; i < track.automation_lanes.size(); ++i) {
+    const uint32_t lane_id = track.automation_lanes[i].lane_id();
+    if (lane_id == std::numeric_limits<uint32_t>::max()) return 0;
+    if (lane_id == 0) continue;
+    for (const Track& existing_track : tracks_) {
+      for (const automation::AutomationLane& existing_lane : existing_track.automation_lanes) {
+        if (existing_lane.lane_id() == lane_id) return 0;
+      }
+    }
+    for (size_t previous = 0; previous < i; ++previous) {
+      if (track.automation_lanes[previous].lane_id() == lane_id) return 0;
+    }
+    max_lane_id = std::max(max_lane_id, lane_id);
+  }
+  if (max_lane_id != 0) ensure_next_automation_lane_id(max_lane_id);
+  for (automation::AutomationLane& lane : track.automation_lanes) {
+    if (lane.lane_id() == 0) {
+      const uint32_t lane_id = allocate_automation_lane_id();
+      if (lane_id == 0) return 0;
+      lane.set_lane_id(lane_id);
+    }
+  }
+
   const TrackId id = allocate_entity_id(next_track_id_);
   if (id == 0) return 0;
   track.id = id;
@@ -337,6 +366,67 @@ const ProjectPartRig* Project::find_part_rig(uint32_t destination_id, uint8_t pa
   return &*it;
 }
 
+const DestinationInstrumentBinding* Project::find_destination_instrument(
+    uint32_t destination_id) const noexcept {
+  const auto it = destination_instruments_.find(destination_id);
+  return it == destination_instruments_.end() ? nullptr : &it->second;
+}
+
+namespace {
+
+void validate_destination_instrument(const DestinationInstrumentBinding& binding) {
+  const auto refuse_instrument_field = [](const std::string& subject,
+                                          const std::string& predicate) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject, predicate)
+        .as_caller_spelled();
+  };
+  if (binding.bank.has_value()) {
+    if (binding.bank->msb < 0 || binding.bank->msb > 127) {
+      refuse_instrument_field("bank.msb", "must be 0 to 127");
+    }
+    if (binding.bank->lsb < 0 || binding.bank->lsb > 127) {
+      refuse_instrument_field("bank.lsb", "must be 0 to 127");
+    }
+  }
+  if (binding.program.has_value() && (*binding.program < 0 || *binding.program > 127)) {
+    refuse_instrument_field("program", "must be 0 to 127");
+  }
+  if (const auto* sf2 = std::get_if<DestinationSf2Instrument>(&binding.instrument);
+      sf2 != nullptr && sf2->sound_font_uri.has_value() && sf2->sound_font_uri->empty()) {
+    refuse_instrument_field("sound_font_uri", "must not be empty");
+  }
+}
+
+}  // namespace
+
+void Project::set_destination_instrument(uint32_t destination_id,
+                                         DestinationInstrumentBinding binding) {
+  validate_destination_instrument(binding);
+  const bool is_referenced = std::any_of(
+      tracks_.begin(), tracks_.end(),
+      [destination_id](const Track& track) { return track.midi_destination_id == destination_id; });
+  if (!is_referenced) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, "destination_id",
+                                            "must be referenced by at least one track")
+        .as_caller_spelled();
+  }
+  destination_instruments_.insert_or_assign(destination_id, std::move(binding));
+}
+
+bool Project::remove_destination_instrument(uint32_t destination_id) {
+  return destination_instruments_.erase(destination_id) != 0;
+}
+
+void Project::restore_destination_instrument(uint32_t destination_id,
+                                             std::optional<DestinationInstrumentBinding> binding) {
+  if (binding.has_value()) {
+    validate_destination_instrument(*binding);
+    destination_instruments_.insert_or_assign(destination_id, std::move(*binding));
+  } else {
+    (void)remove_destination_instrument(destination_id);
+  }
+}
+
 namespace {
 
 [[noreturn]] void refuse_part_rig(const std::string& subject, const std::string& predicate,
@@ -411,6 +501,10 @@ uint32_t Project::add_marker(double ppq, std::string name, uint8_t kind, int8_t 
   return id;
 }
 
+uint32_t Project::allocate_automation_lane_id() noexcept {
+  return allocate_entity_id(next_automation_lane_id_);
+}
+
 std::pair<Track, bool> Project::remove_track(TrackId id) {
   for (auto it = tracks_.begin(); it != tracks_.end(); ++it) {
     if (it->id == id) {
@@ -453,10 +547,15 @@ bool Project::insert_track_raw(Track track, size_t index, bool known_unique) {
       (!known_unique && has_track(track.id))) {
     return false;
   }
-  if (index >= tracks_.size()) {
+  const size_t insertion_index = index >= tracks_.size() ? tracks_.size() : index;
+  if (insertion_index == tracks_.size()) {
     tracks_.emplace_back(std::move(track));
   } else {
-    tracks_.insert(tracks_.begin() + static_cast<std::ptrdiff_t>(index), std::move(track));
+    tracks_.insert(tracks_.begin() + static_cast<std::ptrdiff_t>(insertion_index),
+                   std::move(track));
+  }
+  for (const automation::AutomationLane& lane : tracks_[insertion_index].automation_lanes) {
+    if (lane.lane_id() != 0) ensure_next_automation_lane_id(lane.lane_id());
   }
   return true;
 }
@@ -541,6 +640,7 @@ Project Project::snapshot_members(ProjectMemberMask mask) const {
   if (mask & kTracks) {
     copy.tracks_ = tracks_;
     copy.next_track_id_ = next_track_id_;
+    copy.next_automation_lane_id_ = next_automation_lane_id_;
   }
   if (mask & kClips) {
     copy.clips_ = clips_;
@@ -555,6 +655,7 @@ Project Project::snapshot_members(ProjectMemberMask mask) const {
   if (mask & kAssistSidecars) copy.assist_sidecars_ = assist_sidecars_;
   if (mask & kWarpMaps) copy.warp_maps_ = warp_maps_;
   if (mask & kPartRigs) copy.part_rigs_ = part_rigs_;
+  if (mask & kDestinationInstruments) copy.destination_instruments_ = destination_instruments_;
   return copy;
 }
 
@@ -575,6 +676,7 @@ void Project::swap_members(Project& other, ProjectMemberMask mask) noexcept {
   if (mask & kTracks) {
     swap(tracks_, other.tracks_);
     swap(next_track_id_, other.next_track_id_);
+    swap(next_automation_lane_id_, other.next_automation_lane_id_);
   }
   if (mask & kClips) {
     swap(clips_, other.clips_);
@@ -589,6 +691,8 @@ void Project::swap_members(Project& other, ProjectMemberMask mask) noexcept {
   if (mask & kAssistSidecars) swap(assist_sidecars_, other.assist_sidecars_);
   if (mask & kWarpMaps) swap(warp_maps_, other.warp_maps_);
   if (mask & kPartRigs) swap(part_rigs_, other.part_rigs_);
+  if (mask & kDestinationInstruments)
+    swap(destination_instruments_, other.destination_instruments_);
 }
 
 void Project::ensure_next_source_id(SourceId id) noexcept {
@@ -603,6 +707,10 @@ void Project::ensure_next_clip_id(ClipId id) noexcept { ensure_next_entity_id(id
 
 void Project::ensure_next_marker_id(uint32_t id) noexcept {
   ensure_next_entity_id(id, next_marker_id_);
+}
+
+void Project::ensure_next_automation_lane_id(uint32_t id) noexcept {
+  ensure_next_entity_id(id, next_automation_lane_id_);
 }
 
 }  // namespace sonare::arrangement

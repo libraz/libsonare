@@ -90,6 +90,14 @@ inline std::string last_subject() {
   return subject != nullptr ? subject : "";
 }
 
+inline bool last_refusal_has_subject(const std::string& expected) {
+  for (std::size_t i = 0; i < sonare_last_refusal_subject_count(); ++i) {
+    const char* subject = sonare_last_refusal_subject(i);
+    if (subject != nullptr && expected == subject) return true;
+  }
+  return false;
+}
+
 inline std::string row_key(const NumericDomainRow& row) {
   return std::string(row.entry) + '\n' + row.param;
 }
@@ -113,9 +121,19 @@ inline void require_outside_refused(const NumericDomainTable& table,
     REQUIRE(probe != probes.end());
     const SonareError err = probe->second(row.param, outside_value(row.domain));
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_subject() == subject_of(row));
-    CHECK(std::string(sonare_last_error_message()).find(expected_predicate(row)) !=
-          std::string::npos);
+    const std::string message = sonare_last_error_message();
+    const bool istft_geometry_pair =
+        std::string(row.entry) == "istft" &&
+        (std::string(row.param) == "n_fft" || std::string(row.param) == "hop_length");
+    if (istft_geometry_pair) {
+      REQUIRE(sonare_last_refusal_subject_count() == 2);
+      CHECK(last_refusal_has_subject("n_fft"));
+      CHECK(last_refusal_has_subject("hop_length"));
+      CHECK(message.find("when paired with") != std::string::npos);
+    } else {
+      CHECK(last_subject() == subject_of(row));
+    }
+    CHECK(message.find(expected_predicate(row)) != std::string::npos);
   }
 }
 

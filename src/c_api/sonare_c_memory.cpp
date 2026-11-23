@@ -9,6 +9,7 @@
 
 #include "c_api/sonare_c_last_refusal.h"
 #include "capability_features.h"
+#include "core/audio_encode.h"
 #include "rt/command.h"
 #include "sonare.h"
 #include "sonare_c_internal.h"
@@ -237,6 +238,8 @@ const char* sonare_last_error_message(void) { return last_error_message(); }
 
 SonareError sonare_last_error_code(void) { return last_error_code_storage(); }
 
+const char* sonare_last_error_reason(void) { return last_error_reason(); }
+
 size_t sonare_last_diagnostic_count(void) { return last_diagnostics_storage().size(); }
 
 void sonare_diagnostic_init(SonareDiagnostic* diagnostic) {
@@ -311,6 +314,16 @@ SonareError sonare_capabilities_json(char** out_json) {
 #ifdef SONARE_WITH_FFMPEG
   capabilities += "\"m4a\",\"aac\",\"flac\",\"ogg\",\"opus\",\"wma\"";
 #endif
+  capabilities += "]},\"encode\":{\"builtin\":[\"wav\"],\"ffmpeg\":[";
+  bool first_encode_format = true;
+  for (const std::string_view format : sonare::kOptionalAudioEncodeFormats) {
+    if (!sonare::audio_encode_format_available(format)) continue;
+    if (!first_encode_format) capabilities += ',';
+    first_encode_format = false;
+    capabilities += '"';
+    capabilities += std::string(format);
+    capabilities += '"';
+  }
   capabilities += "]},\"simd\":\"";
   capabilities += capability_simd();
   capabilities += "\",\"hardwareConcurrency\":";
@@ -391,6 +404,7 @@ void sonare_free_stft_result(SonareStftResult* r) {
     delete[] r->magnitude;
     delete[] r->power;
     delete[] r->db;
+    delete[] r->phase;
     *r = {};
   }
 }

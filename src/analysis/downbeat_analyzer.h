@@ -72,9 +72,4 @@ std::vector<float> low_frequency_energy_observations(const std::vector<Beat>& be
                                                      const Audio& audio, float cutoff_hz = 200.0f,
                                                      float window_seconds = 0.08f);
 
-/// @brief Aggregates frame-level onset strength around each beat.
-std::vector<float> onset_strength_observations(const std::vector<Beat>& beats,
-                                               const std::vector<float>& onset_strength, int sr,
-                                               int hop_length, float window_seconds = 0.08f);
-
 }  // namespace sonare

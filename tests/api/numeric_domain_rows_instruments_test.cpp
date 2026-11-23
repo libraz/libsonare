@@ -139,7 +139,19 @@ SonareError probe_project_bounce(const std::string& param, double value) {
   options.block_size = 64;
   options.num_channels = 2;
   options.sample_rate = 48000;
-  if (param.rfind("options.builtin_instruments[]", 0) == 0) {
+  SonareEngineMetronomeConfig metronome{};
+  if (param.rfind("options.metronome.", 0) == 0) {
+    sonare_engine_metronome_config_init(&metronome);
+    if (param == "options.metronome.beat_gain") metronome.beat_gain = static_cast<float>(value);
+    if (param == "options.metronome.accent_gain") {
+      metronome.accent_gain = static_cast<float>(value);
+    }
+    if (param == "options.metronome.click_samples") {
+      metronome.click_samples = static_cast<int>(value);
+    }
+    if (param == "options.metronome.click_sec") metronome.click_sec = value;
+    options.metronome = &metronome;
+  } else if (param.rfind("options.builtin_instruments[]", 0) == 0) {
     set_builtin_field(&builtin.config, field_of(param), value);
     options.builtin_instruments = &builtin;
     options.builtin_instrument_count = 1;

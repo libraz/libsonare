@@ -51,29 +51,21 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
                        config.hop_length = core_length(hop_length);
                        Spectrogram spec = Spectrogram::compute(audio, config);
 
-                       size_t total = static_cast<size_t>(spec.n_bins()) * spec.n_frames();
-                       const std::vector<float>& mag = spec.magnitude();
-                       const std::vector<float>& pow = spec.power();
-
-                       std::unique_ptr<float[]> magnitude(new float[total]);
-                       std::unique_ptr<float[]> power(new float[total]);
-                       std::unique_ptr<float[]> db_out;
-                       std::memcpy(magnitude.get(), mag.data(), total * sizeof(float));
-                       std::memcpy(power.get(), pow.data(), total * sizeof(float));
-                       if (resolved.db != 0) {
-                         const std::vector<float> db = spec.to_db();
-                         db_out.reset(new float[db.size()]);
-                         std::memcpy(db_out.get(), db.data(), db.size() * sizeof(float));
+                       StagedOutput<SonareStftResult, &sonare_free_stft_result> staged;
+                       staged->n_bins = spec.n_bins();
+                       staged->n_frames = spec.n_frames();
+                       staged->n_fft = spec.n_fft();
+                       staged->hop_length = static_cast<size_t>(spec.hop_length());
+                       staged->sample_rate = spec.sample_rate();
+                       staged->magnitude = copy_vector(spec.magnitude());
+                       staged->power = copy_vector(spec.power());
+                       if (resolved.db != 0) staged->db = copy_vector(spec.to_db());
+                       if (resolved.phase != 0) {
+                         const size_t total = static_cast<size_t>(spec.n_bins()) * spec.n_frames();
+                         staged->phase = new float[total];
+                         spec.phase(staged->phase);
                        }
-
-                       out->n_bins = spec.n_bins();
-                       out->n_frames = spec.n_frames();
-                       out->n_fft = spec.n_fft();
-                       out->hop_length = static_cast<size_t>(spec.hop_length());
-                       out->sample_rate = spec.sample_rate();
-                       out->magnitude = release_array(magnitude);
-                       out->power = release_array(power);
-                       out->db = db_out ? release_array(db_out) : nullptr;
+                       staged.publish(out);
                        return SONARE_OK;
                      });
 }
