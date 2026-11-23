@@ -5498,6 +5498,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `ClipDetection.sampleFraction` | `ClipDetection.clippedRatio`: sampleFraction -> clippedRatio |
 | `DeclipOptions.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `DeclipReport.interpolatedRuns` | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
+| `DeclipReport.linkedRuns` | 0 unless linkChannels: true is passed: each channel of a stereo declip, in masteringRepairDeclipStereo and in a masteringRepairApply declip stage, repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); linkChannels: true restores the union |
 | `MasteringRepairDeclipRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
@@ -6172,6 +6173,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `ClippingReport.clippingRatio` | `ClippingReport.clippedRatio`: clippingRatio -> clippedRatio |
 | `MasteringChainConfig.repair.declip.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
+| `MasteringChainConfig.repair.declip` | a new linkChannels, default false: on more than one channel each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); true restores the union |
 | `MeteringDynamicRangeOptions.lowPercentile` | a value outside [0, 1], or a lowPercentile above highPercentile, is a RangeError |
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
@@ -13942,7 +13944,7 @@ try { new OfflineWorkerClient(); } catch (e) {
 
 ### A refusal names the public entry the caller invoked
 
-Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front. A member of a handle class is named by its class and member (`Audio.spectrum`, `StreamingRetune.setConfig`), never by the call it forwards to, and an `Audio` method refuses the same keys with the same text as its free function. On Node an asynchronous entry rejects with the same entry-named text as its synchronous form, and on WASM a worklet refusal reaches `onSyncError` under the public entry whose call posted it.
+Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front. A member of a handle class is named by its class and member (`Audio.spectrum`, `StreamingRetune.setConfig`), never by the call it forwards to, and an `Audio` method refuses the same keys with the same text as its free function. On Node an asynchronous entry rejects with the same entry-named text as its synchronous form, and on WASM a worklet refusal reaches `onSyncError` under the public entry whose call posted it. On Node a wrong-typed or missing argument is refused by its name (`<entry>: root must be an integer`, `<entry>: sampleRate must be a number`) where 1.x answered with a usage sentence such as `Expected (frames, sr, hopLength)`; only a positional call that matches no supported form still reads `<entry>: expected (...)`.
 
 Python, 1.x:
 
@@ -13968,6 +13970,18 @@ WASM, 2.0.0:
 
 ```ts
 audio.analyze({ hopLength: 2 ** 32 }); // RangeError: Audio.analyze: hopLength must be ...
+```
+
+Node, 1.x:
+
+```ts
+scaleQuantizeMidi('C' as any, mask, 60); // TypeError: scaleQuantizeMidi: expected (root, modeMask, midi, referenceMidi?)
+```
+
+Node, 2.0.0:
+
+```ts
+scaleQuantizeMidi('C' as any, mask, 60); // TypeError: scaleQuantizeMidi: root must be an integer
 ```
 
 ### Cheap scalar state reads are getters and properties

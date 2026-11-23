@@ -693,7 +693,7 @@ try { new OfflineWorkerClient(); } catch (e) {
 [[rule]]
 slug = "entry-named-refusals"
 title = "A refusal names the public entry the caller invoked"
-summary = "Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front. A member of a handle class is named by its class and member (`Audio.spectrum`, `StreamingRetune.setConfig`), never by the call it forwards to, and an `Audio` method refuses the same keys with the same text as its free function. On Node an asynchronous entry rejects with the same entry-named text as its synchronous form, and on WASM a worklet refusal reaches `onSyncError` under the public entry whose call posted it."
+summary = "Every refusal message opens with the public entry the caller invoked: a function by its name, a method as `Class.method`, a constructor as `Class`. A coded error other than `RangeError` / `TypeError` / `SonareValueError` keeps its code in front, so a closed project reads `[7] Project.add_track: Project is closed`. Text the native library supplies gets the same prefix, and when one public call reaches another only the outermost is named. A match anchored at the start of a message needs the entry in front. A member of a handle class is named by its class and member (`Audio.spectrum`, `StreamingRetune.setConfig`), never by the call it forwards to, and an `Audio` method refuses the same keys with the same text as its free function. On Node an asynchronous entry rejects with the same entry-named text as its synchronous form, and on WASM a worklet refusal reaches `onSyncError` under the public entry whose call posted it. On Node a wrong-typed or missing argument is refused by its name (`<entry>: root must be an integer`, `<entry>: sampleRate must be a number`) where 1.x answered with a usage sentence such as `Expected (frames, sr, hopLength)`; only a positional call that matches no supported form still reads `<entry>: expected (...)`."
 [[rule.example]]
 surface = "python"
 before = '''
@@ -711,6 +711,14 @@ audio.analyze({ hopLength: 2 ** 32 }); // RangeError: analyze: hopLength must be
 '''
 after = '''
 audio.analyze({ hopLength: 2 ** 32 }); // RangeError: Audio.analyze: hopLength must be ...
+'''
+[[rule.example]]
+surface = "node"
+before = '''
+scaleQuantizeMidi('C' as any, mask, 60); // TypeError: scaleQuantizeMidi: expected (root, modeMask, midi, referenceMidi?)
+'''
+after = '''
+scaleQuantizeMidi('C' as any, mask, 60); // TypeError: scaleQuantizeMidi: root must be an integer
 '''
 
 [[rule]]
