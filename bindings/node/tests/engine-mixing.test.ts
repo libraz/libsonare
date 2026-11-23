@@ -448,11 +448,9 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badBypassError = error;
     }
-    expect(isSonareError(badBypassError)).toBe(true);
-    if (!isSonareError(badBypassError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badBypassError.code).toBe(ErrorCode.InvalidState);
+    // The default master strip carries no insert, so index 0 is the argument at fault.
+    expect(badBypassError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badBypassError)).toBe(false);
 
     engine.play();
     const processed = engine.process([new Float32Array(256)]);
