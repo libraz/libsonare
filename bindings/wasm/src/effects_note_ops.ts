@@ -10,6 +10,7 @@ import {
   toVoicedFloat32,
 } from './internal/effects_common.js';
 import { codedError, mergeRespelled, refuseType, withEntry } from './internal/entry.js';
+import { sampleNeed, withHeapNeed, withMonoHeap } from './internal/memory_budget.js';
 import { requireOneOf } from './internal/one_of.js';
 import { withRespelled } from './internal/respell.js';
 import { isAbsent } from './internal/value_guards.js';
@@ -278,14 +279,27 @@ export function noteStretch(...args: unknown[]): Float32Array {
       'offsetSample',
       'offsetSec',
     );
+    const { samples, stretchRatio } = request;
+    const onsetSample = onset.value ?? 0;
+    const offsetSample = offset.value ?? samples.length;
+    const call = () =>
+      getSonareModule().noteStretch(samples, rate, onsetSample, offsetSample, stretchRatio);
+    // The region is clamped to the buffer; the output is the input with that span rescaled.
+    const span = Math.max(0, Math.min(offsetSample, samples.length) - Math.max(onsetSample, 0));
+    const outLength = Math.floor(samples.length + span * (stretchRatio - 1));
+    // An out-of-domain ratio or one projecting past the 32-bit length is the native refusal.
+    const inDomain = stretchRatio > 0 && outLength <= 0x7fffffff;
     return withRespelled(mergeRespelled(onset.respelled, offset.respelled), () =>
-      getSonareModule().noteStretch(
-        request.samples,
-        rate,
-        onset.value ?? 0,
-        offset.value ?? request.samples.length,
-        request.stretchRatio,
-      ),
+      inDomain
+        ? withHeapNeed(
+            {
+              subject: 'stretchRatio',
+              size: stretchRatio,
+              bytes: () => 4 * samples.length + 4 * Math.max(0, outLength),
+            },
+            call,
+          )
+        : call(),
     );
   });
 }
@@ -330,14 +344,19 @@ export function noteMove(...args: unknown[]): Float32Array {
       'offsetSample',
       'offsetSec',
     );
+    const { samples } = request;
+    const onsetSample = onset.value ?? 0;
+    const offsetSample = offset.value ?? samples.length;
+    const call = () =>
+      getSonareModule().noteMove(samples, rate, onsetSample, offsetSample, target.value);
+    // A region or target the native reader refuses is its refusal, not a memory one.
+    const inDomain =
+      onsetSample >= 0 &&
+      offsetSample > onsetSample &&
+      target.value >= 0 &&
+      target.value < samples.length;
     return withRespelled(mergeRespelled(target.respelled, onset.respelled, offset.respelled), () =>
-      getSonareModule().noteMove(
-        request.samples,
-        rate,
-        onset.value ?? 0,
-        offset.value ?? request.samples.length,
-        target.value,
-      ),
+      inDomain ? withMonoHeap(samples, rate, 2, call) : call(),
     );
   });
 }
@@ -406,14 +425,19 @@ export function extractNotes(...args: unknown[]): NoteObject[] {
   return withEntry('extractNotes', () => {
     const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
     const voicedF32 = assertNoteTrack(request);
-    return getSonareModule().extractNotes(
-      request.samples,
-      request.sampleRate,
-      request.f0Hz,
-      request.voicedProb ?? undefined,
-      voicedF32,
-      request.frameRate,
-      request,
+    const { samples, sampleRate, f0Hz } = request;
+    return withHeapNeed(
+      sampleNeed('samples', samples.length, sampleRate, (n) => 4 * n + 4 * f0Hz.length),
+      () =>
+        getSonareModule().extractNotes(
+          samples,
+          sampleRate,
+          f0Hz,
+          request.voicedProb ?? undefined,
+          voicedF32,
+          request.frameRate,
+          request,
+        ),
     );
   });
 }
@@ -508,8 +532,13 @@ export function renderNotes(...args: unknown[]): Float32Array {
       request.sampleRate,
       true,
     );
+    const { samples, sampleRate } = request;
+    const f0Bytes = 4 * (f0Hz?.length ?? 0);
     return withRespelled(respelled, () =>
-      getSonareModule().renderNotes(request.samples, request.sampleRate, notes, options),
+      withHeapNeed(
+        sampleNeed('samples', samples.length, sampleRate, (n) => 4 * n + 4 * n + f0Bytes),
+        () => getSonareModule().renderNotes(samples, sampleRate, notes, options),
+      ),
     );
   });
 }
@@ -649,18 +678,23 @@ export function splitNote(...args: unknown[]): NoteObject[] {
       request.sampleRate,
       false,
     );
+    const { samples, sampleRate, f0Hz } = request;
     return withRespelled(respelled, () =>
-      getSonareModule().splitNote(
-        request.samples,
-        request.sampleRate,
-        request.f0Hz,
-        request.voicedProb ?? undefined,
-        voicedF32,
-        request.frameRate,
-        notes,
-        request.index,
-        frame,
-        request,
+      withHeapNeed(
+        sampleNeed('samples', samples.length, sampleRate, (n) => 4 * n + 4 * f0Hz.length),
+        () =>
+          getSonareModule().splitNote(
+            samples,
+            sampleRate,
+            f0Hz,
+            request.voicedProb ?? undefined,
+            voicedF32,
+            request.frameRate,
+            notes,
+            request.index,
+            frame,
+            request,
+          ),
       ),
     );
   });
@@ -728,18 +762,23 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
       request.sampleRate,
       false,
     );
+    const { samples, sampleRate, f0Hz } = request;
     return withRespelled(respelled, () =>
-      getSonareModule().mergeNotes(
-        request.samples,
-        request.sampleRate,
-        request.f0Hz,
-        request.voicedProb ?? undefined,
-        voicedF32,
-        request.frameRate,
-        notes,
-        request.first,
-        request.last,
-        request,
+      withHeapNeed(
+        sampleNeed('samples', samples.length, sampleRate, (n) => 4 * n + 4 * f0Hz.length),
+        () =>
+          getSonareModule().mergeNotes(
+            samples,
+            sampleRate,
+            f0Hz,
+            request.voicedProb ?? undefined,
+            voicedF32,
+            request.frameRate,
+            notes,
+            request.first,
+            request.last,
+            request,
+          ),
       ),
     );
   });

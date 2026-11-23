@@ -9,6 +9,7 @@ import {
   resolveFftOptions,
   resolveResynthesisHop,
 } from './internal/fft_options.js';
+import { MAX_OFFLINE_AUDIO_SAMPLES, withHeapNeed } from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -37,6 +38,16 @@ function resolveInverseFftOptions(
     nFft: resolveFftOptions(nFft, undefined).nFft,
     hopLength: resolveResynthesisHop(hopLength),
   };
+}
+
+/** The core's frame-count ceiling for a mel inversion, and its largest `mel_to_stft` FFT size. */
+const MAX_MEL_INVERSE_FRAMES = 4096;
+const MAX_MEL_INVERSE_N_FFT = 8192;
+
+/** Samples a Griffin-Lim reconstruction returns for `frames` frames; an automatic hop is a quarter of `nFft`. */
+function reconstructedSamples(frames: number, nFft: number, hopLength: number): number {
+  const hop = hopLength !== 0 ? hopLength : Math.max(1, Math.floor(nFft / 4));
+  return Math.max(0, frames - 1) * hop;
 }
 
 /** Mel power to linear STFT magnitude request. */
@@ -148,16 +159,33 @@ export function melToStft(...args: unknown[]): Matrix2D {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    const native = getSonareModule().melToStft(
-      power.data,
-      power.rows,
-      power.cols,
-      sampleRate,
-      nFft,
-      fminHz,
-      fmaxHz,
-      r.htk ?? false,
-    );
+    const call = () =>
+      getSonareModule().melToStft(
+        power.data,
+        power.rows,
+        power.cols,
+        sampleRate,
+        nFft,
+        fminHz,
+        fmaxHz,
+        r.htk ?? false,
+      );
+    const inDomain =
+      Number.isInteger(nFft) &&
+      nFft >= 1 &&
+      nFft <= MAX_MEL_INVERSE_N_FFT &&
+      power.cols <= MAX_MEL_INVERSE_FRAMES;
+    const native = inDomain
+      ? withHeapNeed(
+          {
+            subject: 'power',
+            size: power.cols,
+            bytes: (n) => 4 * power.rows * n + 4 * (Math.floor(nFft / 2) + 1) * n,
+            monotone: true,
+          },
+          call,
+        )
+      : call();
     return toMatrix2D(native.magnitude, native.nBins, native.nFrames);
   });
 }
@@ -184,17 +212,30 @@ export function melToAudio(...args: unknown[]): Float32Array {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    return getSonareModule().melToAudio(
-      power.data,
-      power.rows,
-      power.cols,
-      sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      fminHz,
-      fmaxHz,
-      nIter,
-      r.htk ?? false,
+    const call = () =>
+      getSonareModule().melToAudio(
+        power.data,
+        power.rows,
+        power.cols,
+        sampleRate,
+        fft.nFft,
+        fft.hopLength,
+        fminHz,
+        fmaxHz,
+        nIter,
+        r.htk ?? false,
+      );
+    if (!Number.isInteger(fft.nFft) || fft.nFft < 1 || power.cols > MAX_MEL_INVERSE_FRAMES) {
+      return call();
+    }
+    return withHeapNeed(
+      {
+        subject: 'power',
+        size: power.cols,
+        bytes: (n) => 4 * power.rows * n + 4 * reconstructedSamples(n, fft.nFft, fft.hopLength),
+        monotone: true,
+      },
+      call,
     );
   });
 }
@@ -220,15 +261,28 @@ export function griffinLim(...args: unknown[]): Float32Array {
     const fft = resolveInverseFftOptions(r.nFft ?? (magnitude.rows - 1) * 2, r.hopLength);
     assertGriffinLimFftSize(magnitude.rows, fft.nFft);
     const nIter = r.nIter ?? 32;
-    return getSonareModule().griffinLim(
-      magnitude.data,
-      magnitude.rows,
-      magnitude.cols,
-      sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      nIter,
-      r.momentum ?? 0.99,
+    const call = () =>
+      getSonareModule().griffinLim(
+        magnitude.data,
+        magnitude.rows,
+        magnitude.cols,
+        sampleRate,
+        fft.nFft,
+        fft.hopLength,
+        nIter,
+        r.momentum ?? 0.99,
+      );
+    if (!Number.isInteger(fft.nFft) || fft.nFft < 1) {
+      return call();
+    }
+    return withHeapNeed(
+      {
+        subject: 'magnitude',
+        size: magnitude.cols,
+        bytes: (n) => 4 * magnitude.rows * n + 4 * reconstructedSamples(n, fft.nFft, fft.hopLength),
+        monotone: true,
+      },
+      call,
     );
   });
 }
@@ -246,13 +300,26 @@ export function mfccToMel(...args: unknown[]): Matrix2D {
     const coefficients = assertMatrix2D(r.coefficients, 'coefficients');
     const nMels = r.nMels ?? 128;
     assertInt32(nMels, 'nMels');
-    const native = getSonareModule().mfccToMel(
-      coefficients.data,
-      coefficients.rows,
-      coefficients.cols,
-      nMels,
-      r.lifter ?? 0,
-    );
+    const call = () =>
+      getSonareModule().mfccToMel(
+        coefficients.data,
+        coefficients.rows,
+        coefficients.cols,
+        nMels,
+        r.lifter ?? 0,
+      );
+    const native =
+      nMels >= 1
+        ? withHeapNeed(
+            {
+              subject: 'coefficients',
+              size: coefficients.cols,
+              bytes: (n) => 4 * coefficients.rows * n + 4 * nMels * n,
+              monotone: true,
+            },
+            call,
+          )
+        : call();
     return toMatrix2D(native.power, native.nMels, native.nFrames);
   });
 }
@@ -281,19 +348,33 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    return getSonareModule().mfccToAudio(
-      coefficients.data,
-      coefficients.rows,
-      coefficients.cols,
-      nMels,
-      sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      fminHz,
-      fmaxHz,
-      nIter,
-      r.htk ?? false,
-      r.lifter ?? 0,
+    const call = () =>
+      getSonareModule().mfccToAudio(
+        coefficients.data,
+        coefficients.rows,
+        coefficients.cols,
+        nMels,
+        sampleRate,
+        fft.nFft,
+        fft.hopLength,
+        fminHz,
+        fmaxHz,
+        nIter,
+        r.htk ?? false,
+        r.lifter ?? 0,
+      );
+    if (!Number.isInteger(fft.nFft) || fft.nFft < 1 || coefficients.cols > MAX_MEL_INVERSE_FRAMES) {
+      return call();
+    }
+    return withHeapNeed(
+      {
+        subject: 'coefficients',
+        size: coefficients.cols,
+        bytes: (n) =>
+          4 * coefficients.rows * n + 4 * reconstructedSamples(n, fft.nFft, fft.hopLength),
+        monotone: true,
+      },
+      call,
     );
   });
 }
@@ -339,6 +420,23 @@ export function phaseVocoder(...args: unknown[]): Float32Array {
     assertFiniteScalar(r.speedRatio, 'speedRatio');
     assertPositiveFloatValue(r.speedRatio, 'speedRatio');
     const { nFft, hopLength } = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return getSonareModule().phaseVocoder(r.samples, r.sampleRate, r.speedRatio, nFft, hopLength);
+    const call = () =>
+      getSonareModule().phaseVocoder(r.samples, r.sampleRate, r.speedRatio, nFft, hopLength);
+    const rate = Math.fround(r.speedRatio);
+    // The output is ceil(N / rate) samples; the factor keeps float rounding from overcounting.
+    const length = r.samples.length;
+    const outSamples = Math.floor((length / rate) * (1 - 1e-6));
+    // A rate whose output passes the offline cap is the native rate check's refusal.
+    if (!(rate > 0) || !Number.isFinite(rate) || outSamples > MAX_OFFLINE_AUDIO_SAMPLES) {
+      return call();
+    }
+    return withHeapNeed(
+      {
+        subject: 'speedRatio',
+        size: r.speedRatio,
+        bytes: () => 4 * length + 4 * outSamples,
+      },
+      call,
+    );
   });
 }

@@ -1,6 +1,7 @@
 import { chainConfigFromDocument } from './internal/chain_config.js';
 import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { sampleNeed, withHeapNeed, withMonoHeap, withPairHeap } from './internal/memory_budget.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { parseCatalogJson, parseRecordJson, type ResultFamily } from './internal/record_json.js';
@@ -605,13 +606,11 @@ export function masteringApplyProcessor(...args: unknown[]): MasteringResult {
     const r = sampleOneShot<MasteringApplyProcessorRequest>('masteringApplyProcessor', args);
     assertString(r.processor, 'processor');
     assertAudioInput(r.samples, r.sampleRate, r);
-    const result = getSonareModule().masteringProcess(
-      r.processor,
-      r.samples,
-      r.sampleRate,
-      withEntry('masteringApplyProcessor', () =>
-        resolveProcessorParams(r.processor, r.params ?? {}),
-      ),
+    const params = withEntry('masteringApplyProcessor', () =>
+      resolveProcessorParams(r.processor, r.params ?? {}),
+    );
+    const result = withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringProcess(r.processor, r.samples, r.sampleRate, params),
     );
     return result as MasteringResult;
   });
@@ -638,14 +637,11 @@ export function masteringApplyProcessorStereo<P extends SoloProcessor>(
     if (r.left.length !== r.right.length) {
       throw refuse('left and right must have the same length');
     }
-    return getSonareModule().masteringProcessStereo(
-      r.processor,
-      r.left,
-      r.right,
-      r.sampleRate,
-      withEntry('masteringApplyProcessorStereo', () =>
-        resolveProcessorParams(r.processor, r.params ?? {}),
-      ),
+    const params = withEntry('masteringApplyProcessorStereo', () =>
+      resolveProcessorParams(r.processor, r.params ?? {}),
+    );
+    return withPairHeap(r.left, r.right, r.sampleRate, 1, () =>
+      getSonareModule().masteringProcessStereo(r.processor, r.left, r.right, r.sampleRate, params),
     );
   });
 }
@@ -687,13 +683,17 @@ export function masteringApplyPairProcessor<P extends PairProcessor>(
     ]);
     assertString(r.processor, 'processor');
     const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
-    const result = getSonareModule().masteringPairProcess(
-      r.processor,
-      r.source,
-      r.reference,
-      r.sampleRate,
-      referenceRate,
-      r.params ?? {},
+    const result = withHeapNeed(
+      sampleNeed('source', r.source.length, r.sampleRate, (n) => 4 * (n + r.reference.length)),
+      () =>
+        getSonareModule().masteringPairProcess(
+          r.processor,
+          r.source,
+          r.reference,
+          r.sampleRate,
+          referenceRate,
+          r.params ?? {},
+        ),
     );
     return result as MasteringResult;
   });
@@ -728,15 +728,24 @@ export function masteringApplyPairProcessorStereo(
     if (r.referenceLeft.length !== r.referenceRight.length) {
       throw refuse('referenceLeft and referenceRight must have the same length');
     }
-    return getSonareModule().masteringPairProcessStereo(
-      r.processor,
-      r.sourceLeft,
-      r.sourceRight,
-      r.referenceLeft,
-      r.referenceRight,
-      r.sampleRate,
-      referenceRate,
-      r.params ?? {},
+    return withHeapNeed(
+      sampleNeed(
+        'sourceLeft',
+        r.sourceLeft.length,
+        r.sampleRate,
+        (n) => 8 * (n + r.referenceLeft.length),
+      ),
+      () =>
+        getSonareModule().masteringPairProcessStereo(
+          r.processor,
+          r.sourceLeft,
+          r.sourceRight,
+          r.referenceLeft,
+          r.referenceRight,
+          r.sampleRate,
+          referenceRate,
+          r.params ?? {},
+        ),
     );
   });
 }
@@ -769,13 +778,17 @@ export function masteringAnalyzePair<A extends PairAnalysis>(
     assertString(r.analysis, 'analysis');
     const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
     return parseRecordJson(
-      getSonareModule().masteringPairAnalyze(
-        r.analysis,
-        r.source,
-        r.reference,
-        r.sampleRate,
-        referenceRate,
-        r.params ?? {},
+      withHeapNeed(
+        sampleNeed('source', r.source.length, r.sampleRate, (n) => 4 * (n + r.reference.length)),
+        () =>
+          getSonareModule().masteringPairAnalyze(
+            r.analysis,
+            r.source,
+            r.reference,
+            r.sampleRate,
+            referenceRate,
+            r.params ?? {},
+          ),
       ),
       ANALYSIS_FAMILIES[r.analysis],
     ) as PairAnalysisResultMap[A];
@@ -798,12 +811,14 @@ export function masteringAnalyzeStereo<A extends StereoAnalysis>(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return parseRecordJson(
-      getSonareModule().masteringStereoAnalyze(
-        r.analysis,
-        r.left,
-        r.right,
-        r.sampleRate,
-        r.params ?? {},
+      withPairHeap(r.left, r.right, r.sampleRate, 1, () =>
+        getSonareModule().masteringStereoAnalyze(
+          r.analysis,
+          r.left,
+          r.right,
+          r.sampleRate,
+          r.params ?? {},
+        ),
       ),
       ANALYSIS_FAMILIES[r.analysis],
     ) as StereoAnalysisResultMap[A];
@@ -845,11 +860,20 @@ export function masteringAbMatchLoudness(
     return withRespelled(
       { a: { name: 'reference', scale: 1 }, b: { name: 'source', scale: 1 } },
       () =>
-        getSonareModule().masteringAbMatchLoudness(
-          r.source,
-          r.reference,
-          r.sampleRate,
-          referenceRate,
+        withHeapNeed(
+          sampleNeed(
+            'source',
+            r.source.length,
+            r.sampleRate,
+            (n) => 8 * n + 4 * r.reference.length,
+          ),
+          () =>
+            getSonareModule().masteringAbMatchLoudness(
+              r.source,
+              r.reference,
+              r.sampleRate,
+              referenceRate,
+            ),
         ),
     );
   });
@@ -875,13 +899,22 @@ export function masteringAbMatchLoudnessStereo(
     if (r.referenceLeft.length !== r.referenceRight.length) {
       throw refuse('referenceLeft and referenceRight must have the same length');
     }
-    return getSonareModule().masteringAbMatchLoudnessStereo(
-      r.sourceLeft,
-      r.sourceRight,
-      r.referenceLeft,
-      r.referenceRight,
-      r.sampleRate,
-      referenceRate,
+    return withHeapNeed(
+      sampleNeed(
+        'sourceLeft',
+        r.sourceLeft.length,
+        r.sampleRate,
+        (n) => 16 * n + 8 * r.referenceLeft.length,
+      ),
+      () =>
+        getSonareModule().masteringAbMatchLoudnessStereo(
+          r.sourceLeft,
+          r.sourceRight,
+          r.referenceLeft,
+          r.referenceRight,
+          r.sampleRate,
+          referenceRate,
+        ),
     );
   });
 }
@@ -988,11 +1021,10 @@ export function masteringAssistantSuggest(...args: unknown[]): MasteringAssistan
   return withEntry('masteringAssistantSuggest', () => {
     const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggest', args);
     assertAudioInput(r.samples, r.sampleRate, r);
+    const params = withEntry('masteringAssistantSuggest', () => assistantParams(r));
     return assistantResultFromNative(
-      getSonareModule().masteringAssistantSuggest(
-        r.samples,
-        r.sampleRate,
-        withEntry('masteringAssistantSuggest', () => assistantParams(r)),
+      withMonoHeap(r.samples, r.sampleRate, 1, () =>
+        getSonareModule().masteringAssistantSuggest(r.samples, r.sampleRate, params),
       ),
     );
   });
@@ -1017,8 +1049,11 @@ export function masteringAudioProfile(...args: unknown[]): MasteringAudioProfile
   return withEntry('masteringAudioProfile', () => {
     const r = sampleOneShot<MasteringAudioProfileRequest>('masteringAudioProfile', args);
     assertAudioInput(r.samples, r.sampleRate, r);
+    const params = profileParams(r);
     return profileFromNative(
-      getSonareModule().masteringAudioProfile(r.samples, r.sampleRate, profileParams(r)),
+      withMonoHeap(r.samples, r.sampleRate, 1, () =>
+        getSonareModule().masteringAudioProfile(r.samples, r.sampleRate, params),
+      ),
     );
   });
 }
@@ -1041,11 +1076,10 @@ export function masteringStreamingPreview(...args: unknown[]): MasteringStreamin
   return withEntry('masteringStreamingPreview', () => {
     const r = sampleOneShot<MasteringStreamingPreviewRequest>('masteringStreamingPreview', args);
     assertAudioInput(r.samples, r.sampleRate, r);
+    const platforms = previewPlatforms(r.platforms);
     return previewFromNative(
-      getSonareModule().masteringStreamingPreview(
-        r.samples,
-        r.sampleRate,
-        previewPlatforms(r.platforms),
+      withMonoHeap(r.samples, r.sampleRate, 1, () =>
+        getSonareModule().masteringStreamingPreview(r.samples, r.sampleRate, platforms),
       ),
     );
   });
@@ -1071,12 +1105,10 @@ export function masteringAssistantSuggestStereo(
     );
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
+    const params = withEntry('masteringAssistantSuggestStereo', () => assistantParams(r));
     return assistantResultFromNative(
-      getSonareModule().masteringAssistantSuggestStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        withEntry('masteringAssistantSuggestStereo', () => assistantParams(r)),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringAssistantSuggestStereo(r.left, r.right, r.sampleRate, params),
       ),
     );
   });
@@ -1101,12 +1133,10 @@ export function masteringAudioProfileStereo(
     ]);
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
+    const params = profileParams(r);
     return profileFromNative(
-      getSonareModule().masteringAudioProfileStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        profileParams(r),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringAudioProfileStereo(r.left, r.right, r.sampleRate, params),
       ),
     );
   });
@@ -1131,12 +1161,10 @@ export function masteringStreamingPreviewStereo(
     );
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
+    const platforms = previewPlatforms(r.platforms);
     return previewFromNative(
-      getSonareModule().masteringStreamingPreviewStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        previewPlatforms(r.platforms),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringStreamingPreviewStereo(r.left, r.right, r.sampleRate, platforms),
       ),
     );
   });

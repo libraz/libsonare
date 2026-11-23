@@ -45,6 +45,12 @@ import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget, stringifyWithinBudget } from './internal/list_budget.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
+import {
+  MAX_OFFLINE_AUDIO_SAMPLES,
+  sampleNeed,
+  withChannelsHeap,
+  withHeapNeedWhen,
+} from './internal/memory_budget.js';
 import { assertMidiCcBindingBytes } from './internal/midi_cc_binding.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
@@ -509,6 +515,23 @@ function withoutDestinationId<T extends object>(config: T): T {
     throw refuseType('destinationId is the first argument; remove it from the config');
   }
   return config;
+}
+
+/** `kEngineBounceLiveFloatCopies` / `kEngineBounceDitherLiveFloatCopies` in src/util/resource_limits.h. */
+const BOUNCE_LIVE_FLOAT_COPIES = 3;
+const BOUNCE_DITHER_LIVE_FLOAT_COPIES = 4;
+/** `kMaxEngineOfflinePeakBytes` in src/util/resource_limits.h. */
+const MAX_ENGINE_OFFLINE_PEAK_BYTES = 1024 * 1024 * 1024;
+
+/** Whether `engine_bounce_shape_fits` admits this many frames at this width. */
+function bounceShapeFits(frames: number, channels: number, dithering: boolean): boolean {
+  const samples = frames * channels;
+  const copies = dithering ? BOUNCE_DITHER_LIVE_FLOAT_COPIES : BOUNCE_LIVE_FLOAT_COPIES;
+  return (
+    frames >= 1 &&
+    samples <= MAX_OFFLINE_AUDIO_SAMPLES &&
+    samples * 4 * copies <= MAX_ENGINE_OFFLINE_PEAK_BYTES
+  );
 }
 
 /**
@@ -2671,11 +2694,13 @@ export class RealtimeEngine {
    */
   renderOffline(request: RenderOfflineRequest): Float32Array[] {
     const normalized = normalizeRenderOfflineRequest(request);
-    return this.native.renderOffline(
-      normalized.channels,
-      normalized.blockSize,
-      normalized.finalize,
-    );
+    const channels = normalized.channels;
+    const call = () =>
+      this.native.renderOffline(channels, normalized.blockSize, normalized.finalize);
+    // The planes are copied onto the heap and rendered in place; a malformed list is the native refusal.
+    return Array.isArray(channels) && channels.every((plane) => plane instanceof Float32Array)
+      ? withChannelsHeap(channels, undefined, 1, call)
+      : call();
   }
 
   /**
@@ -2718,10 +2743,41 @@ export class RealtimeEngine {
         throw refuse('ditherBits must be an integer');
       }
     }
-    const result = this.native.bounceOffline({
-      ...rest,
-      ...(ditherCode === undefined ? {} : { dither: ditherCode }),
-    });
+    const call = () =>
+      this.native.bounceOffline({
+        ...rest,
+        ...(ditherCode === undefined ? {} : { dither: ditherCode }),
+      });
+    const { totalFrames, numChannels, sourceSampleRate, targetSampleRate } = options;
+    // The rendered planes and their interleaved copy are held together. The length is known from
+    // the arguments only when it is not resampled (no target rate) or both rates are given.
+    const outputRatio =
+      targetSampleRate === undefined
+        ? 1
+        : typeof targetSampleRate === 'number' && typeof sourceSampleRate === 'number'
+          ? targetSampleRate / sourceSampleRate
+          : undefined;
+    // A shape the native resource check refuses is that check's refusal, not a memory one.
+    const result = withHeapNeedWhen(
+      outputRatio !== undefined &&
+        outputRatio > 0 &&
+        Number.isInteger(totalFrames) &&
+        totalFrames >= 1 &&
+        [1, 2, 6, 8].includes(numChannels) &&
+        bounceShapeFits(totalFrames, numChannels, (ditherCode ?? 0) !== 0) &&
+        bounceShapeFits(
+          Math.round(totalFrames * outputRatio),
+          numChannels,
+          (ditherCode ?? 0) !== 0,
+        ),
+      sampleNeed(
+        'totalFrames',
+        totalFrames,
+        typeof sourceSampleRate === 'number' ? sourceSampleRate : undefined,
+        (n) => 8 * numChannels * Math.floor(n * (outputRatio as number)),
+      ),
+      call,
+    );
     return {
       channels: deinterleavePlanes(result.interleaved, result.numChannels),
       sampleRate: result.sampleRate,

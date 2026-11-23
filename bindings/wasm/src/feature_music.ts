@@ -2,6 +2,16 @@ import { convertSection } from './analysis_helpers.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { resolveFftOptions } from './internal/fft_options.js';
+import {
+  MAX_OFFLINE_AUDIO_SAMPLES,
+  MAX_STFT_N_FFT,
+  sampleNeed,
+  stftBins,
+  stftFrames,
+  withHeapNeed,
+  withHeapNeedWhen,
+  withMonoHeap,
+} from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AnalyzeSectionsOptions,
@@ -29,6 +39,17 @@ import {
   toMatrix2D,
   toMatrix2DByRows,
 } from './validation.js';
+
+const MAX_INT32 = 2147483647;
+/** Largest mel band count the filterbank accepts. */
+const MAX_MEL_BANDS = 4096;
+/** Largest tempogram window the core accepts. */
+const MAX_TEMPOGRAM_WIN_LENGTH = 384 * 32;
+/** Rate the analysers' window lengths are stated at. */
+const ANALYSIS_SAMPLE_RATE = 22050;
+
+const isCount = (value: unknown, max = MAX_INT32): value is number =>
+  Number.isInteger(value) && (value as number) >= 1 && (value as number) <= max;
 
 /** The audio and its sample rate, which every one-shot over samples takes. */
 interface SampleInput {
@@ -182,13 +203,26 @@ export function nnlsChroma(...args: unknown[]): Matrix2D {
     const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
-    const result = getSonareModule().nnlsChroma(
-      request.samples,
-      request.sampleRate,
-      optionalBoolean(request.enableStftBlend, 'enableStftBlend', true),
-      request.stftBlendWeight ?? 0.55,
-      request.stftBlendNFft ?? 4096,
-      hopLength,
+    const call = () =>
+      getSonareModule().nnlsChroma(
+        request.samples,
+        request.sampleRate,
+        optionalBoolean(request.enableStftBlend, 'enableStftBlend', true),
+        request.stftBlendWeight ?? 0.55,
+        request.stftBlendNFft ?? 4096,
+        hopLength,
+      );
+    // An out-of-domain hop is the native reader's refusal, not a memory one.
+    const result = withHeapNeedWhen(
+      isCount(hopLength),
+      sampleNeed(
+        'samples',
+        request.samples.length,
+        request.sampleRate,
+        // The CQT cells and magnitude cache (84 bins, 12 bytes) beside the 12 returned chroma rows.
+        (n) => 4 * n + (12 * 84 + 4 * 12) * Math.floor(n / hopLength),
+      ),
+      call,
     );
     return toMatrix2D(result.data, result.nChroma, result.nFrames);
   });
@@ -213,7 +247,19 @@ function cqtFamily<R extends CqtRequest>(
   const binsPerOctave = request.binsPerOctave ?? 12;
   const fminHz = request.fminHz ?? 32.70319566257483;
   assertPositiveFloatValue(fminHz, 'fminHz');
-  const native = call(request, hopLength, fminHz, nBins, binsPerOctave);
+  const run = () => call(request, hopLength, fminHz, nBins, binsPerOctave);
+  // An out-of-domain count is the native reader's refusal, not a memory one.
+  const native = withHeapNeedWhen(
+    isCount(hopLength) && isCount(nBins),
+    sampleNeed(
+      'samples',
+      request.samples.length,
+      request.sampleRate,
+      // Complex cells (8 bytes) with the magnitude cache (4), and the frequency axis.
+      (n) => 4 * n + 12 * nBins * Math.floor(n / hopLength) + 4 * nBins,
+    ),
+    run,
+  );
   return {
     hopLength: native.hopLength,
     sampleRate: native.sampleRate,
@@ -327,6 +373,27 @@ function cqtInverseInput(request: CqtToAudioRequest | VqtToAudioRequest) {
   return { sampleRate, hopLength, binsPerOctave, nIter, fminHz };
 }
 
+/** Runs a CQT/VQT inverse once the heap holds the magnitude copy and the audio it returns. */
+function withInverseHeapNeed(
+  magnitude: Matrix2D,
+  hopLength: number,
+  call: () => Float32Array,
+): Float32Array {
+  // A reconstruction past the offline limit is the native refusal, not a memory one.
+  if ((magnitude.cols - 1) * hopLength > MAX_OFFLINE_AUDIO_SAMPLES) {
+    return call();
+  }
+  return withHeapNeed(
+    {
+      subject: 'magnitude.cols',
+      size: magnitude.cols,
+      bytes: (n) => 4 * magnitude.rows * n + 4 * Math.max(0, n - 1) * hopLength,
+      monotone: true,
+    },
+    call,
+  );
+}
+
 /**
  * Reconstruct mono audio from CQT magnitude via Griffin-Lim.
  *
@@ -337,15 +404,17 @@ export function cqtToAudio(request: CqtToAudioRequest): Float32Array {
   return withEntry('cqtToAudio', () => {
     const r = requestOnly<CqtToAudioRequest>('cqtToAudio', [request]);
     const c = cqtInverseInput(r);
-    return getSonareModule().cqtToAudio(
-      r.magnitude.data,
-      r.magnitude.rows,
-      r.magnitude.cols,
-      c.sampleRate,
-      c.hopLength,
-      c.fminHz,
-      c.binsPerOctave,
-      c.nIter,
+    return withInverseHeapNeed(r.magnitude, c.hopLength, () =>
+      getSonareModule().cqtToAudio(
+        r.magnitude.data,
+        r.magnitude.rows,
+        r.magnitude.cols,
+        c.sampleRate,
+        c.hopLength,
+        c.fminHz,
+        c.binsPerOctave,
+        c.nIter,
+      ),
     );
   });
 }
@@ -360,16 +429,18 @@ export function vqtToAudio(request: VqtToAudioRequest): Float32Array {
   return withEntry('vqtToAudio', () => {
     const r = requestOnly<VqtToAudioRequest>('vqtToAudio', [request]);
     const c = cqtInverseInput(r);
-    return getSonareModule().vqtToAudio(
-      r.magnitude.data,
-      r.magnitude.rows,
-      r.magnitude.cols,
-      c.sampleRate,
-      c.hopLength,
-      c.fminHz,
-      c.binsPerOctave,
-      r.gamma ?? undefined,
-      c.nIter,
+    return withInverseHeapNeed(r.magnitude, c.hopLength, () =>
+      getSonareModule().vqtToAudio(
+        r.magnitude.data,
+        r.magnitude.rows,
+        r.magnitude.cols,
+        c.sampleRate,
+        c.hopLength,
+        c.fminHz,
+        c.binsPerOctave,
+        r.gamma ?? undefined,
+        c.nIter,
+      ),
     );
   });
 }
@@ -398,13 +469,15 @@ export function analyzeSections(...args: unknown[]): SectionAnalysis {
     // Symbol.species, leaving a result that structuredClone (and so postMessage to
     // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
     // plain Array before mapping.
-    const native = getSonareModule().analyzeSections(
-      request.samples,
-      request.sampleRate,
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
-      request.minSectionSec ?? 4.0,
-      request.threshold,
+    const native = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().analyzeSections(
+        request.samples,
+        request.sampleRate,
+        request.nFft ?? 2048,
+        request.hopLength ?? 512,
+        request.minSectionSec ?? 4.0,
+        request.threshold,
+      ),
     );
     return { sections: Array.from(native.sections, convertSection), form: native.form };
   });
@@ -468,7 +541,9 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
       throw refuse('require useMfcc or useChroma');
     }
     const nativeOptions: Record<string, unknown> = { ...request };
-    const result = getSonareModule().detectBoundaries(samples, sampleRate, nativeOptions);
+    const result = withMonoHeap(samples, sampleRate, 1, () =>
+      getSonareModule().detectBoundaries(samples, sampleRate, nativeOptions),
+    );
     // Re-root the embind array as a plain Array, for the reason analyzeSections
     // spells out: chaining onto it propagates a constructor structuredClone
     // rejects, so a result posted from a Worker would fail to clone.
@@ -529,16 +604,37 @@ export function analyzeMelody(...args: unknown[]): MelodyResult {
   return withEntry('analyzeMelody', () => {
     const request = sampleOneShot<AnalyzeMelodyRequest>('analyzeMelody', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const result = getSonareModule().analyzeMelody(
-      request.samples,
-      request.sampleRate,
-      request.f0MinHz ?? 65.0,
-      request.f0MaxHz ?? 2093.0,
-      request.frameLength ?? 2048,
-      request.hopLength ?? 256,
-      request.threshold ?? 0.1,
-      optionalBoolean(request.usePyin, 'usePyin', false),
-      optionalBoolean(request.center, 'center', true),
+    const frameLength = request.frameLength ?? 2048;
+    const hopLength = request.hopLength ?? 256;
+    const usePyin = optionalBoolean(request.usePyin, 'usePyin', false);
+    const center = optionalBoolean(request.center, 'center', true);
+    const call = () =>
+      getSonareModule().analyzeMelody(
+        request.samples,
+        request.sampleRate,
+        request.f0MinHz ?? 65.0,
+        request.f0MaxHz ?? 2093.0,
+        frameLength,
+        hopLength,
+        request.threshold ?? 0.1,
+        usePyin,
+        center,
+      );
+    // The frame length is stated at 22050 Hz and rescaled; an out-of-domain size is the native
+    // reader's refusal, not a memory one.
+    const scaled = isCount(frameLength)
+      ? (frameLength * request.sampleRate) / ANALYSIS_SAMPLE_RATE
+      : Number.NaN;
+    const result = withHeapNeedWhen(
+      isCount(hopLength) && scaled <= MAX_STFT_N_FFT,
+      sampleNeed(
+        'samples',
+        request.samples.length,
+        request.sampleRate,
+        // One 12-byte point per frame, with the rescaled frame length rounded up.
+        (n) => 4 * n + 12 * Math.max(0, Math.floor((n - (Math.round(scaled) + 1)) / hopLength)),
+      ),
+      call,
     );
     return {
       // Native reports an unvoiced frame as frequency 0; here it is absent.
@@ -577,12 +673,26 @@ export function onsetStrength(...args: unknown[]): Float32Array {
     assertAudioInput(request.samples, request.sampleRate, request);
     const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
     const nMels = request.nMels ?? 128;
-    return getSonareModule().onsetEnvelope(
-      request.samples,
-      request.sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      nMels,
+    const call = () =>
+      getSonareModule().onsetEnvelope(
+        request.samples,
+        request.sampleRate,
+        fft.nFft,
+        fft.hopLength,
+        nMels,
+      );
+    const hop = fft.hopLength;
+    // An out-of-domain size, hop or band count is the native reader's refusal, not a memory one.
+    return withHeapNeedWhen(
+      stftBins(fft.nFft, hop) !== undefined && isCount(nMels, MAX_MEL_BANDS),
+      sampleNeed(
+        'samples',
+        request.samples.length,
+        request.sampleRate,
+        // The mel spectrogram is held beside the returned envelope.
+        (n) => 4 * n + 4 * nMels * stftFrames(n, hop) + 4 * Math.floor(n / hop),
+      ),
+      call,
     );
   });
 }
@@ -608,13 +718,27 @@ export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
     const fft = resolveFftOptions(request.nFft ?? 2048, request.hopLength ?? 512);
     const nMels = request.nMels ?? 128;
     const nBands = request.nBands ?? 3;
-    const result = getSonareModule().onsetStrengthMulti(
-      request.samples,
-      request.sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      nMels,
-      nBands,
+    const call = () =>
+      getSonareModule().onsetStrengthMulti(
+        request.samples,
+        request.sampleRate,
+        fft.nFft,
+        fft.hopLength,
+        nMels,
+        nBands,
+      );
+    const hop = fft.hopLength;
+    // An out-of-domain count is the native reader's refusal, not a memory one.
+    const result = withHeapNeedWhen(
+      isCount(hop) && isCount(nMels, MAX_MEL_BANDS) && isCount(nBands),
+      sampleNeed(
+        'samples',
+        request.samples.length,
+        request.sampleRate,
+        // The mel spectrogram is held beside the returned bands.
+        (n) => 4 * n + 4 * (nMels + nBands) * Math.floor(n / hop),
+      ),
+      call,
     );
     return toMatrix2D(result.data, result.nBands, result.nFrames);
   });
@@ -638,14 +762,29 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
     assertSampleRate(sampleRate);
     assertSamples(r.onsetEnvelope, true, 'onsetEnvelope');
     // Native takes a `norm` flag; the normalised form is the only one exposed.
-    const result = getSonareModule().fourierTempogram(
-      r.onsetEnvelope,
-      sampleRate,
-      hopLength,
-      winLength,
-      optionalBoolean(r.center, 'center', true),
-      true,
-    );
+    const onsetEnvelope = r.onsetEnvelope;
+    const call = () =>
+      getSonareModule().fourierTempogram(
+        onsetEnvelope,
+        sampleRate,
+        hopLength,
+        winLength,
+        optionalBoolean(r.center, 'center', true),
+        true,
+      );
+    // An out-of-domain window is the native reader's refusal, not a memory one.
+    const result =
+      Number.isInteger(winLength) && winLength >= 2 && winLength <= MAX_TEMPOGRAM_WIN_LENGTH
+        ? withHeapNeed(
+            {
+              subject: 'onsetEnvelope',
+              size: onsetEnvelope.length,
+              bytes: (n) => 4 * n * (1 + Math.floor(winLength / 2) + 1),
+              monotone: true,
+            },
+            call,
+          )
+        : call();
     return toMatrix2DByRows(result.data, result.nBins);
   });
 }
@@ -664,12 +803,26 @@ export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
     const sampleRate = r.sampleRate ?? 22050;
     const hopLength = r.hopLength ?? 512;
     assertSampleRate(sampleRate);
-    return getSonareModule().tempogramRatio(
-      tempogram.data,
-      tempogram.rows,
-      sampleRate,
-      hopLength,
-      r.factors,
+    const factors = r.factors;
+    const factorCount =
+      Array.isArray(factors) || factors instanceof Float32Array ? factors.length : 0;
+    // The factors are copied and one value is returned for each; none given runs the five defaults.
+    const factorBytes = factorCount > 0 ? 8 * factorCount : 4 * 5;
+    return withHeapNeed(
+      {
+        subject: 'tempogram',
+        size: tempogram.data.length,
+        bytes: (n) => 4 * n + factorBytes,
+        monotone: true,
+      },
+      () =>
+        getSonareModule().tempogramRatio(
+          tempogram.data,
+          tempogram.rows,
+          sampleRate,
+          hopLength,
+          r.factors,
+        ),
     );
   });
 }
@@ -691,7 +844,9 @@ export function lufs(...args: unknown[]): LufsResult {
   return withEntry('lufs', () => {
     const request = sampleOneShot<LufsRequest>('lufs', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const native = getSonareModule().lufs(request.samples, request.sampleRate);
+    const native = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().lufs(request.samples, request.sampleRate),
+    );
     return { ...native };
   });
 }
@@ -713,7 +868,9 @@ export function momentaryLufs(...args: unknown[]): Float32Array {
   return withEntry('momentaryLufs', () => {
     const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return getSonareModule().momentaryLufs(request.samples, request.sampleRate);
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().momentaryLufs(request.samples, request.sampleRate),
+    );
   });
 }
 
@@ -734,6 +891,8 @@ export function shortTermLufs(...args: unknown[]): Float32Array {
   return withEntry('shortTermLufs', () => {
     const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return getSonareModule().shortTermLufs(request.samples, request.sampleRate);
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().shortTermLufs(request.samples, request.sampleRate),
+    );
   });
 }

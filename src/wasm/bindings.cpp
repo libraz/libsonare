@@ -5,6 +5,9 @@
 
 #include <cxxabi.h>
 #include <emscripten/emscripten.h>
+#include <emscripten/heap.h>
+#include <malloc.h>
+#include <unistd.h>
 
 #include <string>
 #include <vector>
@@ -464,6 +467,18 @@ void js_sonare_release_exception(std::uintptr_t exception_ptr) {
   __cxxabiv1::__cxa_decrement_exception_refcount(reinterpret_cast<void*>(exception_ptr));
 }
 
+// Bytes the heap can still hand out at most: the linear-memory cap less what is in use (static
+// data, stack and live allocations). A need within the never-grown tail answers without walking
+// the allocator, so the common call pays only an sbrk read.
+double js_heap_headroom(double need_bytes) {
+  const auto cap = static_cast<double>(emscripten_get_heap_max());
+  const auto brk = static_cast<double>(reinterpret_cast<std::uintptr_t>(sbrk(0)));
+  if (need_bytes <= cap - brk) return cap - brk;
+  const struct mallinfo info = mallinfo();
+  const double used = brk - static_cast<double>(info.fordblks);
+  return cap > used ? cap - used : 0.0;
+}
+
 // Aggregate C-ABI version: the per-subsystem ABI macros folded into one 32-bit
 // value, matching the Node addon (sonare_abi_version) and Python. Computed from
 // the compile-time SONARE_ABI_VERSION macro so it stays correct without linking
@@ -670,6 +685,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
 #endif
   function("sonareExceptionInfo", &js_sonare_exception_info);
   function("sonareReleaseException", &js_sonare_release_exception);
+  function("sonareHeapHeadroom", &js_heap_headroom);
   function("abiVersion", &js_abi_version);
   function("engineAbiVersion", &js_engine_abi_version);
   function("voiceChangerAbiVersion", &js_voice_changer_abi_version);

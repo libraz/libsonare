@@ -1,6 +1,13 @@
 import { refuseType, withEntry } from './internal/entry.js';
+import { withHeapNeedWhen } from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
-import { assertAudioSamples, assertInt32, requestOnly } from './validation.js';
+import {
+  assertAudioSamples,
+  assertInt32,
+  MAX_AUDIO_SAMPLE_RATE,
+  MIN_AUDIO_SAMPLE_RATE,
+  requestOnly,
+} from './validation.js';
 
 // ============================================================================
 // Core - Resample
@@ -50,10 +57,20 @@ export function resample(...args: unknown[]): Float32Array {
     assertAudioSamples(request.samples, { scanFinite: false });
     assertInt32(request.sampleRate, 'sampleRate');
     assertInt32(request.targetSampleRate, 'targetSampleRate');
-    return getSonareModule().resample(
-      request.samples,
-      request.sampleRate,
-      request.targetSampleRate,
+    const { samples, sampleRate, targetSampleRate } = request;
+    const inRange = (rate: number) =>
+      rate >= MIN_AUDIO_SAMPLE_RATE && rate <= MAX_AUDIO_SAMPLE_RATE;
+    // An out-of-range rate is the native reader's refusal, not a memory one.
+    return withHeapNeedWhen(
+      inRange(sampleRate) && inRange(targetSampleRate),
+      {
+        subject: 'targetSampleRate',
+        size: targetSampleRate,
+        // The input copy and the converted output, whose length rounds down.
+        bytes: (n) => 4 * samples.length + 4 * Math.floor((samples.length * n) / sampleRate),
+        monotone: true,
+      },
+      () => getSonareModule().resample(samples, sampleRate, targetSampleRate),
     );
   });
 }

@@ -7,6 +7,13 @@ import { keyModeName, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpe
 import { assertPitchTrackLengths, toVoicedFloat32 } from './internal/effects_common.js';
 import { refuseType, withEntry } from './internal/entry.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
+import {
+  MAX_OFFLINE_AUDIO_SAMPLES,
+  sampleNeed,
+  withHeapNeed,
+  withHeapNeedWhen,
+  withMonoHeap,
+} from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { AutoTuneOptions, AutoTuneResult, PitchCorrectOptions } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -105,12 +112,24 @@ export function timeStretch(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertPositiveFloatValue(r.speedRatio, 'speedRatio');
     const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return getSonareModule().timeStretch(
-      r.samples,
-      r.sampleRate,
-      r.speedRatio,
-      fftOptions.nFft,
-      fftOptions.hopLength,
+    const { samples, sampleRate, speedRatio } = r;
+    const outSamples = Math.floor(samples.length / speedRatio);
+    // An output past the offline cap is the native rate check's refusal, not a memory one.
+    return withHeapNeedWhen(
+      outSamples <= MAX_OFFLINE_AUDIO_SAMPLES,
+      {
+        subject: 'speedRatio',
+        size: speedRatio,
+        bytes: () => 4 * samples.length + 4 * outSamples,
+      },
+      () =>
+        getSonareModule().timeStretch(
+          samples,
+          sampleRate,
+          speedRatio,
+          fftOptions.nFft,
+          fftOptions.hopLength,
+        ),
     );
   });
 }
@@ -140,12 +159,15 @@ export function pitchShift(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFloatValue(r.pitchSemitones, 'pitchSemitones');
     const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
-    return getSonareModule().pitchShift(
-      r.samples,
-      r.sampleRate,
-      r.pitchSemitones,
-      fftOptions.nFft,
-      fftOptions.hopLength,
+    const { samples, sampleRate, pitchSemitones } = r;
+    return withMonoHeap(samples, sampleRate, 2, () =>
+      getSonareModule().pitchShift(
+        samples,
+        sampleRate,
+        pitchSemitones,
+        fftOptions.nFft,
+        fftOptions.hopLength,
+      ),
     );
   });
 }
@@ -176,11 +198,9 @@ export function pitchCorrectToMidi(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFloatValue(r.currentMidi, 'currentMidi');
     assertFloatValue(r.targetMidi, 'targetMidi');
-    return getSonareModule().pitchCorrectToMidi(
-      r.samples,
-      r.sampleRate,
-      r.currentMidi,
-      r.targetMidi,
+    const { samples, sampleRate, currentMidi, targetMidi } = r;
+    return withMonoHeap(samples, sampleRate, 2, () =>
+      getSonareModule().pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi),
     );
   });
 }
@@ -235,12 +255,22 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
       voiced: voicedF32,
       voicedProb: voicedProb ?? undefined,
     };
-    return getSonareModule().pitchCorrectTimevarying(
-      r.samples,
-      r.sampleRate,
-      r.f0Hz,
-      hopLength ?? 512,
-      nativeOptions,
+    const { samples, sampleRate, f0Hz } = r;
+    return withHeapNeed(
+      sampleNeed(
+        'samples',
+        samples.length,
+        sampleRate,
+        (n) => 4 * n + 4 * n + 4 * n + 4 * f0Hz.length,
+      ),
+      () =>
+        getSonareModule().pitchCorrectTimevarying(
+          samples,
+          sampleRate,
+          f0Hz,
+          hopLength ?? 512,
+          nativeOptions,
+        ),
     );
   });
 }
@@ -291,10 +321,9 @@ export function autoTune(...args: unknown[]): AutoTuneResult {
       keyModeOrdinal(keyOrDetect.mode, 'key.mode');
       nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
     }
-    const result = getSonareModule().autoTune(samples, sampleRate, nativeKey, options) as Omit<
-      AutoTuneResult,
-      'key'
-    > & {
+    const result = withMonoHeap(samples, sampleRate, 2, () =>
+      getSonareModule().autoTune(samples, sampleRate, nativeKey, options),
+    ) as Omit<AutoTuneResult, 'key'> & {
       key: Omit<AutoTuneResult['key'], 'mode'> & { mode: number };
     };
     return { ...result, key: { ...result.key, mode: keyModeName(result.key.mode) } };

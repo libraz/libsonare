@@ -3,6 +3,7 @@
  */
 
 import { type Respelled, withEntry } from './internal/entry.js';
+import { withMonoHeap, withPairHeap } from './internal/memory_budget.js';
 import { repairNativeOptions } from './internal/repair_common.js';
 import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
@@ -85,8 +86,11 @@ export function masteringRepairTrimSilence(...args: unknown[]): TrimSilenceResul
     const r = sampleOneShot<MasteringRepairTrimSilenceRequest>('masteringRepairTrimSilence', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const trim = nativeTrimOptions(r, r.sampleRate);
-    return withRespelled(trim.respelled, () =>
-      getSonareModule().masteringRepairTrimSilence(r.samples, r.sampleRate, trim.options),
+    // The trimmed result can be empty, so only the input copy is certain.
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      withRespelled(trim.respelled, () =>
+        getSonareModule().masteringRepairTrimSilence(r.samples, r.sampleRate, trim.options),
+      ),
     );
   });
 }
@@ -154,12 +158,15 @@ export function masteringRepairTrimSilenceStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     const trim = nativeTrimOptions(r, r.sampleRate);
-    const native = withRespelled(trim.respelled, () =>
-      getSonareModule().masteringRepairTrimSilenceStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        trim.options,
+    // The trimmed result can be empty, so only the input copies are certain.
+    const native = withPairHeap(r.left, r.right, r.sampleRate, 1, () =>
+      withRespelled(trim.respelled, () =>
+        getSonareModule().masteringRepairTrimSilenceStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          trim.options,
+        ),
       ),
     );
     return {
@@ -217,8 +224,10 @@ export function masteringRepairDetectTrimRange(...args: unknown[]): TrimRange {
     );
     assertAudioInput(r.samples, r.sampleRate, r);
     const trim = nativeTrimOptions(r, r.sampleRate);
-    return withRespelled(trim.respelled, () =>
-      getSonareModule().masteringRepairDetectTrimRange(r.samples, r.sampleRate, trim.options),
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      withRespelled(trim.respelled, () =>
+        getSonareModule().masteringRepairDetectTrimRange(r.samples, r.sampleRate, trim.options),
+      ),
     );
   });
 }
@@ -253,12 +262,14 @@ export function masteringRepairDetectTrimRangeStereo(...args: unknown[]): TrimRa
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     const trim = nativeTrimOptions(r, r.sampleRate);
-    return withRespelled(trim.respelled, () =>
-      getSonareModule().masteringRepairDetectTrimRangeStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        trim.options,
+    return withPairHeap(r.left, r.right, r.sampleRate, 1, () =>
+      withRespelled(trim.respelled, () =>
+        getSonareModule().masteringRepairDetectTrimRangeStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          trim.options,
+        ),
       ),
     );
   });

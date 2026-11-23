@@ -6,6 +6,7 @@
 import { resolveEntryTimes } from './internal/effects_common.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { withMonoHeap } from './internal/memory_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
@@ -198,7 +199,9 @@ export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
     assertAudioInput(samples, request.sampleRate, request);
     assertPercussiveSeparation(request);
     refuseZeroDefaults(request, ['onsetWait', 'onsetDelta', 'maxEventMs']);
-    return getSonareModule().extractPercussiveEvents(samples, request.sampleRate, request);
+    return withMonoHeap(samples, request.sampleRate, 1, () =>
+      getSonareModule().extractPercussiveEvents(samples, request.sampleRate, request),
+    );
   });
 }
 
@@ -275,7 +278,9 @@ export function renderPercussiveEvents(...args: unknown[]): Float32Array {
       true,
     );
     return withRespelled(respelled, () =>
-      getSonareModule().renderPercussiveEvents(samples, request.sampleRate, events, request),
+      withMonoHeap(samples, request.sampleRate, 2, () =>
+        getSonareModule().renderPercussiveEvents(samples, request.sampleRate, events, request),
+      ),
     );
   });
 }

@@ -128,6 +128,7 @@ export type SonareAnalysisModule = Pick<
   | 'segmentSubsegment'
   | 'shortTermLufs'
   | 'sonareExceptionInfo'
+  | 'sonareHeapHeadroom'
   | 'sonareReleaseException'
   | 'spectralBandwidth'
   | 'spectralCentroid'

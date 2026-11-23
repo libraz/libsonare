@@ -24,7 +24,7 @@ For BPM / key / chord detection, feature extraction and metering without the mas
 
 ## Quick Start
 
-`init()` loads the WASM module once. Start from `Audio.fromMemoryWithBrowserFallback(bytes)`, which decodes WAV / MP3 in WASM and uses the browser's `decodeAudioData` for other formats. A multi-channel file folds to mono there with the ITU-R BS.775 rule; `decodeChannels(bytes)` keeps every channel and `downmix(channels, targetLayout)` applies the same fold on demand. The build is single-threaded, so drive long calls from a Web Worker.
+`init()` loads the WASM module once. Start from `Audio.fromMemoryWithBrowserFallback(bytes)`, which decodes WAV / MP3 in WASM and uses the browser's `decodeAudioData` for other formats. A multi-channel file folds to mono there with the ITU-R BS.775 rule; `decodeChannels(bytes)` keeps every channel and `downmix(channels, targetLayout)` applies the same fold on demand. The build is single-threaded, so drive long calls from a Web Worker. A one-shot call whose input copy and output alone exceed the heap left is refused with a `RangeError` before it runs; past that bound, and for audio a handle stores across calls, running out of memory is a `SonareError` with code `OutOfMemory`.
 
 ```typescript
 import { Audio, init } from '@libraz/libsonare';

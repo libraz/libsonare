@@ -3,6 +3,7 @@
  */
 
 import { refuseType, withEntry } from './internal/entry.js';
+import { withChannelsHeap } from './internal/memory_budget.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative, humDetection, noiseDetection } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
@@ -225,10 +226,12 @@ export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnaly
         ? {}
         : { preferStreamingSafe: request.preferStreamingSafe };
     const analysis = parseRecordJson<MasteringRepairAnalysis>(
-      getSonareModule().masteringRepairAnalyze(
-        request.channels,
-        request.sampleRate,
-        JSON.stringify(options),
+      withChannelsHeap(request.channels, request.sampleRate, 1, () =>
+        getSonareModule().masteringRepairAnalyze(
+          request.channels,
+          request.sampleRate,
+          JSON.stringify(options),
+        ),
       ),
       'repair_analysis',
     );
@@ -270,12 +273,14 @@ export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyRe
     if (!Array.isArray(request.stages)) {
       throw refuseType('stages must be an array');
     }
-    const result = getSonareModule().masteringRepairApply(
-      request.channels,
-      request.sampleRate,
-      JSON.stringify(request.stages),
-      request.onProgress ?? null,
-      request.cancel ?? null,
+    const result = withChannelsHeap(request.channels, request.sampleRate, 2, () =>
+      getSonareModule().masteringRepairApply(
+        request.channels,
+        request.sampleRate,
+        JSON.stringify(request.stages),
+        request.onProgress ?? null,
+        request.cancel ?? null,
+      ),
     );
     return {
       channels: result.channels,

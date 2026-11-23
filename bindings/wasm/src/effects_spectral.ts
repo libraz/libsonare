@@ -5,6 +5,7 @@
 
 import { mergeRespelled, type Respelled, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { withMonoHeap } from './internal/memory_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
@@ -103,11 +104,13 @@ export function spectralEdit(...args: unknown[]): Float32Array {
         })
       : (requestOps as SpectralRegionOp[]);
     return withRespelled(mergeRespelled(...respellings), () =>
-      getSonareModule().spectralEdit(
-        request.samples,
-        request.sampleRate,
-        nativeOps,
-        request as unknown as Record<string, unknown>,
+      withMonoHeap(request.samples, request.sampleRate, 2, () =>
+        getSonareModule().spectralEdit(
+          request.samples,
+          request.sampleRate,
+          nativeOps,
+          request as unknown as Record<string, unknown>,
+        ),
       ),
     );
   });

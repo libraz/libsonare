@@ -1,6 +1,7 @@
 import { entryClass, refuse, refuseType, withEntry } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
+import { sampleNeed, withHeapNeed } from './internal/memory_budget.js';
 import { isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -317,13 +318,31 @@ export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackRe
   return withEntry('renderPlayback', () => {
     requestObject('renderPlayback', request, 'request', true);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const { samples, channels } = getSonareModule().renderPlayback(
-      request.samples,
-      request.numChannels,
-      request.sampleRate,
-      configJsonText(request.config),
-      nativeHrtf(request.hrtf),
-    );
+    const config = configJsonText(request.config);
+    const hrtf = nativeHrtf(request.hrtf);
+    const inChannels = request.numChannels;
+    const call = () =>
+      getSonareModule().renderPlayback(
+        request.samples,
+        request.numChannels,
+        request.sampleRate,
+        config,
+        hrtf,
+      );
+    // The output has the input's frame count in at least one channel; the native reader
+    // refuses a channel count that is not a positive integer, so only a valid one is sized.
+    const { samples, channels } =
+      Number.isInteger(inChannels) && inChannels >= 1
+        ? withHeapNeed(
+            sampleNeed(
+              'samples',
+              request.samples.length,
+              request.sampleRate,
+              (n) => 4 * n + 4 * Math.floor(n / inChannels),
+            ),
+            call,
+          )
+        : call();
     return { samples, numChannels: channels };
   });
 }

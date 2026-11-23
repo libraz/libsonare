@@ -1,4 +1,5 @@
 import { withEntry } from './internal/entry.js';
+import { sampleNeed, withHeapNeed } from './internal/memory_budget.js';
 import { projectModule } from './project_internal.js';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from './project_types.js';
 import { assertAudioInput, requestObject } from './validation.js';
@@ -67,12 +68,21 @@ export function alignTakeToReference(
     const takeSampleRate = request.takeSampleRate ?? request.sampleRate;
     assertAudioInput(request.reference, request.sampleRate, {}, 'reference');
     assertAudioInput(request.take, takeSampleRate, {}, 'take');
-    return projectModule().alignTakeToReference(
-      request.reference,
-      request.take,
-      request.sampleRate,
-      takeSampleRate,
-      request,
+    return withHeapNeed(
+      sampleNeed(
+        'reference',
+        request.reference.length,
+        request.sampleRate,
+        (n) => 4 * (n + request.take.length),
+      ),
+      () =>
+        projectModule().alignTakeToReference(
+          request.reference,
+          request.take,
+          request.sampleRate,
+          takeSampleRate,
+          request,
+        ),
     );
   });
 }

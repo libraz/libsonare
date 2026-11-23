@@ -1,4 +1,5 @@
 import { withEntry } from './internal/entry.js';
+import { withMonoHeap } from './internal/memory_budget.js';
 import { isAbsent } from './internal/value_guards.js';
 import { projectModule } from './project_internal.js';
 import type { TranscribeOptions, TranscribeResult } from './project_types.js';
@@ -90,6 +91,8 @@ export function transcribe(...args: unknown[]): TranscribeResult {
     if (!isAbsent(tempoBpm)) {
       assertPositiveFloatValue(tempoBpm, 'tempoBpm');
     }
-    return projectModule().transcribe(samples, sampleRate, tempoBpm, rest);
+    return withMonoHeap(samples, sampleRate, 1, () =>
+      projectModule().transcribe(samples, sampleRate, tempoBpm, rest),
+    );
   });
 }

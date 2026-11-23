@@ -1,5 +1,6 @@
 import { chainConfigFromJson, chainConfigJson } from './internal/chain_config.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { withMonoHeap, withPairHeap } from './internal/memory_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -79,12 +80,14 @@ export function normalize(...args: unknown[]): Float32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     const mode = resolveNormalizeMode(r.mode);
     // The core names the signal it measures `audio`; the caller wrote `samples`.
-    return withRespelled({ audio: { name: 'samples', scale: 1 } }, () =>
-      getSonareModule().normalize(
-        r.samples,
-        r.sampleRate,
-        r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
-        mode,
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      withRespelled({ audio: { name: 'samples', scale: 1 } }, () =>
+        getSonareModule().normalize(
+          r.samples,
+          r.sampleRate,
+          r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
+          mode,
+        ),
       ),
     );
   });
@@ -169,12 +172,14 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
     // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
     // default -- the peaks sit well above the RMS, so every one of them clips.
     const targetDb = request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0);
-    return getSonareModule().normalizeStereo(
-      request.left,
-      request.right,
-      request.sampleRate,
-      targetDb,
-      mode,
+    return withPairHeap(request.left, request.right, request.sampleRate, 2, () =>
+      getSonareModule().normalizeStereo(
+        request.left,
+        request.right,
+        request.sampleRate,
+        targetDb,
+        mode,
+      ),
     );
   });
 }
@@ -257,10 +262,12 @@ export function streamingLoudnessGain(...args: unknown[]): StreamingLoudnessGain
     const r = sampleOneShot<StreamingLoudnessGainRequest>('streamingLoudnessGain', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     return streamingGainFromNative(
-      getSonareModule().masteringStreamingLoudnessGain(
-        r.samples,
-        r.sampleRate,
-        chainConfigJson('config', r.config),
+      withMonoHeap(r.samples, r.sampleRate, 1, () =>
+        getSonareModule().masteringStreamingLoudnessGain(
+          r.samples,
+          r.sampleRate,
+          chainConfigJson('config', r.config),
+        ),
       ),
     );
   });
@@ -278,11 +285,13 @@ export function streamingLoudnessGainStereo(
       throw refuse('left and right must have the same length');
     }
     return streamingGainFromNative(
-      getSonareModule().masteringStreamingLoudnessGainStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        chainConfigJson('config', r.config),
+      withPairHeap(r.left, r.right, r.sampleRate, 1, () =>
+        getSonareModule().masteringStreamingLoudnessGainStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          chainConfigJson('config', r.config),
+        ),
       ),
     );
   });
@@ -450,14 +459,20 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
     const progress = r.onProgress ?? undefined;
     const cancel = r.cancel ?? undefined;
     const module = getSonareModule();
-    return module.masterAudio(
-      preset,
+    return withMonoHeap(
       r.samples,
       r.sampleRate,
-      overrides,
-      progress,
-      cancel,
-    ) as MasteringChainResult;
+      2,
+      () =>
+        module.masterAudio(
+          preset,
+          r.samples,
+          r.sampleRate,
+          overrides,
+          progress,
+          cancel,
+        ) as MasteringChainResult,
+    );
   });
 }
 
@@ -491,14 +506,21 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
     const progress = r.onProgress ?? undefined;
     const cancel = r.cancel ?? undefined;
     const module = getSonareModule();
-    return module.masterAudioStereo(
-      preset,
+    return withPairHeap(
       r.left,
       r.right,
       r.sampleRate,
-      overrides,
-      progress,
-      cancel,
-    ) as MasteringChainStereoResult;
+      2,
+      () =>
+        module.masterAudioStereo(
+          preset,
+          r.left,
+          r.right,
+          r.sampleRate,
+          overrides,
+          progress,
+          cancel,
+        ) as MasteringChainStereoResult,
+    );
   });
 }

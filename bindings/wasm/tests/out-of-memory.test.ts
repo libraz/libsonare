@@ -1,32 +1,27 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, fixLength, init, isSonareError, type SonareError } from '../dist/index.js';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  ErrorCode,
+  fixLength,
+  init,
+  isSonareError,
+  SampleBank,
+  type SonareError,
+  stft,
+} from '../dist/index.js';
 
-// The module's linear memory, captured at instantiation: it is not reachable through the package.
-let memory: WebAssembly.Memory | undefined;
+const MIB = 1024 * 1024;
 
-function captureMemory(): void {
-  for (const name of ['instantiate', 'instantiateStreaming'] as const) {
-    const original = WebAssembly[name] as (...args: unknown[]) => Promise<unknown>;
-    (WebAssembly as unknown as Record<string, unknown>)[name] = async (...args: unknown[]) => {
-      const result = (await original.apply(WebAssembly, args)) as {
-        instance?: WebAssembly.Instance;
-      } & WebAssembly.Instance;
-      const instance = result.instance ?? result;
-      for (const value of Object.values(instance.exports)) {
-        if (value instanceof WebAssembly.Memory) {
-          memory = value;
-        }
-      }
-      return result;
-    };
+// What the heap can still hand out, as the memory refusal of an oversized request states it.
+function headroomMib(): number {
+  let message = '';
+  try {
+    fixLength({ values: new Float32Array(4), targetSize: 0xffffffff });
+  } catch (error) {
+    message = (error as Error).message;
   }
-}
-
-function heapBytes(): number {
-  if (memory === undefined) {
-    throw new Error('the module memory was not captured');
-  }
-  return memory.buffer.byteLength;
+  const match = message.match(/more than the (\d+\.\d) MiB available/);
+  expect(match).not.toBeNull();
+  return Number(match?.[1]);
 }
 
 function outOfMemory(call: () => unknown): SonareError {
@@ -41,42 +36,61 @@ function outOfMemory(call: () => unknown): SonareError {
   return caught as SonareError;
 }
 
-// A request larger than the 2 GiB linear-memory cap fails to grow the heap. With memory growth on,
-// malloc returns null instead of aborting, so the failure surfaces as a coded error. Every unit
-// unwinds, so what the failed call held before the allocation that failed is freed on the way out.
-describe('an allocation past the linear-memory cap', () => {
+// A call that fits its certain need (the input copy and the complex spectrum) but not the
+// magnitude and power it then derives runs out of memory past the lower bound. The heap is
+// filled first by samples a bank holds, so the failing call is small and fails quickly.
+describe('an allocation past the lower bound', () => {
+  const banks: SampleBank[] = [];
+
   beforeAll(async () => {
-    captureMemory();
     await init();
+    // A bank's sample pool is one growing buffer with a size cap, so a bank that refuses the next
+    // block (past its cap, or with no room left to grow its pool) is set aside for a fresh one.
+    const block = new Float32Array(8 * MIB).fill(0.25);
+    banks.push(new SampleBank());
+    let fresh = true;
+    while (headroomMib() > 320) {
+      try {
+        banks[banks.length - 1].addSample(block);
+        fresh = false;
+      } catch (error) {
+        if (!isSonareError(error) || error.code !== ErrorCode.OutOfMemory || fresh) {
+          throw error;
+        }
+        banks.push(new SampleBank());
+        fresh = true;
+      }
+    }
   });
 
-  it('is a coded OutOfMemory, and the module still answers the next call', () => {
-    const error = outOfMemory(() =>
-      fixLength({ values: new Float32Array(4), targetSize: 700_000_000 }),
+  afterAll(() => {
+    for (const bank of banks) {
+      bank[Symbol.dispose]();
+    }
+  });
+
+  it('is a coded OutOfMemory naming the input, and releases what the call held', () => {
+    // A first call builds the transform plans the module keeps for later calls of the same size.
+    expect(
+      stft({ samples: new Float32Array(48000), sampleRate: 48000 }).magnitude.cols,
+    ).toBeGreaterThan(0);
+    const before = headroomMib();
+    // The bound is about 20 bytes per sample and the call holds about 36, so a need of 80% of
+    // the headroom is admitted and the call then fails.
+    const n = Math.floor((0.8 * before * MIB) / 20.1);
+    const samples = new Float32Array(n).fill(0.1);
+    const error = outOfMemory(() => stft({ samples, sampleRate: 48000 }));
+    expect(error.message).toBe(
+      `stft: Out of memory; samples is ${n} samples (${(n / 48000).toFixed(2)} s at 48000 Hz)`,
     );
-    expect(error.message).toBe('fixLength: Out of memory');
-    expect(Array.from(fixLength({ values: new Float32Array([1, 2]), targetSize: 3 }))).toEqual([
-      1, 2, 0,
-    ]);
-  });
 
-  it('returns what the failed call held, so repeating it does not grow the heap', () => {
-    // 64 MiB of input is copied into the heap before the output allocation fails; a frame that
-    // did not unwind would keep that copy, and each repeat would grow memory by as much again.
-    // The heap is read as the memory size, which never shrinks, so only growth is visible.
-    const values = new Float32Array(16 * 1024 * 1024).fill(0.25);
-    outOfMemory(() => fixLength({ values, targetSize: 700_000_000 }));
-    const afterFirst = heapBytes();
-    outOfMemory(() => fixLength({ values, targetSize: 700_000_000 }));
-    outOfMemory(() => fixLength({ values, targetSize: 700_000_000 }));
-    expect(heapBytes()).toBe(afterFirst);
+    // Every frame unwinds, so what the call held before the allocation that failed is free again.
+    expect(headroomMib()).toBe(before);
+    outOfMemory(() => stft({ samples, sampleRate: 48000 }));
+    expect(headroomMib()).toBe(before);
 
-    // A call of the same input size then succeeds, and repeating it reuses its own memory.
-    const fitted = fixLength({ values, targetSize: values.length });
-    expect(fitted.length).toBe(values.length);
-    expect(fitted[values.length - 1]).toBe(0.25);
-    const afterSuccess = heapBytes();
-    fixLength({ values, targetSize: values.length });
-    expect(heapBytes()).toBe(afterSuccess);
+    // The module still answers, and a call within the headroom succeeds.
+    const small = stft({ samples: samples.subarray(0, 48000), sampleRate: 48000 });
+    expect(small.magnitude.cols).toBeGreaterThan(0);
   });
 });

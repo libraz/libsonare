@@ -5,6 +5,13 @@
 
 import { refuse, withEntry } from './internal/entry.js';
 import { resolveFftOptions } from './internal/fft_options.js';
+import {
+  sampleNeed,
+  stftBins,
+  stftFrames,
+  withHeapNeedWhen,
+  withMonoHeap,
+} from './internal/memory_budget.js';
 import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -33,6 +40,28 @@ import {
   sampleOneShot,
   toMatrix2D,
 } from './validation.js';
+
+const MAX_CQT_HOP = 65536;
+const MAX_CQT_BINS_PER_OCTAVE = Math.floor(0x7fffffff / 7);
+const MAX_MEL_BANDS = 4096;
+
+const isInt = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value);
+
+/** Whether the native chroma-from-CQT reader accepts this hop, chroma count and grid. */
+function cqtChromaInDomain(hopLength: unknown, nChroma: unknown, binsPerOctave: unknown): boolean {
+  return (
+    isInt(hopLength) &&
+    hopLength >= 1 &&
+    hopLength <= MAX_CQT_HOP &&
+    isInt(nChroma) &&
+    nChroma >= 1 &&
+    isInt(binsPerOctave) &&
+    binsPerOctave >= 1 &&
+    binsPerOctave <= MAX_CQT_BINS_PER_OCTAVE &&
+    binsPerOctave % nChroma === 0
+  );
+}
 
 /** STFT request. */
 export interface StftRequest {
@@ -219,7 +248,10 @@ export function trim(...args: unknown[]): Float32Array {
     const hopLength = r.hopLength ?? 512;
     assertAudioInput(r.samples, r.sampleRate, r);
     assertFiniteScalar(thresholdDb, 'thresholdDb');
-    return getSonareModule().trim(r.samples, r.sampleRate, thresholdDb, frameLength, hopLength);
+    const { samples, sampleRate } = r;
+    return withMonoHeap(samples, sampleRate, 1, () =>
+      getSonareModule().trim(samples, sampleRate, thresholdDb, frameLength, hopLength),
+    );
   });
 }
 
@@ -247,7 +279,10 @@ export function fade(request: FadeRequest): Float32Array {
     const r = requestOnly<FadeRequest>('fade', [request]);
     assertFloat32Array(r.samples, 'samples');
     assertSampleRate(r.sampleRate);
-    return getSonareModule().fade(r.samples, r.sampleRate, r.fadeInSec ?? 0, r.fadeOutSec ?? 0);
+    const { samples, sampleRate } = r;
+    return withMonoHeap(samples, sampleRate, 3, () =>
+      getSonareModule().fade(samples, sampleRate, r.fadeInSec ?? 0, r.fadeOutSec ?? 0),
+    );
   });
 }
 
@@ -295,15 +330,19 @@ export function biquadFilter(request: BiquadFilterRequest): Float32Array {
     assertFloat32Array(r.samples, 'samples');
     assertSampleRate(r.sampleRate);
     assertClosedToken(r.type, BIQUAD_FILTER_TYPES, 'type');
-    return getSonareModule().biquadFilter(
-      r.samples,
-      r.sampleRate,
-      BIQUAD_FILTER_TYPES.indexOf(r.type),
-      r.order ?? 2,
-      optionalBoolean(r.zeroPhase, 'zeroPhase', false),
-      r.cutoffHz,
-      r.centerHz,
-      r.bandwidthHz,
+    const { samples, sampleRate } = r;
+    const zeroPhase = optionalBoolean(r.zeroPhase, 'zeroPhase', false);
+    return withMonoHeap(samples, sampleRate, 3, () =>
+      getSonareModule().biquadFilter(
+        samples,
+        sampleRate,
+        BIQUAD_FILTER_TYPES.indexOf(r.type),
+        r.order ?? 2,
+        zeroPhase,
+        r.cutoffHz,
+        r.centerHz,
+        r.bandwidthHz,
+      ),
     );
   });
 }
@@ -329,12 +368,18 @@ export function stft(...args: unknown[]): StftResult {
     const r = sampleOneShot<StftRequest>('stft', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const fft = resolveFftOptions(r.nFft, r.hopLength);
-    const native = getSonareModule().stft(
-      r.samples,
-      r.sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      optionalBoolean(r.db, 'db', false) ? true : undefined,
+    const { samples, sampleRate } = r;
+    const withDb = optionalBoolean(r.db, 'db', false) ? true : undefined;
+    const bins = stftBins(fft.nFft, fft.hopLength);
+    const native = withHeapNeedWhen(
+      bins !== undefined,
+      sampleNeed(
+        'samples',
+        samples.length,
+        sampleRate,
+        (n) => 4 * n + 8 * (bins as number) * stftFrames(n, fft.hopLength),
+      ),
+      () => getSonareModule().stft(samples, sampleRate, fft.nFft, fft.hopLength, withDb),
     );
     const result: StftResult = {
       nFft: native.nFft,
@@ -377,8 +422,18 @@ export function chromaCens(...args: unknown[]): ChromaResult {
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
     const binsPerOctave = r.binsPerOctave ?? 36;
+    const { samples, sampleRate } = r;
     return chromaResult(
-      getSonareModule().chromaCens(r.samples, r.sampleRate, hopLength, nChroma, binsPerOctave),
+      withHeapNeedWhen(
+        cqtChromaInDomain(hopLength, nChroma, binsPerOctave),
+        sampleNeed(
+          'samples',
+          samples.length,
+          sampleRate,
+          (n) => 4 * n + 8 * nChroma * Math.floor(n / hopLength),
+        ),
+        () => getSonareModule().chromaCens(samples, sampleRate, hopLength, nChroma, binsPerOctave),
+      ),
     );
   });
 }
@@ -401,8 +456,18 @@ export function chromaCqt(...args: unknown[]): ChromaResult {
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
     const binsPerOctave = r.binsPerOctave ?? 36;
+    const { samples, sampleRate } = r;
     return chromaResult(
-      getSonareModule().chromaCqt(r.samples, r.sampleRate, hopLength, nChroma, binsPerOctave),
+      withHeapNeedWhen(
+        cqtChromaInDomain(hopLength, nChroma, binsPerOctave),
+        sampleNeed(
+          'samples',
+          samples.length,
+          sampleRate,
+          (n) => 4 * n + 4 * nChroma * Math.floor(n / hopLength),
+        ),
+        () => getSonareModule().chromaCqt(samples, sampleRate, hopLength, nChroma, binsPerOctave),
+      ),
     );
   });
 }
@@ -424,7 +489,19 @@ export function bassChroma(...args: unknown[]): ChromaResult {
     assertAudioInput(r.samples, r.sampleRate, r);
     const hopLength = r.hopLength ?? 512;
     const nChroma = r.nChroma ?? 12;
-    return chromaResult(getSonareModule().bassChroma(r.samples, r.sampleRate, hopLength, nChroma));
+    const { samples, sampleRate } = r;
+    return chromaResult(
+      withHeapNeedWhen(
+        cqtChromaInDomain(hopLength, nChroma, 36),
+        sampleNeed(
+          'samples',
+          samples.length,
+          sampleRate,
+          (n) => 4 * n + 4 * nChroma * Math.floor(n / hopLength),
+        ),
+        () => getSonareModule().bassChroma(samples, sampleRate, hopLength, nChroma),
+      ),
+    );
   });
 }
 
@@ -545,15 +622,27 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    const native = getSonareModule().melSpectrogram(
-      r.samples,
-      r.sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      nMels,
-      fminHz,
-      fmaxHz,
-      r.htk ?? false,
+    const { samples, sampleRate } = r;
+    const bins = stftBins(fft.nFft, fft.hopLength);
+    const native = withHeapNeedWhen(
+      bins !== undefined && isInt(nMels) && nMels >= 1 && nMels <= MAX_MEL_BANDS,
+      sampleNeed(
+        'samples',
+        samples.length,
+        sampleRate,
+        (n) => 4 * n + 8 * nMels * stftFrames(n, fft.hopLength),
+      ),
+      () =>
+        getSonareModule().melSpectrogram(
+          samples,
+          sampleRate,
+          fft.nFft,
+          fft.hopLength,
+          nMels,
+          fminHz,
+          fmaxHz,
+          r.htk ?? false,
+        ),
     );
     return {
       sampleRate: native.sampleRate,
@@ -593,17 +682,35 @@ export function mfcc(...args: unknown[]): MfccResult {
     if (r.fmaxHz !== undefined) {
       assertPositiveFloatValue(fmaxHz, 'fmaxHz');
     }
-    const native = getSonareModule().mfcc(
-      r.samples,
-      r.sampleRate,
-      fft.nFft,
-      fft.hopLength,
-      nMels,
-      nMfcc,
-      fminHz,
-      fmaxHz,
-      r.htk ?? false,
-      r.lifter ?? 0,
+    const { samples, sampleRate } = r;
+    const bins = stftBins(fft.nFft, fft.hopLength);
+    const native = withHeapNeedWhen(
+      bins !== undefined &&
+        isInt(nMels) &&
+        nMels >= 1 &&
+        nMels <= MAX_MEL_BANDS &&
+        isInt(nMfcc) &&
+        nMfcc >= 1 &&
+        nMfcc <= nMels,
+      sampleNeed(
+        'samples',
+        samples.length,
+        sampleRate,
+        (n) => 4 * n + 4 * (nMels + nMfcc) * stftFrames(n, fft.hopLength),
+      ),
+      () =>
+        getSonareModule().mfcc(
+          samples,
+          sampleRate,
+          fft.nFft,
+          fft.hopLength,
+          nMels,
+          nMfcc,
+          fminHz,
+          fmaxHz,
+          r.htk ?? false,
+          r.lifter ?? 0,
+        ),
     );
     return {
       sampleRate: native.sampleRate,
@@ -630,7 +737,16 @@ export function melDelta(...args: unknown[]): Matrix2D {
     const r = requestOnly<MelDeltaRequest>('melDelta', args);
     const features = assertMatrix2D(r.features, 'features');
     const width = r.width ?? 9;
-    const out = getSonareModule().melDelta(features.data, features.rows, features.cols, width);
+    const out = withHeapNeedWhen(
+      isInt(width) && width >= 3 && width % 2 === 1,
+      {
+        subject: 'features',
+        size: features.data.length,
+        bytes: (n) => 4 * n + 4 * n,
+        monotone: true,
+      },
+      () => getSonareModule().melDelta(features.data, features.rows, features.cols, width),
+    );
     return toMatrix2D(out, features.rows, features.cols);
   });
 }
@@ -656,13 +772,25 @@ export function reassignedSpectrogram(...args: unknown[]): ReassignedSpectrogram
     const hopLength = r.hopLength ?? 512;
     const refPower = r.refPower ?? 1e-6;
     assertNonNegativeScalar(refPower, 'refPower');
-    const native = getSonareModule().reassignedSpectrogram(
-      r.samples,
-      r.sampleRate,
-      nFft,
-      hopLength,
-      refPower,
-      r.fillNan ?? false,
+    const { samples, sampleRate } = r;
+    const bins = stftBins(nFft, hopLength);
+    const native = withHeapNeedWhen(
+      bins !== undefined,
+      sampleNeed(
+        'samples',
+        samples.length,
+        sampleRate,
+        (n) => 4 * n + 36 * (bins as number) * stftFrames(n, hopLength),
+      ),
+      () =>
+        getSonareModule().reassignedSpectrogram(
+          samples,
+          sampleRate,
+          nFft,
+          hopLength,
+          refPower,
+          r.fillNan ?? false,
+        ),
     );
     return {
       magnitude: toMatrix2D(native.magnitude, native.nBins, native.nFrames),
@@ -699,6 +827,18 @@ export function chroma(...args: unknown[]): ChromaResult {
     const r = sampleOneShot<ChromaRequest>('chroma', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const fft = resolveFftOptions(r.nFft, r.hopLength);
-    return chromaResult(getSonareModule().chroma(r.samples, r.sampleRate, fft.nFft, fft.hopLength));
+    const { samples, sampleRate } = r;
+    return chromaResult(
+      withHeapNeedWhen(
+        stftBins(fft.nFft, fft.hopLength) !== undefined,
+        sampleNeed(
+          'samples',
+          samples.length,
+          sampleRate,
+          (n) => 4 * n + 4 * 12 * stftFrames(n, fft.hopLength),
+        ),
+        () => getSonareModule().chroma(samples, sampleRate, fft.nFft, fft.hopLength),
+      ),
+    );
   });
 }

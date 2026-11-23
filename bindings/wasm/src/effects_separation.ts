@@ -5,6 +5,7 @@
 
 import { withEntry } from './internal/entry.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
+import { withMonoHeap } from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -99,15 +100,18 @@ export function hpss(...args: unknown[]): HpssResult {
     const kernelHarmonic = r.kernelHarmonic ?? 31;
     const kernelPercussive = r.kernelPercussive ?? 31;
     assertHpssKernels(kernelHarmonic, kernelPercussive);
-    return getSonareModule().hpss(
-      r.samples,
-      r.sampleRate,
-      kernelHarmonic,
-      kernelPercussive,
-      fftOptions.nFft,
-      fftOptions.hopLength,
-      hardMask,
-      withResidual,
+    // The input copy and the two components, or the three of them with the residual.
+    return withMonoHeap(r.samples, r.sampleRate, withResidual ? 4 : 3, () =>
+      getSonareModule().hpss(
+        r.samples,
+        r.sampleRate,
+        kernelHarmonic,
+        kernelPercussive,
+        fftOptions.nFft,
+        fftOptions.hopLength,
+        hardMask,
+        withResidual,
+      ),
     );
   });
 }
@@ -128,7 +132,9 @@ export function harmonic(...args: unknown[]): Float32Array {
   return withEntry('harmonic', () => {
     const r = sampleOneShot<HarmonicRequest>('harmonic', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().harmonic(r.samples, r.sampleRate);
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().harmonic(r.samples, r.sampleRate),
+    );
   });
 }
 
@@ -148,6 +154,8 @@ export function percussive(...args: unknown[]): Float32Array {
   return withEntry('percussive', () => {
     const r = sampleOneShot<PercussiveRequest>('percussive', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().percussive(r.samples, r.sampleRate);
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().percussive(r.samples, r.sampleRate),
+    );
   });
 }

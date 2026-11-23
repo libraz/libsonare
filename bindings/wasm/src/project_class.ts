@@ -19,6 +19,7 @@ import {
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { withMonoHeap } from './internal/memory_budget.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { optionalId, optionalPositiveInt } from './internal/optional_ints.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
@@ -863,7 +864,9 @@ export class Project {
     assertSamples(request.samples, true);
     assertSampleRate(request.sampleRate);
     const { clipId, samples, sampleRate, ...options } = request;
-    return this.native.transcribeToClip(clipId, samples, sampleRate, options);
+    return withMonoHeap(samples, sampleRate, 1, () =>
+      this.native.transcribeToClip(clipId, samples, sampleRate, options),
+    );
   }
 
   /**
@@ -881,9 +884,11 @@ export class Project {
       'Project.analyzeTempo',
       args,
     );
-    return this.native
-      .analyzeTempo(samples, sampleRate, options)
-      .map(projectTempoCandidateFromNative);
+    const call = () => this.native.analyzeTempo(samples, sampleRate, options);
+    // The native reader refuses any other input; only a typed array is sized here.
+    const candidates =
+      samples instanceof Float32Array ? withMonoHeap(samples, sampleRate, 1, call) : call();
+    return candidates.map(projectTempoCandidateFromNative);
   }
 
   /**
@@ -900,13 +905,11 @@ export class Project {
   autoTempo(...args: unknown[]): number {
     const { samples, sampleRate, candidateIndex, applyTimeSignatures, ...options } =
       sampleOneShot<ProjectAutoTempoRequest>('Project.autoTempo', args);
-    return this.native.autoTempo(
-      samples,
-      sampleRate,
-      candidateIndex ?? 0,
-      optionalBoolean(applyTimeSignatures, 'applyTimeSignatures', false),
-      options,
-    );
+    const applyMeter = optionalBoolean(applyTimeSignatures, 'applyTimeSignatures', false);
+    const call = () =>
+      this.native.autoTempo(samples, sampleRate, candidateIndex ?? 0, applyMeter, options);
+    // The native reader refuses any other input; only a typed array is sized here.
+    return samples instanceof Float32Array ? withMonoHeap(samples, sampleRate, 1, call) : call();
   }
 
   /** Snap `ppq` (in [0, 1e12]) to a bar (`division=0`), beat (`1`), or beat subdivision (`2+`). */

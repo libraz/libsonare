@@ -1,6 +1,14 @@
 import type { TrimResult } from './feature_spectrogram.js';
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import {
+  MAX_OFFLINE_AUDIO_SAMPLES,
+  sampleNeed,
+  withHeapNeed,
+  withHeapNeedWhen,
+  withMonoHeap,
+  withValuesHeap,
+} from './internal/memory_budget.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D, NormType, TempogramMode } from './public_types.js';
@@ -458,12 +466,28 @@ export function clicks(...args: unknown[]): Float32Array {
     const frequencyHz = r.frequencyHz ?? 1000;
     const clickDurationSec = r.clickDurationSec ?? 0.1;
     assertFloatFields({ frequencyHz, clickDurationSec });
-    return getSonareModule().clicks(
-      r.times,
-      r.sampleRate ?? 22050,
-      r.length,
-      frequencyHz,
-      clickDurationSec,
+    const times = r.times;
+    const sampleRate = r.sampleRate ?? 22050;
+    const length = r.length;
+    const call = () =>
+      getSonareModule().clicks(times, sampleRate, length, frequencyHz, clickDurationSec);
+    // An explicit length sizes the output; left automatic, only the input copy is certain.
+    // An out-of-domain length is the native reader's refusal, not a memory one.
+    if (length === undefined || length === null || length === 0) {
+      return withHeapNeed(
+        { subject: 'times', size: times.length, bytes: (n) => 4 * n, monotone: true },
+        call,
+      );
+    }
+    return withHeapNeedWhen(
+      isCount(length, MAX_OFFLINE_AUDIO_SAMPLES),
+      sampleNeed(
+        'length',
+        length as number,
+        typeof sampleRate === 'number' ? sampleRate : undefined,
+        (n) => 4 * times.length + 4 * n,
+      ),
+      call,
     );
   });
 }
@@ -649,6 +673,19 @@ export function samplesToFrames(samples: number, hopLength = 512, nFft?: number)
 // Core - dB conversion and filters
 // ============================================================================
 
+/** Largest tempogram window the core accepts. */
+const MAX_TEMPOGRAM_WIN_LENGTH = 384 * 32;
+const MAX_INT32 = 2147483647;
+
+const isCount = (value: unknown, max = MAX_INT32): value is number =>
+  Number.isInteger(value) && (value as number) >= 1 && (value as number) <= max;
+
+/** A tempogram window the native reader accepts. */
+const isTempogramWindow = (value: unknown): value is number =>
+  Number.isInteger(value) &&
+  (value as number) >= 2 &&
+  (value as number) <= MAX_TEMPOGRAM_WIN_LENGTH;
+
 /**
  * Applies an elementwise conversion to a flat array or to a matrix's data,
  * returning the same form.
@@ -673,7 +710,9 @@ export function powerToDb(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('powerToDb', () => {
     const r = requestOnly<PowerToDbRequest>('powerToDb', args);
     return convertElementwise(r.values, (data) =>
-      getSonareModule().powerToDb(data, r.ref ?? 1.0, r.amin ?? 1e-10, r.topDb ?? 80.0),
+      withValuesHeap(data, 2, () =>
+        getSonareModule().powerToDb(data, r.ref ?? 1.0, r.amin ?? 1e-10, r.topDb ?? 80.0),
+      ),
     );
   });
 }
@@ -686,7 +725,9 @@ export function amplitudeToDb(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('amplitudeToDb', () => {
     const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
     return convertElementwise(r.values, (data) =>
-      getSonareModule().amplitudeToDb(data, r.ref ?? 1.0, r.amin ?? 1e-5, r.topDb ?? 80.0),
+      withValuesHeap(data, 2, () =>
+        getSonareModule().amplitudeToDb(data, r.ref ?? 1.0, r.amin ?? 1e-5, r.topDb ?? 80.0),
+      ),
     );
   });
 }
@@ -697,7 +738,9 @@ export function dbToPower(...args: unknown[]): Float32Array | Matrix2D {
   return withEntry('dbToPower', () => {
     const r = requestOnly<DbToPowerRequest>('dbToPower', args);
     assertNumber(r.ref ?? 1.0, 'ref');
-    return convertElementwise(r.values, (data) => getSonareModule().dbToPower(data, r.ref ?? 1.0));
+    return convertElementwise(r.values, (data) =>
+      withValuesHeap(data, 2, () => getSonareModule().dbToPower(data, r.ref ?? 1.0)),
+    );
   });
 }
 
@@ -710,7 +753,7 @@ export function dbToAmplitude(...args: unknown[]): Float32Array | Matrix2D {
     const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
     assertNumber(r.ref ?? 1.0, 'ref');
     return convertElementwise(r.values, (data) =>
-      getSonareModule().dbToAmplitude(data, r.ref ?? 1.0),
+      withValuesHeap(data, 2, () => getSonareModule().dbToAmplitude(data, r.ref ?? 1.0)),
     );
   });
 }
@@ -726,7 +769,9 @@ export function preemphasis(...args: unknown[]): Float32Array {
   return withEntry('preemphasis', () => {
     const r = sampleOneShot<PreemphasisRequest>('preemphasis', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().preemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().preemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null),
+    );
   });
 }
 
@@ -741,7 +786,9 @@ export function deemphasis(...args: unknown[]): Float32Array {
   return withEntry('deemphasis', () => {
     const r = sampleOneShot<DeemphasisRequest>('deemphasis', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().deemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().deemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null),
+    );
   });
 }
 
@@ -756,11 +803,13 @@ export function trimSilence(...args: unknown[]): TrimResult {
   return withEntry('trimSilence', () => {
     const r = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().trimSilence(
-      r.samples,
-      r.topDb ?? 60.0,
-      r.frameLength ?? 2048,
-      r.hopLength ?? 512,
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().trimSilence(
+        r.samples,
+        r.topDb ?? 60.0,
+        r.frameLength ?? 2048,
+        r.hopLength ?? 512,
+      ),
     );
   });
 }
@@ -776,11 +825,13 @@ export function splitSilence(...args: unknown[]): Int32Array {
   return withEntry('splitSilence', () => {
     const r = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().splitSilence(
-      r.samples,
-      r.topDb ?? 60.0,
-      r.frameLength ?? 2048,
-      r.hopLength ?? 512,
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().splitSilence(
+        r.samples,
+        r.topDb ?? 60.0,
+        r.frameLength ?? 2048,
+        r.hopLength ?? 512,
+      ),
     );
   });
 }
@@ -869,10 +920,20 @@ export function frameSignal(...args: unknown[]): Matrix2D {
   return withEntry('frameSignal', () => {
     const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const { nFrames, frames } = getSonareModule().frameSignal(
-      r.samples,
-      r.frameLength,
-      r.hopLength,
+    const { frameLength, hopLength } = r;
+    // An out-of-domain length or hop is the native reader's refusal, not a memory one.
+    const { nFrames, frames } = withHeapNeedWhen(
+      isCount(frameLength) && isCount(hopLength),
+      sampleNeed(
+        'samples',
+        r.samples.length,
+        r.sampleRate,
+        // The input copy and the returned frames.
+        (n) =>
+          4 * n +
+          4 * frameLength * (n < frameLength ? 0 : Math.floor((n - frameLength) / hopLength) + 1),
+      ),
+      () => getSonareModule().frameSignal(r.samples, frameLength, hopLength),
     );
     // Native stores one frame after another; the surface puts samples on rows and frames on columns.
     const data = new Float32Array(frames.length);
@@ -895,7 +956,20 @@ export function padCenter(...args: unknown[]): Float32Array {
     if (typeof r.targetSize !== 'number') {
       throw refuseType('targetSize must be an integer');
     }
-    return getSonareModule().padCenter(r.values, r.targetSize, r.padValue ?? 0.0);
+    const values = r.values;
+    const targetSize = r.targetSize;
+    const call = () => getSonareModule().padCenter(values, targetSize, r.padValue ?? 0.0);
+    // An out-of-domain size is the native reader's refusal, not a memory one.
+    return withHeapNeedWhen(
+      Number.isInteger(targetSize) && targetSize >= values.length && targetSize <= 0xffffffff,
+      {
+        subject: 'targetSize',
+        size: targetSize,
+        bytes: (n) => 4 * (values.length + n),
+        monotone: true,
+      },
+      call,
+    );
   });
 }
 
@@ -909,7 +983,21 @@ export function fixLength(...args: unknown[]): Float32Array {
     if (typeof r.targetSize !== 'number') {
       throw refuseType('targetSize must be an integer');
     }
-    return getSonareModule().fixLength(r.values, r.targetSize, r.padValue ?? 0.0);
+    const values = r.values;
+    const call = () => getSonareModule().fixLength(values, r.targetSize, r.padValue ?? 0.0);
+    // An out-of-domain size is the native reader's refusal, not a memory one.
+    if (!Number.isInteger(r.targetSize) || r.targetSize < 0 || r.targetSize > 0xffffffff) {
+      return call();
+    }
+    return withHeapNeed(
+      {
+        subject: 'targetSize',
+        size: r.targetSize,
+        bytes: (n) => 4 * (values.length + n),
+        monotone: true,
+      },
+      call,
+    );
   });
 }
 
@@ -918,11 +1006,14 @@ export function fixFrames(request: FixFramesRequest): Int32Array;
 export function fixFrames(...args: unknown[]): Int32Array {
   return withEntry('fixFrames', () => {
     const r = requestOnly<FixFramesRequest>('fixFrames', args);
-    return getSonareModule().fixFrames(
-      toInt32Array(r.frames, 'frames'),
-      r.xMin ?? 0,
-      resolveOptionalNonNegative(r.xMax, 'xMax'),
-      requireBoolean(r.pad ?? true, 'pad'),
+    const frames = toInt32Array(r.frames, 'frames');
+    const xMin = r.xMin ?? 0;
+    const xMax = resolveOptionalNonNegative(r.xMax, 'xMax');
+    const pad = requireBoolean(r.pad ?? true, 'pad');
+    // The input copy and the output, which reserves room for the two padded bounds.
+    return withHeapNeed(
+      { subject: 'frames', size: frames.length, bytes: (n) => 8 * n + 8, monotone: true },
+      () => getSonareModule().fixFrames(frames, xMin, xMax, pad),
     );
   });
 }
@@ -934,7 +1025,17 @@ export function onsetBacktrack(...args: unknown[]): Int32Array {
     const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
     const events = toInt32Array(r.events, 'events');
     assertFloat32Array(r.energy, 'energy');
-    return getSonareModule().onsetBacktrack(events, r.energy);
+    const energy = r.energy;
+    // Both inputs are copied and the output reserves one entry per event.
+    return withHeapNeed(
+      {
+        subject: 'events',
+        size: events.length,
+        bytes: (n) => 8 * n + 4 * energy.length,
+        monotone: true,
+      },
+      () => getSonareModule().onsetBacktrack(events, energy),
+    );
   });
 }
 
@@ -951,14 +1052,10 @@ export function peakPick(...args: unknown[]): Int32Array {
     assertNonNegativeSafeInteger(r.postAvg, 'postAvg');
     assertNonNegativeSafeInteger(r.wait, 'wait');
     assertFloatValue(r.delta, 'delta');
-    return getSonareModule().peakPick(
-      r.values,
-      r.preMax,
-      r.postMax,
-      r.preAvg,
-      r.postAvg,
-      r.delta,
-      r.wait,
+    const values = r.values;
+    // The input copy alone: how many peaks come back is not known from the arguments.
+    return withValuesHeap(values, 1, () =>
+      getSonareModule().peakPick(values, r.preMax, r.postMax, r.preAvg, r.postAvg, r.delta, r.wait),
     );
   });
 }
@@ -976,10 +1073,9 @@ export function vectorNormalize(...args: unknown[]): Float32Array {
     const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
     assertFloat32Array(r.values, 'values');
     const norm = requireToken(r.norm, 'norm', NORM_TOKENS, 'max');
-    return getSonareModule().vectorNormalize(
-      r.values,
-      NORM_TOKENS.indexOf(norm),
-      r.threshold ?? 0.0,
+    const values = r.values;
+    return withValuesHeap(values, 2, () =>
+      getSonareModule().vectorNormalize(values, NORM_TOKENS.indexOf(norm), r.threshold ?? 0.0),
     );
   });
 }
@@ -1010,7 +1106,9 @@ export function pcen(...args: unknown[]): Matrix2D {
         options[key] = r[key] as number;
       }
     }
-    const out = getSonareModule().pcen(values.data, values.rows, values.cols, options);
+    const out = withValuesHeap(values.data, 2, () =>
+      getSonareModule().pcen(values.data, values.rows, values.cols, options),
+    );
     return toMatrix2D(out, values.rows, values.cols);
   });
 }
@@ -1025,7 +1123,16 @@ export function tonnetz(...args: unknown[]): Matrix2D {
   return withEntry('tonnetz', () => {
     const r = requestOnly<TonnetzRequest>('tonnetz', args);
     const chromagram = assertMatrix2D(r.chromagram, 'chromagram');
-    const out = getSonareModule().tonnetz(chromagram.data, chromagram.rows, chromagram.cols);
+    // The input copy and the six returned rows.
+    const out = withHeapNeed(
+      {
+        subject: 'chromagram',
+        size: chromagram.data.length,
+        bytes: (n) => 4 * n + 24 * chromagram.cols,
+        monotone: true,
+      },
+      () => getSonareModule().tonnetz(chromagram.data, chromagram.rows, chromagram.cols),
+    );
     return toMatrix2D(out, 6, chromagram.cols);
   });
 }
@@ -1044,14 +1151,30 @@ export function tempogram(...args: unknown[]): Matrix2D {
     const r = requestOnly<TempogramRequest>('tempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     const mode = requireToken(r.mode, 'mode', TEMPOGRAM_MODES, 'autocorrelation');
-    const native = getSonareModule().tempogram(
-      r.onsetEnvelope,
-      r.sampleRate ?? 22050,
-      r.hopLength ?? 512,
-      r.winLength ?? 384,
-      mode,
-      r.center ?? true,
-      r.norm ?? true,
+    const onsetEnvelope = r.onsetEnvelope;
+    const hopLength = r.hopLength ?? 512;
+    const winLength = r.winLength ?? 384;
+    const centered = r.center === undefined || r.center === null || r.center === true;
+    // An out-of-domain window or hop is the native reader's refusal, not a memory one.
+    const native = withHeapNeedWhen(
+      isTempogramWindow(winLength) && isCount(hopLength),
+      {
+        subject: 'onsetEnvelope',
+        size: onsetEnvelope.length,
+        // The input copy and the returned lags; an uncentred window keeps only the full ones.
+        bytes: (n) => 4 * n + 4 * winLength * (centered ? n : Math.max(0, n - winLength + 1)),
+        monotone: true,
+      },
+      () =>
+        getSonareModule().tempogram(
+          onsetEnvelope,
+          r.sampleRate ?? 22050,
+          hopLength,
+          winLength,
+          mode,
+          r.center ?? true,
+          r.norm ?? true,
+        ),
     );
     return toMatrix2DByRows(native.data, native.winLength);
   });
@@ -1068,13 +1191,29 @@ export function cyclicTempogram(...args: unknown[]): Matrix2D {
     const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
     assertSampleRate(r.sampleRate);
-    const native = getSonareModule().cyclicTempogram(
-      r.onsetEnvelope,
-      r.sampleRate,
-      r.hopLength ?? 512,
-      r.winLength ?? 384,
-      r.bpmMin,
-      r.nBins,
+    const onsetEnvelope = r.onsetEnvelope;
+    const hopLength = r.hopLength ?? 512;
+    const winLength = r.winLength ?? 384;
+    const nBins = r.nBins === undefined || r.nBins === null ? 60 : r.nBins;
+    // An out-of-domain window, hop or bin count is the native reader's refusal, not a memory one.
+    const native = withHeapNeedWhen(
+      isTempogramWindow(winLength) && isCount(hopLength) && isCount(nBins),
+      {
+        subject: 'onsetEnvelope',
+        size: onsetEnvelope.length,
+        // The input copy, the returned bins and the Fourier magnitudes folded into them.
+        bytes: (n) => 4 * n + 4 * nBins * n + 4 * (Math.floor(winLength / 2) + 1) * n,
+        monotone: true,
+      },
+      () =>
+        getSonareModule().cyclicTempogram(
+          onsetEnvelope,
+          r.sampleRate,
+          hopLength,
+          winLength,
+          r.bpmMin,
+          r.nBins,
+        ),
     );
     return toMatrix2DByRows(native.data, native.nBins);
   });
@@ -1086,13 +1225,22 @@ export function plp(...args: unknown[]): Float32Array {
   return withEntry('plp', () => {
     const r = requestOnly<PlpRequest>('plp', args);
     assertFloat32Array(r.onsetEnvelope, 'onsetEnvelope');
-    return getSonareModule().plp(
-      r.onsetEnvelope,
-      r.sampleRate ?? 22050,
-      r.hopLength ?? 512,
-      r.bpmMin,
-      r.bpmMax,
-      r.winLength ?? 384,
+    const onsetEnvelope = r.onsetEnvelope;
+    const sampleRate = r.sampleRate ?? 22050;
+    const hopLength = r.hopLength ?? 512;
+    const winLength = r.winLength ?? 384;
+    // An out-of-domain rate, hop or window is the native reader's refusal, not a memory one.
+    return withHeapNeedWhen(
+      isCount(sampleRate) && isCount(hopLength) && isTempogramWindow(winLength),
+      {
+        subject: 'onsetEnvelope',
+        size: onsetEnvelope.length,
+        // The input copy, the returned curve and the complex Fourier tempogram held beside it.
+        bytes: (n) => 8 * n + 8 * (Math.floor(winLength / 2) + 1) * n,
+        monotone: true,
+      },
+      () =>
+        getSonareModule().plp(onsetEnvelope, sampleRate, hopLength, r.bpmMin, r.bpmMax, winLength),
     );
   });
 }

@@ -1,4 +1,5 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { withChannelsHeap, withMonoHeap } from './internal/memory_budget.js';
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -66,12 +67,15 @@ export function voiceChange(...args: unknown[]): Float32Array {
     assertAudioInput(request.samples, request.sampleRate, request);
     const formantMode = request.formantMode ?? 'relative';
     assertString(formantMode, 'formantMode');
-    return getSonareModule().voiceChange(
-      request.samples,
-      request.sampleRate,
-      request.pitchSemitones ?? 0.0,
-      request.formantFactor ?? 1.0,
-      formantMode,
+    const { samples, sampleRate } = request;
+    return withMonoHeap(samples, sampleRate, 2, () =>
+      getSonareModule().voiceChange(
+        samples,
+        sampleRate,
+        request.pitchSemitones ?? 0.0,
+        request.formantFactor ?? 1.0,
+        formantMode,
+      ),
     );
   });
 }
@@ -118,11 +122,14 @@ export function realtimeVoiceChangerRender(
     const native = withEntry('realtimeVoiceChangerRender', () =>
       nativeVoiceConfig(req.config ?? 'neutralMonitor'),
     );
-    const out = getSonareModule().realtimeVoiceChangerRender(
-      interleavePlanes(planes),
-      req.sampleRate,
-      typeof native === 'string' ? native : JSON.stringify(native),
-      planes.length,
+    const channelCount = planes.length;
+    const out = withChannelsHeap(planes, req.sampleRate, 2, () =>
+      getSonareModule().realtimeVoiceChangerRender(
+        interleavePlanes(planes),
+        req.sampleRate,
+        typeof native === 'string' ? native : JSON.stringify(native),
+        channelCount,
+      ),
     );
     return deinterleavePlanes(out, planes.length);
   });

@@ -3,6 +3,7 @@
  */
 
 import { refuseType, withEntry } from './internal/entry.js';
+import { withChannelsHeap, withMonoHeap, withPairHeap } from './internal/memory_budget.js';
 import { repairNativeOptions, sharedReportResult } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type { RoomEstimateResult } from './public_types_acoustic.js';
@@ -96,10 +97,12 @@ export function masteringRepairDereverbClassical(...args: unknown[]): DereverbRe
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDereverbClassical(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().masteringRepairDereverbClassical(
+        r.samples,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
     );
   });
 }
@@ -153,11 +156,13 @@ export function masteringRepairDereverbClassicalStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return sharedReportResult(
-      getSonareModule().masteringRepairDereverbClassicalStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDereverbClassicalStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -213,10 +218,12 @@ export function masteringRepairDereverbClassicalLinked(
     );
     assertAudioChannels(r.channels, r.sampleRate, r);
     return sharedReportResult(
-      getSonareModule().masteringRepairDereverbClassicalLinked(
-        r.channels,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withChannelsHeap(r.channels, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDereverbClassicalLinked(
+          r.channels,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -319,10 +326,12 @@ export function masteringRepairDetectReverb(...args: unknown[]): ReverbDetection
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDetectReverb(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringRepairDetectReverb(
+        r.samples,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
     );
   });
 }

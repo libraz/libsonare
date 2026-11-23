@@ -3,6 +3,7 @@
  */
 
 import { withEntry } from './internal/entry.js';
+import { withChannelsHeap, withMonoHeap, withPairHeap } from './internal/memory_budget.js';
 import { pairedResult, repairNativeOptions, sharedReportResult } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -89,10 +90,12 @@ export function masteringRepairDenoiseClassical(...args: unknown[]): DenoiseResu
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDenoiseClassical(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().masteringRepairDenoiseClassical(
+        r.samples,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
     );
   });
 }
@@ -144,11 +147,13 @@ export function masteringRepairDenoiseClassicalStereo(
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return sharedReportResult(
-      getSonareModule().masteringRepairDenoiseClassicalStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDenoiseClassicalStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -200,10 +205,12 @@ export function masteringRepairDenoiseClassicalLinked(
     );
     assertAudioChannels(r.channels, r.sampleRate, r);
     return sharedReportResult(
-      getSonareModule().masteringRepairDenoiseClassicalLinked(
-        r.channels,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withChannelsHeap(r.channels, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDenoiseClassicalLinked(
+          r.channels,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -270,7 +277,9 @@ export function masteringRepairDehum(...args: unknown[]): DehumResult {
   return withEntry('masteringRepairDehum', () => {
     const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r));
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().masteringRepairDehum(r.samples, r.sampleRate, repairNativeOptions(r)),
+    );
   });
 }
 
@@ -294,11 +303,13 @@ export function masteringRepairDehumStereo(...args: unknown[]): MasteringRepairD
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return pairedResult(
-      getSonareModule().masteringRepairDehumStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDehumStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -356,10 +367,12 @@ export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetect
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDetectNoiseFloor(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringRepairDetectNoiseFloor(
+        r.samples,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
     );
   });
 }
@@ -429,10 +442,8 @@ export function masteringRepairDetectHum(...args: unknown[]): HumDetection {
   return withEntry('masteringRepairDetectHum', () => {
     const r = sampleOneShot<MasteringRepairDetectHumRequest>('masteringRepairDetectHum', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDetectHum(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringRepairDetectHum(r.samples, r.sampleRate, repairNativeOptions(r)),
     );
   });
 }

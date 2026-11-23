@@ -8,6 +8,7 @@ import {
   refuseType,
 } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { sampleNeed, withHeapNeed } from './internal/memory_budget.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -632,7 +633,16 @@ export class StreamingEqualizer {
    *   and `maxBands` (default 8)
    */
   match(source: Float32Array, reference: Float32Array, options: EqMatchOptions = {}): void {
-    this.eq.match(source, reference, options as Record<string, unknown>);
+    const call = (): void => this.eq.match(source, reference, options as Record<string, unknown>);
+    // The native reader refuses any other input; only a typed array is sized here.
+    if (!(source instanceof Float32Array) || !(reference instanceof Float32Array)) {
+      call();
+      return;
+    }
+    withHeapNeed(
+      sampleNeed('source', source.length, undefined, (n) => 4 * (n + reference.length)),
+      call,
+    );
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */

@@ -3716,6 +3716,10 @@ export interface SonareModule {
   // pointer it surfaces.
   sonareReleaseException: (ptr: number) => void;
 
+  // Bytes the heap can still hand out at most: the linear-memory cap less what is in use.
+  // Exact once `needBytes` exceeds the never-grown tail; below that it reports the tail alone.
+  sonareHeapHeadroom: (needBytes: number) => number;
+
   // Native Wasm exception helpers: the C++ tag, and the thrown object's address
   // inside a WebAssembly.Exception carrying it.
   getCppExceptionTag: () => WebAssembly.Tag;

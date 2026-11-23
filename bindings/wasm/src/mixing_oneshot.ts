@@ -1,5 +1,6 @@
 import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { sampleNeed, withHeapNeed } from './internal/memory_budget.js';
 import { panModeToNative } from './internal/mix_scene.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -153,7 +154,15 @@ export function mixStereo(...args: unknown[]): MixResult {
         options[key] = column;
       }
     });
-    const native = getSonareModule().mixStereo(left, right, req.sampleRate, options);
+    const call = () => getSonareModule().mixStereo(left, right, req.sampleRate, options);
+    // Strips of unequal length are refused by the native reader, so only equal ones are sized.
+    const length = left[0].length;
+    const native = left.every((channel) => channel.length === length)
+      ? withHeapNeed(
+          sampleNeed('strips', length, req.sampleRate, (n) => 8 * n * (left.length + 1)),
+          call,
+        )
+      : call();
     return {
       left: native.left,
       right: native.right,

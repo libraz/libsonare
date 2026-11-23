@@ -1,5 +1,6 @@
 import { toVoicedFloat32 } from './internal/effects_common.js';
 import { refuseType, withEntry } from './internal/entry.js';
+import { sampleNeed, stftBins, stftFrames, withHeapNeed } from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { NoteSegment, PiptrackResult, PitchResult } from './public_types.js';
 import type { VoicedFlags } from './public_types_spectral.js';
@@ -17,6 +18,38 @@ import {
 // ============================================================================
 // Features - Pitch
 // ============================================================================
+
+/** Whether `value` is an integer of at least `min`. */
+function isIntegerAtLeast(value: unknown, min: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min;
+}
+
+/**
+ * Runs a spectral pitch call under the heap guard: the heap copy of the input, then the complex
+ * spectrogram, its magnitude cache and the two result matrices held together. A size or hop
+ * outside the core's domain skips the guard so the native refusal stays the one that speaks.
+ */
+function guardedPeakTrack<T>(
+  samples: Float32Array,
+  sampleRate: number,
+  nFft: unknown,
+  hop: unknown,
+  call: () => T,
+): T {
+  const bins = stftBins(nFft, hop);
+  if (bins === undefined) {
+    return call();
+  }
+  return withHeapNeed(
+    sampleNeed(
+      'samples',
+      samples.length,
+      sampleRate,
+      (n) => 4 * n + 20 * bins * stftFrames(n, hop as number),
+    ),
+    call,
+  );
+}
 
 /** YIN pitch request. */
 export interface PitchYinRequest {
@@ -92,14 +125,18 @@ export function piptrack(...args: unknown[]): PiptrackResult {
     const fminHz = r.fminHz ?? 150;
     const fmaxHz = r.fmaxHz ?? 4000;
     assertFrequencyBounds(fminHz, fmaxHz, 'fminHz', 'fmaxHz');
-    const native = getSonareModule().piptrack(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
-      fminHz,
-      fmaxHz,
-      r.threshold ?? 0.1,
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    const native = guardedPeakTrack(r.samples, r.sampleRate, nFft, hopLength, () =>
+      getSonareModule().piptrack(
+        r.samples,
+        r.sampleRate,
+        nFft,
+        hopLength,
+        fminHz,
+        fmaxHz,
+        r.threshold ?? 0.1,
+      ),
     );
     return {
       pitches: toMatrix2D(native.pitches, native.nBins, native.nFrames),
@@ -128,15 +165,31 @@ export function pitchYin(...args: unknown[]): PitchResult {
     const f0MinHz = r.f0MinHz ?? 65.0;
     const f0MaxHz = r.f0MaxHz ?? 2093.0;
     assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-    return toPitchResult(
+    const frameLength = r.frameLength ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    const call = () =>
       getSonareModule().pitchYin(
         r.samples,
         r.sampleRate,
-        r.frameLength ?? 2048,
-        r.hopLength ?? 512,
+        frameLength,
+        hopLength,
         f0MinHz,
         f0MaxHz,
         r.threshold ?? 0.1,
+      );
+    if (!isIntegerAtLeast(frameLength, 1) || !isIntegerAtLeast(hopLength, 1)) {
+      return toPitchResult(call());
+    }
+    // The input copy, its centered padded copy, and the f0 and voiced-probability tracks.
+    return toPitchResult(
+      withHeapNeed(
+        sampleNeed(
+          'samples',
+          r.samples.length,
+          r.sampleRate,
+          (n) => 4 * n + 4 * (n + frameLength) + 8 * (1 + Math.floor(n / hopLength)),
+        ),
+        call,
       ),
     );
   });
@@ -156,16 +209,40 @@ export function pitchPyin(...args: unknown[]): PitchResult {
     const f0MinHz = r.f0MinHz ?? 65.0;
     const f0MaxHz = r.f0MaxHz ?? 2093.0;
     assertFrequencyBounds(f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-    return toPitchResult(
+    const frameLength = r.frameLength ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    const call = () =>
       getSonareModule().pitchPyin(
         r.samples,
         r.sampleRate,
-        r.frameLength ?? 2048,
-        r.hopLength ?? 512,
+        frameLength,
+        hopLength,
         f0MinHz,
         f0MaxHz,
         r.threshold ?? 0.1,
         r.fillNa ?? false,
+      );
+    if (!isIntegerAtLeast(frameLength, 1) || !isIntegerAtLeast(hopLength, 1)) {
+      return toPitchResult(call());
+    }
+    // The core returns early, holding no observation matrix, when the period window is empty;
+    // the matrix is counted only when rounding cannot empty it.
+    const minPeriod = Math.floor((r.sampleRate / f0MaxHz) * (1 + 1e-6));
+    const maxPeriod = Math.min(Math.ceil((r.sampleRate / f0MinHz) * (1 - 1e-6)), frameLength - 1);
+    const states =
+      minPeriod < maxPeriod
+        ? 2 * (Math.max(0, Math.floor(120 * Math.log2(f0MaxHz / f0MinHz) - 0.001)) + 1)
+        : 0;
+    // The input copy, its centered padded copy, the f0 and voiced-probability tracks, and the
+    // observation matrix of doubles, frames x states.
+    return toPitchResult(
+      withHeapNeed(
+        sampleNeed('samples', r.samples.length, r.sampleRate, (n) => {
+          const frames = 1 + Math.floor(n / hopLength);
+          const track = states > 0 ? 8 * frames : 0;
+          return 4 * n + 4 * (n + frameLength) + track + 8 * frames * states;
+        }),
+        call,
       ),
     );
   });
@@ -224,12 +301,26 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
     if (prob != null && !(prob instanceof Float32Array)) {
       throw refuseType('voicedProb must be a Float32Array');
     }
-    return getSonareModule().noteSegments(r.f0Hz, prob, flags, r.frameRate, {
-      segmentationThresholdCents: r.segmentationThresholdCents,
-      minNoteMs: r.minNoteMs,
-      referenceHz: r.referenceHz,
-      voicedThreshold: r.voicedThreshold,
-    });
+    const call = () =>
+      getSonareModule().noteSegments(r.f0Hz, prob, flags, r.frameRate, {
+        segmentationThresholdCents: r.segmentationThresholdCents,
+        minNoteMs: r.minNoteMs,
+        referenceHz: r.referenceHz,
+        voicedThreshold: r.voicedThreshold,
+      });
+    if (!(r.f0Hz instanceof Float32Array)) {
+      return call();
+    }
+    // The f0 copy, the probability copy when given, and the flag bytes beside their widened copy.
+    return withHeapNeed(
+      {
+        subject: 'f0Hz',
+        size: r.f0Hz.length,
+        bytes: (n) => 4 * n + (prob !== null ? 4 * n : 0) + (flags !== null ? 5 * n : 0),
+        monotone: true,
+      },
+      call,
+    );
   });
 }
 
@@ -275,7 +366,15 @@ export function pitchTuning(...args: unknown[]): number {
     const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
     assertFloat32Array(r.frequencies, 'frequencies');
     const binsPerOctave = r.binsPerOctave ?? 12;
-    const bins = getSonareModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);
+    const bins = withHeapNeed(
+      {
+        subject: 'frequencies',
+        size: r.frequencies.length,
+        bytes: (n) => 4 * n,
+        monotone: true,
+      },
+      () => getSonareModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave),
+    );
     return tuningCentsFromNative((bins * 12) / binsPerOctave);
   });
 }
@@ -327,13 +426,17 @@ export function estimateTuning(...args: unknown[]): number {
     const r = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
     assertAudioInput(r.samples, r.sampleRate, r);
     const binsPerOctave = r.binsPerOctave ?? 12;
-    const bins = getSonareModule().estimateTuning(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
-      r.resolution ?? 0.01,
-      binsPerOctave,
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    const bins = guardedPeakTrack(r.samples, r.sampleRate, nFft, hopLength, () =>
+      getSonareModule().estimateTuning(
+        r.samples,
+        r.sampleRate,
+        nFft,
+        hopLength,
+        r.resolution ?? 0.01,
+        binsPerOctave,
+      ),
     );
     return tuningCentsFromNative((bins * 12) / binsPerOctave);
   });

@@ -4,6 +4,7 @@
  */
 
 import { refuse, withEntry } from './internal/entry.js';
+import { sampleNeed, stftBins, withHeapNeed } from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -147,6 +148,52 @@ function assertSquare(matrix: Matrix2D, argName: string): void {
   }
 }
 
+const MAX_INT32 = 2147483647;
+/** Most channels the linked stem separation accepts. */
+const MAX_STEMS_LINKED_CHANNELS = 64;
+
+/**
+ * The geometry that sizes a stem separation's returned factors, or `undefined`
+ * when an option is out of domain and the native reader refuses it instead.
+ */
+function stemsShape(r: {
+  nComponents?: number;
+  nFft?: number;
+  hopLength?: number;
+}): { k: number; bins: number; hop: number } | undefined {
+  const k = r.nComponents === undefined ? 4 : r.nComponents;
+  const nFft = r.nFft === undefined ? 2048 : r.nFft;
+  const hopLength = r.hopLength === undefined ? 0 : r.hopLength;
+  if (!Number.isInteger(k) || k < 1 || k > MAX_INT32) {
+    return undefined;
+  }
+  const bins = nFft >= 4 ? stftBins(nFft, 1) : undefined;
+  if (bins === undefined) {
+    return undefined;
+  }
+  if (!Number.isInteger(hopLength) || hopLength < 0 || hopLength > nFft / 2) {
+    return undefined;
+  }
+  return {
+    k,
+    bins,
+    hop: hopLength !== 0 ? hopLength : Math.max(1, Math.floor(nFft / 4)),
+  };
+}
+
+/** Samples the unsnapped slices of flat (start, end) pairs hold once clamped to `[0, length]`. */
+function clampedIntervalSamples(intervals: Int32Array, length: number): number {
+  let total = 0;
+  for (let i = 0; i + 1 < intervals.length; i += 2) {
+    const start = Math.min(Math.max(intervals[i], 0), length);
+    const end = Math.min(intervals[i + 1], length);
+    if (end > start) {
+      total += end - start;
+    }
+  }
+  return total;
+}
+
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */
 export interface RemixRequest {
   /** Mono audio samples. */
@@ -175,15 +222,30 @@ export function decompose(...args: unknown[]): DecomposeResult {
     const s = assertMatrix2D(r.s, 's');
     // An empty token is the embind reader's spelling of the library's initialiser.
     const init = optionalToken(r.init, 'init', NMF_INITS) ?? '';
-    const native = getSonareModule().decompose(
-      s.data,
-      s.rows,
-      s.cols,
-      r.nComponents,
-      r.nIter,
-      r.beta ?? 2.0,
-      init,
-    );
+    const call = () =>
+      getSonareModule().decompose(
+        s.data,
+        s.rows,
+        s.cols,
+        r.nComponents,
+        r.nIter,
+        r.beta ?? 2.0,
+        init,
+      );
+    const k = r.nComponents;
+    // An out-of-domain count is the native reader's refusal, not a memory one.
+    const native =
+      Number.isInteger(k) && k >= 1 && k <= MAX_INT32
+        ? withHeapNeed(
+            {
+              subject: 'nComponents',
+              size: k,
+              bytes: (n) => 4 * s.data.length + 4 * n * (s.rows + s.cols),
+              monotone: true,
+            },
+            call,
+          )
+        : call();
     return {
       w: toMatrix2D(native.w, s.rows, r.nComponents),
       h: toMatrix2D(native.h, r.nComponents, s.cols),
@@ -251,15 +313,31 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
   return withEntry('decomposeStems', () => {
     const r = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().decomposeStems(r.samples, r.sampleRate, {
-      nComponents: r.nComponents,
-      nFft: r.nFft,
-      hopLength: r.hopLength,
-      nIter: r.nIter,
-      beta: r.beta,
-      init: r.init,
-      maskPower: r.maskPower,
-    });
+    const samples = r.samples;
+    const call = () =>
+      getSonareModule().decomposeStems(samples, r.sampleRate, {
+        nComponents: r.nComponents,
+        nFft: r.nFft,
+        hopLength: r.hopLength,
+        nIter: r.nIter,
+        beta: r.beta,
+        init: r.init,
+        maskPower: r.maskPower,
+      });
+    const shape = stemsShape(r);
+    if (shape === undefined) {
+      return call();
+    }
+    const { k, bins, hop } = shape;
+    return withHeapNeed(
+      sampleNeed(
+        'samples',
+        samples.length,
+        r.sampleRate,
+        (n) => 4 * n * (1 + k) + 4 * bins * k + 4 * k * Math.floor(n / hop),
+      ),
+      call,
+    );
   });
 }
 
@@ -316,15 +394,32 @@ export function decomposeStemsLinked(
   return withEntry('decomposeStemsLinked', () => {
     const r = requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
     assertAudioChannels(r.channels, r.sampleRate, r);
-    return getSonareModule().decomposeStemsLinked(r.channels, r.sampleRate, {
-      nComponents: r.nComponents,
-      nFft: r.nFft,
-      hopLength: r.hopLength,
-      nIter: r.nIter,
-      beta: r.beta,
-      init: r.init,
-      maskPower: r.maskPower,
-    });
+    const channels = r.channels;
+    const call = () =>
+      getSonareModule().decomposeStemsLinked(channels, r.sampleRate, {
+        nComponents: r.nComponents,
+        nFft: r.nFft,
+        hopLength: r.hopLength,
+        nIter: r.nIter,
+        beta: r.beta,
+        init: r.init,
+        maskPower: r.maskPower,
+      });
+    const shape = stemsShape(r);
+    if (shape === undefined || channels.length > MAX_STEMS_LINKED_CHANNELS) {
+      return call();
+    }
+    const { k, bins, hop } = shape;
+    const count = channels.length;
+    return withHeapNeed(
+      sampleNeed(
+        'channels',
+        channels[0].length,
+        r.sampleRate,
+        (n) => 4 * n * count * (1 + k) + 4 * bins * k + 4 * k * Math.floor(n / hop),
+      ),
+      call,
+    );
   });
 }
 
@@ -342,7 +437,10 @@ export function nnFilter(...args: unknown[]): Matrix2D {
     const s = assertMatrix2D(r.s, 's');
     // An empty token is the embind reader's spelling of the library's aggregate.
     const aggregate = optionalToken(r.aggregate, 'aggregate', NN_FILTER_AGGREGATES) ?? '';
-    return getSonareModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width);
+    return withHeapNeed(
+      { subject: 's', size: s.data.length, bytes: (n) => 8 * n, monotone: true },
+      () => getSonareModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width),
+    );
   });
 }
 
@@ -372,7 +470,22 @@ export function remix(...args: unknown[]): Float32Array {
     // boundary the conversion changed would cut the slice somewhere the caller
     // never named.
     const intervals = toInt32Array(r.intervals, 'intervals');
-    return getSonareModule().remix(r.samples, intervals, r.sampleRate, alignZeros);
+    const samples = r.samples;
+    const call = () => getSonareModule().remix(samples, intervals, r.sampleRate, alignZeros);
+    // Odd-length intervals are the native reader's refusal, not a memory one.
+    if (intervals.length % 2 !== 0) {
+      return call();
+    }
+    // Zero-snapping can shorten any slice, so only the unsnapped output is certain.
+    const outSamples = alignZeros ? 0 : clampedIntervalSamples(intervals, samples.length);
+    return withHeapNeed(
+      {
+        subject: 'intervals',
+        size: intervals.length,
+        bytes: (n) => 4 * samples.length + 8 * n + 4 * outSamples,
+      },
+      call,
+    );
   });
 }
 
@@ -404,7 +517,22 @@ export function remixAlignedIntervals(...args: unknown[]): Int32Array {
     assertAudioInput(r.samples, r.sampleRate, r);
     const alignZeros = optionalBoolean(r.alignZeros, 'alignZeros', true);
     const intervals = toInt32Array(r.intervals, 'intervals');
-    return getSonareModule().remixAlignedIntervals(r.samples, intervals, r.sampleRate, alignZeros);
+    const samples = r.samples;
+    const call = () =>
+      getSonareModule().remixAlignedIntervals(samples, intervals, r.sampleRate, alignZeros);
+    // Odd-length intervals are the native reader's refusal, not a memory one.
+    if (intervals.length % 2 !== 0) {
+      return call();
+    }
+    return withHeapNeed(
+      {
+        subject: 'intervals',
+        size: intervals.length,
+        bytes: (n) => 4 * samples.length + 16 * n,
+        monotone: true,
+      },
+      call,
+    );
   });
 }
 
@@ -422,17 +550,31 @@ export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
     if (x.rows !== y.rows) {
       throw refuse('feature dimensions must match');
     }
-    const native = getSonareModule().segmentCrossSimilarity(
-      x.data,
-      x.rows,
-      x.cols,
-      y.data,
-      y.rows,
-      y.cols,
-      r.k,
-      r.metric ?? 'cosine',
-      r.mode ?? 'connectivity',
-    );
+    const call = () =>
+      getSonareModule().segmentCrossSimilarity(
+        x.data,
+        x.rows,
+        x.cols,
+        y.data,
+        y.rows,
+        y.cols,
+        r.k,
+        r.metric ?? 'cosine',
+        r.mode ?? 'connectivity',
+      );
+    // A result past the core's 32-bit cell index is the native reader's refusal.
+    const native =
+      x.cols * y.cols > MAX_INT32
+        ? call()
+        : withHeapNeed(
+            {
+              subject: 'x.cols',
+              size: x.cols,
+              bytes: (n) => 4 * (x.rows * n + y.data.length + n * y.cols),
+              monotone: true,
+            },
+            call,
+          );
     return toMatrix2D(native.values, native.rows, native.cols);
   });
 }
@@ -447,16 +589,31 @@ export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   return withEntry('segmentRecurrenceMatrix', () => {
     const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
     const data = assertMatrix2D(r.data, 'data');
-    const native = getSonareModule().segmentRecurrenceMatrix(
-      data.data,
-      data.rows,
-      data.cols,
-      r.k,
-      r.width ?? 1,
-      optionalBoolean(r.sym, 'sym', false),
-      r.metric ?? 'euclidean',
-      r.mode ?? 'connectivity',
-    );
+    const sym = optionalBoolean(r.sym, 'sym', false);
+    const call = () =>
+      getSonareModule().segmentRecurrenceMatrix(
+        data.data,
+        data.rows,
+        data.cols,
+        r.k,
+        r.width ?? 1,
+        sym,
+        r.metric ?? 'euclidean',
+        r.mode ?? 'connectivity',
+      );
+    // A result past the core's 32-bit cell index is the native reader's refusal.
+    const native =
+      data.cols * data.cols > MAX_INT32
+        ? call()
+        : withHeapNeed(
+            {
+              subject: 'data.cols',
+              size: data.cols,
+              bytes: (n) => 4 * (data.rows * n + n * n),
+              monotone: true,
+            },
+            call,
+          );
     return toMatrix2D(native.values, native.rows, native.cols);
   });
 }
@@ -472,10 +629,15 @@ export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
     const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
     const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
     assertSquare(recurrence, 'recurrence');
-    const native = getSonareModule().segmentRecurrenceToLag(
-      recurrence.data,
-      recurrence.rows,
-      optionalBoolean(r.pad, 'pad', true),
+    const pad = optionalBoolean(r.pad, 'pad', true);
+    const native = withHeapNeed(
+      {
+        subject: 'recurrence.cols',
+        size: recurrence.cols,
+        bytes: (n) => 4 * (n * n + (pad ? 2 : 1) * n * n),
+        monotone: true,
+      },
+      () => getSonareModule().segmentRecurrenceToLag(recurrence.data, recurrence.rows, pad),
     );
     return toMatrix2D(native.values, native.rows, native.cols);
   });
@@ -491,7 +653,15 @@ export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
   return withEntry('segmentLagToRecurrence', () => {
     const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
     const lag = assertMatrix2D(r.lag, 'lag');
-    const native = getSonareModule().segmentLagToRecurrence(lag.data, lag.cols, lag.rows);
+    const native = withHeapNeed(
+      {
+        subject: 'lag.cols',
+        size: lag.cols,
+        bytes: (n) => 4 * (lag.rows * n + n * n),
+        monotone: true,
+      },
+      () => getSonareModule().segmentLagToRecurrence(lag.data, lag.cols, lag.rows),
+    );
     return toMatrix2D(native.values, native.rows, native.cols);
   });
 }
@@ -502,12 +672,22 @@ export function segmentSubsegment(...args: unknown[]): Int32Array {
   return withEntry('segmentSubsegment', () => {
     const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
     const data = assertMatrix2D(r.data, 'data');
-    return getSonareModule().segmentSubsegment(
-      data.data,
-      data.rows,
-      data.cols,
-      toInt32Array(r.boundaries, 'boundaries'),
-      r.nSegments ?? 4,
+    const boundaries = toInt32Array(r.boundaries, 'boundaries');
+    return withHeapNeed(
+      {
+        subject: 'data',
+        size: data.data.length,
+        bytes: (n) => 4 * n + 8 * boundaries.length,
+        monotone: true,
+      },
+      () =>
+        getSonareModule().segmentSubsegment(
+          data.data,
+          data.rows,
+          data.cols,
+          boundaries,
+          r.nSegments ?? 4,
+        ),
     );
   });
 }
@@ -518,12 +698,28 @@ export function segmentAgglomerative(...args: unknown[]): Int32Array {
   return withEntry('segmentAgglomerative', () => {
     const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
     const data = assertMatrix2D(r.data, 'data');
-    return getSonareModule().segmentAgglomerative(
-      data.data,
-      data.rows,
-      data.cols,
-      r.k,
-      r.linkage ?? 'average',
+    const call = () =>
+      getSonareModule().segmentAgglomerative(
+        data.data,
+        data.rows,
+        data.cols,
+        r.k,
+        r.linkage ?? 'average',
+      );
+    const k = r.k;
+    // An out-of-domain cluster count is the native reader's refusal, not a memory one.
+    if (!Number.isInteger(k) || k < 1 || k > MAX_INT32) {
+      return call();
+    }
+    // Fewer clusters than columns builds the full pairwise distance matrix, otherwise only labels.
+    return withHeapNeed(
+      {
+        subject: 'data.cols',
+        size: data.cols,
+        bytes: (n) => (k < n ? 4 * (data.rows * n + n * n) : 4 * (data.rows * n + n)),
+        monotone: true,
+      },
+      call,
     );
   });
 }
@@ -539,13 +735,22 @@ export function segmentPathEnhance(...args: unknown[]): Matrix2D {
     const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
     const recurrence = assertMatrix2D(r.recurrence, 'recurrence');
     assertSquare(recurrence, 'recurrence');
-    const native = getSonareModule().segmentPathEnhance(
-      recurrence.data,
-      recurrence.rows,
-      r.win,
-      r.maxRatio ?? 2,
-      r.minRatio ?? 0,
-      r.nFilters ?? 7,
+    const native = withHeapNeed(
+      {
+        subject: 'recurrence.cols',
+        size: recurrence.cols,
+        bytes: (n) => 8 * n * n,
+        monotone: true,
+      },
+      () =>
+        getSonareModule().segmentPathEnhance(
+          recurrence.data,
+          recurrence.rows,
+          r.win,
+          r.maxRatio ?? 2,
+          r.minRatio ?? 0,
+          r.nFilters ?? 7,
+        ),
     );
     return toMatrix2D(native.values, native.rows, native.cols);
   });

@@ -3,6 +3,7 @@
  */
 
 import { withEntry } from './internal/entry.js';
+import { withMonoHeap, withPairHeap } from './internal/memory_budget.js';
 import { clipDetectionFromNative, declipReportFromNative } from './internal/metering_native.js';
 import { pairedResult, repairNativeOptions } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
@@ -74,11 +75,13 @@ export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepai
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return pairedResult(
-      getSonareModule().masteringRepairDeclickStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDeclickStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -95,10 +98,8 @@ export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
   return withEntry('masteringRepairDeclick', () => {
     const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDeclick(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().masteringRepairDeclick(r.samples, r.sampleRate, repairNativeOptions(r)),
     );
   });
 }
@@ -188,10 +189,8 @@ export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   return withEntry('masteringRepairDeclip', () => {
     const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    const native = getSonareModule().masteringRepairDeclip(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    const native = withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().masteringRepairDeclip(r.samples, r.sampleRate, repairNativeOptions(r)),
     );
     return { samples: native.samples, report: declipReportFromNative(native.report) };
   });
@@ -216,11 +215,13 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     const paired = pairedResult(
-      getSonareModule().masteringRepairDeclipStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDeclipStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
     return { channels: paired.channels, reports: paired.reports.map(declipReportFromNative) };
@@ -238,10 +239,8 @@ export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
   return withEntry('masteringRepairDecrackle', () => {
     const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDecrackle(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 2, () =>
+      getSonareModule().masteringRepairDecrackle(r.samples, r.sampleRate, repairNativeOptions(r)),
     );
   });
 }
@@ -267,11 +266,13 @@ export function masteringRepairDecrackleStereo(...args: unknown[]): MasteringRep
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     return pairedResult(
-      getSonareModule().masteringRepairDecrackleStereo(
-        r.left,
-        r.right,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withPairHeap(r.left, r.right, r.sampleRate, 2, () =>
+        getSonareModule().masteringRepairDecrackleStereo(
+          r.left,
+          r.right,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -331,10 +332,12 @@ export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection 
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDetectClicks(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringRepairDetectClicks(
+        r.samples,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
     );
   });
 }
@@ -384,10 +387,12 @@ export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection
     );
     assertAudioInput(r.samples, r.sampleRate, r);
     return clipDetectionFromNative(
-      getSonareModule().masteringRepairDetectClipping(
-        r.samples,
-        r.sampleRate,
-        repairNativeOptions(r),
+      withMonoHeap(r.samples, r.sampleRate, 1, () =>
+        getSonareModule().masteringRepairDetectClipping(
+          r.samples,
+          r.sampleRate,
+          repairNativeOptions(r),
+        ),
       ),
     );
   });
@@ -416,10 +421,12 @@ export function masteringRepairDetectCrackle(...args: unknown[]): CrackleDetecti
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringRepairDetectCrackle(
-      r.samples,
-      r.sampleRate,
-      repairNativeOptions(r),
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringRepairDetectCrackle(
+        r.samples,
+        r.sampleRate,
+        repairNativeOptions(r),
+      ),
     );
   });
 }

@@ -1,5 +1,6 @@
 import { refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { sampleNeed, withHeapNeed } from './internal/memory_budget.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -225,15 +226,30 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
         params[key] = req[key] as number | boolean;
       }
     }
-    const json = getSonareModule().mixingAssistantSuggest(
-      left,
-      right,
-      ids,
-      names,
-      sampleRates,
-      req.sampleRate,
-      params,
-    );
+    const call = (): string =>
+      getSonareModule().mixingAssistantSuggest(
+        left,
+        right,
+        ids,
+        names,
+        sampleRates,
+        req.sampleRate,
+        params,
+      );
+    // A track at its own rate is resampled in the native reader, which changes its length.
+    const json =
+      sampleRates === null
+        ? withHeapNeed(
+            sampleNeed(
+              'tracks',
+              left.reduce((sum, plane) => sum + plane.length, 0) +
+                right.reduce((sum, plane) => sum + (plane?.length ?? 0), 0),
+              undefined,
+              (n) => 4 * n,
+            ),
+            call,
+          )
+        : call();
     return parseRecordJson(json, 'mix_assistant_result') as unknown as MixAssistantResult;
   });
 }

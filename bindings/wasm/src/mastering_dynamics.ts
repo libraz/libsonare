@@ -1,4 +1,5 @@
 import { withEntry } from './internal/entry.js';
+import { withMonoHeap } from './internal/memory_budget.js';
 import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
 import {
@@ -169,7 +170,9 @@ export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcess
       const token = requireToken(r.detector, 'detector', COMPRESSOR_DETECTOR_TOKENS, 'peak');
       opts.detector = COMPRESSOR_DETECTOR_ORDINAL[token];
     }
-    return getSonareModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts),
+    );
   });
 }
 
@@ -189,7 +192,10 @@ export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResu
     if (!isAbsent(r.keyHighPassHz)) {
       assertNonNegativeFloatValue(r.keyHighPassHz, 'keyHighPassHz');
     }
-    return getSonareModule().masteringDynamicsGate(r.samples, r.sampleRate, nativeOptions(r));
+    const opts = nativeOptions(r);
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringDynamicsGate(r.samples, r.sampleRate, opts),
+    );
   });
 }
 
@@ -209,6 +215,8 @@ export function masteringDynamicsTransientShaper(...args: unknown[]): DynamicsPr
       args,
     );
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().masteringDynamicsTransientShaper(r.samples, r.sampleRate, r);
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().masteringDynamicsTransientShaper(r.samples, r.sampleRate, r),
+    );
   });
 }

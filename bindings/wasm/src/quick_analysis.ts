@@ -14,6 +14,7 @@ import {
 import { ErrorCode, SonareError } from './errors.js';
 import { assertDeclaredKeys, codedError, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
+import { sampleNeed, withHeapNeed, withMonoHeap } from './internal/memory_budget.js';
 import { withRespelled } from './internal/respell.js';
 import { isAbsent } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -370,7 +371,9 @@ export function detectBpm(...args: unknown[]): number | undefined {
     const request = sampleOneShot<DetectBpmRequest>('detectBpm', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const [bpmMin, bpmMax] = tempoRange(request);
-    return getSonareModule().detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax);
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax),
+    );
   });
 }
 
@@ -400,18 +403,28 @@ export function detectKey(...args: unknown[]): KeyDetection {
     assertAudioInput(request.samples, request.sampleRate, request);
     const chromaHighPassHz = request.chromaHighPassHz ?? 80;
     assertFloatValue(chromaHighPassHz, 'chromaHighPassHz');
-    const result = getSonareModule()._detectKeyWithOptions(
-      request.samples,
-      request.sampleRate,
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
-      optionalBoolean(request.useHpss, 'useHpss', false),
-      optionalBoolean(request.loudnessWeighted, 'loudnessWeighted', false),
-      chromaHighPassHz,
-      keyModeValues(request.modes),
-      keyProfileValue(request.profile),
-      genreHintValue(request.genreHint),
-      nativeTuning(request.tuningCents),
+    const nFft = request.nFft ?? 2048;
+    const hopLength = request.hopLength ?? 512;
+    const useHpss = optionalBoolean(request.useHpss, 'useHpss', false);
+    const loudnessWeighted = optionalBoolean(request.loudnessWeighted, 'loudnessWeighted', false);
+    const modes = keyModeValues(request.modes);
+    const profile = keyProfileValue(request.profile);
+    const genreHint = genreHintValue(request.genreHint);
+    const tuning = nativeTuning(request.tuningCents);
+    const result = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule()._detectKeyWithOptions(
+        request.samples,
+        request.sampleRate,
+        nFft,
+        hopLength,
+        useHpss,
+        loudnessWeighted,
+        chromaHighPassHz,
+        modes,
+        profile,
+        genreHint,
+        tuning,
+      ),
     );
     return {
       root: result.root as PitchClass,
@@ -447,18 +460,28 @@ export function detectKeyCandidates(...args: unknown[]): KeyCandidate[] {
     // Symbol.species, leaving a result that structuredClone (and so postMessage to
     // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
     // plain Array before mapping.
-    const candidates = getSonareModule()._detectKeyCandidates(
-      request.samples,
-      request.sampleRate,
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
-      optionalBoolean(request.useHpss, 'useHpss', false),
-      optionalBoolean(request.loudnessWeighted, 'loudnessWeighted', false),
-      chromaHighPassHz,
-      keyModeValues(request.modes),
-      keyProfileValue(request.profile),
-      genreHintValue(request.genreHint),
-      nativeTuning(request.tuningCents),
+    const nFft = request.nFft ?? 2048;
+    const hopLength = request.hopLength ?? 512;
+    const useHpss = optionalBoolean(request.useHpss, 'useHpss', false);
+    const loudnessWeighted = optionalBoolean(request.loudnessWeighted, 'loudnessWeighted', false);
+    const modes = keyModeValues(request.modes);
+    const profile = keyProfileValue(request.profile);
+    const genreHint = genreHintValue(request.genreHint);
+    const tuning = nativeTuning(request.tuningCents);
+    const candidates = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule()._detectKeyCandidates(
+        request.samples,
+        request.sampleRate,
+        nFft,
+        hopLength,
+        useHpss,
+        loudnessWeighted,
+        chromaHighPassHz,
+        modes,
+        profile,
+        genreHint,
+        tuning,
+      ),
     );
     return Array.from(candidates, convertKeyCandidate);
   });
@@ -481,7 +504,9 @@ export function detectOnsets(...args: unknown[]): Float32Array {
   return withEntry('detectOnsets', () => {
     const request = sampleOneShot<DetectOnsetsRequest>('detectOnsets', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return getSonareModule().detectOnsets(request.samples, request.sampleRate, request);
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().detectOnsets(request.samples, request.sampleRate, request),
+    );
   });
 }
 
@@ -503,7 +528,9 @@ export function detectBeats(...args: unknown[]): Float32Array {
     const request = sampleOneShot<DetectBeatsRequest>('detectBeats', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     const [bpmMin, bpmMax] = tempoRange(request);
-    return getSonareModule().detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax);
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax),
+    );
   });
 }
 
@@ -524,7 +551,9 @@ export function detectDownbeats(...args: unknown[]): Float32Array {
   return withEntry('detectDownbeats', () => {
     const request = sampleOneShot<DetectDownbeatsRequest>('detectDownbeats', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return getSonareModule().detectDownbeats(request.samples, request.sampleRate);
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().detectDownbeats(request.samples, request.sampleRate),
+    );
   });
 }
 
@@ -550,24 +579,35 @@ export function detectChords(...args: unknown[]): ChordAnalysisResult {
     const minDurationSec = request.minDurationSec ?? 0.3;
     const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
     assertFloatFields({ minDurationSec, smoothingWindowSec });
-    const result = getSonareModule().detectChords(
-      request.samples,
-      request.sampleRate,
-      minDurationSec,
-      smoothingWindowSec,
-      request.threshold ?? 0.5,
-      optionalBoolean(request.useTriadsOnly, 'useTriadsOnly', true),
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
-      optionalBoolean(request.useBeatSync, 'useBeatSync', true),
-      optionalBoolean(request.useHmm, 'useHmm', true),
-      request.hmmBeamWidth ?? 24,
-      optionalBoolean(request.useKeyContext, 'useKeyContext', false),
-      pitchClassOrdinal(request.keyRoot ?? 0, 'keyRoot'),
-      keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
-      optionalBoolean(request.detectInversions, 'detectInversions', false),
-      chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
-      nativeTuning(request.tuningCents),
+    const useTriadsOnly = optionalBoolean(request.useTriadsOnly, 'useTriadsOnly', true);
+    const useBeatSync = optionalBoolean(request.useBeatSync, 'useBeatSync', true);
+    const useHmm = optionalBoolean(request.useHmm, 'useHmm', true);
+    const useKeyContext = optionalBoolean(request.useKeyContext, 'useKeyContext', false);
+    const keyRoot = pitchClassOrdinal(request.keyRoot ?? 0, 'keyRoot');
+    const keyMode = keyModeOrdinal(request.keyMode ?? 'major', 'keyMode');
+    const detectInversions = optionalBoolean(request.detectInversions, 'detectInversions', false);
+    const chromaMethod = chordChromaMethodValue(request.chromaMethod ?? 'cqt');
+    const tuning = nativeTuning(request.tuningCents);
+    const result = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().detectChords(
+        request.samples,
+        request.sampleRate,
+        minDurationSec,
+        smoothingWindowSec,
+        request.threshold ?? 0.5,
+        useTriadsOnly,
+        request.nFft ?? 2048,
+        request.hopLength ?? 512,
+        useBeatSync,
+        useHmm,
+        request.hmmBeamWidth ?? 24,
+        useKeyContext,
+        keyRoot,
+        keyMode,
+        detectInversions,
+        chromaMethod,
+        tuning,
+      ),
     );
     return convertChordAnalysisResult(result);
   });
@@ -650,24 +690,34 @@ export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
     const minDurationSec = request.minDurationSec ?? 0.3;
     const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
     assertFloatFields({ minDurationSec, smoothingWindowSec });
-    const analysed = getSonareModule().chordFunctionalAnalysis(
-      request.samples,
-      keyRoot,
-      keyModeOrdinal(request.keyMode ?? 'major', 'keyMode'),
-      request.sampleRate,
-      minDurationSec,
-      smoothingWindowSec,
-      request.threshold ?? 0.5,
-      optionalBoolean(request.useTriadsOnly, 'useTriadsOnly', true),
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
-      optionalBoolean(request.useBeatSync, 'useBeatSync', true),
-      optionalBoolean(request.useHmm, 'useHmm', true),
-      request.hmmBeamWidth ?? 24,
-      optionalBoolean(request.useKeyContext, 'useKeyContext', false),
-      optionalBoolean(request.detectInversions, 'detectInversions', false),
-      chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
-      nativeTuning(request.tuningCents),
+    const keyMode = keyModeOrdinal(request.keyMode ?? 'major', 'keyMode');
+    const useTriadsOnly = optionalBoolean(request.useTriadsOnly, 'useTriadsOnly', true);
+    const useBeatSync = optionalBoolean(request.useBeatSync, 'useBeatSync', true);
+    const useHmm = optionalBoolean(request.useHmm, 'useHmm', true);
+    const useKeyContext = optionalBoolean(request.useKeyContext, 'useKeyContext', false);
+    const detectInversions = optionalBoolean(request.detectInversions, 'detectInversions', false);
+    const chromaMethod = chordChromaMethodValue(request.chromaMethod ?? 'cqt');
+    const tuning = nativeTuning(request.tuningCents);
+    const analysed = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().chordFunctionalAnalysis(
+        request.samples,
+        keyRoot,
+        keyMode,
+        request.sampleRate,
+        minDurationSec,
+        smoothingWindowSec,
+        request.threshold ?? 0.5,
+        useTriadsOnly,
+        request.nFft ?? 2048,
+        request.hopLength ?? 512,
+        useBeatSync,
+        useHmm,
+        request.hmmBeamWidth ?? 24,
+        useKeyContext,
+        detectInversions,
+        chromaMethod,
+        tuning,
+      ),
     );
     return convertChordAnalysisResult(analysed).chords.map((chord, i) => ({
       ...chord,
@@ -816,12 +866,14 @@ export function analyze(...args: unknown[]): AnalysisResult {
       nativeOptions.tuningCents = nativeTuning(tuningCents);
     }
     const module = getSonareModule();
-    const result = module.analyze(
-      request.samples,
-      request.sampleRate,
-      nativeOptions,
-      onProgress ?? undefined,
-      cancel ?? undefined,
+    const result = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      module.analyze(
+        request.samples,
+        request.sampleRate,
+        nativeOptions,
+        onProgress ?? undefined,
+        cancel ?? undefined,
+      ),
     );
     return convertAnalysisResult(result);
   });
@@ -946,8 +998,17 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
       times.push(beat.timeSec);
       strengths.push(beat.strength);
     });
-    return withRespelled(BEAT_RESPELLED, () =>
-      getSonareModule().estimateMeter(times, strengths, options),
+    return withHeapNeed(
+      {
+        subject: 'beats',
+        size: times.length,
+        bytes: (n) => 8 * n,
+        monotone: true,
+      },
+      () =>
+        withRespelled(BEAT_RESPELLED, () =>
+          getSonareModule().estimateMeter(times, strengths, options),
+        ),
     );
   });
 }
@@ -970,11 +1031,13 @@ export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
     // Only `undefined` takes the default; the module's reader refuses `null` by name.
     const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
     assertAudioInput(request.samples, request.sampleRate, request);
-    const result: WasmAcousticResult = getSonareModule().analyzeImpulseResponse(
-      request.samples,
-      request.sampleRate,
-      request.nOctaveBands ?? 6,
-      resolvedMinDecayDb,
+    const result: WasmAcousticResult = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().analyzeImpulseResponse(
+        request.samples,
+        request.sampleRate,
+        request.nOctaveBands ?? 6,
+        resolvedMinDecayDb,
+      ),
     );
     return result;
   });
@@ -996,13 +1059,15 @@ export function detectAcoustic(...args: unknown[]): AcousticResult {
   return withEntry('detectAcoustic', () => {
     const request = sampleOneShot<DetectAcousticRequest>('detectAcoustic', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const result: WasmAcousticResult = getSonareModule().detectAcoustic(
-      request.samples,
-      request.sampleRate,
-      request.nOctaveBands ?? 6,
-      request.nThirdOctaveSubbands ?? 24,
-      request.minDecayDb ?? 30.0,
-      request.noiseFloorMarginDb ?? 10.0,
+    const result: WasmAcousticResult = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().detectAcoustic(
+        request.samples,
+        request.sampleRate,
+        request.nOctaveBands ?? 6,
+        request.nThirdOctaveSubbands ?? 24,
+        request.minDecayDb ?? 30.0,
+        request.noiseFloorMarginDb ?? 10.0,
+      ),
     );
     return result;
   });
@@ -1060,10 +1125,10 @@ export function estimateRoom(...args: unknown[]): RoomEstimateResult {
     }
     const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return module.estimateRoom(
-      r.samples,
-      r.sampleRate,
-      withEntry('estimateRoom', () => nativeRoomOptions(r)),
+    const native = withEntry('estimateRoom', () => nativeRoomOptions(r));
+    const estimate = module.estimateRoom;
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      estimate.call(module, r.samples, r.sampleRate, native),
     );
   });
 }
@@ -1100,14 +1165,24 @@ export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometry {
     if (bandAbsorption !== undefined) {
       requireListBudget(bandAbsorption, 'estimate.bandAbsorption');
     }
-    const geometry = module.roomGeometryFromEstimate({
-      lengthM,
-      widthM,
-      heightM,
-      ...(bandAbsorption === undefined
-        ? {}
-        : { bandAbsorption: Float32Array.from(bandAbsorption) }),
-    }) as RoomGeometry;
+    const fromEstimate = module.roomGeometryFromEstimate;
+    const geometry = withHeapNeed(
+      {
+        subject: 'estimate.bandAbsorption',
+        size: bandAbsorption === undefined ? 0 : bandAbsorption.length,
+        bytes: (n) => 4 * n,
+        monotone: true,
+      },
+      () =>
+        fromEstimate.call(module, {
+          lengthM,
+          widthM,
+          heightM,
+          ...(bandAbsorption === undefined
+            ? {}
+            : { bandAbsorption: Float32Array.from(bandAbsorption) }),
+        }),
+    ) as RoomGeometry;
     for (const name of ['source', 'listener'] as const) {
       const placement = checkedPlacement(name, request[name]);
       if (placement !== undefined) {
@@ -1149,7 +1224,10 @@ export function roomMorph(...args: unknown[]): RoomMorphResult {
     assertAudioInput(r.samples, r.sampleRate, r);
     const native = withEntry('roomMorph', () => nativeRoomOptions(r));
     const morph = module.roomMorph;
-    return refusingInvalidGeometry(() => morph.call(module, r.samples, r.sampleRate, native));
+    // The input copy, the zero-padded working buffer and the output, each at least the input length.
+    return withMonoHeap(r.samples, r.sampleRate, 3, () =>
+      refusingInvalidGeometry(() => morph.call(module, r.samples, r.sampleRate, native)),
+    );
   });
 }
 
@@ -1187,8 +1265,13 @@ export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
     }
     const native = withEntry('roomMorphStereo', () => nativeRoomOptions(request));
     const morphStereo = module.roomMorphStereo;
-    return refusingInvalidGeometry(() =>
-      morphStereo.call(module, request.left, request.right, request.sampleRate, native),
+    // Both input copies, both working buffers and one output channel, each at least the input length.
+    return withHeapNeed(
+      sampleNeed('left', request.left.length, request.sampleRate, (n) => 20 * n),
+      () =>
+        refusingInvalidGeometry(() =>
+          morphStereo.call(module, request.left, request.right, request.sampleRate, native),
+        ),
     );
   });
 }
@@ -1229,15 +1312,17 @@ export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
     const request = sampleOneShot<AnalyzeBpmRequest>('analyzeBpm', args);
     assertAudioInput(request.samples, request.sampleRate, request);
     assertNonNegativeSafeInteger(request.maxCandidates ?? 5, 'maxCandidates');
-    return getSonareModule().analyzeBpm(
-      request.samples,
-      request.sampleRate,
-      request.bpmMin,
-      request.bpmMax,
-      request.startBpm,
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
-      request.maxCandidates ?? 5,
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().analyzeBpm(
+        request.samples,
+        request.sampleRate,
+        request.bpmMin,
+        request.bpmMax,
+        request.startBpm,
+        request.nFft ?? 2048,
+        request.hopLength ?? 512,
+        request.maxCandidates ?? 5,
+      ),
     );
   });
 }
@@ -1255,14 +1340,16 @@ export function analyzeRhythm(...args: unknown[]): RhythmResult {
   return withEntry('analyzeRhythm', () => {
     const request = sampleOneShot<AnalyzeRhythmRequest>('analyzeRhythm', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const result = getSonareModule().analyzeRhythm(
-      request.samples,
-      request.sampleRate,
-      request.bpmMin,
-      request.bpmMax,
-      request.startBpm,
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
+    const result = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().analyzeRhythm(
+        request.samples,
+        request.sampleRate,
+        request.bpmMin,
+        request.bpmMax,
+        request.startBpm,
+        request.nFft ?? 2048,
+        request.hopLength ?? 512,
+      ),
     );
     return { ...result, grooveType: result.grooveType as GrooveType };
   });
@@ -1281,12 +1368,14 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
   return withEntry('analyzeDynamics', () => {
     const request = sampleOneShot<AnalyzeDynamicsRequest>('analyzeDynamics', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    const result = getSonareModule().analyzeDynamics(
-      request.samples,
-      request.sampleRate,
-      request.windowSec ?? 0.4,
-      request.hopLength ?? 512,
-      request.compressionThresholdDb ?? 6.0,
+    const result = withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().analyzeDynamics(
+        request.samples,
+        request.sampleRate,
+        request.windowSec ?? 0.4,
+        request.hopLength ?? 512,
+        request.compressionThresholdDb ?? 6.0,
+      ),
     );
     return { ...result };
   });
@@ -1306,14 +1395,16 @@ export function analyzeTimbre(...args: unknown[]): TimbreResult {
   return withEntry('analyzeTimbre', () => {
     const request = sampleOneShot<AnalyzeTimbreRequest>('analyzeTimbre', args);
     assertAudioInput(request.samples, request.sampleRate, request);
-    return getSonareModule().analyzeTimbre(
-      request.samples,
-      request.sampleRate,
-      request.nFft ?? 2048,
-      request.hopLength ?? 512,
-      request.nMels ?? 128,
-      request.nMfcc ?? 13,
-      request.windowSec ?? 0.5,
+    return withMonoHeap(request.samples, request.sampleRate, 1, () =>
+      getSonareModule().analyzeTimbre(
+        request.samples,
+        request.sampleRate,
+        request.nFft ?? 2048,
+        request.hopLength ?? 512,
+        request.nMels ?? 128,
+        request.nMfcc ?? 13,
+        request.windowSec ?? 0.5,
+      ),
     );
   });
 }

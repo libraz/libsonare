@@ -4,6 +4,13 @@
  */
 
 import { withEntry } from './internal/entry.js';
+import {
+  sampleNeed,
+  stftBins,
+  stftFrames,
+  withHeapNeed,
+  withMonoHeap,
+} from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -156,6 +163,55 @@ export interface ZeroCrossingsRequest {
 // Features - Spectral
 // ============================================================================
 
+/** Frames a time-domain framing of `n` samples certainly yields. */
+function centeredFrames(n: number, hop: number): number {
+  return n > 0 ? 1 + Math.floor((n - 1) / hop) : 0;
+}
+
+/**
+ * Runs an STFT-backed descriptor under the heap guard: the heap copy of the input, the complex
+ * spectrogram held beside the result and `rows` floats of result per frame. A size or hop outside
+ * the core's domain skips the guard so the native refusal stays the one that speaks.
+ */
+function guardedStft<T>(
+  samples: Float32Array,
+  sampleRate: number,
+  nFft: unknown,
+  hop: unknown,
+  rows: number,
+  call: () => T,
+): T {
+  const bins = stftBins(nFft, hop);
+  if (bins === undefined) {
+    return call();
+  }
+  return withHeapNeed(
+    sampleNeed(
+      'samples',
+      samples.length,
+      sampleRate,
+      (n) => 4 * n + (8 * bins + 4 * rows) * stftFrames(n, hop as number),
+    ),
+    call,
+  );
+}
+
+/** Same guard for a time-domain framing: the input copy and `rows` floats of result per frame. */
+function guardedFraming<T>(
+  samples: Float32Array,
+  sampleRate: number,
+  hop: unknown,
+  call: () => T,
+): T {
+  if (typeof hop !== 'number' || !Number.isInteger(hop) || hop < 1) {
+    return call();
+  }
+  return withHeapNeed(
+    sampleNeed('samples', samples.length, sampleRate, (n) => 4 * n + 4 * centeredFrames(n, hop)),
+    call,
+  );
+}
+
 /**
  * Spectral centroid (center of mass of the spectrum) in Hz, one value per frame.
  */
@@ -169,11 +225,10 @@ export function spectralCentroid(...args: unknown[]): Float32Array {
   return withEntry('spectralCentroid', () => {
     const r = sampleOneShot<SpectralCentroidRequest>('spectralCentroid', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().spectralCentroid(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    return guardedStft(r.samples, r.sampleRate, nFft, hopLength, 1, () =>
+      getSonareModule().spectralCentroid(r.samples, r.sampleRate, nFft, hopLength),
     );
   });
 }
@@ -203,15 +258,23 @@ export function spectralContrast(...args: unknown[]): Matrix2D {
     assertAudioInput(r.samples, r.sampleRate, r);
     const fminHz = r.fminHz ?? 200.0;
     assertPositiveFloatValue(fminHz, 'fminHz');
-    return getSonareModule().spectralContrast(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
-      r.nBands ?? 6,
-      fminHz,
-      r.quantile ?? 0.02,
-    );
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    const nBands = r.nBands ?? 6;
+    const call = () =>
+      getSonareModule().spectralContrast(
+        r.samples,
+        r.sampleRate,
+        nFft,
+        hopLength,
+        nBands,
+        fminHz,
+        r.quantile ?? 0.02,
+      );
+    if (typeof nBands !== 'number' || !Number.isInteger(nBands) || nBands < 1) {
+      return call();
+    }
+    return guardedStft(r.samples, r.sampleRate, nFft, hopLength, nBands + 1, call);
   });
 }
 
@@ -230,13 +293,15 @@ export function polyFeatures(...args: unknown[]): Matrix2D {
   return withEntry('polyFeatures', () => {
     const r = sampleOneShot<PolyFeaturesRequest>('polyFeatures', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().polyFeatures(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
-      r.order ?? 1,
-    );
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    const order = r.order ?? 1;
+    const call = () =>
+      getSonareModule().polyFeatures(r.samples, r.sampleRate, nFft, hopLength, order);
+    if (typeof order !== 'number' || !Number.isInteger(order) || order < 0) {
+      return call();
+    }
+    return guardedStft(r.samples, r.sampleRate, nFft, hopLength, order + 1, call);
   });
 }
 
@@ -253,12 +318,12 @@ export function zeroCrossings(...args: unknown[]): Int32Array {
   return withEntry('zeroCrossings', () => {
     const r = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().zeroCrossings(
-      r.samples,
-      r.threshold ?? 1e-10,
-      requireBoolean(r.refMagnitude ?? false, 'refMagnitude'),
-      requireBoolean(r.pad ?? true, 'pad'),
-      requireBoolean(r.zeroPos ?? true, 'zeroPos'),
+    const refMagnitude = requireBoolean(r.refMagnitude ?? false, 'refMagnitude');
+    const pad = requireBoolean(r.pad ?? true, 'pad');
+    const zeroPos = requireBoolean(r.zeroPos ?? true, 'zeroPos');
+    // The index list can be as long as the input, but only an empty one is certain.
+    return withMonoHeap(r.samples, r.sampleRate, 1, () =>
+      getSonareModule().zeroCrossings(r.samples, r.threshold ?? 1e-10, refMagnitude, pad, zeroPos),
     );
   });
 }
@@ -276,12 +341,10 @@ export function spectralBandwidth(...args: unknown[]): Float32Array {
   return withEntry('spectralBandwidth', () => {
     const r = sampleOneShot<SpectralBandwidthRequest>('spectralBandwidth', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().spectralBandwidth(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
-      r.p ?? 2,
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    return guardedStft(r.samples, r.sampleRate, nFft, hopLength, 1, () =>
+      getSonareModule().spectralBandwidth(r.samples, r.sampleRate, nFft, hopLength, r.p ?? 2),
     );
   });
 }
@@ -299,12 +362,16 @@ export function spectralRolloff(...args: unknown[]): Float32Array {
   return withEntry('spectralRolloff', () => {
     const r = sampleOneShot<SpectralRolloffRequest>('spectralRolloff', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().spectralRolloff(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
-      r.rollPercent ?? 0.85,
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    return guardedStft(r.samples, r.sampleRate, nFft, hopLength, 1, () =>
+      getSonareModule().spectralRolloff(
+        r.samples,
+        r.sampleRate,
+        nFft,
+        hopLength,
+        r.rollPercent ?? 0.85,
+      ),
     );
   });
 }
@@ -322,11 +389,10 @@ export function spectralFlatness(...args: unknown[]): Float32Array {
   return withEntry('spectralFlatness', () => {
     const r = sampleOneShot<SpectralFlatnessRequest>('spectralFlatness', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().spectralFlatness(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    return guardedStft(r.samples, r.sampleRate, nFft, hopLength, 1, () =>
+      getSonareModule().spectralFlatness(r.samples, r.sampleRate, nFft, hopLength),
     );
   });
 }
@@ -344,12 +410,10 @@ export function spectralFlux(...args: unknown[]): Float32Array {
   return withEntry('spectralFlux', () => {
     const r = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().spectralFlux(
-      r.samples,
-      r.sampleRate,
-      r.nFft ?? 2048,
-      r.hopLength ?? 512,
-      r.lag ?? 1,
+    const nFft = r.nFft ?? 2048;
+    const hopLength = r.hopLength ?? 512;
+    return guardedStft(r.samples, r.sampleRate, nFft, hopLength, 1, () =>
+      getSonareModule().spectralFlux(r.samples, r.sampleRate, nFft, hopLength, r.lag ?? 1),
     );
   });
 }
@@ -367,11 +431,9 @@ export function zeroCrossingRate(...args: unknown[]): Float32Array {
   return withEntry('zeroCrossingRate', () => {
     const r = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().zeroCrossingRate(
-      r.samples,
-      r.sampleRate,
-      r.frameLength ?? 2048,
-      r.hopLength ?? 512,
+    const hopLength = r.hopLength ?? 512;
+    return guardedFraming(r.samples, r.sampleRate, hopLength, () =>
+      getSonareModule().zeroCrossingRate(r.samples, r.sampleRate, r.frameLength ?? 2048, hopLength),
     );
   });
 }
@@ -389,11 +451,9 @@ export function rmsEnergy(...args: unknown[]): Float32Array {
   return withEntry('rmsEnergy', () => {
     const r = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);
     assertAudioInput(r.samples, r.sampleRate, r);
-    return getSonareModule().rmsEnergy(
-      r.samples,
-      r.sampleRate,
-      r.frameLength ?? 2048,
-      r.hopLength ?? 512,
+    const hopLength = r.hopLength ?? 512;
+    return guardedFraming(r.samples, r.sampleRate, hopLength, () =>
+      getSonareModule().rmsEnergy(r.samples, r.sampleRate, r.frameLength ?? 2048, hopLength),
     );
   });
 }
