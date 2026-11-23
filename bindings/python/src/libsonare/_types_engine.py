@@ -7,7 +7,7 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import KW_ONLY, dataclass, field
+from dataclasses import KW_ONLY, dataclass
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, get_args
 
 import numpy as np
@@ -15,7 +15,6 @@ import numpy.typing as npt
 
 from ._types_analysis import (
     TimeSignature,
-    _empty_float32,
 )
 from ._types_enums import (
     AutomationCurve,
@@ -823,7 +822,7 @@ class MeterTelemetryRecord:
     """Gain reduction applied, in dB."""
     dropped_records: int
     """Records dropped because the telemetry queue was full."""
-    input_peak_db: npt.NDArray[np.float32] = field(default_factory=_empty_float32)
+    input_peak_db: npt.NDArray[np.float32]
     """Input-tap sample peak per plane, in dBFS; -inf for silence, NaN in a plane not written."""
 
 

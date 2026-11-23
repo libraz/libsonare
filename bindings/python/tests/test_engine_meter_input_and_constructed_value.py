@@ -113,3 +113,29 @@ def test_meter_target_insert_gain_reduction() -> None:
         assert engine.meter_target_insert_gain_reduction(0xFFFF).size == 0
         with pytest.raises(SonareError):
             engine.meter_target_insert_gain_reduction(41)
+
+
+def test_meter_record_requires_its_input_tap_planes() -> None:
+    from libsonare import MeterTelemetryRecord
+
+    planes = np.zeros(2, dtype=np.float32)
+    fields = {
+        "target_id": 0,
+        "render_frame": 0,
+        "seq": 0,
+        "num_channels": 2,
+        "peak_db": planes,
+        "rms_db": planes,
+        "true_peak_dbtp": planes,
+        "max_true_peak_dbtp": None,
+        "correlation": None,
+        "mono_compat_width": None,
+        "momentary_lufs": None,
+        "short_term_lufs": None,
+        "integrated_lufs": None,
+        "gain_reduction_db": 0.0,
+        "dropped_records": 0,
+    }
+    with pytest.raises(TypeError, match="input_peak_db"):
+        MeterTelemetryRecord(**fields)
+    assert MeterTelemetryRecord(**fields, input_peak_db=planes).input_peak_db is planes
