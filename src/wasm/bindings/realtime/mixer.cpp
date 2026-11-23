@@ -53,13 +53,6 @@ void requireTrackLaneEdit(sonare::engine::TrackLaneEditResult result, const char
   throw WasmRangeError(message);
 }
 
-// The master EQ, insert and sidechain setters address the engine-owned master strip.
-void requireMasterStrip(const sonare::engine::RealtimeEngine& engine) {
-  if (!engine.has_master_strip()) {
-    throwMixerStateRefusal("no master strip is configured; set one with setMasterStripJson");
-  }
-}
-
 // Table-full and alignment-ceiling verdicts come from bindings and latency earlier
 // calls left; every other verdict refuses the call's own target or source.
 [[noreturn]] void throwSidechainRefusal(sonare::engine::SidechainRefusal refusal,
@@ -370,7 +363,6 @@ void RealtimeEngineWasm::setMasterSidechain(const val& insert_index_val, const v
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
 #if defined(SONARE_WITH_MIXING)
   const sonare::engine::SidechainSourceKind kind = sidechainSourceKind(source_kind);
-  requireMasterStrip(engine_);
   if (!engine_.set_master_sidechain(insert_index, kind, source_id)) {
     throwSidechainRefusal(engine_.can_set_master_sidechain(insert_index, kind, source_id),
                           "invalid master sidechain binding");
@@ -494,7 +486,6 @@ void RealtimeEngineWasm::setMasterStripEqBandJson(const val& band_index_val,
   requireMixingTarget(band_index >= 0, "invalid master strip EQ band target");
   const sonare::mastering::eq::EqBand band =
       sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson"));
-  requireMasterStrip(engine_);
   requireMixingTarget(engine_.set_master_eq_band(static_cast<size_t>(band_index), band),
                       "invalid master strip EQ band target");
 #else
@@ -509,7 +500,6 @@ void RealtimeEngineWasm::setMasterStripInsertBypassed(const val& insert_index_va
                                                       bool reset_on_bypass) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  requireMasterStrip(engine_);
   requireMixingTarget(engine_.set_master_insert_bypassed(insert_index, bypassed, reset_on_bypass),
                       "invalid master strip insert bypass target");
 #else
@@ -625,7 +615,6 @@ void RealtimeEngineWasm::setMasterStripInsertParamByName(const val& insert_index
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
-  requireMasterStrip(engine_);
   const auto result = engine_.set_master_insert_param_detailed(insert_index, param_name, value);
   if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
     throw WasmRangeError("invalid master strip insert parameter target");
@@ -674,7 +663,6 @@ void RealtimeEngineWasm::restoreMasterStripInsertParamByName(const val& insert_i
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
-  requireMasterStrip(engine_);
   requireMixingTarget(engine_.restore_master_insert_param_by_name(insert_index, param_name, value),
                       "invalid master strip insert parameter target");
 #else
@@ -828,7 +816,6 @@ double RealtimeEngineWasm::resolveMasterInsertAutomationId(const val& insert_ind
                                                            const std::string& param_name) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  requireMasterStrip(engine_);
   return resolvedAutomationId(engine_.resolve_master_insert_automation_id(insert_index, param_name),
                               param_name);
 #else

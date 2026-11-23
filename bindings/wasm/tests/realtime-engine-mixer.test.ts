@@ -157,18 +157,61 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badBypassError = error;
       }
-      // No master strip is configured yet: the engine's state refuses, not the index.
-      expect(isSonareError(badBypassError)).toBe(true);
-      if (!isSonareError(badBypassError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badBypassError.code).toBe(ErrorCode.InvalidState);
+      // The default master strip carries no insert, so index 0 is the argument at fault.
+      expect(badBypassError).toBeInstanceOf(RangeError);
+      expect(isSonareError(badBypassError)).toBe(false);
 
       engine.play();
       const processed = engine.process([new Float32Array(256)]);
       expect(processed[0].at(-1)).toBeGreaterThan(1.2);
       expect(processed[0].at(-1)).toBeLessThan(1.4);
       engine.destroy();
+    });
+
+    it('applies a master fader set before any setStrip, in realtime and in an offline bounce', () => {
+      const frames = 256 * 64;
+      const withClip = (masterFaderDb: number | undefined, body: (e: RealtimeEngine) => number) => {
+        const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+        try {
+          engine.setClips([
+            {
+              id: 1,
+              trackId: 10,
+              channels: [new Float32Array(frames).fill(0.5)],
+              startPpq: 0,
+              lengthSamples: frames,
+            },
+          ]);
+          engine.setTrackLanes([{ trackId: 10 }]);
+          if (masterFaderDb !== undefined) {
+            engine.setStripFaderDb('master', masterFaderDb);
+          }
+          return body(engine);
+        } finally {
+          engine.destroy();
+        }
+      };
+      const realtime = (engine: RealtimeEngine) => {
+        engine.play();
+        let last = 0;
+        for (let block = 0; block < 32; block += 1) {
+          last = engine.process([new Float32Array(256)])[0].at(-1) ?? 0;
+        }
+        return last;
+      };
+      const bounced = (engine: RealtimeEngine) =>
+        engine
+          .bounceOffline({ totalFrames: 256 * 32, blockSize: 256, numChannels: 2 })
+          .channels[0].at(-1) ?? 0;
+      const gain = 10 ** (-6 / 20);
+      for (const [label, body] of [
+        ['realtime', realtime],
+        ['bounce', bounced],
+      ] as const) {
+        const unity = withClip(undefined, body);
+        expect(unity, label).toBeGreaterThan(0.1);
+        expect(withClip(-6, body) / unity, label).toBeCloseTo(gain, 3);
+      }
     });
 
     it('toggles track strip insert bypass', () => {

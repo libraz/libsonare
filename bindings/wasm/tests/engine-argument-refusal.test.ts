@@ -111,12 +111,12 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
 });
 
 describe('RealtimeEngine state refusals stay a coded InvalidState', () => {
-  it('refuses master-strip edits before a master strip is configured', () => {
+  it('edits the default master strip before any setStrip, refusing an insert it lacks as the argument', () => {
     withEngine((engine) => {
-      expectInvalidState(() => engine.setStripInsertBypassed('master', 0, { bypassed: true }));
-      expectInvalidState(() => engine.setStripEqBand('master', 0, { type: 'peak' }));
-      expectInvalidState(() => engine.resolveStripInsertAutomationId('master', 0, 'thresholdDb'));
-      // Once a master strip exists, the same setter refuses a bad index as the argument.
+      expect(() => engine.setStripEqBand('master', 0, { type: 'peak' })).not.toThrow();
+      // The default master strip carries no insert, so index 0 is the argument at fault.
+      expectRefusalOf(() => engine.setStripInsertBypassed('master', 0, { bypassed: true }));
+      expectRefusalOf(() => engine.resolveStripInsertAutomationId('master', 0, 'thresholdDb'));
       engine.setStrip('master', JSON.parse(LIMITER_MASTER).strips[0]);
       expect(() => engine.setStripInsertBypassed('master', 0, { bypassed: true })).not.toThrow();
       expectRefusalOf(() => engine.setStripInsertBypassed('master', 99, { bypassed: true }));

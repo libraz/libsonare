@@ -21,6 +21,22 @@ beforeAll(async () => {
   await init();
 });
 
+/** The native InvalidState a mixer meter read throws before the meter is enabled. */
+function meterReadBeforeEnable(): unknown {
+  const mixer = Mixer.fromJson('{"version":2,"strips":[],"buses":[],"connections":[]}', {
+    sampleRate: 48000,
+    maxBlockSize: 128,
+  });
+  try {
+    mixer.meterSnapshot();
+  } catch (error) {
+    return error;
+  } finally {
+    mixer.destroy();
+  }
+  return undefined;
+}
+
 describe('SonareError', () => {
   it('exposes an ErrorCode table aligned with the C ABI', () => {
     expect(ErrorCode.Ok).toBe(0);
@@ -50,16 +66,8 @@ describe('SonareError', () => {
   });
 
   it('rethrows a native C++ exception as a coded SonareError', () => {
-    // A master-strip edit before any master strip exists is the engine's state, not the argument.
-    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    let caught: unknown;
-    try {
-      engine.setStripInsertBypassed('master', 0, { bypassed: true });
-    } catch (e) {
-      caught = e;
-    } finally {
-      engine.destroy();
-    }
+    // A meter read before the meter is enabled is the mixer's state, not the argument.
+    const caught = meterReadBeforeEnable();
     expect(caught).toBeInstanceOf(SonareError);
     expect(isSonareError(caught)).toBe(true);
 
@@ -68,7 +76,7 @@ describe('SonareError', () => {
     expect(err.code).toBe(ErrorCode.InvalidState);
     expect(err.codeName).toBe('InvalidState');
     // The native detail message survives the pointer round-trip.
-    expect(err.message).toContain('master strip');
+    expect(err.message).toContain('mixer meter has not been enabled');
   });
 
   it('rethrows a refused argument as the native JS class, not a SonareError', () => {
@@ -114,15 +122,7 @@ describe('SonareError is a value class with brand-based instanceof', () => {
   });
 
   it('narrows a native failure through instanceof as well as isSonareError', () => {
-    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    let caught: unknown;
-    try {
-      engine.setStripInsertBypassed('master', 0, { bypassed: true });
-    } catch (e) {
-      caught = e;
-    } finally {
-      engine.destroy();
-    }
+    const caught = meterReadBeforeEnable();
     expect(isSonareError(caught)).toBe(true);
     // The two must never disagree: instanceof delegates to the same predicate.
     expect(caught instanceof SonareError).toBe(true);

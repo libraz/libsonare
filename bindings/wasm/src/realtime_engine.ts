@@ -518,9 +518,9 @@ function withoutDestinationId<T extends object>(config: T): T {
  *   throws a `RangeError` (`TypeError` for a value of the wrong type or an
  *   unknown request key), never a `SonareError`.
  * - A call refused because of state earlier calls left (a full binding table,
- *   rack or pool, no master strip configured, a queued SysEx the new instrument
- *   cannot prepare) throws a `SonareError` with `ErrorCode.InvalidState`; a
- *   call on a destroyed engine does too.
+ *   rack or pool, a queued SysEx the new instrument cannot prepare) throws a
+ *   `SonareError` with `ErrorCode.InvalidState`; a call on a destroyed engine
+ *   does too.
  * - A full command queue or payload ring, and a failed allocation, throw a
  *   `SonareError` with `ErrorCode.OutOfMemory`; a feature compiled out of the
  *   build throws `ErrorCode.NotSupported`.
