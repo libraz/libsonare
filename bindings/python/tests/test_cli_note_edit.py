@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 
 # ruff: noqa: F403,F405
+import libsonare as ls
+
 from ._analyzer_helpers import *
 from ._analyzer_helpers import _run_cli, _write_test_wav
 
@@ -256,8 +258,8 @@ def _tune_reference_smf(*midi_numbers: int, beats: float = 1.0, offset_beats: fl
         events = []
         for index, midi in enumerate(midi_numbers):
             start = offset_beats + index * beats
-            events.append(Project.midi_note_on(start, 0, 0, midi, 100))
-            events.append(Project.midi_note_off(start + beats, 0, 0, midi, 0))
+            events.append(ls.midi_note_on(start, 0, 0, midi, 100))
+            events.append(ls.midi_note_off(start + beats, 0, 0, midi, 0))
         project.set_midi_events(clip_id, events)
         return project.export_smf()
     finally:

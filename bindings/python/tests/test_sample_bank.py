@@ -7,6 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import libsonare as ls
 from libsonare import (
     ErrorCode,
     Project,
@@ -38,8 +39,8 @@ def _one_note_project(note: int) -> Project:
     project.set_midi_events(
         clip,
         [
-            Project.midi_note_on(0.0, 0, 0, note, 100),
-            Project.midi_note_off(0.5, 0, 0, note, 0),
+            ls.midi_note_on(0.0, 0, 0, note, 100),
+            ls.midi_note_off(0.5, 0, 0, note, 0),
         ],
     )
     return project
@@ -246,8 +247,8 @@ def test_each_binding_carries_its_own_bank() -> None:
             project.set_midi_events(
                 clip,
                 [
-                    Project.midi_note_on(0.0, 0, 0, note, 100),
-                    Project.midi_note_off(0.5, 0, 0, note, 0),
+                    ls.midi_note_on(0.0, 0, 0, note, 100),
+                    ls.midi_note_off(0.5, 0, 0, note, 0),
                 ],
             )
 
@@ -374,8 +375,8 @@ def test_a_looped_sample_outlasts_the_frames_it_holds() -> None:
         project.set_midi_events(
             clip,
             [
-                Project.midi_note_on(0.0, 0, 0, 60, 100),
-                Project.midi_note_off(2.0, 0, 0, 60, 0),
+                ls.midi_note_on(0.0, 0, 0, 60, 100),
+                ls.midi_note_off(2.0, 0, 0, 60, 0),
             ],
         )
         try:
@@ -505,8 +506,8 @@ def test_the_sample_loop_mode_token_reaches_the_render() -> None:
         project.set_midi_events(
             clip,
             [
-                Project.midi_note_on(0.0, 0, 0, 60, 100),
-                Project.midi_note_off(2.0, 0, 0, 60, 0),
+                ls.midi_note_on(0.0, 0, 0, 60, 100),
+                ls.midi_note_off(2.0, 0, 0, 60, 0),
             ],
         )
         try:

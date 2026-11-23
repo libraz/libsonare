@@ -24,10 +24,10 @@ def main() -> int:
         project.set_midi_events(
             clip_id,
             [
-                libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),
-                libsonare.Project.midi_note_off(1.0, 0, 0, 60),
-                libsonare.Project.midi_note_on(1.0, 0, 0, 64, 100),
-                libsonare.Project.midi_note_off(2.0, 0, 0, 64),
+                libsonare.midi_note_on(0.0, 0, 0, 60, 100),
+                libsonare.midi_note_off(1.0, 0, 0, 60),
+                libsonare.midi_note_on(1.0, 0, 0, 64, 100),
+                libsonare.midi_note_off(2.0, 0, 0, 64),
             ],
         )
         audio = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])

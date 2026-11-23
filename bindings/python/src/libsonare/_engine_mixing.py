@@ -55,8 +55,8 @@ def _strip_target(ref: StripRef) -> int | None:
     if isinstance(ref, str):
         if ref == "master":
             return None
-        raise _refuse("strip must be a track id or 'master'")
-    return _narrow_int(ref, "strip", 0, _UINT32_MAX)
+        raise _refuse("ref must be a track id or 'master'")
+    return _narrow_int(ref, "ref", 0, _UINT32_MAX)
 
 
 def _track_only(fn: str, ref: StripRef) -> int:
@@ -119,7 +119,9 @@ def _marshal_sends(
     for send_index, raw_send in enumerate(sends):
         send = _mapping_keys(raw_send, _SEND_KEYS, f"{where}[{send_index}]")
         send_array[send_index].bus_id = cast(int, send["bus_id"])
-        send_array[send_index].level_db = _narrow_double(send.get("level_db", 0.0), "level_db")
+        send_array[send_index].level_db = _narrow_double(
+            send.get("level_db", 0.0), f"{where}[{send_index}].level_db"
+        )
         send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
         # Absent timing is post-fader, the C default.
         timing = send.get("send_timing")
@@ -277,7 +279,7 @@ class _EngineMixingMixin:
             _require_track_source(kind)
             rc = _get_lib().sonare_engine_set_lane_sidechain(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_uint(insert_index, "insert_index"),
                 _to_c_uint32(source_id, "source.id"),
             )
@@ -306,7 +308,7 @@ class _EngineMixingMixin:
             _require_track_source(kind)
             rc = _get_lib().sonare_engine_can_set_lane_sidechain(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_uint(insert_index, "insert_index"),
                 _to_c_uint32(source_id, "source.id"),
                 ctypes.byref(refusal),
@@ -363,7 +365,7 @@ class _EngineMixingMixin:
             # Assigned unconverted so the struct's own narrowing sees the caller
             # value; int() would truncate a fraction past it.
             raw[i].bus_id = cast(int, bus["bus_id"])
-            raw[i].gain_db = _narrow_double(bus.get("gain_db", 0.0), "gain_db")
+            raw[i].gain_db = _narrow_double(bus.get("gain_db", 0.0), f"{where}.gain_db")
             # ctypes zero-inits channel_layout to 0 (mono); default to stereo
             # unless the caller specifies it.
             if "channel_layout" in bus:
@@ -413,7 +415,7 @@ class _EngineMixingMixin:
             rc = _get_lib().sonare_engine_set_master_strip_json(self._require_handle(), payload)
         else:
             rc = _get_lib().sonare_engine_set_track_strip_json(
-                self._require_handle(), _to_c_uint32(track_id, "strip"), payload
+                self._require_handle(), _to_c_uint32(track_id, "ref"), payload
             )
         _check(rc)
 
@@ -428,7 +430,7 @@ class _EngineMixingMixin:
         else:
             rc = _get_lib().sonare_engine_set_track_strip_eq_band_json(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_int(band_index, "band_index"),
                 _band_json_arg(band),
             )
@@ -466,7 +468,7 @@ class _EngineMixingMixin:
         else:
             rc = _get_lib().sonare_engine_set_track_strip_insert_bypassed(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_uint(insert_index, "insert_index"),
                 1 if bypassed else 0,
                 1 if reset_on_bypass else 0,
@@ -512,7 +514,7 @@ class _EngineMixingMixin:
         else:
             rc = _get_lib().sonare_engine_set_track_strip_insert_param_by_name(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_uint(insert_index, "insert_index"),
                 _utf8_arg(name, "name"),
                 _to_c_float(value, "value"),
@@ -559,7 +561,7 @@ class _EngineMixingMixin:
         else:
             rc = _get_lib().sonare_engine_apply_track_strip_insert_param_by_name_now(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_uint(insert_index, "insert_index"),
                 _utf8_arg(name, "name"),
                 _to_c_float(value, "value"),
@@ -608,7 +610,7 @@ class _EngineMixingMixin:
         else:
             rc = _get_lib().sonare_engine_restore_track_strip_insert_param_by_name(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_uint(insert_index, "insert_index"),
                 _utf8_arg(name, "name"),
                 _to_c_float(value, "value"),
@@ -646,7 +648,7 @@ class _EngineMixingMixin:
             )
         else:
             rc = _get_lib().sonare_engine_clear_track_insert_parameter_bases(
-                self._require_handle(), _to_c_uint32(track_id, "strip")
+                self._require_handle(), _to_c_uint32(track_id, "ref")
             )
         _check(rc)
 
@@ -673,7 +675,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_pan(
                 self._require_handle(),
-                _to_c_uint32(_track_only("set_strip_pan", ref), "strip"),
+                _to_c_uint32(_track_only("set_strip_pan", ref), "ref"),
                 _to_c_float(pan, "pan"),
             )
         )
@@ -689,7 +691,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_law(
                 self._require_handle(),
-                _to_c_uint32(_track_only("set_strip_pan_law", ref), "strip"),
+                _to_c_uint32(_track_only("set_strip_pan_law", ref), "ref"),
                 _pan_law_value(pan_law, "pan_law"),
             )
         )
@@ -700,7 +702,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_mode(
                 self._require_handle(),
-                _to_c_uint32(_track_only("set_strip_pan_mode", ref), "strip"),
+                _to_c_uint32(_track_only("set_strip_pan_mode", ref), "ref"),
                 _pan_mode_value(pan_mode, "pan_mode"),
             )
         )
@@ -711,7 +713,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_dual_pan(
                 self._require_handle(),
-                _to_c_uint32(_track_only("set_strip_dual_pan", ref), "strip"),
+                _to_c_uint32(_track_only("set_strip_dual_pan", ref), "ref"),
                 _to_c_float(left_pan, "left_pan"),
                 _to_c_float(right_pan, "right_pan"),
             )
@@ -741,7 +743,7 @@ class _EngineMixingMixin:
         )
         _check(
             _get_lib().sonare_engine_set_track_strip_surround_pan(
-                self._require_handle(), _to_c_uint32(track_id, "strip"), ctypes.byref(pan)
+                self._require_handle(), _to_c_uint32(track_id, "ref"), ctypes.byref(pan)
             )
         )
 
@@ -751,7 +753,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_channel_delay_samples(
                 self._require_handle(),
-                _to_c_uint32(_track_only("set_strip_channel_delay_samples", ref), "strip"),
+                _to_c_uint32(_track_only("set_strip_channel_delay_samples", ref), "ref"),
                 _to_c_int(delay_samples, "delay_samples"),
             )
         )
@@ -849,7 +851,7 @@ class _EngineMixingMixin:
         else:
             rc = _get_lib().sonare_engine_resolve_track_insert_automation_id(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _to_c_uint(insert_index, "insert_index"),
                 _utf8_arg(param_name, "param_name"),
                 ctypes.byref(out_id),
@@ -900,7 +902,7 @@ class _EngineMixingMixin:
                 raise _refuse("a track strip has no 'width' parameter")
             rc = _get_lib().sonare_engine_resolve_track_lane_automation_id(
                 self._require_handle(),
-                _to_c_uint32(track_id, "strip"),
+                _to_c_uint32(track_id, "ref"),
                 _utf8_arg(token, "kind"),
                 ctypes.byref(out_id),
             )

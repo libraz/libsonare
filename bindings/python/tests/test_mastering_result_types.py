@@ -170,6 +170,26 @@ def test_pair_analysis_eq_curve_is_float32_arrays(monkeypatch: pytest.MonkeyPatc
     np.testing.assert_allclose(result.gain_db, wire["gainDb"], rtol=1e-6, atol=1e-6)
 
 
+def test_pair_analysis_keyword_reports_delay_in_source_samples() -> None:
+    reference_rate = 32000
+    source_rate = 48000
+    reference_delay = 100
+    signal = np.random.default_rng(23).uniform(-0.5, 0.5, 16000).astype(np.float32)
+    reference = np.pad(signal, (reference_delay, 0))
+    source = libsonare.resample(signal, reference_rate, source_rate)
+
+    result = libsonare.mastering_analyze_pair(
+        analysis="match.estimateReferenceDelaySamples",
+        source=source,
+        reference=reference,
+        sample_rate=source_rate,
+        reference_sample_rate=reference_rate,
+    )
+    assert isinstance(result, libsonare.MatchEstimateReferenceDelaySamplesResult)
+    expected = reference_delay * source_rate / reference_rate
+    assert result.delay_samples == pytest.approx(expected, abs=1)
+
+
 @pytest.mark.parametrize(
     ("name", "typed"),
     [
@@ -187,6 +207,14 @@ def test_stereo_analysis_results(monkeypatch: pytest.MonkeyPatch, name: str, typ
     assert type(result) is getattr(libsonare, typed)
     (wire,) = wires
     assert _result_to_json_dict(result) == _without_nulls(_cli_view(wire))
+
+
+def test_stereo_analysis_takes_the_analysis_keyword() -> None:
+    result = libsonare.mastering_analyze_stereo(
+        analysis="stereo.monoCompatCheck", left=SOURCE, right=-SOURCE, sample_rate=SR
+    )
+    assert isinstance(result, libsonare.StereoMonoCompatCheckResult)
+    assert result.width == math.inf
 
 
 def test_a_silent_band_has_no_correlation() -> None:

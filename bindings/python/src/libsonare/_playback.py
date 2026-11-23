@@ -19,6 +19,7 @@ from typing import Any, cast
 import numpy as np
 
 from ._errors import _entry, _refuse, _refuse_type, _require_open
+from ._field_spelling import surface_spelling
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -336,10 +337,13 @@ class PlaybackRenderer:
             self._lib.sonare_playback_renderer_process_planar(
                 handle,
                 in_ptrs,
-                _to_c_int(len(in_arrays), "num_input_channels"),
+                _to_c_int(
+                    len(in_arrays),
+                    surface_spelling("playback_renderer_process_planar", "in_channels"),
+                ),
                 out_ptrs,
                 _to_c_int(out_channels, "num_output_channels"),
-                _to_c_int(frames, "frames"),
+                _to_c_int(frames, "planes frame count"),
             )
         )
         return out
@@ -396,7 +400,9 @@ class PlaybackRenderer:
                 _to_c_int(ch, "num_input_channels"),
                 c_out,
                 _to_c_int(out_channels, "num_output_channels"),
-                _to_c_int(frames, "frames"),
+                _to_c_int(
+                    frames, surface_spelling("playback_renderer_process_interleaved", "frames")
+                ),
             )
         )
         return out_buf

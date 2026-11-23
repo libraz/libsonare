@@ -75,16 +75,63 @@ from ._project import synth_preset_patch as synth_preset_patch
 from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
 from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
 from ._project_instruments import GsEfxRealization as GsEfxRealization
+from ._project_midi import gm2_drum_name as gm2_drum_name
+from ._project_midi import gm2_drum_set_name as gm2_drum_set_name
+from ._project_midi import gm2_instrument_name as gm2_instrument_name
+from ._project_midi import gm_drum_name as gm_drum_name
+from ._project_midi import gm_drum_note_for_name as gm_drum_note_for_name
+from ._project_midi import gm_family_first_program as gm_family_first_program
+from ._project_midi import gm_family_name as gm_family_name
+from ._project_midi import gm_instrument_name as gm_instrument_name
+from ._project_midi import gm_program_for_name as gm_program_for_name
+from ._project_midi import midi2_assignable_controller as midi2_assignable_controller
+from ._project_midi import (
+    midi2_assignable_per_note_controller as midi2_assignable_per_note_controller,
+)
+from ._project_midi import midi2_cc as midi2_cc
+from ._project_midi import midi2_channel_pressure as midi2_channel_pressure
 from ._project_midi import midi2_control_to_midi1 as midi2_control_to_midi1
 from ._project_midi import midi2_control_to_midi1_control14 as midi2_control_to_midi1_control14
+from ._project_midi import midi2_note_off as midi2_note_off
+from ._project_midi import midi2_note_on as midi2_note_on
 from ._project_midi import midi2_note_on_velocity_to_midi1 as midi2_note_on_velocity_to_midi1
+from ._project_midi import midi2_per_note_management as midi2_per_note_management
+from ._project_midi import midi2_per_note_pitch_bend as midi2_per_note_pitch_bend
+from ._project_midi import midi2_pitch_bend as midi2_pitch_bend
 from ._project_midi import midi2_pitch_bend_to_midi1 as midi2_pitch_bend_to_midi1
+from ._project_midi import midi2_poly_pressure as midi2_poly_pressure
+from ._project_midi import midi2_program as midi2_program
+from ._project_midi import midi2_registered_controller as midi2_registered_controller
+from ._project_midi import (
+    midi2_registered_per_note_controller as midi2_registered_per_note_controller,
+)
+from ._project_midi import (
+    midi2_relative_assignable_controller as midi2_relative_assignable_controller,
+)
+from ._project_midi import (
+    midi2_relative_registered_controller as midi2_relative_registered_controller,
+)
 from ._project_midi import midi2_velocity_to_midi1 as midi2_velocity_to_midi1
+from ._project_midi import midi_bank_program as midi_bank_program
+from ._project_midi import midi_cc as midi_cc
+from ._project_midi import midi_cc_index_for_name as midi_cc_index_for_name
+from ._project_midi import midi_cc_learn as midi_cc_learn
+from ._project_midi import midi_cc_name as midi_cc_name
+from ._project_midi import midi_cc_to_breakpoint as midi_cc_to_breakpoint
+from ._project_midi import midi_channel_pressure as midi_channel_pressure
 from ._project_midi import midi_control14_to_midi2 as midi_control14_to_midi2
 from ._project_midi import midi_control_to_midi2 as midi_control_to_midi2
+from ._project_midi import midi_note_off as midi_note_off
+from ._project_midi import midi_note_on as midi_note_on
 from ._project_midi import midi_note_on_velocity_to_midi2 as midi_note_on_velocity_to_midi2
+from ._project_midi import midi_param_to_cc as midi_param_to_cc
+from ._project_midi import midi_pitch_bend as midi_pitch_bend
 from ._project_midi import midi_pitch_bend_to_midi2 as midi_pitch_bend_to_midi2
+from ._project_midi import midi_poly_pressure as midi_poly_pressure
+from ._project_midi import midi_program as midi_program
+from ._project_midi import midi_route_events as midi_route_events
 from ._project_midi import midi_velocity_to_midi2 as midi_velocity_to_midi2
+from ._project_midi import per_note_controller_name as per_note_controller_name
 from ._project_model import ProjectCompileResult as ProjectCompileResult
 from ._project_model import ProjectDiagnostic as ProjectDiagnostic
 from ._project_model import ProjectDiagnosticCode as ProjectDiagnosticCode

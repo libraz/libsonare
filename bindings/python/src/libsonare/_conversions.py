@@ -784,8 +784,8 @@ def pcen(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_pcen(
             c_array,
-            _to_c_int(n_bins, "n_bins"),
-            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(n_bins, "values row count"),
+            _to_c_int(n_frames, "values length"),
             _to_c_int(sr, "sr"),
             _to_c_size_t(hop_length, "hop_length"),
             _to_c_float(time_constant, "time_constant"),
@@ -812,8 +812,8 @@ def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray:
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tonnetz(
             c_array,
-            _to_c_int(n_chroma, "n_chroma"),
-            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(n_chroma, "chromagram row count"),
+            _to_c_int(n_frames, "chromagram length"),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )

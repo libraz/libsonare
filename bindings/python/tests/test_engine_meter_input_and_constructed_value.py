@@ -18,17 +18,19 @@ _STRIP_JSON = (
 )
 
 
-def test_meter_input_peaks_and_reset_command() -> None:
+@pytest.mark.parametrize("num_channels", [1, 2])
+def test_meter_input_peaks_and_reset_command(num_channels: int) -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.configure_capture(capacity_frames=128)
         engine.play()
-        engine.process([[0.25] * 128, [-0.25] * 128])
+        engine.process([[0.25] * 128, [-0.25] * 128][:num_channels])
         records = engine.drain_meter_telemetry()
         master = [record for record in records if record.target_id == 0]
         assert master
         expected_db = 20.0 * math.log10(0.25)
-        assert master[-1].input_peak_db[0] == pytest.approx(expected_db, abs=0.05)
-        assert master[-1].input_peak_db[1] == pytest.approx(expected_db, abs=0.05)
+        record = master[-1]
+        assert record.num_channels == num_channels
+        assert record.input_peak_db == pytest.approx([expected_db] * num_channels, abs=0.05)
         engine.reset_master_loudness_meter()
 
 
@@ -43,16 +45,32 @@ def test_constructed_insert_value_and_invalid_id() -> None:
             engine.insert_parameter_constructed_value(0)
 
 
-def test_wide_input_peak_conversion() -> None:
+@pytest.mark.parametrize("num_channels", [1, 2])
+def test_meter_record_keeps_only_measured_planes(num_channels: int) -> None:
     from libsonare._engine_conversions import _meter_telemetry_from_c
     from libsonare._ffi_types_core import SonareMeterTelemetryRecord
 
     raw = SonareMeterTelemetryRecord()
-    raw.num_channels = 2
-    raw.input_peak_db[0] = -6.0
-    raw.input_peak_db[1] = -12.0
+    raw.target_id = 1
+    raw.num_channels = num_channels
+    levels = {
+        "peak_db": (-3.0, -9.0),
+        "rms_db": (-6.0, -12.0),
+        "true_peak_dbtp": (-2.0, -8.0),
+        "input_peak_db": (-4.0, -10.0),
+    }
+    for field, (left, right) in levels.items():
+        plane = getattr(raw, field)
+        plane[:] = [-120.0] * len(plane)
+        plane[0] = left
+        if num_channels == 2:
+            plane[1] = right
     record = _meter_telemetry_from_c(raw)
-    assert record.input_peak_db == pytest.approx([-6.0, -12.0])
+    assert record.target_id == 1
+    assert record.num_channels == num_channels
+    for field, (left, right) in levels.items():
+        assert getattr(record, field) == pytest.approx([left, right][:num_channels])
+        assert not hasattr(record, f"{field}_r")
 
 
 _DYNAMICS_STRIP_JSON = (

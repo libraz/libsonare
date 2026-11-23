@@ -458,9 +458,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         c_segments = (_ffi_project.SonareProjectTempoSegment * count)() if count else None
         for i, seg in enumerate(rows):
             fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
-            start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
-            bpm = _narrow_double(fields["bpm"], "bpm")
-            end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
+            start_ppq = _narrow_double(fields["start_ppq"], f"segments[{i}].start_ppq")
+            bpm = _narrow_double(fields["bpm"], f"segments[{i}].bpm")
+            end_bpm = _narrow_double(fields.get("end_bpm", 0.0), f"segments[{i}].end_bpm")
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
             c_segments[i].end_bpm = end_bpm
@@ -488,7 +488,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         # which the core's positive-signature check then accepts as written.
         for i, seg in enumerate(rows):
             fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
-            c_segments[i].start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+            c_segments[i].start_ppq = _narrow_double(
+                fields["start_ppq"], f"segments[{i}].start_ppq"
+            )
             c_segments[i].numerator = fields["numerator"]
             c_segments[i].denominator = fields["denominator"]
         _check(
@@ -633,7 +635,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         for stored in self.markers():
             floor = max(floor, stored.id + 1)
         assigned, next_id = _assign_marker_ids(list(markers), floor)
-        raw = [_marker_to_c(marker) for marker in assigned]
+        raw = [_marker_to_c(marker, f"markers[{index}]") for index, marker in enumerate(assigned)]
         raw_markers = (_ffi_core.SonareEngineMarker * len(raw))(*raw)
         _check(_get_lib().sonare_engine_set_markers(self._require_handle(), raw_markers, len(raw)))
         self._next_marker_id = next_id
@@ -913,12 +915,13 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 # being rejected, and int() folded 5.5 onto the legal group 5.
                 # Narrow both away here; the C ABI still owns the finer [0, 15]
                 # MIDI range.
+                group_name = f"clips[{index}].events[{event_index}].group"
                 try:
-                    group = _narrow_int(event.group, "EngineMidiEvent.group", 0, _UINT8_MAX)
+                    group = _narrow_int(event.group, group_name, 0, _UINT8_MAX)
                 except (TypeError, SonareValueError) as exc:
                     raise _int_refusal(
                         event.group,
-                        "EngineMidiEvent.group",
+                        group_name,
                         f"must be an integer in [0, {_UINT8_MAX}]",
                     ) from exc
                 # Same tolerance the C bridge documents: a word_count outside
@@ -926,7 +929,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 # only -- a range refusal would reject what the bridge defines.
                 # int() truncated 2.5 onto a word form the caller never asked for.
                 word_count = _narrow_int(
-                    event.word_count, "EngineMidiEvent.word_count", _C_INT_MIN, _C_INT_MAX
+                    event.word_count,
+                    f"clips[{index}].events[{event_index}].word_count",
+                    _C_INT_MIN,
+                    _C_INT_MAX,
                 )
                 # The remaining fields go in unconverted so the struct's own
                 # narrowing sees each caller value.
@@ -949,7 +955,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 id=_optional_positive_int(clip.id, "clip.id", _UINT32_MAX),
                 track_id=track_id,
                 start_sample=clip.start_sample,
-                start_ppq=_narrow_double(clip.start_ppq, "clip.start_ppq"),
+                start_ppq=_narrow_double(clip.start_ppq, f"clips[{index}].start_ppq"),
                 length_samples=_given_positive(
                     clip.length_samples, f"clips[{index}].length_samples", _POSITIVE_COUNT
                 ),
@@ -958,7 +964,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 destination_id=track_id if clip.destination_id is None else clip.destination_id,
                 events=raw_events,
                 event_count=len(clip.events),
-                gain=_narrow_double(clip.gain, "clip.gain"),
+                gain=_narrow_double(clip.gain, f"clips[{index}].gain"),
                 fade_in_samples=clip.fade_in_samples,
                 fade_out_samples=clip.fade_out_samples,
             )

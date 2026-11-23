@@ -40,6 +40,7 @@ from ._ffi_types_core import (
     SonareMeterTelemetryRecord,
     SonareScopeTelemetryRecord,
 )
+from ._field_spelling import surface_spelling
 from ._narrowing import _MAX_PUBLIC_PPQ, _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -340,8 +341,8 @@ class _EngineIoMixin:
                 self._require_handle(),
                 ptrs,
                 monitor_ptrs,
-                _to_c_int(len(arrays), "num_channels"),
-                _to_c_int(frame_count, "frame_count"),
+                _to_c_int(len(arrays), surface_spelling("engine_process", "num_channels")),
+                _to_c_int(frame_count, "channels frame count"),
             )
         )
         if not with_monitor:
@@ -386,7 +387,7 @@ class _EngineIoMixin:
             _get_lib().sonare_engine_render_offline(
                 self._require_handle(),
                 ptrs,
-                _to_c_int(len(arrays), "num_channels"),
+                _to_c_int(len(arrays), surface_spelling("engine_render_offline", "num_channels")),
                 _to_c_int64(frame_count, "frame_count"),
                 _to_c_int(_resolve_zero_default(block_size, "block_size"), "block_size"),
                 ctypes.byref(options),
@@ -619,7 +620,8 @@ class _EngineIoMixin:
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
         """Drain pending per-plane meter telemetry for every target.
 
-        A stereo target's left and right are planes 0 and 1.
+        Each array has one element per target channel. A stereo target's left
+        and right are planes 0 and 1. A mono target has no right measurement.
         """
         if max_records <= 0:
             return []

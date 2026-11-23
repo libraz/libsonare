@@ -336,8 +336,8 @@ def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray:
     out = ctypes.POINTER(ctypes.c_float)()
     rc = lib.sonare_mel_delta(
         c_array,
-        _to_c_int(n_features, "n_features"),
-        _to_c_int(n_frames, "n_frames"),
+        _to_c_int(n_features, "features row count"),
+        _to_c_int(n_frames, "features length"),
         _to_c_int(width, "width"),
         ctypes.byref(out),
     )

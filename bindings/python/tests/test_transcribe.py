@@ -387,8 +387,8 @@ def test_transcribe_to_clip_replaces_rather_than_appends(melody: np.ndarray) -> 
         project.set_midi_events(
             clip_id,
             [
-                libsonare.Project.midi_note_on(0.0, 0, 0, 40, 100),
-                libsonare.Project.midi_note_off(1.0, 0, 0, 40, 0),
+                libsonare.midi_note_on(0.0, 0, 0, 40, 100),
+                libsonare.midi_note_off(1.0, 0, 0, 40, 0),
             ],
         )
         assert len(_clip_events(project, clip_id)) == 2

@@ -80,10 +80,10 @@ def _two_quarter_notes_smf() -> bytes:
         project.set_midi_events(
             clip_id,
             [
-                Project.midi_note_on(0.0, 0, 0, 60, 100),
-                Project.midi_note_off(1.0, 0, 0, 60, 0),
-                Project.midi_note_on(1.0, 0, 0, 67, 100),
-                Project.midi_note_off(2.0, 0, 0, 67, 0),
+                libsonare.midi_note_on(0.0, 0, 0, 60, 100),
+                libsonare.midi_note_off(1.0, 0, 0, 60, 0),
+                libsonare.midi_note_on(1.0, 0, 0, 67, 100),
+                libsonare.midi_note_off(2.0, 0, 0, 67, 0),
             ],
         )
         return project.export_smf()

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from libsonare import ErrorCode, Project, RealtimeEngine, SonareError, SonareValueError
+import libsonare as ls
+from libsonare import ErrorCode, RealtimeEngine, SonareError, SonareValueError
 
 # (builder, keyword arguments, expected (word0, word1)); every case is computed
 # by hand from the MT 0x4 channel-voice layout.
 BUILDER_CASES = [
     (
-        Project.midi2_note_on,
+        ls.midi2_note_on,
         dict(
             group=1,
             channel=2,
@@ -22,37 +23,37 @@ BUILDER_CASES = [
         (0x41923C03, 0xFFFF1234),
     ),
     (
-        Project.midi2_note_on,
+        ls.midi2_note_on,
         dict(group=0, channel=0, note=0x40, velocity16=0),
         (0x40904000, 0x00000000),
     ),
     (
-        Project.midi2_note_off,
+        ls.midi2_note_off,
         dict(group=0, channel=0, note=0x40, velocity16=0x8000),
         (0x40804000, 0x80000000),
     ),
     (
-        Project.midi2_cc,
+        ls.midi2_cc,
         dict(group=0, channel=3, controller=7, value32=0xDEADBEEF),
         (0x40B30700, 0xDEADBEEF),
     ),
     (
-        Project.midi2_poly_pressure,
+        ls.midi2_poly_pressure,
         dict(group=2, channel=1, note=0x45, pressure32=0x11223344),
         (0x42A14500, 0x11223344),
     ),
     (
-        Project.midi2_channel_pressure,
+        ls.midi2_channel_pressure,
         dict(group=0, channel=5, pressure32=0xCAFEBABE),
         (0x40D50000, 0xCAFEBABE),
     ),
     (
-        Project.midi2_pitch_bend,
+        ls.midi2_pitch_bend,
         dict(group=0, channel=9, bend32=0x80000000),
         (0x40E90000, 0x80000000),
     ),
     (
-        Project.midi2_program,
+        ls.midi2_program,
         dict(
             group=0,
             channel=4,
@@ -63,52 +64,52 @@ BUILDER_CASES = [
         (0x40C40001, 0x05001020),
     ),
     (
-        Project.midi2_program,
+        ls.midi2_program,
         dict(group=0, channel=4, program=5),
         (0x40C40000, 0x05000000),
     ),
     (
-        Project.midi2_registered_controller,
+        ls.midi2_registered_controller,
         dict(group=0, channel=1, bank=0x12, index=0x34, value32=0x01020304),
         (0x40211234, 0x01020304),
     ),
     (
-        Project.midi2_assignable_controller,
+        ls.midi2_assignable_controller,
         dict(group=0, channel=1, bank=0x12, index=0x34, value32=0x01020304),
         (0x40311234, 0x01020304),
     ),
     (
-        Project.midi2_relative_registered_controller,
+        ls.midi2_relative_registered_controller,
         dict(group=0, channel=1, bank=0x12, index=0x34, delta32=-1),
         (0x40411234, 0xFFFFFFFF),
     ),
     (
-        Project.midi2_relative_assignable_controller,
+        ls.midi2_relative_assignable_controller,
         dict(group=0, channel=1, bank=0x12, index=0x34, delta32=16),
         (0x40511234, 0x00000010),
     ),
     (
-        Project.midi2_registered_per_note_controller,
+        ls.midi2_registered_per_note_controller,
         dict(group=0, channel=1, note=0x3C, index=0x03, value32=0xA5A5A5A5),
         (0x40013C03, 0xA5A5A5A5),
     ),
     (
-        Project.midi2_assignable_per_note_controller,
+        ls.midi2_assignable_per_note_controller,
         dict(group=0, channel=1, note=0x3C, index=0xFF, value32=0x5A5A5A5A),
         (0x40113CFF, 0x5A5A5A5A),
     ),
     (
-        Project.midi2_per_note_pitch_bend,
+        ls.midi2_per_note_pitch_bend,
         dict(group=0, channel=1, note=0x3C, bend32=0x80000000),
         (0x40613C00, 0x80000000),
     ),
     (
-        Project.midi2_per_note_management,
+        ls.midi2_per_note_management,
         dict(group=0, channel=1, note=0x3C, detach=True),
         (0x40F13C02, 0x00000000),
     ),
     (
-        Project.midi2_per_note_management,
+        ls.midi2_per_note_management,
         dict(group=0, channel=1, note=0x3C, detach=True, reset=True),
         (0x40F13C03, 0x00000000),
     ),
@@ -125,15 +126,15 @@ def test_midi2_builder_packs_expected_words(builder, kwargs, words) -> None:
 @pytest.mark.parametrize(
     "call",
     [
-        lambda: Project.midi2_cc(0.0, 16, 0, 7, 0),
-        lambda: Project.midi2_cc(0.0, 0, 16, 7, 0),
-        lambda: Project.midi2_cc(0.0, 0, 0, 128, 0),
-        lambda: Project.midi2_cc(0.0, 0, 0, 7, 1 << 32),
-        lambda: Project.midi2_cc(0.0, 0, 0, 7, -1),
-        lambda: Project.midi2_cc(float("nan"), 0, 0, 7, 0),
-        lambda: Project.midi2_note_on(0.0, 0, 0, 60, 1 << 16),
-        lambda: Project.midi2_relative_registered_controller(0.0, 0, 0, 0, 0, 1 << 31),
-        lambda: Project.midi2_registered_per_note_controller(0.0, 0, 0, 60, 256, 0),
+        lambda: ls.midi2_cc(0.0, 16, 0, 7, 0),
+        lambda: ls.midi2_cc(0.0, 0, 16, 7, 0),
+        lambda: ls.midi2_cc(0.0, 0, 0, 128, 0),
+        lambda: ls.midi2_cc(0.0, 0, 0, 7, 1 << 32),
+        lambda: ls.midi2_cc(0.0, 0, 0, 7, -1),
+        lambda: ls.midi2_cc(float("nan"), 0, 0, 7, 0),
+        lambda: ls.midi2_note_on(0.0, 0, 0, 60, 1 << 16),
+        lambda: ls.midi2_relative_registered_controller(0.0, 0, 0, 0, 0, 1 << 31),
+        lambda: ls.midi2_registered_per_note_controller(0.0, 0, 0, 60, 256, 0),
     ],
 )
 def test_midi2_builder_rejects_out_of_range(call) -> None:
@@ -142,7 +143,7 @@ def test_midi2_builder_rejects_out_of_range(call) -> None:
 
 
 def test_push_midi_ump_accepts_two_word_channel_voice() -> None:
-    event = Project.midi2_note_on(0.0, 0, 0, 60, 0xC000)
+    event = ls.midi2_note_on(0.0, 0, 0, 60, 0xC000)
     w0, w1 = event.word0, event.word1
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
@@ -182,7 +183,7 @@ def test_push_midi_ump_rejects_word_out_of_range() -> None:
 
 
 def test_push_midi_input_ump_queues_messages() -> None:
-    event = Project.midi2_cc(0.0, 0, 0, 1, 0x80000000)
+    event = ls.midi2_cc(0.0, 0, 0, 1, 0x80000000)
     w0, w1 = event.word0, event.word1
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)

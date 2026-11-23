@@ -10,6 +10,7 @@ import gc
 import numpy as np
 import pytest
 
+import libsonare as ls
 from libsonare import (
     EngineMidiClipSchedule,
     EngineMidiEvent,
@@ -148,8 +149,8 @@ def _build_midi_only_project(note: int = 60) -> Project:
     project.set_midi_events(
         clip,
         [
-            Project.midi_note_on(0.0, 0, 0, note, 100),
-            Project.midi_note_off(2.0, 0, 0, note, 0),
+            ls.midi_note_on(0.0, 0, 0, note, 100),
+            ls.midi_note_off(2.0, 0, 0, note, 0),
         ],
     )
     return project
@@ -165,9 +166,9 @@ def _build_gm_program_project(program: int) -> Project:
     project.set_midi_events(
         clip,
         [
-            Project.midi_program(0.0, 0, 0, program),
-            Project.midi_note_on(0.0, 0, 0, 60, 100),
-            Project.midi_note_off(0.5, 0, 0, 60, 0),
+            ls.midi_program(0.0, 0, 0, program),
+            ls.midi_note_on(0.0, 0, 0, 60, 100),
+            ls.midi_note_off(0.5, 0, 0, 60, 0),
         ],
     )
     return project
@@ -445,10 +446,10 @@ def test_note_retrigger_renders_a_repeated_note_identically() -> None:
         project.set_midi_events(
             clip,
             [
-                Project.midi_note_on(0.0, 0, 0, 48, 100),
-                Project.midi_note_off(1.0, 0, 0, 48, 0),
-                Project.midi_note_on(9.37, 0, 0, 48, 100),
-                Project.midi_note_off(10.37, 0, 0, 48, 0),
+                ls.midi_note_on(0.0, 0, 0, 48, 100),
+                ls.midi_note_off(1.0, 0, 0, 48, 0),
+                ls.midi_note_on(9.37, 0, 0, 48, 100),
+                ls.midi_note_off(10.37, 0, 0, 48, 0),
             ],
         )
         frames = 48000 * 6
@@ -686,9 +687,9 @@ def _build_two_destination_gm_project(program: int = 40) -> Project:
         project.set_midi_events(
             clip,
             [
-                Project.midi_program(0.0, 0, 0, program),
-                Project.midi_note_on(0.0, 0, 0, note, 100),
-                Project.midi_note_off(0.5, 0, 0, note, 0),
+                ls.midi_program(0.0, 0, 0, program),
+                ls.midi_note_on(0.0, 0, 0, note, 100),
+                ls.midi_note_off(0.5, 0, 0, note, 0),
             ],
         )
     return project

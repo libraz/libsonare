@@ -63,9 +63,9 @@ def test_fader_id_keeps_its_track_across_a_reorder_and_retires_with_it() -> None
     ("ref", "error", "match"),
     [
         ("bus", SonareValueError, "track id or 'master'"),
-        (None, TypeError, "strip"),
-        (True, TypeError, "strip"),
-        (1.5, SonareValueError, "strip"),
+        (None, TypeError, "ref"),
+        (True, TypeError, "ref"),
+        (1.5, SonareValueError, "ref"),
     ],
 )
 def test_a_strip_reference_is_a_track_id_or_master(

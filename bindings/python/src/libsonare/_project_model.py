@@ -377,7 +377,7 @@ class NotePairValidation:
 
 @dataclass(frozen=True, kw_only=True)
 class MidiCcBinding:
-    """A MIDI CC <-> automation-parameter binding (see :meth:`Project.midi_cc_learn`).
+    """A MIDI CC <-> automation-parameter binding (see :func:`midi_cc_learn`).
 
     ``kind`` is a :data:`ProjectMidiCcBindingKind` token. For a 14-bit
     binding ``cc_lsb_number`` carries the LSB controller; for RPN/NRPN
@@ -423,7 +423,7 @@ class ProjectMidiEvent:
 
 @dataclass(frozen=True)
 class MidiRouteResult:
-    """Result of :meth:`Project.midi_route_events`.
+    """Result of :func:`midi_route_events`.
 
     ``events`` is the filtered / remapped event stream. ``overflowed`` is True
     when the router or caller capacity dropped events; ``overflow_count`` is how
@@ -466,12 +466,14 @@ def _cc_binding_to_c(binding: MidiCcBinding) -> SonareMidiCcBinding:
     _require_instance(binding, MidiCcBinding, "binding")
     # Controller numbers and selector bytes are 7-bit MIDI data, narrower than their uint8 fields.
     return SonareMidiCcBinding(
-        cc_number=_narrow_int(binding.cc_number, "cc_number", 0, _MIDI_DATA_MAX),
+        cc_number=_narrow_int(binding.cc_number, "binding.cc_number", 0, _MIDI_DATA_MAX),
         channel=_absent_or_in_range(binding.channel, "channel", 15, 0xFF),
         kind=_token_ordinal(binding.kind, _MIDI_CC_BINDING_KINDS, "binding.kind"),
-        cc_lsb_number=_narrow_int(binding.cc_lsb_number, "cc_lsb_number", 0, _MIDI_DATA_MAX),
-        selector_msb=_narrow_int(binding.selector_msb, "selector_msb", 0, _MIDI_DATA_MAX),
-        selector_lsb=_narrow_int(binding.selector_lsb, "selector_lsb", 0, _MIDI_DATA_MAX),
+        cc_lsb_number=_narrow_int(
+            binding.cc_lsb_number, "binding.cc_lsb_number", 0, _MIDI_DATA_MAX
+        ),
+        selector_msb=_narrow_int(binding.selector_msb, "binding.selector_msb", 0, _MIDI_DATA_MAX),
+        selector_lsb=_narrow_int(binding.selector_lsb, "binding.selector_lsb", 0, _MIDI_DATA_MAX),
         reserved=0,
         param_id=binding.param_id,
         min_value=float(binding.min_value),

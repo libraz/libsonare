@@ -1,5 +1,5 @@
 # ruff: noqa: F405
-"""Project MIDI editing, routing, and catalog methods."""
+"""Project MIDI editing, event builders, routing, and catalog helpers."""
 
 from __future__ import annotations
 
@@ -103,6 +103,308 @@ def _found_index(value: int, message: str) -> int:
     if value < 0:
         raise _refuse(message)
     return int(value)
+
+
+# -- MIDI naming / GM tables (static-lifetime lookups) ------------------
+
+
+@_entry("gm_instrument_name")
+def gm_instrument_name(program: int) -> str:
+    """GM Level 1 instrument name for ``program``; every program in [0, 127] has one.
+
+    Raises:
+        TypeError: If ``program`` is not an integer.
+        SonareValueError: If ``program`` is outside [0, 127].
+    """
+    program = _narrow_int(program, "program", 0, _MIDI_DATA_MAX)
+    return _total_table_name(_get_lib().sonare_midi_gm_instrument_name(program))
+
+
+@_entry("gm_program_for_name")
+def gm_program_for_name(name: str) -> int:
+    """Reverse GM instrument lookup.
+
+    Raises:
+        SonareValueError: If ``name`` is not a GM instrument name.
+    """
+    return _found_index(
+        _get_lib().sonare_midi_gm_program_for_name(_utf8_arg(name, "name")),
+        "name must be a GM instrument name",
+    )
+
+
+@_entry("gm_family_name")
+def gm_family_name(family: int) -> str:
+    """GM family name for ``family``; every family in [0, 15] has one.
+
+    Raises:
+        TypeError: If ``family`` is not an integer.
+        SonareValueError: If ``family`` is outside [0, 15].
+    """
+    family = _narrow_int(family, "family", 0, _GM_FAMILY_MAX)
+    return _total_table_name(_get_lib().sonare_midi_gm_family_name(family))
+
+
+@_entry("gm_family_first_program")
+def gm_family_first_program(family: int) -> int:
+    """First GM program in ``family`` [0,15].
+
+    Raises:
+        TypeError: If ``family`` is not an integer.
+        SonareValueError: If ``family`` is outside [0, 15].
+    """
+    family = _narrow_int(family, "family", 0, _GM_FAMILY_MAX)
+    return _found_index(
+        _get_lib().sonare_midi_gm_family_first_program(family),
+        "family must be an integer in [0, 15]",
+    )
+
+
+@_entry("gm2_instrument_name")
+def gm2_instrument_name(bank_lsb: int, program: int) -> str | None:
+    """GM2 melodic instrument name for ``bank_lsb`` + ``program``.
+
+    Returns ``None`` for a pair in the domain that GM2 names nothing.
+
+    Raises:
+        TypeError: If ``bank_lsb`` or ``program`` is not an integer.
+        SonareValueError: If ``bank_lsb`` or ``program`` is outside [0, 127].
+    """
+    bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _MIDI_DATA_MAX)
+    program = _narrow_int(program, "program", 0, _MIDI_DATA_MAX)
+    return _table_name(_get_lib().sonare_midi_gm2_instrument_name(bank_lsb, program))
+
+
+@_entry("gm_drum_name")
+def gm_drum_name(note: int) -> str | None:
+    """GM drum name for ``note``; ``None`` for a note outside the kit's [35, 81].
+
+    Raises:
+        TypeError: If ``note`` is not an integer.
+        SonareValueError: If ``note`` is outside [0, 127].
+    """
+    note = _narrow_int(note, "note", 0, _MIDI_DATA_MAX)
+    return _table_name(_get_lib().sonare_midi_gm_drum_name(note))
+
+
+@_entry("gm_drum_note_for_name")
+def gm_drum_note_for_name(name: str) -> int:
+    """Reverse GM drum lookup.
+
+    Raises:
+        SonareValueError: If ``name`` is not a GM drum name.
+    """
+    return _found_index(
+        _get_lib().sonare_midi_gm_drum_note_for_name(_utf8_arg(name, "name")),
+        "name must be a GM drum name",
+    )
+
+
+@_entry("gm2_drum_set_name")
+def gm2_drum_set_name(bank_lsb: int) -> str | None:
+    """GM2 drum-set name for ``bank_lsb``; ``None`` where GM2 defines no set.
+
+    Raises:
+        TypeError: If ``bank_lsb`` is not an integer.
+        SonareValueError: If ``bank_lsb`` is outside [0, 127].
+    """
+    bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _MIDI_DATA_MAX)
+    return _table_name(_get_lib().sonare_midi_gm2_drum_set_name(bank_lsb))
+
+
+@_entry("gm2_drum_name")
+def gm2_drum_name(bank_lsb: int, note: int) -> str | None:
+    """GM2 drum name for ``bank_lsb`` + ``note``; ``None`` where that set names nothing.
+
+    Raises:
+        TypeError: If ``bank_lsb`` or ``note`` is not an integer.
+        SonareValueError: If ``bank_lsb`` or ``note`` is outside [0, 127].
+    """
+    bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _MIDI_DATA_MAX)
+    note = _narrow_int(note, "note", 0, _MIDI_DATA_MAX)
+    return _table_name(_get_lib().sonare_midi_gm2_drum_name(bank_lsb, note))
+
+
+@_entry("midi_cc_name")
+def midi_cc_name(controller: int) -> str | None:
+    """Standard MIDI CC name for ``controller``; ``None`` for an unassigned controller.
+
+    Raises:
+        TypeError: If ``controller`` is not an integer.
+        SonareValueError: If ``controller`` is outside [0, 127].
+    """
+    controller = _narrow_int(controller, "controller", 0, _MIDI_DATA_MAX)
+    return _table_name(_get_lib().sonare_midi_cc_name(controller))
+
+
+@_entry("midi_cc_index_for_name")
+def midi_cc_index_for_name(name: str) -> int:
+    """Reverse standard MIDI CC lookup.
+
+    Raises:
+        SonareValueError: If ``name`` is not a standard MIDI CC name.
+    """
+    return _found_index(
+        _get_lib().sonare_midi_cc_index_for_name(_utf8_arg(name, "name")),
+        "name must be a standard MIDI CC name",
+    )
+
+
+@_entry("per_note_controller_name")
+def per_note_controller_name(index: int) -> str | None:
+    """MIDI 2.0 registered per-note controller name for ``index``.
+
+    Returns ``None`` for an index in the domain that names no registered controller.
+
+    Raises:
+        TypeError: If ``index`` is not an integer.
+        SonareValueError: If ``index`` is outside [0, 255].
+    """
+    index = _narrow_int(index, "index", 0, _PER_NOTE_CONTROLLER_MAX)
+    return _table_name(_get_lib().sonare_midi_per_note_controller_name(index))
+
+
+# -- MIDI routing and automation ----------------------------------------
+
+
+@_entry("midi_route_events")
+def midi_route_events(
+    events: Sequence[ProjectMidiEvent],
+    config: Mapping[str, int | None] | None = None,
+) -> MidiRouteResult:
+    """Route events through the RT MidiRouter filter / remap / thru logic.
+
+    ``config`` is an optional mapping with ``filter_group`` (0..15) /
+    ``filter_channel`` (0..15), absent or ``None`` for any;
+    ``remap_channel`` (0..15), absent or ``None`` for no remap; and
+    ``thru`` (1 = pass non-matching events through, default). A negative
+    group or channel is refused rather than read as "any".
+    """
+    lib = _get_lib()
+    c_in, n = _midi_events_to_c(events, "events")
+    cfg_map: Mapping[str, int | None] = config or {}
+    # The C ABI spells "any" / "no remap" as -1; only absence reaches it.
+    cfg = SonareMidiRouteConfig(
+        filter_group=_absent_or_in_range(cfg_map.get("filter_group"), "filter_group", 15, -1),
+        filter_channel=_absent_or_in_range(cfg_map.get("filter_channel"), "filter_channel", 15, -1),
+        remap_channel=_absent_or_in_range(cfg_map.get("remap_channel"), "remap_channel", 15, -1),
+        thru=cfg_map.get("thru", 1),
+    )
+    out = (SonareMidiEventPod * n)()
+    out_count = ctypes.c_size_t()
+    overflowed = ctypes.c_int()
+    overflow_count = ctypes.c_size_t()
+    _check(
+        lib.sonare_midi_route_events(
+            c_in if n else None,
+            _to_c_size_t(n, "n"),
+            ctypes.byref(cfg),
+            out,
+            _to_c_size_t(n, "n"),
+            ctypes.byref(out_count),
+            ctypes.byref(overflowed),
+            ctypes.byref(overflow_count),
+        )
+    )
+    routed = [_midi_event_from_c(out[i]) for i in range(int(out_count.value))]
+    return MidiRouteResult(
+        events=routed,
+        overflowed=bool(overflowed.value),
+        overflow_count=int(overflow_count.value),
+    )
+
+
+@_entry("midi_cc_learn")
+def midi_cc_learn(
+    events: Sequence[ProjectMidiEvent],
+    param_id: int,
+    min_value: float = 0.0,
+    max_value: float = 1.0,
+    min_movement: int = 0,
+) -> MidiCcBinding | None:
+    """Run MIDI learn over ``events`` and return the learned binding.
+
+    ``min_movement`` is the activity threshold in 7-bit CC units (0-127).
+    Returns ``None`` when no binding is learned (native
+    ``SONARE_ERROR_INVALID_STATE``).
+    """
+    lib = _get_lib()
+    c_in, n = _midi_events_to_c(events, "events")
+    out_binding = SonareMidiCcBinding()
+    rc = lib.sonare_midi_cc_learn(
+        c_in if n else None,
+        _to_c_size_t(n, "n"),
+        _to_c_uint32(param_id, "param_id"),
+        _to_c_float(min_value, "min_value"),
+        _to_c_float(max_value, "max_value"),
+        _to_c_uint8(min_movement, "min_movement"),
+        ctypes.byref(out_binding),
+    )
+    if rc == SONARE_ERROR_INVALID_STATE:
+        return None
+    _check(rc)
+    return _cc_binding_from_c(out_binding)
+
+
+@_entry("midi_cc_to_breakpoint")
+def midi_cc_to_breakpoint(
+    bindings: Sequence[MidiCcBinding],
+    event: ProjectMidiEvent,
+) -> AutomationPoint | None:
+    """Convert one CC ``event`` to an automation breakpoint via a binding table.
+
+    Returns ``None`` when the event does not match any binding (native
+    ``SONARE_ERROR_INVALID_STATE``).
+    """
+    lib = _get_lib()
+    rows = list(bindings)
+    m = len(rows)
+    c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
+    ev = _midi_event_to_c(event, "event")
+    pt = SonareAutomationPoint()
+    rc = lib.sonare_midi_cc_to_breakpoint(
+        c_bindings if m else None,
+        _to_c_size_t(m, "m"),
+        ctypes.byref(ev),
+        ctypes.byref(pt),
+    )
+    if rc == SONARE_ERROR_INVALID_STATE:
+        return None
+    _check(rc)
+    curve = cast(AutomationCurve, _AUTOMATION_CURVES[int(pt.curve_to_next)])
+    return AutomationPoint(float(pt.ppq), float(pt.value), curve)
+
+
+@_entry("midi_param_to_cc")
+def midi_param_to_cc(
+    bindings: Sequence[MidiCcBinding],
+    param_id: int,
+    unit_value: float,
+    group: int,
+    ppq: float = 0.0,
+) -> ProjectMidiEvent | None:
+    """Convert an automation parameter value back to a CC event.
+
+    Returns ``None`` when ``param_id`` is not bound (native ``SONARE_ERROR_INVALID_STATE``).
+    """
+    lib = _get_lib()
+    rows = list(bindings)
+    m = len(rows)
+    c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
+    out_event = SonareMidiEventPod()
+    rc = lib.sonare_midi_param_to_cc(
+        c_bindings if m else None,
+        _to_c_size_t(m, "m"),
+        _to_c_uint32(param_id, "param_id"),
+        _to_c_float(unit_value, "unit_value"),
+        _to_c_uint8(group, "group"),
+        _validate_midi_event_ppq(ppq, "ppq"),
+        ctypes.byref(out_event),
+    )
+    if rc == SONARE_ERROR_INVALID_STATE:
+        return None
+    _check(rc)
+    return _midi_event_from_c(out_event)
 
 
 class _ProjectMidiMixin:
@@ -516,694 +818,386 @@ class _ProjectMidiMixin:
             unmatched_note_offs=int(result.unmatched_note_offs),
         )
 
-    @staticmethod
-    @_entry("Project.midi_note_on")
-    def midi_note_on(
-        ppq: float, group: int, channel: int, note: int, velocity: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 1.0 note-on event accepted by :meth:`set_midi_events`."""
-        return _midi_event_packed(
-            "sonare_midi_note_on",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint8(velocity, "velocity"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi_note_off")
-    def midi_note_off(
-        ppq: float, group: int, channel: int, note: int, velocity: int = 0
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 1.0 note-off event accepted by :meth:`set_midi_events`."""
-        return _midi_event_packed(
-            "sonare_midi_note_off",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint8(velocity, "velocity"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi_cc")
-    def midi_cc(
-        ppq: float, group: int, channel: int, controller: int, value: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 1.0 control-change event tuple."""
-        return _midi_event_packed(
-            "sonare_midi_cc",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(controller, "controller"),
-            _to_c_uint8(value, "value"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi_poly_pressure")
-    def midi_poly_pressure(
-        ppq: float, group: int, channel: int, note: int, pressure: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 1.0 poly-pressure event tuple."""
-        return _midi_event_packed(
-            "sonare_midi_poly_pressure",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint8(pressure, "pressure"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi_program")
-    def midi_program(ppq: float, group: int, channel: int, program: int) -> ProjectMidiEvent:
-        """Pack a MIDI 1.0 program-change event tuple."""
-        return _midi_event_packed(
-            "sonare_midi_program",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(program, "program"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi_channel_pressure")
-    def midi_channel_pressure(
-        ppq: float, group: int, channel: int, pressure: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 1.0 channel-pressure event tuple."""
-        return _midi_event_packed(
-            "sonare_midi_channel_pressure",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(pressure, "pressure"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi_pitch_bend")
-    def midi_pitch_bend(ppq: float, group: int, channel: int, bend: int) -> ProjectMidiEvent:
-        """Pack a MIDI 1.0 pitch-bend event tuple (`bend` is unsigned 14-bit)."""
-        # The one uint16 in the family; a uint8 here would refuse most of the range.
-        return _midi_event_packed(
-            "sonare_midi_pitch_bend",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint16(bend, "bend"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_note_on")
-    def midi2_note_on(
-        ppq: float,
-        group: int,
-        channel: int,
-        note: int,
-        velocity16: int,
-        attribute_type: int = 0,
-        attribute_data: int = 0,
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 note-on event tuple (16-bit velocity; 0 still sounds)."""
-        return _midi_event_packed(
-            "sonare_midi2_note_on",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint16(velocity16, "velocity16"),
-            _to_c_uint8(attribute_type, "attribute_type"),
-            _to_c_uint16(attribute_data, "attribute_data"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_note_off")
-    def midi2_note_off(
-        ppq: float, group: int, channel: int, note: int, velocity16: int = 0
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 note-off event tuple (16-bit release velocity)."""
-        return _midi_event_packed(
-            "sonare_midi2_note_off",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint16(velocity16, "velocity16"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_cc")
-    def midi2_cc(
-        ppq: float, group: int, channel: int, controller: int, value32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 control-change event tuple (32-bit value)."""
-        return _midi_event_packed(
-            "sonare_midi2_cc",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(controller, "controller"),
-            _to_c_uint32(value32, "value32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_poly_pressure")
-    def midi2_poly_pressure(
-        ppq: float, group: int, channel: int, note: int, pressure32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 poly-pressure event tuple (32-bit pressure)."""
-        return _midi_event_packed(
-            "sonare_midi2_poly_pressure",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint32(pressure32, "pressure32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_channel_pressure")
-    def midi2_channel_pressure(
-        ppq: float, group: int, channel: int, pressure32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 channel-pressure event tuple (32-bit pressure)."""
-        return _midi_event_packed(
-            "sonare_midi2_channel_pressure",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint32(pressure32, "pressure32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_pitch_bend")
-    def midi2_pitch_bend(ppq: float, group: int, channel: int, bend32: int) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 pitch-bend event tuple (unsigned 32-bit)."""
-        return _midi_event_packed(
-            "sonare_midi2_pitch_bend",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint32(bend32, "bend32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_program")
-    def midi2_program(
-        ppq: float,
-        group: int,
-        channel: int,
-        program: int,
-        bank_msb: int | None = None,
-        bank_lsb: int | None = None,
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 program-change event tuple.
-
-        The bank travels in the same message: give ``bank_msb`` and ``bank_lsb``
-        (each in [0, 127]) together to apply it, or omit both. One alone is
-        refused with :class:`SonareValueError`."""
-        valid, msb, lsb = _bank_pair(bank_msb, bank_lsb)
-        return _midi_event_packed(
-            "sonare_midi2_program",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(program, "program"),
-            _to_c_int(1 if valid else 0, "bank_valid"),
-            _to_c_uint8(msb, "bank_msb"),
-            _to_c_uint8(lsb, "bank_lsb"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_registered_controller")
-    def midi2_registered_controller(
-        ppq: float, group: int, channel: int, bank: int, index: int, value32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 registered controller (RPN) event tuple (32-bit value)."""
-        return _midi_event_packed(
-            "sonare_midi2_registered_controller",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(bank, "bank"),
-            _to_c_uint8(index, "index"),
-            _to_c_uint32(value32, "value32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_assignable_controller")
-    def midi2_assignable_controller(
-        ppq: float, group: int, channel: int, bank: int, index: int, value32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 assignable controller (NRPN) event tuple (32-bit value)."""
-        return _midi_event_packed(
-            "sonare_midi2_assignable_controller",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(bank, "bank"),
-            _to_c_uint8(index, "index"),
-            _to_c_uint32(value32, "value32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_relative_registered_controller")
-    def midi2_relative_registered_controller(
-        ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 relative registered controller event tuple (signed 32-bit delta)."""
-        return _midi_event_packed(
-            "sonare_midi2_relative_registered_controller",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(bank, "bank"),
-            _to_c_uint8(index, "index"),
-            _to_c_int32(delta32, "delta32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_relative_assignable_controller")
-    def midi2_relative_assignable_controller(
-        ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 relative assignable controller event tuple (signed 32-bit delta)."""
-        return _midi_event_packed(
-            "sonare_midi2_relative_assignable_controller",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(bank, "bank"),
-            _to_c_uint8(index, "index"),
-            _to_c_int32(delta32, "delta32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_registered_per_note_controller")
-    def midi2_registered_per_note_controller(
-        ppq: float, group: int, channel: int, note: int, index: int, value32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 registered per-note controller event tuple (32-bit value)."""
-        return _midi_event_packed(
-            "sonare_midi2_registered_per_note_controller",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint8(index, "index"),
-            _to_c_uint32(value32, "value32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_assignable_per_note_controller")
-    def midi2_assignable_per_note_controller(
-        ppq: float, group: int, channel: int, note: int, index: int, value32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 assignable per-note controller event tuple (32-bit value)."""
-        return _midi_event_packed(
-            "sonare_midi2_assignable_per_note_controller",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint8(index, "index"),
-            _to_c_uint32(value32, "value32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_per_note_pitch_bend")
-    def midi2_per_note_pitch_bend(
-        ppq: float, group: int, channel: int, note: int, bend32: int
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 per-note pitch-bend event tuple (unsigned 32-bit)."""
-        return _midi_event_packed(
-            "sonare_midi2_per_note_pitch_bend",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_uint32(bend32, "bend32"),
-        )
-
-    @staticmethod
-    @_entry("Project.midi2_per_note_management")
-    def midi2_per_note_management(
-        ppq: float, group: int, channel: int, note: int, detach: bool = False, reset: bool = False
-    ) -> ProjectMidiEvent:
-        """Pack a MIDI 2.0 per-note management event tuple.
-
-        ``detach`` detaches per-note controllers from voices already sounding
-        on ``note``; ``reset`` resets the note's per-note controllers."""
-        return _midi_event_packed(
-            "sonare_midi2_per_note_management",
-            _validate_midi_event_ppq(ppq, "ppq"),
-            _to_c_uint8(group, "group"),
-            _to_c_uint8(channel, "channel"),
-            _to_c_uint8(note, "note"),
-            _to_c_int(1 if detach else 0, "detach"),
-            _to_c_int(1 if reset else 0, "reset"),
-        )
-
-    # -- MIDI naming / GM tables (static-lifetime lookups) ------------------
-
-    @staticmethod
-    @_entry("Project.gm_instrument_name")
-    def gm_instrument_name(program: int) -> str:
-        """GM Level 1 instrument name for ``program``; every program in [0, 127] has one.
-
-        Raises:
-            TypeError: If ``program`` is not an integer.
-            SonareValueError: If ``program`` is outside [0, 127].
-        """
-        program = _narrow_int(program, "program", 0, _MIDI_DATA_MAX)
-        return _total_table_name(_get_lib().sonare_midi_gm_instrument_name(program))
-
-    @staticmethod
-    @_entry("Project.gm_program_for_name")
-    def gm_program_for_name(name: str) -> int:
-        """Reverse GM instrument lookup.
-
-        Raises:
-            SonareValueError: If ``name`` is not a GM instrument name.
-        """
-        return _found_index(
-            _get_lib().sonare_midi_gm_program_for_name(_utf8_arg(name, "name")),
-            "name must be a GM instrument name",
-        )
-
-    @staticmethod
-    @_entry("Project.gm_family_name")
-    def gm_family_name(family: int) -> str:
-        """GM family name for ``family``; every family in [0, 15] has one.
-
-        Raises:
-            TypeError: If ``family`` is not an integer.
-            SonareValueError: If ``family`` is outside [0, 15].
-        """
-        family = _narrow_int(family, "family", 0, _GM_FAMILY_MAX)
-        return _total_table_name(_get_lib().sonare_midi_gm_family_name(family))
-
-    @staticmethod
-    @_entry("Project.gm_family_first_program")
-    def gm_family_first_program(family: int) -> int:
-        """First GM program in ``family`` [0,15].
-
-        Raises:
-            TypeError: If ``family`` is not an integer.
-            SonareValueError: If ``family`` is outside [0, 15].
-        """
-        family = _narrow_int(family, "family", 0, _GM_FAMILY_MAX)
-        return _found_index(
-            _get_lib().sonare_midi_gm_family_first_program(family),
-            "family must be an integer in [0, 15]",
-        )
-
-    @staticmethod
-    @_entry("Project.gm2_instrument_name")
-    def gm2_instrument_name(bank_lsb: int, program: int) -> str | None:
-        """GM2 melodic instrument name for ``bank_lsb`` + ``program``.
-
-        Returns ``None`` for a pair in the domain that GM2 names nothing.
-
-        Raises:
-            TypeError: If ``bank_lsb`` or ``program`` is not an integer.
-            SonareValueError: If ``bank_lsb`` or ``program`` is outside [0, 127].
-        """
-        bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _MIDI_DATA_MAX)
-        program = _narrow_int(program, "program", 0, _MIDI_DATA_MAX)
-        return _table_name(_get_lib().sonare_midi_gm2_instrument_name(bank_lsb, program))
-
-    @staticmethod
-    @_entry("Project.gm_drum_name")
-    def gm_drum_name(note: int) -> str | None:
-        """GM drum name for ``note``; ``None`` for a note outside the kit's [35, 81].
-
-        Raises:
-            TypeError: If ``note`` is not an integer.
-            SonareValueError: If ``note`` is outside [0, 127].
-        """
-        note = _narrow_int(note, "note", 0, _MIDI_DATA_MAX)
-        return _table_name(_get_lib().sonare_midi_gm_drum_name(note))
-
-    @staticmethod
-    @_entry("Project.gm_drum_note_for_name")
-    def gm_drum_note_for_name(name: str) -> int:
-        """Reverse GM drum lookup.
-
-        Raises:
-            SonareValueError: If ``name`` is not a GM drum name.
-        """
-        return _found_index(
-            _get_lib().sonare_midi_gm_drum_note_for_name(_utf8_arg(name, "name")),
-            "name must be a GM drum name",
-        )
-
-    @staticmethod
-    @_entry("Project.gm2_drum_set_name")
-    def gm2_drum_set_name(bank_lsb: int) -> str | None:
-        """GM2 drum-set name for ``bank_lsb``; ``None`` where GM2 defines no set.
-
-        Raises:
-            TypeError: If ``bank_lsb`` is not an integer.
-            SonareValueError: If ``bank_lsb`` is outside [0, 127].
-        """
-        bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _MIDI_DATA_MAX)
-        return _table_name(_get_lib().sonare_midi_gm2_drum_set_name(bank_lsb))
-
-    @staticmethod
-    @_entry("Project.gm2_drum_name")
-    def gm2_drum_name(bank_lsb: int, note: int) -> str | None:
-        """GM2 drum name for ``bank_lsb`` + ``note``; ``None`` where that set names nothing.
-
-        Raises:
-            TypeError: If ``bank_lsb`` or ``note`` is not an integer.
-            SonareValueError: If ``bank_lsb`` or ``note`` is outside [0, 127].
-        """
-        bank_lsb = _narrow_int(bank_lsb, "bank_lsb", 0, _MIDI_DATA_MAX)
-        note = _narrow_int(note, "note", 0, _MIDI_DATA_MAX)
-        return _table_name(_get_lib().sonare_midi_gm2_drum_name(bank_lsb, note))
-
-    @staticmethod
-    @_entry("Project.midi_cc_name")
-    def midi_cc_name(controller: int) -> str | None:
-        """Standard MIDI CC name for ``controller``; ``None`` for an unassigned controller.
-
-        Raises:
-            TypeError: If ``controller`` is not an integer.
-            SonareValueError: If ``controller`` is outside [0, 127].
-        """
-        controller = _narrow_int(controller, "controller", 0, _MIDI_DATA_MAX)
-        return _table_name(_get_lib().sonare_midi_cc_name(controller))
-
-    @staticmethod
-    @_entry("Project.midi_cc_index_for_name")
-    def midi_cc_index_for_name(name: str) -> int:
-        """Reverse standard MIDI CC lookup.
-
-        Raises:
-            SonareValueError: If ``name`` is not a standard MIDI CC name.
-        """
-        return _found_index(
-            _get_lib().sonare_midi_cc_index_for_name(_utf8_arg(name, "name")),
-            "name must be a standard MIDI CC name",
-        )
-
-    @staticmethod
-    @_entry("Project.per_note_controller_name")
-    def per_note_controller_name(index: int) -> str | None:
-        """MIDI 2.0 registered per-note controller name for ``index``.
-
-        Returns ``None`` for an index in the domain that names no registered controller.
-
-        Raises:
-            TypeError: If ``index`` is not an integer.
-            SonareValueError: If ``index`` is outside [0, 255].
-        """
-        index = _narrow_int(index, "index", 0, _PER_NOTE_CONTROLLER_MAX)
-        return _table_name(_get_lib().sonare_midi_per_note_controller_name(index))
-
-    # -- MIDI pure conversion helpers ---------------------------------------
-
-    @staticmethod
-    @_entry("Project.midi_bank_program")
-    def midi_bank_program(
-        ppq: float,
-        group: int,
-        channel: int,
-        bank_msb: int,
-        bank_lsb: int,
-        program: int,
-    ) -> list[ProjectMidiEvent]:
-        """Lower a bank/program selection to MIDI 1.0 bank-select + program events.
-
-        Returns the emitted events (Bank MSB CC, Bank LSB CC, then Program
-        Change) at ``ppq``.
-        """
-        lib = _get_lib()
-        events = (SonareMidiEventPod * 3)()
-        out_count = ctypes.c_size_t()
-        _check(
-            lib.sonare_midi_bank_program(
-                _validate_midi_event_ppq(ppq, "ppq"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_int(bank_msb, "bank_msb"),
-                _to_c_int(bank_lsb, "bank_lsb"),
-                _to_c_int(program, "program"),
-                events,
-                ctypes.c_size_t(3),
-                ctypes.byref(out_count),
-            )
-        )
-        return [_midi_event_from_c(events[i]) for i in range(int(out_count.value))]
-
-    @staticmethod
-    @_entry("Project.midi_route_events")
-    def midi_route_events(
-        events: Sequence[ProjectMidiEvent],
-        config: Mapping[str, int | None] | None = None,
-    ) -> MidiRouteResult:
-        """Route events through the RT MidiRouter filter / remap / thru logic.
-
-        ``config`` is an optional mapping with ``filter_group`` (0..15) /
-        ``filter_channel`` (0..15), absent or ``None`` for any;
-        ``remap_channel`` (0..15), absent or ``None`` for no remap; and
-        ``thru`` (1 = pass non-matching events through, default). A negative
-        group or channel is refused rather than read as "any".
-        """
-        lib = _get_lib()
-        c_in, n = _midi_events_to_c(events, "events")
-        cfg_map: Mapping[str, int | None] = config or {}
-        # The C ABI spells "any" / "no remap" as -1; only absence reaches it.
-        cfg = SonareMidiRouteConfig(
-            filter_group=_absent_or_in_range(cfg_map.get("filter_group"), "filter_group", 15, -1),
-            filter_channel=_absent_or_in_range(
-                cfg_map.get("filter_channel"), "filter_channel", 15, -1
-            ),
-            remap_channel=_absent_or_in_range(
-                cfg_map.get("remap_channel"), "remap_channel", 15, -1
-            ),
-            thru=cfg_map.get("thru", 1),
-        )
-        out = (SonareMidiEventPod * n)()
-        out_count = ctypes.c_size_t()
-        overflowed = ctypes.c_int()
-        overflow_count = ctypes.c_size_t()
-        _check(
-            lib.sonare_midi_route_events(
-                c_in if n else None,
-                _to_c_size_t(n, "n"),
-                ctypes.byref(cfg),
-                out,
-                _to_c_size_t(n, "n"),
-                ctypes.byref(out_count),
-                ctypes.byref(overflowed),
-                ctypes.byref(overflow_count),
-            )
-        )
-        routed = [_midi_event_from_c(out[i]) for i in range(int(out_count.value))]
-        return MidiRouteResult(
-            events=routed,
-            overflowed=bool(overflowed.value),
-            overflow_count=int(overflow_count.value),
-        )
-
-    @staticmethod
-    @_entry("Project.midi_cc_learn")
-    def midi_cc_learn(
-        events: Sequence[ProjectMidiEvent],
-        param_id: int,
-        min_value: float = 0.0,
-        max_value: float = 1.0,
-        min_movement: int = 0,
-    ) -> MidiCcBinding | None:
-        """Run MIDI learn over ``events`` and return the learned binding.
-
-        ``min_movement`` is the activity threshold in 7-bit CC units (0-127).
-        Returns ``None`` when no binding is learned (native
-        ``SONARE_ERROR_INVALID_STATE``).
-        """
-        lib = _get_lib()
-        c_in, n = _midi_events_to_c(events, "events")
-        out_binding = SonareMidiCcBinding()
-        rc = lib.sonare_midi_cc_learn(
-            c_in if n else None,
-            _to_c_size_t(n, "n"),
-            _to_c_uint32(param_id, "param_id"),
-            _to_c_float(min_value, "min_value"),
-            _to_c_float(max_value, "max_value"),
-            _to_c_uint8(min_movement, "min_movement"),
-            ctypes.byref(out_binding),
-        )
-        if rc == SONARE_ERROR_INVALID_STATE:
-            return None
-        _check(rc)
-        return _cc_binding_from_c(out_binding)
-
-    @staticmethod
-    @_entry("Project.midi_cc_to_breakpoint")
-    def midi_cc_to_breakpoint(
-        bindings: Sequence[MidiCcBinding],
-        event: ProjectMidiEvent,
-    ) -> AutomationPoint | None:
-        """Convert one CC ``event`` to an automation breakpoint via a binding table.
-
-        Returns ``None`` when the event does not match any binding (native
-        ``SONARE_ERROR_INVALID_STATE``).
-        """
-        lib = _get_lib()
-        rows = list(bindings)
-        m = len(rows)
-        c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
-        ev = _midi_event_to_c(event, "event")
-        pt = SonareAutomationPoint()
-        rc = lib.sonare_midi_cc_to_breakpoint(
-            c_bindings if m else None,
-            _to_c_size_t(m, "m"),
-            ctypes.byref(ev),
-            ctypes.byref(pt),
-        )
-        if rc == SONARE_ERROR_INVALID_STATE:
-            return None
-        _check(rc)
-        curve = cast(AutomationCurve, _AUTOMATION_CURVES[int(pt.curve_to_next)])
-        return AutomationPoint(float(pt.ppq), float(pt.value), curve)
-
-    @staticmethod
-    @_entry("Project.midi_param_to_cc")
-    def midi_param_to_cc(
-        bindings: Sequence[MidiCcBinding],
-        param_id: int,
-        unit_value: float,
-        group: int,
-        ppq: float = 0.0,
-    ) -> ProjectMidiEvent | None:
-        """Convert an automation parameter value back to a CC event.
-
-        Returns ``None`` when ``param_id`` is not bound (native ``SONARE_ERROR_INVALID_STATE``).
-        """
-        lib = _get_lib()
-        rows = list(bindings)
-        m = len(rows)
-        c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
-        out_event = SonareMidiEventPod()
-        rc = lib.sonare_midi_param_to_cc(
-            c_bindings if m else None,
-            _to_c_size_t(m, "m"),
-            _to_c_uint32(param_id, "param_id"),
-            _to_c_float(unit_value, "unit_value"),
-            _to_c_uint8(group, "group"),
-            _validate_midi_event_ppq(ppq, "ppq"),
-            ctypes.byref(out_event),
-        )
-        if rc == SONARE_ERROR_INVALID_STATE:
-            return None
-        _check(rc)
-        return _midi_event_from_c(out_event)
-
     # -- MIR ----------------------------------------------------------------
+
+
+@_entry("midi_note_on")
+def midi_note_on(
+    ppq: float, group: int, channel: int, note: int, velocity: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 1.0 note-on event accepted by :meth:`Project.set_midi_events`."""
+    return _midi_event_packed(
+        "sonare_midi_note_on",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint8(velocity, "velocity"),
+    )
+
+
+@_entry("midi_note_off")
+def midi_note_off(
+    ppq: float, group: int, channel: int, note: int, velocity: int = 0
+) -> ProjectMidiEvent:
+    """Pack a MIDI 1.0 note-off event accepted by :meth:`Project.set_midi_events`."""
+    return _midi_event_packed(
+        "sonare_midi_note_off",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint8(velocity, "velocity"),
+    )
+
+
+@_entry("midi_cc")
+def midi_cc(ppq: float, group: int, channel: int, controller: int, value: int) -> ProjectMidiEvent:
+    """Pack a MIDI 1.0 control-change event."""
+    return _midi_event_packed(
+        "sonare_midi_cc",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(controller, "controller"),
+        _to_c_uint8(value, "value"),
+    )
+
+
+@_entry("midi_poly_pressure")
+def midi_poly_pressure(
+    ppq: float, group: int, channel: int, note: int, pressure: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 1.0 poly-pressure event."""
+    return _midi_event_packed(
+        "sonare_midi_poly_pressure",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint8(pressure, "pressure"),
+    )
+
+
+@_entry("midi_program")
+def midi_program(ppq: float, group: int, channel: int, program: int) -> ProjectMidiEvent:
+    """Pack a MIDI 1.0 program-change event."""
+    return _midi_event_packed(
+        "sonare_midi_program",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(program, "program"),
+    )
+
+
+@_entry("midi_channel_pressure")
+def midi_channel_pressure(ppq: float, group: int, channel: int, pressure: int) -> ProjectMidiEvent:
+    """Pack a MIDI 1.0 channel-pressure event."""
+    return _midi_event_packed(
+        "sonare_midi_channel_pressure",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(pressure, "pressure"),
+    )
+
+
+@_entry("midi_pitch_bend")
+def midi_pitch_bend(ppq: float, group: int, channel: int, bend: int) -> ProjectMidiEvent:
+    """Pack a MIDI 1.0 pitch-bend event (`bend` is unsigned 14-bit)."""
+    # The one uint16 in the family; a uint8 here would refuse most of the range.
+    return _midi_event_packed(
+        "sonare_midi_pitch_bend",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint16(bend, "bend"),
+    )
+
+
+@_entry("midi2_note_on")
+def midi2_note_on(
+    ppq: float,
+    group: int,
+    channel: int,
+    note: int,
+    velocity16: int,
+    attribute_type: int = 0,
+    attribute_data: int = 0,
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 note-on event (16-bit velocity; 0 still sounds)."""
+    return _midi_event_packed(
+        "sonare_midi2_note_on",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint16(velocity16, "velocity16"),
+        _to_c_uint8(attribute_type, "attribute_type"),
+        _to_c_uint16(attribute_data, "attribute_data"),
+    )
+
+
+@_entry("midi2_note_off")
+def midi2_note_off(
+    ppq: float, group: int, channel: int, note: int, velocity16: int = 0
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 note-off event (16-bit release velocity)."""
+    return _midi_event_packed(
+        "sonare_midi2_note_off",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint16(velocity16, "velocity16"),
+    )
+
+
+@_entry("midi2_cc")
+def midi2_cc(
+    ppq: float, group: int, channel: int, controller: int, value32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 control-change event (32-bit value)."""
+    return _midi_event_packed(
+        "sonare_midi2_cc",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(controller, "controller"),
+        _to_c_uint32(value32, "value32"),
+    )
+
+
+@_entry("midi2_poly_pressure")
+def midi2_poly_pressure(
+    ppq: float, group: int, channel: int, note: int, pressure32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 poly-pressure event (32-bit pressure)."""
+    return _midi_event_packed(
+        "sonare_midi2_poly_pressure",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint32(pressure32, "pressure32"),
+    )
+
+
+@_entry("midi2_channel_pressure")
+def midi2_channel_pressure(
+    ppq: float, group: int, channel: int, pressure32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 channel-pressure event (32-bit pressure)."""
+    return _midi_event_packed(
+        "sonare_midi2_channel_pressure",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint32(pressure32, "pressure32"),
+    )
+
+
+@_entry("midi2_pitch_bend")
+def midi2_pitch_bend(ppq: float, group: int, channel: int, bend32: int) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 pitch-bend event (unsigned 32-bit)."""
+    return _midi_event_packed(
+        "sonare_midi2_pitch_bend",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint32(bend32, "bend32"),
+    )
+
+
+@_entry("midi2_program")
+def midi2_program(
+    ppq: float,
+    group: int,
+    channel: int,
+    program: int,
+    bank_msb: int | None = None,
+    bank_lsb: int | None = None,
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 program-change event.
+
+    The bank travels in the same message: give ``bank_msb`` and ``bank_lsb``
+    (each in [0, 127]) together to apply it, or omit both. One alone is
+    refused with :class:`SonareValueError`."""
+    valid, msb, lsb = _bank_pair(bank_msb, bank_lsb)
+    return _midi_event_packed(
+        "sonare_midi2_program",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(program, "program"),
+        _to_c_int(1 if valid else 0, "bank_valid"),
+        _to_c_uint8(msb, "bank_msb"),
+        _to_c_uint8(lsb, "bank_lsb"),
+    )
+
+
+@_entry("midi2_registered_controller")
+def midi2_registered_controller(
+    ppq: float, group: int, channel: int, bank: int, index: int, value32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 registered controller (RPN) event (32-bit value)."""
+    return _midi_event_packed(
+        "sonare_midi2_registered_controller",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(bank, "bank"),
+        _to_c_uint8(index, "index"),
+        _to_c_uint32(value32, "value32"),
+    )
+
+
+@_entry("midi2_assignable_controller")
+def midi2_assignable_controller(
+    ppq: float, group: int, channel: int, bank: int, index: int, value32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 assignable controller (NRPN) event (32-bit value)."""
+    return _midi_event_packed(
+        "sonare_midi2_assignable_controller",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(bank, "bank"),
+        _to_c_uint8(index, "index"),
+        _to_c_uint32(value32, "value32"),
+    )
+
+
+@_entry("midi2_relative_registered_controller")
+def midi2_relative_registered_controller(
+    ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 relative registered controller event (signed 32-bit delta)."""
+    return _midi_event_packed(
+        "sonare_midi2_relative_registered_controller",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(bank, "bank"),
+        _to_c_uint8(index, "index"),
+        _to_c_int32(delta32, "delta32"),
+    )
+
+
+@_entry("midi2_relative_assignable_controller")
+def midi2_relative_assignable_controller(
+    ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 relative assignable controller event (signed 32-bit delta)."""
+    return _midi_event_packed(
+        "sonare_midi2_relative_assignable_controller",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(bank, "bank"),
+        _to_c_uint8(index, "index"),
+        _to_c_int32(delta32, "delta32"),
+    )
+
+
+@_entry("midi2_registered_per_note_controller")
+def midi2_registered_per_note_controller(
+    ppq: float, group: int, channel: int, note: int, index: int, value32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 registered per-note controller event (32-bit value)."""
+    return _midi_event_packed(
+        "sonare_midi2_registered_per_note_controller",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint8(index, "index"),
+        _to_c_uint32(value32, "value32"),
+    )
+
+
+@_entry("midi2_assignable_per_note_controller")
+def midi2_assignable_per_note_controller(
+    ppq: float, group: int, channel: int, note: int, index: int, value32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 assignable per-note controller event (32-bit value)."""
+    return _midi_event_packed(
+        "sonare_midi2_assignable_per_note_controller",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint8(index, "index"),
+        _to_c_uint32(value32, "value32"),
+    )
+
+
+@_entry("midi2_per_note_pitch_bend")
+def midi2_per_note_pitch_bend(
+    ppq: float, group: int, channel: int, note: int, bend32: int
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 per-note pitch-bend event (unsigned 32-bit)."""
+    return _midi_event_packed(
+        "sonare_midi2_per_note_pitch_bend",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_uint32(bend32, "bend32"),
+    )
+
+
+@_entry("midi2_per_note_management")
+def midi2_per_note_management(
+    ppq: float, group: int, channel: int, note: int, detach: bool = False, reset: bool = False
+) -> ProjectMidiEvent:
+    """Pack a MIDI 2.0 per-note management event.
+
+    ``detach`` detaches per-note controllers from voices already sounding
+    on ``note``; ``reset`` resets the note's per-note controllers."""
+    return _midi_event_packed(
+        "sonare_midi2_per_note_management",
+        _validate_midi_event_ppq(ppq, "ppq"),
+        _to_c_uint8(group, "group"),
+        _to_c_uint8(channel, "channel"),
+        _to_c_uint8(note, "note"),
+        _to_c_int(1 if detach else 0, "detach"),
+        _to_c_int(1 if reset else 0, "reset"),
+    )
+
+
+@_entry("midi_bank_program")
+def midi_bank_program(
+    ppq: float,
+    group: int,
+    channel: int,
+    bank_msb: int,
+    bank_lsb: int,
+    program: int,
+) -> list[ProjectMidiEvent]:
+    """Lower a bank/program selection to MIDI 1.0 bank-select + program events.
+
+    Returns the emitted events (Bank MSB CC, Bank LSB CC, then Program
+    Change) at ``ppq``.
+    """
+    lib = _get_lib()
+    events = (SonareMidiEventPod * 3)()
+    out_count = ctypes.c_size_t()
+    _check(
+        lib.sonare_midi_bank_program(
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_int(bank_msb, "bank_msb"),
+            _to_c_int(bank_lsb, "bank_lsb"),
+            _to_c_int(program, "program"),
+            events,
+            ctypes.c_size_t(3),
+            ctypes.byref(out_count),
+        )
+    )
+    return [_midi_event_from_c(events[i]) for i in range(int(out_count.value))]
 
 
 def _scaled(

@@ -108,41 +108,41 @@ def test_an_out_of_range_index_is_refused(mixer_scene) -> None:
 
 def _cc_sweep() -> list:
     """One 7-bit controller moving by 10, so a movement threshold is observable."""
-    return [ls.Project.midi_cc(0.0, 0, 2, 74, 60), ls.Project.midi_cc(0.1, 0, 2, 74, 70)]
+    return [ls.midi_cc(0.0, 0, 2, 74, 60), ls.midi_cc(0.1, 0, 2, 74, 70)]
 
 
 def test_a_wrapped_movement_threshold_is_refused_rather_than_read_as_a_smaller_one() -> None:
     """The 8-bit argument reader, on a field whose in-domain wrap changes the outcome."""
     events = _cc_sweep()
-    assert ls.Project.midi_cc_learn(events, 77, min_movement=10) is not None  # positive control
-    assert ls.Project.midi_cc_learn(events, 77, min_movement=11) is None
-    assert ls.Project.midi_cc_learn(events, 77, min_movement=127) is None
+    assert ls.midi_cc_learn(events, 77, min_movement=10) is not None  # positive control
+    assert ls.midi_cc_learn(events, 77, min_movement=11) is None
+    assert ls.midi_cc_learn(events, 77, min_movement=127) is None
     for value in (128, 255, 2**8 + 7, 2**8, -1, 2**32):
         with pytest.raises(SonareValueError, match="min_movement"):
-            ls.Project.midi_cc_learn(events, 77, min_movement=value)
+            ls.midi_cc_learn(events, 77, min_movement=value)
 
 
 def test_a_wrapped_group_is_refused_rather_than_read_as_a_different_port() -> None:
     """The same reader on the other field that reaches it from a caller."""
-    binding = ls.Project.midi_cc_learn(_cc_sweep(), 77)
+    binding = ls.midi_cc_learn(_cc_sweep(), 77)
     assert binding is not None
-    first = ls.Project.midi_param_to_cc([binding], 77, 0.5, 0)
-    second = ls.Project.midi_param_to_cc([binding], 77, 0.5, 1)
+    first = ls.midi_param_to_cc([binding], 77, 0.5, 0)
+    second = ls.midi_param_to_cc([binding], 77, 0.5, 1)
     assert first is not None and second is not None and first != second  # positive control
     for value in (2**8 + 1, 2**8, -1, 2**32):
         with pytest.raises(SonareValueError, match="group"):
-            ls.Project.midi_param_to_cc([binding], 77, 0.5, value)
+            ls.midi_param_to_cc([binding], 77, 0.5, value)
 
 
 def test_a_wrapped_param_id_is_refused_rather_than_read_as_a_bound_one() -> None:
     """The 32-bit argument reader: a wrap lands back on the id that is bound."""
-    binding = ls.Project.midi_cc_learn(_cc_sweep(), 77)
+    binding = ls.midi_cc_learn(_cc_sweep(), 77)
     assert binding is not None
-    assert ls.Project.midi_param_to_cc([binding], 77, 0.5, 0) is not None  # positive control
-    assert ls.Project.midi_param_to_cc([binding], 78, 0.5, 0) is None
+    assert ls.midi_param_to_cc([binding], 77, 0.5, 0) is not None  # positive control
+    assert ls.midi_param_to_cc([binding], 78, 0.5, 0) is None
     for value in (2**32 + 77, 2**32, -1, 2**64):
         with pytest.raises(SonareValueError, match="param_id"):
-            ls.Project.midi_param_to_cc([binding], value, 0.5, 0)
+            ls.midi_param_to_cc([binding], value, 0.5, 0)
 
 
 def test_a_marker_kind_is_an_exact_token() -> None:
@@ -410,8 +410,8 @@ def two_midi_clip_project():
         project.set_midi_events(
             clip,
             [
-                ls.Project.midi_note_on(0.0, 0, 0, note, 100),
-                ls.Project.midi_note_off(240.0, 0, 0, note),
+                ls.midi_note_on(0.0, 0, 0, note, 100),
+                ls.midi_note_off(240.0, 0, 0, note),
             ],
         )
     return project, clips
@@ -422,7 +422,7 @@ def test_a_wrapped_midi_argument_is_refused_rather_than_addressing_another_clip(
 ) -> None:
     """The MIDI surface, whose clip id and channel-voice scalars narrow onto three widths."""
     project, (clip_a, clip_b) = two_midi_clip_project
-    events = [ls.Project.midi_note_on(0.0, 0, 0, 72, 100)]
+    events = [ls.midi_note_on(0.0, 0, 0, 72, 100)]
     fx = {"transposeSemitones": 5}
 
     def applied(edit, value) -> str:
@@ -474,9 +474,9 @@ def test_a_wrapped_midi_query_argument_is_refused_rather_than_counting_another_c
     project.set_midi_events(
         clip_b,
         [
-            ls.Project.midi_note_on(0.0, 0, 0, 67, 100),
-            ls.Project.midi_note_off(240.0, 0, 0, 67),
-            ls.Project.midi_note_on(240.0, 0, 0, 69, 100),
+            ls.midi_note_on(0.0, 0, 0, 67, 100),
+            ls.midi_note_off(240.0, 0, 0, 67),
+            ls.midi_note_on(240.0, 0, 0, 69, 100),
         ],
     )
     fx = {"transposeSemitones": 5}
@@ -501,17 +501,17 @@ def test_a_wrapped_gm_lookup_argument_is_refused_rather_than_naming_another_entr
     contract promises ``None``.
     """
     lookups = (
-        ("program", ls.Project.gm_instrument_name, (0,), (1,), 0),
-        ("family", ls.Project.gm_family_name, (0,), (1,), 0),
-        ("family", ls.Project.gm_family_first_program, (0,), (1,), 0),
-        ("note", ls.Project.gm_drum_name, (36,), (38,), 0),
-        ("bank_lsb", ls.Project.gm2_drum_set_name, (0,), (8,), 0),
-        ("controller", ls.Project.midi_cc_name, (7,), (10,), 0),
-        ("index", ls.Project.per_note_controller_name, (1,), (2,), 0),
-        ("bank_lsb", ls.Project.gm2_instrument_name, (0, 0), (1, 0), 0),
-        ("program", ls.Project.gm2_instrument_name, (0, 0), (0, 1), 1),
-        ("bank_lsb", ls.Project.gm2_drum_name, (0, 27), (48, 27), 0),
-        ("note", ls.Project.gm2_drum_name, (0, 36), (0, 38), 1),
+        ("program", ls.gm_instrument_name, (0,), (1,), 0),
+        ("family", ls.gm_family_name, (0,), (1,), 0),
+        ("family", ls.gm_family_first_program, (0,), (1,), 0),
+        ("note", ls.gm_drum_name, (36,), (38,), 0),
+        ("bank_lsb", ls.gm2_drum_set_name, (0,), (8,), 0),
+        ("controller", ls.midi_cc_name, (7,), (10,), 0),
+        ("index", ls.per_note_controller_name, (1,), (2,), 0),
+        ("bank_lsb", ls.gm2_instrument_name, (0, 0), (1, 0), 0),
+        ("program", ls.gm2_instrument_name, (0, 0), (0, 1), 1),
+        ("bank_lsb", ls.gm2_drum_name, (0, 27), (48, 27), 0),
+        ("note", ls.gm2_drum_name, (0, 36), (0, 38), 1),
     )
     for name, lookup, first, second, position in lookups:
         assert lookup(*first) != lookup(*second), name  # positive control
@@ -534,11 +534,11 @@ def test_a_wrapped_bank_program_argument_is_refused_rather_than_emitting_another
     for name, position, refused in scalars:
         moved = list(base)
         moved[position] = 1
-        assert ls.Project.midi_bank_program(*moved) != ls.Project.midi_bank_program(*base), name
+        assert ls.midi_bank_program(*moved) != ls.midi_bank_program(*base), name
         for value in refused:
             args = list(base)
             args[position] = value
-            _refuses(name, ls.Project.midi_bank_program, *args)
+            _refuses(name, ls.midi_bank_program, *args)
 
 
 # Two legal values per packer argument, both inside the MIDI range the core
@@ -563,13 +563,13 @@ _PACKER_PAIRS = {
 _PACKER_WIDTHS: dict[str, int | None] = {"bend": 16, "ppq": None}
 
 _PACKERS = (
-    (ls.Project.midi_note_on, ("ppq", "group", "channel", "note", "velocity")),
-    (ls.Project.midi_note_off, ("ppq", "group", "channel", "note", "velocity")),
-    (ls.Project.midi_cc, ("ppq", "group", "channel", "controller", "value")),
-    (ls.Project.midi_poly_pressure, ("ppq", "group", "channel", "note", "pressure")),
-    (ls.Project.midi_program, ("ppq", "group", "channel", "program")),
-    (ls.Project.midi_channel_pressure, ("ppq", "group", "channel", "pressure")),
-    (ls.Project.midi_pitch_bend, ("ppq", "group", "channel", "bend")),
+    (ls.midi_note_on, ("ppq", "group", "channel", "note", "velocity")),
+    (ls.midi_note_off, ("ppq", "group", "channel", "note", "velocity")),
+    (ls.midi_cc, ("ppq", "group", "channel", "controller", "value")),
+    (ls.midi_poly_pressure, ("ppq", "group", "channel", "note", "pressure")),
+    (ls.midi_program, ("ppq", "group", "channel", "program")),
+    (ls.midi_channel_pressure, ("ppq", "group", "channel", "pressure")),
+    (ls.midi_pitch_bend, ("ppq", "group", "channel", "bend")),
 )
 
 
@@ -614,11 +614,11 @@ def test_a_packer_still_refuses_at_the_midi_bound_the_core_owns() -> None:
     a passing change.
     """
     for call in (
-        lambda: ls.Project.midi_note_on(0.0, 0, 0, 128, 100),
-        lambda: ls.Project.midi_note_on(0.0, 0, 16, 60, 100),
-        lambda: ls.Project.midi_note_on(0.0, 16, 0, 60, 100),
-        lambda: ls.Project.midi_note_on(0.0, 0, 0, 60, 128),
-        lambda: ls.Project.midi_pitch_bend(0.0, 0, 0, 16384),
+        lambda: ls.midi_note_on(0.0, 0, 0, 128, 100),
+        lambda: ls.midi_note_on(0.0, 0, 16, 60, 100),
+        lambda: ls.midi_note_on(0.0, 16, 0, 60, 100),
+        lambda: ls.midi_note_on(0.0, 0, 0, 60, 128),
+        lambda: ls.midi_pitch_bend(0.0, 0, 0, 16384),
     ):
         with pytest.raises(SonareValueError) as raised:
             call()
@@ -634,9 +634,7 @@ def test_a_pitch_bend_keeps_the_range_its_own_width_carries() -> None:
     refuse most of a 14-bit quantity while every other packer stayed green.
     """
     for value in (256, 8192, 16383):
-        assert ls.Project.midi_pitch_bend(0.0, 0, 0, value) != ls.Project.midi_pitch_bend(
-            0.0, 0, 0, 0
-        )
+        assert ls.midi_pitch_bend(0.0, 0, 0, value) != ls.midi_pitch_bend(0.0, 0, 0, 0)
 
 
 def test_a_wrong_typed_packer_argument_is_refused_by_name_not_by_ctypes() -> None:

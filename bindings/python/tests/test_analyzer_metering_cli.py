@@ -11,6 +11,8 @@ from typing import get_args
 import numpy as np
 
 # ruff: noqa: F403,F405
+import libsonare as ls
+
 from ._analyzer_helpers import *
 from ._analyzer_helpers import _run_cli, _write_test_wav
 from ._helpers import patch_mono_decode
@@ -310,8 +312,8 @@ def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
             project.set_midi_events(
                 clip_id,
                 [
-                    Project.midi_note_on(0.0, 0, 0, 60, 100),
-                    Project.midi_note_off(0.5, 0, 0, 60, 0),
+                    ls.midi_note_on(0.0, 0, 0, 60, 100),
+                    ls.midi_note_off(0.5, 0, 0, 60, 0),
                 ],
             )
             project_path.write_text(project.to_json(), encoding="utf-8")

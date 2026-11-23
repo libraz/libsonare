@@ -658,7 +658,7 @@ class SynthPatch:
                 destination=_synth_enum_value(
                     routing.destination, _SYNTH_MOD_DESTINATIONS, f"mod_routings[{i}].destination"
                 ),
-                depth=_narrow_double(routing.depth, "routing.depth"),
+                depth=_narrow_double(routing.depth, f"mod_routings[{i}].depth"),
             )
         _set_float("gain", SONARE_SYNTH_FIELD_GAIN, self.gain)
         _set_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, self.polyphony)

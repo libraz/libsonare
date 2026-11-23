@@ -780,7 +780,7 @@ class EngineGraphSpec:
 class MeterTelemetryRecord:
     """A per-plane meter snapshot for a mix target.
 
-    ``peak_db``/``rms_db``/``true_peak_dbtp`` carry ``num_channels`` valid planes
+    ``peak_db``/``rms_db``/``true_peak_dbtp``/``input_peak_db`` carry ``num_channels`` planes
     in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss
     Rss); a stereo target's left and right are planes 0 and 1.
 

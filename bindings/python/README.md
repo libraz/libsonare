@@ -40,8 +40,8 @@ with libsonare.Project() as project:
     project.set_sample_rate(48000)
     clip_id = project.add_midi_clip(0.0, 4.0).clip_id
     project.set_midi_events(clip_id, [
-        libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),  # ppq, group, channel, note, velocity
-        libsonare.Project.midi_note_off(2.0, 0, 0, 60),
+        libsonare.midi_note_on(0.0, 0, 0, 60, 100),  # ppq, group, channel, note, velocity
+        libsonare.midi_note_off(2.0, 0, 0, 60),
     ])
     audio = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
 ```

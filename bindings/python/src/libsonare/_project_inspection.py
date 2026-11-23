@@ -324,8 +324,8 @@ class _ProjectInspectionMixin:
                     _utf8_arg(roman, "roman") if isinstance(roman, str) and roman else None
                 )
                 backing.append(roman_bytes)
-                c_chords[i].start_ppq = _narrow_double(c["start_ppq"], "start_ppq")
-                c_chords[i].end_ppq = _narrow_double(c["end_ppq"], "end_ppq")
+                c_chords[i].start_ppq = _narrow_double(c["start_ppq"], f"chords[{i}].start_ppq")
+                c_chords[i].end_ppq = _narrow_double(c["end_ppq"], f"chords[{i}].end_ppq")
                 # Assigned unconverted so the struct's own narrowing sees each
                 # caller value; int() would truncate a fraction past it.
                 c_chords[i].root_pc = _absent_or_in_range(
@@ -679,9 +679,9 @@ class _ProjectInspectionMixin:
         c_segments = (SonareProjectTempoSegment * count)()
         for i, seg in enumerate(rows):
             fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
-            start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
-            bpm = _narrow_double(fields["bpm"], "bpm")
-            end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
+            start_ppq = _narrow_double(fields["start_ppq"], f"segments[{i}].start_ppq")
+            bpm = _narrow_double(fields["bpm"], f"segments[{i}].bpm")
+            end_bpm = _narrow_double(fields.get("end_bpm", 0.0), f"segments[{i}].end_bpm")
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
             c_segments[i].end_bpm = end_bpm
@@ -706,7 +706,9 @@ class _ProjectInspectionMixin:
         c_segments = (SonareProjectTimeSignatureSegment * count)()
         for i, seg in enumerate(rows):
             fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
-            c_segments[i].start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+            c_segments[i].start_ppq = _narrow_double(
+                fields["start_ppq"], f"segments[{i}].start_ppq"
+            )
             # Left unconverted so the struct's own narrowing sees each caller
             # value; int() would truncate a fraction past it.
             c_segments[i].numerator = fields["numerator"]

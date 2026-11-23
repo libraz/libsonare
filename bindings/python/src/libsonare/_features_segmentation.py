@@ -11,6 +11,7 @@ import numpy.typing as npt
 
 from ._errors import _entry, _refuse
 from ._ffi import SonareSegmentIndices, SonareSegmentMatrix
+from ._field_spelling import surface_spelling
 from ._narrowing import _resolve_zero_default
 from ._runtime import (
     _check,
@@ -73,11 +74,11 @@ def segment_cross_similarity(
     out = SonareSegmentMatrix()
     rc = _get_lib().sonare_segment_cross_similarity(
         x_array,
-        _to_c_int(x_rows, "x_rows"),
-        _to_c_int(x_cols, "x_cols"),
+        _to_c_int(x_rows, "x row count"),
+        _to_c_int(x_cols, surface_spelling("segment_cross_similarity", "x_cols")),
         y_array,
-        _to_c_int(y_rows, "y_rows"),
-        _to_c_int(y_cols, "y_cols"),
+        _to_c_int(y_rows, "y row count"),
+        _to_c_int(y_cols, "y length"),
         _to_c_int(_resolve_zero_default(k, "k"), "k"),
         _utf8_arg(_token_arg(metric, _SEGMENT_METRICS, "metric"), "metric"),
         _utf8_arg(_token_arg(mode, _SEGMENT_MODES, "mode"), "mode"),
@@ -107,8 +108,8 @@ def segment_recurrence_matrix(
     out = SonareSegmentMatrix()
     rc = lib.sonare_segment_recurrence_matrix(
         c_data,
-        _to_c_int(rows, "rows"),
-        _to_c_int(cols, "cols"),
+        _to_c_int(rows, "data row count"),
+        _to_c_int(cols, "data length"),
         _to_c_int(_resolve_zero_default(k, "k"), "k"),
         _to_c_int(width, "width"),
         1 if sym else 0,
@@ -136,7 +137,7 @@ def segment_recurrence_to_lag(
     out = SonareSegmentMatrix()
     _check(
         lib.sonare_segment_recurrence_to_lag(
-            c_recurrence, _to_c_int(n, "n"), 1 if pad else 0, ctypes.byref(out)
+            c_recurrence, _to_c_int(n, "recurrence length"), 1 if pad else 0, ctypes.byref(out)
         )
     )
     return _segment_matrix_result(lib, out)
@@ -154,7 +155,10 @@ def segment_lag_to_recurrence(lag: npt.ArrayLike) -> np.ndarray:
     out = SonareSegmentMatrix()
     _check(
         lib.sonare_segment_lag_to_recurrence(
-            c_lag, _to_c_int(n_rows, "n_rows"), _to_c_int(n_lags, "n_lags"), ctypes.byref(out)
+            c_lag,
+            _to_c_int(n_rows, "lag length"),
+            _to_c_int(n_lags, "lag row count"),
+            ctypes.byref(out),
         )
     )
     return _segment_matrix_result(lib, out)
@@ -178,8 +182,8 @@ def segment_subsegment(
     _check(
         lib.sonare_segment_subsegment(
             c_data,
-            _to_c_int(rows, "rows"),
-            _to_c_int(cols, "cols"),
+            _to_c_int(rows, "data row count"),
+            _to_c_int(cols, "data length"),
             c_boundaries,
             _to_c_size_t(count, "boundaries length"),
             _to_c_int(n_segments, "n_segments"),
@@ -205,8 +209,8 @@ def segment_agglomerative(
     _check(
         lib.sonare_segment_agglomerative(
             c_data,
-            _to_c_int(rows, "rows"),
-            _to_c_int(cols, "cols"),
+            _to_c_int(rows, "data row count"),
+            _to_c_int(cols, "data length"),
             _to_c_int(k, "k"),
             _utf8_arg(_token_arg(linkage, _SEGMENT_LINKAGES, "linkage"), "linkage"),
             ctypes.byref(out),
@@ -233,7 +237,7 @@ def segment_path_enhance(
     _check(
         lib.sonare_segment_path_enhance(
             c_recurrence,
-            _to_c_int(n, "n"),
+            _to_c_int(n, "recurrence length"),
             _to_c_int(win, "win"),
             _to_c_int(max_ratio, "max_ratio"),
             _to_c_int(_resolve_zero_default(min_ratio, "min_ratio"), "min_ratio"),

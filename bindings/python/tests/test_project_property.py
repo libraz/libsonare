@@ -20,6 +20,7 @@ import random
 import numpy as np
 import pytest
 
+import libsonare as ls
 from libsonare import Project
 
 SAMPLE_RATES = (44100, 48000, 96000)
@@ -70,14 +71,12 @@ def _add_random_midi_track(project: Project, rng: random.Random) -> None:
         kind = rng.random()
         if kind < 0.4:
             note, vel = rng.randint(0, 127), rng.randint(1, 127)
-            events.append(Project.midi_note_on(ppq, group, channel, note, vel))
-            events.append(Project.midi_note_off(min(ppq + 0.5, length), group, channel, note, 0))
+            events.append(ls.midi_note_on(ppq, group, channel, note, vel))
+            events.append(ls.midi_note_off(min(ppq + 0.5, length), group, channel, note, 0))
         elif kind < 0.7:
-            events.append(
-                Project.midi_cc(ppq, group, channel, rng.randint(0, 127), rng.randint(0, 127))
-            )
+            events.append(ls.midi_cc(ppq, group, channel, rng.randint(0, 127), rng.randint(0, 127)))
         else:
-            events.append(Project.midi_program(ppq, group, channel, rng.randint(0, 127)))
+            events.append(ls.midi_program(ppq, group, channel, rng.randint(0, 127)))
     if events:
         project.set_midi_events(clip, events)
 
@@ -148,8 +147,8 @@ def test_boundary_values_round_trip() -> None:
         clip = project.add_midi_clip(0.0, 256.0).clip_id
         events: list[tuple[float, int, int]] = []
         for i in range(256):
-            events.append(Project.midi_note_on(float(i), 0, i % 16, i % 128, 1 + (i % 127)))
-            events.append(Project.midi_note_off(float(i) + 0.25, 0, i % 16, i % 128, 0))
+            events.append(ls.midi_note_on(float(i), 0, i % 16, i % 128, 1 + (i % 127)))
+            events.append(ls.midi_note_off(float(i) + 0.25, 0, i % 16, i % 128, 0))
         project.set_midi_events(clip, events)
         _assert_round_trips(project)
     finally:

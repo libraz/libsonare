@@ -476,16 +476,18 @@ def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEd
     return raw, keepalive
 
 
-def _transition_to_c(lib: ctypes.CDLL, transition: VocalTransition) -> SonareVocalTransition:
+def _transition_to_c(
+    lib: ctypes.CDLL, transition: VocalTransition, *, where: str
+) -> SonareVocalTransition:
     raw = SonareVocalTransition()
     raw.struct_size = ctypes.sizeof(SonareVocalTransition)
     raw.left_note_id = _uint32(transition.left_note_id, "left_note_id", allow_zero=False)
     raw.right_note_id = _uint32(transition.right_note_id, "right_note_id", allow_zero=False)
     raw.left_window_samples = _narrow_int(
-        transition.left_window_samples, "left_window_samples", 0, _INT64_MAX
+        transition.left_window_samples, f"{where}.left_window_samples", 0, _INT64_MAX
     )
     raw.right_window_samples = _narrow_int(
-        transition.right_window_samples, "right_window_samples", 0, _INT64_MAX
+        transition.right_window_samples, f"{where}.right_window_samples", 0, _INT64_MAX
     )
     raw.strength = _finite_float(transition.strength, "strength")
     if not 0.0 <= raw.strength <= 1.0:
@@ -590,7 +592,7 @@ def _operation_to_c(
         keepalive.append(ids)
     elif isinstance(operation, VocalSetTransition):
         raw.kind = _operation_kind("setTransition")
-        raw.transition = _transition_to_c(lib, operation.transition)
+        raw.transition = _transition_to_c(lib, operation.transition, where="operation.transition")
     elif isinstance(operation, VocalRemoveTransition):
         raw.kind = _operation_kind("removeTransition")
         raw.transition.left_note_id = _uint32(

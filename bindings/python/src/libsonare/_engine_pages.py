@@ -76,7 +76,7 @@ class ClipPageProvider:
                 self._require_handle(),
                 _to_c_int64(page_index, "page_index"),
                 ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-                _to_c_int(len(arrays), "num_channels"),
+                _to_c_int(len(arrays), "channels length"),
                 _to_c_int64(frames, "frames"),
             )
         )

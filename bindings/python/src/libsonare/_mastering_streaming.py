@@ -271,7 +271,7 @@ class StreamingMasteringChain:
         self._ensure_open()
         c_array, length = _to_c_float_array_owned(samples)
         rc = self._lib.sonare_streaming_mastering_chain_process_mono(
-            self._handle, c_array, _to_c_size_t(length, "length")
+            self._handle, c_array, _to_c_size_t(length, "samples length")
         )
         _check(rc)
         return _from_c_float_array(c_array, length)
@@ -293,7 +293,7 @@ class StreamingMasteringChain:
         if left_length != right_length:
             raise _refuse("left and right must have the same length")
         rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
-            self._handle, left_array, right_array, _to_c_size_t(left_length, "left_length")
+            self._handle, left_array, right_array, _to_c_size_t(left_length, "left length")
         )
         _check(rc)
         return StereoBlock(
@@ -587,7 +587,7 @@ class StreamingEqualizer:
         channels = channel_array_type(ctypes.cast(c_array, ctypes.POINTER(ctypes.c_float)))
         _check(
             self._lib.sonare_eq_set_sidechain(
-                self._handle, channels, ctypes.c_int(1), _to_c_int(length, "length")
+                self._handle, channels, ctypes.c_int(1), _to_c_int(length, "samples length")
             )
         )
         self._sidechain_refs = (c_array, channels)
@@ -616,7 +616,7 @@ class StreamingEqualizer:
         )
         _check(
             self._lib.sonare_eq_set_sidechain(
-                self._handle, channels, ctypes.c_int(2), _to_c_int(left_length, "left_length")
+                self._handle, channels, ctypes.c_int(2), _to_c_int(left_length, "left length")
             )
         )
         self._sidechain_refs = (left_array, right_array, channels)
@@ -681,7 +681,7 @@ class StreamingEqualizer:
         channels = channel_array_type(ctypes.cast(c_array, ctypes.POINTER(ctypes.c_float)))
         _check(
             self._lib.sonare_eq_process(
-                self._handle, channels, ctypes.c_int(1), _to_c_int(length, "length")
+                self._handle, channels, ctypes.c_int(1), _to_c_int(length, "samples length")
             )
         )
         self._sidechain_refs = None
@@ -710,7 +710,7 @@ class StreamingEqualizer:
         )
         _check(
             self._lib.sonare_eq_process(
-                self._handle, channels, ctypes.c_int(2), _to_c_int(left_length, "left_length")
+                self._handle, channels, ctypes.c_int(2), _to_c_int(left_length, "left length")
             )
         )
         self._sidechain_refs = None

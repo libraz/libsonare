@@ -7569,7 +7569,7 @@ changed = "max_true_peak_db -> max_true_peak_dbtp, float | None: -inf for silenc
 to = "MeterTelemetryRecord.max_true_peak_dbtp"
 domain = "engine"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none_and_keeps_plane_arrays"
 
 [[entry]]
 kind = "field"
@@ -8005,34 +8005,30 @@ test = "bindings/python/tests/test_absent_measurements.py::test_a_refused_inharm
 [[entry]]
 kind = "method"
 old = "Project.gm_program_for_name"
-changed = "an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError"
+removed = "call the module function gm_program_for_name"
 domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gm_drum_note_for_name"
-changed = "an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError"
+removed = "call the module function gm_drum_note_for_name"
 domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_index_for_name"
-changed = "an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError"
+removed = "call the module function midi_cc_index_for_name"
 domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.gm_family_first_program"
-changed = "a family outside 0..15 raises SonareValueError (returned -1)"
+removed = "call the module function gm_family_first_program"
 domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_finds_nothing_is_refused"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "function"
@@ -9012,16 +9008,21 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_stereo_analys
 [[entry]]
 kind = "option"
 old = "mastering_pair_analyze(analysis_name)"
-new = "mastering_analyze_pair(analysis)"
+to = "mastering_analyze_pair(analysis)"
+changed = "pass the analysis name with the analysis keyword"
 domain = "mastering"
 rule = "individual"
+test = "bindings/python/tests/test_mastering_result_types.py::test_pair_analysis_keyword_reports_delay_in_source_samples"
 
 [[entry]]
 kind = "option"
 old = "mastering_stereo_analyze(analysis_name)"
-new = "mastering_analyze_stereo(analysis)"
+to = "mastering_analyze_stereo(analysis)"
+changed = "pass the analysis name with the analysis keyword"
 domain = "mastering"
 rule = "individual"
+test = "bindings/python/tests/test_mastering_result_types.py::test_stereo_analysis_takes_the_analysis_keyword"
+
 [[entry]]
 kind = "type"
 old = "MatchReferenceLoudnessResult"
@@ -10024,6 +10025,7 @@ test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_o
 [[entry]]
 kind = "option"
 old = "Project.midi_cc_to_breakpoint(bindings)"
+to = "midi_cc_to_breakpoint(bindings)"
 changed = "each binding is a MidiCcBinding record; a mapping is TypeError"
 domain = "project"
 rule = "one-input-form"
@@ -10032,6 +10034,7 @@ test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_o
 [[entry]]
 kind = "option"
 old = "Project.midi_param_to_cc(bindings)"
+to = "midi_param_to_cc(bindings)"
 changed = "each binding is a MidiCcBinding record; a mapping is TypeError"
 domain = "project"
 rule = "one-input-form"
@@ -10995,82 +10998,177 @@ rule = "python-public-names"
 [[entry]]
 kind = "method"
 old = "Project.midi_note_on"
-changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_note_on, which returns a frozen ProjectMidiEvent instead of a tuple"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_note_off"
-changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_note_off, which returns a frozen ProjectMidiEvent instead of a tuple"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_cc"
-changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_cc, which returns a frozen ProjectMidiEvent instead of a tuple"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_poly_pressure"
-changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_poly_pressure, which returns a frozen ProjectMidiEvent instead of a tuple"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_program"
-changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_program, which returns a frozen ProjectMidiEvent instead of a tuple"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_channel_pressure"
-changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_pitch_bend"
-changed = "returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_events_come_back_as_project_midi_event_records"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_note_on"
+removed = "call the module function midi2_note_on, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_note_off"
+removed = "call the module function midi2_note_off, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_cc"
+removed = "call the module function midi2_cc, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_poly_pressure"
+removed = "call the module function midi2_poly_pressure, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_channel_pressure"
+removed = "call the module function midi2_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_pitch_bend"
+removed = "call the module function midi2_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_program"
+removed = "call the module function midi2_program, which returns a frozen ProjectMidiEvent instead of a tuple and takes no bank_valid: pass bank_msb and bank_lsb together (each 0..127), or omit both to send no bank"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_registered_controller"
+removed = "call the module function midi2_registered_controller, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_assignable_controller"
+removed = "call the module function midi2_assignable_controller, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_relative_registered_controller"
+removed = "call the module function midi2_relative_registered_controller, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_relative_assignable_controller"
+removed = "call the module function midi2_relative_assignable_controller, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_registered_per_note_controller"
+removed = "call the module function midi2_registered_per_note_controller, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_assignable_per_note_controller"
+removed = "call the module function midi2_assignable_per_note_controller, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_per_note_pitch_bend"
+removed = "call the module function midi2_per_note_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2_per_note_management"
+removed = "call the module function midi2_per_note_management, which returns a frozen ProjectMidiEvent instead of a tuple"
+domain = "project"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_bank_program"
-changed = "returns a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples"
+removed = "call the module function midi_bank_program, which returns a list of frozen ProjectMidiEvent records instead of tuples"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_bank_program_lowers_to_events"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_param_to_cc"
-changed = "returns a ProjectMidiEvent record or None instead of a (ppq, data0, data1) tuple"
+removed = "call the module function midi_param_to_cc, which returns a ProjectMidiEvent record or None"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_cc_learn_and_conversion_helpers"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_to_breakpoint"
-changed = "returns an AutomationPoint record or None instead of a (ppq, value, curve_to_next) tuple"
+removed = "call the module function midi_cc_to_breakpoint, which returns an AutomationPoint record or None"
 domain = "project"
-rule = "typed-results"
-test = "bindings/python/tests/test_project_midi.py::test_midi_cc_learn_and_conversion_helpers"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "option"
@@ -11083,6 +11181,7 @@ test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_o
 [[entry]]
 kind = "option"
 old = "Project.midi_route_events(events)"
+to = "midi_route_events(events)"
 changed = "each event is a ProjectMidiEvent record; a tuple or mapping is TypeError"
 domain = "project"
 rule = "one-input-form"
@@ -11091,6 +11190,7 @@ test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_o
 [[entry]]
 kind = "option"
 old = "Project.midi_cc_learn(events)"
+to = "midi_cc_learn(events)"
 changed = "each event is a ProjectMidiEvent record; a tuple or mapping is TypeError"
 domain = "project"
 rule = "one-input-form"
@@ -11099,6 +11199,7 @@ test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_o
 [[entry]]
 kind = "option"
 old = "Project.midi_cc_to_breakpoint(event)"
+to = "midi_cc_to_breakpoint(event)"
 changed = "a ProjectMidiEvent record; a tuple or mapping is TypeError"
 domain = "project"
 rule = "one-input-form"
@@ -11275,10 +11376,81 @@ rule = "collections"
 [[entry]]
 kind = "option"
 old = "Project.midi_route_events(config)"
+to = "midi_route_events(config)"
 changed = "filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap; -1 and any other value outside 0..15 raise SonareValueError naming the key"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_project_midi.py::test_midi_route_absent_filters_mean_any_and_a_negative_is_refused"
+
+[[entry]]
+kind = "method"
+old = "Project.gm_instrument_name"
+removed = "call the module function gm_instrument_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm_family_name"
+removed = "call the module function gm_family_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2_instrument_name"
+removed = "call the module function gm2_instrument_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm_drum_name"
+removed = "call the module function gm_drum_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2_drum_set_name"
+removed = "call the module function gm2_drum_set_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2_drum_name"
+removed = "call the module function gm2_drum_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_cc_name"
+removed = "call the module function midi_cc_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.per_note_controller_name"
+removed = "call the module function per_note_controller_name"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_route_events"
+removed = "call the module function midi_route_events"
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi_cc_learn"
+removed = "call the module function midi_cc_learn"
+domain = "project"
+rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
@@ -13750,13 +13922,6 @@ domain = "project"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "option"
-old = "Project.midi2_program(bank_valid)"
-removed = "pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank"
-domain = "project"
-rule = "one-entry-per-operation"
-
-[[entry]]
 kind = "field"
 old = "NoteObject.onset_sec"
 removed = "give onset_sec on a NoteObjectInput; a returned NoteObject carries the sample spelling only"
@@ -14155,7 +14320,7 @@ old = "MeterTelemetryRecord.correlation"
 changed = "float -> float | None: None on a zero channel or silence"
 domain = "engine"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none_and_keeps_plane_arrays"
 
 [[entry]]
 kind = "field"
@@ -14163,7 +14328,7 @@ old = "MeterTelemetryRecord.mono_compat_width"
 changed = "float -> float | None: None on a zero channel or silence, inf for a silent mid under a nonzero side"
 domain = "engine"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none_and_keeps_plane_arrays"
 
 [[entry]]
 kind = "field"
@@ -14171,7 +14336,7 @@ old = "MeterTelemetryRecord.momentary_lufs"
 changed = "float -> float | None: -inf for silence, None until the window fills"
 domain = "engine"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none_and_keeps_plane_arrays"
 
 [[entry]]
 kind = "field"
@@ -14179,7 +14344,7 @@ old = "MeterTelemetryRecord.short_term_lufs"
 changed = "float -> float | None: -inf for silence, None until the window fills"
 domain = "engine"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none_and_keeps_plane_arrays"
 
 [[entry]]
 kind = "field"
@@ -14187,7 +14352,7 @@ old = "MeterTelemetryRecord.integrated_lufs"
 changed = "float -> float | None: None before the first gating block, -inf while nothing passes the gate"
 domain = "engine"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_meter_telemetry_reads_nan_scalars_as_none_and_keeps_plane_arrays"
 
 [[entry]]
 kind = "field"

@@ -200,7 +200,7 @@ def _assign_marker_ids(markers: Sequence[object], next_id: int) -> tuple[list[ob
     return out, highest + 1
 
 
-def _marker_to_c(value: object) -> SonareEngineMarker:
+def _marker_to_c(value: object, where: str) -> SonareEngineMarker:
     if not isinstance(value, EngineMarker | EngineMarkerInput):
         raise _refuse_type("marker must be an EngineMarker or an EngineMarkerInput")
     marker = value
@@ -218,7 +218,7 @@ def _marker_to_c(value: object) -> SonareEngineMarker:
     raw.kind = _marker_kind_value(marker.kind, "marker.kind")
     raw.key_fifths = marker.key_fifths
     raw.key_minor = 1 if marker.key_minor else 0
-    raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
+    raw.ppq = _narrow_double(marker.ppq, f"{where}.ppq")
     if marker.name is not None:
         if marker.name == "":
             raise _refuse("marker name must not be empty; omit it for an unnamed marker")
@@ -285,6 +285,7 @@ def _clips_to_c(
     for index, clip in enumerate(clips):
         _require_instance(clip, EngineClip, "clip")
         # The C ABI's subject: clips[i]. for a set, clip. for a single upsert.
+        where = f"clips[{index}]" if indexed else "clip"
         length_name = f"clips[{index}].length_samples" if indexed else "clip.length_samples"
         page_provider = getattr(clip, "page_provider", None)
         if page_provider is not None and not isinstance(page_provider, ClipPageProvider):
@@ -299,14 +300,14 @@ def _clips_to_c(
             raw.channels = None
             raw.num_channels = 0
             raw.num_samples = 0
-            raw.start_ppq = _narrow_double(clip.start_ppq, "clip.start_ppq")
+            raw.start_ppq = _narrow_double(clip.start_ppq, f"{where}.start_ppq")
             raw.clip_offset_samples = clip.clip_offset_samples
             if clip.length_samples is not None:
                 raw.length_samples = _given_positive(
                     clip.length_samples, length_name, _POSITIVE_COUNT
                 )
             raw.loop = 1 if clip.loop else 0
-            raw.gain = _narrow_double(clip.gain, "clip.gain")
+            raw.gain = _narrow_double(clip.gain, f"{where}.gain")
             raw.fade_in_samples = clip.fade_in_samples
             raw.fade_out_samples = clip.fade_out_samples
             raw.warp_mode = _warp_mode_value(clip.warp_mode, "clip.warp_mode")
@@ -314,8 +315,11 @@ def _clips_to_c(
             if clip.warp_anchors:
                 anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
                 for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
-                    anchor_array[i].warp_sample = _narrow_double(warp_sample, "warp_sample")
-                    anchor_array[i].source_sample = _narrow_double(source_sample, "source_sample")
+                    anchor_where = f"{where}.warp_anchors[{i}]"
+                    anchor_array[i].warp_sample = _narrow_double(warp_sample, f"{anchor_where}[0]")
+                    anchor_array[i].source_sample = _narrow_double(
+                        source_sample, f"{anchor_where}[1]"
+                    )
                 raw.warp_anchors = ctypes.cast(anchor_array, ctypes.c_void_p)
                 raw.warp_anchor_count = len(clip.warp_anchors)
                 warp_arrays.append(anchor_array)
@@ -330,21 +334,22 @@ def _clips_to_c(
         raw.channels = ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float)))
         raw.num_channels = len(arrays)
         raw.num_samples = num_samples
-        raw.start_ppq = _narrow_double(clip.start_ppq, "clip.start_ppq")
+        raw.start_ppq = _narrow_double(clip.start_ppq, f"{where}.start_ppq")
         raw.clip_offset_samples = clip.clip_offset_samples
         # An omitted length keeps the init's LENGTH_TO_END: the source remaining after the offset.
         if clip.length_samples is not None:
             raw.length_samples = _given_positive(clip.length_samples, length_name, _POSITIVE_COUNT)
         raw.loop = 1 if clip.loop else 0
-        raw.gain = _narrow_double(clip.gain, "clip.gain")
+        raw.gain = _narrow_double(clip.gain, f"{where}.gain")
         raw.fade_in_samples = clip.fade_in_samples
         raw.fade_out_samples = clip.fade_out_samples
         raw.warp_mode = _warp_mode_value(clip.warp_mode, "clip.warp_mode")
         if clip.warp_anchors:
             anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
             for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
-                anchor_array[i].warp_sample = _narrow_double(warp_sample, "warp_sample")
-                anchor_array[i].source_sample = _narrow_double(source_sample, "source_sample")
+                anchor_where = f"{where}.warp_anchors[{i}]"
+                anchor_array[i].warp_sample = _narrow_double(warp_sample, f"{anchor_where}[0]")
+                anchor_array[i].source_sample = _narrow_double(source_sample, f"{anchor_where}[1]")
             raw.warp_anchors = ctypes.cast(anchor_array, ctypes.c_void_p)
             raw.warp_anchor_count = len(clip.warp_anchors)
             warp_arrays.append(anchor_array)

@@ -1265,7 +1265,7 @@ def mix_stereo(
     mixer_handle = ctypes.c_void_p()
     _check(
         lib.sonare_mixer_create(
-            c_sample_rate, _to_c_int(length, "length"), ctypes.byref(mixer_handle)
+            c_sample_rate, _to_c_int(length, "strips frame count"), ctypes.byref(mixer_handle)
         )
     )
     mixer = mixer_handle.value
@@ -1342,7 +1342,7 @@ def mix_stereo(
             ctypes.c_size_t(len(strips)),
             out_left,
             out_right,
-            _to_c_size_t(length, "length"),
+            _to_c_size_t(length, "strips frame count"),
         )
         _check(rc)
         # The whole signal was one block: fold the meters' pending group delay in.

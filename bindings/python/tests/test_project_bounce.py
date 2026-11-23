@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import libsonare as ls
 from libsonare import (
     BuiltinSynthConfig,
     ErrorCode,
@@ -58,8 +59,8 @@ def _build_midi_only_project() -> Project:
     project.set_midi_events(
         clip,
         [
-            Project.midi_note_on(0.0, 0, 0, 60, 100),
-            Project.midi_note_off(2.0, 0, 0, 60, 0),
+            ls.midi_note_on(0.0, 0, 0, 60, 100),
+            ls.midi_note_off(2.0, 0, 0, 60, 0),
         ],
     )
     return project
@@ -307,8 +308,8 @@ def test_bounce_mixes_instrument_kinds_on_separate_destinations() -> None:
             project.set_midi_events(
                 midi.clip_id,
                 [
-                    Project.midi_note_on(0.0, 0, 0, note, 100),
-                    Project.midi_note_off(0.5, 0, 0, note, 0),
+                    ls.midi_note_on(0.0, 0, 0, note, 100),
+                    ls.midi_note_off(0.5, 0, 0, note, 0),
                 ],
             )
         kwargs = {"total_frames": 12000, "block_size": 128, "num_channels": 2, "sample_rate": 48000}

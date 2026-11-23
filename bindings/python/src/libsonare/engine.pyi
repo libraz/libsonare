@@ -446,7 +446,7 @@ class RealtimeEngine:
         """Clip-page look-ahead window in timeline frames."""
         ...
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
-        """Drain per-plane meter records; a stereo target's L/R are planes 0 and 1."""
+        """Drain meter records with one measurement per plane and no right value for mono."""
         ...
     def meter_target_insert_gain_reduction(self, target_id: int) -> np.ndarray:
         """Return per-insert gain reduction in dB (<= 0) for a meter target's strip.

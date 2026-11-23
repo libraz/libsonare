@@ -143,17 +143,17 @@ def test_a_saturating_automation_value_is_refused(mixer_scene) -> None:
 
 def test_a_saturating_controller_value_is_refused() -> None:
     """The MIDI path, where the argument is already a unit-range quantity."""
-    events = [ls.Project.midi_cc(0.0, 0, 2, 74, 60), ls.Project.midi_cc(0.1, 0, 2, 74, 70)]
-    binding = ls.Project.midi_cc_learn(events, 77)
+    events = [ls.midi_cc(0.0, 0, 2, 74, 60), ls.midi_cc(0.1, 0, 2, 74, 70)]
+    binding = ls.midi_cc_learn(events, 77)
     assert binding is not None
-    first = ls.Project.midi_param_to_cc([binding], 77, 0.25, 0)
-    second = ls.Project.midi_param_to_cc([binding], 77, 0.75, 0)
+    first = ls.midi_param_to_cc([binding], 77, 0.25, 0)
+    second = ls.midi_param_to_cc([binding], 77, 0.75, 0)
     assert first is not None and second is not None and first != second  # positive control
     for value in REFUSED:
         _refuses(
             "unit_value",
             ("param_id", "group"),
-            ls.Project.midi_param_to_cc,
+            ls.midi_param_to_cc,
             [binding],
             77,
             value,
@@ -276,16 +276,16 @@ def test_a_non_finite_double_argument_is_refused_by_name() -> None:
     observable change at these two sites is the finiteness refusal, and the
     type match is for the conversion's own correctness rather than for reach.
     """
-    events = [ls.Project.midi_cc(0.0, 0, 2, 74, 60), ls.Project.midi_cc(0.1, 0, 2, 74, 70)]
-    binding = ls.Project.midi_cc_learn(events, 77)
+    events = [ls.midi_cc(0.0, 0, 2, 74, 60), ls.midi_cc(0.1, 0, 2, 74, 70)]
+    binding = ls.midi_cc_learn(events, 77)
     assert binding is not None
     # Positive control: the argument under test reaches the core and is used.
-    assert ls.Project.midi_param_to_cc([binding], 77, 0.25, 0, 480.0) is not None
+    assert ls.midi_param_to_cc([binding], 77, 0.25, 0, 480.0) is not None
     for value in NON_FINITE:
         _refuses(
             "ppq",
             ("param_id", "unit_value", "group"),
-            ls.Project.midi_param_to_cc,
+            ls.midi_param_to_cc,
             [binding],
             77,
             0.25,

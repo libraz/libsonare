@@ -128,6 +128,11 @@ _MIDI_CC_BYTE_FIELDS: dict[str, tuple[ProjectMidiCcBindingKind, int]] = {
 }
 
 
+def _binding_field(case: dict[str, Any]) -> str:
+    field = _python_field(case)
+    return f"binding.{field}" if field in _MIDI_CC_BYTE_FIELDS else field
+
+
 @pytest.mark.parametrize("field", sorted(_MIDI_CC_BYTE_FIELDS))
 @pytest.mark.parametrize("value", [128, 255])
 def test_bind_midi_cc_refuses_a_byte_above_the_midi_data_range(field: str, value: int) -> None:
@@ -137,7 +142,10 @@ def test_bind_midi_cc_refuses_a_byte_above_the_midi_data_range(field: str, value
     with RealtimeEngine(sample_rate=48000, max_block_size=128) as engine:
         with pytest.raises(
             SonareValueError,
-            match=rf"^RealtimeEngine\.bind_midi_cc: {field} must be an integer in \[0, 127\]$",
+            match=(
+                rf"^RealtimeEngine\.bind_midi_cc: binding\.{field} "
+                r"must be an integer in \[0, 127\]$"
+            ),
         ):
             engine.bind_midi_cc(binding)
         assert engine.midi_cc_binding_count == 0
@@ -155,7 +163,8 @@ def test_bind_midi_cc_byte_fields_follow_the_corpus(case: dict[str, Any]) -> Non
             assert engine.midi_cc_binding_count == 1
         else:
             with pytest.raises(
-                SonareValueError, match=rf"^\S+: {_python_field(case)} must be an integer in \[0, "
+                SonareValueError,
+                match=rf"^\S+: {re.escape(_binding_field(case))} must be an integer in \[0, ",
             ):
                 engine.bind_midi_cc(_midi_cc_binding(case))
             assert engine.midi_cc_binding_count == 0
@@ -163,25 +172,27 @@ def test_bind_midi_cc_byte_fields_follow_the_corpus(case: dict[str, Any]) -> Non
 
 @pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])
 def test_midi_cc_to_breakpoint_byte_fields_follow_the_corpus(case: dict[str, Any]) -> None:
-    event = Project.midi_cc(0.0, 0, 0, 7, 64)
+    event = libsonare.midi_cc(0.0, 0, 0, 7, 64)
     if case["accepted"]:
-        Project.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
+        libsonare.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
     else:
         with pytest.raises(
-            SonareValueError, match=rf"^\S+: {_python_field(case)} must be an integer in \[0, "
+            SonareValueError,
+            match=rf"^\S+: {re.escape(_binding_field(case))} must be an integer in \[0, ",
         ):
-            Project.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
+            libsonare.midi_cc_to_breakpoint([_midi_cc_binding(case)], event)
 
 
 @pytest.mark.parametrize("case", _MIDI_CC_CASES, ids=lambda case: case["id"])
 def test_midi_param_to_cc_byte_fields_follow_the_corpus(case: dict[str, Any]) -> None:
     if case["accepted"]:
-        Project.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
+        libsonare.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
     else:
         with pytest.raises(
-            SonareValueError, match=rf"^\S+: {_python_field(case)} must be an integer in \[0, "
+            SonareValueError,
+            match=rf"^\S+: {re.escape(_binding_field(case))} must be an integer in \[0, ",
         ):
-            Project.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
+            libsonare.midi_param_to_cc([_midi_cc_binding(case)], 1, 0.5, 0)
 
 
 _STREAMING = _CORPUS["streaming_contract"]
@@ -360,12 +371,12 @@ _GM_REFUSALS: dict[str, type[Exception]] = {"range": SonareValueError, "type": T
 
 @pytest.mark.parametrize("case", _CORPUS["gm_lookup"]["cases"], ids=lambda case: case["id"])
 def test_gm_lookup_follows_the_corpus(case: dict[str, Any]) -> None:
-    lookup = getattr(Project, case["lookup"])
+    lookup = getattr(libsonare, case["lookup"])
     if "refused" in case:
         refusal = f"{case['key']} {case['predicate']}"
         with pytest.raises(
             _GM_REFUSALS[case["refused"]],
-            match=rf"^Project\.{case['lookup']}: {re.escape(refusal)}$",
+            match=rf"^{case['lookup']}: {re.escape(refusal)}$",
         ):
             lookup(**case["args"])
     elif case.get("absent"):
@@ -387,7 +398,7 @@ def _corpus_number(raw: object) -> object:
 
 @pytest.mark.parametrize("case", _NUMBER_SPLIT["cases"], ids=lambda case: case["id"])
 def test_number_reader_split_follows_the_corpus(case: dict[str, Any]) -> None:
-    fn = getattr(Project, _NUMBER_SPLIT["fn"])
+    fn = getattr(libsonare, _NUMBER_SPLIT["fn"])
     args = {**_NUMBER_SPLIT["base"], case["key"]: _corpus_number(case["value"])}
     if case.get("accepted"):
         fn(**args)
@@ -395,7 +406,7 @@ def test_number_reader_split_follows_the_corpus(case: dict[str, Any]) -> None:
     refusal = f"{case['key']} {case['predicate']}"
     with pytest.raises(
         _GM_REFUSALS[case["refused"]],
-        match=rf"^Project\.{_NUMBER_SPLIT['fn']}: {re.escape(refusal)}$",
+        match=rf"^{_NUMBER_SPLIT['fn']}: {re.escape(refusal)}$",
     ):
         fn(**args)
 

@@ -416,7 +416,7 @@ def _rehydrate_project_vocal_edits(
 
     originals = tuple(originals)
     original_count = _narrow_int(
-        len(originals), "original_count", 0, min(_SIZE_T_MAX, _MAX_RESULT_ITEMS)
+        len(originals), "originals length", 0, min(_SIZE_T_MAX, _MAX_RESULT_ITEMS)
     )
     rows, buffers = _originals_to_c(originals)
     callback, callback_errors = _project_cancel_callback(cancel)

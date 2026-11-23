@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import libsonare as ls
 from libsonare import (
     Project,
     RealtimeEngine,
@@ -33,8 +34,8 @@ def _build_midi_only_project() -> Project:
     project.set_midi_events(
         clip,
         [
-            Project.midi_note_on(0.0, 0, 0, 60, 100),
-            Project.midi_note_off(2.0, 0, 0, 60, 0),
+            ls.midi_note_on(0.0, 0, 0, 60, 100),
+            ls.midi_note_off(2.0, 0, 0, 60, 0),
         ],
     )
     return project
@@ -165,9 +166,9 @@ def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
         project.set_midi_events(
             clip,
             [
-                Project.midi_program(0.0, 0, 0, program),
-                Project.midi_note_on(0.05, 0, 0, 52, 110),
-                Project.midi_note_off(1.0, 0, 0, 52, 0),
+                ls.midi_program(0.0, 0, 0, program),
+                ls.midi_note_on(0.05, 0, 0, 52, 110),
+                ls.midi_note_off(1.0, 0, 0, 52, 0),
             ],
         )
         return project.bounce(
