@@ -93,7 +93,7 @@ describe('meteringSpectrum optional scalars', () => {
     meteringSpectrum({ samples, sampleRate: SR, ...options } as never).db;
 
   it.each([
-    ['nFft', 'nFft must be a power of two in [1, 1073741824]'],
+    ['nFft', 'nFft must be a power of two in [2, 4194304]'],
     ['octaveFraction', 'octaveFraction must be an integer in [1, 2147483647]'],
     ['dbRef', 'dbRef must be finite and at least 0'],
     ['dbAmin', 'dbAmin must be finite and at least 0'],
