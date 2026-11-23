@@ -18,6 +18,7 @@ beforeAll(async () => {
 });
 
 describe('MIDI 1.0 <-> MIDI 2.0 value scaling', () => {
+  // The anchors and refusal texts are the ones tests/api/sonare_c_midi_scaling_test.cpp pins.
   it('lands min, center and max', () => {
     expect(midiVelocityToMidi2(0)).toBe(0);
     expect(midiVelocityToMidi2(64)).toBe(0x8000);
