@@ -326,7 +326,8 @@ class _ProjectEditMixin:
         _check(
             _get_lib().sonare_project_add_clip(
                 self._require_handle(), ctypes.byref(desc), ctypes.byref(out_id)
-            )
+            ),
+            flattened="desc",
         )
         # `backing` is kept alive until the call returns above.
         del backing
@@ -399,7 +400,8 @@ class _ProjectEditMixin:
         _check(
             lib.sonare_project_import_external_stems(
                 self._require_handle(), ctypes.byref(request), ctypes.byref(result)
-            )
+            ),
+            flattened="request",
         )
         try:
             return ExternalSeparatedStemImportResult(
@@ -490,7 +492,8 @@ class _ProjectEditMixin:
                 ctypes.byref(desc),
                 ctypes.byref(out_clip),
                 ctypes.byref(out_take_count),
-            )
+            ),
+            flattened="desc",
         )
         del backing
         return ProjectLoopRecordingResult(
@@ -1108,7 +1111,8 @@ class _ProjectEditMixin:
                 _to_c_uint32(track_id, "track_id"),
                 ctypes.byref(desc),
                 ctypes.byref(out_target_param_id),
-            )
+            ),
+            flattened="desc",
         )
         del _backing
         return int(out_target_param_id.value)
@@ -1141,7 +1145,8 @@ class _ProjectEditMixin:
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_uint32(target_id, "target_id"),
                 ctypes.byref(desc),
-            )
+            ),
+            flattened="desc",
         )
         del _backing
 

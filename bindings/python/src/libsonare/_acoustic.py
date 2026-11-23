@@ -296,7 +296,7 @@ def synthesize_rir(
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="config")
     try:
         # Non-fatal diagnostics are recorded on success too -- a max_sec clamp
         # that cut the tail, or a request degraded to early reflections only.
