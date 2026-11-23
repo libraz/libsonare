@@ -3,6 +3,7 @@
 /// @file music_analyzer.h
 /// @brief Unified music analysis facade.
 
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -60,22 +61,24 @@ struct BpmCandidateHypothesis {
 };
 
 /// @brief Beat-level evidence published alongside the meter and downbeat decisions.
-/// @details Each vector holds one value per entry of AnalysisResult::beats, so
-///          they index in parallel with it. These are evidence rather than
-///          outputs of the decisions, exposed so callers
-///          running their own meter work score the same evidence the library
-///          does instead of reconstructing a weaker approximation from the
-///          frame-level onset envelope. A stream is empty when the analysis
-///          could not produce it.
+/// @details Beat-level vectors align with AnalysisResult::beats. The
+///          subdivision_accent vector aligns with the gaps and has one fewer
+///          value. These are evidence rather than decision outputs, so callers
+///          can score the same measurements the library used.
 struct BeatObservations {
-  /// @brief Beat-local onset-strength window; unlike Beat::strength this is
-  ///        aggregated over a window rather than sampled at a single frame.
+  /// @brief Beat-local onset-strength window, aggregated rather than sampled at one frame.
   std::vector<float> onset_strength;
   /// @brief Beat-local low-frequency energy, the accent evidence a log-spectral
   ///        difference discards. Empty when analysis ran without audio.
   std::vector<float> low_frequency_energy;
   /// @brief Per-beat chord-change evidence. Empty until chords are analyzed.
   std::vector<float> chord_change;
+  /// @brief Linear beat accent measured around each beat.
+  std::vector<float> accent;
+  /// @brief Whether each beat has an attack in its evidence window.
+  std::vector<uint8_t> has_attack;
+  /// @brief Linear accent measured at each inter-beat midpoint, or zero without an attack.
+  std::vector<float> subdivision_accent;
 };
 
 /// @brief Complete music analysis result.
@@ -136,11 +139,13 @@ struct AnalysisResult {
 
 /// @brief Configuration for music analysis.
 struct MusicAnalyzerConfig {
-  int n_fft = 2048;                  ///< Window in samples at 22050 Hz, rescaled to analysis rate
-  int hop_length = 512;              ///< Hop length
-  float bpm_min = 60.0f;             ///< Minimum BPM
-  float bpm_max = 200.0f;            ///< Maximum BPM
-  float start_bpm = 120.0f;          ///< Prior BPM estimate
+  int n_fft = 2048;        ///< Window in samples at 22050 Hz, rescaled to analysis rate
+  int hop_length = 512;    ///< Hop length
+  float bpm_min = 60.0f;   ///< Minimum BPM
+  float bpm_max = 200.0f;  ///< Maximum BPM
+  /// Finite, positive BPM prior that seeds beat tracking if the tempo search finds none.
+  /// The result reports measured tempo or NaN.
+  float start_bpm = 120.0f;
   bool use_triads_only = true;       ///< Use only triads for chord detection (no 7th chords)
   bool use_hpss = false;             ///< HPSS (margin 3) before the chord chroma
   float chroma_highpass_hz = 80.0f;  ///< High-pass filter cutoff for chroma (0 = disabled)

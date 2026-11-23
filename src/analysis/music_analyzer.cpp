@@ -445,6 +445,11 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   result.chords = chord_analyzer().chords();
 
   // Read after chord_analyzer(), which publishes the chord-change stream on the beat analyzer.
+  const BeatAccents& accents = beat_analyzer().beat_accents();
+  result.beat_observations.accent = accents.beat;
+  result.beat_observations.has_attack.assign(accents.beat_has_attack.begin(),
+                                             accents.beat_has_attack.end());
+  result.beat_observations.subdivision_accent = accents.subdivision;
   result.beat_observations.onset_strength = beat_analyzer().beat_onset_observations();
   result.beat_observations.low_frequency_energy = beat_analyzer().beat_low_frequency_observations();
   result.beat_observations.chord_change = beat_analyzer().beat_chord_change_observations();

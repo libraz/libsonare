@@ -153,15 +153,27 @@ bool is_compound_pair(const std::vector<int>& parts) {
 }
 
 /// Mean subdivision accent against the mean accent of the beats that open each gap.
-float compound_subdivision_score(const BeatAccents& accents) {
-  if (accents.subdivision.size() < 3) return 0.0f;
+float compound_subdivision_score(const std::vector<float>& accent,
+                                 const std::vector<float>& subdivision_accent) {
+  if (subdivision_accent.size() < 3) return 0.0f;
   float subdivision_sum = 0.0f;
   float beat_sum = 0.0f;
-  for (size_t i = 0; i < accents.subdivision.size(); ++i) {
-    subdivision_sum += accents.subdivision[i];
-    beat_sum += accents.beat[i];
+  for (size_t i = 0; i < subdivision_accent.size(); ++i) {
+    subdivision_sum += subdivision_accent[i];
+    beat_sum += accent[i];
   }
-  return beat_sum > kEpsilon ? subdivision_sum / beat_sum : 0.0f;
+  if (numeric::finite(subdivision_sum) && numeric::finite(beat_sum)) {
+    return beat_sum > kEpsilon ? subdivision_sum / beat_sum : 0.0f;
+  }
+  // Caller-supplied finite accents can exceed the float range when summed.
+  const double wide_subdivision =
+      std::accumulate(subdivision_accent.begin(), subdivision_accent.end(), 0.0);
+  const double wide_beat =
+      std::accumulate(accent.data(), accent.data() + subdivision_accent.size(), 0.0);
+  return wide_beat > kEpsilon
+             ? static_cast<float>(std::min(wide_subdivision / wide_beat,
+                                           double{std::numeric_limits<float>::max()}))
+             : 0.0f;
 }
 
 }  // namespace
@@ -169,16 +181,33 @@ float compound_subdivision_score(const BeatAccents& accents) {
 MeterAnalyzer::MeterAnalyzer(const std::vector<Beat>& beats, const MeterConfig& config,
                              const BeatAccents& accents, const std::vector<float>& beat_energy)
     : config_(config) {
-  analyze(beats, accents, beat_energy);
+  if (accents.beat.size() == beats.size() && accents.beat_has_attack.size() == beats.size()) {
+    analyze(accents.beat, accents.beat_has_attack, accents.subdivision, beat_energy);
+    return;
+  }
+  std::vector<float> strengths;
+  strengths.reserve(beats.size());
+  for (const Beat& beat : beats) strengths.push_back(beat.strength);
+  analyze(strengths, {}, {}, beat_energy);
 }
 
-void MeterAnalyzer::analyze(const std::vector<Beat>& beats, const BeatAccents& accents,
+MeterAnalyzer::MeterAnalyzer(const MeterConfig& config, const std::vector<float>& accent,
+                             const std::vector<char>& has_attack,
+                             const std::vector<float>& subdivision_accent,
+                             const std::vector<float>& beat_energy)
+    : config_(config) {
+  analyze(accent, has_attack, subdivision_accent, beat_energy);
+}
+
+void MeterAnalyzer::analyze(const std::vector<float>& accent, const std::vector<char>& has_attack,
+                            const std::vector<float>& subdivision_accent,
                             const std::vector<float>& beat_energy) {
+  const size_t beat_count = accent.size();
   result_ = {};
   result_.time_signature = {4, config_.denominator, 0.0f};
   result_.candidate_scores.assign(config_.candidate_numerators.size(), 0.0f);
 
-  if (beats.size() < 8 || config_.candidate_numerators.empty()) {
+  if (beat_count < 8 || config_.candidate_numerators.empty()) {
     // No search ran, so the bar is reported undivided rather than carrying the
     // 2+2 that a four would have been given had anything been scored, the
     // confidence stays at the zero it was initialized to so an unchecked read
@@ -191,39 +220,26 @@ void MeterAnalyzer::analyze(const std::vector<Beat>& beats, const BeatAccents& a
   }
   result_.searched = true;
 
-  // The accents read from the audio when the caller has them, else the strengths the beats
-  // carry. Either series is divided by its own maximum: clamping instead would saturate every
-  // value above 1 and erase the contrast the score is built on, and the documented public input,
-  // AnalysisResult::beat_observations.onset_strength, is in the envelope's own units.
-  const bool has_accents =
-      accents.beat.size() == beats.size() && accents.beat_has_attack.size() == beats.size();
-  std::vector<float> beat_strengths;
-  beat_strengths.reserve(beats.size());
-  for (size_t i = 0; i < beats.size(); ++i) {
-    beat_strengths.push_back(has_accents ? accents.beat[i] : beats[i].strength);
-  }
-  const float strength_max = beat_strengths.empty()
-                                 ? 0.0f
-                                 : *std::max_element(beat_strengths.begin(), beat_strengths.end());
+  // Normalize to the largest accent so scoring depends on relative strength.
+  auto beat_strengths = accent;
+  const float strength_max = *std::max_element(accent.begin(), accent.end());
   for (float& strength : beat_strengths) {
     strength = strength_max > kEpsilon ? std::clamp(strength / strength_max, 0.0f, 1.0f) : 0.0f;
   }
 
   // A beat with no onset evidence but among the loudest in energy was masked by a louder event;
   // a rest is quiet in both and stays evidence. At most kReferenceIgnoredTopEvents beats qualify.
-  std::vector<char> observed(beats.size(), 1);
-  if (beat_energy.size() == beats.size()) {
+  std::vector<char> observed(beat_count, 1);
+  if (beat_energy.size() == beat_count) {
     std::vector<float> raw;
-    raw.reserve(beats.size());
+    raw.reserve(beat_count);
     // Onset evidence is the accent of a beat whose window holds an attack, and none otherwise.
-    for (size_t i = 0; i < beats.size(); ++i) {
-      raw.push_back(!has_accents                 ? beats[i].strength
-                    : accents.beat_has_attack[i] ? accents.beat[i]
-                                                 : 0.0f);
+    for (size_t i = 0; i < beat_count; ++i) {
+      raw.push_back(has_attack.empty() || has_attack[i] ? accent[i] : 0.0f);
     }
     const float onset_reference = max_excluding_top(raw, kReferenceIgnoredTopEvents);
     const float energy_reference = max_excluding_top(beat_energy, kReferenceIgnoredTopEvents);
-    for (size_t i = 0; i < beats.size(); ++i) {
+    for (size_t i = 0; i < beat_count; ++i) {
       if (raw[i] < kOnsetEvidenceRelativeThreshold * onset_reference &&
           beat_energy[i] > energy_reference) {
         observed[i] = 0;
@@ -381,8 +397,11 @@ void MeterAnalyzer::analyze(const std::vector<Beat>& beats, const BeatAccents& a
   // Whether the question "does a beat divide into three?" can be asked at all: it is answered
   // from accents between the beats, so without them there is no evidence either way -- neither
   // for the promotion to a compound denominator nor for the demotion its absence would justify.
-  const bool subdivision_measurable = has_accents && accents.subdivision.size() + 1 == beats.size();
-  const float compound_score = subdivision_measurable ? compound_subdivision_score(accents) : 0.0f;
+  const bool subdivision_measurable = subdivision_accent.size() == beat_count - 1;
+  if (subdivision_measurable) {
+    result_.compound_score = compound_subdivision_score(accent, subdivision_accent);
+  }
+  const float compound_score = result_.compound_score.value_or(0.0f);
   // A six only reaches the compound question if that is how its own beats
   // divide. Six grouped as 2+2+2 is a simple meter, and used to be forced
   // through this branch and out the other side as a three or a four; it now
@@ -533,6 +552,41 @@ void validate_meter_config(const MeterConfig& config) {
   util::check::at_least(config.subdivision_weight, 0.0, "subdivision_weight");
   util::check::at_least(config.compound_subdivision_threshold, 0.0,
                         "compound_subdivision_threshold");
+}
+
+MeterResult estimate_meter_from_observations(const MeterBeats& beats, const MeterConfig& config) {
+  validate_meter_config(config);
+  const size_t count = beats.accent.size();
+  if (count == 0) util::check::refuse("accent", util::refusal::kNonEmptyPredicate);
+  if (!beats.has_attack.empty() && beats.has_attack.size() != count) {
+    util::check::refuse_relation({"has_attack", "accent"},
+                                 "{0} must be empty or have the same length as {1}");
+  }
+  if (!beats.low_frequency_energy.empty() && beats.low_frequency_energy.size() != count) {
+    util::check::refuse_relation({"low_frequency_energy", "accent"},
+                                 "{0} must be empty or have the same length as {1}");
+  }
+  if (!beats.subdivision_accent.empty() && beats.subdivision_accent.size() != count - 1) {
+    util::check::refuse_relation({"subdivision_accent", "accent"},
+                                 "{0} must be empty or have one fewer entry than {1}");
+  }
+  if (std::any_of(beats.has_attack.begin(), beats.has_attack.end(),
+                  [](uint8_t flag) { return flag > 1; })) {
+    util::check::refuse("has_attack", "must hold only 0 or 1");
+  }
+  const auto validate_values = [](const std::vector<float>& values, const char* name) {
+    if (!std::all_of(values.begin(), values.end(), numeric::finite_non_negative<float>)) {
+      util::check::refuse(name, "must hold only finite values of at least 0");
+    }
+  };
+  validate_values(beats.accent, "accent");
+  validate_values(beats.low_frequency_energy, "low_frequency_energy");
+  validate_values(beats.subdivision_accent, "subdivision_accent");
+
+  const std::vector<char> has_attack(beats.has_attack.begin(), beats.has_attack.end());
+  MeterAnalyzer analyzer(config, beats.accent, has_attack, beats.subdivision_accent,
+                         beats.low_frequency_energy);
+  return std::move(analyzer.result_);
 }
 
 MeterResult estimate_meter_from_beats(const std::vector<float>& beat_times,

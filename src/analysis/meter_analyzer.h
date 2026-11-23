@@ -3,6 +3,8 @@
 /// @file meter_analyzer.h
 /// @brief Multi-comb meter analysis for time-signature estimation.
 
+#include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
@@ -55,6 +57,14 @@ struct MeterConfig {
   /// event_time_refinement.cpp) above the local level, so a subdivision masked by a sustained bed
   /// does not count.
   float compound_subdivision_threshold = 0.5f;
+};
+
+/// @brief Per-beat evidence for meter scoring.
+struct MeterBeats {
+  std::vector<float> accent;
+  std::vector<uint8_t> has_attack;          ///< Empty assumes an attack at every beat.
+  std::vector<float> low_frequency_energy;  ///< Empty disables masked-beat detection.
+  std::vector<float> subdivision_accent;    ///< One per beat interval, or empty if unmeasured.
 };
 
 /// @brief Result from meter analysis.
@@ -119,6 +129,8 @@ struct MeterResult {
   ///          rather than rested, so reading it as the weakest beat would be
   ///          wrong. Empty unless per-beat energy was supplied.
   std::vector<int> unobserved_beats;
+  /// @brief Ratio of subdivision to beat accents, absent if subdivisions were unmeasured.
+  std::optional<float> compound_score;
 };
 
 /// @brief Estimates meter from per-beat accents using a multi-comb score.
@@ -138,8 +150,13 @@ class MeterAnalyzer {
   TimeSignature time_signature() const { return result_.time_signature; }
 
  private:
-  void analyze(const std::vector<Beat>& beats, const BeatAccents& accents,
-               const std::vector<float>& beat_energy);
+  friend MeterResult estimate_meter_from_observations(const MeterBeats&, const MeterConfig&);
+
+  MeterAnalyzer(const MeterConfig& config, const std::vector<float>& accent,
+                const std::vector<char>& has_attack, const std::vector<float>& subdivision_accent,
+                const std::vector<float>& beat_energy);
+  void analyze(const std::vector<float>& accent, const std::vector<char>& has_attack,
+               const std::vector<float>& subdivision_accent, const std::vector<float>& beat_energy);
 
   MeterConfig config_;
   MeterResult result_;
@@ -157,6 +174,9 @@ MeterResult estimate_meter(const std::vector<Beat>& beats,
 ///          rejects the same input for the same reason, including the ones that
 ///          call the core directly instead of going through the C ABI.
 void validate_meter_config(const MeterConfig& config);
+
+/// @brief Validates and scores caller-supplied beat observations.
+MeterResult estimate_meter_from_observations(const MeterBeats& beats, const MeterConfig& config);
 
 /// @brief Estimates meter over a caller-supplied beat series.
 /// @param beat_times Beat positions in seconds, ascending.
