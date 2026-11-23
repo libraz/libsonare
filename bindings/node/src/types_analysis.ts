@@ -178,7 +178,7 @@ export interface AnalysisChord extends Chord {
 
 /** Aggregate dynamics summary in {@link AnalysisResult.dynamics}. */
 export interface AnalysisDynamics {
-  /** Dynamic range in dB. Absent when not measured. */
+  /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
   /** Peak level in dB. `-Infinity` for silence; absent when not measured. */
   peakDb?: number;
@@ -988,7 +988,7 @@ export interface RhythmResult {
  * processor envelope is `DynamicsProcessorResult`, which is a different shape.
  */
 export interface DynamicsResult {
-  /** Dynamic range in dB. Absent when not measured. */
+  /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
   /** Peak level in dB. `-Infinity` for silence. */
   peakDb: number;

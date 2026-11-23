@@ -585,7 +585,7 @@ export interface MelodyResult {
  * Dynamics characteristics from the unified analysis.
  */
 export interface AnalysisDynamics {
-  /** Dynamic range in dB. Absent when not measured. */
+  /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
   /** Peak level in dB. `-Infinity` for silence; absent when not measured. */
   peakDb?: number;
@@ -860,7 +860,7 @@ export interface RhythmResult {
  * pinned to one field list by `tests/conformance/shared_type_shapes.json`.
  */
 export interface DynamicsResult {
-  /** Dynamic range in dB. Absent when not measured. */
+  /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
   /** Peak level in dB. `-Infinity` for silence. */
   peakDb: number;

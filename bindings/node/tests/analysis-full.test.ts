@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, analyzeMelody } from '../src/index.js';
+import { analyze, analyzeDynamics, analyzeMelody } from '../src/index.js';
 
 const SR = 22050;
 
@@ -26,6 +26,15 @@ function generateChordTone(sr: number, duration: number): Float32Array {
 }
 
 describe('analyze() full result', () => {
+  it('reads the dynamic range of a tone followed by silence as +Infinity', () => {
+    const tone = generateSine(440, SR, 2);
+    const gapped = new Float32Array(tone.length * 2);
+    gapped.set(tone, 0);
+    // The JSON route carries the infinite end as null and the facade restores it.
+    expect(analyze(gapped, SR).dynamics.dynamicRangeDb).toBe(Number.POSITIVE_INFINITY);
+    expect(analyzeDynamics(gapped, SR).dynamicRangeDb).toBe(Number.POSITIVE_INFINITY);
+  });
+
   it('returns the enriched analysis shape with all new fields', () => {
     const samples = generateChordTone(SR, 3);
     const result = analyze(samples, SR);

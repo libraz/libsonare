@@ -14,6 +14,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyze,
+  analyzeDynamics,
   analyzeMelody,
   CHORD_QUALITIES,
   chordFunctionalAnalysis,
@@ -61,6 +62,15 @@ describe('WASM wave3 analysis parity', () => {
       const actual = [...collectSchemaPaths(module._analysisResultSchemaFixture())].sort();
 
       expect(actual).toEqual(expected);
+    });
+
+    it('reads the dynamic range of a tone followed by silence as +Infinity', () => {
+      const tone = makeSine(2, 440);
+      const gapped = new Float32Array(tone.length * 2);
+      gapped.set(tone, 0);
+      // The JSON route carries the infinite end as null and the facade restores it.
+      expect(analyze(gapped, SR).dynamics.dynamicRangeDb).toBe(Number.POSITIVE_INFINITY);
+      expect(analyzeDynamics(gapped, SR).dynamicRangeDb).toBe(Number.POSITIVE_INFINITY);
     });
 
     it('exposes tempo/meter hypotheses, dynamics, rhythm stability, and a melody contour', () => {
