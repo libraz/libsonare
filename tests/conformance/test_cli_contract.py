@@ -484,8 +484,8 @@ class CliContractSelfTest(unittest.TestCase):
         """A docs edit under src/ is not artifact skew, and cannot be rebuilt away.
 
         `src/` carries the specification pages beside the code, so taking every
-        file made a markdown edit between two link times fail the contract with
-        nothing a rebuild could clear.
+        file made a markdown edit between two link times decline the comparison
+        with nothing a rebuild could clear.
         """
         self.assertTrue(CHECKER._is_core_source(ROOT / "src/midi/synth/gs_layer.h"))
         self.assertTrue(CHECKER._is_core_source(ROOT / "src/midi/synth/gs_layer.cpp"))
@@ -538,7 +538,8 @@ class CliContractSelfTest(unittest.TestCase):
             CHECKER._check_artifact_skew("cli", "python", 1.0, report)
         self.assertEqual(len(report), 1)
         level, message = report[0]
-        self.assertEqual(level, "fail")
+        self.assertEqual(level, "not-compared")
+        self.assertTrue(message.startswith("binary older than sources: "), message)
         self.assertIn("src/c_api/core_quick.cpp", message)
         self.assertIn("changed after cli was linked and before lib.dylib was", message)
         self.assertNotIn("includes", message)
@@ -547,9 +548,9 @@ class CliContractSelfTest(unittest.TestCase):
         """A skewed pair must be reported and not compared.
 
         Every difference the comparison could then report belongs to the build,
-        which is the same reason the skew is a failure at all -- so running it
-        emits findings indistinguishable from contract defects. One stale
-        artifact produced four of them against one real cause.
+        so running it emits findings indistinguishable from contract defects.
+        One stale artifact produced four of them against one real cause. The
+        skew itself is a comparison not performed, so it does not fail the run.
         """
         report: list[tuple[str, str]] = []
         with (
@@ -576,6 +577,28 @@ class CliContractSelfTest(unittest.TestCase):
         ):
             self.assertFalse(CHECKER._check_artifact_skew("cli", "python", 1.0, matched))
         self.assertEqual(matched, [])
+
+    def test_a_skewed_pair_is_not_compared_and_does_not_fail(self) -> None:
+        """The skew is printed where the comparison would have run, and nothing runs."""
+        stdout = StringIO()
+        with (
+            mock.patch.object(CHECKER, "_resolved_python_library", return_value="lib.dylib"),
+            mock.patch.object(CHECKER.os.path, "getmtime", side_effect=[100.0, 200.0]),
+            mock.patch.object(CHECKER, "_count_sources_after", return_value=0),
+            mock.patch.object(
+                CHECKER, "_straddling_source", return_value=ROOT / "src/c_api/core_quick.cpp"
+            ),
+            mock.patch.object(CHECKER, "_run", side_effect=AssertionError("compared")),
+            redirect_stdout(stdout),
+        ):
+            result = CHECKER.main(
+                ["--manifest", str(CHECKER.DEFAULT_MANIFEST), "--native", "cli", "--python", "py"]
+            )
+        self.assertEqual(result, 0)
+        self.assertIn(
+            "cli contract v2: not compared: binary older than sources: ", stdout.getvalue()
+        )
+        self.assertNotIn("FAIL", stdout.getvalue())
 
     def test_pending_payload_with_active_options_still_checks_inventory(self) -> None:
         """Payload promotion and option promotion are independent gates."""

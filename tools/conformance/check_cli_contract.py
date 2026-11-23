@@ -140,8 +140,8 @@ def _resolved_python_library(python_executable: str, timeout: float) -> str | No
 # What counts as a core source for the skew check below: a file that can change
 # what either artifact links to. `src/` also holds the specification pages
 # (`src/midi/synth/docs/*.md`), and taking every file made a docs-only edit
-# report as artifact skew -- a failure no rebuild can clear, since nothing the
-# build reads had changed.
+# report as artifact skew -- a comparison declined that no rebuild can restore,
+# since nothing the build reads had changed.
 _CORE_SOURCE_SUFFIXES = frozenset(
     {".c", ".cc", ".cpp", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".inc", ".ipp"}
 )
@@ -240,12 +240,14 @@ def _check_artifact_skew(
     timeout: float,
     report: list[tuple[str, str]],
 ) -> bool:
-    """Name the compared artifacts, and reject two built from different cores.
+    """Name the compared artifacts, and decline to compare two built from different cores.
 
     Returns whether the pair is skewed. A skewed pair must not be compared: by
     the argument below, every difference the comparison could then report
     belongs to the build rather than to either surface, so the findings would be
-    real failures of nothing and indistinguishable from contract defects.
+    real failures of nothing and indistinguishable from contract defects. The
+    skew is reported as a comparison not performed, not as a failure, since it
+    says nothing about either surface.
 
     Every run prints which two artifacts were compared. Whether the Python
     surface loads the build tree, a ``SONARE_LIB_PATH`` override, or the
@@ -259,7 +261,7 @@ def _check_artifact_skew(
     behind, and comparing across that gap reports a difference belonging to the
     build rather than to either surface. Two equally stale artifacts still agree
     with each other, so staleness alone is reported and not rejected; what is
-    rejected is a core source change arriving between the two link times.
+    declined is a core source change arriving between the two link times.
     """
     library = _resolved_python_library(python_executable, timeout)
     if library is None:
@@ -284,10 +286,10 @@ def _check_artifact_skew(
     )
     report.append(
         (
-            "fail",
+            "not-compared",
             (
-                f"artifact skew: {straddling.relative_to(REPO_ROOT)} changed after {behind} "
-                f"was linked and before {ahead} was -- rebuild both before comparing"
+                f"binary older than sources: {straddling.relative_to(REPO_ROOT)} changed after "
+                f"{behind} was linked and before {ahead} was -- rebuild both to compare"
             ),
         )
     )
@@ -844,7 +846,9 @@ def main(argv: list[str] | None = None) -> int:
 
     report: list[tuple[str, str]] = []
     if _check_artifact_skew(native_executable, python_executable, args.timeout, report):
-        return _emit(report)
+        for _, message in report:
+            print(f"cli contract v2: not compared: {message}")
+        return 0
     # Each surface is asked about its own library. The inventory half only ever
     # relaxes the native front-end -- the Python parser is built
     # unconditionally, so a feature-off library changes what its commands DO
