@@ -205,7 +205,7 @@ describe('Sonare WASM part rig', () => {
       expect(
         expectRefusalOf(
           () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
-          RangeError,
+          TypeError,
         ).message,
       ).toBe('RealtimeEngine.setPartRig: insertsJson must be given when mode is chain');
       expect(
@@ -352,7 +352,7 @@ describe('Sonare WASM part rig request form', () => {
       expect(
         expectRefusalOf(
           () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
-          RangeError,
+          TypeError,
         ).message,
       ).toBe('RealtimeEngine.setPartRig: insertsJson must be omitted unless mode is chain');
       expect(() =>

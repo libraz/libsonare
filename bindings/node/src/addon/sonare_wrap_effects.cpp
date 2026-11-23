@@ -277,7 +277,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   // Two spellings of one input, worded as the C ABI words it; neither reads every frame as voiced.
   if (has_voiced && has_prob) {
     sonare::util::check::refuse_relation({"voicedProb", "voiced"},
-                                         "{1} {must_be_absent} when {0} {is_present}");
+                                         sonare::util::refusal::kAbsentWhenPresentRelation);
   }
   Napi::Int32Array voiced_arr;
   Napi::Float32Array prob_arr;

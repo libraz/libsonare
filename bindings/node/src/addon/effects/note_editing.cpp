@@ -453,7 +453,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
     if (!voiced_value.IsUndefined() && !voiced_value.IsNull() && f0_data == nullptr) {
       // Worded as the C ABI words it; the presence requirement makes it a shape refusal.
       sonare::util::check::refuse_relation({"f0Hz", "voiced"},
-                                           "{0} {must_be_present} when {1} {is_present}");
+                                           sonare::util::refusal::kPresentWhenPresentRelation);
     }
     if (!ReadOptionalVoicedFlags(env, voiced_value, n_frames, &voiced, &voiced_data)) {
       return env.Undefined();

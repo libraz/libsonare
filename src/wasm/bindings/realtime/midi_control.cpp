@@ -15,6 +15,7 @@
 #include "midi/controller_profile.h"
 #include "midi/part_rig.h"
 #include "realtime_engine_wasm.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/midi_cc_kind.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
@@ -444,8 +445,9 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
                                      sonare_wasm_synth::kPartRigModeCount, "part rig mode"));
   const bool has_inserts = !inserts_json.isUndefined() && !inserts_json.isNull();
   if ((rig.mode == sonare::midi::PartRigMode::kChain) != has_inserts) {
-    throw WasmRangeError(has_inserts ? "insertsJson must be omitted unless mode is chain"
-                                     : "insertsJson must be given when mode is chain");
+    sonare::util::check::refuse_relation(
+        {"insertsJson", "mode"}, has_inserts ? sonare::util::refusal::kAbsentUnlessChainRelation
+                                             : sonare::util::refusal::kPresentWhenChainRelation);
   }
   if (has_inserts) {
     const std::string json = inserts_json.as<std::string>();
