@@ -27,13 +27,13 @@ _DOCUMENT = json.loads(_CONFORMANCE.read_text(encoding="utf-8"))
 
 # JSON key -> MixMeterSnapshot field.
 _FIELDS = {
-    "peakDbL": "peak_db_l",
-    "peakDbR": "peak_db_r",
-    "rmsDbL": "rms_db_l",
-    "rmsDbR": "rms_db_r",
+    "peakDbL": ("peak_db", 0),
+    "peakDbR": ("peak_db", 1),
+    "rmsDbL": ("rms_db", 0),
+    "rmsDbR": ("rms_db", 1),
     "correlation": "correlation",
-    "truePeakDbL": "true_peak_dbtp_l",
-    "truePeakDbR": "true_peak_dbtp_r",
+    "truePeakDbL": ("true_peak_dbtp", 0),
+    "truePeakDbR": ("true_peak_dbtp", 1),
 }
 
 _SCENE = json.dumps(
@@ -49,7 +49,12 @@ _SCENE = json.dumps(
 def _assert_reading(snapshot: libsonare.MixMeterSnapshot, expected: dict[str, float]) -> None:
     for key, field in _FIELDS.items():
         tolerance = _DOCUMENT["toleranceCorrelation" if key == "correlation" else "toleranceDb"]
-        assert getattr(snapshot, field) == pytest.approx(expected[key], abs=tolerance), key
+        actual = (
+            getattr(snapshot, field[0])[field[1]]
+            if isinstance(field, tuple)
+            else getattr(snapshot, field)
+        )
+        assert actual == pytest.approx(expected[key], abs=tolerance), key
 
 
 @pytest.mark.parametrize("case", _DOCUMENT["cases"], ids=lambda case: case["name"])
@@ -66,7 +71,10 @@ def test_the_master_meter_reproduces_the_conformance_reading(case: dict) -> None
         mixer.configure_meter(true_peak_oversample=case["truePeakOversample"], measure_lufs=False)
         for start in range(0, block * blocks, block):
             mixer.process_stereo([left[start : start + block]], [right[start : start + block]])
-        _assert_reading(mixer.meter_snapshot(), case["expected"])
+        snapshot = mixer.meter_snapshot()
+        assert snapshot.num_channels == 2
+        assert len(snapshot.peak_db) == len(snapshot.rms_db) == len(snapshot.true_peak_dbtp) == 2
+        _assert_reading(snapshot, case["expected"])
         mixer.flush_meters()
         _assert_reading(mixer.meter_snapshot(), case["expectedAfterFlush"])
     finally:
@@ -108,11 +116,17 @@ def test_true_peak_off_leaves_the_true_peak_fields_unmeasured(mixer) -> None:
     mixer.configure_meter(measure_lufs=False)
     mixer.process_stereo([block], [block])
     on = mixer.meter_snapshot()
-    assert (off.true_peak_dbtp_l, off.true_peak_dbtp_r, off.max_true_peak_dbtp) == (
-        None,
-        None,
-        None,
-    )
-    assert on.true_peak_dbtp_l is not None
-    assert math.isfinite(on.true_peak_dbtp_l)
-    assert on.peak_db_l == pytest.approx(off.peak_db_l, abs=1e-4)
+    assert off.true_peak_dbtp == (None, None)
+    assert off.max_true_peak_dbtp is None
+    assert on.true_peak_dbtp[0] is not None
+    assert math.isfinite(on.true_peak_dbtp[0])
+    assert on.peak_db[0] == pytest.approx(off.peak_db[0], abs=1e-4)
+    for field in (
+        "peak_db_l",
+        "peak_db_r",
+        "rms_db_l",
+        "rms_db_r",
+        "true_peak_dbtp_l",
+        "true_peak_dbtp_r",
+    ):
+        assert not hasattr(on, field)

@@ -334,7 +334,7 @@ def test_synth_patch_second_presence_word_fields() -> None:
     project = _build_midi_only_project()
     try:
         # Long enough to pass the note-off, so a one-shot that ignores it differs.
-        reference = project.bounce(synth_instruments=[(0, base)], total_frames=72000)
+        reference = project.bounce(synth_instruments=[(0, base)], total_frames=72000).channels
         assert float(np.max(np.abs(reference))) > 0.0
         for edit in (
             {"drift_rate_hz": 7.0},
@@ -349,7 +349,7 @@ def test_synth_patch_second_presence_word_fields() -> None:
             edited = project.bounce(
                 synth_instruments=[(0, dataclasses.replace(base, **edit))],
                 total_frames=72000,
-            )
+            ).channels
             assert not np.array_equal(edited, reference), edit
         with pytest.raises(TypeError, match="one_shot"):
             project.bounce(
@@ -456,11 +456,11 @@ def test_note_retrigger_renders_a_repeated_note_identically() -> None:
         note = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="sawLead", retrigger="note"))],
             total_frames=frames,
-        )
+        ).channels
         free = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="sawLead", retrigger="free"))],
             total_frames=frames,
-        )
+        ).channels
         assert float(np.max(np.abs(note))) > 0.01
         assert _repeated_note_diff(note) == 0.0
         assert _repeated_note_diff(free) > 1e-3
@@ -472,12 +472,12 @@ def test_bounce_synth_instruments_render_presets() -> None:
     project = _build_midi_only_project()
     try:
         for preset in ("va:sawLead", "ePiano", "harp"):
-            audio = project.bounce(synth_instruments=[(0, preset)], total_frames=24000)
-            assert audio.shape == (24000, 2)
+            audio = project.bounce(synth_instruments=[(0, preset)], total_frames=24000).channels
+            assert audio.shape == (2, 24000)
             assert float(np.max(np.abs(audio))) > 0.0
         # Deterministic: bit-identical renders for a fixed patch.
-        first = project.bounce(synth_instruments=[(0, "sawLead")], total_frames=24000)
-        second = project.bounce(synth_instruments=[(0, "sawLead")], total_frames=24000)
+        first = project.bounce(synth_instruments=[(0, "sawLead")], total_frames=24000).channels
+        second = project.bounce(synth_instruments=[(0, "sawLead")], total_frames=24000).channels
         assert np.array_equal(first, second)
     finally:
         project.close()
@@ -486,12 +486,12 @@ def test_bounce_synth_instruments_render_presets() -> None:
 def test_synth_patch_overrides_and_mod_matrix() -> None:
     project = _build_midi_only_project()
     try:
-        plain = project.bounce(synth_instruments=[(0, SynthPatch())], total_frames=24000)
+        plain = project.bounce(synth_instruments=[(0, SynthPatch())], total_frames=24000).channels
         assert float(np.max(np.abs(plain))) > 0.0
         dark = project.bounce(
             synth_instruments=[(0, SynthPatch(cutoff_hz=300.0, resonance_q=4.0))],
             total_frames=24000,
-        )
+        ).channels
         assert not np.array_equal(dark, plain)
         wobble = project.bounce(
             synth_instruments=[
@@ -504,7 +504,7 @@ def test_synth_patch_overrides_and_mod_matrix() -> None:
                 )
             ],
             total_frames=24000,
-        )
+        ).channels
         assert not np.array_equal(wobble, plain)
         with pytest.raises(SonareError):
             project.bounce(synth_instruments=[(0, "no-such-preset")], total_frames=128)
@@ -521,26 +521,26 @@ def test_synth_patch_zero_is_an_override_not_keep_the_base() -> None:
     """A field left at None keeps the base; a supplied zero overrides with it."""
     project = _build_midi_only_project()
     try:
-        preset = project.bounce(synth_instruments=[(0, "warmPad")], total_frames=24000)
+        preset = project.bounce(synth_instruments=[(0, "warmPad")], total_frames=24000).channels
 
         # warm-pad carries a non-zero stereo spread and bus drive, so turning
         # either off is a real edit that the patch can now express.
         no_spread = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="warmPad", stereo_spread=0.0))],
             total_frames=24000,
-        )
+        ).channels
         assert not np.array_equal(no_spread, preset)
         no_drive = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="warmPad", bus_drive=0.0))],
             total_frames=24000,
-        )
+        ).channels
         assert not np.array_equal(no_drive, preset)
 
         # Leaving the fields out keeps the preset's own values.
         untouched = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="warmPad"))],
             total_frames=24000,
-        )
+        ).channels
         assert np.array_equal(untouched, preset)
 
         # An empty routing tuple clears the base matrix; None keeps it.
@@ -556,11 +556,11 @@ def test_synth_patch_zero_is_an_override_not_keep_the_base() -> None:
                 )
             ],
             total_frames=24000,
-        )
+        ).channels
         cleared = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="warmPad", lfo_rate_hz=6.0, mod_routings=()))],
             total_frames=24000,
-        )
+        ).channels
         assert not np.array_equal(cleared, wobble)
     finally:
         project.close()
@@ -569,19 +569,19 @@ def test_synth_patch_zero_is_an_override_not_keep_the_base() -> None:
 def test_synth_patch_gain_zero_renders_silence() -> None:
     project = _build_midi_only_project()
     try:
-        reference = project.bounce(synth_instruments=[(0, "warmPad")], total_frames=24000)
+        reference = project.bounce(synth_instruments=[(0, "warmPad")], total_frames=24000).channels
         assert float(np.max(np.abs(reference))) > 0.0
 
         silent = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="warmPad", gain=0.0))],
             total_frames=24000,
-        )
+        ).channels
         assert float(np.max(np.abs(silent))) == 0.0
 
         quiet = project.bounce(
             synth_instruments=[(0, SynthPatch(preset="warmPad", gain=0.01))],
             total_frames=24000,
-        )
+        ).channels
         assert float(np.max(np.abs(quiet))) > 0.0
     finally:
         project.close()
@@ -590,7 +590,7 @@ def test_synth_patch_gain_zero_renders_silence() -> None:
 def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> None:
     project = _build_midi_only_project()
     try:
-        info = {d.name: d for d in synth_patch_param_info()}
+        info = {d.name: d for d in synth_patch_param_info() if d.type != "enum"}
         cases = [
             (SynthPatch(cutoff_hz=1e6), "cutoff_hz"),
             (SynthPatch(stereo_spread=5.0), "stereo_spread"),
@@ -644,7 +644,7 @@ def test_mod_routing_naming_none_is_refused() -> None:
                 (0, SynthPatch(mod_routings=(SynthModRouting("lfo1", "pitchCents", 80.0),))),
             ],
             total_frames=24000,
-        )
+        ).channels
         assert float(np.max(np.abs(audio))) > 0.0
     finally:
         project.close()
@@ -659,9 +659,8 @@ def test_synth_bounce_gm_programs_4_and_40_are_finite_audible_and_distinct() -> 
                 total_frames=12000,
                 block_size=128,
                 num_channels=1,
-                sample_rate=48000,
-            )
-            assert audio.shape == (12000, 1)
+            ).channels
+            assert audio.shape == (1, 12000)
             assert np.isfinite(audio).all()
             assert float(np.max(np.abs(audio))) > 0.0
             return audio.copy()
@@ -708,8 +707,7 @@ def _render_two_destinations(
         total_frames=12000,
         block_size=128,
         num_channels=1,
-        sample_rate=48000,
-    )
+    ).channels
     assert np.isfinite(audio).all()
     assert float(np.max(np.abs(audio))) > 0.0
     return audio.copy()
@@ -742,7 +740,7 @@ def test_drum_kit_preset_plays_the_gm_map() -> None:
     # Note 38 = acoustic snare in the GM drum map.
     project = _build_midi_only_project(note=38)
     try:
-        audio = project.bounce(synth_instruments=[(0, "drumKit")], total_frames=24000)
+        audio = project.bounce(synth_instruments=[(0, "drumKit")], total_frames=24000).channels
         assert float(np.max(np.abs(audio))) > 0.0
     finally:
         project.close()
@@ -879,12 +877,12 @@ def test_every_engine_mode_but_sample_is_audible_bare(engine_mode: str) -> None:
         audio = project.bounce(
             synth_instruments=[(0, SynthPatch(engine_mode=engine_mode))],
             total_frames=24000,
-        )
+        ).channels
         assert _peak(audio) > 10 ** (-60 / 20)
         silent = project.bounce(
             synth_instruments=[(0, SynthPatch(engine_mode="sample"))],
             total_frames=24000,
-        )
+        ).channels
         assert _peak(silent) == 0.0
     finally:
         project.close()
@@ -900,13 +898,13 @@ def test_engine_params_change_a_render_and_default_to_none() -> None:
                 (0, SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.15})),
             ],
             total_frames=24000,
-        )
+        ).channels
         hard = project.bounce(
             synth_instruments=[
                 (0, SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.9})),
             ],
             total_frames=24000,
-        )
+        ).channels
         assert _peak(soft) > 0.0 and _peak(hard) > 0.0
         assert not np.array_equal(soft, hard)
     finally:
@@ -939,7 +937,7 @@ def test_subtractive_engine_params_are_accepted_by_key() -> None:
         plain = project.bounce(
             synth_instruments=[(0, SynthPatch(engine_mode="subtractive"))],
             total_frames=24000,
-        )
+        ).channels
         layered = project.bounce(
             synth_instruments=[
                 (
@@ -955,7 +953,7 @@ def test_subtractive_engine_params_are_accepted_by_key() -> None:
                 )
             ],
             total_frames=24000,
-        )
+        ).channels
         assert _peak(plain) > 0.0
         assert not np.array_equal(plain, layered)
         with pytest.raises(SonareError, match="osc2IntervalCents"):
@@ -1020,7 +1018,8 @@ def test_engine_param_info_shape() -> None:
     patch_rows = synth_patch_param_info()
     names = {row.name for row in patch_rows}
     assert {"gain", "busDrive"} <= names
-    assert all(row.unit for row in patch_rows)
+    assert all(row.unit for row in patch_rows if row.type != "enum")
+    assert all(row.default in row.values for row in patch_rows if row.type == "enum")
 
 
 def test_engine_param_info_states_gates_only_where_set() -> None:
@@ -1075,7 +1074,7 @@ def test_engine_params_survive_garbage_collection_until_the_call_returns() -> No
                 (0, SynthPatch(engine_mode="bowedString", engine_params={"bowForce": 0.9})),
             ],
             total_frames=24000,
-        )
+        ).channels
         patch = _engine_params_patch()
         c_patch = patch._to_c()
         del patch
@@ -1086,7 +1085,7 @@ def test_engine_params_survive_garbage_collection_until_the_call_returns() -> No
         again = project.bounce(
             synth_instruments=[(0, _engine_params_patch())],
             total_frames=24000,
-        )
+        ).channels
         gc.collect()
         assert np.array_equal(again, expected)
     finally:

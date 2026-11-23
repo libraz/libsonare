@@ -20,6 +20,7 @@ from ._project_mir import chord_symbol_from_analysis as chord_symbol_from_analys
 from ._project_mir import key_mode_from_analysis as key_mode_from_analysis
 from ._project_model import *  # noqa: F403
 from ._project_model import (
+    _AUTOMATION_TARGET_KINDS,
     _STEM_LAYOUTS,
     _automation_lane_desc,
     _automation_target_kind_value,
@@ -117,6 +118,65 @@ def _planar_channels(audio: object) -> list[np.ndarray] | None:
     return None
 
 
+def _automation_lane_target_fields(
+    target_param_id: int | None,
+    target_kind: ProjectAutomationTargetKind | None,
+    send_id: str | None,
+    insert_index: int | None,
+    processor: str | None,
+    param_name: str | None,
+    *,
+    editing: bool,
+) -> tuple[int, int]:
+    identities = {
+        "send_id": send_id,
+        "insert_index": insert_index,
+        "processor": processor,
+        "param_name": param_name,
+    }
+    if editing and target_kind is None:
+        if target_param_id is not None or any(value is not None for value in identities.values()):
+            raise _refuse("target identity fields require target_kind")
+        return SONARE_AUTOMATION_TARGET_UNCHANGED, 0
+
+    kind_value = _automation_target_kind_value(
+        "opaque" if target_kind is None else target_kind, "target_kind"
+    )
+    kind = _AUTOMATION_TARGET_KINDS[kind_value]
+    if kind == "opaque":
+        if any(value is not None for value in identities.values()):
+            raise _refuse("typed target identity fields require their target_kind")
+        if target_param_id is None:
+            raise _refuse_type("target_param_id is required for an opaque target")
+        return kind_value, _automation_target_param_id_value(target_param_id)
+
+    if target_param_id is not None:
+        raise _refuse("target_param_id must be omitted for a typed target")
+    allowed = {
+        "trackSendDb": {"send_id"},
+        "trackInsertParam": {"insert_index", "processor", "param_name"},
+    }
+    allowed_fields = allowed.get(kind, set())
+    unexpected = next(
+        (
+            name
+            for name, value in identities.items()
+            if value is not None and name not in allowed_fields
+        ),
+        None,
+    )
+    if unexpected is not None:
+        raise _refuse(f"{unexpected} is not valid for target_kind {kind}")
+    required_fields = {
+        "trackSendDb": ("send_id",),
+        "trackInsertParam": ("insert_index", "processor", "param_name"),
+    }.get(kind, ())
+    missing = next((name for name in required_fields if identities[name] is None), None)
+    if missing is not None:
+        raise _refuse_type(f"{missing} is required for target_kind {kind}")
+    return kind_value, 0
+
+
 class _ProjectEditMixin:
     if TYPE_CHECKING:
 
@@ -207,6 +267,32 @@ class _ProjectEditMixin:
                 _to_c_int(sample_rate, "sample_rate"),
             )
         )
+
+    @_entry("Project.add_audio_source")
+    def add_audio_source(self, uri: str) -> int:
+        """Add an unresolved audio source and return its new stable id."""
+        encoded_uri = _utf8_arg(uri, "uri")
+        if not encoded_uri:
+            raise _refuse("uri must not be empty")
+        source_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_project_add_audio_source(
+                self._require_handle(), encoded_uri, ctypes.byref(source_id)
+            )
+        )
+        return int(source_id.value)
+
+    @_entry("Project.relink_source")
+    def relink_source(self, source_id: int, uri: str) -> int:
+        """Relink an audio source to ``uri`` and return its unchanged id."""
+        native_id = _to_c_uint32(source_id, "source_id")
+        encoded_uri = _utf8_arg(uri, "uri")
+        if not encoded_uri:
+            raise _refuse("uri must not be empty")
+        _check(
+            _get_lib().sonare_project_relink_source(self._require_handle(), native_id, encoded_uri)
+        )
+        return int(native_id.value)
 
     @_entry("Project.set_audio_source_metadata")
     def set_audio_source_metadata(
@@ -1087,64 +1173,95 @@ class _ProjectEditMixin:
     def add_automation_lane(
         self,
         track_id: int,
-        target_param_id: int,
         points: Sequence[AutomationPoint] | None = None,
+        *,
         target_kind: ProjectAutomationTargetKind | None = None,
+        target_param_id: int | None = None,
+        send_id: str | None = None,
+        insert_index: int | None = None,
+        processor: str | None = None,
+        param_name: str | None = None,
     ) -> int:
-        """Append an automation lane and return its stable target parameter id.
+        """Append a project-owned automation lane and return its lane id.
 
-        ``points`` is an optional list of :class:`AutomationPoint` records; any
-        other item is a ``TypeError``. ``target_param_id`` must be non-zero; zero is
-        reserved as the unset id. Without ``target_kind`` the lane is opaque: it
-        drives exactly ``target_param_id`` -- a host-registered engine parameter,
-        a graph-node parameter binding or strip width (3) -- and reserved mixer,
-        insert and instrument ids are refused. ``"opaque"``, ``"trackFaderDb"``
-        or ``"trackPan"`` state the kind explicitly.
+        ``points`` is an optional sequence of :class:`AutomationPoint` records. The
+        default target is opaque and requires ``target_param_id``. Typed targets
+        take their identity through ``send_id`` or ``insert_index``, ``processor``
+        and ``param_name``; they do not take a parameter id.
         """
-        desc, _backing = _automation_lane_desc(target_param_id, points)
-        desc.target_kind = (
-            0 if target_kind is None else _automation_target_kind_value(target_kind, "target_kind")
+        kind_value, target_id = _automation_lane_target_fields(
+            target_param_id,
+            target_kind,
+            send_id,
+            insert_index,
+            processor,
+            param_name,
+            editing=False,
         )
-        out_target_param_id = ctypes.c_uint32()
+        desc, _backing = _automation_lane_desc(
+            target_id,
+            points,
+            kind_value,
+            send_id=send_id,
+            insert_index=insert_index,
+            processor=processor,
+            param_name=param_name,
+        )
+        out_lane_id = ctypes.c_uint32()
         _check(
             _get_lib().sonare_project_add_automation_lane(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 ctypes.byref(desc),
-                ctypes.byref(out_target_param_id),
+                ctypes.byref(out_lane_id),
             ),
             flattened="desc",
         )
         del _backing
-        return int(out_target_param_id.value)
+        return int(out_lane_id.value)
 
     @_entry("Project.edit_automation_lane")
     def edit_automation_lane(
         self,
         track_id: int,
-        target_param_id: int,
+        lane_id: int,
         points: Sequence[AutomationPoint] | None = None,
+        *,
         target_kind: ProjectAutomationTargetKind | None = None,
+        target_param_id: int | None = None,
+        send_id: str | None = None,
+        insert_index: int | None = None,
+        processor: str | None = None,
+        param_name: str | None = None,
     ) -> None:
-        """Replace an automation lane via an undoable edit.
+        """Replace a lane by its project-owned id via an undoable edit.
 
-        Without ``target_kind`` the lane keeps its existing kind. Supplying a
-        kind applies it and rejects a same-track typed-target conflict
-        atomically.
-        ``points`` takes the same records as :meth:`add_automation_lane`.
+        Omitting ``target_kind`` preserves the lane identity and permits a points-only
+        edit. When it is supplied, target fields follow :meth:`add_automation_lane`.
         """
-        desc, _backing = _automation_lane_desc(target_param_id, points)
-        target_id = _automation_target_param_id_value(target_param_id)
-        desc.target_kind = (
-            SONARE_AUTOMATION_TARGET_UNCHANGED
-            if target_kind is None
-            else _automation_target_kind_value(target_kind, "target_kind")
+        kind_value, target_id = _automation_lane_target_fields(
+            target_param_id,
+            target_kind,
+            send_id,
+            insert_index,
+            processor,
+            param_name,
+            editing=True,
+        )
+        desc, _backing = _automation_lane_desc(
+            target_id,
+            points,
+            kind_value,
+            send_id=send_id,
+            insert_index=insert_index,
+            processor=processor,
+            param_name=param_name,
         )
         _check(
             _get_lib().sonare_project_edit_automation_lane(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                _to_c_uint32(target_id, "target_id"),
+                _to_c_uint32(lane_id, "lane_id"),
                 ctypes.byref(desc),
             ),
             flattened="desc",
@@ -1152,14 +1269,13 @@ class _ProjectEditMixin:
         del _backing
 
     @_entry("Project.remove_automation_lane")
-    def remove_automation_lane(self, track_id: int, target_param_id: int) -> None:
-        """Remove the lane identified by ``target_param_id`` via an undoable edit."""
-        target_id = _automation_target_param_id_value(target_param_id)
+    def remove_automation_lane(self, track_id: int, lane_id: int) -> None:
+        """Remove the lane identified by ``lane_id`` via an undoable edit."""
         _check(
             _get_lib().sonare_project_remove_automation_lane(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                _to_c_uint32(target_id, "target_id"),
+                _to_c_uint32(lane_id, "lane_id"),
             )
         )
 

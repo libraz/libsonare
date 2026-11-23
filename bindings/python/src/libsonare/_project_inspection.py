@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import ctypes
+import json
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
 from ._engine_conversions import _marker_kind_name, _marker_kind_value
-from ._errors import _entry, _refuse, _refuse_type
+from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_model import (
@@ -25,6 +26,8 @@ from ._project_model import (
     ProjectSourceKind,
     ProjectTrackKind,
     _absent_or_in_range,
+    _automation_target_kind_names,
+    _automation_target_kind_token,
     _marker_name_arg,
 )
 from ._project_render import _compile_diagnostics
@@ -37,13 +40,20 @@ from ._project_synth import (
 from ._runtime import (
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
+    SONARE_AUTOMATION_INSERT_INDEX_NONE,
     SonareProjectAssistSidecar,
     SonareProjectAudioSourceMetadata,
+    SonareProjectAutomationLaneList,
     SonareProjectChordSymbol,
+    SonareProjectChordSymbolList,
     SonareProjectClip,
     SonareProjectCompileResult,
     SonareProjectKeySegment,
+    SonareProjectKeySegmentList,
     SonareProjectMarker,
+    SonareProjectPosition,
+    SonareProjectSection,
+    SonareProjectSectionList,
     SonareProjectSnapToGridOptions,
     SonareProjectSource,
     SonareProjectTempoCandidate,
@@ -51,6 +61,7 @@ from ._runtime import (
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
     SonareProjectTrack,
+    SonareStringList,
     _check,
     _get_lib,
     _guard_buffer,
@@ -59,6 +70,7 @@ from ._runtime import (
     _ordinal_token,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int64,
     _to_c_size_t,
     _to_c_uint8,
     _to_c_uint32,
@@ -66,9 +78,19 @@ from ._runtime import (
     _utf8_arg,
 )
 from ._types_engine import MarkerKind
-from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
+from ._types_enums import _AUTOMATION_CURVES, AutomationCurve
+from .types import (
+    AutomationPoint,
+    MixSceneDocument,
+    ProjectAutomationLane,
+    ProjectClip,
+    ProjectMarker,
+    ProjectSource,
+    ProjectTrack,
+)
 
 _KEY_SEGMENT_KEYS = ("start_ppq", "end_ppq", "tonic_pc", "mode")
+_SECTION_KEYS = ("start_ppq", "end_ppq", "label")
 _CHORD_KEYS = (
     "start_ppq",
     "end_ppq",
@@ -79,6 +101,15 @@ _CHORD_KEYS = (
     "roman_numeral",
     "modulation_boundary",
 )
+_MAX_PROJECT_CHORD_EXTENSIONS = 32
+
+
+def _project_pitch_class(value: int, path: str) -> int | None:
+    if value == _NO_PITCH_CLASS:
+        return None
+    if 0 <= value <= 11:
+        return value
+    raise _malformed_output(f"{path} has unknown pitch-class value: {value}")
 
 
 class _ProjectInspectionMixin:
@@ -253,6 +284,91 @@ class _ProjectInspectionMixin:
         )
         return float(out_ppq.value)
 
+    @_entry("Project.key_annotations")
+    def key_annotations(self) -> list[ProjectKeySegment]:
+        """Read key annotation segments in their stored order."""
+        lib = _get_lib()
+        raw = SonareProjectKeySegmentList()
+        try:
+            _check(lib.sonare_project_key_annotations(self._require_handle(), ctypes.byref(raw)))
+            count = int(raw.count)
+            if count and not raw.items:
+                raise _malformed_output("key_annotations returned a null items pointer")
+            segments: list[ProjectKeySegment] = []
+            for index in range(count):
+                item = raw.items[index]
+                segments.append(
+                    ProjectKeySegment(
+                        start_ppq=float(item.start_ppq),
+                        end_ppq=float(item.end_ppq),
+                        tonic_pc=_project_pitch_class(
+                            int(item.tonic_pc), f"key_annotations[{index}].tonic_pc"
+                        ),
+                        mode=cast(
+                            ProjectKeyMode,
+                            _ordinal_token(int(item.mode), _PROJECT_KEY_MODES, "key mode"),
+                        ),
+                    )
+                )
+            return segments
+        finally:
+            lib.sonare_free_project_key_segment_list(ctypes.byref(raw))
+
+    @_entry("Project.chord_annotations")
+    def chord_annotations(self) -> list[ProjectChordSymbol]:
+        """Read chord annotation symbols in their stored order."""
+        lib = _get_lib()
+        raw = SonareProjectChordSymbolList()
+        try:
+            _check(lib.sonare_project_chord_annotations(self._require_handle(), ctypes.byref(raw)))
+            count = int(raw.count)
+            if count and not raw.items:
+                raise _malformed_output("chord_annotations returned a null items pointer")
+            chords: list[ProjectChordSymbol] = []
+            for index in range(count):
+                item = raw.items[index]
+                extension_count = int(item.extension_count)
+                if extension_count > _MAX_PROJECT_CHORD_EXTENSIONS:
+                    raise _malformed_output(
+                        f"chord_annotations[{index}].extensions has too many values: "
+                        f"{extension_count}"
+                    )
+                if extension_count and not item.extensions:
+                    raise _malformed_output(
+                        f"chord_annotations[{index}].extensions is null with nonzero count"
+                    )
+                extensions = [int(item.extensions[j]) for j in range(extension_count)]
+                chord = ProjectChordSymbol(
+                    start_ppq=float(item.start_ppq),
+                    end_ppq=float(item.end_ppq),
+                    root_pc=_project_pitch_class(
+                        int(item.root_pc), f"chord_annotations[{index}].root_pc"
+                    ),
+                    quality=cast(
+                        ProjectChordQuality,
+                        _ordinal_token(
+                            int(item.quality), _PROJECT_CHORD_QUALITIES, "chord quality"
+                        ),
+                    ),
+                    extensions=extensions,
+                    slash_bass_pc=_project_pitch_class(
+                        int(item.slash_bass_pc), f"chord_annotations[{index}].slash_bass_pc"
+                    ),
+                    modulation_boundary=bool(item.modulation_boundary),
+                )
+                roman_numeral = item.roman_numeral
+                if roman_numeral:
+                    try:
+                        chord["roman_numeral"] = roman_numeral.decode("utf-8")
+                    except UnicodeDecodeError:
+                        raise _malformed_output(
+                            f"chord_annotations[{index}].roman_numeral is not UTF-8"
+                        ) from None
+                chords.append(chord)
+            return chords
+        finally:
+            lib.sonare_free_project_chord_symbol_list(ctypes.byref(raw))
+
     @_entry("Project.annotate_keys")
     def annotate_keys(self, keys: Sequence[Mapping[str, object]]) -> None:
         """Replace the project's key annotation stream via an undoable command.
@@ -282,7 +398,7 @@ class _ProjectInspectionMixin:
         )
 
     @_entry("Project.annotate_chords")
-    def annotate_chords(self, chords: Sequence[dict[str, object]]) -> None:
+    def annotate_chords(self, chords: Sequence[Mapping[str, object]]) -> None:
         """Replace the project's chord-symbol annotation stream (undoable command).
 
         Each chord is a mapping with keys ``start_ppq``, ``end_ppq``, ``root_pc``
@@ -349,6 +465,66 @@ class _ProjectInspectionMixin:
             )
         )
         del backing
+
+    @_entry("Project.annotate_sections")
+    def annotate_sections(self, sections: Sequence[ProjectSection]) -> None:
+        """Replace the labeled section stream; overlapping sections are allowed."""
+        if isinstance(sections, (str, bytes)) or not isinstance(sections, Sequence):
+            raise _refuse_type("sections must be a sequence of mappings")
+        rows = list(sections)
+        count = len(rows)
+        c_sections = (SonareProjectSection * count)()
+        labels: list[bytes] = []
+        for i, section in enumerate(rows):
+            where = f"sections[{i}]"
+            fields = _mapping_keys(section, _SECTION_KEYS, where, required=_SECTION_KEYS)
+            label = _utf8_arg(fields["label"], f"{where}.label")
+            if all(character in b" \t\n\v\f\r" for character in label):
+                raise _refuse(f"{where}.label must not be blank")
+            labels.append(label)
+            c_sections[i].start_ppq = _narrow_double(fields["start_ppq"], f"{where}.start_ppq")
+            c_sections[i].end_ppq = _narrow_double(fields["end_ppq"], f"{where}.end_ppq")
+            c_sections[i].label = label
+        _check(
+            _get_lib().sonare_project_annotate_sections(
+                self._require_handle(), c_sections if count else None, _to_c_size_t(count, "count")
+            )
+        )
+        del labels
+
+    @_entry("Project.section_annotations")
+    def section_annotations(self) -> list[ProjectSection]:
+        """Read labeled sections in their stored order."""
+        lib = _get_lib()
+        raw = SonareProjectSectionList()
+        try:
+            _check(
+                lib.sonare_project_section_annotations(self._require_handle(), ctypes.byref(raw))
+            )
+            count = int(raw.count)
+            if count and not raw.items:
+                raise _malformed_output("section_annotations returned a null items pointer")
+            sections: list[ProjectSection] = []
+            for index in range(count):
+                item = raw.items[index]
+                if item.label is None:
+                    raise _malformed_output(f"section_annotations[{index}].label is null")
+                try:
+                    label = item.label.decode("utf-8")
+                except UnicodeDecodeError:
+                    raise _malformed_output(
+                        f"section_annotations[{index}].label is not UTF-8"
+                    ) from None
+                sections.append(
+                    ProjectSection(
+                        start_ppq=float(item.start_ppq),
+                        end_ppq=float(item.end_ppq),
+                        label=label,
+                    )
+                )
+            return sections
+        finally:
+            lib.sonare_free_project_section_list(ctypes.byref(raw))
 
     # -- assist sidecars ----------------------------------------------------
 
@@ -535,12 +711,31 @@ class _ProjectInspectionMixin:
 
     def _track_by_index(self, index: int) -> ProjectTrack:
         """Read a stored project track by 0-based index."""
+        lib = _get_lib()
         raw = SonareProjectTrack()
         _check(
-            _get_lib().sonare_project_track_by_index(
+            lib.sonare_project_track_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
+        strip_ref = ctypes.c_char_p()
+        output_target = ctypes.c_char_p()
+        try:
+            _check(
+                lib.sonare_project_track_route_by_index(
+                    self._require_handle(),
+                    _to_c_size_t(index, "index"),
+                    ctypes.byref(strip_ref),
+                    ctypes.byref(output_target),
+                )
+            )
+            channel_strip_ref = self._decode_optional_project_string(strip_ref.value)
+            route_target = self._decode_optional_project_string(output_target.value)
+        finally:
+            if strip_ref.value is not None:
+                lib.sonare_free_string(strip_ref)
+            if output_target.value is not None:
+                lib.sonare_free_string(output_target)
         return ProjectTrack(
             id=int(raw.id),
             kind=cast(ProjectTrackKind, _TRACK_KINDS[int(raw.kind)]),
@@ -550,6 +745,8 @@ class _ProjectInspectionMixin:
             mute=bool(raw.mute),
             solo=bool(raw.solo),
             name=self._string_by_index("sonare_project_track_name_by_index", index) or None,
+            channel_strip_ref=channel_strip_ref,
+            output_target=route_target,
         )
 
     def _clip_by_index(self, index: int) -> ProjectClip:
@@ -646,6 +843,15 @@ class _ProjectInspectionMixin:
                     lib.sonare_free_string(uri)
         return name_or_uri
 
+    @staticmethod
+    def _decode_optional_project_string(value: bytes | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            raise _malformed_output("project reader returned invalid UTF-8") from None
+
     @_entry("Project.set_mixer_scene_json")
     def set_mixer_scene_json(self, document: str) -> None:
         """Replace the project's mixer scene from scene JSON.
@@ -661,6 +867,58 @@ class _ProjectInspectionMixin:
                 _utf8_arg(document, "document"),
             )
         )
+
+    @_entry("Project.mixer_scene")
+    def mixer_scene(self) -> MixSceneDocument | None:
+        """Read the project's mixer scene, or return ``None`` when it is unset."""
+        lib = _get_lib()
+        out = ctypes.c_char_p()
+        try:
+            _check(lib.sonare_project_mixer_scene_json(self._require_handle(), ctypes.byref(out)))
+            if out.value is None:
+                return None
+            try:
+                scene = json.loads(out.value)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                raise _malformed_output("mixer_scene returned invalid scene JSON") from None
+            if not isinstance(scene, dict):
+                raise _malformed_output("mixer_scene returned a non-object scene")
+            return cast(MixSceneDocument, scene)
+        finally:
+            if out.value is not None:
+                lib.sonare_free_string(out)
+
+    @_entry("Project.unresolved_sound_font_uris")
+    def unresolved_sound_font_uris(self) -> list[str]:
+        """Return the distinct unresolved SoundFont URIs in the project."""
+        lib = _get_lib()
+        result = SonareStringList()
+        try:
+            _check(
+                lib.sonare_project_unresolved_sound_font_uris(
+                    self._require_handle(), ctypes.byref(result)
+                )
+            )
+            count = int(result.count)
+            if bool(result.items) != bool(count):
+                raise _malformed_output(
+                    "unresolved SoundFont URI list has an inconsistent pointer and count"
+                )
+            uris: list[str] = []
+            for index in range(count):
+                raw_uri = result.items[index]
+                if raw_uri is None:
+                    raise _malformed_output("unresolved SoundFont URI list contains a null item")
+                try:
+                    uris.append(raw_uri.decode("utf-8"))
+                except UnicodeDecodeError:
+                    raise _malformed_output(
+                        "unresolved SoundFont URI list contains invalid UTF-8"
+                    ) from None
+            return uris
+        finally:
+            if result.items:
+                lib.sonare_free_string_list(ctypes.byref(result))
 
     @_entry("Project.set_tempo_segments")
     def set_tempo_segments(
@@ -734,6 +992,125 @@ class _ProjectInspectionMixin:
         """Every track, in stored order."""
         return [self._track_by_index(i) for i in range(self._count("sonare_project_track_count"))]
 
+    @_entry("Project.automation_lanes")
+    def automation_lanes(self) -> list[ProjectAutomationLane]:
+        """Read every project automation lane, including its target and breakpoints."""
+        lib = _get_lib()
+        result = SonareProjectAutomationLaneList()
+        try:
+            _check(
+                lib.sonare_project_automation_lanes(self._require_handle(), ctypes.byref(result))
+            )
+            count = int(result.count)
+            if bool(result.items) != bool(count):
+                raise _malformed_output(
+                    "automation lane list has an inconsistent pointer and count"
+                )
+            lanes: list[ProjectAutomationLane] = []
+            target_kind_names = _automation_target_kind_names()
+            for index in range(count):
+                item = result.items[index]
+                desc = item.desc
+                kind = _automation_target_kind_token(int(desc.target_kind), target_kind_names)
+                point_count = int(desc.point_count)
+                if bool(desc.points) != bool(point_count):
+                    raise _malformed_output(
+                        "automation lane points have an inconsistent pointer and count"
+                    )
+                points = tuple(
+                    AutomationPoint(
+                        ppq=float(desc.points[point_index].ppq),
+                        value=float(desc.points[point_index].value),
+                        curve_to_next=cast(
+                            AutomationCurve,
+                            _ordinal_token(
+                                int(desc.points[point_index].curve_to_next),
+                                _AUTOMATION_CURVES,
+                                "automation curve",
+                            ),
+                        ),
+                    )
+                    for point_index in range(point_count)
+                )
+                send_id_bytes = desc.send_id
+                processor_bytes = desc.processor
+                param_name_bytes = desc.param_name
+                try:
+                    send_id = send_id_bytes.decode("utf-8") if send_id_bytes is not None else None
+                    processor = (
+                        processor_bytes.decode("utf-8") if processor_bytes is not None else None
+                    )
+                    param_name = (
+                        param_name_bytes.decode("utf-8") if param_name_bytes is not None else None
+                    )
+                except UnicodeDecodeError:
+                    raise _malformed_output(
+                        "automation lane identity contains invalid UTF-8"
+                    ) from None
+                insert_index_value = int(desc.insert_index)
+                insert_index = (
+                    None
+                    if insert_index_value == SONARE_AUTOMATION_INSERT_INDEX_NONE
+                    else insert_index_value
+                )
+                if kind == "opaque":
+                    if int(desc.target_param_id) == 0 or any(
+                        value is not None
+                        for value in (send_id, insert_index, processor, param_name)
+                    ):
+                        raise _malformed_output(
+                            "opaque automation lane has an invalid target identity"
+                        )
+                    target_param_id = int(desc.target_param_id)
+                elif kind == "trackSendDb":
+                    if (
+                        int(desc.target_param_id) != 0
+                        or not send_id
+                        or any(value is not None for value in (insert_index, processor, param_name))
+                    ):
+                        raise _malformed_output(
+                            "send automation lane has an invalid target identity"
+                        )
+                    target_param_id = None
+                elif kind == "trackInsertParam":
+                    if (
+                        int(desc.target_param_id) != 0
+                        or insert_index is None
+                        or insert_index < 0
+                        or not processor
+                        or not param_name
+                        or send_id is not None
+                    ):
+                        raise _malformed_output(
+                            "insert automation lane has an invalid target identity"
+                        )
+                    target_param_id = None
+                else:
+                    if int(desc.target_param_id) != 0 or any(
+                        value is not None
+                        for value in (send_id, insert_index, processor, param_name)
+                    ):
+                        raise _malformed_output(
+                            "typed automation lane has an invalid target identity"
+                        )
+                    target_param_id = None
+                lanes.append(
+                    ProjectAutomationLane(
+                        track_id=int(item.track_id),
+                        lane_id=int(item.lane_id),
+                        target_param_id=target_param_id,
+                        target_kind=kind,
+                        points=points,
+                        send_id=send_id,
+                        insert_index=insert_index,
+                        processor=processor,
+                        param_name=param_name,
+                    )
+                )
+            return lanes
+        finally:
+            lib.sonare_free_project_automation_lane_list(ctypes.byref(result))
+
     @_entry("Project.clips")
     def clips(self) -> list[ProjectClip]:
         """Every clip, in stored order."""
@@ -755,6 +1132,71 @@ class _ProjectInspectionMixin:
         """Every time-signature segment in stored order, as :meth:`set_time_signatures` takes it."""
         count = self._count("sonare_project_time_signature_count")
         return [self._time_signature_by_index(i) for i in range(count)]
+
+    @_entry("Project.ppq_to_sec")
+    def ppq_to_sec(self, ppq: float) -> float:
+        """Convert a project PPQ position to seconds from PPQ zero."""
+        out_sec = ctypes.c_double()
+        _check(
+            _get_lib().sonare_project_ppq_to_sec(
+                self._require_handle(), _narrow_double(ppq, "ppq"), ctypes.byref(out_sec)
+            )
+        )
+        return float(out_sec.value)
+
+    @_entry("Project.sec_to_ppq")
+    def sec_to_ppq(self, sec: float) -> float:
+        """Convert seconds from PPQ zero to a project PPQ position."""
+        out_ppq = ctypes.c_double()
+        _check(
+            _get_lib().sonare_project_sec_to_ppq(
+                self._require_handle(), _narrow_double(sec, "sec"), ctypes.byref(out_ppq)
+            )
+        )
+        return float(out_ppq.value)
+
+    @_entry("Project.position_at_ppq")
+    def position_at_ppq(self, ppq: float) -> ProjectPosition:
+        """Read the effective tempo, time signature, bar, and beat at ``ppq``."""
+        raw = SonareProjectPosition()
+        _check(
+            _get_lib().sonare_project_position_at_ppq(
+                self._require_handle(), _narrow_double(ppq, "ppq"), ctypes.byref(raw)
+            )
+        )
+        return ProjectPosition(
+            bpm=float(raw.bpm),
+            time_signature=ProjectTimeSignatureSegment(
+                start_ppq=float(raw.time_signature.start_ppq),
+                numerator=int(raw.time_signature.numerator),
+                denominator=int(raw.time_signature.denominator),
+            ),
+            bar_start_ppq=float(raw.bar_start_ppq),
+            bar_index=int(raw.bar_index),
+            beat=int(raw.beat),
+            beat_fraction=float(raw.beat_fraction),
+        )
+
+    @_entry("Project.bar_start_ppq")
+    def bar_start_ppq(self, bar_index: int) -> float:
+        """Read the PPQ start of a zero-based project bar."""
+        out_ppq = ctypes.c_double()
+        _check(
+            _get_lib().sonare_project_bar_start_ppq(
+                self._require_handle(), _to_c_int64(bar_index, "bar_index"), ctypes.byref(out_ppq)
+            )
+        )
+        return float(out_ppq.value)
+
+    @_entry("Project.end_ppq")
+    def end_ppq(self) -> float:
+        """Read the last audible audio or MIDI clip's end in PPQ, excluding render tails.
+
+        Return zero when there are no audible clips.
+        """
+        out_end_ppq = ctypes.c_double()
+        _check(_get_lib().sonare_project_end_ppq(self._require_handle(), ctypes.byref(out_end_ppq)))
+        return float(out_end_ppq.value)
 
     def _tempo_segment_by_index(self, index: int) -> dict[str, float]:
         """Read a tempo-map segment by 0-based stored index.

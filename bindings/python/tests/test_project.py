@@ -27,6 +27,7 @@ from libsonare import (
     ProjectDiagnosticSeverity,
     ProjectLoopRecordingResult,
     ProjectMidiClipResult,
+    ProjectSection,
     SonareError,
     SonareValueError,
     project_abi_version,
@@ -332,6 +333,91 @@ def test_unresolved_audio_sources_empty_for_midi_only_project() -> None:
         project.close()
 
 
+def test_add_audio_source_and_relink_preserve_source_identity() -> None:
+    project = Project()
+    try:
+        uri = "asset://shared.wav"
+        first_id = project.add_audio_source(uri)
+        second_id = project.add_audio_source(uri)
+        assert first_id != second_id
+        assert [source.name_or_uri for source in project.sources()] == [uri, uri]
+
+        assert project.relink_source(first_id, uri) == first_id
+        changed_uri = "asset://replacement.wav"
+        assert project.relink_source(first_id, changed_uri) == first_id
+        assert [source.name_or_uri for source in project.sources()] == [changed_uri, uri]
+        relinked = project.to_json_bytes()
+
+        project.undo()
+        assert [source.name_or_uri for source in project.sources()] == [uri, uri]
+        project.redo()
+        assert project.to_json_bytes() == relinked
+
+        with pytest.raises(SonareValueError, match="uri"):
+            project.add_audio_source("")
+        with pytest.raises(SonareValueError, match="NUL"):
+            project.relink_source(first_id, "asset://bad\0name")
+
+        midi_clip = project.add_midi_clip(0.0, 1.0)
+        midi_source = next(source for source in project.sources() if source.kind == "midi")
+        with pytest.raises(SonareError):
+            project.relink_source(midi_source.id, "asset://not-midi.wav")
+        assert midi_clip.clip_id > 0
+    finally:
+        project.close()
+
+
+def test_annotate_sections_replaces_overlapping_sections_and_undoes() -> None:
+    project = Project()
+    try:
+        before = project.to_json_bytes()
+        sections = [
+            ProjectSection(start_ppq=0.0, end_ppq=8.0, label="序章"),
+            ProjectSection(start_ppq=4.0, end_ppq=12.0, label="Verse"),
+        ]
+        assert project.section_annotations() == []
+        project.annotate_sections(sections)
+        assert project.section_annotations() == sections
+        annotated = project.to_json_bytes()
+        assert json.loads(annotated)["annotation"]["sections"] == [
+            {"startPpq": 0.0, "endPpq": 8.0, "label": "序章"},
+            {"startPpq": 4.0, "endPpq": 12.0, "label": "Verse"},
+        ]
+
+        project.undo()
+        assert project.to_json_bytes() == before
+        assert project.section_annotations() == []
+        project.redo()
+        assert project.to_json_bytes() == annotated
+        assert project.section_annotations() == sections
+        project.annotate_sections([])
+        assert json.loads(project.to_json_bytes())["annotation"]["sections"] == []
+        assert project.section_annotations() == []
+        project.undo()
+        assert project.to_json_bytes() == annotated
+        assert project.section_annotations() == sections
+
+        with pytest.raises(TypeError, match=r"sections\[0\] must be a mapping"):
+            project.annotate_sections(["not a mapping"])  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"sections\[0\]\.label must be given"):
+            project.annotate_sections([{"start_ppq": 0.0, "end_ppq": 1.0}])  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"unknown key sections\[0\]\.unknown"):
+            project.annotate_sections(
+                [{"start_ppq": 0.0, "end_ppq": 1.0, "label": "A", "unknown": 1}]
+            )  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"sections\[0\]\.label"):
+            project.annotate_sections([ProjectSection(start_ppq=0.0, end_ppq=1.0, label=" \t\n")])
+    finally:
+        project.close()
+
+
+def test_section_annotations_refuses_closed_project() -> None:
+    project = Project()
+    project.close()
+    with pytest.raises(SonareError):
+        project.section_annotations()
+
+
 def test_deserialized_audio_source_can_be_rebound_before_bounce() -> None:
     project = Project()
     audio = np.full(480, 0.25, dtype=np.float32)
@@ -352,7 +438,7 @@ def test_deserialized_audio_source_can_be_rebound_before_bounce() -> None:
             assert len(ids) == 1
             restored.set_source_audio(ids[0], audio, 1, 48000)
             assert restored.unresolved_audio_source_ids().size == 0
-            assert restored.bounce(total_frames=480, num_channels=1).shape == (480, 1)
+            assert restored.bounce(total_frames=480, num_channels=1).channels.shape == (1, 480)
         finally:
             restored.close()
     finally:

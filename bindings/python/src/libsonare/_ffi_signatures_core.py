@@ -285,7 +285,6 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_float,
         ctypes.c_float,
-        ctypes.c_float,
         ctypes.c_int,
         ctypes.c_size_t,
         ctypes.c_int,
@@ -786,6 +785,10 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_last_error_message.restype = ctypes.c_char_p
     lib.sonare_last_error_message.argtypes = []
 
+    # sonare_last_error_reason: optional token recorded with the thread-local error.
+    lib.sonare_last_error_reason.restype = ctypes.c_char_p
+    lib.sonare_last_error_reason.argtypes = []
+
     # The subjects of the last parameter refusal, and its message rendered with others
     # in their place; a facade that flattens a struct drops the struct's root.
     lib.sonare_last_refusal_subject_count.restype = ctypes.c_size_t
@@ -863,16 +866,16 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_music_analyze_options_init.restype = None
     lib.sonare_music_analyze_options_init.argtypes = [ctypes.POINTER(SonareMusicAnalyzeOptions)]
 
-    # sonare_estimate_meter_json: meter estimation over a caller-supplied beat
-    # series, with no audio and no re-analysis. Free *out_json with
+    # sonare_estimate_meter_json: meter estimation over caller-supplied beat
+    # observations, with no audio and no re-analysis. Free *out_json with
     # sonare_free_string.
+    lib.sonare_meter_beats_init.restype = None
+    lib.sonare_meter_beats_init.argtypes = [ctypes.POINTER(SonareMeterBeats)]
     lib.sonare_meter_options_init.restype = None
     lib.sonare_meter_options_init.argtypes = [ctypes.POINTER(SonareMeterOptions)]
     lib.sonare_estimate_meter_json.restype = ctypes.c_int32
     lib.sonare_estimate_meter_json.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
+        ctypes.POINTER(SonareMeterBeats),
         ctypes.POINTER(SonareMeterOptions),
         ctypes.POINTER(ctypes.c_char_p),
     ]

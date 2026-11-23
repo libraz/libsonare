@@ -11,6 +11,28 @@ from ._ffi_types import *  # noqa: F403,F405
 def configure_extra_signatures(lib: ctypes.CDLL) -> None:
     # --- Free functions for result types ---
 
+    lib.sonare_read_audio_tags.restype = ctypes.c_int32
+    lib.sonare_read_audio_tags.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareAudioTags),
+    ]
+    lib.sonare_free_audio_tags.restype = None
+    lib.sonare_free_audio_tags.argtypes = [ctypes.POINTER(SonareAudioTags)]
+
+    lib.sonare_encode_options_init.restype = None
+    lib.sonare_encode_options_init.argtypes = [ctypes.POINTER(SonareEncodeOptions)]
+    lib.sonare_encode_audio.restype = ctypes.c_int32
+    lib.sonare_encode_audio.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareEncodeOptions),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_uint8)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     lib.sonare_free_stft_result.restype = None
     lib.sonare_free_stft_result.argtypes = [ctypes.POINTER(SonareStftResult)]
 

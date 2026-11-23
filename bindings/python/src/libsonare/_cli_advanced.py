@@ -325,7 +325,10 @@ def register_advanced_parsers(
         "--start-bpm",
         type=_tempo_bpm,
         default=None,
-        help="Tempo reported when nothing is detected (default: 120.0)",
+        help=(
+            "Finite, positive BPM prior for beat tracking when the tempo search finds none. "
+            "Output reports only measured tempo. (default: 120.0)"
+        ),
     )
     rhythm_p.add_argument(
         "--bpm-min", type=_tempo_bpm, default=None, help="Lowest tempo in BPM (default: 60.0)"

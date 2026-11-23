@@ -149,9 +149,8 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
         before_save_bounce = project.bounce(
             total_frames=source.size,
             num_channels=1,
-            sample_rate=sample_rate,
-        )
-        assert before_save_bounce.shape == (source.size, 1)
+        ).channels
+        assert before_save_bounce.shape == (1, source.size)
 
         serialized = project.to_json_bytes()
 
@@ -206,8 +205,7 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
         after_rehydrate_bounce = restored.bounce(
             total_frames=source.size,
             num_channels=1,
-            sample_rate=sample_rate,
-        )
+        ).channels
         np.testing.assert_array_equal(after_rehydrate_bounce, before_save_bounce)
         assert restored.to_json_bytes() == serialized_before_rehydrate
 

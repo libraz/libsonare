@@ -25,6 +25,7 @@ from ._cli_common import (
     _parse_mode,
     _parse_modes,
     _parse_pitch_class,
+    _read_audio_bounded,
     _section_type_label,
     _strict_json_dumps,
 )
@@ -46,7 +47,7 @@ from ._cli_options import (
     _positive_int,
     _positive_pitch_frequency,
 )
-from ._errors import _malformed_output
+from ._errors import ErrorCode, SonareError, _malformed_output
 from ._runtime import _mode_value
 from ._types_enums import _GENRE_HINTS
 
@@ -63,7 +64,7 @@ def cmd_version(args: argparse.Namespace) -> int:
 
 
 def cmd_info(args: argparse.Namespace) -> int:
-    from .audio import Audio
+    from .audio import Audio, read_audio_tags
 
     samples, sr = _load_audio(args.file)
     values = np.asarray(samples, dtype=np.float64)
@@ -78,6 +79,13 @@ def cmd_info(args: argparse.Namespace) -> int:
     rms = float(np.sqrt(np.sum(np.square(values), dtype=np.float64) / n)) if n else 0.0
 
     if args.json:
+        data = _read_audio_bounded(args.file)
+        try:
+            tags = read_audio_tags(data)
+        except SonareError as exc:
+            if exc.code != ErrorCode.INVALID_FORMAT:
+                raise
+            tags = {}
         print(
             _strict_json_dumps(
                 {
@@ -88,6 +96,7 @@ def cmd_info(args: argparse.Namespace) -> int:
                     "samples": n,
                     "peak_db": 20.0 * math.log10(max(peak, 1e-10)),
                     "rms_db": 20.0 * math.log10(max(rms, 1e-10)),
+                    "tags": tags,
                 }
             )
         )

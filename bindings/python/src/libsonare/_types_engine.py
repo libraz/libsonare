@@ -26,7 +26,11 @@ from ._types_enums import (
 )
 
 if TYPE_CHECKING:
-    from ._project_model import ProjectLoopMode, ProjectSourceKind, ProjectTrackKind
+    from ._project_model import (
+        ProjectLoopMode,
+        ProjectSourceKind,
+        ProjectTrackKind,
+    )
 
 PlanarChannels: TypeAlias = Sequence[Sequence[float] | np.ndarray] | np.ndarray
 """Planar audio: one buffer per channel, or a 2-D ``(channels, frames)`` array."""
@@ -44,23 +48,20 @@ class EngineProcessWithMonitorResult:
 
 @dataclass(frozen=True, slots=True)
 class MixMeterSnapshot:
-    """Realtime mixer meter snapshot for one strip.
+    """Realtime mixer meter snapshot.
 
-    ``true_peak_dbtp_l``/``true_peak_dbtp_r``/``max_true_peak_dbtp`` are inter-sample
-    peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
-    streaming measurement that runs one reconstruction-filter group delay (a
-    few samples) behind the block, so the reading does not depend on the block
-    size. :func:`metering_true_peak_dbtp` measures a whole signal at once.
+    ``true_peak_dbtp`` and ``max_true_peak_dbtp`` are inter-sample peaks from
+    the ITU-R BS.1770-4 polyphase reconstruction at the configured 4x or 8x
+    oversampling. They are a streaming measurement that runs one
+    reconstruction-filter group delay (a few samples) behind the block, so
+    the reading does not depend on the block size.
+    :func:`metering_true_peak_dbtp` measures a whole signal at once.
+
+    The three per-channel arrays have exactly ``num_channels`` elements.
+    ``num_channels`` is zero before any audio; a plane that was not measured is
+    ``None``, while silence is ``-inf``.
     """
 
-    peak_db_l: float | None
-    """Left sample peak, in dBFS; -inf for silence, None when not measured."""
-    peak_db_r: float | None
-    """Right sample peak, in dBFS; -inf for silence, None when not measured."""
-    rms_db_l: float | None
-    """Left RMS level, in dBFS; -inf for silence, None when not measured."""
-    rms_db_r: float | None
-    """Right RMS level, in dBFS; -inf for silence, None when not measured."""
     correlation: float | None
     """Stereo phase correlation, -1..1; None when not measured."""
     mono_compat_width: float | None
@@ -81,25 +82,19 @@ class MixMeterSnapshot:
     passes the gate."""
     gain_reduction_db: float
     """Gain reduction applied, in dB."""
-    true_peak_dbtp_l: float | None
-    """Left true peak, in dBTP; -inf for silence, None when not measured."""
-    true_peak_dbtp_r: float | None
-    """Right true peak, in dBTP; -inf for silence, None when not measured."""
     max_true_peak_dbtp: float | None
-    """Maximum true peak over both channels, in dBTP; -inf for silence, None when not
+    """Maximum true peak over all channels, in dBTP; -inf for silence, None when not
     measured."""
     seq: int
     """Sequence number of the snapshot."""
-    # Per-plane surround meters (5.1/7.1). Each tuple holds num_channels values;
-    # indices 0/1 mirror the *_l/*_r stereo fields above. None before any audio.
-    num_channels: int | None = None
-    """Number of valid planes in the per-plane tuples; None before any audio."""
-    peak_db: tuple[float, ...] = ()
-    """Sample peak per plane, in dBFS; -inf for silence, NaN in a plane not measured."""
-    rms_db: tuple[float, ...] = ()
-    """RMS level per plane, in dBFS; -inf for silence, NaN in a plane not measured."""
-    true_peak_dbtp: tuple[float, ...] = ()
-    """True peak per plane, in dBTP; -inf for silence, NaN in a plane not measured."""
+    num_channels: int
+    """Number of channels represented by the per-channel arrays; zero before any audio."""
+    peak_db: tuple[float | None, ...]
+    """Sample peak per channel, in dBFS; -inf for silence, None when not measured."""
+    rms_db: tuple[float | None, ...]
+    """RMS level per channel, in dBFS; -inf for silence, None when not measured."""
+    true_peak_dbtp: tuple[float | None, ...]
+    """True peak per channel, in dBTP; -inf for silence, None when not measured."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -408,6 +403,10 @@ class ProjectTrack:
     """Whether the track is soloed."""
     name: str | None
     """Track name; None for an unnamed track."""
+    channel_strip_ref: str | None = None
+    """Mixer strip bound to the track, or ``None`` when the route is unset."""
+    output_target: str | None = None
+    """Mixer output target for the track, or ``None`` when the route is unset."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -18,6 +18,7 @@ from libsonare import (
     Project,
     SonareError,
     SonareValueError,
+    automation_target_kind_names,
     mastering_insert_names,
 )
 
@@ -221,28 +222,124 @@ def test_set_max_history_bytes_zero_keeps_mutation_but_discards_undo() -> None:
     assert p.to_json() == after
 
 
-def test_automation_lane_add_edit_remove() -> None:
+def test_automation_lane_add_edit_remove_uses_lane_id() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
-    target_param_id = p.add_automation_lane(
+    lane_id = p.add_automation_lane(
         track,
-        1,
         [
             AutomationPoint(0.0, 0.0, "linear"),
             AutomationPoint(480.0, 1.0, "linear"),
         ],
+        target_param_id=1,
     )
-    assert target_param_id == 1
+    assert lane_id == 1
     after_add = p.to_json()
     assert after_add != before
-    p.edit_automation_lane(track, target_param_id, [AutomationPoint(0.0, 0.5, "hold")])
+    p.edit_automation_lane(track, lane_id, [AutomationPoint(0.0, 0.5, "hold")])
     assert p.to_json() != after_add
     p.undo()  # undo edit
     assert p.to_json() == after_add
-    p.remove_automation_lane(track, target_param_id)
+    p.remove_automation_lane(track, lane_id)
     assert p.to_json() != after_add
     p.undo()  # undo remove restores the lane
     assert p.to_json() == after_add
+
+
+def test_automation_lane_read_edit_identity_for_every_target_kind() -> None:
+    _require_typed_automation_api()
+    p, track, _clip = _audio_project()
+    descriptors = (
+        ("opaque", {"target_param_id": 101}, 0.25),
+        ("trackFaderDb", {}, -3.0),
+        ("trackPan", {}, 0.25),
+        ("trackSendDb", {"send_id": "send-main"}, -6.0),
+        ("trackWidth", {}, 0.5),
+        (
+            "trackInsertParam",
+            {"insert_index": 0, "processor": "dynamics.compressor", "param_name": "ratio"},
+            2.0,
+        ),
+    )
+    lane_ids: dict[str, int] = {}
+    for kind, identity, value in descriptors:
+        lane_ids[kind] = p.add_automation_lane(
+            track,
+            points=[AutomationPoint(0.0, value, "hold")],
+            target_kind=kind,
+            **identity,
+        )
+
+    before = p.to_json()
+    lanes = p.automation_lanes()
+    by_kind = {lane.target_kind: lane for lane in lanes}
+    assert set(by_kind) == {kind for kind, _identity, _value in descriptors}
+    for kind, identity, value in descriptors:
+        lane = by_kind[kind]
+        assert lane.track_id == track
+        assert lane.lane_id == lane_ids[kind]
+        assert lane.target_param_id == (identity.get("target_param_id"))
+        assert lane.points == (AutomationPoint(0.0, value, "hold"),)
+        assert lane.send_id == identity.get("send_id")
+        assert lane.insert_index == identity.get("insert_index")
+        assert lane.processor == identity.get("processor")
+        assert lane.param_name == identity.get("param_name")
+        p.edit_automation_lane(
+            lane.track_id,
+            lane.lane_id,
+            lane.points,
+            target_kind=lane.target_kind,
+            target_param_id=lane.target_param_id,
+            send_id=lane.send_id,
+            insert_index=lane.insert_index,
+            processor=lane.processor,
+            param_name=lane.param_name,
+        )
+    assert p.to_json() == before
+
+    with pytest.raises(SonareValueError, match="target identity fields require target_kind"):
+        p.edit_automation_lane(
+            track,
+            by_kind["opaque"].lane_id,
+            [AutomationPoint(0.0, 0.5, "linear")],
+            target_param_id=101,
+        )
+    with pytest.raises(SonareValueError, match="target_param_id must be omitted"):
+        p.edit_automation_lane(
+            track,
+            by_kind["trackFaderDb"].lane_id,
+            [AutomationPoint(0.0, 0.5, "linear")],
+            target_kind="trackFaderDb",
+            target_param_id=0,
+        )
+    assert p.to_json() == before
+
+    send_lane = by_kind["trackSendDb"]
+    p.edit_automation_lane(track, send_lane.lane_id, [AutomationPoint(0.0, -4.0, "hold")])
+    edited_send_lane = next(
+        lane for lane in p.automation_lanes() if lane.lane_id == send_lane.lane_id
+    )
+    assert edited_send_lane.lane_id == send_lane.lane_id
+    assert edited_send_lane.target_kind == "trackSendDb"
+    assert edited_send_lane.target_param_id is None
+    assert edited_send_lane.send_id == "send-main"
+    assert edited_send_lane.points == (AutomationPoint(0.0, -4.0, "hold"),)
+
+    with pytest.raises(SonareValueError, match="lane_id"):
+        p.edit_automation_lane(track, 999_999, [AutomationPoint(0.0, 0.0, "linear")])
+    with pytest.raises(SonareValueError, match="lane_id"):
+        p.remove_automation_lane(track, 999_999)
+
+
+def test_automation_target_kind_names_follow_c_token_order() -> None:
+    assert automation_target_kind_names() == [
+        "opaque",
+        "trackFaderDb",
+        "trackPan",
+        "trackSendDb",
+        "trackWidth",
+        "trackInsertParam",
+    ]
 
 
 def test_automation_lane_rejects_zero_as_reserved_target_id() -> None:
@@ -251,7 +348,7 @@ def test_automation_lane_rejects_zero_as_reserved_target_id() -> None:
     with pytest.raises(
         ValueError, match=r"target_param_id must be an integer in \[1, 4294967295\]$"
     ):
-        p.add_automation_lane(track, 0, [AutomationPoint(0.0, 0.0, "linear")])
+        p.add_automation_lane(track, [AutomationPoint(0.0, 0.0, "linear")], target_param_id=0)
     assert p.to_json() == before
 
 
@@ -271,6 +368,9 @@ def _require_typed_automation_api() -> None:
         for name in (
             "sonare_project_add_automation_lane",
             "sonare_project_edit_automation_lane",
+            "sonare_project_automation_lanes",
+            "sonare_free_project_automation_lane_list",
+            "sonare_automation_target_kind_names",
         )
         if not hasattr(lib, name)
     ]
@@ -281,16 +381,17 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
     _require_typed_automation_api()
     p, track, _clip = _audio_project()
 
-    legacy_target = p.add_automation_lane(track, 1, [AutomationPoint(0.0, 0.0, "linear")])
+    legacy_lane_id = p.add_automation_lane(
+        track, [AutomationPoint(0.0, 0.0, "linear")], target_param_id=1
+    )
     legacy_doc = json.loads(p.to_json())
     assert legacy_doc["version"] == 7
     assert "targetKind" not in legacy_doc["tracks"][0]["automationLanes"][0]
-    p.remove_automation_lane(track, legacy_target)
+    p.remove_automation_lane(track, legacy_lane_id)
 
     typed_target = p.add_automation_lane(
         track,
-        2,
-        [
+        points=[
             AutomationPoint(0.0, 0.0, "linear"),
             AutomationPoint(480.0, 1.0, "hold"),
         ],
@@ -317,20 +418,18 @@ def test_automation_lane_typed_kind_conflict_is_atomic() -> None:
     p, track, _clip = _audio_project()
     p.add_automation_lane(
         track,
-        1,
-        [AutomationPoint(0.0, 0.0, "linear")],
+        points=[AutomationPoint(0.0, 0.0, "linear")],
         target_kind="trackFaderDb",
     )
     pan_target = p.add_automation_lane(
-        track, 2, [AutomationPoint(0.0, 0.0, "linear")], target_kind="trackPan"
+        track, points=[AutomationPoint(0.0, 0.0, "linear")], target_kind="trackPan"
     )
     before = p.to_json()
 
     with pytest.raises(SonareError):
         p.add_automation_lane(
             track,
-            3,
-            [AutomationPoint(0.0, 1.0, "linear")],
+            points=[AutomationPoint(0.0, 1.0, "linear")],
             target_kind="trackFaderDb",
         )
     assert p.to_json() == before
@@ -363,8 +462,7 @@ def test_automation_lane_rejects_invalid_target_kind_without_mutation() -> None:
         with pytest.raises(expected):
             p.add_automation_lane(
                 track,
-                1,
-                [AutomationPoint(0.0, 0.0, "linear")],
+                points=[AutomationPoint(0.0, 0.0, "linear")],
                 target_kind=invalid,
             )
         assert p.to_json() == before
@@ -376,8 +474,80 @@ def test_automation_lane_rejects_nonintegral_target_without_mutation() -> None:
     for invalid in (1.5, float("nan"), float("inf"), True, "1"):
         refused = isinstance(invalid, (bool, str))
         with pytest.raises(TypeError if refused else ValueError, match="target_param_id"):
-            p.add_automation_lane(track, invalid, [AutomationPoint(0.0, 0.0, "linear")])
+            p.add_automation_lane(
+                track, [AutomationPoint(0.0, 0.0, "linear")], target_param_id=invalid
+            )
         assert p.to_json() == before
+
+
+def test_automation_lane_typed_targets_refuse_target_param_id() -> None:
+    p, track, _clip = _audio_project()
+    before = p.to_json()
+    for target_param_id in (0, 17):
+        with pytest.raises(SonareValueError, match="target_param_id must be omitted"):
+            p.add_automation_lane(
+                track,
+                target_param_id=target_param_id,
+                target_kind="trackFaderDb",
+                points=[AutomationPoint(0.0, 0.0, "linear")],
+            )
+    assert p.to_json() == before
+
+
+def test_project_scene_route_and_unresolved_soundfont_readers() -> None:
+    p, track, _clip = _audio_project()
+    default_track = p.tracks()[0]
+    assert default_track.channel_strip_ref is None
+    assert default_track.output_target is None
+    p.set_track_route(track, "strip-main", "master")
+    stored_track = p.tracks()[0]
+    assert stored_track.channel_strip_ref == "strip-main"
+    assert stored_track.output_target == "master"
+    assert p.mixer_scene() is None
+
+    p.set_mixer_scene_json(
+        json.dumps({"version": 2, "strips": [], "buses": [], "vcaGroups": [], "connections": []})
+    )
+    scene = p.mixer_scene()
+    assert scene is not None
+    assert scene["version"] == 2
+    assert scene["strips"] == []
+
+    project_document = {
+        "version": 7,
+        "sampleRate": 48000,
+        "tracks": [
+            {
+                "id": 1,
+                "name": "keys",
+                "kind": "midi",
+                "midiDestinationId": 5,
+                "channelStripRef": "",
+                "outputTarget": "",
+                "automationLanes": [],
+            }
+        ],
+        "clips": [],
+        "instruments": [
+            {
+                "destinationId": 5,
+                "kind": "sf2",
+                "sf2": {
+                    "gain": 1.0,
+                    "polyphony": 32,
+                    "preferModelForModeledFamilies": 0,
+                    "clearBankRig": 0,
+                    "gsEfxRealization": 0,
+                    "soundFontUri": "fonts/missing.sf2",
+                },
+            }
+        ],
+    }
+    unresolved = Project.from_json(json.dumps(project_document))
+    try:
+        assert unresolved.unresolved_sound_font_uris() == ["fonts/missing.sf2"]
+    finally:
+        unresolved.close()
 
 
 def test_move_clip_rejects_cross_kind_track() -> None:

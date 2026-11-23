@@ -7,6 +7,8 @@ renders.
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -17,9 +19,12 @@ from libsonare import (
     ErrorCode,
     Project,
     ProjectMidiEvent,
+    ProjectPosition,
     ProjectTimeline,
+    ProjectTimeSignatureSegment,
     RealtimeEngine,
     SonareError,
+    SonareValueError,
 )
 
 from ._helpers import raises_coded
@@ -67,8 +72,7 @@ def _project_bounce(project: Project) -> np.ndarray:
         total_frames=_FRAMES,
         block_size=_BLOCK,
         num_channels=2,
-        sample_rate=_RATE,
-    )
+    ).channels
 
 
 def _prepared_engine() -> RealtimeEngine:
@@ -99,7 +103,7 @@ def _engine_bounce(engine: RealtimeEngine) -> np.ndarray:
     )
     _stop_and_rewind(engine)
     assert result.frames == _FRAMES
-    return np.asarray(result.interleaved, dtype=np.float32).reshape(-1, 2)
+    return np.ascontiguousarray(np.asarray(result.interleaved, dtype=np.float32).reshape(-1, 2).T)
 
 
 def _compile(project: Project) -> ProjectTimeline:
@@ -120,6 +124,75 @@ def _apply(engine: RealtimeEngine, project: Project, *, close_early: bool = Fals
             timeline.close()
     finally:
         timeline.close()
+
+
+def test_project_ppq_time_and_position_readers() -> None:
+    project = Project()
+    try:
+        project.set_tempo_segments([{"start_ppq": 0.0, "bpm": 120.0, "end_bpm": 120.0}])
+        project.set_time_signatures([{"start_ppq": 0.0, "numerator": 3, "denominator": 4}])
+
+        assert project.ppq_to_sec(2.0) == pytest.approx(1.0)
+        assert project.sec_to_ppq(1.0) == pytest.approx(2.0)
+        assert project.bar_start_ppq(0) == 0.0
+        assert project.bar_start_ppq(2) == 6.0
+
+        position = project.position_at_ppq(4.5)
+        assert position == ProjectPosition(
+            bpm=120.0,
+            time_signature=ProjectTimeSignatureSegment(0.0, 3, 4),
+            bar_start_ppq=3.0,
+            bar_index=1,
+            beat=2,
+            beat_fraction=0.5,
+        )
+        assert [field.name for field in dataclasses.fields(ProjectPosition)] == [
+            "bpm",
+            "time_signature",
+            "bar_start_ppq",
+            "bar_index",
+            "beat",
+            "beat_fraction",
+        ]
+
+        with pytest.raises(SonareValueError, match="ppq"):
+            project.ppq_to_sec(-1.0)
+        with pytest.raises(SonareValueError, match="ppq"):
+            project.position_at_ppq(-1.0)
+        with pytest.raises(TypeError, match="sec"):
+            project.sec_to_ppq(True)  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="bar_index"):
+            project.bar_start_ppq(-1)
+    finally:
+        project.close()
+
+
+def test_project_end_ppq_tracks_the_last_audible_clip() -> None:
+    project = Project()
+    try:
+        assert project.end_ppq() == 0.0
+
+        first_clip = project.add_midi_clip(start_ppq=1.25, length_ppq=2.5)
+        project.set_midi_events(
+            first_clip.clip_id,
+            [
+                ProjectMidiEvent(0.0, 0x20903C60, 0),
+                ProjectMidiEvent(2.5, 0x20803C00, 0),
+            ],
+        )
+        assert project.end_ppq() == 3.75
+
+        later_clip = project.add_midi_clip(start_ppq=6.0, length_ppq=2.0)
+        project.set_midi_events(
+            later_clip.clip_id,
+            [
+                ProjectMidiEvent(0.0, 0x20904060, 0),
+                ProjectMidiEvent(2.0, 0x20804000, 0),
+            ],
+        )
+        assert project.end_ppq() == 8.0
+    finally:
+        project.close()
 
 
 def test_applied_timeline_renders_exactly_like_project_bounce_across_edits() -> None:

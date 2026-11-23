@@ -108,8 +108,8 @@ def test_capabilities_dataclass_fields_match_the_payload() -> None:
     import libsonare
     from libsonare._analysis_music import _capabilities_document
     from libsonare.types import (
+        AudioFormatCapabilities,
         CapabilitiesAbi,
-        CapabilitiesDecode,
         CapabilitiesFeatures,
     )
 
@@ -122,7 +122,8 @@ def test_capabilities_dataclass_fields_match_the_payload() -> None:
     for section, cls in (
         ("abi", CapabilitiesAbi),
         ("features", CapabilitiesFeatures),
-        ("decode", CapabilitiesDecode),
+        ("decode", AudioFormatCapabilities),
+        ("encode", AudioFormatCapabilities),
     ):
         assert isinstance(getattr(descriptor, section), cls), section
         names = {wire_key(field.name) for field in dataclasses.fields(cls)}

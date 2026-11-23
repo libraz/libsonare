@@ -123,6 +123,21 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_char_p),
     ]
+    lib.sonare_mastering_analyze_pair_stereo.restype = ctypes.c_int32
+    lib.sonare_mastering_analyze_pair_stereo.argtypes = [
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareMasteringParam),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_char_p),
+    ]
     lib.sonare_mastering_analyze_stereo.restype = ctypes.c_int32
     lib.sonare_mastering_analyze_stereo.argtypes = [
         ctypes.c_char_p,

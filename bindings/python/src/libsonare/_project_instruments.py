@@ -5,12 +5,12 @@ from __future__ import annotations
 import ctypes
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import Literal, Protocol, TypeAlias, cast, get_args
+from dataclasses import dataclass, replace
+from typing import Any, Literal, Protocol, TypeAlias, cast, get_args
 
 import numpy as np
 
-from ._errors import _entry, _refuse, _refuse_type
+from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD2_AMP_DELAY_MS,
     SONARE_SYNTH_FIELD2_AMP_HOLD_MS,
@@ -52,7 +52,7 @@ from ._ffi_types_mastering_project import (
     SONARE_SYNTH_PATCH_MOD_ROUTINGS,
     SONARE_SYNTH_PRESET_NAME_MAX,
 )
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _narrow_int
 from ._project_synth import (
     _BUILTIN_SYNTH_WAVEFORMS,
     _SAMPLE_KEY_TRACKS,
@@ -118,11 +118,15 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    ErrorCode,
     SonareBuiltinSynthConfig,
+    SonareError,
     SonareInstrumentCallbacks,
     SonareInstrumentOnEventCallback,
     SonareInstrumentPrepareCallback,
     SonareInstrumentRenderCallback,
+    SonareProjectInstrument,
+    SonareProjectInstrumentBinding,
     SonareSf2InstrumentConfig,
     SonareSynthEngineParam,
     SonareSynthModRouting,
@@ -134,7 +138,12 @@ from ._runtime import (
     _to_c_int,
     _utf8_arg,
 )
-from ._types_capabilities import SynthParamInfo, _from_wire
+from ._types_capabilities import (
+    SynthParamInfo,
+    SynthPatchEnumParamInfo,
+    SynthPatchParamInfo,
+    _from_wire,
+)
 
 GsEfxRealization: TypeAlias = Literal["modern", "classic"]
 """Which GS insertion-effect realisation an instrument uses."""
@@ -822,17 +831,15 @@ def synth_engine_param_info(engine_mode: SynthEngineMode) -> list[SynthParamInfo
 
 
 @_entry("synth_patch_param_info")
-def synth_patch_param_info() -> list[SynthParamInfo]:
-    """Describe every numeric :class:`SynthPatch` wrapper field.
+def synth_patch_param_info() -> list[SynthPatchParamInfo]:
+    """Describe every numeric, boolean, and enum :class:`SynthPatch` wrapper field.
 
-    One descriptor per field, in the layout of :func:`synth_engine_param_info`:
-    ``name`` is the binding spelling of the field, ``min`` / ``max`` the range it
-    is accepted in (a value outside it is refused) and ``default`` the init
-    patch's value. Enum fields, the preset name and the mod matrix are not
-    described.
+    Each numeric or boolean row follows :func:`synth_engine_param_info`.
+    An enum row has ``type`` ``"enum"``, ``values`` in ordinal order, and ``default`` set to
+    the ordinal-0 token. The preset name and mod matrix are not described.
     """
     lib = _get_lib()
-    return _synth_param_info(_call_string(lib.sonare_synth_patch_param_info))
+    return _synth_patch_param_info(_call_string(lib.sonare_synth_patch_param_info))
 
 
 @_entry("synth_gs_drum_kit_name")
@@ -1019,3 +1026,309 @@ def _make_instrument_callbacks(
     keepalive.append(cb_render)
     cbs.render = cb_render
     return cbs
+
+
+ProjectInstrumentKind: TypeAlias = Literal["synth", "builtin", "sf2"]
+"""Kind of a persistent MIDI destination instrument."""
+
+_PROJECT_INSTRUMENT_KINDS = {"synth": 0, "builtin": 1, "sf2": 2}
+_PROJECT_INSTRUMENT_KIND_NAMES = tuple(_PROJECT_INSTRUMENT_KINDS)
+
+
+@dataclass(frozen=True)
+class ProjectInstrument:
+    """Instrument and optional bank/program bound to one project destination."""
+
+    kind: ProjectInstrumentKind
+    """Instrument family: NativeSynth, the built-in synth, or SoundFont."""
+    patch: SynthPatch | None = None
+    """NativeSynth patch when ``kind`` is ``"synth"``."""
+    config: BuiltinSynthConfig | Sf2InstrumentConfig | None = None
+    """Configuration for ``"builtin"`` or ``"sf2"``."""
+    sound_font_uri: str | None = None
+    """SoundFont URI for an SF2 binding, or ``None`` for the default font."""
+    use_gm_programs: bool | None = None
+    """Whether NativeSynth follows incoming GM bank/program messages."""
+    bank_msb: int | None = None
+    """MIDI bank MSB, or ``None`` to follow each clip."""
+    bank_lsb: int | None = None
+    """MIDI bank LSB, or ``None`` to follow each clip."""
+    program: int | None = None
+    """MIDI program, or ``None`` to follow each clip."""
+
+    def _to_c(self) -> SonareProjectInstrument:
+        kind = _synth_enum_value(self.kind, _PROJECT_INSTRUMENT_KINDS, "instrument.kind")
+        if self.patch is not None and kind != _PROJECT_INSTRUMENT_KINDS["synth"]:
+            raise _refuse_type("instrument.patch is only valid for kind 'synth'")
+        if self.config is not None and kind == _PROJECT_INSTRUMENT_KINDS["synth"]:
+            raise _refuse_type("instrument.config is not valid for kind 'synth'")
+        if self.sound_font_uri is not None and kind != _PROJECT_INSTRUMENT_KINDS["sf2"]:
+            raise _refuse_type("instrument.sound_font_uri is only valid for kind 'sf2'")
+        if self.use_gm_programs is not None and kind != _PROJECT_INSTRUMENT_KINDS["synth"]:
+            raise _refuse_type("instrument.use_gm_programs is only valid for kind 'synth'")
+
+        c = SonareProjectInstrument()
+        c.kind = kind
+        if self.bank_msb is not None:
+            c.bank_msb = _narrow_int(self.bank_msb, "instrument.bank_msb", 0, 127)
+        if self.bank_lsb is not None:
+            c.bank_lsb = _narrow_int(self.bank_lsb, "instrument.bank_lsb", 0, 127)
+        if self.program is not None:
+            c.program = _narrow_int(self.program, "instrument.program", 0, 127)
+        keepalive: list[object] = []
+
+        if kind == _PROJECT_INSTRUMENT_KINDS["synth"]:
+            if not isinstance(self.patch, SynthPatch):
+                raise _refuse_type("instrument.patch must be a SynthPatch for kind 'synth'")
+            if self.patch.sample_bank is not None:
+                error = SonareError(
+                    ErrorCode.NOT_SUPPORTED,
+                    "instrument.patch.sample_bank cannot be persisted",
+                )
+                error.reason = "notPersistable"
+                raise error
+            use_gm_programs = self.use_gm_programs
+            if use_gm_programs is not None and not isinstance(use_gm_programs, bool):
+                raise _refuse_type("instrument.use_gm_programs must be a bool")
+            if self.patch.use_gm_programs is not None:
+                if not isinstance(self.patch.use_gm_programs, bool):
+                    raise _refuse_type("instrument.patch.use_gm_programs must be a bool")
+                if use_gm_programs is not None and use_gm_programs != self.patch.use_gm_programs:
+                    raise _refuse(
+                        "instrument.use_gm_programs conflicts with instrument.patch.use_gm_programs"
+                    )
+                use_gm_programs = self.patch.use_gm_programs
+            patch = self.patch._to_c()
+            c.synth = ctypes.pointer(patch)
+            keepalive.append(patch)
+            if hasattr(patch, "_keepalive"):
+                keepalive.append(patch._keepalive)
+            if use_gm_programs is not None:
+                c.use_gm_programs = int(use_gm_programs)
+        elif kind == _PROJECT_INSTRUMENT_KINDS["builtin"]:
+            if not isinstance(self.config, BuiltinSynthConfig):
+                raise _refuse_type(
+                    "instrument.config must be a BuiltinSynthConfig for kind 'builtin'"
+                )
+            builtin_config = self.config._to_c()
+            c.builtin = ctypes.pointer(builtin_config)
+            keepalive.append(builtin_config)
+        else:
+            if not isinstance(self.config, Sf2InstrumentConfig):
+                raise _refuse_type(
+                    "instrument.config must be an Sf2InstrumentConfig for kind 'sf2'"
+                )
+            for field in ("prefer_model_for_modeled_families", "clear_bank_rig"):
+                if not isinstance(getattr(self.config, field), bool):
+                    raise _refuse_type(f"instrument.config.{field} must be a bool")
+            sf2_config = self.config._to_c()
+            c.sf2 = ctypes.pointer(sf2_config)
+            keepalive.append(sf2_config)
+            if self.sound_font_uri is not None:
+                c.sound_font_uri = _utf8_arg(self.sound_font_uri, "instrument.sound_font_uri")
+
+        c._keepalive = tuple(keepalive)
+        return c
+
+
+@dataclass(frozen=True, kw_only=True)
+class ProjectDestinationInstrument(ProjectInstrument):
+    """A stored instrument and the MIDI destination it serves."""
+
+    destination_id: int
+    """MIDI destination id of the stored binding."""
+
+    @classmethod
+    def _from_c(cls, binding: SonareProjectInstrumentBinding) -> ProjectDestinationInstrument:
+        c = binding.instrument
+        destination_id = int(binding.destination_id)
+        kind_value = int(c.kind)
+        if not 0 <= kind_value < len(_PROJECT_INSTRUMENT_KIND_NAMES):
+            raise _malformed_output(f"unknown project instrument kind ordinal: {kind_value}")
+        kind = cast(ProjectInstrumentKind, _PROJECT_INSTRUMENT_KIND_NAMES[kind_value])
+        bank_msb = _optional_midi_value(int(c.bank_msb), "bank_msb")
+        bank_lsb = _optional_midi_value(int(c.bank_lsb), "bank_lsb")
+        program = _optional_midi_value(int(c.program), "program")
+        if kind == "synth":
+            if not c.synth:
+                raise _malformed_output("project instrument synth config is missing")
+            patch = _project_synth_patch_from_c(c.synth.contents)
+            return cls(
+                destination_id=destination_id,
+                kind=kind,
+                patch=patch,
+                use_gm_programs=_project_bool_from_c(c.use_gm_programs, "use_gm_programs"),
+                bank_msb=bank_msb,
+                bank_lsb=bank_lsb,
+                program=program,
+            )
+        if kind == "builtin":
+            if not c.builtin:
+                raise _malformed_output("project instrument built-in config is missing")
+            config = c.builtin.contents
+            waveform = _synth_enum_name(int(config.waveform), _BUILTIN_SYNTH_WAVEFORMS)
+            return cls(
+                destination_id=destination_id,
+                kind=kind,
+                config=BuiltinSynthConfig(
+                    waveform=cast(SynthWaveform, waveform),
+                    gain=float(config.gain),
+                    attack_ms=float(config.attack_ms),
+                    decay_ms=float(config.decay_ms),
+                    sustain=float(config.sustain),
+                    release_ms=float(config.release_ms),
+                    polyphony=int(config.polyphony),
+                ),
+                bank_msb=bank_msb,
+                bank_lsb=bank_lsb,
+                program=program,
+            )
+        if not c.sf2:
+            raise _malformed_output("project instrument SoundFont config is missing")
+        config = c.sf2.contents
+        if config.prefer_model_for_modeled_families < 0 or config.clear_bank_rig < 0:
+            raise _malformed_output("project instrument SoundFont flags must be nonnegative")
+        gs_efx_realization = _enum_token_from_value(
+            int(config.gs_efx_realization), _GS_EFX_REALIZATIONS, "GS effect realization"
+        )
+        uri = _project_string_from_c(c.sound_font_uri, "sound_font_uri")
+        return cls(
+            destination_id=destination_id,
+            kind=kind,
+            config=Sf2InstrumentConfig(
+                gain=float(config.gain),
+                polyphony=int(config.polyphony),
+                prefer_model_for_modeled_families=bool(config.prefer_model_for_modeled_families),
+                clear_bank_rig=bool(config.clear_bank_rig),
+                gs_efx_realization=cast(GsEfxRealization, gs_efx_realization),
+            ),
+            sound_font_uri=uri,
+            bank_msb=bank_msb,
+            bank_lsb=bank_lsb,
+            program=program,
+        )
+
+
+def _optional_midi_value(value: int, name: str) -> int | None:
+    if value == -1:
+        return None
+    if not 0 <= value <= 127:
+        raise _malformed_output(f"destination instrument has an invalid {name} override")
+    return value
+
+
+def _project_bool_from_c(value: int, name: str) -> bool:
+    if value not in (0, 1):
+        raise _malformed_output(f"project instrument {name} is not a bool: {value}")
+    return bool(value)
+
+
+def _project_string_from_c(value: bytes | None, name: str) -> str | None:
+    if value is None:
+        return None
+    try:
+        return value.decode("utf-8")
+    except UnicodeDecodeError:
+        raise _malformed_output(f"project instrument {name} is not UTF-8") from None
+
+
+def _enum_token_from_value(value: int, names: Mapping[str, int], noun: str) -> str:
+    try:
+        return next(name for name, ordinal in names.items() if ordinal == value)
+    except StopIteration:
+        raise _malformed_output(f"unknown {noun} ordinal: {value}") from None
+
+
+_PROJECT_PATCH_PRESENCE = {
+    "unison": (SONARE_SYNTH_FIELD_UNISON, False),
+    "detune_cents": (SONARE_SYNTH_FIELD_DETUNE_CENTS, False),
+    "drift_cents": (SONARE_SYNTH_FIELD_DRIFT_CENTS, False),
+    "drive": (SONARE_SYNTH_FIELD_DRIVE, False),
+    "cutoff_hz": (SONARE_SYNTH_FIELD_CUTOFF_HZ, False),
+    "resonance_q": (SONARE_SYNTH_FIELD_RESONANCE_Q, False),
+    "key_track": (SONARE_SYNTH_FIELD_KEY_TRACK, False),
+    "env_to_cutoff_cents": (SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS, False),
+    "vel_to_cutoff_cents": (SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS, False),
+    "amp_attack_ms": (SONARE_SYNTH_FIELD_AMP_ATTACK_MS, False),
+    "amp_decay_ms": (SONARE_SYNTH_FIELD_AMP_DECAY_MS, False),
+    "amp_sustain": (SONARE_SYNTH_FIELD_AMP_SUSTAIN, False),
+    "amp_release_ms": (SONARE_SYNTH_FIELD_AMP_RELEASE_MS, False),
+    "filter_attack_ms": (SONARE_SYNTH_FIELD_FILTER_ATTACK_MS, False),
+    "filter_decay_ms": (SONARE_SYNTH_FIELD_FILTER_DECAY_MS, False),
+    "filter_sustain": (SONARE_SYNTH_FIELD_FILTER_SUSTAIN, False),
+    "filter_release_ms": (SONARE_SYNTH_FIELD_FILTER_RELEASE_MS, False),
+    "lfo_rate_hz": (SONARE_SYNTH_FIELD_LFO_RATE_HZ, False),
+    "lfo_to_pitch_cents": (SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS, False),
+    "lfo2_rate_hz": (SONARE_SYNTH_FIELD_LFO2_RATE_HZ, False),
+    "glide_ms": (SONARE_SYNTH_FIELD_GLIDE_MS, False),
+    "body_mix": (SONARE_SYNTH_FIELD_BODY_MIX, False),
+    "stereo_spread": (SONARE_SYNTH_FIELD_STEREO_SPREAD, False),
+    "gain": (SONARE_SYNTH_FIELD_GAIN, False),
+    "polyphony": (SONARE_SYNTH_FIELD_POLYPHONY, False),
+    "bus_drive": (SONARE_SYNTH_FIELD_BUS_DRIVE, False),
+    "sample_set": (0, False),
+    "sample_level": (0, False),
+    "sample_start_offset": (0, False),
+    "hp_cutoff_hz": (SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, False),
+    "sample_hold_hz": (SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ, False),
+    "bit_depth": (SONARE_SYNTH_FIELD_BIT_DEPTH, False),
+    "pitch_offset_cents": (SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS, False),
+    "drift_rate_hz": (SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ, True),
+    "amp_delay_ms": (SONARE_SYNTH_FIELD2_AMP_DELAY_MS, True),
+    "amp_hold_ms": (SONARE_SYNTH_FIELD2_AMP_HOLD_MS, True),
+    "filter_delay_ms": (SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, True),
+    "filter_hold_ms": (SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, True),
+    "one_shot": (SONARE_SYNTH_FIELD2_ONE_SHOT, True),
+}
+
+
+def _project_synth_patch_from_c(c: SonareSynthPatch) -> SynthPatch:
+    if not 0 <= int(c.num_mod_routings) <= SONARE_SYNTH_PATCH_MOD_ROUTINGS:
+        raise _malformed_output(
+            f"project instrument mod routing count is out of range: {c.num_mod_routings}"
+        )
+    if c.engine_param_count and not c.engine_params:
+        raise _malformed_output("project instrument engine parameters are missing")
+
+    patch = SynthPatch._from_c(c)
+    updates: dict[str, object] = {}
+    for name, (bit, second_word) in _PROJECT_PATCH_PRESENCE.items():
+        value = getattr(patch, name)
+        if bit == 0:
+            if value == 0:
+                updates[name] = None
+            continue
+        word = int(c.present_fields2 if second_word else c.present_fields)
+        if word & bit == 0:
+            updates[name] = None
+
+    if (
+        int(c.num_mod_routings) == 0
+        and int(c.present_fields) & SONARE_SYNTH_FIELD_MOD_ROUTINGS == 0
+    ):
+        updates["mod_routings"] = None
+    if c.engine_param_count:
+        params: dict[str, float] = {}
+        for index in range(int(c.engine_param_count)):
+            raw_key = c.engine_params[index].key
+            if not raw_key:
+                raise _malformed_output("project instrument engine parameter key is empty")
+            key = _project_string_from_c(raw_key, "engine parameter key")
+            if not key:
+                raise _malformed_output("project instrument engine parameter key is empty")
+            params[key] = float(c.engine_params[index].value)
+        updates["engine_params"] = params
+    else:
+        updates["engine_params"] = None
+    return replace(patch, **cast(Any, updates))
+
+
+def _synth_patch_param_info(raw: str) -> list[SynthPatchParamInfo]:
+    rows = json.loads(raw)
+    result: list[SynthPatchParamInfo] = []
+    for row in rows:
+        if row.get("type") == "enum":
+            result.append(_from_wire(SynthPatchEnumParamInfo, row))
+        else:
+            result.append(_from_wire(SynthParamInfo, row))
+    return result

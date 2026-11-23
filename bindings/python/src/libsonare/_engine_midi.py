@@ -12,14 +12,19 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from ._cstruct import CStruct
-from ._errors import _entry, _refuse
-from ._ffi_types_mastering_project import SonareControllerBinding, SonareSynthInstrumentBinding
+from ._errors import _entry, _malformed_output, _refuse
+from ._ffi_types_mastering_project import (
+    SonareControllerBinding,
+    SonareMidiCcBindingList,
+    SonareSynthInstrumentBinding,
+)
 from ._project import (
     BuiltinSynthConfig,
     MidiCcBinding,
     SampleBank,
     Sf2InstrumentConfig,
     SynthPatch,
+    _cc_binding_from_c,
     _cc_binding_to_c,
     _synth_patch_arg,
 )
@@ -851,6 +856,22 @@ class _EngineMidiMixin:
         """Clear all live MIDI CC to parameter bindings."""
         lib = _get_lib()
         _check(lib.sonare_engine_clear_midi_cc_bindings(self._require_handle()))
+
+    @_entry("RealtimeEngine.midi_cc_bindings")
+    def midi_cc_bindings(self) -> list[MidiCcBinding]:
+        """Return a copied snapshot of the live MIDI CC to parameter bindings."""
+        lib = _get_lib()
+        result = SonareMidiCcBindingList()
+        try:
+            _check(lib.sonare_engine_midi_cc_bindings(self._require_handle(), ctypes.byref(result)))
+            count = int(result.count)
+            if bool(result.items) != bool(count):
+                raise _malformed_output(
+                    "MIDI CC binding list has an inconsistent pointer and count"
+                )
+            return [_cc_binding_from_c(result.items[i]) for i in range(count)]
+        finally:
+            lib.sonare_free_midi_cc_binding_list(ctypes.byref(result))
 
     @property
     def midi_cc_binding_count(self) -> int:

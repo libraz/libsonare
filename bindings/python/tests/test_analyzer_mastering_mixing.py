@@ -409,21 +409,21 @@ def test_mastering_pair_and_stereo_analysis() -> None:
     [
         (
             {"name": "S", "targetLufs": -14.0, "ceiling_dbtp": -1.0},
-            "unknown key platforms[0].targetLufs (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].targetLufs (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             {"name": "S", "target_lufs": -14.0, "ceilingDb": -1.0},
-            "unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].ceilingDb (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             {"name": "S", "target_lufs": -14.0, "ceiling_db": -1.0},
-            "unknown key platforms[0].ceiling_db (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].ceiling_db (expected ceiling_dbtp, name, target_lufs)",
         ),
         ({"name": "S", "target_lufs": -14.0}, "platforms[0].ceiling_dbtp must be given"),
         ({"target_lufs": -14.0}, "platforms[0].name must be given"),
         (
             {"name": "S", "target_lufs": -14.0, "ceiling_dbtp": -1.0, "gain": 0.0},
-            "unknown key platforms[0].gain (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].gain (expected ceiling_dbtp, name, target_lufs)",
         ),
     ],
 )
@@ -600,7 +600,7 @@ def test_mixing_presets_and_stereo_mix() -> None:
     assert result.right == pytest.approx([0.0, 0.0], abs=0.0002)
     assert result.sample_rate == 48000
     assert len(result.meters) == 1
-    assert math.isfinite(result.meters[0].peak_db_l)
+    assert math.isfinite(result.meters[0].peak_db[0])
     assert isinstance(result.meters[0].likely_mono_compatible, bool)
 
     # A per-strip option longer than the strip list raises a ValueError naming

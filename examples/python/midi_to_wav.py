@@ -30,8 +30,8 @@ def main() -> int:
                 libsonare.midi_note_off(2.0, 0, 0, 64),
             ],
         )
-        audio = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
-    write_wav(sys.argv[1], audio, 48000)
+        rendered = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
+    write_wav(sys.argv[1], rendered.channels.T, rendered.sample_rate)
     return 0
 
 

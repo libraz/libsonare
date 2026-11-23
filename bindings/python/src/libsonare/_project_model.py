@@ -22,11 +22,21 @@ import math
 import numbers
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, get_args
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NotRequired,
+    SupportsFloat,
+    TypeAlias,
+    TypedDict,
+    cast,
+    get_args,
+)
 
 import numpy as np
 
-from ._errors import _entry, _refuse, _refuse_type
+from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._narrowing import _MAX_PUBLIC_PPQ, _narrow_int
 
 if TYPE_CHECKING:
@@ -177,11 +187,15 @@ from ._runtime import (
     SonareAutomationLaneDesc,
     SonareMidiCcBinding,
     SonareMidiEventPod,
+    _bool_flag,
     _check,
     _get_lib,
+    _joined_names,
+    _ordinal_token,
     _require_instance,
     _to_c_size_t,
     _token_ordinal,
+    _utf8_arg,
 )
 from ._types_engine import AutomationPoint
 
@@ -221,12 +235,41 @@ ProjectOverlapPolicy: TypeAlias = Literal["disallow", "allow"]
 """Whether clips on one track may overlap."""
 _OVERLAP_POLICIES: tuple[str, ...] = get_args(ProjectOverlapPolicy)
 
-# Automation target kind; a token's index is its SonareAutomationTargetKind ordinal.
-# None selects the untyped C call (an opaque lane, or the lane's existing kind
-# on edit), while an explicit "opaque" selects the typed call.
-ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "trackFaderDb", "trackPan"]
-"""What an automation lane drives: an opaque parameter, a track fader or a track pan."""
+# Automation target kind; runtime token order comes from the C ABI.
+ProjectAutomationTargetKind: TypeAlias = Literal[
+    "opaque",
+    "trackFaderDb",
+    "trackPan",
+    "trackSendDb",
+    "trackWidth",
+    "trackInsertParam",
+]
+"""What an automation lane drives, as a token from the C ABI."""
 _AUTOMATION_TARGET_KINDS: tuple[str, ...] = get_args(ProjectAutomationTargetKind)
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectAutomationLane:
+    """One automation lane returned by :meth:`Project.automation_lanes`."""
+
+    track_id: int
+    """Owning track id."""
+    lane_id: int
+    """Stable project-allocated lane id."""
+    target_param_id: int | None
+    """Opaque engine parameter id, or ``None`` for a typed target."""
+    target_kind: ProjectAutomationTargetKind
+    """Target kind token from the library."""
+    points: tuple[AutomationPoint, ...]
+    """Breakpoints in PPQ order."""
+    send_id: str | None
+    """Send identity for ``trackSendDb``."""
+    insert_index: int | None
+    """Strip insert position for ``trackInsertParam``."""
+    processor: str | None
+    """Processor catalog id for ``trackInsertParam``."""
+    param_name: str | None
+    """Processor parameter name for ``trackInsertParam``."""
 
 
 # MIDI CC binding kind; a token's index is its SonareMidiCcBindingKind ordinal.
@@ -256,8 +299,78 @@ ProjectChordQuality: TypeAlias = Literal[
 _PROJECT_CHORD_QUALITIES: tuple[str, ...] = get_args(ProjectChordQuality)
 
 
+class ProjectKeySegment(TypedDict):
+    """Key annotation mapping returned by :meth:`Project.key_annotations`.
+
+    The same mapping shape is accepted by :meth:`Project.annotate_keys`.
+    """
+
+    start_ppq: float
+    """Start of the key segment in PPQ."""
+    end_ppq: float
+    """End of the key segment in PPQ, after ``start_ppq``."""
+    tonic_pc: int | None
+    """Tonic pitch class 0..11, or ``None`` when unknown."""
+    mode: ProjectKeyMode
+    """Key-mode token, including ``"unknown"``."""
+
+
+class ProjectChordSymbol(TypedDict):
+    """Chord annotation mapping returned by :meth:`Project.chord_annotations`.
+
+    The same mapping shape is accepted by :meth:`Project.annotate_chords`.
+    """
+
+    start_ppq: float
+    """Start of the chord segment in PPQ."""
+    end_ppq: float
+    """End of the chord segment in PPQ, after ``start_ppq``."""
+    root_pc: int | None
+    """Root pitch class 0..11, or ``None`` when unknown."""
+    quality: ProjectChordQuality
+    """Chord quality token, including ``"unknown"``."""
+    extensions: list[int]
+    """Scale-degree extensions, empty when there are none."""
+    slash_bass_pc: int | None
+    """Slash-bass pitch class 0..11, or ``None`` when absent."""
+    modulation_boundary: bool
+    """Whether this chord marks a key change."""
+    roman_numeral: NotRequired[str]
+    """Optional Roman-numeral label, omitted when absent."""
+
+
 def _automation_target_kind_value(value: object, key: str) -> int:
-    return _token_ordinal(value, _AUTOMATION_TARGET_KINDS, key)
+    return _token_ordinal(value, _automation_target_kind_names(), key)
+
+
+def _automation_target_kind_names() -> tuple[ProjectAutomationTargetKind, ...]:
+    raw = _get_lib().sonare_automation_target_kind_names()
+    names = tuple(_joined_names(raw, "automation target kind names"))
+    if not names:
+        raise _malformed_output("automation target kind names are empty")
+    if names != _AUTOMATION_TARGET_KINDS:
+        unknown = next((name for name in names if name not in _AUTOMATION_TARGET_KINDS), None)
+        if unknown is not None:
+            raise _malformed_output(f"unknown automation target kind token: {unknown}")
+        raise _malformed_output("automation target kind names do not match the Python mirror")
+    return cast(tuple[ProjectAutomationTargetKind, ...], names)
+
+
+@_entry("automation_target_kind_names")
+def automation_target_kind_names() -> list[ProjectAutomationTargetKind]:
+    """Return the automation target kind tokens in C ABI ordinal order."""
+    return list(_automation_target_kind_names())
+
+
+def _automation_target_kind_token(
+    value: int, names: tuple[str, ...] | None = None
+) -> ProjectAutomationTargetKind:
+    token = _ordinal_token(
+        value,
+        _automation_target_kind_names() if names is None else names,
+        "automation target kind",
+    )
+    return cast(ProjectAutomationTargetKind, token)
 
 
 def _automation_target_param_id_value(value: object) -> int:
@@ -276,6 +389,12 @@ def _loop_mode_value(mode: ProjectLoopMode, key: str) -> int:
 def _automation_lane_desc(
     target_param_id: object,
     points: Sequence[AutomationPoint] | None,
+    target_kind: int,
+    *,
+    send_id: str | None = None,
+    insert_index: int | None = None,
+    processor: str | None = None,
+    param_name: str | None = None,
 ) -> tuple[SonareAutomationLaneDesc, object]:
     """Marshal :class:`AutomationPoint` records into a SonareAutomationLaneDesc.
 
@@ -286,10 +405,26 @@ def _automation_lane_desc(
     c_points = _automation_points_to_c(points if points is not None else [])
     desc = SonareAutomationLaneDesc(
         target_param_id=target_id,
+        target_kind=target_kind,
         points=c_points,
         point_count=_to_c_size_t(len(c_points), "count"),
     )
-    return desc, c_points
+    identity_buffers: list[bytes] = []
+    if send_id is not None:
+        encoded_send_id = _utf8_arg(send_id, "send_id")
+        desc.send_id = encoded_send_id
+        identity_buffers.append(encoded_send_id)
+    if insert_index is not None:
+        desc.insert_index = _narrow_int(insert_index, "insert_index", 0, (1 << 31) - 1)
+    if processor is not None:
+        encoded_processor = _utf8_arg(processor, "processor")
+        desc.processor = encoded_processor
+        identity_buffers.append(encoded_processor)
+    if param_name is not None:
+        encoded_param_name = _utf8_arg(param_name, "param_name")
+        desc.param_name = encoded_param_name
+        identity_buffers.append(encoded_param_name)
+    return desc, (c_points, identity_buffers)
 
 
 @dataclass(frozen=True)
@@ -401,6 +536,8 @@ class MidiCcBinding:
     """Selector MSB 0..127 of an RPN/NRPN binding."""
     selector_lsb: int = 0
     """Selector LSB 0..127 of an RPN/NRPN binding."""
+    consume: bool = False
+    """Whether the live engine consumes matching MIDI CC events."""
     param_id: int
     """Automation parameter id the controller drives."""
     min_value: float = 0.0
@@ -411,7 +548,7 @@ class MidiCcBinding:
 
 @dataclass(frozen=True, slots=True)
 class ProjectMidiEvent:
-    """One project MIDI event: a PPQ position and the first two UMP-1.0 words of a message."""
+    """One project MIDI event: a PPQ position and a UMP message."""
 
     ppq: float
     """Event position in PPQ (quarter notes)."""
@@ -419,6 +556,59 @@ class ProjectMidiEvent:
     """First UMP word of the message."""
     word1: int = 0
     """Second UMP word of the message."""
+    sysex: bytes | None = None
+    """Owned SysEx bytes for a Data64 message, or None for a channel-voice message."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectTimeSignatureSegment:
+    """The normalized time-signature segment active at a project position."""
+
+    start_ppq: float
+    """PPQ position where this normalized segment begins."""
+    numerator: int
+    """Beats per bar."""
+    denominator: int
+    """Beat unit, such as 4 for a quarter note."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectPosition:
+    """Effective tempo, time signature, bar, and beat at one PPQ position."""
+
+    bpm: float
+    """Instantaneous tempo at this position."""
+    time_signature: ProjectTimeSignatureSegment
+    """Normalized time-signature segment active at this position."""
+    bar_start_ppq: float
+    """PPQ start of the bar containing the position."""
+    bar_index: int
+    """Zero-based bar index."""
+    beat: int
+    """One-based beat within the bar."""
+    beat_fraction: float
+    """Position within the beat, in [0, 1)."""
+
+
+class ProjectSection(TypedDict):
+    """Labeled PPQ interval mapping used by :meth:`Project.annotate_sections`."""
+
+    start_ppq: float
+    """Section start in PPQ."""
+    end_ppq: float
+    """Section end in PPQ, after ``start_ppq``."""
+    label: str
+    """Nonblank UTF-8 label."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectBounceResult:
+    """Rendered planar project audio and its sample rate."""
+
+    channels: np.ndarray
+    """Float32 planar audio with shape ``(num_channels, frames)``."""
+    sample_rate: int
+    """Sample rate of the rendered channels in Hz."""
 
 
 @dataclass(frozen=True)
@@ -474,6 +664,7 @@ def _cc_binding_to_c(binding: MidiCcBinding) -> SonareMidiCcBinding:
         ),
         selector_msb=_narrow_int(binding.selector_msb, "binding.selector_msb", 0, _MIDI_DATA_MAX),
         selector_lsb=_narrow_int(binding.selector_lsb, "binding.selector_lsb", 0, _MIDI_DATA_MAX),
+        consume=_bool_flag(binding.consume, "binding.consume"),
         reserved=0,
         param_id=binding.param_id,
         min_value=float(binding.min_value),
@@ -482,13 +673,18 @@ def _cc_binding_to_c(binding: MidiCcBinding) -> SonareMidiCcBinding:
 
 
 def _cc_binding_from_c(b: SonareMidiCcBinding) -> MidiCcBinding:
+    kind = _ordinal_token(int(b.kind), _MIDI_CC_BINDING_KINDS, "MIDI CC binding kind")
+    consume = int(b.consume)
+    if consume not in (0, 1):
+        raise _malformed_output(f"unknown MIDI CC consume value: {consume}")
     return MidiCcBinding(
         cc_number=int(b.cc_number),
         channel=None if int(b.channel) == 0xFF else int(b.channel),
-        kind=cast(ProjectMidiCcBindingKind, _MIDI_CC_BINDING_KINDS[int(b.kind)]),
+        kind=cast(ProjectMidiCcBindingKind, kind),
         cc_lsb_number=int(b.cc_lsb_number),
         selector_msb=int(b.selector_msb),
         selector_lsb=int(b.selector_lsb),
+        consume=bool(consume),
         param_id=int(b.param_id),
         min_value=float(b.min_value),
         max_value=float(b.max_value),
@@ -609,17 +805,37 @@ def _midi_event_packed(name: str, *args: float | ctypes._SimpleCData[int]) -> Pr
 
 
 def _midi_event_from_c(event: SonareMidiEventPod) -> ProjectMidiEvent:
-    return ProjectMidiEvent(float(event.ppq), int(event.word0), int(event.word1))
+    sysex_size = int(event.sysex_size)
+    if event.sysex:
+        if sysex_size == 0:
+            raise _malformed_output("MIDI event has a SysEx payload pointer with zero size")
+        sysex = ctypes.string_at(event.sysex, sysex_size)
+    elif sysex_size:
+        raise _malformed_output("MIDI event has a SysEx size without a payload")
+    else:
+        sysex = None
+    return ProjectMidiEvent(float(event.ppq), int(event.word0), int(event.word1), sysex)
 
 
 def _midi_event_to_c(event: object, label: str) -> SonareMidiEventPod:
     """Validate one :class:`ProjectMidiEvent` and pack it for the C ABI."""
     if not isinstance(event, ProjectMidiEvent):
         raise _refuse_type(f"{label} must be a ProjectMidiEvent")
+    if event.sysex is not None and not isinstance(event.sysex, bytes):
+        raise _refuse_type(f"{label}.sysex must be bytes or None")
+    sysex_pointer = None
+    sysex_size = 0
+    if event.sysex is not None:
+        # c_char_p keeps the immutable bytes alive, including an empty bytes
+        # object's non-null address, so C can distinguish it from absence.
+        sysex_pointer = ctypes.cast(ctypes.c_char_p(event.sysex), ctypes.POINTER(ctypes.c_uint8))
+        sysex_size = len(event.sysex)
     return SonareMidiEventPod(
         ppq=_validate_midi_event_ppq(event.ppq, f"{label}.ppq"),
         word0=_validate_midi_event_word(event.word0, f"{label}.word0"),
         word1=_validate_midi_event_word(event.word1, f"{label}.word1"),
+        sysex=sysex_pointer,
+        sysex_size=sysex_size,
     )
 
 

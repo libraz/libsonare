@@ -44,6 +44,9 @@ class _FailedGetterLib:
     def sonare_last_refusal_subject_count(self) -> int:
         return 0
 
+    def sonare_last_error_reason(self) -> None:
+        return None
+
 
 def test_joined_names_raises_the_error_an_empty_getter_result_recorded(
     monkeypatch: pytest.MonkeyPatch,

@@ -913,9 +913,11 @@ def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
         "samples",
         "peak_db",
         "rms_db",
+        "tags",
     }
     assert info["path"] == str(source)
     assert info["channels"] == 1
+    assert info["tags"] == {}
 
     lufs_result = _run_console("lufs", "--json", str(source))
     assert lufs_result.returncode == 0, lufs_result.stderr
@@ -1629,24 +1631,24 @@ def test_mastering_ceiling_is_spelled_and_echoed_in_dbtp(tmp_path: Path) -> None
     [
         (
             '{"name":"x","targetLufs":-14,"ceiling_dbtp":-1}',
-            "unknown key platforms[0].targetLufs (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].targetLufs (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceilingDb":-1}',
-            "unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].ceilingDb (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceilingDbtp":-1}',
-            "unknown key platforms[0].ceilingDbtp (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].ceilingDbtp (expected ceiling_dbtp, name, target_lufs)",
         ),
         (
             '{"name":"x","target_lufs":-14,"ceiling_db":-1}',
-            "unknown key platforms[0].ceiling_db (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].ceiling_db (expected ceiling_dbtp, name, target_lufs)",
         ),
         ('{"name":"x","target_lufs":-14}', "platforms[0].ceiling_dbtp must be given"),
         (
             '{"name":"x","target_lufs":-14,"ceiling_dbtp":-1,"x":1}',
-            "unknown key platforms[0].x (expected name, target_lufs, ceiling_dbtp)",
+            "unknown key platforms[0].x (expected ceiling_dbtp, name, target_lufs)",
         ),
     ],
 )

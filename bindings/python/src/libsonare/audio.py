@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -25,7 +25,7 @@ from ._features_metering import (
     _oversample_factor,
     _spectrum_args,
 )
-from ._narrowing import _domain_float
+from ._narrowing import _domain_float, _narrow_float
 from ._runtime import (
     _channel_layout_value,
     _check,
@@ -261,6 +261,101 @@ def decode_channels(data: bytes) -> DecodedChannels:
             sample_rate=int(sample_rate.value),
             channels=planar.reshape(channels.value, frames.value),
         )
+
+
+@_entry("read_audio_tags")
+def read_audio_tags(data: bytes) -> dict[str, str]:
+    """Read normalized container tags from audio bytes without decoding samples."""
+    if not isinstance(data, bytes):
+        raise _refuse_type("data must be bytes")
+    lib = _get_lib()
+    encoded = np.frombuffer(data, dtype=np.uint8)
+    c_array = encoded.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    out = _ffi_core.SonareAudioTags()
+    rc = lib.sonare_read_audio_tags(
+        c_array,
+        _to_c_size_t(int(encoded.size), "size"),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        return {
+            (out.keys[index] or b"").decode("utf-8", errors="replace"): (
+                out.values[index] or b""
+            ).decode("utf-8", errors="replace")
+            for index in range(int(out.count))
+        }
+    finally:
+        lib.sonare_free_audio_tags(ctypes.byref(out))
+
+
+@_entry("encode_audio")
+def encode_audio(
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    sample_rate: int,
+    format: str,
+    *,
+    tags: Mapping[str, str] | None = None,
+    bit_depth: int | None = None,
+    quality: float | None = None,
+) -> bytes:
+    """Encode channel-planar samples into an in-memory audio file."""
+    lib = _get_lib()
+    planes = _linked_channel_planes(channels)
+    frames = int(planes[0].shape[0])
+    if any(int(plane.shape[0]) != frames for plane in planes):
+        raise _refuse("all channels must have the same length")
+    packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
+    options = _ffi_core.SonareEncodeOptions()
+    format_bytes = _utf8_arg(format, "format")
+    options.format = format_bytes
+
+    if bit_depth is not None:
+        depth = _to_c_int(bit_depth, "bit_depth")
+        if depth.value == 0:
+            raise _refuse("bit_depth must not be 0; omit it for the format default")
+        options.bit_depth = depth.value
+    if quality is not None:
+        number = _narrow_float(quality, "quality")
+        if not 0.0 <= number <= 1.0:
+            raise _refuse("quality must be in [0, 1]")
+        options.quality = number
+
+    if tags is not None:
+        if not isinstance(tags, Mapping):
+            raise _refuse_type("tags must be a mapping or None")
+        encoded_tags = [
+            (_utf8_arg(key, f"tags.{key}"), _utf8_arg(value, f"tags.{key}"))
+            for key, value in tags.items()
+        ]
+        tag_options = _ffi_core.SonareAudioTags()
+        if encoded_tags:
+            tag_array_type = ctypes.c_char_p * len(encoded_tags)
+            key_array = tag_array_type(*(key for key, _ in encoded_tags))
+            value_array = tag_array_type(*(value for _, value in encoded_tags))
+            tag_options.keys = ctypes.cast(key_array, ctypes.POINTER(ctypes.c_char_p))
+            tag_options.values = ctypes.cast(value_array, ctypes.POINTER(ctypes.c_char_p))
+        tag_options.count = len(encoded_tags)
+        options.tags = ctypes.pointer(tag_options)
+
+    sample_array = packed.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+    out = ctypes.POINTER(ctypes.c_uint8)()
+    out_size = ctypes.c_size_t()
+    rc = lib.sonare_encode_audio(
+        sample_array,
+        _to_c_size_t(frames, "frames"),
+        _to_c_int(len(planes), "num_channels"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(options),
+        ctypes.byref(out),
+        ctypes.byref(out_size),
+    )
+    try:
+        _check(rc, flattened="options")
+        return ctypes.string_at(out, out_size.value)
+    finally:
+        if out:
+            lib.sonare_free_bytes(out)
 
 
 @_entry("downmix")
@@ -655,7 +750,7 @@ class Audio:
 
         Returns:
             A float32 array of beat times in seconds. For the beat-level accent evidence
-            (``beat_observations.onset_strength``), the time signature,
+            (``beat_observations.accent``), the time signature,
             confidence values, or the bar-start positions, use
             :func:`libsonare.analyze` instead — one call returns all of them.
 
@@ -683,7 +778,7 @@ class Audio:
 
         Returns:
             A float32 array of downbeat times in seconds. For the beat-level accent evidence
-            (``beat_observations.onset_strength``), the time signature,
+            (``beat_observations.accent``), the time signature,
             confidence values, or the bar starts as indices into the beat
             list, use :func:`libsonare.analyze` instead — one call returns all
             of them.
@@ -731,7 +826,9 @@ class Audio:
         decoded ``data`` / ``sample_rate``; the analysis itself carries no
         handle-lifetime state of its own, so there is nothing this method adds
         over calling the module-level function directly except not having to
-        pass them again.
+        pass them again. ``start_bpm`` is a finite, positive BPM prior that
+        seeds beat tracking if the tempo search finds none. The result's
+        ``bpm`` is ``None`` when no tempo is measured.
 
         Raises:
             RuntimeError: If the audio has been closed.
@@ -747,7 +844,6 @@ class Audio:
         self,
         bpm_min: float | None = None,
         bpm_max: float | None = None,
-        start_bpm: float = 120.0,
         n_fft: int = 2048,
         hop_length: int = 512,
         max_candidates: int = 5,
@@ -758,7 +854,6 @@ class Audio:
             self.sample_rate,
             bpm_min,
             bpm_max,
-            start_bpm,
             n_fft,
             hop_length,
             max_candidates,
@@ -796,7 +891,12 @@ class Audio:
         n_fft: int = 2048,
         hop_length: int = 512,
     ) -> RhythmResult:
-        """Analyze rhythm primitives."""
+        """Analyze rhythm primitives.
+
+        ``start_bpm`` is a finite, positive BPM prior that seeds beat tracking
+        if the tempo search finds none. The result's ``bpm`` is ``None`` when
+        no tempo is measured.
+        """
         return _analyze_rhythm(
             self.data,
             self.sample_rate,
@@ -1069,12 +1169,14 @@ class Audio:
     # --- Features - Spectrogram ---
 
     @_entry("Audio.stft")
-    def stft(self, n_fft: int = 2048, hop_length: int = 512, *, db: bool = False) -> StftResult:
+    def stft(
+        self, n_fft: int = 2048, hop_length: int = 512, *, db: bool = False, phase: bool = False
+    ) -> StftResult:
         """Compute the short-time Fourier transform.
 
-        With ``db=True`` the result's ``db`` plane holds the magnitude in dB.
+        The optional db and phase planes hold magnitude in dB and phase in radians.
         """
-        return _stft(self.data, self.sample_rate, n_fft, hop_length, db=db)
+        return _stft(self.data, self.sample_rate, n_fft, hop_length, db=db, phase=phase)
 
     # --- Features - Mel ---
 

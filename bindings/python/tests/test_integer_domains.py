@@ -75,7 +75,44 @@ _REQUIRED: dict[str, Any] = {
     "notes": [],
     "targets": [],
     "beats": [libsonare.Beat(time_sec=0.5 * i, strength=1.0) for i in range(8)],
+    "ppq": 0.0,
+    "phase": np.zeros((1025, 4), np.float32),
+    "format": "wav",
+    "observations": libsonare.BeatObservations(
+        accent=np.ones(8, np.float32), has_attack=np.ones(8, np.bool_)
+    ),
+    "events": [],
+    "group": 0,
+    "channel": 0,
+    "controller": 1,
+    "value": 0,
+    "value14": 0,
+    "value32": 0,
+    "delta32": 0,
+    "note": 60,
+    "velocity": 100,
+    "velocity16": 0x8000,
+    "pressure": 0,
+    "pressure32": 0,
+    "program": 0,
+    "bank": 0,
+    "bank_msb": 0,
+    "bank_lsb": 0,
+    "index": 0,
+    "bend": 8192,
+    "bend14": 8192,
+    "bend32": 0x80000000,
+    "param_id": 1,
+    "unit_value": 0.5,
+    "bindings": [],
+    "k": 2,
+    "length_m": 6.0,
+    "width_m": 5.0,
+    "height_m": 3.0,
 }
+
+# Arguments refused unless given together, so probing one supplies the other.
+_PAIRED = {"bank_msb": "bank_lsb", "bank_lsb": "bank_msb"}
 
 # Entries whose required argument of a shared name needs another shape.
 _ENTRY_REQUIRED: dict[str, dict[str, Any]] = {
@@ -170,6 +207,8 @@ def _refusal(entry: str, keyword: str, value: object) -> str:
         and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
         and name != keyword
     }
+    if keyword in _PAIRED:
+        kwargs[_PAIRED[keyword]] = 0
     with pytest.raises((SonareError, TypeError, ValueError)) as caught:
         fn(**kwargs, **{keyword: value})
     return str(caught.value)

@@ -151,8 +151,8 @@ def test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero() -
     project = ls.Project()
     try:
         project.set_sample_rate(SR)
-        assert project.bounce(total_frames=64).ndim == 2
-        for field in ("total_frames", "block_size", "num_channels", "sample_rate"):
+        assert project.bounce(total_frames=64).channels.ndim == 2
+        for field in ("total_frames", "block_size", "num_channels"):
             with pytest.raises(SonareValueError, match=field):
                 project.bounce(**{field: 0})
     finally:

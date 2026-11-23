@@ -20,6 +20,7 @@ from ._cli_common import (
     _params_keys,
     _parse_kv_params,
     _print_unreconstructed_runs,
+    _read_audio_bounded,
     _strict_json_dumps,
     _write_mastering_output,
 )
@@ -47,6 +48,7 @@ from ._errors import SonareError, _malformed_output
 from ._mastering_offline import _chain_config_paths, _check_chain_document, _nest_chain_config
 from ._narrowing import _FLOAT32_MAX
 from ._result_records import _result_to_json_dict
+from ._runtime import _mapping_keys
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
@@ -730,17 +732,18 @@ def cmd_mastering_pair_analyses(args: argparse.Namespace) -> int:
 
 def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     from . import mastering_analyze_pair
+    from .audio import decode_channels
 
-    source, sr = _load_audio(args.file)
-    reference, ref_sr = _load_audio(args.reference)
+    source = decode_channels(_read_audio_bounded(args.file))
+    reference = decode_channels(_read_audio_bounded(args.reference))
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
     result = mastering_analyze_pair(
         args.analysis,
-        source,
-        reference,
-        sample_rate=sr,
-        reference_sample_rate=ref_sr,
+        source.channels,
+        reference.channels,
+        sample_rate=source.sample_rate,
+        reference_sample_rate=reference.sample_rate,
         params=params or None,
     )
     print(_strict_json_dumps(_result_to_json_dict(result)))
@@ -825,7 +828,7 @@ def _streaming_platform_number(entry: dict[str, Any], where: str, key: str) -> f
 
 
 def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
-    """Read a platform document, refused in the native CLI's words under ``subject``."""
+    """Read a platform document and report any refusal under ``subject``."""
     if not text:
         return []
     try:
@@ -838,13 +841,7 @@ def _parse_streaming_platforms(text: str, subject: str) -> list[dict[str, Any]]:
         platforms: list[dict[str, Any]] = []
         for index, entry in enumerate(document):
             where = f"platforms[{index}]"
-            for key in entry:
-                if key not in _STREAMING_PLATFORM_KEYS:
-                    expected = ", ".join(_STREAMING_PLATFORM_KEYS)
-                    raise ValueError(f"unknown key {where}.{key} (expected {expected})")
-            for key in _STREAMING_PLATFORM_KEYS:
-                if key not in entry:
-                    raise ValueError(f"{where}.{key} must be given")
+            _mapping_keys(entry, _STREAMING_PLATFORM_KEYS, where, required=_STREAMING_PLATFORM_KEYS)
             name = entry["name"]
             if not isinstance(name, str):
                 raise ValueError(f"{where}.name must be a string")

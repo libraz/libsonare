@@ -21,6 +21,10 @@ def _empty_float32() -> np.ndarray:
     return np.empty(0, dtype=np.float32)
 
 
+def _empty_bool() -> np.ndarray:
+    return np.empty(0, dtype=np.bool_)
+
+
 def _empty_int32() -> np.ndarray:
     return np.empty(0, dtype=np.int32)
 
@@ -115,9 +119,8 @@ class Beat:
     ``strength`` is a single raw frame of the onset envelope, sampled at the
     beat's own frame. It is not normalized, its scale depends on the material,
     and it moves with beat-position jitter, so it is not a relative salience
-    across beats. For accent scoring use
-    :attr:`AnalysisResult.beat_observations` ``.onset_strength``, which is the
-    windowed aggregate the library's own downbeat pass scores.
+    across beats. For accent scoring use the measured ``accent`` values in
+    :attr:`AnalysisResult.beat_observations`.
     """
 
     time_sec: float
@@ -168,26 +171,24 @@ class AnalysisRhythm:
 class BeatObservations:
     """Beat-level evidence behind the downbeat and meter decisions.
 
-    These are the inputs the library's own downbeat and meter pass scores, not
-    outputs of it. Each stream is parallel to ``AnalysisResult.beats``, one
-    value per beat. An empty stream means the analysis could not produce it,
-    *not* that every beat scored zero: ``low_frequency_energy`` is empty when
-    the analysis ran without audio, and ``chord_change`` is empty until chords
-    have been analyzed.
-
-    ``onset_strength`` is the windowed onset aggregate around each beat -- the
-    accent value the downbeat pass scores, and the strength source
-    :func:`libsonare.estimate_meter` expects. It is distinct from
-    ``Beat.strength``, which is a single raw unwindowed envelope frame at the
-    beat's frame.
+    ``accent`` is the maximum 5 ms RMS near each beat's attack. Beat-indexed
+    streams have one value per beat; ``subdivision_accent`` has one value per
+    gap. An empty optional stream means evidence was not measured; a zero in a
+    measured stream means it was measured and absent. Empty ``has_attack``
+    treats every beat as attacked. ``chord_change`` is populated after chord
+    analysis and is not read by :func:`libsonare.estimate_meter`.
     """
 
-    onset_strength: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
-    """Windowed onset aggregate around each beat; the accent value the downbeat pass scores."""
+    accent: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
+    """Maximum 5 ms attack RMS per beat; required by :func:`libsonare.estimate_meter`."""
+    has_attack: npt.NDArray[np.bool_] = dataclasses.field(default_factory=_empty_bool)
+    """Whether an attack was observed in each beat's evidence window; empty means all true."""
     low_frequency_energy: npt.NDArray[np.float32] = dataclasses.field(
         default_factory=_empty_float32
     )
     """Low-frequency energy at each beat; empty when the analysis ran without audio."""
+    subdivision_accent: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
+    """Measured accent between adjacent beats; empty when subdivision was not measured."""
     chord_change: npt.NDArray[np.float32] = dataclasses.field(default_factory=_empty_float32)
     """Chord-change evidence at each beat; empty until chords are analyzed."""
 
@@ -815,9 +816,8 @@ class ChordAnalysisResult:
 class StftResult:
     """Short-time Fourier transform result.
 
-    ``magnitude`` and ``power`` are float32 arrays of shape ``(n_bins, n_frames)``;
-    ``db`` is the magnitude in dB with the same shape, or ``None`` unless the
-    transform was asked for it.
+    Magnitude and power are float32 arrays of shape (n_bins, n_frames). The
+    optional db and phase arrays have the same shape when requested.
     """
 
     n_fft: int
@@ -832,6 +832,8 @@ class StftResult:
     """Power spectrogram."""
     db: NDArray[np.float32] | None = None
     """Magnitude in dB, or ``None`` unless requested."""
+    phase: NDArray[np.float32] | None = None
+    """Phase in radians, or ``None`` unless requested."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)

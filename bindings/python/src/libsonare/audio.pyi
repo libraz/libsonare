@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal
 
 import numpy as np
@@ -51,6 +51,16 @@ class DecodedChannels:
     def __init__(self, sample_rate: int, channels: np.ndarray) -> None: ...
 
 def decode_channels(data: bytes) -> DecodedChannels: ...
+def read_audio_tags(data: bytes) -> dict[str, str]: ...
+def encode_audio(
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    sample_rate: int,
+    format: str,
+    *,
+    tags: Mapping[str, str] | None = None,
+    bit_depth: int | None = None,
+    quality: float | None = None,
+) -> bytes: ...
 def downmix(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     target_layout: ChannelLayout,
@@ -108,12 +118,13 @@ class Audio:
     ) -> np.ndarray: ...
     def detect_downbeats(self) -> np.ndarray: ...
     def detect_onsets(self) -> np.ndarray: ...
-    def analyze(self, **kwargs: Any) -> AnalysisResult: ...
+    def analyze(self, **kwargs: Any) -> AnalysisResult:
+        """``start_bpm`` is a finite, positive BPM prior that seeds beat tracking if the tempo
+        search finds none. The result's ``bpm`` is ``None`` when no tempo is measured."""
     def analyze_bpm(
         self,
         bpm_min: float | None = None,
         bpm_max: float | None = None,
-        start_bpm: float = 120.0,
         n_fft: int = 2048,
         hop_length: int = 512,
         max_candidates: int = 5,
@@ -133,7 +144,9 @@ class Audio:
         start_bpm: float = 120.0,
         n_fft: int = 2048,
         hop_length: int = 512,
-    ) -> RhythmResult: ...
+    ) -> RhythmResult:
+        """``start_bpm`` is a finite, positive BPM prior that seeds beat tracking if the tempo
+        search finds none. The result's ``bpm`` is ``None`` when no tempo is measured."""
     def analyze_dynamics(
         self, window_sec: float = 0.4, hop_length: int = 512, compression_threshold_db: float = 6.0
     ) -> DynamicsResult: ...
@@ -230,7 +243,9 @@ class Audio:
         cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult: ...
     def trim(self, threshold_db: float = -60.0) -> np.ndarray: ...
-    def stft(self, n_fft: int = 2048, hop_length: int = 512, *, db: bool = False) -> StftResult: ...
+    def stft(
+        self, n_fft: int = 2048, hop_length: int = 512, *, db: bool = False, phase: bool = False
+    ) -> StftResult: ...
     def mel_spectrogram(
         self, n_fft: int = 2048, hop_length: int = 512, n_mels: int = 128
     ) -> MelSpectrogramResult: ...

@@ -289,31 +289,39 @@ def test_every_table_row_is_driven_or_undriven_for_a_closed_reason() -> None:
     assert set(_UNDRIVEN.values()) <= _REASONS
 
 
-def _strip_document_call(entry: str) -> Callable[[dict[str, Any]], None]:
+def _document_call(entry: str) -> tuple[Callable[[dict[str, Any]], None], list[tuple[Any, str]]]:
+    """The call that puts a caller mapping in ``entry``'s document slot, and refusals under it."""
+    if entry == "encode_audio":
+        planes = np.zeros((1, 100), np.float32)
+        return (
+            lambda tags: libsonare.encode_audio(planes, 48000, format="wav", tags=tags),
+            [({"a=b": "c"}, "a=b is not writable as WAV INFO")],
+        )
     engine = _engine()
     engine.set_track_lanes([{"track_id": 1, "source_channel_layout": "stereo"}])
     engine.set_track_buses([{"bus_id": 1}])
-    calls: dict[str, Callable[[dict[str, Any]], None]] = {
+    strips: dict[str, Callable[[dict[str, Any]], None]] = {
         "engine_set_track_strip_json": lambda settings: engine.set_strip(1, settings),
         "engine_set_master_strip_json": lambda settings: engine.set_strip("master", settings),
         "engine_set_bus_strip_json": lambda settings: engine.set_bus_strip(1, settings),
     }
-    return calls[entry]
+    return strips[entry], [
+        ({"id": "1", "faderDB": 0}, "unknown key {root}faderDB"),
+        ({"id": "1", "pan": "left"}, "{root}pan must be a number"),
+        ({"id": "1", "pan": 2.0}, "{root}pan must be finite and in [-1, 1]"),
+    ]
 
 
 @pytest.mark.parametrize(("entry", "prefix", "root"), DOCUMENT_ROOTS)
-def test_a_strip_document_refusal_is_a_refused_settings_argument(
+def test_a_document_refusal_is_a_refused_argument_under_the_callers_root(
     entry: str, prefix: str, root: str
 ) -> None:
-    call = _strip_document_call(entry)
-    for settings, cause in (
-        ({"id": "1", "faderDB": 0}, f"unknown key {root}faderDB"),
-        ({"id": "1", "pan": "left"}, f"{root}pan must be a number"),
-        ({"id": "1", "pan": 2.0}, f"{root}pan must be finite and in [-1, 1]"),
-    ):
+    call, cases = _document_call(entry)
+    for value, cause in cases:
+        expected = cause.format(root=root) if "{root}" in cause else root + cause
         with pytest.raises(SonareValueError) as refused:
-            call(settings)
-        assert str(refused.value).endswith(f": {cause}"), str(refused.value)
+            call(value)
+        assert str(refused.value).endswith(f": {expected}"), str(refused.value)
         assert refused.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
 
 

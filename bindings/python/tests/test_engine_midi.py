@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from typing import Any
 
 import numpy as np
@@ -18,7 +19,9 @@ from libsonare import (
     Sf2InstrumentConfig,
     SonareError,
     SonareValueError,
+    _engine_midi,
 )
+from libsonare._ffi_types_mastering_project import SonareMidiCcBinding
 from libsonare._runtime import _get_lib
 
 from ._helpers import _midi1_word, raises_coded
@@ -100,6 +103,102 @@ def test_engine_midi_cc_bindings() -> None:
         assert engine.midi_cc_binding_count == 2
         engine.clear_midi_cc_bindings()
         assert engine.midi_cc_binding_count == 0
+
+
+class _FakeMidiCcBindingLibrary:
+    def __init__(self) -> None:
+        self.rows: dict[int, list[SonareMidiCcBinding]] = {}
+        self.arrays: list[Any] = []
+        self.bound_consumes: list[int] = []
+        self.free_calls = 0
+        self.malformed_list = False
+
+    def sonare_engine_bind_midi_cc(self, handle: ctypes.c_void_p, binding: Any) -> int:
+        raw = binding._obj
+        copied = SonareMidiCcBinding()
+        for name, *_ in copied._fields_:
+            setattr(copied, name, getattr(raw, name))
+        self.bound_consumes.append(int(copied.consume))
+        rows = self.rows.setdefault(int(handle.value), [])
+        identity = (int(copied.cc_number), int(copied.channel))
+        rows[:] = [row for row in rows if (int(row.cc_number), int(row.channel)) != identity]
+        rows.append(copied)
+        return 0
+
+    def sonare_engine_midi_cc_bindings(self, handle: ctypes.c_void_p, out: Any) -> int:
+        rows = self.rows.get(int(handle.value), [])
+        raw = out._obj
+        if self.malformed_list:
+            raw.count = 1
+            raw.items = ctypes.POINTER(SonareMidiCcBinding)()
+            return 0
+        raw.count = len(rows)
+        if rows:
+            array = (SonareMidiCcBinding * len(rows))(*rows)
+            self.arrays.append(array)
+            raw.items = ctypes.cast(array, ctypes.POINTER(SonareMidiCcBinding))
+        else:
+            raw.items = ctypes.POINTER(SonareMidiCcBinding)()
+        return 0
+
+    def sonare_free_midi_cc_binding_list(self, result: Any) -> None:
+        self.free_calls += 1
+        raw = result._obj
+        if self.arrays:
+            array = self.arrays.pop()
+            for row in array:
+                for name, *_ in row._fields_:
+                    setattr(row, name, 0)
+        raw.items = ctypes.POINTER(SonareMidiCcBinding)()
+        raw.count = 0
+
+
+def _bare_engine(handle: int) -> RealtimeEngine:
+    engine = object.__new__(RealtimeEngine)
+    engine._handle = ctypes.c_void_p(handle)
+    return engine
+
+
+def test_engine_midi_cc_bindings_round_trip_copies_and_preserves_consume(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeMidiCcBindingLibrary()
+    monkeypatch.setattr(_engine_midi, "_get_lib", lambda: fake)
+    first = _bare_engine(1)
+    second = _bare_engine(2)
+    default = MidiCcBinding(cc_number=1, param_id=42)
+    consuming = MidiCcBinding(cc_number=2, channel=3, param_id=43, consume=True)
+
+    assert first.midi_cc_bindings() == []
+    first.bind_midi_cc(default)
+    first.bind_midi_cc(consuming)
+    with pytest.raises(TypeError, match=r"binding\.consume must be a bool"):
+        first.bind_midi_cc(MidiCcBinding(cc_number=3, param_id=44, consume=1))  # type: ignore[arg-type]
+
+    snapshot = first.midi_cc_bindings()
+    assert snapshot == [default, consuming]
+    assert snapshot[0].kind == "controlChange7"
+    assert fake.bound_consumes == [0, 1]
+    for binding in snapshot:
+        second.bind_midi_cc(binding)
+    assert second.midi_cc_bindings() == snapshot
+    assert fake.free_calls == 3
+    first._handle = None
+    second._handle = None
+
+
+def test_engine_midi_cc_bindings_refuse_inconsistent_owned_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeMidiCcBindingLibrary()
+    fake.malformed_list = True
+    monkeypatch.setattr(_engine_midi, "_get_lib", lambda: fake)
+    engine = _bare_engine(1)
+    with pytest.raises(SonareError) as error:
+        engine.midi_cc_bindings()
+    assert error.value.code == ErrorCode.INVALID_FORMAT
+    assert fake.free_calls == 1
+    engine._handle = None
 
 
 def test_a_cc_binding_mapping_is_a_type_error() -> None:

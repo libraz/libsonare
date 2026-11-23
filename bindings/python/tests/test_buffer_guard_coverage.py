@@ -198,6 +198,7 @@ _MATRIX_COL_ARGS = ("cols", "n_frames", "n_lags", "x_cols", "y_cols")
 # Parameters that are themselves buffers, and take the same probe input.
 _BUFFER_ARGS = (
     "right",
+    "phase",
     "carrier",
     "y",
     "source",

@@ -959,6 +959,15 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    lib.sonare_engine_midi_cc_bindings.restype = ctypes.c_int32
+    lib.sonare_engine_midi_cc_bindings.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareMidiCcBindingList),
+    ]
+    lib.sonare_free_midi_cc_binding_list.restype = None
+    lib.sonare_free_midi_cc_binding_list.argtypes = [
+        ctypes.POINTER(SonareMidiCcBindingList),
+    ]
     lib.sonare_controller_profile_names.restype = ctypes.c_char_p
     lib.sonare_controller_profile_names.argtypes = []
     lib.sonare_engine_set_controller_profile.restype = ctypes.c_int32

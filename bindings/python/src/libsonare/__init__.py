@@ -5,6 +5,7 @@ from importlib.metadata import version as _pkg_version
 
 from ._cancellation import CancelCallback, ProgressCallback
 from ._effects_polyphony import PolyphonicAnalysis
+from ._live import LiveAudioDevice, LiveMidiDevice, LiveSession, LiveSessionStatus
 from ._mixing import StripRef
 from ._playback import (
     HrtfSet,
@@ -30,20 +31,29 @@ from ._project import (
     PartRigEntry,
     PartRigMode,
     Project,
+    ProjectAutomationLane,
     ProjectAutomationTargetKind,
+    ProjectBounceResult,
     ProjectChordQuality,
+    ProjectChordSymbol,
     ProjectDeserializeResult,
+    ProjectDestinationInstrument,
     ProjectFadeCurve,
+    ProjectInstrument,
     ProjectKeyMode,
+    ProjectKeySegment,
     ProjectLoopMode,
     ProjectLoopRecordingResult,
     ProjectMidiCcBindingKind,
     ProjectMidiClipResult,
     ProjectMidiEvent,
     ProjectOverlapPolicy,
+    ProjectPosition,
+    ProjectSection,
     ProjectSourceKind,
     ProjectStemLayout,
     ProjectTimeline,
+    ProjectTimeSignatureSegment,
     ProjectTrackKind,
     SampleBank,
     SampleDescLoopMode,
@@ -66,6 +76,7 @@ from ._project import (
     SynthWaveform,
     TakeAlignment,
     align_take_to_reference,
+    automation_target_kind_names,
     chord_symbol_from_analysis,
     controller_profile_names,
     key_mode_from_analysis,
@@ -138,8 +149,13 @@ from ._project_model import (
     ProjectDiagnosticCode,
     ProjectDiagnosticSeverity,
 )
-from ._runtime import ErrorCode, ErrorCodeName, SonareError, SonareValueError
-from ._types_capabilities import SynthParamCondition, SynthParamInfo
+from ._runtime import ErrorCode, ErrorCodeName, ErrorReason, SonareError, SonareValueError
+from ._types_capabilities import (
+    SynthParamCondition,
+    SynthParamInfo,
+    SynthPatchEnumParamInfo,
+    SynthPatchParamInfo,
+)
 from ._types_engine import PlanarChannels
 from ._types_mastering import (
     MasteringAssistantParams,
@@ -253,6 +269,7 @@ from .analyzer import (
     hz_to_mel,
     hz_to_midi,
     hz_to_note,
+    istft,
     lufs,
     lufs_interleaved,
     lufs_series_interleaved,
@@ -445,7 +462,14 @@ from .analyzer import (
     zero_crossing_rate,
     zero_crossings,
 )
-from .audio import Audio, DecodedChannels, decode_channels, downmix
+from .audio import (
+    Audio,
+    DecodedChannels,
+    decode_channels,
+    downmix,
+    encode_audio,
+    read_audio_tags,
+)
 from .engine import MAX_TRACK_LANES, ClipPageProvider, FileClipPageProvider, RealtimeEngine
 from .mixing_assistant import (
     MixAssistantTrack,
@@ -464,6 +488,7 @@ from .types import (
     AnalysisResult,
     AnalysisRhythm,
     AudioDefects,
+    AudioFormatCapabilities,
     AutomationCurve,
     AutomationPoint,
     AutoTuneResult,
@@ -476,7 +501,6 @@ from .types import (
     BpmCandidateRelation,
     Capabilities,
     CapabilitiesAbi,
-    CapabilitiesDecode,
     CapabilitiesFeatures,
     CapabilityCatalog,
     CapabilityCatalogChain,
@@ -661,6 +685,7 @@ from .types import (
     ProjectWarpMode,
     ReassignedSpectrogramResult,
     RepairApplyResult,
+    RepairChannelChange,
     RepairStage,
     RepairStageName,
     RepairStageReports,
@@ -827,7 +852,7 @@ __all__ = [
     "CapabilityCatalogPresets",
     "Capabilities",
     "CapabilitiesAbi",
-    "CapabilitiesDecode",
+    "AudioFormatCapabilities",
     "CapabilitiesFeatures",
     "ClipPageProvider",
     "FileClipPageProvider",
@@ -897,6 +922,7 @@ __all__ = [
     "DehumStereoResult",
     "DenoiseLinkedResult",
     "RepairApplyResult",
+    "RepairChannelChange",
     "AudioDefects",
     "DeclickStage",
     "DeclipStage",
@@ -1017,6 +1043,8 @@ __all__ = [
     "MixSceneStripInput",
     "MidiRouteResult",
     "ProjectMidiEvent",
+    "ProjectBounceResult",
+    "ProjectPosition",
     "MixBusRole",
     "MixMeterSnapshot",
     "MixResult",
@@ -1048,20 +1076,27 @@ __all__ = [
     "render_playback",
     "Project",
     "ProjectAutomationTargetKind",
+    "ProjectInstrument",
+    "ProjectDestinationInstrument",
     "ProjectChordQuality",
+    "ProjectChordSymbol",
     "ProjectKeyMode",
+    "ProjectKeySegment",
     "ProjectMidiCcBindingKind",
     "ProjectFadeCurve",
     "ProjectLoopMode",
     "ProjectOverlapPolicy",
     "ProjectSourceKind",
+    "ProjectSection",
     "ProjectStemLayout",
+    "ProjectTimeSignatureSegment",
     "ProjectTrackKind",
     "ProjectWarpMode",
     "VoicePresetId",
     "ProjectTimeline",
     "ProjectDeserializeResult",
     "ProjectClip",
+    "ProjectAutomationLane",
     "ProjectMarker",
     "ProjectSource",
     "ProjectTrack",
@@ -1089,6 +1124,7 @@ __all__ = [
     "SonareValueError",
     "ErrorCode",
     "ErrorCodeName",
+    "ErrorReason",
     "SpectrumReport",
     "StageGainReduction",
     "StftResult",
@@ -1175,6 +1211,7 @@ __all__ = [
     "db_to_amplitude",
     "db_to_power",
     "decode_channels",
+    "encode_audio",
     "DecodedChannels",
     "decompose",
     "decompose_stems",
@@ -1190,10 +1227,12 @@ __all__ = [
     "detect_key",
     "detect_onsets",
     "downmix",
+    "read_audio_tags",
     "ebur128_loudness_range_lu",
     "engine_abi_version",
     "estimate_meter",
     "controller_profile_names",
+    "automation_target_kind_names",
     "synth_gs_drum_kit_is_voiced_apart",
     "synth_gs_drum_kit_name",
     "synth_gs_variation_is_voiced_apart",
@@ -1233,6 +1272,7 @@ __all__ = [
     "segment_agglomerative",
     "segment_path_enhance",
     "griffin_lim",
+    "istft",
     "mel_to_audio",
     "mel_filterbank",
     "mel_frequencies",
@@ -1514,6 +1554,8 @@ __all__ += [
     "StripRef",
     "SynthParamCondition",
     "SynthParamInfo",
+    "SynthPatchEnumParamInfo",
+    "SynthPatchParamInfo",
 ]
 __all__ += [
     "ProjectVocalRehydrateStatus",
@@ -1522,3 +1564,4 @@ __all__ += [
     "ProjectVocalEditDependency",
     "ProjectVocalRehydrateItem",
 ]
+__all__ += ["LiveAudioDevice", "LiveMidiDevice", "LiveSession", "LiveSessionStatus"]

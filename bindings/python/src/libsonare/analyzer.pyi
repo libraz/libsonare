@@ -49,7 +49,7 @@ from .types import (
     AcousticResult,
     AnalysisResult,
     AutoTuneResult,
-    Beat,
+    BeatObservations,
     BoundaryResult,
     BpmAnalysisResult,
     Capabilities,
@@ -424,10 +424,12 @@ def analyze(
 ) -> AnalysisResult:
     """``n_fft`` is in samples at 22050 Hz, rescaled to the analysis rate; ``hop_length`` is the
     hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is
-    above 22050 Hz, the input itself otherwise."""
+    above 22050 Hz, the input itself otherwise. ``start_bpm`` is a finite, positive BPM prior
+    that seeds beat tracking if the tempo search finds none. The result's ``bpm`` is ``None``
+    when no tempo is measured."""
 
 def estimate_meter(
-    beats: Sequence[Beat],
+    observations: BeatObservations,
     *,
     candidate_numerators: Sequence[int] | None = None,
     denominator: int = 4,
@@ -441,7 +443,6 @@ def analyze_bpm(
     sample_rate: int,
     bpm_min: float | None = None,
     bpm_max: float | None = None,
-    start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
     max_candidates: int = 5,
@@ -566,7 +567,9 @@ def analyze_rhythm(
     hop_length: int = 512,
 ) -> RhythmResult:
     """``n_fft`` is the analysis window length in samples at 22050 Hz, rescaled to the input
-    sample rate; ``hop_length`` is in samples of the input buffer."""
+    sample rate; ``hop_length`` is in samples of the input buffer. ``start_bpm`` is a finite,
+    positive BPM prior that seeds beat tracking if the tempo search finds none. The result's
+    ``bpm`` is ``None`` when no tempo is measured."""
 
 def analyze_dynamics(
     samples: FloatSamples,
@@ -1154,8 +1157,8 @@ def mastering_apply_pair_processor_stereo(
 @overload
 def mastering_analyze_pair(
     analysis: Literal["match.referenceLoudness"],
-    source: FloatSamples,
-    reference: FloatSamples,
+    source: FloatSamples | PlanarChannels,
+    reference: FloatSamples | PlanarChannels,
     sample_rate: int,
     params: MasteringParams | None = None,
     *,
@@ -1164,8 +1167,8 @@ def mastering_analyze_pair(
 @overload
 def mastering_analyze_pair(
     analysis: Literal["match.tonalBalance", "match.tonalBalanceLogBands"],
-    source: FloatSamples,
-    reference: FloatSamples,
+    source: FloatSamples | PlanarChannels,
+    reference: FloatSamples | PlanarChannels,
     sample_rate: int,
     params: MasteringParams | None = None,
     *,
@@ -1174,8 +1177,8 @@ def mastering_analyze_pair(
 @overload
 def mastering_analyze_pair(
     analysis: Literal["match.matchEqCurve"],
-    source: FloatSamples,
-    reference: FloatSamples,
+    source: FloatSamples | PlanarChannels,
+    reference: FloatSamples | PlanarChannels,
     sample_rate: int,
     params: MasteringParams | None = None,
     *,
@@ -1184,8 +1187,8 @@ def mastering_analyze_pair(
 @overload
 def mastering_analyze_pair(
     analysis: Literal["match.estimateReferenceDelaySamples"],
-    source: FloatSamples,
-    reference: FloatSamples,
+    source: FloatSamples | PlanarChannels,
+    reference: FloatSamples | PlanarChannels,
     sample_rate: int,
     params: MasteringParams | None = None,
     *,
@@ -1248,6 +1251,7 @@ def stft(
     hop_length: int = 512,
     *,
     db: bool = False,
+    phase: bool = False,
 ) -> StftResult: ...
 def mel_spectrogram(
     samples: FloatSamples,
@@ -2175,6 +2179,14 @@ def griffin_lim(
     hop_length: int | None = None,
     n_iter: int = 32,
     momentum: float = 0.99,
+) -> np.ndarray[Any, Any]: ...
+def istft(
+    magnitude: npt.ArrayLike,
+    phase: npt.ArrayLike,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    *,
+    length_samples: int | None = None,
 ) -> np.ndarray[Any, Any]: ...
 def mfcc_to_mel(
     coefficients: npt.ArrayLike,

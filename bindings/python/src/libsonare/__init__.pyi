@@ -3,6 +3,10 @@ from __future__ import annotations
 from ._cancellation import CancelCallback as CancelCallback
 from ._cancellation import ProgressCallback as ProgressCallback
 from ._effects_polyphony import PolyphonicAnalysis as PolyphonicAnalysis
+from ._live import LiveAudioDevice as LiveAudioDevice
+from ._live import LiveMidiDevice as LiveMidiDevice
+from ._live import LiveSession as LiveSession
+from ._live import LiveSessionStatus as LiveSessionStatus
 from ._playback import HrtfSet as HrtfSet
 from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
 from ._playback import PlaybackRenderer as PlaybackRenderer
@@ -24,20 +28,29 @@ from ._project import NoteTracking as NoteTracking
 from ._project import PartRigEntry as PartRigEntry
 from ._project import PartRigMode as PartRigMode
 from ._project import Project as Project
+from ._project import ProjectAutomationLane as ProjectAutomationLane
 from ._project import ProjectAutomationTargetKind as ProjectAutomationTargetKind
+from ._project import ProjectBounceResult as ProjectBounceResult
 from ._project import ProjectChordQuality as ProjectChordQuality
+from ._project import ProjectChordSymbol as ProjectChordSymbol
 from ._project import ProjectDeserializeResult as ProjectDeserializeResult
+from ._project import ProjectDestinationInstrument as ProjectDestinationInstrument
 from ._project import ProjectFadeCurve as ProjectFadeCurve
+from ._project import ProjectInstrument as ProjectInstrument
 from ._project import ProjectKeyMode as ProjectKeyMode
+from ._project import ProjectKeySegment as ProjectKeySegment
 from ._project import ProjectLoopMode as ProjectLoopMode
 from ._project import ProjectLoopRecordingResult as ProjectLoopRecordingResult
 from ._project import ProjectMidiCcBindingKind as ProjectMidiCcBindingKind
 from ._project import ProjectMidiClipResult as ProjectMidiClipResult
 from ._project import ProjectMidiEvent as ProjectMidiEvent
 from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
+from ._project import ProjectPosition as ProjectPosition
+from ._project import ProjectSection as ProjectSection
 from ._project import ProjectSourceKind as ProjectSourceKind
 from ._project import ProjectStemLayout as ProjectStemLayout
 from ._project import ProjectTimeline as ProjectTimeline
+from ._project import ProjectTimeSignatureSegment as ProjectTimeSignatureSegment
 from ._project import ProjectTrackKind as ProjectTrackKind
 from ._project import SampleBank as SampleBank
 from ._project import SampleDescLoopMode as SampleDescLoopMode
@@ -60,6 +73,7 @@ from ._project import SynthRetrigger as SynthRetrigger
 from ._project import SynthWaveform as SynthWaveform
 from ._project import TakeAlignment as TakeAlignment
 from ._project import align_take_to_reference as align_take_to_reference
+from ._project import automation_target_kind_names as automation_target_kind_names
 from ._project import chord_symbol_from_analysis as chord_symbol_from_analysis
 from ._project import controller_profile_names as controller_profile_names
 from ._project import key_mode_from_analysis as key_mode_from_analysis
@@ -138,6 +152,7 @@ from ._project_model import ProjectDiagnosticCode as ProjectDiagnosticCode
 from ._project_model import ProjectDiagnosticSeverity as ProjectDiagnosticSeverity
 from ._runtime import ErrorCode as ErrorCode
 from ._runtime import ErrorCodeName as ErrorCodeName
+from ._runtime import ErrorReason as ErrorReason
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
 from .analyzer import AssignNoteTargetsResult as AssignNoteTargetsResult
@@ -409,6 +424,7 @@ from .analyzer import (
 from .analyzer import (
     hz_to_note as hz_to_note,
 )
+from .analyzer import istft as istft
 from .analyzer import lufs as lufs
 from .analyzer import (
     lufs_interleaved as lufs_interleaved,
@@ -922,6 +938,8 @@ from .audio import Audio as Audio
 from .audio import DecodedChannels as DecodedChannels
 from .audio import decode_channels as decode_channels
 from .audio import downmix as downmix
+from .audio import encode_audio as encode_audio
+from .audio import read_audio_tags as read_audio_tags
 from .engine import MAX_TRACK_LANES as MAX_TRACK_LANES
 from .engine import ClipPageProvider as ClipPageProvider
 from .engine import FileClipPageProvider as FileClipPageProvider
@@ -954,6 +972,7 @@ from .types import (
     AnalysisRhythm as AnalysisRhythm,
 )
 from .types import AudioDefects as AudioDefects
+from .types import AudioFormatCapabilities as AudioFormatCapabilities
 from .types import (
     AutomationCurve as AutomationCurve,
 )
@@ -978,7 +997,6 @@ from .types import (
 )
 from .types import Capabilities as Capabilities
 from .types import CapabilitiesAbi as CapabilitiesAbi
-from .types import CapabilitiesDecode as CapabilitiesDecode
 from .types import CapabilitiesFeatures as CapabilitiesFeatures
 from .types import CapabilityCatalog as CapabilityCatalog
 from .types import CapabilityCatalogChain as CapabilityCatalogChain
@@ -1409,6 +1427,9 @@ from .types import (
 from .types import (
     RepairApplyResult as RepairApplyResult,
 )
+from .types import (
+    RepairChannelChange as RepairChannelChange,
+)
 from .types import RepairStage as RepairStage
 from .types import RepairStageName as RepairStageName
 from .types import (
@@ -1524,6 +1545,8 @@ from .types import (
 )
 from .types import SynthParamCondition as SynthParamCondition
 from .types import SynthParamInfo as SynthParamInfo
+from .types import SynthPatchEnumParamInfo as SynthPatchEnumParamInfo
+from .types import SynthPatchParamInfo as SynthPatchParamInfo
 from .types import (
     TempogramMode as TempogramMode,
 )

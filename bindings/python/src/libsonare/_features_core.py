@@ -8,12 +8,13 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from ._errors import _entry, _refuse
+from ._errors import _entry, _refuse, _refuse_type
 from ._features_transforms import _CQT_HOP_LENGTH_MAX
 from ._ffi import (
     SonareChromaCensOptions,
     SonareChromaCqtOptions,
     SonareChromaResult,
+    SonareIstftOptions,
     SonareMelResult,
     SonareMelSpectrogramOptions,
     SonareMfccOptions,
@@ -144,6 +145,7 @@ def stft(
     hop_length: int = 512,
     *,
     db: bool = False,
+    phase: bool = False,
 ) -> StftResult:
     """Compute the short-time Fourier transform.
 
@@ -153,17 +155,22 @@ def stft(
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         db: Also compute the magnitude in dB (default False).
+        phase: Also compute the phase in radians (default False).
 
     Returns:
         StftResult with magnitude and power spectrograms, each of shape
         ``(n_fft // 2 + 1, n_frames)``; ``db`` holds the magnitude in dB with
-        the same shape when ``db`` is True and is ``None`` otherwise.
+        the same shape when ``db`` is True and is ``None`` otherwise; phase
+        holds the phase in radians with that shape when requested and is None
+        otherwise.
     """
+    if not isinstance(phase, bool):
+        raise _refuse_type("phase must be a bool")
     lib = _get_lib()
     sample_buf = _validate_samples(samples)
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareStftResult()
-    options = SonareStftOptions._given(db=1 if db else 0)
+    options = SonareStftOptions._given(db=1 if db else 0, phase=1 if phase else 0)
     rc = lib.sonare_stft(
         c_array,
         _to_c_size_t(length, "length"),
@@ -182,9 +189,60 @@ def stft(
             magnitude=_from_c_float_matrix(out.magnitude, out.n_bins, out.n_frames),
             power=_from_c_float_matrix(out.power, out.n_bins, out.n_frames),
             db=_from_c_float_matrix(out.db, out.n_bins, out.n_frames) if db else None,
+            phase=(_from_c_float_matrix(out.phase, out.n_bins, out.n_frames) if phase else None),
         )
     finally:
         lib.sonare_free_stft_result(ctypes.byref(out))
+
+
+@_entry("istft")
+def istft(
+    magnitude: npt.ArrayLike,
+    phase: npt.ArrayLike,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    *,
+    length_samples: int | None = None,
+) -> np.ndarray:
+    """Reconstruct centered audio from STFT magnitude and phase matrices."""
+    magnitude_data, n_bins, n_frames = _to_c_float_matrix(
+        magnitude, arg_name="magnitude", scan=False, allow_empty=True
+    )
+    phase_data, phase_bins, phase_frames = _to_c_float_matrix(
+        phase, arg_name="phase", scan=False, allow_empty=True
+    )
+    if (phase_bins, phase_frames) != (n_bins, n_frames):
+        raise _refuse("magnitude and phase must have the same shape")
+
+    fft_size = 2 * (n_bins - 1) if n_fft is None else n_fft
+    fft_arg = _to_c_int(fft_size, "n_fft")
+    hop_size = max(1, int(fft_arg.value) // 4) if hop_length is None else hop_length
+    hop_arg = _to_c_size_t(hop_size, "hop_length")
+
+    options = None
+    if length_samples is not None:
+        length_arg = _to_c_size_t(length_samples, "length_samples")
+        if length_arg.value == 0:
+            raise _refuse("length_samples must not be 0; omit it for the natural length")
+        options = SonareIstftOptions()
+        options.length_samples = length_arg.value
+
+    lib = _get_lib()
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_istft(
+                magnitude_data,
+                phase_data,
+                _to_c_int(n_bins, "magnitude row count"),
+                _to_c_int(n_frames, "magnitude frame count"),
+                fft_arg,
+                hop_arg,
+                None if options is None else ctypes.byref(options),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        )
+        return _from_c_float_array(out, out_length.value)
 
 
 # ============================================================================

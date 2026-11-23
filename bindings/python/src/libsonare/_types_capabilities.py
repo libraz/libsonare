@@ -13,7 +13,17 @@ import types
 from collections.abc import Hashable
 from dataclasses import dataclass, fields, is_dataclass
 from functools import cache
-from typing import Any, Literal, TypeVar, Union, cast, get_args, get_origin, get_type_hints
+from typing import (
+    Any,
+    Literal,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 """How a mastering processor runs: as a realtime insert, whole-file only, or on a pair of inputs."""
@@ -98,6 +108,8 @@ class CapabilitiesFeatures:
     """Room acoustics simulation."""
     playback: bool
     """Device playback."""
+    live_devices: bool
+    """Native live audio and MIDI device sessions."""
     pitch_editor: bool
     """Pitch editor."""
     vocal_edit: bool
@@ -109,13 +121,13 @@ class CapabilitiesFeatures:
 
 
 @dataclass(frozen=True)
-class CapabilitiesDecode:
-    """Built-in and FFmpeg-backed decoder lists for the loaded library."""
+class AudioFormatCapabilities:
+    """Formats available through the built-in implementation and through FFmpeg."""
 
     builtin: tuple[str, ...]
-    """File extensions the built-in decoders read."""
+    """Formats available through the built-in implementation."""
     ffmpeg: tuple[str, ...]
-    """File extensions read through FFmpeg; empty without FFmpeg."""
+    """Formats available through FFmpeg; empty when ``features.ffmpeg`` is false."""
 
 
 @dataclass(frozen=True)
@@ -130,8 +142,10 @@ class Capabilities:
     """Target platform, such as ``"darwin-arm64"``."""
     features: CapabilitiesFeatures
     """Compiled-in build options."""
-    decode: CapabilitiesDecode
+    decode: AudioFormatCapabilities
     """Decodable file extensions."""
+    encode: AudioFormatCapabilities
+    """Formats the encoder writes without, and through, FFmpeg."""
     simd: str
     """SIMD instruction set the build uses."""
     hardware_concurrency: int
@@ -217,8 +231,7 @@ class SynthParamCondition:
 
 @dataclass(frozen=True)
 class SynthParamInfo:
-    """One synth parameter as :func:`synth_engine_param_info` and
-    :func:`synth_patch_param_info` describe it.
+    """One numeric or boolean synth parameter as the catalog functions describe it.
 
     ``name`` is the key ``SynthPatch.engine_params`` (or the patch field) is
     spelled with; ``"boolean"`` is a switch given as 0 or 1. ``integer`` is
@@ -254,6 +267,24 @@ class SynthParamInfo:
     """Largest accepted value; None for a field with no closed range."""
     active_when: tuple[tuple[SynthParamCondition, ...], ...] | None = None
     """Alternatives of conditions under which the field reaches the voice; None if unconditional."""
+
+
+@dataclass(frozen=True)
+class SynthPatchEnumParamInfo:
+    """One closed-set field in :func:`synth_patch_param_info`."""
+
+    name: str
+    """Binding spelling of the patch field."""
+    type: Literal["enum"]
+    """Enum-valued patch field."""
+    values: tuple[str, ...]
+    """Accepted catalog tokens in ordinal order."""
+    default: str
+    """Token the initialized patch uses to keep the preset value."""
+
+
+SynthPatchParamInfo: TypeAlias = SynthParamInfo | SynthPatchEnumParamInfo
+"""A numeric, boolean, or enum field in :func:`synth_patch_param_info`."""
 
 
 @dataclass(frozen=True)
@@ -376,6 +407,8 @@ class MasteringProcessorCatalogEntry:
 
     id: str
     """Processor id, the name used for scene inserts and named processors."""
+    description: str
+    """One sentence saying what the processor does, for a processor picker."""
     kind: MasteringProcessorKind
     """``"realtime"`` builds as a scene insert, ``"offline"`` is whole-file only, ``"pair"`` takes
     two inputs."""
@@ -524,6 +557,8 @@ class CapabilityCatalog:
     """Library version string."""
     abi: CapabilitiesAbi
     """ABI versions."""
+    encode: AudioFormatCapabilities
+    """Audio encoding formats available in this build."""
     processors: tuple[MasteringProcessorCatalogEntry, ...]
     """Every mastering processor."""
     chain: CapabilityCatalogChain

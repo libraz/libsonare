@@ -18,6 +18,8 @@ from libsonare import (
     KeyMode,
     PitchClass,
     Project,
+    ProjectChordSymbol,
+    ProjectKeySegment,
     SonareValueError,
     chord_symbol_from_analysis,
     key_mode_from_analysis,
@@ -89,6 +91,79 @@ def test_key_modes_keep_their_name_and_are_accepted_by_annotate_keys(mode: KeyMo
     project.annotate_keys([{"start_ppq": 0.0, "end_ppq": 480.0, "tonic_pc": 0, "mode": converted}])
     serialized = project.to_json()
     assert Project.from_json(serialized).to_json() == serialized
+
+
+def test_project_key_annotation_reader_returns_typed_segments_in_stored_order() -> None:
+    project = Project()
+    try:
+        first = ProjectKeySegment(start_ppq=0.0, end_ppq=480.0, tonic_pc=None, mode="unknown")
+        second = ProjectKeySegment(start_ppq=480.0, end_ppq=960.0, tonic_pc=11, mode="locrian")
+        assert project.key_annotations() == []
+        project.annotate_keys([second, first])
+        assert project.key_annotations() == [second, first]
+    finally:
+        project.close()
+
+
+def test_project_chord_annotation_reader_copies_extensions_and_omits_absent_numerals() -> None:
+    project = Project()
+    try:
+        absent = ProjectChordSymbol(
+            start_ppq=0.0,
+            end_ppq=480.0,
+            root_pc=None,
+            quality="unknown",
+            extensions=[],
+            slash_bass_pc=None,
+            modulation_boundary=False,
+        )
+        labeled = ProjectChordSymbol(
+            start_ppq=480.0,
+            end_ppq=960.0,
+            root_pc=7,
+            quality="halfDiminished",
+            extensions=[7, 9, 13],
+            slash_bass_pc=4,
+            modulation_boundary=True,
+            roman_numeral="iiø7",
+        )
+        single_extension = ProjectChordSymbol(
+            start_ppq=960.0,
+            end_ppq=1200.0,
+            root_pc=2,
+            quality="minor",
+            extensions=[7],
+            slash_bass_pc=None,
+            modulation_boundary=False,
+        )
+        empty_numeral = ProjectChordSymbol(
+            start_ppq=1200.0,
+            end_ppq=1440.0,
+            root_pc=0,
+            quality="major",
+            extensions=[7] * 32,
+            slash_bass_pc=None,
+            modulation_boundary=False,
+            roman_numeral="",
+        )
+        assert project.chord_annotations() == []
+        project.annotate_chords([absent, labeled, single_extension, empty_numeral])
+        expected_empty = {
+            "start_ppq": empty_numeral["start_ppq"],
+            "end_ppq": empty_numeral["end_ppq"],
+            "root_pc": empty_numeral["root_pc"],
+            "quality": empty_numeral["quality"],
+            "extensions": empty_numeral["extensions"],
+            "slash_bass_pc": empty_numeral["slash_bass_pc"],
+            "modulation_boundary": empty_numeral["modulation_boundary"],
+        }
+        snapshot = project.chord_annotations()
+        assert snapshot == [absent, labeled, single_extension, expected_empty]
+        project.annotate_chords([])
+        assert project.chord_annotations() == []
+        assert snapshot == [absent, labeled, single_extension, expected_empty]
+    finally:
+        project.close()
 
 
 @pytest.mark.parametrize("value", [{"root": 0}, "major", None, (0, "major")])

@@ -249,21 +249,33 @@ def test_mastering_pair_analyze_cli_takes_reference_at_its_own_rate(monkeypatch,
     """Pair analysis hands the reference's own rate to the library, which resamples it."""
     import argparse
 
-    from libsonare import cli, mastering_analyze_pair
+    from libsonare import _cli_mastering, audio, cli, mastering_analyze_pair
 
     # 2 kHz sits on the K-weighting shelf, so the tone read at the wrong rate (2.18 kHz)
     # is not the control's only difference; 1 s clears the loudness gate.
     source_samples = _generate_sine(2000, 48000, 1.0)
     reference_samples = _generate_sine(2000, 44100, 1.0)
 
-    def fake_load_audio(path: str) -> tuple[list[float], int]:
-        if path == "master.wav":
-            return source_samples, 48000
-        if path == "reference.wav":
-            return reference_samples, 44100
+    def fake_read_audio(path: str) -> bytes:
+        if path in ("master.wav", "reference.wav"):
+            return path.encode()
         raise AssertionError(path)
 
-    patch_mono_decode(monkeypatch, fake_load_audio)
+    def fake_decode_channels(data: bytes):
+        if data == b"master.wav":
+            return SimpleNamespace(
+                sample_rate=48000,
+                channels=np.asarray([source_samples], dtype=np.float32),
+            )
+        if data == b"reference.wav":
+            return SimpleNamespace(
+                sample_rate=44100,
+                channels=np.asarray([reference_samples], dtype=np.float32),
+            )
+        raise AssertionError(data)
+
+    monkeypatch.setattr(_cli_mastering, "_read_audio_bounded", fake_read_audio)
+    monkeypatch.setattr(audio, "decode_channels", fake_decode_channels)
 
     args = argparse.Namespace(
         analysis="match.referenceLoudness",

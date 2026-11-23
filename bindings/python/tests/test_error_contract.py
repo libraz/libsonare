@@ -103,6 +103,9 @@ class _FailingLib:
     def sonare_last_refusal_subject_count(self) -> int:
         return 0
 
+    def sonare_last_error_reason(self) -> None:
+        return None
+
     def sonare_mastering_insert_names(self) -> None:
         return None
 

@@ -50,6 +50,12 @@ def test_a_non_mapping_descriptor_is_a_type_error() -> None:
         _mapping_keys([("start_ppq", 0.0)], ("start_ppq",), "segment")
 
 
+def test_unknown_key_refusal_lists_expected_keys_in_sorted_order() -> None:
+    with pytest.raises(SonareValueError) as caught:
+        _mapping_keys({"wrong": 1}, ("z", "a", "b"), "segments[2]")
+    assert str(caught.value) == "unknown key segments[2].wrong (expected a, b, z)"
+
+
 @needs_lib
 def test_engine_mixing_mappings_take_one_spelling() -> None:
     from libsonare import RealtimeEngine
@@ -144,7 +150,7 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
             track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_channels=1, audio_sample_rate=48000
         )
         point = AutomationPoint(ppq=0.0, value=0.5)
-        project.add_automation_lane(track, 7, [point])
+        lane_id = project.add_automation_lane(track, [point], target_param_id=7)
         project.set_tempo_segments([{"start_ppq": 0.0, "bpm": 120.0}])
         project.set_time_signatures([{"start_ppq": 0.0, "numerator": 3, "denominator": 4}])
         project.set_clip_takes(clip, [{"id": 1}], active_take_id=1)
@@ -152,16 +158,28 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
         project.set_assist_sidecar("mod", b"x")
         before = project.to_json()
         with pytest.raises(TypeError):
-            project.add_automation_lane(track, 8, [(0.0, 0.5, "linear")])  # type: ignore[list-item]
+            project.add_automation_lane(
+                track,
+                [(0.0, 0.5, "linear")],
+                target_param_id=8,  # type: ignore[list-item]
+            )
         with pytest.raises(TypeError):
-            project.edit_automation_lane(track, 7, [(0.0, 0.5)])  # type: ignore[list-item]
+            project.edit_automation_lane(track, lane_id, [(0.0, 0.5)])  # type: ignore[list-item]
         # AutomationPoint is the record for a point, so a mapping is refused too.
         with pytest.raises(TypeError, match="AutomationPoint"):
-            project.add_automation_lane(track, 8, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
+            project.add_automation_lane(
+                track,
+                [{"ppq": 0.0, "value": 0.5}],
+                target_param_id=8,  # type: ignore[list-item]
+            )
         with pytest.raises(TypeError, match="AutomationPoint"):
-            project.edit_automation_lane(track, 7, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
+            project.edit_automation_lane(track, lane_id, [{"ppq": 0.0, "value": 0.5}])  # type: ignore[list-item]
         with pytest.raises(TypeError, match="target_param_id must be an integer$"):
-            project.add_automation_lane(track, {"target_param_id": 9, "points": [point]})  # type: ignore[arg-type]
+            project.add_automation_lane(
+                track,
+                [point],
+                target_param_id={"target_param_id": 9},  # type: ignore[arg-type]
+            )
         with pytest.raises(TypeError):
             project.set_tempo_segments([(0.0, 120.0)])  # type: ignore[list-item]
         with pytest.raises(TypeError):

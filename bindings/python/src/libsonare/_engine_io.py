@@ -343,7 +343,8 @@ class _EngineIoMixin:
                 monitor_ptrs,
                 _to_c_int(len(arrays), surface_spelling("engine_process", "num_channels")),
                 _to_c_int(frame_count, "channels frame count"),
-            )
+            ),
+            reason="engineDeviceDriven",
         )
         if not with_monitor:
             return _plane_arrays(arrays, frame_count)

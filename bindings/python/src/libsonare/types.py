@@ -6,6 +6,8 @@ capability shapes.  Public names are imported explicitly so static analyzers
 and IDEs retain the same API surface as the former monolithic module.
 """
 
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._types_acoustic import (
     AcousticModeName as AcousticModeName,
@@ -188,13 +190,13 @@ from ._types_analysis import (
     WaveformPeaksReport as WaveformPeaksReport,
 )
 from ._types_capabilities import (
+    AudioFormatCapabilities as AudioFormatCapabilities,
+)
+from ._types_capabilities import (
     Capabilities as Capabilities,
 )
 from ._types_capabilities import (
     CapabilitiesAbi as CapabilitiesAbi,
-)
-from ._types_capabilities import (
-    CapabilitiesDecode as CapabilitiesDecode,
 )
 from ._types_capabilities import (
     CapabilitiesFeatures as CapabilitiesFeatures,
@@ -264,6 +266,12 @@ from ._types_capabilities import (
 )
 from ._types_capabilities import (
     SynthParamInfo as SynthParamInfo,
+)
+from ._types_capabilities import (
+    SynthPatchEnumParamInfo as SynthPatchEnumParamInfo,
+)
+from ._types_capabilities import (
+    SynthPatchParamInfo as SynthPatchParamInfo,
 )
 from ._types_engine import (
     AutomationPoint as AutomationPoint,
@@ -749,6 +757,9 @@ from ._types_repair import (
     RepairApplyResult as RepairApplyResult,
 )
 from ._types_repair import (
+    RepairChannelChange as RepairChannelChange,
+)
+from ._types_repair import (
     RepairStage as RepairStage,
 )
 from ._types_repair import (
@@ -793,3 +804,27 @@ from ._types_streaming import (
 
 _rebind_facade_exports(globals(), "libsonare._types_")
 del _rebind_facade_exports
+
+if _TYPE_CHECKING:
+    from ._project_instruments import ProjectDestinationInstrument as ProjectDestinationInstrument
+    from ._project_instruments import ProjectInstrument as ProjectInstrument
+    from ._project_model import ProjectAutomationLane as ProjectAutomationLane
+
+
+def __getattr__(name: str) -> object:
+    if name == "ProjectAutomationLane":
+        from ._project_model import ProjectAutomationLane
+
+        globals()[name] = ProjectAutomationLane
+        return ProjectAutomationLane
+    if name == "ProjectDestinationInstrument":
+        from ._project_instruments import ProjectDestinationInstrument
+
+        globals()[name] = ProjectDestinationInstrument
+        return ProjectDestinationInstrument
+    if name == "ProjectInstrument":
+        from ._project_instruments import ProjectInstrument
+
+        globals()[name] = ProjectInstrument
+        return ProjectInstrument
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

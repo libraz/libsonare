@@ -623,7 +623,12 @@ def capabilities() -> Capabilities:
     The descriptor describes the loaded native library, rather than the Python
     package that happens to call it.
     """
-    return _from_wire(Capabilities, _capabilities_document())
+    document = _capabilities_document()
+    features = document.get("features")
+    if not isinstance(features, dict):
+        raise _malformed_output("libsonare returned a non-object capabilities feature descriptor")
+    document["features"] = {**features, "liveDevices": bool(_get_lib().sonare_has_live_devices())}
+    return _from_wire(Capabilities, document)
 
 
 @_entry("abi_version")

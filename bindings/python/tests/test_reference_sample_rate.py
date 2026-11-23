@@ -104,6 +104,104 @@ def test_pair_delay_is_in_source_rate_samples() -> None:
     assert abs(delay - 100 * SR / REF_SR) <= 1.0
 
 
+@pytest.mark.parametrize(
+    ("source", "reference", "message"),
+    [
+        (
+            np.zeros((3, 64), dtype=np.float32),
+            SOURCE,
+            "source must hold 1 or 2 channels",
+        ),
+        (
+            SOURCE,
+            np.zeros((3, 64), dtype=np.float32),
+            "reference must hold 1 or 2 channels",
+        ),
+        (
+            np.empty((0, 64), dtype=np.float32),
+            SOURCE,
+            "source must hold 1 or 2 channels",
+        ),
+        (np.stack((SOURCE, SOURCE)), REFERENCE, "same number of channels"),
+        (SOURCE, np.stack((REFERENCE, REFERENCE)), "same number of channels"),
+        ([[], []], SOURCE, r"source\[0\].*must not be empty"),
+        (SOURCE, np.empty((2, 0), dtype=np.float32), r"reference\[0\].*must not be empty"),
+        ([SOURCE, SOURCE[:-1]], REFERENCE, r"source\[1\] must have the same length as source\[0\]"),
+        (
+            SOURCE,
+            [REFERENCE, REFERENCE[:-1]],
+            r"reference\[1\] must have the same length as reference\[0\]",
+        ),
+    ],
+)
+def test_pair_analyze_refuses_invalid_planar_channels_before_native_call(
+    monkeypatch: pytest.MonkeyPatch, source: object, reference: object, message: str
+) -> None:
+    from libsonare import _mastering_pair
+
+    def native_call_is_unexpected() -> object:
+        pytest.fail("invalid channel input reached the native library")
+
+    monkeypatch.setattr(_mastering_pair, "_get_lib", native_call_is_unexpected)
+    with pytest.raises(SonareValueError, match=message):
+        mastering_analyze_pair("match.referenceLoudness", source, reference, SR)  # type: ignore[arg-type]
+
+
+def _assert_measurements_close(mono: object, stereo: object, path: str = "") -> None:
+    """Compare every serialized field, allowing the two-channel loudness power sum."""
+    if isinstance(mono, dict):
+        assert isinstance(stereo, dict)
+        assert mono.keys() == stereo.keys()
+        for key in mono:
+            _assert_measurements_close(mono[key], stereo[key], f"{path}.{key}" if path else key)
+        return
+    if isinstance(mono, list):
+        assert isinstance(stereo, list)
+        assert len(mono) == len(stereo)
+        for index, (mono_value, stereo_value) in enumerate(zip(mono, stereo, strict=True)):
+            _assert_measurements_close(mono_value, stereo_value, f"{path}[{index}]")
+        return
+    if isinstance(mono, (float, int)) and not isinstance(mono, bool):
+        assert isinstance(stereo, (float, int)) and not isinstance(stereo, bool)
+        if path in {"source_lufs", "reference_lufs"}:
+            expected = float(mono) + 10.0 * np.log10(2.0)
+        else:
+            expected = float(mono)
+        scale = max(1.0, abs(expected), abs(float(stereo)))
+        assert np.isclose(stereo, expected, rtol=1e-5, atol=1e-5 * scale), path
+        return
+    assert stereo == mono, path
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "match.referenceLoudness",
+        "match.tonalBalance",
+        "match.tonalBalanceLogBands",
+        "match.matchEqCurve",
+        "match.estimateReferenceDelaySamples",
+    ],
+)
+def test_pair_analyze_duplicate_stereo_matches_mono_measurements(name: str) -> None:
+    mono = _result_to_json_dict(mastering_analyze_pair(name, SOURCE, REFERENCE, SR))
+    stereo_source = np.stack((SOURCE, SOURCE))
+    stereo_reference = np.stack((REFERENCE, REFERENCE))
+    stereo = _result_to_json_dict(mastering_analyze_pair(name, stereo_source, stereo_reference, SR))
+    _assert_measurements_close(mono, stereo)
+
+
+def test_pair_analyze_accepts_channel_buffer_sequences() -> None:
+    source = [SOURCE.tolist(), SOURCE.tolist()]
+    reference = [REFERENCE.tolist(), REFERENCE.tolist()]
+    result = mastering_analyze_pair("match.referenceLoudness", source, reference, SR)
+    assert result.source_lufs == pytest.approx(
+        mastering_analyze_pair("match.referenceLoudness", SOURCE, REFERENCE, SR).source_lufs
+        + 10.0 * np.log10(2.0),
+        abs=1e-4,
+    )
+
+
 def test_equal_rates_match_the_omitted_rate_bit_for_bit() -> None:
     omitted = mastering_analyze_pair("match.referenceLoudness", SOURCE, REFERENCE, SR)
     stated = mastering_analyze_pair(

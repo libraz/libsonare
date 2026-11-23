@@ -23,35 +23,118 @@ from ._project_model import (
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
+from ._project_synth import _articulation_value
 from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
     SonareBuiltinInstrumentBinding,
+    SonareEngineMetronomeConfig,
     SonareInstrumentBinding,
+    SonareProjectArticulationBinding,
     SonareProjectBounceOptions,
     SonareProjectCompileResult,
+    SonareProjectControllerProfileBinding,
     SonareSf2InstrumentBinding,
     SonareSf2ProgramStatus,
     SonareSynthInstrumentBinding,
+    _bool_flag,
     _check,
     _from_c_float_array,
     _get_lib,
+    _narrow_double,
+    _narrow_int,
     _out_float_array,
+    _Respelling,
     _to_c_size_t,
+    _to_c_uint32,
+    _utf8_arg,
 )
+from ._types_engine import EngineMetronomeConfig
 
 
-def _reshape_bounce(interleaved: np.ndarray, num_channels: int) -> np.ndarray:
-    """Shape an interleaved bounce as ``(frames, channels)`` at the width it was mixed at."""
-    return interleaved.reshape(-1, num_channels)
+def _planar_bounce(interleaved: np.ndarray, num_channels: int) -> np.ndarray:
+    """Return an interleaved bounce as contiguous ``(channels, frames)`` planes."""
+    return np.ascontiguousarray(interleaved.reshape(-1, num_channels).T)
+
+
+def _bounce_metronome(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfig:
+    """Convert a project bounce click config with project keyword names."""
+    if not isinstance(config, EngineMetronomeConfig):
+        raise _refuse_type("metronome must be an EngineMetronomeConfig")
+    if config.click_samples is not None and config.click_sec is not None:
+        raise _refuse("metronome.click_samples and metronome.click_sec are mutually exclusive")
+    return SonareEngineMetronomeConfig._given(
+        enabled=_bool_flag(config.enabled, "metronome.enabled"),
+        beat_gain=_narrow_double(config.beat_gain, "metronome.beat_gain"),
+        accent_gain=_narrow_double(config.accent_gain, "metronome.accent_gain"),
+        click_samples=None
+        if config.click_samples is None
+        else _narrow_int(config.click_samples, "metronome.click_samples", 1, 384000),
+        click_sec=None
+        if config.click_sec is None
+        else _narrow_double(config.click_sec, "metronome.click_sec"),
+    )
+
+
+def _bounce_bindings(
+    controller_profiles: Sequence[tuple[int, str]] | None,
+    articulations: Sequence[tuple[int, int, Articulation]] | None,
+) -> tuple[
+    ctypes.Array | None,
+    list[bytes],
+    ctypes.Array | None,
+]:
+    """Convert typed instrument-control bindings and keep their strings alive."""
+    profile_rows = _sequence_rows(controller_profiles, "controller_profiles")
+    profile_names: list[bytes] = []
+    c_profiles = (SonareProjectControllerProfileBinding * len(profile_rows))()
+    for index, row in enumerate(profile_rows):
+        if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) != 2:
+            raise _refuse_type(f"controller_profiles[{index}] must be a pair")
+        destination, preset_name = row
+        c_profiles[index].destination_id = _to_c_uint32(
+            destination, f"controller_profiles[{index}][0]"
+        )
+        encoded_name = _utf8_arg(preset_name, f"controller_profiles[{index}][1]")
+        if not encoded_name:
+            raise _refuse(f"controller_profiles[{index}][1] must not be empty")
+        profile_names.append(encoded_name)
+        c_profiles[index].preset_name = encoded_name
+
+    articulation_rows = _sequence_rows(articulations, "articulations")
+    c_articulations = (SonareProjectArticulationBinding * len(articulation_rows))()
+    for index, row in enumerate(articulation_rows):
+        if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) != 3:
+            raise _refuse_type(f"articulations[{index}] must be a triple")
+        destination, channel, articulation = row
+        c_articulations[index].destination_id = _to_c_uint32(
+            destination, f"articulations[{index}][0]"
+        )
+        c_articulations[index].channel = _narrow_int(channel, f"articulations[{index}][1]", 0, 15)
+        c_articulations[index].articulation = _articulation_value(
+            articulation, f"articulations[{index}][2]"
+        )
+    return (
+        c_profiles if profile_rows else None,
+        profile_names,
+        c_articulations if articulation_rows else None,
+    )
+
+
+def _sequence_rows(value: Sequence[object] | None, name: str) -> list[object]:
+    """Copy a facade sequence while refusing scalar strings and non-sequences by name."""
+    if value is None:
+        return []
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise _refuse_type(f"{name} must be a sequence")
+    return list(value)
 
 
 def _bounce_options(
     total_frames: int | None,
     block_size: int | None,
     num_channels: int | None,
-    sample_rate: int | None,
     instrument_latency_samples: int,
 ) -> SonareProjectBounceOptions:
     """Build the C bounce options, leaving each omitted field at the init value.
@@ -63,7 +146,6 @@ def _bounce_options(
         total_frames=_given_positive(total_frames, "total_frames", _POSITIVE_COUNT),
         block_size=_given_positive(block_size, "block_size", _POSITIVE_INT),
         num_channels=_given_positive(num_channels, "num_channels", _POSITIVE_INT),
-        sample_rate=_given_positive(sample_rate, "sample_rate", _POSITIVE_INT),
         instrument_latency_samples=instrument_latency_samples,
     )
 
@@ -116,6 +198,21 @@ class _ProjectRenderMixin:
 
         def last_bounce_compile_result(self) -> ProjectCompileResult | None: ...
 
+    @_entry("Project.count_in_frames")
+    def count_in_frames(self, count_in_bars: int) -> int:
+        """Return the pre-roll length at the project's initial tempo and meter."""
+        bars = _narrow_int(count_in_bars, "count_in_bars", 0, 16)
+        out_frames = ctypes.c_int64()
+        _check(
+            _get_lib().sonare_project_count_in_frames(
+                self._require_handle(),
+                bars,
+                -1,
+                ctypes.byref(out_frames),
+            )
+        )
+        return int(out_frames.value)
+
     @_entry("Project.bounce")
     def bounce(
         self,
@@ -127,14 +224,18 @@ class _ProjectRenderMixin:
         total_frames: int | None = None,
         block_size: int | None = None,
         num_channels: int | None = None,
-        sample_rate: int | None = None,
         instrument_latency_samples: int = 0,
-    ) -> np.ndarray:
-        """Compile + render the project offline to interleaved float audio.
+        metronome: EngineMetronomeConfig | None = None,
+        count_in_bars: int = 0,
+        controller_profiles: Sequence[tuple[int, str]] | None = None,
+        articulations: Sequence[tuple[int, int, Articulation]] | None = None,
+    ) -> ProjectBounceResult:
+        """Compile and render the project offline to planar float audio.
 
-        Returns a ``(frames, channels)`` float32 ndarray at the width the master
-        was mixed at. Deterministic: the same project + options + instruments
-        yields a bit-identical array within one build. An omitted option takes
+        Returns a frozen :class:`ProjectBounceResult` whose ``channels`` array
+        has shape ``(num_channels, frames)``. Deterministic: the same project +
+        options + instruments yields bit-identical channel arrays within one
+        build. An omitted option takes
         the library default: the project's sample rate, the scene master's
         layout width (2 with no master), the default render block, and a render
         length derived from the arrangement (musical end + the longest
@@ -172,18 +273,41 @@ class _ProjectRenderMixin:
                 loaded SoundFont (:meth:`load_sound_font`); programs it does not
                 cover, or no SoundFont at all, play through the built-in GM
                 fallback bank (see :meth:`sound_font_manifest`).
-            total_frames / block_size / num_channels / sample_rate: Render
-                length, block size, output width and rate; omitted takes the
-                library default.
+            total_frames / block_size / num_channels: Render length, block
+                size and output width; omitted takes the library default.
             instrument_latency_samples: Host-instrument latency compensation in
                 samples fed to the compiler.
+            metronome: Optional :class:`EngineMetronomeConfig`; clicks are mixed
+                when ``enabled`` is true. A disabled config renders like ``None``.
+            count_in_bars: Silent or clicked pre-roll bars in ``[0, 16]``.
+            controller_profiles: ``(destination_id, preset_name)`` pairs for
+                instruments that support controller profiles.
+            articulations: ``(destination_id, channel, articulation)`` triples.
         """
         lib = _get_lib()
         # Passed unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
         options = _bounce_options(
-            total_frames, block_size, num_channels, sample_rate, instrument_latency_samples
+            total_frames, block_size, num_channels, instrument_latency_samples
         )
+        options.count_in_bars = _narrow_int(count_in_bars, "count_in_bars", 0, 16)
+        # A Python instrument callback may reenter and edit the project, so read
+        # the effective rate before entering the native renderer.
+        resolved_sample_rate = int(self.sample_rate)
+
+        c_metronome = _bounce_metronome(metronome) if metronome is not None else None
+        if c_metronome is not None:
+            options.metronome = ctypes.pointer(c_metronome)
+
+        c_profiles, profile_names, c_articulations = _bounce_bindings(
+            controller_profiles, articulations
+        )
+        if c_profiles is not None:
+            options.controller_profiles = c_profiles
+            options.controller_profile_count = _to_c_size_t(len(c_profiles), "controller_profiles")
+        if c_articulations is not None:
+            options.articulations = c_articulations
+            options.articulation_count = _to_c_size_t(len(c_articulations), "articulations")
 
         errors: list[BaseException] = []
         keepalive: list[object] = []
@@ -247,11 +371,42 @@ class _ProjectRenderMixin:
             )
             # `keepalive` pins the ctypes trampolines until the bounce returns.
             keepalive.clear()
-            _check(rc, flattened="options")
+            respelled = {
+                "metronome.enabled": _Respelling("metronome.enabled"),
+                "metronome.beat_gain": _Respelling("metronome.beat_gain"),
+                "metronome.accent_gain": _Respelling("metronome.accent_gain"),
+                "metronome.click_samples": _Respelling("metronome.click_samples"),
+                "metronome.click_sec": _Respelling("metronome.click_sec"),
+            }
+            if c_profiles is not None:
+                for index in range(len(c_profiles)):
+                    respelled[f"controller_profiles[{index}].destination_id"] = _Respelling(
+                        f"controller_profiles[{index}][0]"
+                    )
+                    respelled[f"controller_profiles[{index}].preset_name"] = _Respelling(
+                        f"controller_profiles[{index}][1]"
+                    )
+            if c_articulations is not None:
+                for index in range(len(c_articulations)):
+                    respelled[f"articulations[{index}].destination_id"] = _Respelling(
+                        f"articulations[{index}][0]"
+                    )
+                    respelled[f"articulations[{index}].channel"] = _Respelling(
+                        f"articulations[{index}][1]"
+                    )
+                    respelled[f"articulations[{index}].articulation"] = _Respelling(
+                        f"articulations[{index}][2]"
+                    )
+            _check(rc, flattened="options", respelled=respelled)
             if errors:
                 raise errors[0]
+            if width.value <= 0:
+                raise _malformed_output("project bounce returned no channels")
             interleaved = _from_c_float_array(out, int(out_frames.value) * width.value)
-        return _reshape_bounce(interleaved, width.value)
+        channels = _planar_bounce(interleaved, width.value)
+        # Keep the encoded preset strings alive through the C call.
+        del profile_names
+        return ProjectBounceResult(channels=channels, sample_rate=resolved_sample_rate)
 
     @_entry("Project.load_sound_font")
     def load_sound_font(self, data: bytes | bytearray | memoryview) -> None:

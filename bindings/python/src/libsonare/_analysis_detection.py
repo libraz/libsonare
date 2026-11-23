@@ -509,13 +509,15 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     downbeat_phase = int(data["downbeatPhase"])
 
     # Beat-level evidence the downbeat and meter pass scores. Each stream is
-    # beat-indexed; an empty one means the analysis could not produce it rather
-    # than that every beat scored zero.
+    # beat-indexed except subdivision_accent, which describes the gaps between
+    # beats. Empty optional streams mean that evidence was not measured.
     obs_d = data["beatObservations"]
     beat_observations = (
         BeatObservations(
-            onset_strength=np.asarray(obs_d["onsetStrength"], dtype=np.float32),
+            accent=np.asarray(obs_d["accent"], dtype=np.float32),
+            has_attack=np.asarray(obs_d["hasAttack"], dtype=np.bool_),
             low_frequency_energy=np.asarray(obs_d["lowFrequencyEnergy"], dtype=np.float32),
+            subdivision_accent=np.asarray(obs_d["subdivisionAccent"], dtype=np.float32),
             chord_change=np.asarray(obs_d["chordChange"], dtype=np.float32),
         )
         if obs_d

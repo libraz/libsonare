@@ -324,14 +324,19 @@ def test_eq_params_and_shortcut_conflict_is_a_usage_refusal(capsys) -> None:
 
 def test_mastering_pair_analyze_forwards_params(monkeypatch) -> None:
     import libsonare
-    from libsonare import _cli_mastering
+    from libsonare import _cli_mastering, audio
 
     calls: dict[str, object] = {}
     monkeypatch.setattr(
         _cli_mastering,
-        "_load_audio",
-        lambda path: ([0.0], 44_100) if path == "source.wav" else ([0.1], 44_100),
+        "_read_audio_bounded",
+        lambda path: path.encode(),
     )
+    decoded = {
+        b"source.wav": SimpleNamespace(sample_rate=44_100, channels=[[0.0]]),
+        b"reference.wav": SimpleNamespace(sample_rate=44_100, channels=[[0.1]]),
+    }
+    monkeypatch.setattr(audio, "decode_channels", lambda data: decoded[data])
 
     def analyze(*args, **kwargs):
         calls["args"] = args
@@ -347,6 +352,7 @@ def test_mastering_pair_analyze_forwards_params(monkeypatch) -> None:
     )
     assert _cli_mastering.cmd_mastering_pair_analyze(args) == 0
     assert calls["params"] == {"windowMs": 120.0}
+    assert calls["args"] == ("spectralDifference", [[0.0]], [[0.1]])
 
 
 def test_mixing_preset_uses_stable_default(monkeypatch, capsys) -> None:

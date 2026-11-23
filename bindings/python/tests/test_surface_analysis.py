@@ -893,9 +893,12 @@ def test_analysis_arrays_are_float32_ndarrays(analysis: libsonare.AnalysisResult
     assert analysis.beat_local_bpm.dtype == np.float32
     observations = analysis.beat_observations
     assert observations is not None
-    for name in ("onset_strength", "low_frequency_energy", "chord_change"):
+    for name in ("accent", "low_frequency_energy", "subdivision_accent", "chord_change"):
         values = getattr(observations, name)
         assert isinstance(values, np.ndarray) and values.dtype == np.float32, name
+    assert isinstance(observations.has_attack, np.ndarray)
+    assert observations.has_attack.dtype == np.bool_
+    assert not hasattr(observations, "onset_strength")
 
     signal = _signal()
     rhythm = libsonare.analyze_rhythm(signal, SR)
@@ -904,7 +907,8 @@ def test_analysis_arrays_are_float32_ndarrays(analysis: libsonare.AnalysisResult
     bpm = libsonare.analyze_bpm(signal, SR)
     acoustic = libsonare.analyze_impulse_response(signal, SR)
     boundaries = libsonare.detect_boundaries(signal, SR)
-    meter = libsonare.estimate_meter(analysis.beats)
+    assert analysis.beat_observations is not None
+    meter = libsonare.estimate_meter(analysis.beat_observations)
     arrays = {
         "RhythmResult.beat_intervals": rhythm.beat_intervals,
         "DynamicsResult.loudness_times_sec": dynamics.loudness_times_sec,
@@ -963,15 +967,20 @@ def test_analyze_reports_monotone_progress_and_cancels() -> None:
     assert caught.value.code == libsonare.ErrorCode.CANCELLED
 
 
-def test_estimate_meter_takes_the_beats_of_an_analysis(analysis: libsonare.AnalysisResult) -> None:
-    meter = libsonare.estimate_meter(analysis.beats)
+def test_estimate_meter_takes_the_observations_of_an_analysis(
+    analysis: libsonare.AnalysisResult,
+) -> None:
+    assert analysis.beat_observations is not None
+    meter = libsonare.estimate_meter(analysis.beat_observations)
     assert meter.searched
     assert isinstance(meter.time_signature, libsonare.TimeSignature)
-    assert "beat_times" not in inspect.signature(libsonare.estimate_meter).parameters
+    assert list(inspect.signature(libsonare.estimate_meter).parameters)[0] == "observations"
     with pytest.raises(TypeError):
-        libsonare.estimate_meter([0.5, 1.0, 1.5])  # type: ignore[list-item]
-    with pytest.raises(SonareValueError):
+        libsonare.estimate_meter(analysis.beats)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
         libsonare.estimate_meter([])
+    with pytest.raises(SonareValueError):
+        libsonare.estimate_meter(None)  # type: ignore[arg-type]
 
 
 def test_chord_qualities_index_the_c_ordinals() -> None:

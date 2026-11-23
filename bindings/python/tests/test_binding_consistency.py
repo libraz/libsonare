@@ -536,9 +536,9 @@ def test_empty_bounce_returns_empty_array_repeatably() -> None:
         # No tracks/clips -> nothing to render -> empty output. Repeat to surface
         # any double-free / sentinel-leak regression.
         for _ in range(5):
-            audio = project.bounce(num_channels=2, sample_rate=48000)
+            audio = project.bounce(num_channels=2).channels
             assert audio.size == 0
-            assert audio.shape == (0, 2)
+            assert audio.shape == (2, 0)
     finally:
         project.close()
 
@@ -554,10 +554,9 @@ def test_empty_builtin_instrument_bounce_is_empty() -> None:
             audio = project.bounce(
                 builtin_instruments=[(0, BuiltinSynthConfig())],
                 num_channels=2,
-                sample_rate=48000,
-            )
+            ).channels
             assert audio.size == 0
-            assert audio.shape == (0, 2)
+            assert audio.shape == (2, 0)
     finally:
         project.close()
 

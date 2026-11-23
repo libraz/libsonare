@@ -49,6 +49,30 @@ class SonareAudioFileOptions(CStruct):
     ]
 
 
+class SonareAudioTags(CStruct):
+    """Maps to SonareAudioTags in sonare_c_types_functions.h."""
+
+    _fields_ = [
+        ("keys", ctypes.POINTER(ctypes.c_char_p)),
+        ("values", ctypes.POINTER(ctypes.c_char_p)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareEncodeOptions(CStruct):
+    """Maps to SonareEncodeOptions in sonare_c_types_functions.h."""
+
+    _c_init_ = "sonare_encode_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("format", ctypes.c_char_p),
+        ("bit_depth", ctypes.c_int32),
+        ("quality", ctypes.c_float),
+        ("tags", ctypes.POINTER(SonareAudioTags)),
+    ]
+
+
 # SonarePitchCorrectionConfig.target_mode values.
 SONARE_PITCH_TARGET_FIXED_MIDI = 0
 SONARE_PITCH_TARGET_SCALE = 1
@@ -429,6 +453,82 @@ class SonareEngineCaptureBuffer(CStruct):
         ("channels", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
         ("num_channels", ctypes.c_int),
         ("capacity_frames", ctypes.c_int64),
+    ]
+
+
+class SonareLiveAudioDevice(CStruct):
+    """Maps to SonareLiveAudioDevice."""
+
+    _fields_ = [
+        ("uid", ctypes.c_char * 256),
+        ("name", ctypes.c_char * 256),
+        ("input_channels", ctypes.c_int32),
+        ("output_channels", ctypes.c_int32),
+        ("is_default_input", ctypes.c_int32),
+        ("is_default_output", ctypes.c_int32),
+        ("nominal_sample_rate", ctypes.c_double),
+    ]
+
+
+class SonareLiveAudioDeviceList(CStruct):
+    """Maps to SonareLiveAudioDeviceList."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareLiveAudioDevice)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareLiveMidiDevice(CStruct):
+    """Maps to SonareLiveMidiDevice."""
+
+    _fields_ = [("uid", ctypes.c_char * 256), ("name", ctypes.c_char * 256)]
+
+
+class SonareLiveMidiDeviceList(CStruct):
+    """Maps to SonareLiveMidiDeviceList."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareLiveMidiDevice)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareLiveSessionConfig(CStruct):
+    """Maps to SonareLiveSessionConfig."""
+
+    _c_init_ = "sonare_live_session_config_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("audio_output", ctypes.c_int32),
+        ("audio_output_uid", ctypes.c_char_p),
+        ("audio_input", ctypes.c_int32),
+        ("audio_input_uid", ctypes.c_char_p),
+        ("midi_input", ctypes.c_int32),
+        ("midi_input_uid", ctypes.c_char_p),
+        ("sample_rate", ctypes.c_int32),
+        ("block_size", ctypes.c_int32),
+        ("destination_id", ctypes.c_uint32),
+    ]
+
+
+class SonareLiveSessionStatus(CStruct):
+    """Maps to SonareLiveSessionStatus."""
+
+    _fields_ = [
+        ("running", ctypes.c_int32),
+        ("device_lost", ctypes.c_int32),
+        ("rate_changed", ctypes.c_int32),
+        ("sample_rate", ctypes.c_int),
+        ("output_block_size", ctypes.c_int),
+        ("input_block_size", ctypes.c_int),
+        ("output_latency_ms", ctypes.c_double),
+        ("input_latency_ms", ctypes.c_double),
+        ("xrun_count", ctypes.c_uint64),
+        ("input_overrun_frames", ctypes.c_uint64),
+        ("input_underrun_frames", ctypes.c_uint64),
+        ("dropped_midi_events", ctypes.c_uint64),
     ]
 
 

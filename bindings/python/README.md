@@ -43,7 +43,8 @@ with libsonare.Project() as project:
         libsonare.midi_note_on(0.0, 0, 0, 60, 100),  # ppq, group, channel, note, velocity
         libsonare.midi_note_off(2.0, 0, 0, 60),
     ])
-    audio = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
+    rendered = project.bounce(num_channels=2, synth_instruments=[(0, "sawLead")])
+    audio = rendered.channels  # (channels, frames)
 ```
 
 Samples passed directly must be mono float32 (downmix stereo first); the defaults follow librosa (22050 Hz, `n_fft` 2048, `hop_length` 512). See [librosa compatibility](https://libsonare.libraz.net/docs/librosa-compatibility).

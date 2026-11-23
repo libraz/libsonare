@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import dataclasses
 import json
 import re
@@ -19,6 +20,8 @@ from libsonare import (
     SonareError,
     SonareValueError,
 )
+from libsonare._ffi_types_mastering_project import SonareMidiEventPod
+from libsonare._project_model import _midi_event_from_c
 
 from ._helpers import raises_coded
 from ._project_helpers import _build_project
@@ -298,10 +301,69 @@ def test_midi_events_come_back_as_project_midi_event_records() -> None:
         clip_id = project.add_midi_clip(0.0, 4.0).clip_id
         events = [on, ls.midi_note_off(2.0, 0, 0, 60, 0)]
         project.set_midi_events(clip_id, events)
+        assert project.midi_events(clip_id) == events
         as_array = np.array([[e.ppq, e.word0, e.word1] for e in events])
         project.set_midi_events(clip_id, as_array)
     finally:
         project.close()
+
+
+def test_project_midi_events_round_trip_owned_sysex_in_stable_order() -> None:
+    project = Project()
+    try:
+        clip_id = project.add_midi_clip(0.0, 4.0).clip_id
+        payload = b"\xf0\x7e\x00\xff\xf7"
+        events = [
+            ProjectMidiEvent(1.0, 0x20903C60),
+            ProjectMidiEvent(0.5, 0x30000000, 0, payload),
+            ProjectMidiEvent(0.5, 0x20904060),
+        ]
+        project.set_midi_events(clip_id, events)
+        observed = project.midi_events(clip_id)
+        assert observed == [events[1], events[2], events[0]]
+        assert observed[0].sysex == payload
+        project.set_midi_events(clip_id, observed)
+        assert project.midi_events(clip_id) == observed
+    finally:
+        project.close()
+    assert observed[0].sysex == payload
+
+
+def test_project_midi_events_refuses_empty_sysex_and_wrong_payload_type() -> None:
+    project = Project()
+    try:
+        clip_id = project.add_midi_clip(0.0, 1.0).clip_id
+        with pytest.raises(SonareValueError, match=r"events\[0\]\.sysex"):
+            project.set_midi_events(clip_id, [ProjectMidiEvent(0.0, 0x30000000, sysex=b"")])
+        with pytest.raises(TypeError, match=r"events\[0\]\.sysex"):
+            project.set_midi_events(
+                clip_id,
+                [ProjectMidiEvent(0.0, 0x30000000, sysex=bytearray(b"\xf0"))],  # type: ignore[arg-type]
+            )
+    finally:
+        project.close()
+
+
+def test_project_midi_events_refuses_non_midi_and_missing_clips() -> None:
+    project, audio_clip, _midi_track, _midi_clip = _build_project()
+    try:
+        with pytest.raises(SonareValueError, match="clip_id"):
+            project.midi_events(audio_clip)
+        with pytest.raises(SonareValueError, match="clip_id"):
+            project.midi_events(999_999)
+    finally:
+        project.close()
+
+
+def test_midi_event_reader_rejects_empty_pointed_sysex_as_malformed_output() -> None:
+    payload = (ctypes.c_uint8 * 1)(0xF0)
+    event = SonareMidiEventPod()
+    event.word0 = 0x30000000
+    event.sysex = ctypes.cast(payload, ctypes.POINTER(ctypes.c_uint8))
+    event.sysex_size = 0
+    with pytest.raises(SonareError) as exc:
+        _midi_event_from_c(event)
+    assert exc.value.code == ErrorCode.INVALID_FORMAT
 
 
 def test_midi_builders_are_module_functions() -> None:
@@ -465,6 +527,19 @@ def test_midi_route_absent_filters_mean_any_and_a_negative_is_refused() -> None:
             ls.midi_route_events(events, {key: 16})
 
 
+def test_midi_route_preserves_sysex_and_absent_payloads() -> None:
+    payload = bytes([0xF0, 0x00, 0x7D, 0xF7])
+    events = [
+        ProjectMidiEvent(0.0, 0x33000000, sysex=payload),
+        ls.midi_note_on(1.0, 3, 0, 60, 100),
+    ]
+    result = ls.midi_route_events(events, {"filter_group": 3})
+    assert result.events == events
+    assert result.events[1].sysex is None
+    assert not result.overflowed
+    assert result.overflow_count == 0
+
+
 def test_a_cc_binding_channel_is_absent_for_any_and_0xff_is_refused() -> None:
     event = ls.midi_cc(0.0, 0, 9, 1, 100)
     any_channel = MidiCcBinding(
@@ -608,7 +683,7 @@ def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
         )
         # A MIDI-only bounce with no instrument compiles to silence but records
         # the no-instrument diagnostic, retrievable after the bounce.
-        project.bounce(total_frames=48000, num_channels=2, sample_rate=48000)
+        project.bounce(total_frames=48000, num_channels=2)
         result = project.last_bounce_compile_result()
         assert result is not None
         assert [d.code for d in result.diagnostics] == ["midiClipNoInstrument"]

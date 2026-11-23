@@ -13,7 +13,7 @@ from ._effects_note_model import (
     _transcribe_config,
     _transcribe_sample_rate,
 )
-from ._errors import _entry, _not_supported, _refuse
+from ._errors import _entry, _malformed_output, _not_supported, _refuse
 
 # The transcription config is built once for the whole binding: this method and
 # the free `transcribe` take the same keyword options, and two builders would be
@@ -42,6 +42,7 @@ from ._runtime import (
     AutomationCurve,
     SonareAutomationPoint,
     SonareMidiCcBinding,
+    SonareMidiEventList,
     SonareMidiEventPod,
     SonareMidiRouteConfig,
     SonareNotePairValidation,
@@ -51,6 +52,7 @@ from ._runtime import (
     _guard_buffer,
     _midi_fx_config_json,
     _narrow_int,
+    _Respelling,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -420,18 +422,10 @@ class _ProjectMidiMixin:
     ) -> None:
         """Replace a MIDI clip's entire event list.
 
-        Each event is a :class:`ProjectMidiEvent` (a PPQ position and the first
-        two UMP-1.0 words of a channel-voice message, stored opaquely), or the
-        whole list is one ``(n, 3)`` array whose columns are ``ppq``, ``word0``
-        and ``word1``. Pass an empty sequence to clear.
-
-        Drops the clip's SysEx, which :meth:`import_smf` and :meth:`export_smf`
-        both keep. The payloads sit beside the event list and are reached by a
-        handle this triple does not carry, so replacing the list leaves nothing
-        referring to them: a GS setup block that survives an import and an
-        export byte for byte is gone after one call here. Nothing reads the
-        handles back either, so a caller that must keep the setup edits the
-        exported file rather than the event list.
+        Each event is a :class:`ProjectMidiEvent`, including an optional SysEx
+        payload. The whole list may also be one ``(n, 3)`` array whose columns
+        are ``ppq``, ``word0`` and ``word1`` for channel-voice messages. Pass an
+        empty sequence to clear.
 
         Only events inside the clip's half-open window ``[0, length_ppq)`` (after
         the source offset) are kept for export; a note still sounding at the clip
@@ -449,14 +443,40 @@ class _ProjectMidiMixin:
                 c_events[i].word1 = _validate_midi_event_word(word1, f"events[{i}].word1")
         else:
             c_events, count = _midi_events_to_c(events, "events")
+        respelled = {
+            f"events[{i}].sysex_size": _Respelling(f"events[{i}].sysex")
+            for i in range(count)
+            if c_events[i].sysex
+        }
         _check(
             _get_lib().sonare_project_set_midi_events(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
                 c_events if count else None,
                 _to_c_size_t(count, "count"),
-            )
+            ),
+            respelled=respelled,
         )
+
+    @_entry("Project.midi_events")
+    def midi_events(self, clip_id: int) -> list[ProjectMidiEvent]:
+        """Read MIDI events in stable PPQ order, including owned SysEx bytes."""
+        lib = _get_lib()
+        result = SonareMidiEventList()
+        try:
+            _check(
+                lib.sonare_project_midi_events(
+                    self._require_handle(),
+                    _to_c_uint32(clip_id, "clip_id"),
+                    ctypes.byref(result),
+                )
+            )
+            count = int(result.count)
+            if bool(result.items) != bool(count):
+                raise _malformed_output("MIDI event list has an inconsistent pointer and count")
+            return [_midi_event_from_c(result.items[i]) for i in range(count)]
+        finally:
+            lib.sonare_free_midi_event_list(ctypes.byref(result))
 
     @_entry("Project.transcribe_to_clip")
     @_guard_buffer("samples")

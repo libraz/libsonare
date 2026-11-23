@@ -148,6 +148,8 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("mastering_ab_match_loudness_stereo", "source_length"): "source_left",
     ("mastering_analyze_pair", "reference_length"): "reference",
     ("mastering_analyze_pair", "source_length"): "source",
+    ("mastering_analyze_pair_stereo", "reference_length"): "reference",
+    ("mastering_analyze_pair_stereo", "source_length"): "source",
     ("mastering_apply_pair_processor", "reference_length"): "reference",
     ("mastering_apply_pair_processor", "source_length"): "source",
     ("mastering_apply_pair_processor_stereo", "reference_length"): "reference_left",
@@ -163,8 +165,11 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("project_add_loop_recording_takes", "audio_frames"): "audio",
     ("project_annotate_chords", "count"): "chords",
     ("project_annotate_keys", "count"): "keys",
+    ("project_annotate_sections", "count"): "sections",
     ("project_apply_vocal_edit", "rendered_sample_count"): "rendered_mono",
+    ("project_bounce", "articulation_count"): "articulations",
     ("project_bounce", "builtin_instrument_count"): "builtin_instruments",
+    ("project_bounce", "controller_profile_count"): "controller_profiles",
     ("project_bounce", "instrument_count"): "instruments",
     ("project_bounce", "synth_instrument_count"): "synth_instruments",
     ("project_edit_automation_lane", "point_count"): "points",
@@ -202,7 +207,7 @@ QUOTIENTS: dict[tuple[str, str], tuple[str, str]] = {
 
 # (C entry key, document prefix, caller root): the facade puts the caller's mapping in the
 # document slot the prefix names, so a path under it is the caller's path under the root.
-DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = ()
+DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = (("encode_audio", "tags.", "tags."),)
 
 
 def document_rooted(entry: str, subject: str) -> str | None:

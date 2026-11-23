@@ -5,7 +5,12 @@ from __future__ import annotations
 import ctypes
 
 from ._cstruct import CStruct
-from ._ffi_types_core import SonareAutomationPoint, SonareCancelCallback
+from ._ffi_types_core import (
+    SonareAutomationPoint,
+    SonareCancelCallback,
+    SonareEngineMetronomeConfig,
+    SonareTimeSignature,
+)
 
 
 class SonareMasteringConfig(CStruct):
@@ -356,6 +361,17 @@ class SonareMidiEventPod(CStruct):
         ("ppq", ctypes.c_double),
         ("word0", ctypes.c_uint32),
         ("word1", ctypes.c_uint32),
+        ("sysex", ctypes.POINTER(ctypes.c_uint8)),
+        ("sysex_size", ctypes.c_size_t),
+    ]
+
+
+class SonareMidiEventList(CStruct):
+    """Maps to SonareMidiEventList in sonare_c_project_midi.h."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareMidiEventPod)),
+        ("count", ctypes.c_size_t),
     ]
 
 
@@ -432,11 +448,7 @@ class SonareMidiRouteConfig(CStruct):
 
 
 class SonareMidiCcBinding(CStruct):
-    """Maps to SonareMidiCcBinding in sonare_c_project.h (sizeof 20).
-
-    The `reserved` uint16 at offset 6 is load-bearing: drop it and every
-    field after it misaligns, which segfaults on access.
-    """
+    """Maps to SonareMidiCcBinding in sonare_c_project_midi.h (sizeof 20)."""
 
     _fields_ = [
         ("cc_number", ctypes.c_uint8),
@@ -445,10 +457,20 @@ class SonareMidiCcBinding(CStruct):
         ("cc_lsb_number", ctypes.c_uint8),
         ("selector_msb", ctypes.c_uint8),
         ("selector_lsb", ctypes.c_uint8),
-        ("reserved", ctypes.c_uint16),
+        ("consume", ctypes.c_uint8),
+        ("reserved", ctypes.c_uint8),
         ("param_id", ctypes.c_uint32),
         ("min_value", ctypes.c_float),
         ("max_value", ctypes.c_float),
+    ]
+
+
+class SonareMidiCcBindingList(CStruct):
+    """Maps to the owned MIDI CC binding snapshot."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareMidiCcBinding)),
+        ("count", ctypes.c_size_t),
     ]
 
 
@@ -533,6 +555,37 @@ class SonareProjectTimeSignatureSegment(CStruct):
     ]
 
 
+class SonareProjectTempoSegmentList(CStruct):
+    """Maps to the owned project tempo segment snapshot."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareProjectTempoSegment)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareProjectTimeSignatureList(CStruct):
+    """Maps to the owned project time signature snapshot."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareProjectTimeSignatureSegment)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareProjectPosition(CStruct):
+    """Maps to SonareProjectPosition in sonare_c_project_core.h."""
+
+    _fields_ = [
+        ("bpm", ctypes.c_double),
+        ("time_signature", SonareProjectTimeSignatureSegment),
+        ("bar_start_ppq", ctypes.c_double),
+        ("bar_index", ctypes.c_int64),
+        ("beat", ctypes.c_int64),
+        ("beat_fraction", ctypes.c_double),
+    ]
+
+
 class SonareProjectTempoOptions(CStruct):
     """Maps to SonareProjectTempoOptions in sonare_c_project_annotate.h (sizeof 20)."""
 
@@ -556,6 +609,16 @@ class SonareProjectTempoCandidate(CStruct):
         ("kind", ctypes.c_uint32),
         ("time_signature_count", ctypes.c_size_t),
         ("first_time_signature", SonareProjectTimeSignatureSegment),
+    ]
+
+
+class SonareProjectAutoTempoResult(CStruct):
+    """Maps to SonareProjectAutoTempoResult in sonare_c_project_annotate.h."""
+
+    _fields_ = [
+        ("bpm", ctypes.c_float),
+        ("bpm_confidence", ctypes.c_float),
+        ("time_signature", SonareTimeSignature),
     ]
 
 
@@ -900,6 +963,71 @@ class SonareInstrumentBinding(CStruct):
     ]
 
 
+class SonareProjectInstrument(CStruct):
+    """Maps to SonareProjectInstrument."""
+
+    _c_init_ = "sonare_project_instrument_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("kind", ctypes.c_int32),
+        ("synth", ctypes.POINTER(SonareSynthPatch)),
+        ("builtin", ctypes.POINTER(SonareBuiltinSynthConfig)),
+        ("sf2", ctypes.POINTER(SonareSf2InstrumentConfig)),
+        ("sound_font_uri", ctypes.c_char_p),
+        ("use_gm_programs", ctypes.c_int32),
+        ("bank_msb", ctypes.c_int32),
+        ("bank_lsb", ctypes.c_int32),
+        ("program", ctypes.c_int32),
+    ]
+
+
+class SonareProjectInstrumentBinding(CStruct):
+    """Maps to SonareProjectInstrumentBinding."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
+        ("instrument", SonareProjectInstrument),
+    ]
+
+
+class SonareProjectInstrumentList(CStruct):
+    """Maps to SonareProjectInstrumentList."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareProjectInstrumentBinding)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareStringList(CStruct):
+    """Maps to SonareStringList."""
+
+    _fields_ = [("items", ctypes.POINTER(ctypes.c_char_p)), ("count", ctypes.c_size_t)]
+
+
+class SonareProjectControllerProfileBinding(CStruct):
+    """Maps to SonareProjectControllerProfileBinding."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
+        ("preset_name", ctypes.c_char_p),
+    ]
+
+
+class SonareProjectArticulationBinding(CStruct):
+    """Maps to SonareProjectArticulationBinding."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("channel", ctypes.c_uint32),
+        ("articulation", ctypes.c_int32),
+        ("reserved", ctypes.c_uint32),
+    ]
+
+
 class SonareProjectBounceOptions(CStruct):
     """Maps to SonareProjectBounceOptions in sonare_c_project.h."""
 
@@ -920,6 +1048,13 @@ class SonareProjectBounceOptions(CStruct):
         ("synth_instrument_count", ctypes.c_size_t),
         ("sf2_instruments", ctypes.POINTER(SonareSf2InstrumentBinding)),
         ("sf2_instrument_count", ctypes.c_size_t),
+        ("metronome", ctypes.POINTER(SonareEngineMetronomeConfig)),
+        ("controller_profiles", ctypes.POINTER(SonareProjectControllerProfileBinding)),
+        ("controller_profile_count", ctypes.c_size_t),
+        ("articulations", ctypes.POINTER(SonareProjectArticulationBinding)),
+        ("articulation_count", ctypes.c_size_t),
+        ("count_in_bars", ctypes.c_int32),
+        ("reserved", ctypes.c_uint32),
     ]
 
 
@@ -983,7 +1118,10 @@ class SonareProjectLoopRecordingDesc(CStruct):
 class SonareAutomationLaneDesc(CStruct):
     """Maps to SonareAutomationLaneDesc in sonare_c_project.h."""
 
+    _c_init_ = "sonare_automation_lane_desc_init"
+
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("target_param_id", ctypes.c_uint32),
         # C enums use the implementation's signed-int representation; retaining
         # that signedness lets the ABI-layout guard catch an enum-width/sign
@@ -991,6 +1129,30 @@ class SonareAutomationLaneDesc(CStruct):
         ("target_kind", ctypes.c_int32),
         ("points", ctypes.POINTER(SonareAutomationPoint)),
         ("point_count", ctypes.c_size_t),
+        ("send_id", ctypes.c_char_p),
+        ("processor", ctypes.c_char_p),
+        ("param_name", ctypes.c_char_p),
+        ("insert_index", ctypes.c_int32),
+        ("reserved", ctypes.c_uint32),
+    ]
+
+
+class SonareProjectAutomationLane(CStruct):
+    """Maps to SonareProjectAutomationLane."""
+
+    _fields_ = [
+        ("track_id", ctypes.c_uint32),
+        ("lane_id", ctypes.c_uint32),
+        ("desc", SonareAutomationLaneDesc),
+    ]
+
+
+class SonareProjectAutomationLaneList(CStruct):
+    """Maps to SonareProjectAutomationLaneList."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareProjectAutomationLane)),
+        ("count", ctypes.c_size_t),
     ]
 
 
@@ -998,6 +1160,7 @@ SONARE_AUTOMATION_TARGET_UNCHANGED = -1
 SONARE_AUTOMATION_TARGET_OPAQUE = 0
 SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1
 SONARE_AUTOMATION_TARGET_TRACK_PAN = 2
+SONARE_AUTOMATION_INSERT_INDEX_NONE = -1
 
 
 class SonareProjectKeySegment(CStruct):
@@ -1008,6 +1171,16 @@ class SonareProjectKeySegment(CStruct):
         ("end_ppq", ctypes.c_double),
         ("tonic_pc", ctypes.c_uint32),
         ("mode", ctypes.c_uint32),
+    ]
+
+
+class SonareProjectSection(CStruct):
+    """Maps to SonareProjectSection."""
+
+    _fields_ = [
+        ("start_ppq", ctypes.c_double),
+        ("end_ppq", ctypes.c_double),
+        ("label", ctypes.c_char_p),
     ]
 
 
@@ -1024,6 +1197,33 @@ class SonareProjectChordSymbol(CStruct):
         ("slash_bass_pc", ctypes.c_uint32),
         ("roman_numeral", ctypes.c_char_p),
         ("modulation_boundary", ctypes.c_int),
+    ]
+
+
+class SonareProjectKeySegmentList(CStruct):
+    """Maps to SonareProjectKeySegmentList."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareProjectKeySegment)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareProjectChordSymbolList(CStruct):
+    """Maps to SonareProjectChordSymbolList."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareProjectChordSymbol)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+class SonareProjectSectionList(CStruct):
+    """Maps to SonareProjectSectionList."""
+
+    _fields_ = [
+        ("items", ctypes.POINTER(SonareProjectSection)),
+        ("count", ctypes.c_size_t),
     ]
 
 

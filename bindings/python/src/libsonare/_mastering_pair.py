@@ -29,13 +29,16 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _mapping_keys,
     _out_float_array,
     _require_instance,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
     _utf8_arg,
+    _validate_samples,
 )
+from ._types_engine import PlanarChannels
 from .types import (
     LoudnessMatchResult,
     LoudnessMatchStereoResult,
@@ -73,6 +76,49 @@ def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[A
     for key in params or {}:
         _reject_nul(str(key), "parameter key")
     return _mastering_params(params)
+
+
+def _looks_like_channel_buffer(value: object) -> bool:
+    """Whether a value can be one row of planar audio."""
+    if isinstance(value, np.ndarray):
+        return value.ndim > 0
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+
+
+def _pair_audio_planes(samples: object, *, arg_name: str) -> list[np.ndarray]:
+    """Validate mono or one/two-channel planar audio and return contiguous planes."""
+    planar = False
+    raw_planes: list[object]
+    if isinstance(samples, np.ndarray) and samples.ndim == 2:
+        planar = True
+        channel_count = samples.shape[0]
+        if channel_count not in (1, 2):
+            raise _refuse(f"{arg_name} must hold 1 or 2 channels")
+        raw_planes = [samples[index] for index in range(samples.shape[0])]
+    elif (
+        isinstance(samples, Sequence)
+        and not isinstance(samples, (str, bytes, bytearray))
+        and len(samples) > 0
+        and _looks_like_channel_buffer(samples[0])
+    ):
+        planar = True
+        channel_count = len(samples)
+        if channel_count not in (1, 2):
+            raise _refuse(f"{arg_name} must hold 1 or 2 channels")
+        raw_planes = list(samples)
+    else:
+        raw_planes = [samples]
+
+    planes = [
+        _validate_samples(
+            plane,
+            arg_name=f"{arg_name}[{index}]" if planar else arg_name,
+        )
+        for index, plane in enumerate(raw_planes)
+    ]
+    if planar and any(len(plane) != len(planes[0]) for plane in planes[1:]):
+        raise _refuse(f"{arg_name}[1] must have the same length as {arg_name}[0]")
+    return planes
 
 
 @_entry("mastering_apply_pair_processor")
@@ -207,11 +253,10 @@ def mastering_apply_pair_processor_stereo(
 
 
 @_entry("mastering_analyze_pair")
-@_guard_buffer("source", "reference")
 def mastering_analyze_pair(
     analysis: str,
-    source: Sequence[float] | list[float],
-    reference: Sequence[float] | list[float],
+    source: Sequence[float] | PlanarChannels,
+    reference: Sequence[float] | PlanarChannels,
     sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
     *,
@@ -228,32 +273,64 @@ def mastering_analyze_pair(
     ``sample_rate``); it is resampled onto ``sample_rate`` first, so a delay
     estimate is in source-rate samples.
 
+    ``source`` and ``reference`` may each be a mono buffer or planar one- or
+    two-channel audio. Planar audio is a channel-first 2-D numpy array or a
+    sequence of channel buffers; stereo channel pairs must have equal lengths.
+
     ``match.referenceLoudness`` returns :class:`MatchReferenceLoudnessResult`,
     ``match.tonalBalance`` and ``match.tonalBalanceLogBands``
     :class:`MatchTonalBalanceResult`, ``match.matchEqCurve``
     :class:`MatchEqCurveResult` and ``match.estimateReferenceDelaySamples``
     :class:`MatchEstimateReferenceDelaySamplesResult`.
     """
+    source_planes = _pair_audio_planes(source, arg_name="source")
+    reference_planes = _pair_audio_planes(reference, arg_name="reference")
+    if len(source_planes) != len(reference_planes):
+        raise _refuse("source and reference must have the same number of channels")
     lib = _get_lib()
-    source_array, source_length = _to_c_float_array(source)
-    reference_array, reference_length = _to_c_float_array(reference)
+    source_arrays = [_to_c_float_array(plane, arg_name="source") for plane in source_planes]
+    reference_arrays = [
+        _to_c_float_array(plane, arg_name="reference") for plane in reference_planes
+    ]
+    source_length = source_arrays[0][1]
+    reference_length = reference_arrays[0][1]
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
-    rc = lib.sonare_mastering_analyze_pair(
-        _utf8_arg(analysis, "analysis"),
-        source_array,
-        _to_c_size_t(source_length, "source_length"),
-        reference_array,
-        _to_c_size_t(reference_length, "reference_length"),
-        _to_c_int(
-            sample_rate if reference_sample_rate is None else reference_sample_rate,
-            "reference_sample_rate",
-        ),
-        _to_c_int(sample_rate, "sample_rate"),
-        param_array,
-        _to_c_size_t(param_count, "param_count"),
-        ctypes.byref(json_ptr),
+    c_analysis = _utf8_arg(analysis, "analysis")
+    c_reference_sample_rate = _to_c_int(
+        sample_rate if reference_sample_rate is None else reference_sample_rate,
+        "reference_sample_rate",
     )
+    c_sample_rate = _to_c_int(sample_rate, "sample_rate")
+    c_param_count = _to_c_size_t(param_count, "param_count")
+    if len(source_planes) == 1:
+        rc = lib.sonare_mastering_analyze_pair(
+            c_analysis,
+            source_arrays[0][0],
+            _to_c_size_t(source_length, "source_length"),
+            reference_arrays[0][0],
+            _to_c_size_t(reference_length, "reference_length"),
+            c_reference_sample_rate,
+            c_sample_rate,
+            param_array,
+            c_param_count,
+            ctypes.byref(json_ptr),
+        )
+    else:
+        rc = lib.sonare_mastering_analyze_pair_stereo(
+            c_analysis,
+            source_arrays[0][0],
+            source_arrays[1][0],
+            _to_c_size_t(source_length, "source_length"),
+            reference_arrays[0][0],
+            reference_arrays[1][0],
+            _to_c_size_t(reference_length, "reference_length"),
+            c_reference_sample_rate,
+            c_sample_rate,
+            param_array,
+            c_param_count,
+            ctypes.byref(json_ptr),
+        )
     _check(rc)
     return _pair_analysis_from_wire(analysis, _take_json(lib, json_ptr))
 
@@ -440,14 +517,7 @@ _PLATFORM_KEYS = ("name", "target_lufs", "ceiling_dbtp")
 
 def _platform_fields(platform: Mapping[str, Any], where: str) -> tuple[str, float, float]:
     """Read one :class:`StreamingPlatform` record, refusing any other key by name."""
-    if not isinstance(platform, Mapping):
-        raise _refuse_type(f"{where} must be a mapping")
-    for key in platform:
-        if key not in _PLATFORM_KEYS:
-            raise _refuse(f"unknown key {where}.{key} (expected {', '.join(_PLATFORM_KEYS)})")
-    for key in _PLATFORM_KEYS:
-        if key not in platform:
-            raise _refuse(f"{where}.{key} must be given")
+    _mapping_keys(platform, _PLATFORM_KEYS, where, required=_PLATFORM_KEYS)
     name = platform["name"]
     if not isinstance(name, str):
         raise _refuse_type(f"{where}.name must be a string")

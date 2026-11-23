@@ -592,8 +592,8 @@ class PolyphonicAnalysis:
             )
             return
 
-        # amplitude_envelope_offset / amplitude_envelope_count are inert on this door: the points are
-        # the argument below and the analysis keeps its own copy.
+        # amplitude_envelope_offset / amplitude_envelope_count are inert here: the points are the
+        # argument below and the analysis keeps its own copy.
         c_edit, curve, time_offset = _note_edit_to_c(edit, self._sample_rate, "edit", 0)
         envelope, envelope_count = _to_c_float_array(curve, arg_name="edit.amplitude_envelope")
         _check(

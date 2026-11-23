@@ -438,6 +438,21 @@ class SonareMusicAnalyzeOptions(CStruct):
     ]
 
 
+class SonareMeterBeats(CStruct):
+    """Maps to SonareMeterBeats in sonare_c_types_functions.h."""
+
+    _c_init_ = "sonare_meter_beats_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("accent", ctypes.POINTER(ctypes.c_float)),
+        ("has_attack", ctypes.POINTER(ctypes.c_uint8)),
+        ("low_frequency_energy", ctypes.POINTER(ctypes.c_float)),
+        ("subdivision_accent", ctypes.POINTER(ctypes.c_float)),
+        ("beat_count", ctypes.c_size_t),
+    ]
+
+
 class SonareMeterOptions(CStruct):
     """Maps to SonareMeterOptions in sonare_c_types_functions.h."""
 
@@ -556,6 +571,19 @@ class SonareStftOptions(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("db", ctypes.c_int32),
+        ("phase", ctypes.c_int32),
+    ]
+
+
+class SonareIstftOptions(CStruct):
+    """Maps to SonareIstftOptions in sonare_c_features.h."""
+
+    _c_init_ = "sonare_istft_options_init"
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
+        ("length_samples", ctypes.c_size_t),
     ]
 
 

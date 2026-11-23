@@ -12,7 +12,7 @@ import math
 import operator
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from typing import Any, SupportsIndex, TypeVar, cast
+from typing import Any, SupportsIndex, TypeGuard, TypeVar, cast, get_args
 
 import numpy as np
 
@@ -26,6 +26,7 @@ from ._errors import _BARE_TEXT, _malformed_output, _refuse, _refuse_integer, _r
 # what marks a re-export to mypy's strict mode.
 from ._errors import ErrorCode as ErrorCode
 from ._errors import ErrorCodeName as ErrorCodeName
+from ._errors import ErrorReason as ErrorReason
 from ._errors import SonareError as SonareError
 from ._errors import SonareValueError as SonareValueError
 from ._ffi import *  # noqa: F403
@@ -69,6 +70,14 @@ from ._types_enums import _WINDOW_TYPES as _WINDOW_TYPES
 from ._types_enums import ProjectWarpMode as ProjectWarpMode
 from .types import *  # noqa: F403
 
+_ERROR_REASON_TOKENS = frozenset(get_args(ErrorReason))
+
+
+def _is_error_reason(value: str) -> TypeGuard[ErrorReason]:
+    """Whether ``value`` is a reason token declared by this binding."""
+    return value in _ERROR_REASON_TOKENS
+
+
 _lib: ctypes.CDLL | None = None
 
 
@@ -79,11 +88,11 @@ def _get_lib() -> ctypes.CDLL:
     return _lib
 
 
-def _generic_error(rc: int) -> SonareError:
+def _generic_error(rc: int, *, native_reason: bool = False) -> SonareError:
     """Build the exception for ``rc`` from the code's own generic string."""
     msg = _get_lib().sonare_error_message(_to_c_int32(rc, "rc"))
     text = msg.decode("utf-8") if msg else f"sonare error {rc}"
-    return _coded_error(rc, text)
+    return _coded_error(rc, text, native_reason=native_reason)
 
 
 # A leading ``"<token>: "`` the C layer put on its text, before the entry check.
@@ -107,7 +116,13 @@ def _strip_c_entry(message: str) -> str:
     return message[match.end() :]
 
 
-def _coded_error(code: int, message: str, *, argument: bool = False) -> SonareError:
+def _coded_error(
+    code: int,
+    message: str,
+    *,
+    argument: bool = False,
+    native_reason: bool = False,
+) -> SonareError:
     """Build the exception for a C-ABI failure, split by cause.
 
     InvalidParameter is always a refused caller argument, so it is a
@@ -115,7 +130,8 @@ def _coded_error(code: int, message: str, *, argument: bool = False) -> SonareEr
     marks: a document path inside the mapping the entry wrapped into the document it
     handed the C ABI. Every other code is a coded :class:`SonareError`. Either way the
     calling entry prefixes its name on the way out, in place of a C entry name the text
-    opened with.
+    opened with. Read the thread-local reason only when the caller identifies the error
+    as coming from the native call that just failed.
     """
     message = _strip_c_entry(message)
     exc = (
@@ -123,6 +139,16 @@ def _coded_error(code: int, message: str, *, argument: bool = False) -> SonareEr
         if argument or code == int(ErrorCode.INVALID_PARAMETER)
         else SonareError(code, message)
     )
+    if native_reason:
+        raw_reason = _get_lib().sonare_last_error_reason()
+        if raw_reason is not None:
+            reason = raw_reason.decode("utf-8", errors="replace")
+            if _is_error_reason(reason):
+                if not isinstance(exc, SonareValueError):
+                    exc.reason = reason
+            else:
+                message = f"unknown error reason token: {reason}"
+                exc = SonareError(int(ErrorCode.INVALID_FORMAT), message)
     setattr(exc, _BARE_TEXT, message)
     return exc
 
@@ -218,8 +244,8 @@ def _check(
         argument = rendered is not None and rendered[1]
         detail_str = (rendered[0] if rendered is not None else "") or detail_str
         if detail_str:
-            raise _coded_error(rc, detail_str, argument=argument)
-        raise _generic_error(rc)
+            raise _coded_error(rc, detail_str, argument=argument, native_reason=True)
+        raise _generic_error(rc, native_reason=True)
 
 
 def _call_string(fn: Callable[..., int], *args: Any) -> str:
@@ -255,6 +281,7 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
         code if code != SONARE_OK else default_code,
         detail or fallback_message,
         argument=rendered is not None and rendered[1],
+        native_reason=code != SONARE_OK,
     )
 
 
@@ -292,7 +319,7 @@ def _joined_names(raw: bytes | None, what: str) -> list[str]:
     return [name for name in raw.decode("utf-8").split("\n") if name]
 
 
-def _check_realtime(rc: int) -> None:
+def _check_realtime(rc: int, *, reason: ErrorReason | None = None) -> None:
     """Check a return code from an audio-thread C entry point.
 
     Audio-thread entry points -- the engine block-render calls and the realtime
@@ -307,10 +334,14 @@ def _check_realtime(rc: int) -> None:
     stale detail instead described an unrelated call: a channel-count mismatch
     in the voice changer surfaced as a previous STFT's error text, which is
     both wrong and intermittent, since it depends on the call history rather
-    than on the failure.
+    than on the failure. An entry with one documented cause may supply that
+    fixed reason for ``INVALID_STATE`` without reading the thread-local slot.
     """
     if rc != SONARE_OK:
-        raise _generic_error(rc)
+        error = _generic_error(rc)
+        if rc == int(ErrorCode.INVALID_STATE) and reason is not None:
+            error.reason = reason
+        raise error
 
 
 def _validate_samples(
@@ -721,7 +752,13 @@ def _not_two_dimensional(array: np.ndarray, arg_name: str) -> SonareValueError:
     )
 
 
-def _validate_matrix(values: object, *, arg_name: str) -> np.ndarray:
+def _validate_matrix(
+    values: object,
+    *,
+    arg_name: str,
+    scan: bool = True,
+    allow_empty: bool = False,
+) -> np.ndarray:
     """Coerce ``values`` to a C-contiguous ``float32`` array of shape ``(rows, cols)``.
 
     The rank is decided first and named, then the elements get the same
@@ -738,15 +775,24 @@ def _validate_matrix(values: object, *, arg_name: str) -> np.ndarray:
         raise _not_two_dimensional(raw, arg_name)
     if raw.dtype.kind not in "biuf":
         raise _not_a_buffer(values, arg_name)
-    flat = _validate_samples(np.ascontiguousarray(raw).reshape(-1), arg_name=arg_name)
+    flat = _validate_samples(
+        np.ascontiguousarray(raw).reshape(-1),
+        arg_name=arg_name,
+        scan=scan,
+        allow_empty=allow_empty,
+    )
     return flat.reshape(raw.shape)
 
 
 def _to_c_float_matrix(
-    values: object, *, arg_name: str
+    values: object,
+    *,
+    arg_name: str,
+    scan: bool = True,
+    allow_empty: bool = False,
 ) -> tuple[ctypes.Array[ctypes.c_float], int, int]:
     """Marshal a 2-D matrix as a row-major C buffer plus its ``(rows, cols)``."""
-    matrix = _validate_matrix(values, arg_name=arg_name)
+    matrix = _validate_matrix(values, arg_name=arg_name, scan=scan, allow_empty=allow_empty)
     c_array, _ = _to_c_float_array(matrix.reshape(-1), arg_name=arg_name)
     return c_array, int(matrix.shape[0]), int(matrix.shape[1])
 
@@ -1157,11 +1203,8 @@ def _warp_mode_value(mode: ProjectWarpMode, key: str) -> int:
 
 
 def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
+    num_channels = int(snapshot.num_channels)
     return MixMeterSnapshot(
-        peak_db_l=_measured_level(snapshot.peak_db_l),
-        peak_db_r=_measured_level(snapshot.peak_db_r),
-        rms_db_l=_measured_level(snapshot.rms_db_l),
-        rms_db_r=_measured_level(snapshot.rms_db_r),
         correlation=_measured_level(snapshot.correlation),
         mono_compat_width=_measured_level(snapshot.mono_compat_width),
         mono_compat_peak=float(snapshot.mono_compat_peak),
@@ -1171,15 +1214,13 @@ def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
         short_term_lufs=_measured_level(snapshot.short_term_lufs),
         integrated_lufs=_measured_level(snapshot.integrated_lufs),
         gain_reduction_db=float(snapshot.gain_reduction_db),
-        true_peak_dbtp_l=_measured_level(snapshot.true_peak_dbtp_l),
-        true_peak_dbtp_r=_measured_level(snapshot.true_peak_dbtp_r),
         max_true_peak_dbtp=_measured_level(snapshot.max_true_peak_dbtp),
         seq=int(snapshot.seq),
-        num_channels=int(snapshot.num_channels) or None,
-        peak_db=tuple(float(snapshot.peak_db[i]) for i in range(snapshot.num_channels)),
-        rms_db=tuple(float(snapshot.rms_db[i]) for i in range(snapshot.num_channels)),
+        num_channels=num_channels,
+        peak_db=tuple(_measured_level(snapshot.peak_db[i]) for i in range(num_channels)),
+        rms_db=tuple(_measured_level(snapshot.rms_db[i]) for i in range(num_channels)),
         true_peak_dbtp=tuple(
-            float(snapshot.true_peak_dbtp[i]) for i in range(snapshot.num_channels)
+            _measured_level(snapshot.true_peak_dbtp[i]) for i in range(num_channels)
         ),
     )
 
@@ -1222,19 +1263,26 @@ def _max_block_size(getter: Callable[..., int], handle: object) -> int:
     return int(out.value)
 
 
-def _mapping_keys(mapping: object, keys: tuple[str, ...], where: str) -> Mapping[str, object]:
+def _mapping_keys(
+    mapping: object, keys: tuple[str, ...], where: str, *, required: tuple[str, ...] = ()
+) -> Mapping[str, object]:
     """Return a caller-built mapping once every key in it is one of ``keys``.
 
     ``where`` is the mapping's path from the root the caller spelled. A
     non-mapping raises ``TypeError``; any other key, including another spelling
     of an accepted one, raises :class:`SonareValueError` naming its path.
+    A missing required key is also refused by its path.
     """
     if not isinstance(mapping, Mapping):
         raise _refuse_type(f"{where} must be a mapping")
     for key in mapping:
         if key not in keys:
             path = f"{where}.{key}" if where else str(key)
-            raise _refuse(f"unknown key {path} (expected {', '.join(keys)})")
+            raise _refuse(f"unknown key {path} (expected {', '.join(sorted(keys))})")
+    for key in required:
+        if key not in mapping:
+            path = f"{where}.{key}" if where else key
+            raise _refuse(f"{path} must be given")
     return cast("Mapping[str, object]", mapping)
 
 

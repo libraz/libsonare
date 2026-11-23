@@ -27,6 +27,7 @@ from ._ffi import (
     SonareAnalyzeProgressCallback,
     SonareBpmAnalysisResult,
     SonareDynamicsResult,
+    SonareMeterBeats,
     SonareMeterOptions,
     SonareMusicAnalyzeOptions,
     SonareRhythmResult,
@@ -54,7 +55,7 @@ from ._runtime import (
 from .types import (
     AcousticResult,
     AnalysisResult,
-    Beat,
+    BeatObservations,
     BpmAnalysisResult,
     BpmCandidate,
     DynamicsResult,
@@ -188,6 +189,9 @@ def analyze(
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
         sample_rate: Sample rate in Hz.
+        start_bpm: A finite, positive BPM prior that seeds beat tracking if the
+            tempo search finds none. The result's ``bpm`` is ``None`` when no
+            tempo is measured.
         adaptive_tempo: Track a locally updated tempo prior through beat
             tracking instead of holding one global tempo.
         tempo_update_interval_beats: Local tempo context length in beats, used
@@ -231,7 +235,7 @@ def analyze(
           onset-envelope ``strength`` sampled at the beat's own frame. Not
           normalized, scaled by the material, and sensitive to beat-position
           jitter, so it is not a salience comparable across beats; score
-          accents with ``beat_observations.onset_strength`` instead
+          accents with ``beat_observations.accent`` instead
         - ``downbeats`` (``list[Beat]``) — the beats that are bar starts
         - ``downbeat_phase`` (``int``) — which beat of the first bar the
           analysis starts on
@@ -359,16 +363,18 @@ def _analyze_with_callbacks(
     return _parse_analysis_json(data)
 
 
-# The core refuses the beat lists under their own names; the caller wrote them as ``beats``.
-_BEAT_RESPELLED = {
-    "beat_times": _Respelling("beats[].time_sec"),
-    "beat_strengths": _Respelling("beats[].strength"),
+# The C struct is named ``beats``; the Python caller supplies an observations record.
+_METER_BEATS_RESPELLED = {
+    "beats.accent": _Respelling("observations.accent"),
+    "beats.has_attack": _Respelling("observations.has_attack"),
+    "beats.low_frequency_energy": _Respelling("observations.low_frequency_energy"),
+    "beats.subdivision_accent": _Respelling("observations.subdivision_accent"),
 }
 
 
 @_entry("estimate_meter")
 def estimate_meter(
-    beats: Sequence[Beat],
+    observations: BeatObservations,
     *,
     candidate_numerators: Sequence[int] | None = None,
     denominator: int = 4,
@@ -377,51 +383,35 @@ def estimate_meter(
     subdivision_weight: float = 0.15,
     compound_subdivision_threshold: float = 0.5,
 ) -> MeterEstimate:
-    """Estimate meter over a beat series, without audio and without re-analyzing.
+    """Estimate meter from beat-level observations, without re-analyzing audio.
 
-    Scoring reads only the per-beat strengths, so an existing analysis can be
-    re-scored — over a different candidate set, or over an arbitrary span of
-    its beats — without running the pipeline again.
+    The required ``accent`` stream carries the measured attack strength for
+    each beat. Optional attack, low-frequency-energy, and subdivision streams
+    add evidence the analyzer uses to distinguish rests, masked beats, and
+    compound meter. An existing analysis can be re-scored over a different
+    candidate set or an arbitrary span without running the pipeline again.
 
     Args:
-        beats: The beat series, positions non-decreasing in ``time_sec``.
-            ``Beat.strength`` is the per-beat accent value. The ``beats`` of
-            :func:`analyze` carry a single unwindowed envelope frame per beat
-            and score accordingly; for the windowed value the library's own
-            downbeat pass scores, build the series from
-            :attr:`AnalysisResult.beat_observations` ``.onset_strength``,
-            e.g. ``[Beat(b.time_sec, s) for b, s in zip(result.beats, onset)]``.
-            Neither needs pre-scaling: the series is divided by its own maximum before
-            scoring, so only the accent contrast within it is read and the
-            absolute units it arrives in do not matter. A series assembled by
-            hand from :func:`onset_strength` — one frame read at each beat time
-            — is neither of those, and it carries a sample-rate dependence
-            neither of them has: a hop counted in samples frames a different
-            amount of time at each rate, so one waveform sampled at 32000,
-            44100 and 48000 Hz has produced three different winning numerators
-            off beat times identical to the sample. Widening the read to a
-            window around the beat does not remove it.
+        observations: A :class:`BeatObservations` record. ``accent`` must hold
+            one finite, nonnegative value per beat. ``has_attack`` and
+            ``low_frequency_energy`` may be empty or beat-indexed;
+            ``subdivision_accent`` may be empty or have one fewer value than
+            ``accent``. Empty ``has_attack`` treats every beat as attacked;
+            empty subdivision evidence means compound meter cannot be measured.
         candidate_numerators: Meter numerators to score. ``None`` selects the
             native default ``(3, 4, 6)``. At most 16 entries, each in
             ``[2, 32]``. Widening the set does not force a wider meter — the
             default reproduces the historical result.
         denominator: Beat unit reported for the detected meter; a power of two
-            in ``[1, 32]``. It is reported as requested on this path: whether a
-            beat divides into three is measured from energy *between* the
-            beats, which per-beat accents do not carry, so a compound meter is
-            not resolvable here. A six whose beats accent 3+3 comes back with
-            this denominator and ``grouping == [3, 3]`` — read the grouping,
-            not the denominator, to tell a compound bar from a simple one.
-            (:func:`libsonare.analyze`, which has the audio, does resolve it and
-            reports 8 on its own.)
+            ``[1, 32]``. The detected meter reports 8 when measured subdivision
+            evidence identifies compound time.
         downbeat_weight: Weight of the downbeat term in the multi-comb score.
         measure_weight: Weight of the measure-level term.
         subdivision_weight: Weight of the subdivision term.
-        compound_subdivision_threshold: Mean accent between the beats, as a
-            fraction of the mean accent on them, at and above which a six (or a
-            three) is read as compound. Only a midpoint holding an attack
-            contributes, so a subdivision masked by a sustained bed does not
-            count.
+        compound_subdivision_threshold: Mean measured subdivision accent as a
+            fraction of mean beat accent, at and above which the meter is read
+            as compound. Empty subdivision evidence does not affect this
+            decision; measured zero values are evidence of no subdivision.
 
     Returns:
         :class:`libsonare.MeterEstimate`. ``candidate_scores`` is parallel to
@@ -438,16 +428,15 @@ def estimate_meter(
         any candidate, in which case every other field is the fixed fallback
         rather than a measurement, the confidence 0 included. Two quantities
         share the name ``confidence``: ``time_signature.confidence`` is the
-        margin over the runner-up, a ``candidates`` entry's its share of the
-        summed support.
+        margin over the runner-up, and each ``candidates`` entry reports its
+        share of summed support.
 
     Raises:
-        TypeError: If an entry of ``beats`` is not a :class:`Beat`.
-        SonareValueError: If ``beats`` is empty or holds a non-finite value, or
-            ``candidate_numerators`` holds more entries than the native array
-            can carry.
-        SonareError: If the core rejects an option value or a beat series it
-            cannot answer.
+        TypeError: If ``observations`` is not a :class:`BeatObservations`.
+        SonareValueError: If the accent stream is empty, a stream has an invalid
+            length or value, ``observations`` is None, or ``candidate_numerators``
+            is too long.
+        SonareError: If the core rejects an option value.
     """
     numerators = (
         tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
@@ -457,25 +446,88 @@ def estimate_meter(
     # The flat C array cannot carry an over-long list, so reject it here rather
     # than truncating it into a set the caller never asked for. Entries are
     # narrowed on the C int range below so the core sees what the caller passed;
-    # every other rule (non-empty, numerator domain, denominator, weights, beat
-    # series) is the core's to enforce.
+    # option domains remain the core's to enforce.
     if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
         raise _refuse(
             "candidate_numerators must hold at most "
             f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
         )
 
-    lib = _get_lib()
+    if observations is None:
+        raise _refuse("observations must be a BeatObservations")
+    if not isinstance(observations, BeatObservations):
+        raise _refuse_type("observations must be a BeatObservations")
 
-    entries = list(beats)
-    if not all(isinstance(entry, Beat) for entry in entries):
-        raise _refuse_type("beats must be a sequence of Beat")
-    times = _validate_samples([entry.time_sec for entry in entries], arg_name="beats[].time_sec")
-    strengths = _validate_samples(
-        [entry.strength for entry in entries], arg_name="beats[].strength"
+    accent = _validate_samples(observations.accent, arg_name="observations.accent")
+    has_attack = np.asarray(observations.has_attack)
+    if has_attack.ndim != 1:
+        raise _refuse("observations.has_attack must be a one-dimensional array")
+    if has_attack.size:
+        if has_attack.dtype.kind not in "biu":
+            raise _refuse_type("observations.has_attack must contain boolean or integer values")
+        if np.any((has_attack != 0) & (has_attack != 1)):
+            raise _refuse("observations.has_attack must hold only 0 or 1")
+        if has_attack.size != accent.size:
+            raise _refuse(
+                "observations.has_attack must be empty or have the same length as "
+                "observations.accent"
+            )
+        has_attack = np.array(has_attack, dtype=np.uint8, order="C", copy=True)
+    else:
+        has_attack = np.empty(0, dtype=np.uint8)
+
+    low_frequency_energy = _validate_samples(
+        observations.low_frequency_energy,
+        arg_name="observations.low_frequency_energy",
+        allow_empty=True,
     )
-    c_times, time_count = _to_c_float_array(times)
-    c_strengths, _ = _to_c_float_array(strengths)
+    if low_frequency_energy.size not in (0, accent.size):
+        raise _refuse(
+            "observations.low_frequency_energy must be empty or have the same length as "
+            "observations.accent"
+        )
+    subdivision_accent = _validate_samples(
+        observations.subdivision_accent,
+        arg_name="observations.subdivision_accent",
+        allow_empty=True,
+    )
+    if subdivision_accent.size not in (0, accent.size - 1):
+        raise _refuse(
+            "observations.subdivision_accent must be empty or have one fewer entry than "
+            "observations.accent"
+        )
+    lib = _get_lib()
+    c_accent, beat_count = _to_c_float_array(accent, arg_name="observations.accent")
+    c_attack = (
+        (ctypes.c_uint8 * has_attack.size).from_buffer(has_attack)
+        if has_attack.size
+        else (ctypes.c_uint8 * 0)()
+    )
+    c_energy, energy_count = _to_c_float_array(
+        low_frequency_energy, arg_name="observations.low_frequency_energy"
+    )
+    c_subdivision, subdivision_count = _to_c_float_array(
+        subdivision_accent, arg_name="observations.subdivision_accent"
+    )
+    meter_beats = SonareMeterBeats(
+        accent=ctypes.cast(c_accent, ctypes.POINTER(ctypes.c_float)),
+        has_attack=(
+            ctypes.cast(c_attack, ctypes.POINTER(ctypes.c_uint8))
+            if has_attack.size
+            else ctypes.POINTER(ctypes.c_uint8)()
+        ),
+        low_frequency_energy=(
+            ctypes.cast(c_energy, ctypes.POINTER(ctypes.c_float))
+            if energy_count
+            else ctypes.POINTER(ctypes.c_float)()
+        ),
+        subdivision_accent=(
+            ctypes.cast(c_subdivision, ctypes.POINTER(ctypes.c_float))
+            if subdivision_count
+            else ctypes.POINTER(ctypes.c_float)()
+        ),
+        beat_count=beat_count,
+    )
 
     options = SonareMeterOptions(
         # Both the array and its count must be written: ctypes zeroes any field
@@ -496,13 +548,11 @@ def estimate_meter(
     )
     out_json = ctypes.c_char_p()
     rc = lib.sonare_estimate_meter_json(
-        c_times,
-        c_strengths,
-        _to_c_size_t(time_count, "time_count"),
+        ctypes.byref(meter_beats),
         ctypes.byref(options),
         ctypes.byref(out_json),
     )
-    _check(rc, flattened="options", respelled=_BEAT_RESPELLED)
+    _check(rc, flattened="options", respelled=_METER_BEATS_RESPELLED)
     try:
         raw = out_json.value
         data = json.loads(raw.decode("utf-8") if raw else "{}")
@@ -539,7 +589,6 @@ def analyze_bpm(
     sample_rate: int,
     bpm_min: float | None = None,
     bpm_max: float | None = None,
-    start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
     max_candidates: int = 5,
@@ -552,8 +601,7 @@ def analyze_bpm(
     every other tempo entry point; widen it to list half-tempo candidates or
     very slow material. A range other than the default is searched as given,
     and the unconstrained estimate is preferred when it lies inside it.
-    ``start_bpm`` only seeds the search: with no tempo found ``bpm`` is ``None``
-    and ``candidates`` is empty.
+    ``bpm`` is ``None`` when no tempo is found and ``candidates`` is empty.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -564,7 +612,6 @@ def analyze_bpm(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
         _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
-        _to_c_float(start_bpm, "start_bpm"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_size_t(hop_length, "hop_length"),
         _to_c_int(max_candidates, "max_candidates"),
@@ -711,7 +758,9 @@ def analyze_rhythm(
     of the input buffer. The tempo search spans 60-200 BPM by default, as on
     every other tempo entry point. ``bpm`` is ``None`` when neither the search nor
     the tracked beats give a tempo, and the three rhythm measures are ``None``
-    below the beats each needs (see :class:`RhythmResult`).
+    below the beats each needs (see :class:`RhythmResult`). ``start_bpm`` is a
+    finite, positive BPM prior that seeds beat tracking if the tempo search
+    finds none. The result's ``bpm`` is ``None`` when no tempo is measured.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

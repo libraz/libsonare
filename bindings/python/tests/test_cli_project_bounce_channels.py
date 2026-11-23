@@ -12,6 +12,7 @@ import json
 import struct
 import subprocess
 import sys
+import wave
 from pathlib import Path
 
 EXIT_INVALID_PARAMETER = 3
@@ -45,6 +46,33 @@ def _write_project(path: Path, document: dict) -> Path:
     return path
 
 
+def _write_midi_project(path: Path) -> tuple[Path, int]:
+    import libsonare as ls
+
+    project = ls.Project()
+    try:
+        project.set_sample_rate(48000)
+        clip_id = project.add_midi_clip(0.0, 4.0).clip_id
+        project.set_midi_events(
+            clip_id,
+            [
+                ls.midi_note_on(0.0, 0, 0, 60, 100),
+                ls.midi_note_off(2.0, 0, 0, 60, 0),
+            ],
+        )
+        expected_count_in_frames = project.count_in_frames(1)
+        path.write_text(project.to_json(), encoding="utf-8")
+    finally:
+        project.close()
+    return path, expected_count_in_frames
+
+
+def _wav_frames_and_data(path: Path) -> tuple[int, bytes]:
+    with wave.open(str(path), "rb") as wav:
+        frames = wav.getnframes()
+        return frames, wav.readframes(frames)
+
+
 def _surround_master_project(layout: str) -> dict:
     """A project whose scene master carries ``layout`` ("5.1" or "7.1")."""
     return {
@@ -54,6 +82,88 @@ def _surround_master_project(layout: str) -> dict:
             "buses": [{"id": "bus.main", "role": "master", "layout": layout}],
         },
     }
+
+
+def test_bounce_count_in_adds_the_reported_prefix_length(tmp_path: Path) -> None:
+    project, expected_count_in_frames = _write_midi_project(tmp_path / "midi-project.json")
+    without_path = tmp_path / "without-count-in.wav"
+    with_path = tmp_path / "with-count-in.wav"
+
+    without = _run_console("project", "bounce", str(project), "-o", str(without_path), "--json")
+    with_count_in = _run_console(
+        "project",
+        "bounce",
+        str(project),
+        "-o",
+        str(with_path),
+        "--count-in-bars",
+        "1",
+        "--json",
+    )
+
+    assert without.returncode == 0, without.stderr
+    assert with_count_in.returncode == 0, with_count_in.stderr
+    without_frames, _ = _wav_frames_and_data(without_path)
+    with_frames, _ = _wav_frames_and_data(with_path)
+    without_payload = json.loads(without.stdout)
+    count_in_payload = json.loads(with_count_in.stdout)
+    assert without_payload["count_in_frames"] == 0
+    assert expected_count_in_frames > 0
+    assert count_in_payload["count_in_frames"] == expected_count_in_frames
+    assert with_frames == count_in_payload["frames"]
+    assert without_frames == without_payload["frames"]
+    assert with_frames - without_frames == expected_count_in_frames
+
+
+def test_bounce_metronome_changes_the_render(tmp_path: Path) -> None:
+    project, _ = _write_midi_project(tmp_path / "midi-project.json")
+    without_path = tmp_path / "without-metronome.wav"
+    with_path = tmp_path / "with-metronome.wav"
+    common = [
+        "project",
+        "bounce",
+        str(project),
+        "--count-in-bars",
+        "1",
+        "--frames",
+        "10000",
+        "--json",
+    ]
+
+    without = _run_console(*common, "-o", str(without_path), "--metronome=off")
+    with_metronome = _run_console(*common, "-o", str(with_path), "--metronome")
+
+    assert without.returncode == 0, without.stderr
+    assert with_metronome.returncode == 0, with_metronome.stderr
+    without_payload = json.loads(without.stdout)
+    with_payload = json.loads(with_metronome.stdout)
+    without_frames, without_samples = _wav_frames_and_data(without_path)
+    with_frames, with_samples = _wav_frames_and_data(with_path)
+    assert without_payload["frames"] == with_payload["frames"] == 10000
+    assert without_payload["count_in_frames"] == with_payload["count_in_frames"] == 10000
+    assert without_frames == with_frames == 10000
+    assert without_samples != with_samples
+
+
+def test_bounce_refuses_count_in_bars_by_the_typed_option_before_reading_input(
+    tmp_path: Path,
+) -> None:
+    missing_project = tmp_path / "absent-project.json"
+    output = tmp_path / "bounce.wav"
+
+    result = _run_console(
+        "project",
+        "bounce",
+        str(missing_project),
+        "-o",
+        str(output),
+        "--count-in-bars",
+        "17",
+    )
+
+    assert result.returncode == 2
+    assert "argument --count-in-bars: must be an integer in [0, 16]" in result.stderr
+    assert not output.exists()
 
 
 def test_bounce_refuses_a_width_no_speaker_layout_has(tmp_path: Path) -> None:

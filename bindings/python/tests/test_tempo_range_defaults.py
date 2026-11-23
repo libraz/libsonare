@@ -4,6 +4,7 @@ same recording gets the same tempo range whichever function reads it.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -31,6 +32,11 @@ ANALYZERS: dict[str, Callable[..., Any]] = {
     "analyze_bpm": lambda x, **kw: libsonare.analyze_bpm(x, SR, **kw),
     "Audio.analyze_bpm": lambda x, **kw: libsonare.Audio.from_buffer(x, SR).analyze_bpm(**kw),
 }
+
+
+def test_bpm_only_entries_no_longer_accept_start_bpm() -> None:
+    assert "start_bpm" not in inspect.signature(libsonare.analyze_bpm).parameters
+    assert "start_bpm" not in inspect.signature(libsonare.Audio.analyze_bpm).parameters
 
 
 @pytest.mark.parametrize("name", sorted(ANALYZERS))

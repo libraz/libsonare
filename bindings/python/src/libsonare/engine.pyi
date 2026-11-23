@@ -645,6 +645,9 @@ class RealtimeEngine:
     def clear_midi_cc_bindings(self) -> None:
         """Clear all live MIDI CC to parameter bindings."""
         ...
+    def midi_cc_bindings(self) -> list[MidiCcBinding]:
+        """Return a copied snapshot of the live MIDI CC to parameter bindings."""
+        ...
     @property
     def midi_cc_binding_count(self) -> int:
         """Number of live MIDI CC bindings."""

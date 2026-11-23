@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 
 import libsonare as ls
 from libsonare import (
     BuiltinSynthConfig,
+    EngineMetronomeConfig,
     ErrorCode,
     ExternalInstrument,
     Project,
+    ProjectBounceResult,
     ProjectCompileResult,
     SonareError,
     SonareValueError,
@@ -25,18 +29,36 @@ from ._project_helpers import _build_project
 def test_bounce_is_bit_exact_across_two_renders() -> None:
     project, *_ = _build_project()
     try:
-        first = project.bounce(
-            total_frames=24000, block_size=128, num_channels=2, sample_rate=48000
-        )
-        assert first.shape == (24000, 2)
+        first_result = project.bounce(total_frames=24000, block_size=128, num_channels=2)
+        assert isinstance(first_result, ProjectBounceResult)
+        assert dataclasses.is_dataclass(first_result)
+        assert first_result.sample_rate == 48000
+        first = first_result.channels
+        assert first.shape == (2, 24000)
         assert first.dtype == np.float32
 
-        second = project.bounce(
-            total_frames=24000, block_size=128, num_channels=2, sample_rate=48000
-        )
+        second_result = project.bounce(total_frames=24000, block_size=128, num_channels=2)
+        second = second_result.channels
         assert second.shape == first.shape
         # Deterministic: same project + options => bit-identical output.
         assert np.array_equal(first, second)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            first_result.sample_rate = 44100  # type: ignore[misc]
+    finally:
+        project.close()
+
+
+def test_project_render_uses_project_sample_rate_without_a_rate_override() -> None:
+    project = _build_midi_only_project()
+    try:
+        project.set_sample_rate(44100)
+        assert project.count_in_frames(1) == 88200
+        result = project.bounce(total_frames=128, num_channels=2)
+        assert result.sample_rate == 44100
+        with pytest.raises(TypeError, match="sample_rate"):
+            project.count_in_frames(1, sample_rate=48000)  # type: ignore[call-arg]
+        with pytest.raises(TypeError, match="sample_rate"):
+            project.bounce(sample_rate=48000)  # type: ignore[call-arg]
     finally:
         project.close()
 
@@ -45,8 +67,8 @@ def test_bounce_is_bit_exact_across_two_renders() -> None:
 def test_bounce_returns_the_requested_frames_at_every_width(width: int) -> None:
     project, *_ = _build_project()
     try:
-        out = project.bounce(total_frames=4800, block_size=128, num_channels=width)
-        assert out.shape == (4800, width)
+        out = project.bounce(total_frames=4800, block_size=128, num_channels=width).channels
+        assert out.shape == (width, 4800)
     finally:
         project.close()
 
@@ -71,9 +93,7 @@ def test_bounce_builtin_instruments_produces_non_silent_audio() -> None:
     project = _build_midi_only_project()
     try:
         # Silent baseline: plain bounce has no instrument bound -> MIDI is silence.
-        silent = project.bounce(
-            total_frames=48000, block_size=128, num_channels=2, sample_rate=48000
-        )
+        silent = project.bounce(total_frames=48000, block_size=128, num_channels=2).channels
         assert float(np.max(np.abs(silent))) == 0.0
 
         audio = project.bounce(
@@ -81,9 +101,8 @@ def test_bounce_builtin_instruments_produces_non_silent_audio() -> None:
             total_frames=48000,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
-        assert audio.shape == (48000, 2)
+        ).channels
+        assert audio.shape == (2, 48000)
         assert audio.dtype == np.float32
         assert float(np.max(np.abs(audio))) > 0.0
     finally:
@@ -97,8 +116,7 @@ def test_bounce_builtin_instruments_auto_derives_length() -> None:
         audio = project.bounce(
             builtin_instruments=[(0, BuiltinSynthConfig())],
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
         assert audio.ndim == 2
         assert audio.shape[0] > 0
         assert float(np.max(np.abs(audio))) > 0.0
@@ -115,8 +133,7 @@ def test_bounce_builtin_instruments_accepts_waveform_patch() -> None:
             builtin_instruments=[(0, patch)],
             total_frames=24000,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
         assert float(np.max(np.abs(audio))) > 0.0
     finally:
         project.close()
@@ -179,9 +196,8 @@ def test_bounce_instruments_hosts_external_callback() -> None:
             total_frames=48000,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
-        assert audio.shape == (48000, 2)
+        ).channels
+        assert audio.shape == (2, 48000)
         assert audio.dtype == np.float32
         # The instrument emits a constant 0.25 DC, so every rendered frame is audible.
         assert float(np.min(audio)) == pytest.approx(0.25, abs=1e-6)
@@ -209,8 +225,7 @@ def test_bounce_instruments_render_only_instrument() -> None:
             instruments=[(0, RenderOnly())],
             total_frames=4800,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
         assert audio.shape[0] > 0
         assert float(np.max(np.abs(audio))) > 0.0
     finally:
@@ -227,8 +242,7 @@ def test_bounce_instruments_auto_length_includes_tail_samples() -> None:
             instruments=[(0, dry)],
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
 
         wet = _ConstantInstrument(level=0.0)
         wet.tail_samples = 4096
@@ -236,9 +250,8 @@ def test_bounce_instruments_auto_length_includes_tail_samples() -> None:
             instruments=[(0, wet)],
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
-        assert with_tail.shape[0] == no_tail.shape[0] + wet.tail_samples
+        ).channels
+        assert with_tail.shape[1] == no_tail.shape[1] + wet.tail_samples
     finally:
         project.close()
 
@@ -263,7 +276,6 @@ def test_bounce_instruments_propagates_callback_error() -> None:
                 total_frames=48000,
                 block_size=32,
                 num_channels=2,
-                sample_rate=48000,
             )
         assert instrument.calls == 1
     finally:
@@ -280,8 +292,8 @@ def test_bounce_without_instrument_keywords_is_the_plain_bounce() -> None:
     """Every instrument keyword absent, None or empty renders the plain call's silence."""
     project = _build_midi_only_project()
     try:
-        kwargs = {"total_frames": 4800, "block_size": 128, "num_channels": 2, "sample_rate": 48000}
-        plain = project.bounce(**kwargs)
+        kwargs = {"total_frames": 4800, "block_size": 128, "num_channels": 2}
+        plain = project.bounce(**kwargs).channels
         assert float(np.max(np.abs(plain))) == 0.0
         for empty in (
             {},
@@ -292,7 +304,7 @@ def test_bounce_without_instrument_keywords_is_the_plain_bounce() -> None:
             {"instruments": [], "builtin_instruments": [], "synth_instruments": []},
             {"sf2_instruments": []},
         ):
-            assert np.array_equal(project.bounce(**empty, **kwargs), plain)
+            assert np.array_equal(project.bounce(**empty, **kwargs).channels, plain)
     finally:
         project.close()
 
@@ -312,14 +324,16 @@ def test_bounce_mixes_instrument_kinds_on_separate_destinations() -> None:
                     ls.midi_note_off(0.5, 0, 0, note, 0),
                 ],
             )
-        kwargs = {"total_frames": 12000, "block_size": 128, "num_channels": 2, "sample_rate": 48000}
-        builtin_only = project.bounce(builtin_instruments=[(1, BuiltinSynthConfig())], **kwargs)
+        kwargs = {"total_frames": 12000, "block_size": 128, "num_channels": 2}
+        builtin_only = project.bounce(
+            builtin_instruments=[(1, BuiltinSynthConfig())], **kwargs
+        ).channels
         external = _ConstantInstrument(level=0.25)
         both = project.bounce(
             instruments=[(0, external)],
             builtin_instruments=[(1, BuiltinSynthConfig())],
             **kwargs,
-        )
+        ).channels
         assert external.render_calls > 0
         assert float(np.max(np.abs(both - builtin_only))) > 0.1
     finally:
@@ -348,9 +362,139 @@ def test_bounce_auto_derives_length_when_total_frames_omitted() -> None:
     """bounce() with total_frames omitted no longer renders empty (C auto-derives)."""
     project, *_ = _build_project()
     try:
-        audio = project.bounce(num_channels=2, sample_rate=48000)
+        audio = project.bounce(num_channels=2).channels
         assert audio.ndim == 2
         assert audio.shape[0] > 0
+    finally:
+        project.close()
+
+
+def test_bounce_count_in_queries_length_and_shifts_the_arrangement() -> None:
+    project = _build_midi_only_project()
+    try:
+        assert project.count_in_frames(0) == 0
+        assert project.count_in_frames(1) == 96000
+        assert project.count_in_frames(16) == 16 * 96000
+        with pytest.raises(TypeError, match="count_in_bars"):
+            project.count_in_frames(True)  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="count_in_bars"):
+            project.count_in_frames(-1)
+
+        without = project.bounce(
+            builtin_instruments=[(0, BuiltinSynthConfig())],
+            total_frames=4096,
+            num_channels=2,
+        ).channels
+        with_prefix = project.bounce(
+            builtin_instruments=[(0, BuiltinSynthConfig())],
+            count_in_bars=1,
+            total_frames=96000 + 4096,
+            num_channels=2,
+        ).channels
+        assert with_prefix.shape == (2, 96000 + 4096)
+        assert np.count_nonzero(with_prefix[:, :96000]) == 0
+        assert np.array_equal(with_prefix[:, 96000:], without)
+        short = project.bounce(
+            builtin_instruments=[(0, BuiltinSynthConfig())],
+            count_in_bars=1,
+            total_frames=128,
+            num_channels=2,
+        ).channels
+        assert short.shape == (2, 128)
+        assert np.count_nonzero(short) == 0
+
+        omitted = project.bounce(
+            count_in_bars=1, total_frames=96000 + 4096, num_channels=2
+        ).channels
+        disabled = project.bounce(
+            metronome=EngineMetronomeConfig(enabled=False),
+            count_in_bars=1,
+            total_frames=96000 + 4096,
+            num_channels=2,
+        ).channels
+        assert np.array_equal(disabled, omitted)
+        omitted_without_count = project.bounce(total_frames=4096, num_channels=2).channels
+        disabled_without_count = project.bounce(
+            metronome=EngineMetronomeConfig(enabled=False),
+            total_frames=4096,
+            num_channels=2,
+        ).channels
+        assert np.array_equal(disabled_without_count, omitted_without_count)
+
+        clicked = project.bounce(
+            metronome=EngineMetronomeConfig(enabled=True),
+            count_in_bars=1,
+            total_frames=96000 + 128,
+            num_channels=2,
+        ).channels
+        assert np.count_nonzero(clicked[:, :128]) > 0
+        assert np.count_nonzero(clicked[:, 96000:]) > 0
+    finally:
+        project.close()
+
+
+def test_bounce_new_options_refuse_values_by_keyword() -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(TypeError, match="metronome"):
+            project.bounce(metronome=True)  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="count_in_bars"):
+            project.bounce(count_in_bars=17)
+        with pytest.raises(TypeError, match=r"controller_profiles\[0\] must be a pair"):
+            project.bounce(controller_profiles=[(0,)])  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"controller_profiles\[0\]\[1\]"):
+            project.bounce(controller_profiles=[(0, "")])
+        with pytest.raises(SonareValueError, match="controller_profiles\\[0\\]\\[1\\]"):
+            project.bounce(
+                synth_instruments=[(0, "sawLead")],
+                controller_profiles=[(0, "unknown-profile")],
+                total_frames=128,
+            )
+        with pytest.raises(TypeError, match=r"articulations\[0\] must be a triple"):
+            project.bounce(articulations=[(0, 0)])  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"articulations\[0\]\[1\]"):
+            project.bounce(articulations=[(0, 16, "poly")])
+        with pytest.raises(SonareValueError, match=r"articulations\[0\]\[2\]"):
+            project.bounce(articulations=[(0, 0, "unknown")])  # type: ignore[list-item]
+        with pytest.raises(SonareValueError, match=r"metronome\.click_samples"):
+            project.bounce(metronome=EngineMetronomeConfig(click_samples=0))
+        with pytest.raises(SonareValueError, match="mutually exclusive"):
+            project.bounce(metronome=EngineMetronomeConfig(click_samples=10, click_sec=0.01))
+        with pytest.raises(SonareValueError, match=r"controller_profiles\[0\]"):
+            project.bounce(
+                synth_instruments=[(0, "sawLead")],
+                controller_profiles=[(0, "gm"), (0, "gm")],
+                total_frames=128,
+            )
+        with pytest.raises(SonareValueError, match=r"articulations\[1\]"):
+            project.bounce(
+                synth_instruments=[(0, "sawLead")],
+                articulations=[(0, 0, "poly"), (0, 0, "monoLegato")],
+                total_frames=128,
+            )
+
+        # Both control lists reach the native synth when bound to its destination.
+        rendered = project.bounce(
+            synth_instruments=[(0, "sawLead")],
+            controller_profiles=[(0, "gm")],
+            articulations=[(0, 0, "poly")],
+            total_frames=128,
+            num_channels=2,
+        )
+        assert rendered.channels.shape == (2, 128)
+        empty_bindings = project.bounce(
+            synth_instruments=[(0, "sawLead")],
+            controller_profiles=[],
+            articulations=[],
+            total_frames=128,
+            num_channels=2,
+        )
+        plain_bindings = project.bounce(
+            synth_instruments=[(0, "sawLead")],
+            total_frames=128,
+            num_channels=2,
+        )
+        assert np.array_equal(empty_bindings.channels, plain_bindings.channels)
     finally:
         project.close()
 
@@ -370,7 +514,7 @@ def test_last_bounce_compile_result_after_a_clean_bounce_has_no_diagnostics() ->
         project.add_clip(
             track, 0.0, 1.0, audio=[0.1] * 480, audio_channels=1, audio_sample_rate=48000
         )
-        project.bounce(total_frames=480, num_channels=2, sample_rate=48000)
+        project.bounce(total_frames=480, num_channels=2)
         result = project.last_bounce_compile_result()
         assert isinstance(result, ProjectCompileResult)
         assert result.diagnostics == ()
@@ -385,7 +529,7 @@ def test_last_bounce_compile_result_after_a_failed_bounce_carries_the_error() ->
         for index in range(33):
             project.add_track("audio", f"t{index}")
         with raises_coded(ErrorCode.INVALID_STATE):
-            project.bounce(total_frames=480, num_channels=2, sample_rate=48000)
+            project.bounce(total_frames=480, num_channels=2)
         result = project.last_bounce_compile_result()
         assert isinstance(result, ProjectCompileResult)
         assert ("automationLaneCapacity", "error") in [

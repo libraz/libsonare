@@ -8,6 +8,7 @@ returns a number, so the mapping cannot have turned every value into ``None``.
 from __future__ import annotations
 
 import math
+from dataclasses import fields
 
 import numpy as np
 import pytest
@@ -81,14 +82,83 @@ def test_clipping_without_a_flat_run_has_no_flat_level() -> None:
     assert clean.flat_level is None
 
 
-def test_a_meter_that_has_seen_no_audio_has_no_channel_count() -> None:
+def test_a_meter_that_has_seen_no_audio_has_zero_channels() -> None:
     from libsonare._ffi_types_analysis import SonareMixMeterSnapshot
     from libsonare._runtime import _mix_meter_from_c
 
     raw = SonareMixMeterSnapshot()
-    assert _mix_meter_from_c(raw).num_channels is None
-    raw.num_channels = 2
-    assert _mix_meter_from_c(raw).num_channels == 2
+    snapshot = _mix_meter_from_c(raw)
+    assert snapshot.num_channels == 0
+    assert snapshot.peak_db == snapshot.rms_db == snapshot.true_peak_dbtp == ()
+
+
+def test_mixer_meter_requires_its_channel_count_and_planes() -> None:
+    from dataclasses import MISSING
+
+    by_name = {f.name: f for f in fields(libsonare.MixMeterSnapshot)}
+    for name in ("num_channels", "peak_db", "rms_db", "true_peak_dbtp"):
+        assert by_name[name].default is MISSING, name
+        assert by_name[name].default_factory is MISSING, name
+
+
+@pytest.mark.parametrize("num_channels", [1, 2, 6])
+def test_mixer_meter_arrays_are_channel_sized_and_convert_nan_to_none(num_channels: int) -> None:
+    from libsonare._ffi_types_analysis import SonareMixMeterSnapshot
+    from libsonare._runtime import _mix_meter_from_c
+
+    raw = SonareMixMeterSnapshot()
+    raw.num_channels = num_channels
+    for name in ("peak_db", "rms_db", "true_peak_dbtp"):
+        plane = getattr(raw, name)
+        for index in range(len(plane)):
+            plane[index] = math.nan
+        plane[0] = -math.inf
+        if num_channels > 1:
+            plane[1] = math.inf
+        if num_channels > 2:
+            plane[num_channels - 1] = -3.5
+    for name in (
+        "correlation",
+        "mono_compat_width",
+        "momentary_lufs",
+        "short_term_lufs",
+        "integrated_lufs",
+        "max_true_peak_dbtp",
+    ):
+        setattr(raw, name, math.nan)
+
+    snapshot = _mix_meter_from_c(raw)
+    assert snapshot.num_channels == num_channels
+    assert (
+        len(snapshot.peak_db)
+        == len(snapshot.rms_db)
+        == len(snapshot.true_peak_dbtp)
+        == num_channels
+    )
+    for name in ("peak_db", "rms_db", "true_peak_dbtp"):
+        values = getattr(snapshot, name)
+        assert values[0] == -math.inf
+        if num_channels > 1:
+            assert values[1] == math.inf
+        if num_channels > 2:
+            assert values[-1] == -3.5
+            assert all(value is None for value in values[2:-1])
+        assert all(value is None or not math.isnan(value) for value in values)
+    for field in fields(snapshot):
+        value = getattr(snapshot, field.name)
+        if isinstance(value, float):
+            assert not math.isnan(value)
+        elif isinstance(value, tuple):
+            assert all(item is None or not math.isnan(item) for item in value)
+    for name in (
+        "peak_db_l",
+        "peak_db_r",
+        "rms_db_l",
+        "rms_db_r",
+        "true_peak_dbtp_l",
+        "true_peak_dbtp_r",
+    ):
+        assert not hasattr(snapshot, name)
 
 
 def test_a_refused_inharmonicity_fit_is_nan_and_a_fitted_one_is_not() -> None:

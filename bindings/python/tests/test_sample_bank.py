@@ -68,8 +68,7 @@ def _render(note: int, patch: SynthPatch) -> np.ndarray:
             synth_instruments=[(0, patch)],
             total_frames=12000,
             num_channels=1,
-            sample_rate=SAMPLE_RATE,
-        )
+        ).channels
     finally:
         project.close()
 
@@ -216,7 +215,7 @@ def test_bounce_through_a_sample_patch_is_audible_and_deterministic() -> None:
         bank.add_zone(0, sample_index=bank.add_sample(_tone(), root_key=60))
         patch = _sample_patch(bank)
         audio = _render(60, patch)
-        assert audio.shape == (12000, 1)
+        assert audio.shape == (1, 12000)
         assert np.isfinite(audio).all()
         assert _peak(audio) > 0.0
         assert np.array_equal(audio, _render(60, patch))
@@ -265,8 +264,7 @@ def test_each_binding_carries_its_own_bank() -> None:
                     ],
                     total_frames=12000,
                     num_channels=1,
-                    sample_rate=SAMPLE_RATE,
-                )
+                ).channels
 
             # Swapping which destination gets which bank changes the render, so
             # the two banks cannot be collapsing into one shared value.
@@ -394,8 +392,7 @@ def test_a_looped_sample_outlasts_the_frames_it_holds() -> None:
                     synth_instruments=[(0, _sample_patch(bank))],
                     total_frames=12000,
                     num_channels=1,
-                    sample_rate=SAMPLE_RATE,
-                )
+                ).channels
         finally:
             project.close()
 
@@ -527,8 +524,7 @@ def test_the_sample_loop_mode_token_reaches_the_render() -> None:
                     ],
                     total_frames=12000,
                     num_channels=1,
-                    sample_rate=sample_rate,
-                )
+                ).channels
         finally:
             project.close()
         return np.asarray(out, dtype=np.float32)

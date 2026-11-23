@@ -14,6 +14,7 @@ from ._ffi_signatures_effects import configure_effects_signatures
 from ._ffi_signatures_engine import configure_engine_signatures
 from ._ffi_signatures_extra import configure_extra_signatures
 from ._ffi_signatures_features import configure_features_signatures
+from ._ffi_signatures_live import configure_live_signatures
 from ._ffi_signatures_mastering import configure_mastering_signatures
 from ._ffi_signatures_mixing import configure_mixing_signatures
 from ._ffi_signatures_mixing_assistant import configure_mixing_assistant_signatures
@@ -150,6 +151,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         configure_mixing_assistant_signatures(lib)
         configure_extra_signatures(lib)
         configure_project_signatures(lib)
+        configure_live_signatures(lib)
         configure_playback_signatures(lib)
         configure_vocal_signatures(lib)
         configure_vocal_project_signatures(lib)

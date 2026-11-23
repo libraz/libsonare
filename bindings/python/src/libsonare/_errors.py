@@ -50,6 +50,20 @@ ErrorCodeName = Literal[
 ]
 """The cross-binding spelling of each :class:`ErrorCode`, shared with the JS ``codeName``."""
 
+ErrorReason = Literal[
+    "malformedJson",
+    "unsupportedSchemaVersion",
+    "notCompiledIn",
+    "notPersistable",
+    "unresolvedSource",
+    "unresolvedSoundFont",
+    "deviceUnavailable",
+    "deviceFormatRefused",
+    "engineDeviceDriven",
+    "releasedHandle",
+]
+"""Machine-readable cause of a coded error."""
+
 
 def _error_code(code: int) -> ErrorCode:
     try:
@@ -67,9 +81,15 @@ class SonareError(RuntimeError):
 
     code: ErrorCode
     """The failure's :class:`ErrorCode` member."""
+    entry: str | None
+    """The public entry the caller invoked."""
+    reason: ErrorReason | None
+    """Machine-readable cause of this error, when available."""
 
     def __init__(self, code: int, message: str) -> None:
         self.code = _error_code(code)
+        self.entry = None
+        self.reason = None
         super().__init__(f"[{int(code)}] {message}")
 
     @property
@@ -102,6 +122,8 @@ class SonareValueError(SonareError, ValueError):
 
     def __init__(self, message: str, code: int = ErrorCode.INVALID_PARAMETER) -> None:
         self.code = _error_code(code)
+        self.entry = None
+        self.reason = None
         ValueError.__init__(self, message)
 
 
@@ -181,6 +203,8 @@ def _entry(name: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
             try:
                 return fn(*args, **kwargs)
             except (SonareError, TypeError) as exc:
+                if isinstance(exc, SonareError):
+                    exc.entry = name
                 _integer_domain_text(name, exc)
                 bare = getattr(exc, _BARE_TEXT, None)
                 if bare is not None:
@@ -201,9 +225,10 @@ def _not_supported(message: str) -> SonareError:
     return SonareError(int(ErrorCode.NOT_SUPPORTED), message)
 
 
-def _invalid_state(message: str) -> SonareError:
+def _invalid_state(message: str, *, reason: ErrorReason | None = None) -> SonareError:
     """Build the error for a call the object's current state refuses (e.g. closed)."""
     exc = SonareError(int(ErrorCode.INVALID_STATE), message)
+    exc.reason = reason
     setattr(exc, _BARE_TEXT, message)
     return exc
 
@@ -214,7 +239,7 @@ def _require_open(handle: _Handle | None, owner: str) -> _Handle:
     The one closed-handle guard: a closed object holds ``None``, a NULL ``c_void_p`` or ``0``.
     """
     if not handle:
-        raise _invalid_state(f"{owner} is closed")
+        raise _invalid_state(f"{owner} is closed", reason="releasedHandle")
     return handle
 
 

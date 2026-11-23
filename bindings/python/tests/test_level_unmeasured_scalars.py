@@ -100,7 +100,10 @@ def test_stereo_correlation_and_width_are_none_without_energy_and_infinite_for_a
 
 def test_mix_meter_snapshot_reads_silence_as_minus_infinity_and_unmeasured_as_none() -> None:
     silent = libsonare.mix_stereo([(SILENCE[:1024], SILENCE[:1024])], sample_rate=SR).meters[0]
-    assert (silent.peak_db_l, silent.rms_db_r, silent.true_peak_dbtp_l) == (-math.inf,) * 3
+    assert silent.num_channels == 2
+    assert silent.peak_db == (-math.inf, -math.inf)
+    assert silent.rms_db == (-math.inf, -math.inf)
+    assert silent.true_peak_dbtp == (-math.inf, -math.inf)
     assert silent.max_true_peak_dbtp == -math.inf
     assert (silent.correlation, silent.mono_compat_width) == (None, None)
     assert (silent.momentary_lufs, silent.short_term_lufs, silent.integrated_lufs) == (None,) * 3
@@ -109,7 +112,7 @@ def test_mix_meter_snapshot_reads_silence_as_minus_infinity_and_unmeasured_as_no
     sounding = libsonare.mix_stereo([(tone, tone)], sample_rate=SR).meters[0]
     assert sounding.correlation == pytest.approx(1.0)
     assert sounding.mono_compat_width == pytest.approx(0.0)
-    assert math.isfinite(sounding.peak_db_l)
+    assert math.isfinite(sounding.peak_db[0])
 
 
 def test_mastering_report_reads_a_short_take_as_unmeasured_and_silence_as_minus_infinity() -> None:

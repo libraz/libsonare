@@ -16,6 +16,17 @@ from libsonare._runtime import SonareError
 from ._helpers import raises_coded
 
 
+def _patch_info_tags(monkeypatch, tags: dict[str, str]) -> None:
+    from libsonare import audio
+
+    monkeypatch.setattr(_cli_analysis, "_read_audio_bounded", lambda path: b"source bytes")
+    monkeypatch.setattr(
+        audio,
+        "read_audio_tags",
+        lambda data: tags if data == b"source bytes" else pytest.fail("unexpected audio bytes"),
+    )
+
+
 def _write_wav(path, *, channels: int, frames: int = 32, sample_rate: int = 22050) -> None:
     with wave.open(str(path), "wb") as wav:
         wav.setnchannels(channels)
@@ -46,8 +57,10 @@ def test_info_json_uses_vectorized_float64_reductions_and_source_channels(monkey
             raise AssertionError("info must use NumPy reductions, not Python iteration")
 
     samples = np.asarray([0.5, -0.25, 0.0], dtype=np.float32).view(NonIteratingArray)
+    tags = {"title": "A title", "artist": "An artist"}
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (samples, 10))
     monkeypatch.setattr(Audio, "file_num_channels", lambda path: 2)
+    _patch_info_tags(monkeypatch, tags)
 
     args = SimpleNamespace(file="stereo.mp3", json=True)
     assert _cli_analysis.cmd_info(args) == 0
@@ -61,7 +74,9 @@ def test_info_json_uses_vectorized_float64_reductions_and_source_channels(monkey
         "samples",
         "peak_db",
         "rms_db",
+        "tags",
     }
+    assert payload["tags"] == tags
     assert payload["channels"] == 2
     assert payload["samples"] == 3
     assert payload["duration"] == pytest.approx(0.3)
@@ -102,8 +117,10 @@ def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
 def test_info_preserves_minus_200_db_silence_floor(monkeypatch, capsys):
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(4), 10))
     monkeypatch.setattr(Audio, "file_num_channels", lambda path: 1)
+    _patch_info_tags(monkeypatch, {})
 
     assert _cli_analysis.cmd_info(SimpleNamespace(file="silence.wav", json=True)) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["peak_db"] == -200.0
     assert payload["rms_db"] == -200.0
+    assert payload["tags"] == {}

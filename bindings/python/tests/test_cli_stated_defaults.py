@@ -10,7 +10,9 @@ from typing import Any
 import pytest
 
 from libsonare import cli
+from libsonare._cli_advanced import register_advanced_parsers
 from libsonare._cli_inventory import _leaf_command_parsers
+from libsonare._cli_options import _ContractArgumentParser, build_shared_parsers
 
 _STATED = re.compile(r"\(default: ([^)]*)\)")
 
@@ -139,6 +141,13 @@ _ROWS: tuple[tuple[str, str, str, str, int | None], ...] = (
         "--instrument-latency-samples",
         "_project_render:_ProjectRenderMixin.bounce",
         "instrument_latency_samples",
+        None,
+    ),
+    (
+        "project.bounce",
+        "--count-in-bars",
+        "_project_render:_ProjectRenderMixin.bounce",
+        "count_in_bars",
         None,
     ),
     (
@@ -388,6 +397,15 @@ def test_help_states_the_facade_default(
     if index is not None:
         default = default[index]
     assert _same(stated, default), f"{command} {flag}: help says {stated}, facade holds {default!r}"
+
+
+def test_rhythm_help_describes_the_beat_tracking_prior() -> None:
+    parser = _ContractArgumentParser()
+    register_advanced_parsers(parser.add_subparsers(dest="command"), build_shared_parsers())
+    rhythm = dict(_leaf_command_parsers(parser))["rhythm"]
+    help_text = " ".join(rhythm.format_help().split())
+    assert "BPM prior for beat tracking when the tempo search finds none" in help_text
+    assert "Output reports only measured tempo. (default: 120.0)" in help_text
 
 
 def test_every_stated_default_is_checked_or_excused() -> None:

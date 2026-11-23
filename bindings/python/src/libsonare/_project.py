@@ -8,7 +8,15 @@ import ctypes
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Self
 
-from ._errors import _entry, _invalid_state, _require_open
+from ._errors import (
+    ErrorCode,
+    _entry,
+    _invalid_state,
+    _malformed_output,
+    _refuse,
+    _refuse_type,
+    _require_open,
+)
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._project_edit import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project_edit import TakeAlignment as TakeAlignment
@@ -17,6 +25,8 @@ from ._project_edit import align_take_to_reference as align_take_to_reference
 from ._project_edit import chord_symbol_from_analysis as chord_symbol_from_analysis
 from ._project_edit import key_mode_from_analysis as key_mode_from_analysis
 from ._project_inspection import _ProjectInspectionMixin
+from ._project_instruments import ProjectDestinationInstrument as ProjectDestinationInstrument
+from ._project_instruments import ProjectInstrument as ProjectInstrument
 from ._project_midi import _ProjectMidiMixin
 from ._project_model import *  # noqa: F403
 from ._project_model import (
@@ -62,10 +72,14 @@ from ._project_model import (
 )
 from ._project_render import _compile_diagnostics, _ProjectRenderMixin
 from ._runtime import (
+    SONARE_OK,
     SonareProjectCompileResult,
+    SonareProjectInstrumentList,
     _check,
     _coded_error,
     _get_lib,
+    _Respelling,
+    _to_c_uint32,
     _utf8_arg,
 )
 
@@ -391,6 +405,63 @@ class Project(
             originals=originals,
             cancel=cancel,
         )
+
+    @_entry("Project.set_destination_instrument")
+    def set_destination_instrument(
+        self, destination_id: int, instrument: ProjectInstrument | None
+    ) -> None:
+        """Bind or clear an instrument. A read row must name the same destination."""
+        if instrument is not None and not isinstance(instrument, ProjectInstrument):
+            if callable(getattr(instrument, "render", None)):
+                error = _coded_error(
+                    int(ErrorCode.NOT_SUPPORTED), "callback instruments cannot be persisted"
+                )
+                error.reason = "notPersistable"
+                raise error
+            raise _refuse_type("instrument must be a ProjectInstrument or None")
+        destination = _to_c_uint32(destination_id, "destination_id")
+        if isinstance(instrument, ProjectDestinationInstrument):
+            row_id = _to_c_uint32(instrument.destination_id, "instrument.destination_id")
+            if row_id.value != destination.value:
+                raise _refuse("instrument.destination_id must match destination_id")
+        native = instrument._to_c() if instrument is not None else None
+        lib = _get_lib()
+        rc = lib.sonare_project_set_destination_instrument(
+            self._require_handle(),
+            destination,
+            ctypes.byref(native) if native is not None else None,
+        )
+        if rc != SONARE_OK:
+            respelled: dict[str, _Respelling] = {}
+            for index in range(lib.sonare_last_refusal_subject_count()):
+                subject = (lib.sonare_last_refusal_subject(index) or b"").decode("utf-8")
+                root, _, rest = subject.partition(".")
+                kind, dot, suffix = rest.partition(".")
+                if root == "instrument" and kind in ("synth", "builtin", "sf2"):
+                    name = "patch" if kind == "synth" else "config"
+                    respelled[subject] = _Respelling(f"instrument.{name}{dot}{suffix}")
+            _check(rc, respelled=respelled)
+
+    @_entry("Project.destination_instruments")
+    def destination_instruments(self) -> list[ProjectDestinationInstrument]:
+        """Return persistent MIDI destination bindings in destination-ID order."""
+        lib = _get_lib()
+        out = SonareProjectInstrumentList()
+        try:
+            _check(
+                lib.sonare_project_destination_instruments(
+                    self._require_handle(), ctypes.byref(out)
+                )
+            )
+            if out.count and not out.items:
+                raise _malformed_output("destination instrument list has no items")
+            return [
+                ProjectDestinationInstrument._from_c(out.items[index])
+                for index in range(int(out.count))
+            ]
+        finally:
+            if out.items:
+                lib.sonare_free_project_instrument_list(ctypes.byref(out))
 
 
 _rebind_facade_exports(globals(), "libsonare._project_")

@@ -94,8 +94,7 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
             total_frames=4096,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
         assert float(np.max(np.abs(fallback))) > 0.01
 
         project.load_sound_font(_SF2_BYTES)
@@ -104,9 +103,8 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
             total_frames=4096,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
-        assert audio.shape == (4096, 2)
+        ).channels
+        assert audio.shape == (2, 4096)
         assert audio.dtype == np.float32
         assert float(np.max(np.abs(audio))) > 0.01
 
@@ -115,8 +113,7 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
             total_frames=4096,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
         assert np.array_equal(audio, again)
 
         # Program 0 is a dedicated piano model. The opt-in bypasses the
@@ -128,8 +125,7 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
             total_frames=4096,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
         assert float(np.max(np.abs(modeled))) > 0.01
         assert not np.array_equal(modeled, audio)
 
@@ -139,8 +135,7 @@ def test_bounce_sf2_instruments_produce_deterministic_audio() -> None:
             total_frames=2048,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
         assert float(np.max(np.abs(silent))) == 0.0
     finally:
         project.close()
@@ -176,8 +171,7 @@ def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
             total_frames=48000,
             block_size=128,
             num_channels=2,
-            sample_rate=48000,
-        )
+        ).channels
 
     try:
         # No SoundFont is loaded, so every program plays the model floor, which

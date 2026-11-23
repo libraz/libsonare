@@ -252,53 +252,60 @@ def _project_bounce(
             _resolve_bounce_audio_sources(project, args)
         project_sample_rate = cast(Any, project).sample_rate
         # Render at the project's own sample rate by default (args.sample_rate is
-        # None unless the user passed --sample-rate); an explicit --sample-rate is
-        # only accepted when it matches the project's rate, otherwise report the
-        # mismatch by name instead of letting the C ABI reject it generically.
+        # None unless the user passed --sample-rate); an explicit --sample-rate
+        # is accepted only when it matches the project's rate.
         requested_sample_rate = args.sample_rate
-        if requested_sample_rate is not None:
-            if abs(requested_sample_rate - project_sample_rate) > 1e-6:
-                raise ValueError(
-                    f"--sample-rate {requested_sample_rate} does not match the project's "
-                    f"sample rate ({project_sample_rate:g} Hz); {command_name} renders at "
-                    "the project's own rate"
-                )
-            sample_rate = requested_sample_rate
-        else:
-            # A project rate is a whole number of hertz (loading refuses anything
-            # else), so the WAV header carries it exactly.
-            sample_rate = int(project_sample_rate)
+        if (
+            requested_sample_rate is not None
+            and abs(requested_sample_rate - project_sample_rate) > 1e-6
+        ):
+            raise ValueError(
+                f"--sample-rate {requested_sample_rate} does not match the project's "
+                f"sample rate ({project_sample_rate:g} Hz); {command_name} renders at "
+                "the project's own rate"
+            )
         kwargs: dict[str, Any] = _given(args, "instrument_latency_samples")
         # What is left out stays with the library: the derived length, the project's rate and
         # the master's width.
         if args.frames is not None:
             kwargs["total_frames"] = args.frames
-        if requested_sample_rate is not None:
-            kwargs["sample_rate"] = requested_sample_rate
         if args.channels is not None:
             kwargs["num_channels"] = args.channels
+        count_in_bars = getattr(args, "count_in_bars", None)
+        if count_in_bars is None:
+            count_in_bars = 0
+        if count_in_bars:
+            kwargs["count_in_bars"] = count_in_bars
+        if getattr(args, "metronome", False):
+            from . import EngineMetronomeConfig
+
+            kwargs["metronome"] = EngineMetronomeConfig(enabled=True)
         use_synth = force_synth or args.synth is not None
         if use_synth:
             patch = SynthPatch(use_gm_programs=True) if preset is None else preset
-            audio = cast(Any, project).bounce(synth_instruments=[(0, patch)], **kwargs)
+            rendered = cast(Any, project).bounce(synth_instruments=[(0, patch)], **kwargs)
         else:
-            audio = cast(Any, project).bounce(**kwargs)
+            rendered = cast(Any, project).bounce(**kwargs)
+        prefix_frames = 0
+        if args.json and hasattr(args, "count_in_bars") and count_in_bars:
+            prefix_frames = cast(Any, project).count_in_frames(count_in_bars)
+        audio = rendered.channels.T
+        sample_rate = rendered.sample_rate
         fit = _OutputFit().include(audio)
         frames, channels = _write_project_bounce_wav(args.output, audio, sample_rate, fit=fit)
         _note_output_fit(fit)
         if args.json:
-            print(
-                _strict_json_dumps(
-                    {
-                        "output": args.output,
-                        "output_gain_db": fit.gain_db,
-                        "frames": frames,
-                        "channels": channels,
-                        "sample_rate": sample_rate,
-                        "synth": bool(use_synth),
-                    }
-                )
-            )
+            payload = {
+                "output": args.output,
+                "output_gain_db": fit.gain_db,
+                "frames": frames,
+                "channels": channels,
+                "sample_rate": sample_rate,
+                "synth": bool(use_synth),
+            }
+            if hasattr(args, "count_in_bars"):
+                payload["count_in_frames"] = min(prefix_frames, frames)
+            print(_strict_json_dumps(payload))
         else:
             print(f"  Bounced {frames} frames ({channels} ch @ {sample_rate} Hz)")
         return 0
@@ -845,6 +852,21 @@ def register_project_parsers(
         ),
         minimum=0,
         exclusive_minimum=True,
+    )
+    _cli_domain(
+        pbounce.add_argument(
+            "--count-in-bars",
+            type=_c_int,
+            default=None,
+            help="Silent or clicked pre-roll bars to render (default: 0)",
+        ),
+        minimum=0,
+        maximum=16,
+    )
+    pbounce.add_argument(
+        "--metronome",
+        action="store_true",
+        help="Render metronome clicks with the default metronome configuration",
     )
     pbounce.add_argument(
         "--channels",

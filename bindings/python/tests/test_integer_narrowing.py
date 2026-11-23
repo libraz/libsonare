@@ -263,9 +263,16 @@ def arrangement_project():
         project.set_warp_map(warp_ref, [(0.0, 0.0), (100.0, stretch)], f"w{warp_ref}")
     for clip, source in zip(clips, (1, 2), strict=True):
         project.set_clip_takes(clip, [{"id": 1, "source_id": source}])
-    for track in tracks:
-        project.add_automation_lane(track, 7, [AutomationPoint(0.0, 0.25, "linear")])
-    return project, tracks, clips, spare
+    lane_ids = {
+        track: project.add_automation_lane(
+            track, [AutomationPoint(0.0, 0.25, "linear")], target_param_id=7
+        )
+        for track in tracks
+    }
+    extra_lane_id = project.add_automation_lane(
+        tracks[0], [AutomationPoint(0.0, 0.75, "linear")], target_param_id=8
+    )
+    return project, tracks, clips, spare, lane_ids, extra_lane_id
 
 
 def test_a_wrapped_arrangement_id_is_refused_rather_than_selecting_another_object(
@@ -277,7 +284,10 @@ def test_a_wrapped_arrangement_id_is_refused_rather_than_selecting_another_objec
     and the refusal drive the identical call shape and a row cannot assert about
     an argument its own edit never reads.
     """
-    project, (track_a, track_b), (clip_a, clip_b), (spare_a, spare_b) = arrangement_project
+    project, (track_a, track_b), (clip_a, clip_b), (spare_a, spare_b), lane_ids, extra_lane_id = (
+        arrangement_project
+    )
+    lane_a = lane_ids[track_a]
     points = [AutomationPoint(0.0, 0.5, "linear")]
     segment = [{"start_ppq": 0.0, "end_ppq": 100.0, "take_id": 1}]
 
@@ -308,26 +318,45 @@ def test_a_wrapped_arrangement_id_is_refused_rather_than_selecting_another_objec
         ("track_id", lambda v: project.rename_track(v, "zz"), track_a, track_b),
         ("track_id", lambda v: project.set_track_route(v, "strip"), track_a, track_b),
         ("source_id", lambda v: project.set_audio_source_metadata(v, "h", "r"), 1, 2),
-        ("track_id", lambda v: project.add_automation_lane(v, 9, points), track_a, track_b),
         (
             "track_id",
-            lambda v: project.add_automation_lane(v, 9, points, "trackPan"),
+            lambda v: project.add_automation_lane(v, points, target_param_id=9),
             track_a,
             track_b,
         ),
-        ("track_id", lambda v: project.edit_automation_lane(v, 7, points), track_a, track_b),
         (
             "track_id",
-            lambda v: project.edit_automation_lane(v, 7, points, "trackPan"),
+            lambda v: project.add_automation_lane(v, points=points, target_kind="trackPan"),
             track_a,
             track_b,
         ),
-        ("track_id", lambda v: project.remove_automation_lane(v, 7), track_a, track_b),
+        (
+            "lane_id",
+            lambda v: project.edit_automation_lane(track_a, v, points),
+            lane_a,
+            extra_lane_id,
+        ),
+        (
+            "lane_id",
+            lambda v: project.edit_automation_lane(track_a, v, points, target_kind="trackPan"),
+            lane_a,
+            extra_lane_id,
+        ),
+        ("lane_id", lambda v: project.remove_automation_lane(track_a, v), lane_a, extra_lane_id),
     )
     for name, edit, first, second in cases:
         assert applied(edit, first) != applied(edit, second), name  # positive control
         for value in WRAPPED_IDS:
             _refuses(name, edit, value)
+
+    project.edit_automation_lane(track_a, lane_a, points)
+    project.undo()
+    for value in WRAPPED_IDS:
+        _refuses("track_id", project.edit_automation_lane, value, lane_a, points)
+    project.remove_automation_lane(track_a, lane_a)
+    project.undo()
+    for value in WRAPPED_IDS:
+        _refuses("track_id", project.remove_automation_lane, value, lane_a)
 
 
 def test_a_wrapped_take_id_is_refused_rather_than_read_as_take_zero() -> None:
@@ -379,7 +408,7 @@ def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_anothe
                 audio_sample_rate=48000,
             )
         project.set_source_audio(source_id, [0.9, 0.1] * 4, channels, sample_rate)
-        return np.asarray(project.bounce(), dtype=np.float64).tobytes()
+        return np.asarray(project.bounce().channels, dtype=np.float64).tobytes()
 
     assert bounced(1, 1, 48000) != bounced(2, 1, 48000)  # positive control
     assert bounced(1, 1, 48000) != bounced(1, 2, 48000)  # positive control

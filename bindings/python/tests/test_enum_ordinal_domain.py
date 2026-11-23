@@ -44,7 +44,7 @@ _FAMILIES: Sequence[tuple[Resolver, str, Sequence[str], Sequence[str]]] = (
     (
         _automation_target_kind_value,
         "automation target kind",
-        ("opaque", "trackFaderDb", "trackPan"),
+        ("opaque", "trackFaderDb", "trackPan", "trackSendDb", "trackWidth", "trackInsertParam"),
         ("track-fader-db", "track_pan", "OPAQUE"),
     ),
 )
