@@ -27,6 +27,9 @@ inline const NumericDomainRow kInstrumentDomainRows[] = {
     {"engine_set_sf2_instrument", "config.polyphony", kSynthPolyphonyDomain, nullptr},
     {"engine_set_sf2_instrument", "config.prefer_model_for_modeled_families", kSf2PlayerFlagDomain,
      nullptr},
+    {"engine_set_synth_instrument", "patch.num_mod_routings", kSynthModRoutingCountDomain, nullptr},
+    {"engine_set_synth_instrument", "patch.polyphony", kSynthPolyphonyDomain, nullptr},
+    {"engine_set_synth_instrument", "patch.unison", kSynthUnisonDomain, nullptr},
     {"project_bounce", "options.builtin_instruments[].config.attack_ms", kBuiltinSynthStageMsDomain,
      nullptr},
     {"project_bounce", "options.builtin_instruments[].config.decay_ms", kBuiltinSynthStageMsDomain,
@@ -48,6 +51,11 @@ inline const NumericDomainRow kInstrumentDomainRows[] = {
      nullptr},
     {"project_bounce", "options.sf2_instruments[].config.prefer_model_for_modeled_families",
      kSf2PlayerFlagDomain, nullptr},
+    {"project_bounce", "options.synth_instruments[].patch.num_mod_routings",
+     kSynthModRoutingCountDomain, nullptr},
+    {"project_bounce", "options.synth_instruments[].patch.polyphony", kSynthPolyphonyDomain,
+     nullptr},
+    {"project_bounce", "options.synth_instruments[].patch.unison", kSynthUnisonDomain, nullptr},
 };
 
 }  // namespace sonare_c_detail

@@ -6,6 +6,8 @@
 
 #include "engine/metronome.h"
 #include "midi/builtin_synth.h"
+#include "midi/synth/mod_matrix.h"
+#include "midi/synth/native_synth_patch.h"
 #include "util/parameter_checks.h"
 
 namespace sonare_c_detail {
@@ -22,6 +24,12 @@ inline constexpr sonare::util::check::NumericDomain kBuiltinSynthSustainDomain =
 /// @brief What the built-in synth's and the SF2 player's polyphony accept.
 inline constexpr sonare::util::check::NumericDomain kSynthPolyphonyDomain =
     sonare::util::check::integer_domain(1, sonare::midi::kMaxSynthVoices);
+/// @brief What a synth patch's unison oscillator count accepts.
+inline constexpr sonare::util::check::NumericDomain kSynthUnisonDomain =
+    sonare::util::check::integer_domain(1, sonare::midi::synth::kMaxUnisonOscs);
+/// @brief What a synth patch's mod routing count accepts.
+inline constexpr sonare::util::check::NumericDomain kSynthModRoutingCountDomain =
+    sonare::util::check::integer_domain(0, sonare::midi::synth::kMaxModRoutes);
 /// @brief What the byte size of a SoundFont image accepts, on the engine and the project loader.
 inline constexpr sonare::util::check::NumericDomain kSoundFontSizeDomain =
     sonare::util::check::integer_domain_of<size_t>(1);

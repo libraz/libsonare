@@ -678,13 +678,8 @@ SonareError collect_bounce_instruments(const SonareProject* project,
   out->synths.reserve(options.synth_instrument_count);
   for (size_t i = 0; i < options.synth_instrument_count; ++i) {
     const SonareSynthInstrumentBinding& binding = options.synth_instruments[i];
-    sonare::midi::synth::NativeSynthConfig cfg;
-    const char* error = nullptr;
-    if (!sonare_c_detail::synth_config_from_patch_c(binding.patch, &cfg, &error)) {
-      set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                     error != nullptr ? error : "invalid synth patch");
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    sonare::midi::synth::NativeSynthConfig cfg = sonare_c_detail::synth_config_from_patch_c(
+        binding.patch, check::indexed_subject("options.synth_instruments", i, "patch"));
     cfg.use_gm_programs = binding.use_gm_programs != 0;
 #if defined(SONARE_WITH_MASTERING)
     cfg.insert_factory = [](std::string_view name,

@@ -351,21 +351,11 @@ namespace {
 SonareError bind_native_synth(SonareEngine* engine, uint32_t destination_id,
                               const SonareSynthPatch& patch, SonareSampleBank* bank,
                               bool use_gm_programs) {
-  if (const SonareError err = run_validation([&] {
-        require_struct_size(patch.struct_size, sizeof(SonareSynthPatch), "patch",
-                            "sonare_synth_patch_init");
-      });
+  sonare::midi::synth::NativeSynthConfig cfg;
+  if (const SonareError err =
+          run_validation([&] { cfg = sonare_c_detail::synth_config_from_patch_c(patch, "patch"); });
       err != SONARE_OK) {
     return err;
-  }
-  sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
-  if (!sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error)) {
-    if (error != nullptr) {
-      set_last_error(SONARE_ERROR_INVALID_PARAMETER, error);
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    return run_validation([&] { util::check::refuse("patch", "must be a valid synth patch"); });
   }
   cfg.use_gm_programs = use_gm_programs;
 #if defined(SONARE_WITH_MASTERING)

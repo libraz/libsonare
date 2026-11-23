@@ -1746,10 +1746,8 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
     return patch;
   };
   const auto refused = [&](const SonareSynthPatch& patch) {
-    sonare::midi::synth::NativeSynthConfig cfg;
-    const char* error = nullptr;
-    CHECK_FALSE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
-    CHECK(error != nullptr);
+    CHECK_THROWS_AS(sonare_c_detail::synth_config_from_patch_c(patch, "patch"),
+                    sonare::SonareException);
     CHECK(set_synth_patch(engine, 1, &patch) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()).size() > 0);
   };
@@ -1804,9 +1802,8 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
   patch.mod_routings[0] = {SONARE_SYNTH_MOD_SOURCE_COUNT - 1,
                            SONARE_SYNTH_MOD_DESTINATION_COUNT - 1, 9600.0f};
   patch.mod_routings[1] = {1, 1, -9600.0f};
-  sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+  sonare::midi::synth::NativeSynthConfig cfg =
+      sonare_c_detail::synth_config_from_patch_c(patch, "patch");
   const auto& routes = cfg.patch.mod_matrix.routes;
   CHECK(static_cast<int>(routes[0].source) == SONARE_SYNTH_MOD_SOURCE_COUNT - 1);
   CHECK(static_cast<int>(routes[0].destination) == SONARE_SYNTH_MOD_DESTINATION_COUNT - 1);
@@ -1819,7 +1816,7 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
   sample.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
   sample.sample_loop = SONARE_SAMPLE_LOOP_KEY_DOWN;
   sample.sample_key_track = SONARE_SAMPLE_KEY_TRACK_OFF;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(sample, &cfg, &error));
+  cfg = sonare_c_detail::synth_config_from_patch_c(sample, "patch");
   CHECK(cfg.patch.sample.loop_override == 3);
   CHECK_FALSE(cfg.patch.sample.key_track);
   sonare_engine_destroy(engine);

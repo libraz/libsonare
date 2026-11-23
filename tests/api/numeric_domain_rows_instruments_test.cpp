@@ -57,6 +57,28 @@ void set_sf2_field(C* c, const std::string& field, double value) {
   if (field == "gs_efx_realization") c->gs_efx_realization = static_cast<int>(value);
 }
 
+/// Sets a synth patch integer field with its presence bit, so a 0 is read as given rather than
+/// as "keep the preset"; a routing count fills that many valid routings.
+void set_patch_field(SonareSynthPatch* patch, const std::string& field, double value) {
+  const int v = static_cast<int>(value);
+  if (field == "polyphony") {
+    patch->polyphony = v;
+    patch->present_fields |= SONARE_SYNTH_FIELD_POLYPHONY;
+  }
+  if (field == "unison") {
+    patch->unison = v;
+    patch->present_fields |= SONARE_SYNTH_FIELD_UNISON;
+  }
+  if (field == "num_mod_routings") {
+    patch->num_mod_routings = v;
+    for (int i = 0; i < v && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
+      patch->mod_routings[i].source = 1;
+      patch->mod_routings[i].destination = 1;
+      patch->mod_routings[i].depth = 0.0f;
+    }
+  }
+}
+
 std::string field_of(const std::string& param) { return param.substr(param.rfind('.') + 1); }
 
 SonareError probe_engine_builtin(const std::string& param, double value) {
@@ -67,6 +89,19 @@ SonareError probe_engine_builtin(const std::string& param, double value) {
   sonare_engine_builtin_synth_config_init(&config);
   set_builtin_field(&config, field_of(param), value);
   const SonareError err = sonare_engine_set_builtin_instrument(engine, 5, &config);
+  sonare_engine_destroy(engine);
+  return err;
+}
+
+SonareError probe_engine_synth(const std::string& param, double value) {
+  SonareEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000, 64, 32, 16, 0) == SONARE_OK);
+  SonareSynthInstrumentBinding binding{};
+  sonare_synth_patch_init(&binding.patch);
+  binding.destination_id = 5;
+  set_patch_field(&binding.patch, field_of(param), value);
+  const SonareError err = sonare_engine_set_synth_instrument(engine, &binding);
   sonare_engine_destroy(engine);
   return err;
 }
@@ -92,6 +127,9 @@ SonareError probe_project_bounce(const std::string& param, double value) {
   SonareSf2InstrumentBinding sf2{};
   sonare_sf2_instrument_config_init(&sf2.config);
   sf2.destination_id = 2;
+  SonareSynthInstrumentBinding synth{};
+  sonare_synth_patch_init(&synth.patch);
+  synth.destination_id = 2;
 
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -105,6 +143,10 @@ SonareError probe_project_bounce(const std::string& param, double value) {
     set_builtin_field(&builtin.config, field_of(param), value);
     options.builtin_instruments = &builtin;
     options.builtin_instrument_count = 1;
+  } else if (param.rfind("options.synth_instruments[]", 0) == 0) {
+    set_patch_field(&synth.patch, field_of(param), value);
+    options.synth_instruments = &synth;
+    options.synth_instrument_count = 1;
   } else {
     set_sf2_field(&sf2.config, field_of(param), value);
     options.sf2_instruments = &sf2;
@@ -128,6 +170,7 @@ const std::map<std::string, Probe>& probes() {
 #if defined(SONARE_WITH_ARRANGEMENT)
       {"engine_set_builtin_instrument", probe_engine_builtin},
       {"engine_set_sf2_instrument", probe_engine_sf2},
+      {"engine_set_synth_instrument", probe_engine_synth},
       {"project_bounce", probe_project_bounce},
 #endif
   };

@@ -23,9 +23,37 @@
 #include "support/midi_render.h"
 #include "support/project_bounce.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 namespace {
+
+// The validator throws a refusal naming the field; these cases read its verdict and its text.
+bool synth_patch_converts(const SonareSynthPatch& patch,
+                          sonare::midi::synth::NativeSynthConfig* cfg, std::string* error) {
+  try {
+    *cfg = sonare_c_detail::synth_config_from_patch_c(patch, "patch");
+    error->clear();
+    return true;
+  } catch (const sonare::SonareException& e) {
+    *error = e.what();
+    return false;
+  }
+}
+
+// The C field behind an automation-table key: cutoffHz is cutoff_hz.
+std::string snake_key(const std::string& key) {
+  std::string out;
+  for (const char ch : key) {
+    if (ch >= 'A' && ch <= 'Z') {
+      out += '_';
+      out += static_cast<char>(ch - 'A' + 'a');
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
 
 // Bounces with one kind of hosted-instrument list set on a copy of the options.
 SonareError bounce_with_synth_instruments(SonareProject* project,
@@ -327,8 +355,8 @@ TEST_CASE("every named synth patch renders as its catalog preset", "[project][sy
     sonare_synth_patch_init(&patch);
     std::strncpy(patch.preset, preset->name, SONARE_SYNTH_PRESET_NAME_MAX - 1);
     sonare::midi::synth::NativeSynthConfig cfg;
-    const char* error = nullptr;
-    REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+    std::string error;
+    REQUIRE(synth_patch_converts(patch, &cfg, &error));
     const sonare::test::StereoRender direct = render_config(preset->config);
     const sonare::test::StereoRender converted = render_config(cfg);
     REQUIRE(converted.left == direct.left);
@@ -349,8 +377,8 @@ TEST_CASE("a synth patch takes a missing engine section from the base preset",
     sonare_synth_patch_init(&patch);
     patch.engine_mode = mode;
     sonare::midi::synth::NativeSynthConfig cfg;
-    const char* error = nullptr;
-    REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+    std::string error;
+    REQUIRE(synth_patch_converts(patch, &cfg, &error));
     require_section_read_back(cfg.patch, base);
     const sonare::test::StereoRender expected =
         render_config(with_section_of(sonare::midi::synth::NativeSynthConfig{}, engine, base));
@@ -367,8 +395,8 @@ TEST_CASE("a synth patch takes a missing engine section from the base preset",
   std::strcpy(violin_fm.preset, "violin");
   violin_fm.engine_mode = SONARE_SYNTH_ENGINE_FM;
   sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(violin_fm, &cfg, &error));
+  std::string error;
+  REQUIRE(synth_patch_converts(violin_fm, &cfg, &error));
   require_section_read_back(cfg.patch, "ePiano");
   const sonare::midi::synth::SynthPreset* violin = sonare::midi::synth::find_synth_preset("violin");
   REQUIRE(violin != nullptr);
@@ -572,8 +600,8 @@ TEST_CASE("the subtractive section is set by key and reaches the render",
   refused.engine_params = &beyond;
   refused.engine_param_count = 1;
   sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
-  REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(refused, &cfg, &error));
+  std::string error;
+  REQUIRE_FALSE(synth_patch_converts(refused, &cfg, &error));
   REQUIRE(std::string(error).find("osc2IntervalCents") != std::string::npos);
   sonare_project_destroy(project);
 }
@@ -754,14 +782,14 @@ TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][
   SonareSynthPatch patch{};
   sonare_synth_patch_init(&patch);
   sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
+  std::string error;
 
   auto rejected = [&](auto mutate) {
     SonareSynthPatch invalid{};
     sonare_synth_patch_init(&invalid);
     mutate(invalid);
-    error = nullptr;
-    return !sonare_c_detail::synth_config_from_patch_c(invalid, &cfg, &error) && error != nullptr;
+    error.clear();
+    return !synth_patch_converts(invalid, &cfg, &error) && !error.empty();
   };
 
   REQUIRE(rejected([](SonareSynthPatch& p) { p.engine_mode = SONARE_SYNTH_ENGINE_MODE_COUNT; }));
@@ -775,26 +803,26 @@ TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][
   REQUIRE(rejected([](SonareSynthPatch& p) { p.lfo_shape = SONARE_SYNTH_LFO_SHAPE_COUNT; }));
   REQUIRE(rejected([](SonareSynthPatch& p) { p.lfo_shape = -1; }));
 
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+  REQUIRE(synth_patch_converts(patch, &cfg, &error));
 }
 
 TEST_CASE("synth patch conversion refuses a master gain outside [0, 4]",
           "[project][synth_patch][gain]") {
   sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
+  std::string error;
   auto convert = [&](float gain) {
     SonareSynthPatch patch{};
     sonare_synth_patch_init(&patch);
     patch.gain = gain;
     patch.present_fields |= SONARE_SYNTH_FIELD_GAIN;
-    error = nullptr;
-    return sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error);
+    error.clear();
+    return synth_patch_converts(patch, &cfg, &error);
   };
 
   for (const float bad : {4.5f, 16.0f, -0.5f, std::numeric_limits<float>::quiet_NaN(),
                           std::numeric_limits<float>::infinity()}) {
     REQUIRE_FALSE(convert(bad));
-    REQUIRE(error != nullptr);
+    REQUIRE(!error.empty());
     REQUIRE(std::string(error).find("gain") != std::string::npos);
   }
   REQUIRE(convert(4.0f));
@@ -865,14 +893,13 @@ const BoundedPatchField* find_bounded_patch_field(const std::string& key) {
 }
 
 // Converts a current-version patch with @p f set to @p value and its presence bit raised.
-bool convert_with_field(const BoundedPatchField& f, float value, const char** error) {
+bool convert_with_field(const BoundedPatchField& f, float value, std::string* error) {
   SonareSynthPatch patch{};
   sonare_synth_patch_init(&patch);
   patch.*(f.member) = value;
   (f.second_word ? patch.present_fields2 : patch.present_fields) |= f.bit;
   sonare::midi::synth::NativeSynthConfig cfg;
-  *error = nullptr;
-  return sonare_c_detail::synth_config_from_patch_c(patch, &cfg, error);
+  return synth_patch_converts(patch, &cfg, error);
 }
 
 }  // namespace
@@ -900,20 +927,20 @@ TEST_CASE("synth patch conversion refuses each bounded field at the range the in
     const float lo = static_cast<float>((*row)["min"].as_number());
     const float hi = static_cast<float>((*row)["max"].as_number());
 
-    const char* error = nullptr;
+    std::string error;
     REQUIRE(convert_with_field(*field, lo, &error));
     REQUIRE(convert_with_field(*field, hi, &error));
     for (const float bad : {std::nextafter(lo, -std::numeric_limits<float>::infinity()),
                             std::nextafter(hi, std::numeric_limits<float>::infinity())}) {
       REQUIRE_FALSE(convert_with_field(*field, bad, &error));
-      REQUIRE(error != nullptr);
-      REQUIRE(std::string(error).find("synth patch field '" + key + "': out of range [") == 0);
+      REQUIRE(!error.empty());
+      REQUIRE(error.find("patch." + snake_key(key) + " must be finite and in [") == 0);
     }
     for (const float bad :
          {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
       REQUIRE_FALSE(convert_with_field(*field, bad, &error));
-      REQUIRE(error != nullptr);
-      REQUIRE(std::string(error).find("synth patch field '" + key + "':") == 0);
+      REQUIRE(!error.empty());
+      REQUIRE(error.find("patch." + snake_key(key) + " ") == 0);
     }
   }
 }
@@ -921,24 +948,24 @@ TEST_CASE("synth patch conversion refuses each bounded field at the range the in
 TEST_CASE("synth patch conversion refuses out-of-range values rather than clamping them",
           "[project][synth_patch]") {
   sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
+  std::string error;
   const auto refused = [&](auto mutate, const char* key) {
     SonareSynthPatch patch{};
     sonare_synth_patch_init(&patch);
     mutate(patch);
-    error = nullptr;
-    return !sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error) && error != nullptr &&
-           std::string(error).find(std::string("synth patch field '") + key + "'") == 0;
+    error.clear();
+    return !synth_patch_converts(patch, &cfg, &error) && !error.empty() &&
+           error.find(std::string("patch.") + key + " ") == 0;
   };
 
-  REQUIRE(refused([](SonareSynthPatch& p) { p.cutoff_hz = 1e6f; }, "cutoffHz"));
-  REQUIRE(refused([](SonareSynthPatch& p) { p.stereo_spread = 5.0f; }, "stereoSpread"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.cutoff_hz = 1e6f; }, "cutoff_hz"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.stereo_spread = 5.0f; }, "stereo_spread"));
   REQUIRE(refused(
       [](SonareSynthPatch& p) {
         p.amp_release_ms = 0.0f;
         p.present_fields |= SONARE_SYNTH_FIELD_AMP_RELEASE_MS;
       },
-      "ampReleaseMs"));
+      "amp_release_ms"));
   REQUIRE(refused([](SonareSynthPatch& p) { p.polyphony = 500; }, "polyphony"));
   REQUIRE(refused([](SonareSynthPatch& p) { p.polyphony = -3; }, "polyphony"));
   REQUIRE(refused([](SonareSynthPatch& p) { p.unison = sonare::midi::synth::kMaxUnisonOscs + 1; },
@@ -952,26 +979,26 @@ TEST_CASE("synth patch conversion refuses out-of-range values rather than clampi
       "unison"));
   REQUIRE(
       refused([](SonareSynthPatch& p) { p.num_mod_routings = SONARE_SYNTH_PATCH_MOD_ROUTINGS + 1; },
-              "modRoutings"));
+              "num_mod_routings"));
   REQUIRE(refused(
       [](SonareSynthPatch& p) {
         p.num_mod_routings = -1;
         p.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS;
       },
-      "modRoutings"));
-  REQUIRE(refused([](SonareSynthPatch& p) { p.num_mod_routings = -1; }, "modRoutings"));
+      "num_mod_routings"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.num_mod_routings = -1; }, "num_mod_routings"));
   REQUIRE(refused(
       [](SonareSynthPatch& p) {
         p.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
         p.sample_level = 100.0f;
       },
-      "sampleLevel"));
+      "sample_level"));
   REQUIRE(refused(
       [](SonareSynthPatch& p) {
         p.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
         p.sample_start_offset = 2.0f;
       },
-      "sampleStartOffset"));
+      "sample_start_offset"));
 
   // The ends of the integer ranges and a full routing table are accepted.
   SonareSynthPatch edge{};
@@ -982,11 +1009,11 @@ TEST_CASE("synth patch conversion refuses out-of-range values rather than clampi
   for (int i = 0; i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
     edge.mod_routings[i] = {3 /*lfo1*/, 1 /*pitchCents*/, 10.0f};
   }
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(edge, &cfg, &error));
+  REQUIRE(synth_patch_converts(edge, &cfg, &error));
   REQUIRE(cfg.polyphony == sonare::midi::kMaxSynthVoices);
   edge.unison = 1;
   edge.polyphony = 1;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(edge, &cfg, &error));
+  REQUIRE(synth_patch_converts(edge, &cfg, &error));
   REQUIRE(cfg.polyphony == 1);
 
   // A sample patch accepts the published ends of its level and start offset.
@@ -1002,7 +1029,7 @@ TEST_CASE("synth patch conversion refuses out-of-range values rather than clampi
       const float value = static_cast<float>(d[edge_name].as_number());
       (name == "sampleLevel" ? patch.sample_level : patch.sample_start_offset) = value;
       INFO(name << " " << edge_name);
-      REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+      REQUIRE(synth_patch_converts(patch, &cfg, &error));
     }
   }
 }
@@ -1193,9 +1220,9 @@ TEST_CASE("synth patch numeric zero fields keep the base preset", "[project][syn
   std::strcpy(preset_only.preset, "warmPad");
 
   sonare::midi::synth::NativeSynthConfig base;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(preset_only, &base, &error));
-  REQUIRE(error == nullptr);
+  std::string error;
+  REQUIRE(synth_patch_converts(preset_only, &base, &error));
+  REQUIRE(error.empty());
   REQUIRE(base.patch.amp_env.sustain > 0.0f);
   REQUIRE(base.patch.filter_env.sustain > 0.0f);
   REQUIRE(base.gain > 0.0f);
@@ -1206,8 +1233,8 @@ TEST_CASE("synth patch numeric zero fields keep the base preset", "[project][syn
   explicit_zero.gain = 0.0f;
 
   sonare::midi::synth::NativeSynthConfig kept;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(explicit_zero, &kept, &error));
-  REQUIRE(error == nullptr);
+  REQUIRE(synth_patch_converts(explicit_zero, &kept, &error));
+  REQUIRE(error.empty());
   REQUIRE(kept.patch.amp_env.sustain == base.patch.amp_env.sustain);
   REQUIRE(kept.patch.filter_env.sustain == base.patch.filter_env.sustain);
   REQUIRE(kept.gain == base.gain);
@@ -1218,8 +1245,8 @@ TEST_CASE("synth patch numeric zero fields keep the base preset", "[project][syn
   non_zero.gain = 0.5f;
 
   sonare::midi::synth::NativeSynthConfig overridden;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(non_zero, &overridden, &error));
-  REQUIRE(error == nullptr);
+  REQUIRE(synth_patch_converts(non_zero, &overridden, &error));
+  REQUIRE(error.empty());
   REQUIRE(overridden.patch.amp_env.sustain == 0.25f);
   REQUIRE(overridden.patch.filter_env.sustain == 0.125f);
   REQUIRE(overridden.gain == 0.5f);
@@ -1233,9 +1260,9 @@ TEST_CASE("the patch pitch offset is read only by a caller that declares it",
   asked.pitch_offset_cents = 700.0f;
 
   sonare::midi::synth::NativeSynthConfig read;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
-  REQUIRE(error == nullptr);
+  std::string error;
+  REQUIRE(synth_patch_converts(asked, &read, &error));
+  REQUIRE(error.empty());
   REQUIRE(read.patch.pitch_offset_cents == 700.0f);
 }
 
@@ -1247,20 +1274,20 @@ TEST_CASE("the patch retrigger mode is read from a full-size struct",
   std::strcpy(asked.preset, "sawLead");
   asked.retrigger = SONARE_SYNTH_RETRIGGER_NOTE;
   sonare::midi::synth::NativeSynthConfig read;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
+  std::string error;
+  REQUIRE(synth_patch_converts(asked, &read, &error));
   REQUIRE(read.patch.retrigger == SynthRetrigger::kNote);
 
   // Zero keeps the base, which for every catalog preset is free running.
   SonareSynthPatch base = asked;
   base.retrigger = SONARE_SYNTH_RETRIGGER_BASE;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(base, &read, &error));
+  REQUIRE(synth_patch_converts(base, &read, &error));
   REQUIRE(read.patch.retrigger == SynthRetrigger::kFree);
 
   // A struct sized below sizeof is refused by name rather than read past its end.
   SonareSynthPatch undersized = asked;
   undersized.struct_size = sizeof(SonareSynthPatch) - 1;
-  REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(undersized, &read, &error));
+  REQUIRE_FALSE(synth_patch_converts(undersized, &read, &error));
   REQUIRE(std::string(error) == "patch.struct_size must be set by sonare_synth_patch_init");
 
   // The read direction reports the resolved mode rather than the keep-base zero.
@@ -1277,12 +1304,12 @@ TEST_CASE("the patch LFO shape is read from a full-size struct",
   std::strcpy(asked.preset, "sawLead");
   asked.lfo_shape = SONARE_SYNTH_LFO_SHAPE_SINE;
   sonare::midi::synth::NativeSynthConfig read;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
+  std::string error;
+  REQUIRE(synth_patch_converts(asked, &read, &error));
   REQUIRE(read.patch.lfo_shape == LfoShape::kSine);
   SonareSynthPatch random = asked;
   random.lfo_shape = SONARE_SYNTH_LFO_SHAPE_RANDOM;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(random, &read, &error));
+  REQUIRE(synth_patch_converts(random, &read, &error));
   REQUIRE(read.patch.lfo_shape == LfoShape::kRandom);
   SonareSynthPatch written{};
   sonare_c_detail::synth_patch_to_c(sonare::midi::synth::SynthPreset{"sawLead", read}, &written);
@@ -1291,7 +1318,7 @@ TEST_CASE("the patch LFO shape is read from a full-size struct",
   // Zero keeps the base, which for every catalog preset is the triangle.
   SonareSynthPatch base = asked;
   base.lfo_shape = SONARE_SYNTH_LFO_SHAPE_BASE;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(base, &read, &error));
+  REQUIRE(synth_patch_converts(base, &read, &error));
   REQUIRE(read.patch.lfo_shape == LfoShape::kTriangle);
 
   // The read direction reports the resolved shape rather than the keep-base zero.
@@ -1313,9 +1340,9 @@ TEST_CASE("the second presence word's fields are read from a full-size struct",
   asked.filter_hold_ms = 60.0f;
   asked.one_shot = 1;
   sonare::midi::synth::NativeSynthConfig read;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
-  REQUIRE(error == nullptr);
+  std::string error;
+  REQUIRE(synth_patch_converts(asked, &read, &error));
+  REQUIRE(error.empty());
   REQUIRE(read.patch.drift_rate_hz == 4.5f);
   REQUIRE(read.patch.amp_env.delay_ms == 30.0f);
   REQUIRE(read.patch.amp_env.hold_ms == 40.0f);
@@ -1330,12 +1357,12 @@ TEST_CASE("the second presence word's fields are read from a full-size struct",
   const sonare::midi::synth::SynthPreset* saw = sonare::midi::synth::find_synth_preset("sawLead");
   REQUIRE(saw != nullptr);
   REQUIRE(saw->config.patch.drift_rate_hz != 0.0f);
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
+  REQUIRE(synth_patch_converts(zero, &read, &error));
   REQUIRE(read.patch.drift_rate_hz == saw->config.patch.drift_rate_hz);
   // The rate's accepted range starts above zero, so an explicit zero is refused by name.
   zero.present_fields2 = SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ;
-  REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
-  REQUIRE(std::string(error).find("synth patch field 'driftRateHz'") == 0);
+  REQUIRE_FALSE(synth_patch_converts(zero, &read, &error));
+  REQUIRE(error.find("patch.drift_rate_hz ") == 0);
   zero.present_fields2 = 0;
 
   // The read direction reports every field with its presence bit set.
@@ -1344,7 +1371,7 @@ TEST_CASE("the second presence word's fields are read from a full-size struct",
   REQUIRE(preset.present_fields2 == sonare_c_detail::kSynthPatchAllFields2);
   REQUIRE(preset.drift_rate_hz == saw->config.patch.drift_rate_hz);
   REQUIRE(preset.one_shot == 0);
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(preset, &read, &error));
+  REQUIRE(synth_patch_converts(preset, &read, &error));
   REQUIRE(read.patch.drift_rate_hz == saw->config.patch.drift_rate_hz);
 }
 
@@ -1594,9 +1621,9 @@ TEST_CASE("synth patch mod routing ordinals outside the enum are refused at the 
     patch.num_mod_routings = 1;
     patch.mod_routings[0] = routing;
     sonare::midi::synth::NativeSynthConfig cfg;
-    const char* error = nullptr;
-    REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
-    REQUIRE(error != nullptr);
+    std::string error;
+    REQUIRE_FALSE(synth_patch_converts(patch, &cfg, &error));
+    REQUIRE(!error.empty());
   }
 }
 
@@ -1710,9 +1737,9 @@ TEST_CASE("every mod source ordinal survives the C conversion", "[project][synth
     sonare_synth_patch_init(&patch);
     patch.num_mod_routings = 1;
     patch.mod_routings[0] = {source, 1, 1.0f};
-    const char* error = nullptr;
-    const bool ok = sonare_c_detail::synth_config_from_patch_c(patch, cfg, &error);
-    REQUIRE(ok == (error == nullptr));
+    std::string error;
+    const bool ok = synth_patch_converts(patch, cfg, &error);
+    REQUIRE(ok == error.empty());
     return ok;
   };
   for (int ordinal = 1; ordinal < SONARE_SYNTH_MOD_SOURCE_COUNT; ++ordinal) {
@@ -1732,9 +1759,9 @@ TEST_CASE("every mod destination ordinal survives the C conversion", "[project][
     sonare_synth_patch_init(&patch);
     patch.num_mod_routings = 1;
     patch.mod_routings[0] = {1, destination, 1.0f};
-    const char* error = nullptr;
-    const bool ok = sonare_c_detail::synth_config_from_patch_c(patch, cfg, &error);
-    REQUIRE(ok == (error == nullptr));
+    std::string error;
+    const bool ok = synth_patch_converts(patch, cfg, &error);
+    REQUIRE(ok == error.empty());
     return ok;
   };
   for (int ordinal = 1; ordinal < SONARE_SYNTH_MOD_DESTINATION_COUNT; ++ordinal) {

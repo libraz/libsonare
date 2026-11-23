@@ -17,6 +17,7 @@
 
 #include "c_api/c_ordinal.h"
 #include "c_api/instrument_config_domains.h"
+#include "c_api/sonare_c_internal.h"
 #include "midi/builtin_synth.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/patch_tuning.h"
@@ -211,37 +212,15 @@ inline bool valid_builtin_waveform(int value) noexcept {
   return valid_c_enum(value, SONARE_SYNTH_WAVEFORM_COUNT);
 }
 
-/// Storage for a refusal message composed from the caller's values; valid
-/// until the next refusal on the same thread.
-inline std::string& synth_patch_error_message() {
-  static thread_local std::string message;
-  return message;
-}
-
-/// Refuses @p value for the patch field @p key unless it is finite and in [lo, hi].
-inline bool synth_patch_field_in_range(const char* key, float value, float lo, float hi,
-                                       const char** out_error) {
-  if (std::isfinite(value) && value >= lo && value <= hi) return true;
-  std::string& message = synth_patch_error_message();
-  message = std::string("synth patch field '") + key + "': ";
-  if (std::isfinite(value)) {
-    message +=
-        "out of range [" + sonare::util::to_text(lo) + ", " + sonare::util::to_text(hi) + "]";
-  } else {
-    message += "not a finite number";
-  }
-  if (out_error) *out_error = message.c_str();
-  return false;
-}
-
-/// The automation table's range check for the patch field behind @p id.
-inline bool synth_patch_param_in_range(sonare::midi::synth::NativeSynthParamId id, float value,
-                                       const char** out_error) {
+/// Refuses @p value for the patch field @p subject unless it is finite and within the range the
+/// automation table publishes for @p id.
+inline void synth_patch_param_in_range(sonare::midi::synth::NativeSynthParamId id, float value,
+                                       const std::string& subject) {
   const char* key = "";
   float lo = 0.0f;
   float hi = 0.0f;
   sonare::midi::synth::native_synth_param_range(id, &key, &lo, &hi);
-  return synth_patch_field_in_range(key, value, lo, hi, out_error);
+  sonare::util::check::in_range(value, lo, hi, subject.c_str());
 }
 
 /// The sample-engine level and start-offset ranges, read back from the patch clamp's extremes.
@@ -348,16 +327,18 @@ inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& fro
 /// Every non-zero struct field then overrides the base ("0 => keep"), and the
 /// engine params assign fields of the selected engine's section by key.
 /// The presence words @c present_fields and @c present_fields2 let a caller also override with an
-/// explicit zero. The sample-engine block is read only by a sample patch. Returns false (and sets
-/// @p out_error, valid until the next refusal on this thread) for a struct_size below
-/// sizeof(SonareSynthPatch), an unknown preset name, a refused engine param, a bounded numeric
-/// field that is non-finite or outside the range sonare_synth_patch_param_info() publishes for it,
-/// an enum ordinal outside its set, a mod routing with an unknown source or destination or a depth
-/// that is non-finite or beyond the patch clamp, or more mod routings than the matrix holds;
-/// nothing is clamped silently at that step.
-inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
-                                      sonare::midi::synth::NativeSynthConfig* out,
-                                      const char** out_error) {
+/// explicit zero. The sample-engine block is read only by a sample patch. @p subject is the C path
+/// of the patch ("patch", "options.synth_instruments[i].patch"); each refusal names the field under
+/// it. Refused, never clamped: a struct_size below sizeof(SonareSynthPatch), an unknown preset
+/// name, a refused engine param, a bounded numeric field that is non-finite or outside the range
+/// sonare_synth_patch_param_info() publishes for it, an enum ordinal outside its set, a mod routing
+/// with an unknown source or destination or a depth that is non-finite or beyond the patch clamp,
+/// or more mod routings than the matrix holds.
+/// @throws sonare::SonareParameterRefusal (InvalidParameter) naming the field; a refused engine
+///         param is a SonareException carrying the engine's own text.
+inline sonare::midi::synth::NativeSynthConfig synth_config_from_patch_c(
+    const SonareSynthPatch& c, const std::string& subject) {
+  namespace check = sonare::util::check;
   using sonare::midi::synth::BodyType;
   using sonare::midi::synth::find_synth_preset;
   using sonare::midi::synth::kMaxModRoutes;
@@ -370,67 +351,42 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::SynthRetrigger;
   using sonare::midi::synth::VaWaveform;
 
-  if (out_error) *out_error = nullptr;
+  const auto field = [&subject](const char* name) { return subject + "." + name; };
   // A field is applied when its presence bit is set or it is non-zero (NaN included);
   // an applied value outside the automation table's range is refused.
-  const auto take = [out_error](bool given, ParamId id, float value, float* dst) {
-    if (!given && value == 0.0f) return true;
-    if (!synth_patch_param_in_range(id, value, out_error)) return false;
+  const auto take = [&field](bool given, ParamId id, const char* name, float value, float* dst) {
+    if (!given && value == 0.0f) return;
+    synth_patch_param_in_range(id, value, field(name));
     *dst = value;
-    return true;
   };
-  if (c.struct_size < sizeof(SonareSynthPatch)) {
-    if (out_error) *out_error = "patch.struct_size must be set by sonare_synth_patch_init";
-    return false;
-  }
+  require_struct_size(c.struct_size, sizeof(SonareSynthPatch), subject, "sonare_synth_patch_init");
   const uint32_t present = c.present_fields;
   const auto set = [present](uint32_t bit) { return (present & bit) != 0u; };
   const uint32_t present2 = c.present_fields2;
   const auto set2 = [present2](uint32_t bit) { return (present2 & bit) != 0u; };
-  if (!valid_c_enum(c.engine_mode, SONARE_SYNTH_ENGINE_MODE_COUNT)) {
-    if (out_error) *out_error = "invalid synth engine_mode";
-    return false;
-  }
-  if (!valid_c_enum(c.waveform, SONARE_SYNTH_OSC_WAVEFORM_COUNT)) {
-    if (out_error) *out_error = "invalid synth waveform";
-    return false;
-  }
-  if (!valid_c_enum(c.filter_model, SONARE_SYNTH_FILTER_MODEL_COUNT)) {
-    if (out_error) *out_error = "invalid synth filter_model";
-    return false;
-  }
-  if (!valid_c_enum(c.filter_output, SONARE_SYNTH_FILTER_OUTPUT_COUNT)) {
-    if (out_error) *out_error = "invalid synth filter_output";
-    return false;
-  }
-  if (!valid_c_enum(c.body, SONARE_SYNTH_BODY_TYPE_COUNT)) {
-    if (out_error) *out_error = "invalid synth body";
-    return false;
-  }
+  check::integer_in_range(c.engine_mode, 0, SONARE_SYNTH_ENGINE_MODE_COUNT - 1,
+                          field("engine_mode").c_str());
+  check::integer_in_range(c.waveform, 0, SONARE_SYNTH_OSC_WAVEFORM_COUNT - 1,
+                          field("waveform").c_str());
+  check::integer_in_range(c.filter_model, 0, SONARE_SYNTH_FILTER_MODEL_COUNT - 1,
+                          field("filter_model").c_str());
+  check::integer_in_range(c.filter_output, 0, SONARE_SYNTH_FILTER_OUTPUT_COUNT - 1,
+                          field("filter_output").c_str());
+  check::integer_in_range(c.body, 0, SONARE_SYNTH_BODY_TYPE_COUNT - 1, field("body").c_str());
   const int retrigger = c.retrigger;
-  if (!valid_c_enum(retrigger, SONARE_SYNTH_RETRIGGER_COUNT)) {
-    if (out_error) *out_error = "invalid synth retrigger";
-    return false;
-  }
+  check::integer_in_range(retrigger, 0, SONARE_SYNTH_RETRIGGER_COUNT - 1,
+                          field("retrigger").c_str());
   const int lfo_shape = c.lfo_shape;
-  if (!valid_c_enum(lfo_shape, SONARE_SYNTH_LFO_SHAPE_COUNT)) {
-    if (out_error) *out_error = "invalid synth lfo_shape";
-    return false;
-  }
+  check::integer_in_range(lfo_shape, 0, SONARE_SYNTH_LFO_SHAPE_COUNT - 1,
+                          field("lfo_shape").c_str());
   // Any engine refuses an unknown ordinal in the sample block.
-  if (!valid_c_enum(c.sample_loop, SONARE_SAMPLE_LOOP_MODE_COUNT)) {
-    if (out_error) *out_error = "invalid synth sample_loop";
-    return false;
-  }
-  if (!valid_c_enum(c.sample_key_track, SONARE_SAMPLE_KEY_TRACK_COUNT)) {
-    if (out_error) *out_error = "invalid synth sample_key_track";
-    return false;
-  }
+  check::integer_in_range(c.sample_loop, 0, SONARE_SAMPLE_LOOP_MODE_COUNT - 1,
+                          field("sample_loop").c_str());
+  check::integer_in_range(c.sample_key_track, 0, SONARE_SAMPLE_KEY_TRACK_COUNT - 1,
+                          field("sample_key_track").c_str());
   const size_t engine_param_count = c.engine_param_count;
-  if (engine_param_count > 0 && c.engine_params == nullptr) {
-    if (out_error) *out_error = "engine_params is NULL with a non-zero engine_param_count";
-    return false;
-  }
+  check::non_null_when_count(c.engine_params, engine_param_count, field("engine_params").c_str(),
+                             field("engine_param_count").c_str());
   NativeSynthConfig cfg;
   const sonare::midi::synth::SynthPreset* named = nullptr;
   if (c.preset[0] != '\0') {
@@ -438,10 +394,8 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     char name[SONARE_SYNTH_PRESET_NAME_MAX + 1] = {};
     std::memcpy(name, c.preset, SONARE_SYNTH_PRESET_NAME_MAX);
     named = find_synth_preset(name);
-    if (named == nullptr) {
-      if (out_error) *out_error = "unknown synth preset name";
-      return false;
-    }
+    if (named == nullptr)
+      check::refuse(field("preset").c_str(), "must name a synth catalog preset");
     cfg = named->config;
   }
   sonare::midi::synth::NativeSynthPatch& p = cfg.patch;
@@ -458,20 +412,14 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   // Oscillator section.
   if (c.waveform > 0) p.waveform = admitted_ordinal_to_enum<VaWaveform>(c.waveform, 1);
   if (set(SONARE_SYNTH_FIELD_UNISON) || c.unison != 0) {
-    if (!synth_patch_field_in_range("unison", static_cast<float>(c.unison), 1.0f,
-                                    static_cast<float>(sonare::midi::synth::kMaxUnisonOscs),
-                                    out_error)) {
-      return false;
-    }
+    check::integer_within(c.unison, kSynthUnisonDomain, field("unison").c_str());
     p.unison = c.unison;
   }
-  if (!take(set(SONARE_SYNTH_FIELD_DETUNE_CENTS), ParamId::kDetuneCents, c.detune_cents,
-            &p.detune_cents) ||
-      !take(set(SONARE_SYNTH_FIELD_DRIFT_CENTS), ParamId::kDriftCents, c.drift_cents,
-            &p.drift_cents) ||
-      !take(set(SONARE_SYNTH_FIELD_DRIVE), ParamId::kDrive, c.drive, &p.drive)) {
-    return false;
-  }
+  take(set(SONARE_SYNTH_FIELD_DETUNE_CENTS), ParamId::kDetuneCents, "detune_cents", c.detune_cents,
+       &p.detune_cents);
+  take(set(SONARE_SYNTH_FIELD_DRIFT_CENTS), ParamId::kDriftCents, "drift_cents", c.drift_cents,
+       &p.drift_cents);
+  take(set(SONARE_SYNTH_FIELD_DRIVE), ParamId::kDrive, "drive", c.drive, &p.drive);
   // Filter section.
   if (c.filter_model > 0) {
     p.filter_model = admitted_ordinal_to_enum<SynthFilterModel>(c.filter_model, 1);
@@ -479,133 +427,108 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   if (c.filter_output > 0) {
     p.filter_output = admitted_ordinal_to_enum<SynthFilterOutput>(c.filter_output, 1);
   }
-  if (!take(set(SONARE_SYNTH_FIELD_CUTOFF_HZ), ParamId::kCutoffHz, c.cutoff_hz, &p.cutoff_hz) ||
-      !take(set(SONARE_SYNTH_FIELD_RESONANCE_Q), ParamId::kResonanceQ, c.resonance_q,
-            &p.resonance_q) ||
-      !take(set(SONARE_SYNTH_FIELD_KEY_TRACK), ParamId::kKeyTrack, c.key_track, &p.key_track) ||
-      !take(set(SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS), ParamId::kEnvToCutoffCents,
-            c.env_to_cutoff_cents, &p.env_to_cutoff_cents) ||
-      !take(set(SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS), ParamId::kVelToCutoffCents,
-            c.vel_to_cutoff_cents, &p.vel_to_cutoff_cents)) {
-    return false;
-  }
+  take(set(SONARE_SYNTH_FIELD_CUTOFF_HZ), ParamId::kCutoffHz, "cutoff_hz", c.cutoff_hz,
+       &p.cutoff_hz);
+  take(set(SONARE_SYNTH_FIELD_RESONANCE_Q), ParamId::kResonanceQ, "resonance_q", c.resonance_q,
+       &p.resonance_q);
+  take(set(SONARE_SYNTH_FIELD_KEY_TRACK), ParamId::kKeyTrack, "key_track", c.key_track,
+       &p.key_track);
+  take(set(SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS), ParamId::kEnvToCutoffCents,
+       "env_to_cutoff_cents", c.env_to_cutoff_cents, &p.env_to_cutoff_cents);
+  take(set(SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS), ParamId::kVelToCutoffCents,
+       "vel_to_cutoff_cents", c.vel_to_cutoff_cents, &p.vel_to_cutoff_cents);
   // Envelopes.
-  if (!take(set(SONARE_SYNTH_FIELD_AMP_ATTACK_MS), ParamId::kAmpAttackMs, c.amp_attack_ms,
-            &p.amp_env.attack_ms) ||
-      !take(set(SONARE_SYNTH_FIELD_AMP_DECAY_MS), ParamId::kAmpDecayMs, c.amp_decay_ms,
-            &p.amp_env.decay_ms) ||
-      !take(set(SONARE_SYNTH_FIELD_AMP_SUSTAIN), ParamId::kAmpSustain, c.amp_sustain,
-            &p.amp_env.sustain) ||
-      !take(set(SONARE_SYNTH_FIELD_AMP_RELEASE_MS), ParamId::kAmpReleaseMs, c.amp_release_ms,
-            &p.amp_env.release_ms) ||
-      !take(set(SONARE_SYNTH_FIELD_FILTER_ATTACK_MS), ParamId::kFilterAttackMs, c.filter_attack_ms,
-            &p.filter_env.attack_ms) ||
-      !take(set(SONARE_SYNTH_FIELD_FILTER_DECAY_MS), ParamId::kFilterDecayMs, c.filter_decay_ms,
-            &p.filter_env.decay_ms) ||
-      !take(set(SONARE_SYNTH_FIELD_FILTER_SUSTAIN), ParamId::kFilterSustain, c.filter_sustain,
-            &p.filter_env.sustain) ||
-      !take(set(SONARE_SYNTH_FIELD_FILTER_RELEASE_MS), ParamId::kFilterReleaseMs,
-            c.filter_release_ms, &p.filter_env.release_ms)) {
-    return false;
-  }
+  take(set(SONARE_SYNTH_FIELD_AMP_ATTACK_MS), ParamId::kAmpAttackMs, "amp_attack_ms",
+       c.amp_attack_ms, &p.amp_env.attack_ms);
+  take(set(SONARE_SYNTH_FIELD_AMP_DECAY_MS), ParamId::kAmpDecayMs, "amp_decay_ms", c.amp_decay_ms,
+       &p.amp_env.decay_ms);
+  take(set(SONARE_SYNTH_FIELD_AMP_SUSTAIN), ParamId::kAmpSustain, "amp_sustain", c.amp_sustain,
+       &p.amp_env.sustain);
+  take(set(SONARE_SYNTH_FIELD_AMP_RELEASE_MS), ParamId::kAmpReleaseMs, "amp_release_ms",
+       c.amp_release_ms, &p.amp_env.release_ms);
+  take(set(SONARE_SYNTH_FIELD_FILTER_ATTACK_MS), ParamId::kFilterAttackMs, "filter_attack_ms",
+       c.filter_attack_ms, &p.filter_env.attack_ms);
+  take(set(SONARE_SYNTH_FIELD_FILTER_DECAY_MS), ParamId::kFilterDecayMs, "filter_decay_ms",
+       c.filter_decay_ms, &p.filter_env.decay_ms);
+  take(set(SONARE_SYNTH_FIELD_FILTER_SUSTAIN), ParamId::kFilterSustain, "filter_sustain",
+       c.filter_sustain, &p.filter_env.sustain);
+  take(set(SONARE_SYNTH_FIELD_FILTER_RELEASE_MS), ParamId::kFilterReleaseMs, "filter_release_ms",
+       c.filter_release_ms, &p.filter_env.release_ms);
   // LFOs / glide.
-  if (!take(set(SONARE_SYNTH_FIELD_LFO_RATE_HZ), ParamId::kLfoRateHz, c.lfo_rate_hz,
-            &p.lfo_rate_hz) ||
-      !take(set(SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS), ParamId::kLfoToPitchCents,
-            c.lfo_to_pitch_cents, &p.lfo_to_pitch_cents) ||
-      !take(set(SONARE_SYNTH_FIELD_LFO2_RATE_HZ), ParamId::kLfo2RateHz, c.lfo2_rate_hz,
-            &p.lfo2_rate_hz) ||
-      !take(set(SONARE_SYNTH_FIELD_GLIDE_MS), ParamId::kGlideMs, c.glide_ms, &p.glide_ms)) {
-    return false;
-  }
+  take(set(SONARE_SYNTH_FIELD_LFO_RATE_HZ), ParamId::kLfoRateHz, "lfo_rate_hz", c.lfo_rate_hz,
+       &p.lfo_rate_hz);
+  take(set(SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS), ParamId::kLfoToPitchCents, "lfo_to_pitch_cents",
+       c.lfo_to_pitch_cents, &p.lfo_to_pitch_cents);
+  take(set(SONARE_SYNTH_FIELD_LFO2_RATE_HZ), ParamId::kLfo2RateHz, "lfo2_rate_hz", c.lfo2_rate_hz,
+       &p.lfo2_rate_hz);
+  take(set(SONARE_SYNTH_FIELD_GLIDE_MS), ParamId::kGlideMs, "glide_ms", c.glide_ms, &p.glide_ms);
   // Realism polish.
   if (c.body > 0) p.body = admitted_ordinal_to_enum<BodyType>(c.body, 1);
-  if (!take(set(SONARE_SYNTH_FIELD_BODY_MIX), ParamId::kBodyMix, c.body_mix, &p.body_mix) ||
-      !take(set(SONARE_SYNTH_FIELD_STEREO_SPREAD), ParamId::kStereoSpread, c.stereo_spread,
-            &p.stereo_spread)) {
-    return false;
-  }
+  take(set(SONARE_SYNTH_FIELD_BODY_MIX), ParamId::kBodyMix, "body_mix", c.body_mix, &p.body_mix);
+  take(set(SONARE_SYNTH_FIELD_STEREO_SPREAD), ParamId::kStereoSpread, "stereo_spread",
+       c.stereo_spread, &p.stereo_spread);
   // Mod matrix: a non-empty C table replaces the base matrix, and the presence
   // bit lets an empty table clear it instead of keeping the base.
-  if (!synth_patch_field_in_range("modRoutings", static_cast<float>(c.num_mod_routings), 0.0f,
-                                  static_cast<float>(kMaxModRoutes), out_error)) {
-    return false;
-  }
+  check::integer_within(c.num_mod_routings, kSynthModRoutingCountDomain,
+                        field("num_mod_routings").c_str());
   if (c.num_mod_routings > 0 || set(SONARE_SYNTH_FIELD_MOD_ROUTINGS)) {
     p.mod_matrix = {};
     const int count = c.num_mod_routings;
     for (int i = 0; i < count; ++i) {
       const SonareSynthModRouting& r = c.mod_routings[i];
       auto& route = p.mod_matrix.routes[static_cast<size_t>(i)];
-      // Refused like ControllerBinding's axis none: a caller mistake, not an empty slot.
-      if (r.source == 0 || r.destination == 0) {
-        if (out_error) *out_error = "mod routing refused: source and destination must not be none";
-        return false;
-      }
-      if (!ordinal_to_enum(r.source, 1, SONARE_SYNTH_MOD_SOURCE_COUNT - 1, &route.source) ||
-          !ordinal_to_enum(r.destination, 1, SONARE_SYNTH_MOD_DESTINATION_COUNT - 1,
-                           &route.destination)) {
-        if (out_error) *out_error = "mod routing refused: unknown source or destination ordinal";
-        return false;
-      }
+      const std::string at = field("mod_routings[") + std::to_string(i) + "]";
+      // None is refused like ControllerBinding's axis none: a caller mistake, not an empty slot.
+      check::integer_in_range(r.source, 1, SONARE_SYNTH_MOD_SOURCE_COUNT - 1,
+                              (at + ".source").c_str());
+      check::integer_in_range(r.destination, 1, SONARE_SYNTH_MOD_DESTINATION_COUNT - 1,
+                              (at + ".destination").c_str());
+      route.source = admitted_ordinal_to_enum<sonare::midi::synth::ModSource>(r.source);
+      route.destination =
+          admitted_ordinal_to_enum<sonare::midi::synth::ModDestination>(r.destination);
       const float depth_limit = synth_patch_mod_depth_limit();
-      if (!synth_patch_field_in_range("modDepth", r.depth, -depth_limit, depth_limit, out_error)) {
-        return false;
-      }
+      check::in_computed_range(r.depth, -depth_limit, depth_limit, (at + ".depth").c_str());
       route.depth = r.depth;
     }
   }
   // Voice pool / bus.
-  if (!take(set(SONARE_SYNTH_FIELD_GAIN), ParamId::kGain, c.gain, &cfg.gain)) return false;
+  take(set(SONARE_SYNTH_FIELD_GAIN), ParamId::kGain, "gain", c.gain, &cfg.gain);
   if (set(SONARE_SYNTH_FIELD_POLYPHONY) || c.polyphony != 0) {
-    if (!synth_patch_field_in_range("polyphony", static_cast<float>(c.polyphony), 1.0f,
-                                    static_cast<float>(sonare::midi::kMaxSynthVoices), out_error)) {
-      return false;
-    }
+    check::integer_within(c.polyphony, kSynthPolyphonyDomain, field("polyphony").c_str());
     cfg.polyphony = c.polyphony;
   }
-  if (!take(set(SONARE_SYNTH_FIELD_BUS_DRIVE), ParamId::kBusDrive, c.bus_drive, &cfg.bus_drive)) {
-    return false;
-  }
+  take(set(SONARE_SYNTH_FIELD_BUS_DRIVE), ParamId::kBusDrive, "bus_drive", c.bus_drive,
+       &cfg.bus_drive);
 
-  if (!take(set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ), ParamId::kHpCutoffHz, c.hp_cutoff_hz,
-            &p.hp_cutoff_hz)) {
-    return false;
-  }
-  if (!take(set(SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ), ParamId::kSampleHoldHz, c.sample_hold_hz,
-            &p.sample_hold_hz) ||
-      !take(set(SONARE_SYNTH_FIELD_BIT_DEPTH), ParamId::kBitDepth, c.bit_depth, &p.bit_depth)) {
-    return false;
-  }
-  if (!take(set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS), ParamId::kPitchOffsetCents,
-            c.pitch_offset_cents, &p.pitch_offset_cents)) {
-    return false;
-  }
+  take(set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ), ParamId::kHpCutoffHz, "hp_cutoff_hz", c.hp_cutoff_hz,
+       &p.hp_cutoff_hz);
+  take(set(SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ), ParamId::kSampleHoldHz, "sample_hold_hz",
+       c.sample_hold_hz, &p.sample_hold_hz);
+  take(set(SONARE_SYNTH_FIELD_BIT_DEPTH), ParamId::kBitDepth, "bit_depth", c.bit_depth,
+       &p.bit_depth);
+  take(set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS), ParamId::kPitchOffsetCents, "pitch_offset_cents",
+       c.pitch_offset_cents, &p.pitch_offset_cents);
   if (retrigger > 0) p.retrigger = admitted_ordinal_to_enum<SynthRetrigger>(retrigger, 1);
   if (lfo_shape > 0) p.lfo_shape = admitted_ordinal_to_enum<LfoShape>(lfo_shape, 1);
-  if (!take(set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ), ParamId::kDriftRateHz, c.drift_rate_hz,
-            &p.drift_rate_hz) ||
-      !take(set2(SONARE_SYNTH_FIELD2_AMP_DELAY_MS), ParamId::kAmpDelayMs, c.amp_delay_ms,
-            &p.amp_env.delay_ms) ||
-      !take(set2(SONARE_SYNTH_FIELD2_AMP_HOLD_MS), ParamId::kAmpHoldMs, c.amp_hold_ms,
-            &p.amp_env.hold_ms) ||
-      !take(set2(SONARE_SYNTH_FIELD2_FILTER_DELAY_MS), ParamId::kFilterDelayMs, c.filter_delay_ms,
-            &p.filter_env.delay_ms) ||
-      !take(set2(SONARE_SYNTH_FIELD2_FILTER_HOLD_MS), ParamId::kFilterHoldMs, c.filter_hold_ms,
-            &p.filter_env.hold_ms)) {
-    return false;
-  }
+  take(set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ), ParamId::kDriftRateHz, "drift_rate_hz",
+       c.drift_rate_hz, &p.drift_rate_hz);
+  take(set2(SONARE_SYNTH_FIELD2_AMP_DELAY_MS), ParamId::kAmpDelayMs, "amp_delay_ms", c.amp_delay_ms,
+       &p.amp_env.delay_ms);
+  take(set2(SONARE_SYNTH_FIELD2_AMP_HOLD_MS), ParamId::kAmpHoldMs, "amp_hold_ms", c.amp_hold_ms,
+       &p.amp_env.hold_ms);
+  take(set2(SONARE_SYNTH_FIELD2_FILTER_DELAY_MS), ParamId::kFilterDelayMs, "filter_delay_ms",
+       c.filter_delay_ms, &p.filter_env.delay_ms);
+  take(set2(SONARE_SYNTH_FIELD2_FILTER_HOLD_MS), ParamId::kFilterHoldMs, "filter_hold_ms",
+       c.filter_hold_ms, &p.filter_env.hold_ms);
   if (set2(SONARE_SYNTH_FIELD2_ONE_SHOT) || c.one_shot != 0) p.one_shot = c.one_shot != 0;
   if (engine_param_count > 0) {
     std::vector<sonare::midi::synth::EngineParam> params(engine_param_count);
     for (size_t i = 0; i < engine_param_count; ++i) {
       params[i] = {c.engine_params[i].key, c.engine_params[i].value};
     }
-    std::string& message = synth_patch_error_message();
-    message.clear();
+    std::string message;
     if (!sonare::midi::synth::apply_engine_params(p, params.data(), params.size(), &message)) {
-      if (out_error) *out_error = message.c_str();
-      return false;
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
     }
   }
   // Only a sample patch reads the sample block, which is what keeps set 0 addressable without a
@@ -614,18 +537,13 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     p.sample.set_index = c.sample_set;
     const SynthPatchSampleBounds& sample_bounds = synth_patch_sample_bounds();
     if (c.sample_level != 0.0f) {
-      if (!synth_patch_field_in_range("sampleLevel", c.sample_level, sample_bounds.level_lo,
-                                      sample_bounds.level_hi, out_error)) {
-        return false;
-      }
+      check::in_computed_range(c.sample_level, sample_bounds.level_lo, sample_bounds.level_hi,
+                               field("sample_level").c_str());
       p.sample.level = c.sample_level;
     }
     if (c.sample_start_offset != 0.0f) {
-      if (!synth_patch_field_in_range("sampleStartOffset", c.sample_start_offset,
-                                      sample_bounds.start_offset_lo, sample_bounds.start_offset_hi,
-                                      out_error)) {
-        return false;
-      }
+      check::in_computed_range(c.sample_start_offset, sample_bounds.start_offset_lo,
+                               sample_bounds.start_offset_hi, field("sample_start_offset").c_str());
       p.sample.start_offset01 = c.sample_start_offset;
     }
     // The override holds the SoundFont sampleModes value, so the C ordinal is mapped.
@@ -646,8 +564,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     if (c.sample_key_track == SONARE_SAMPLE_KEY_TRACK_OFF) p.sample.key_track = false;
   }
 
-  *out = cfg;
-  return true;
+  return cfg;
 }
 
 /// Every presence bit SonareSynthPatch defines. The read direction sets them

@@ -591,13 +591,13 @@ def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> N
     try:
         info = {d.name: d for d in synth_patch_param_info()}
         cases = [
-            (SynthPatch(cutoff_hz=1e6), "cutoffHz"),
-            (SynthPatch(stereo_spread=5.0), "stereoSpread"),
+            (SynthPatch(cutoff_hz=1e6), "cutoff_hz"),
+            (SynthPatch(stereo_spread=5.0), "stereo_spread"),
             (SynthPatch(polyphony=500), "polyphony"),
             (SynthPatch(gain=5.0), "gain"),
         ]
         for patch, key in cases:
-            expected = f"synth patch field '{key}': out of range"
+            expected = rf"synth_instruments\[0\]\.patch\.{key} must be "
             with pytest.raises(SonareValueError, match=expected) as err:
                 project.bounce(synth_instruments=[(0, patch)], total_frames=128)
             assert err.value.code == 4

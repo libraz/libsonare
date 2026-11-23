@@ -1948,6 +1948,39 @@
       "sentinel": null
     },
     {
+      "entry": "engine_set_synth_instrument",
+      "param": "patch.num_mod_routings",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 8,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_synth_instrument",
+      "param": "patch.polyphony",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 64,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "engine_set_synth_instrument",
+      "param": "patch.unison",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 7,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "engine_set_tempo_segments",
       "param": "segment_count",
       "kind": "integer",
@@ -5836,6 +5869,39 @@
       "kind": "integer",
       "lo": 0,
       "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.synth_instruments[].patch.num_mod_routings",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 8,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.synth_instruments[].patch.polyphony",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 64,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "project_bounce",
+      "param": "options.synth_instruments[].patch.unison",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 7,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
