@@ -8,6 +8,7 @@
 
 #include "analysis/chord_analyzer.h"
 #include "analysis/key_analyzer.h"
+#include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
 #include "editing/voice_changer/realtime.h"
 #include "mastering/api/chain.h"
@@ -24,6 +25,10 @@
 namespace sonare_node {
 
 namespace {
+
+// The core spells the mel range fmin / fmax; the facade keys are fminHz / fmaxHz.
+const std::array<sonare_c_detail::CName, 2> kMelRangeNames{
+    {{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
 
 // Reads an optional quantization-range config from a JS value (null/undefined or
 // a non-object yields the library defaults). Each field defaults to the
@@ -244,7 +249,9 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
     // InvalidParameter on the other three.
     sonare::validate_soa_stream_config(config);
     config_ = config;
-    analyzer_ = std::make_unique<sonare::StreamAnalyzer>(config_);
+    // The core refuses its mel range under its own member names; the facade keys carry the unit.
+    sonare_c_detail::with_c_names(
+        kMelRangeNames, [&] { analyzer_ = std::make_unique<sonare::StreamAnalyzer>(config_); });
   } catch (...) {
     sonare_node::ThrowCurrentException(env);
     return;

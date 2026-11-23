@@ -5,6 +5,7 @@
 
 #include "analysis/chord_analyzer.h"
 #include "analysis/key_analyzer.h"
+#include "c_api/sonare_c_internal.h"
 #include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
 
@@ -73,6 +74,10 @@ val chordEntryToVal(int root, int quality, float start_time, float confidence,
 bool given(const val& value) { return !value.isUndefined() && !value.isNull(); }
 
 /// @brief JavaScript wrapper for StreamAnalyzer.
+// The core spells the mel range fmin / fmax; the facade keys are fminHz / fmaxHz.
+const std::array<sonare_c_detail::CName, 2> kMelRangeNames{
+    {{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
+
 class StreamAnalyzerWrapper {
  public:
   StreamAnalyzerWrapper(const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
@@ -92,8 +97,8 @@ class StreamAnalyzerWrapper {
     if (given(n_fft_val)) config.n_fft = checkedIntFromVal(n_fft_val, "nFft");
     if (given(hop_length_val)) config.hop_length = checkedIntFromVal(hop_length_val, "hopLength");
     if (given(n_mels_val)) config.n_mels = checkedIntFromVal(n_mels_val, "nMels");
-    if (given(fmin_val)) config.fmin = checkedFloatFromVal(fmin_val, "fmin");
-    if (given(fmax_val)) config.fmax = checkedFloatFromVal(fmax_val, "fmax");
+    if (given(fmin_val)) config.fmin = checkedFloatFromVal(fmin_val, "fminHz");
+    if (given(fmax_val)) config.fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
     if (given(tuning_ref_hz_val)) {
       config.tuning_ref_hz = checkedFloatFromVal(tuning_ref_hz_val, "referenceHz");
     }
@@ -142,7 +147,9 @@ class StreamAnalyzerWrapper {
     validate_soa_stream_config(config);
     config.output_format = OutputFormat::Float32;
     config_ = config;
-    analyzer_ = std::make_unique<StreamAnalyzer>(config);
+    // The core refuses its mel range under its own member names; the facade keys carry the unit.
+    sonare_c_detail::with_c_names(kMelRangeNames,
+                                  [&] { analyzer_ = std::make_unique<StreamAnalyzer>(config); });
   }
 
   /// @brief Returns the sample rate.
