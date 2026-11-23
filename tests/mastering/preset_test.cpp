@@ -883,10 +883,12 @@ TEST_CASE("all 30 presets process a deterministic fixture with valid output",
   }
 }
 
-TEST_CASE("all presets master a three-minute stereo fixture with bounded memory",
-          "[.][slow][memory][mastering][preset]") {
+// Twelve seconds spans several offline blocks and four times the longest window a preset stage
+// reads (loudness short-term, 3 s); the heap bound lives in memory_bound_test.cpp.
+TEST_CASE("all presets master a multi-block stereo fixture to finite output of the input length",
+          "[.][slow][mastering][preset]") {
   constexpr int sample_rate = 44100;
-  const auto left = create_preset_fixture(sample_rate, 3.0f * 60.0f);
+  const auto left = create_preset_fixture(sample_rate, 12.0f);
   std::vector<float> right = left;
   for (size_t index = 0; index < right.size(); ++index) right[index] *= 0.83f;
 
