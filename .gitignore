@@ -135,9 +135,9 @@ tools/voicematch/out/
 tools/voicematch/capture/*.local.json
 
 # Local agent notes
-AGENT.md
+AGENTS.md
 
-# Local MCP server config (Serena など、コミットしない)
+# Local MCP server config (Serena and similar; never committed)
 .mcp.json
 .serena/
 
