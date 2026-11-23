@@ -286,7 +286,9 @@ export interface RealtimeVoiceChangerConfig {
   outputGainDb: number;
   /** Overall wet/dry mix. */
   wetMix: number;
-  /** Retune pitch shift in semitones, [-24, 24]. */
+  /**
+   * Retune pitch shift in semitones, [-24, 24]. The changer always applies its input high-pass (20 Hz at the lowest `eqHighPassHz`); for a pitch shift with no other processing use `StreamingRetune`.
+   */
   retunePitchSemitones: number;
   /** Retune wet amount in [0, 1]. */
   retuneMix: number;
@@ -365,6 +367,7 @@ export interface RealtimeVoiceChangerConfig {
   /**
    * Pitch engine. `'psola'` tracks f0; `'grain'` is the f0-less retune and refuses pitch
    * correction, harmony and the vocoder. Fixed when the changer is created.
+   * `'neutralMonitor'` uses `'psola'`; `'grain'` is the engine `StreamingRetune` uses, so the two match only with `voiceEngine: 'grain'`.
    */
   voiceEngine: VoiceEngine;
   /** Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation. */

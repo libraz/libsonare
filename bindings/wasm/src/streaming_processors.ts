@@ -671,6 +671,8 @@ function assertRetuneConfig(config: StreamingRetuneConfig): Record<string, unkno
 
 /**
  * Block-by-block mono voice retune / pitch shifter.
+ * For a pitch shift with no other processing use this rather than the voice changer, which
+ * always applies its input high-pass (20 Hz at the lowest setting).
  *
  * State is maintained across {@link processMono} calls. Call {@link prepare}
  * before processing, and call {@link destroy} (or use `try/finally`) to release

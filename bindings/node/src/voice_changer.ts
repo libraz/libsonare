@@ -580,6 +580,8 @@ function assertRetuneConfig(config: StreamingRetuneConfig): StreamingRetuneConfi
 /**
  * Block-by-block mono pitch shifter (grain overlap-add), the streaming
  * counterpart of the offline `pitchShift`.
+ * For a pitch shift with no other processing use this rather than the voice changer, which
+ * always applies its input high-pass (20 Hz at the lowest setting).
  *
  * State persists across {@link processMono} calls. Call {@link prepare} before
  * processing and {@link destroy} when finished. A non-finite `pitchSemitones` or

@@ -124,7 +124,9 @@ export interface RealtimeVoiceChangerConfig {
   outputGainDb: number;
   /** Dry/wet mix in [0, 1]; 1 is fully processed. */
   wetMix: number;
-  /** Retune pitch shift in semitones, [-24, 24]. */
+  /**
+   * Retune pitch shift in semitones, [-24, 24]. The changer always applies its input high-pass (20 Hz at the lowest `eqHighPassHz`); for a pitch shift with no other processing use `StreamingRetune`.
+   */
   retunePitchSemitones: number;
   /** Retune wet amount in [0, 1]. */
   retuneMix: number;
@@ -200,7 +202,10 @@ export interface RealtimeVoiceChangerConfig {
   limiterEnableIspLimiter: boolean;
   /** Inter-sample-peak limiter ceiling in dBTP (default -1.0). */
   limiterIspCeilingDbtp: number;
-  /** Fixed when the changer is prepared. `'grain'` refuses pitch correction, harmony and the vocoder. */
+  /**
+   * Fixed when the changer is prepared. `'grain'` refuses pitch correction, harmony and the vocoder.
+   * `'neutralMonitor'` uses `'psola'`; `'grain'` is the engine `StreamingRetune` uses, so the two match only with `voiceEngine: 'grain'`.
+   */
   voiceEngine: VoiceEngine;
   /** Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed when the changer is prepared. */
   voiceEngineF0MinHz: number;
