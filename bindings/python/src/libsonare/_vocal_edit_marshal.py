@@ -213,7 +213,9 @@ def _vocal_check(
         raise VocalEditError(
             exc.code,
             message,
-            reason=cast(VocalReason, _ordinal_token(int(detail.reason), _VOCAL_REASONS, "reason")),
+            reason=cast(
+                VocalReason, _ordinal_token(int(detail.reason), _VOCAL_REASONS, "vocal reason")
+            ),
             field=_as_given(_text(detail.field), flattened, respelled),
             expected=int(detail.expected),
             actual=int(detail.actual),
@@ -628,7 +630,7 @@ def _note_edit_from_c(raw: SonareVocalNoteEdit) -> VocalNoteEdit:
     return VocalNoteEdit(
         target_mode=cast(
             VocalTargetMode,
-            _ordinal_token(int(raw.target_mode), _VOCAL_TARGET_MODES, "target_mode"),
+            _ordinal_token(int(raw.target_mode), _VOCAL_TARGET_MODES, "vocal target mode"),
         ),
         target_midi=float(raw.target_midi),
         target_points=points,
@@ -644,7 +646,7 @@ def _note_edit_from_c(raw: SonareVocalNoteEdit) -> VocalNoteEdit:
         muted=bool(raw.muted),
         formant_mode=cast(
             VocalFormantMode,
-            _ordinal_token(int(raw.formant_mode), _VOCAL_FORMANT_MODES, "formant_mode"),
+            _ordinal_token(int(raw.formant_mode), _VOCAL_FORMANT_MODES, "vocal formant mode"),
         ),
         formant_shift_semitones=float(raw.formant_shift_semitones),
         amplitude_envelope=envelope,

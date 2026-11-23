@@ -142,7 +142,7 @@ class ProjectVocalRehydrateItem:
 
 
 def _reason_token(value: int) -> VocalReason:
-    return cast(VocalReason, _ordinal_token(value, _VOCAL_REASONS, "reason"))
+    return cast(VocalReason, _ordinal_token(value, _VOCAL_REASONS, "vocal reason"))
 
 
 def _rehydrate_status_token(value: int) -> ProjectVocalRehydrateStatus:

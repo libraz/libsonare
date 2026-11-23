@@ -9,7 +9,7 @@ from typing import Any, cast
 import numpy as np
 
 from . import _ffi_types_streaming as _ffi_streaming
-from ._errors import _entry, _refuse, _require_open
+from ._errors import _entry, _malformed_output, _require_open
 from ._narrowing import _narrow_double
 from ._runtime import (
     _WINDOW_TYPES,
@@ -446,7 +446,7 @@ def _frame_arrays(raw: Any, ctype: Any, dtype: Any) -> dict[str, np.ndarray | No
 def _chord_quality_token(quality: int) -> str:
     """Spell a streamed chord quality; an ordinal outside the mirror has drifted and is refused."""
     if not 0 <= quality < len(CHORD_QUALITIES):
-        raise _refuse(f"unknown streaming chord quality ordinal: {quality}")
+        raise _malformed_output(f"unknown chord quality ordinal: {quality}")
     return CHORD_QUALITIES[quality]
 
 

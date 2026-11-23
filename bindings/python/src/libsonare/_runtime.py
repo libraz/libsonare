@@ -16,7 +16,7 @@ from typing import Any, SupportsIndex, TypeVar, cast
 
 import numpy as np
 
-from ._errors import _BARE_TEXT, _refuse, _refuse_integer, _refuse_type
+from ._errors import _BARE_TEXT, _malformed_output, _refuse, _refuse_integer, _refuse_type
 
 # _runtime is the shared re-export hub: feature submodules do
 # `from ._runtime import *`, so forward the full C-struct and public type
@@ -1278,7 +1278,7 @@ def _profile_value(profile: KeyProfile | None, key: str) -> int:
 def _ordinal_token(ordinal: int, tokens: tuple[str, ...], what: str) -> str:
     """Convert a C ordinal to its token; an ordinal outside the table is refused."""
     if not 0 <= ordinal < len(tokens):
-        raise _refuse(f"unknown {what} ordinal: {ordinal}")
+        raise _malformed_output(f"unknown {what} ordinal: {ordinal}")
     return tokens[ordinal]
 
 
@@ -1289,7 +1289,7 @@ def _key_mode_token(ordinal: int) -> KeyMode:
 
 def _section_type_token(ordinal: int) -> SectionType:
     """Convert a C section-type ordinal to its token."""
-    return cast(SectionType, _ordinal_token(ordinal, _SECTION_TYPES, "analysis section type"))
+    return cast(SectionType, _ordinal_token(ordinal, _SECTION_TYPES, "section type"))
 
 
 def _optional_from_c_float_array(out: object, count: int) -> np.ndarray:

@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from ._errors import ErrorCode, SonareError
+from ._errors import SonareError, _malformed_output
 from ._null_means import NULL_MEANS
 
 
@@ -52,7 +52,7 @@ def _record(record_type: type, values: Mapping[str, Any]) -> Any:
 
 
 def _unnamed_null(key: str) -> SonareError:
-    return SonareError(int(ErrorCode.INVALID_FORMAT), f"{key} is null, which names no infinite end")
+    return _malformed_output(f"{key} is null, which names no infinite end")
 
 
 def _float_array(node: Mapping[str, Any], key: str) -> np.ndarray:

@@ -13,7 +13,7 @@ from typing import Any, Literal, TypeAlias, cast, get_args
 
 import numpy as np
 
-from ._errors import _entry, _refuse, _refuse_type, _require_open
+from ._errors import _entry, _malformed_output, _refuse, _refuse_type, _require_open
 from ._ffi import (
     SONARE_OK,
     SONARE_VC_PRESET_NEUTRAL_MONITOR,
@@ -101,7 +101,7 @@ def _enum_name(field: str, ordinal: int) -> str:
     """Map a C ordinal read from the library to its spelling."""
     names = _ENUM_FIELD_NAMES[field]
     if not 0 <= int(ordinal) < len(names):
-        raise _refuse(f"unknown {field} ordinal: {ordinal}")
+        raise _malformed_output(f"unknown {field.replace('_', ' ')} ordinal: {ordinal}")
     return names[int(ordinal)]
 
 

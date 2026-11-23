@@ -218,6 +218,17 @@ def _require_open(handle: _Handle | None, owner: str) -> _Handle:
     return handle
 
 
+def _malformed_output(message: str) -> SonareError:
+    """Build the error for a value in the library's own output that this binding cannot read.
+
+    The caller passed nothing wrong, so this is the coded ``INVALID_FORMAT`` and never an
+    argument refusal: an ordinal or token outside the binding's mirror, or a null that names
+    no infinite end, means the mirror has drifted from the loaded library. A drifted value
+    reads ``unknown <noun> ordinal: <n>`` or ``unknown <noun> token: <t>``.
+    """
+    return SonareError(int(ErrorCode.INVALID_FORMAT), message)
+
+
 def _unknown_error(message: str) -> SonareError:
     """Build the error for a native result that fails the binding's sanity checks."""
     return SonareError(int(ErrorCode.UNKNOWN), message)

@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._errors import _entry, _refuse
+from ._errors import _entry, _malformed_output
 from ._ffi_types_analysis import SonareDetectKeyOptions
 from ._ffi_types_core import (
     SonareKey,
@@ -438,7 +438,7 @@ def _bpm_relation(raw: Any) -> BpmCandidateRelation:
     """Spell a candidate's relation token; one outside the mirror has drifted and is refused."""
     token = str(raw)
     if token not in _BPM_RELATIONS:
-        raise _refuse(f"unknown analysis BPM candidate relation: {token}")
+        raise _malformed_output(f"unknown BPM candidate relation token: {token}")
     return cast(BpmCandidateRelation, token)
 
 
@@ -454,7 +454,7 @@ def _section_type_from_ordinal(raw: Any) -> SectionType:
     :raises SonareValueError: the field is absent or names no known section type.
     """
     if raw is None:
-        raise _refuse("analysis result section is missing its type field")
+        raise _malformed_output("analysis result section is missing its type field")
     return _section_type_token(int(raw))
 
 
@@ -533,7 +533,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         # "unknown" is a quality the analyzer genuinely reports, so it has an ordinal of its
         # own. An ordinal outside the table means the mirror has drifted and is refused.
         if not 0 <= q_raw < len(CHORD_QUALITIES):
-            raise _refuse(f"unknown analysis chord quality ordinal: {q_raw}")
+            raise _malformed_output(f"unknown chord quality ordinal: {q_raw}")
         quality_str = CHORD_QUALITIES[q_raw]
         root = PitchClass(int(c["root"]))
         bass = PitchClass(int(c["bass"]))

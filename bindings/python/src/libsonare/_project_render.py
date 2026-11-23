@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from ._engine_conversions import _POSITIVE_COUNT, _POSITIVE_INT, _given_positive
-from ._errors import _entry, _refuse, _refuse_type
+from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _SOURCE_BACKENDS,
@@ -72,7 +72,7 @@ def _diagnostic_token(name_fn: Callable[[int], bytes | None], ordinal: int, what
     """Read a diagnostic ordinal's token from the library's own name table."""
     token = name_fn(ordinal)
     if token is None:
-        raise _refuse(f"unknown {what} ordinal: {ordinal}")
+        raise _malformed_output(f"unknown {what} ordinal: {ordinal}")
     return token.decode("ascii")
 
 

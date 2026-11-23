@@ -18,7 +18,14 @@ from typing import Literal, cast, get_args
 
 import numpy as np
 
-from ._errors import _entry, _refuse, _refuse_integer, _refuse_type, _require_open, _unknown_error
+from ._errors import (
+    _entry,
+    _malformed_output,
+    _refuse,
+    _refuse_integer,
+    _refuse_type,
+    _require_open,
+)
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._narrowing import _is_number, _narrow_double, _optional_nonzero
 from ._runtime import (
@@ -431,7 +438,7 @@ def _synth_enum_name(value: int, names: Mapping[str, int]) -> str:
     for name, ordinal in names.items():
         if ordinal == value:
             return name
-    raise _unknown_error(f"libsonare returned an enum ordinal this binding does not know: {value}")
+    raise _malformed_output(f"unknown synth enum ordinal: {value}")
 
 
 def _strip_va_prefix(name: str) -> str:

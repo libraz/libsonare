@@ -10,7 +10,9 @@ These cover the full analysis result surface:
 
 from __future__ import annotations
 
+import contextlib
 import math
+from collections.abc import Iterator
 from typing import Any, get_args
 
 import pytest
@@ -381,24 +383,32 @@ def test_analyze_progress_matches_analyze_shape(analyze_result, progress_result)
     assert a.melody == b.melody
 
 
+@contextlib.contextmanager
+def _raises_malformed(match: str) -> Iterator[None]:
+    """A value of the library's own output the mirror cannot read: coded INVALID_FORMAT."""
+    with pytest.raises(libsonare.SonareError, match=match) as caught:
+        yield
+    assert not isinstance(caught.value, libsonare.SonareValueError)
+    assert caught.value.code == libsonare.ErrorCode.INVALID_FORMAT
+
+
 def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
     """A section ordinal outside SectionType names a drifted enum mirror.
 
     Substituting "unknown" for it would present the drift as an analysis result,
     so the decoder raises and names the ordinal instead.
     """
-    from libsonare import SonareValueError
     from libsonare._analysis_detection import _parse_analysis_json
 
     def parse(section: dict[str, object]) -> object:
         return _parse_analysis_json(_payload(sections=[section]))
 
-    with pytest.raises(SonareValueError, match="99"):
+    with _raises_malformed("unknown section type ordinal: 99$"):
         parse({**_SECTION, "type": 99})
 
     untyped = dict(_SECTION)
     del untyped["type"]
-    with pytest.raises(SonareValueError, match="missing its type"):
+    with _raises_malformed("missing its type"):
         parse(untyped)
 
     result = parse(_SECTION)
@@ -412,13 +422,12 @@ def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:
     outside the table means the mirror has drifted rather than that the chord
     was unrecognized.
     """
-    from libsonare import SonareValueError
     from libsonare._analysis_detection import _parse_analysis_json
 
     def parse(chord: dict[str, object]) -> object:
         return _parse_analysis_json(_payload(chords=[chord]))
 
-    with pytest.raises(SonareValueError, match="99"):
+    with _raises_malformed("unknown chord quality ordinal: 99$"):
         parse({**_CHORD, "quality": 99})
 
     # The genuine "unknown" quality round-trips; a chord with no quality is not a chord the
@@ -431,18 +440,33 @@ def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:
 
 
 def test_parse_analysis_json_refuses_an_unmirrored_bpm_relation() -> None:
-    from libsonare import SonareValueError
     from libsonare._analysis_detection import _parse_analysis_json
 
     candidate = {"bpm": 120.0, "confidence": 0.9, "relation": "triple"}
-    with pytest.raises(SonareValueError, match="triple"):
+    with _raises_malformed("unknown BPM candidate relation token: triple$"):
         _parse_analysis_json(_payload(bpmCandidates=[candidate]))
 
 
 def test_a_streamed_chord_quality_outside_the_mirror_is_refused() -> None:
-    from libsonare import CHORD_QUALITIES, SonareValueError
+    from libsonare import CHORD_QUALITIES
     from libsonare.streaming import _chord_change
 
     assert _chord_change(0, CHORD_QUALITIES.index("unknown"), 0.0, 0.5).quality == "unknown"
-    with pytest.raises(SonareValueError, match="ordinal: 99"):
+    with _raises_malformed("unknown chord quality ordinal: 99$"):
         _chord_change(0, 99, 0.0, 0.5)
+
+
+def test_every_ordinal_reader_refuses_a_drifted_mirror_as_malformed_output() -> None:
+    from libsonare._effects_voice import _enum_name
+    from libsonare._project_render import _diagnostic_token
+    from libsonare._project_synth import _ARTICULATIONS, _synth_enum_name
+    from libsonare._runtime import _key_mode_token
+
+    with _raises_malformed("unknown key mode ordinal: 7$"):
+        _key_mode_token(7)
+    with _raises_malformed("unknown formant mode ordinal: 99$"):
+        _enum_name("formant_mode", 99)
+    with _raises_malformed("unknown diagnostic ordinal: 5$"):
+        _diagnostic_token(lambda _ordinal: None, 5, "diagnostic")
+    with _raises_malformed("unknown synth enum ordinal: 999$"):
+        _synth_enum_name(999, _ARTICULATIONS)
