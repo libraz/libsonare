@@ -15,6 +15,8 @@
 
 #include <cstdint>
 
+#include "util/db.h"
+
 namespace sonare::editing::event_model {
 
 /// @brief A pending, non-destructive change to one percussive event.
@@ -49,14 +51,14 @@ struct PercussiveEvent {
   float peak_amplitude = 0.0f;
 
   /// Share of the span's energy the separation assigned to percussion, in
-  /// [0, 1]. 0 when the span is silent.
+  /// [0, 1]. Not measured (NaN) when the span is silent.
   ///
   /// It describes the span rather than the onset that opened it. An isolated
   /// hit sits near 1, but a real hit over a loud sustain sits near 0, because
   /// the sustain owns the span's energy. So it separates a hit from a note
   /// attack only where nothing is sustaining through both, and it is not a
   /// test for whether a hit is there.
-  float percussive_ratio = 0.0f;
+  float percussive_ratio = kNotMeasured;
 
   PercussiveEventEdit edit{};
 

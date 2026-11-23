@@ -9,6 +9,7 @@
 #include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -17,7 +18,7 @@ namespace sonare {
 using sonare::constants::kEpsilon;
 
 RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
-    : bpm_(config.start_bpm),
+    : bpm_(kNotMeasured),
       config_(config),
       sr_(audio.sample_rate()),
       hop_length_(config.hop_length) {
@@ -213,6 +214,10 @@ void RhythmAnalyzer::detect_groove_type() {
 void RhythmAnalyzer::compute_syncopation() {
   features_.syncopation = 0.0f;
 
+  if (beats_.empty()) {
+    features_.syncopation = kNotMeasured;
+    return;
+  }
   if (beats_.size() < 4) {
     return;
   }
@@ -229,6 +234,11 @@ void RhythmAnalyzer::compute_syncopation() {
   float accent_max = 0.0f;
   for (size_t i = 0; i < beats_.size(); ++i) {
     accent_max = std::max(accent_max, accent_of(i));
+  }
+  // Silent accents carry no syncopation reading.
+  if (accent_max <= kEpsilon) {
+    features_.syncopation = kNotMeasured;
+    return;
   }
 
   float strong_sum = 0.0f;
@@ -351,8 +361,9 @@ RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
 
 void RhythmAnalyzer::compute_regularity() {
   const RhythmRegularity regularity = rhythm_regularity(beat_intervals_);
-  features_.pattern_regularity = regularity.pattern_regularity;
-  features_.tempo_stability = regularity.tempo_stability;
+  const bool measured = !beat_intervals_.empty();
+  features_.pattern_regularity = measured ? regularity.pattern_regularity : kNotMeasured;
+  features_.tempo_stability = measured ? regularity.tempo_stability : kNotMeasured;
 }
 
 }  // namespace sonare

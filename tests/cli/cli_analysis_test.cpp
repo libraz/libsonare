@@ -497,7 +497,11 @@ TEST_CASE("CLI rhythm command", "[cli]") {
   }
 
   SECTION("json output") {
-    auto [code, output] = exec_command(CLI + " rhythm " + TEST_WAV + " --json -q");
+    // A steady tone has no beats, so the full shape needs a click track.
+    const std::string click = unique_temp_path("_rhythm_click.wav");
+    create_click_track_wav(click);
+    auto [code, output] = exec_command(CLI + " rhythm " + click + " --json -q");
+    std::remove(click.c_str());
     REQUIRE(code == 0);
     const auto payload = sonare::util::json::parse_strict(output);
     REQUIRE(payload.size() == 7);

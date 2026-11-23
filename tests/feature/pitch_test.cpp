@@ -1061,3 +1061,18 @@ TEST_CASE("pitch_tuning and estimate_tuning refuse a member by its name", "[pitc
   CHECK_THROWS_WITH(estimate_tuning(audio, 2048, 512, 0.01f, 0),
                     "bins_per_octave must be an integer in [1, 2147483647]");
 }
+
+TEST_CASE("PitchResult reports no median or mean f0 when no frame is voiced", "[pitch]") {
+  PitchResult result;
+  result.f0 = {0.0f, 0.0f, 0.0f};
+  result.voiced_prob = {0.0f, 0.0f, 0.0f};
+  result.voiced_flag = {false, false, false};
+  CHECK(std::isnan(result.median_f0()));
+  CHECK(std::isnan(result.mean_f0()));
+  CHECK(std::isnan(PitchResult{}.median_f0()));
+
+  result.f0[1] = 220.0f;
+  result.voiced_flag[1] = true;
+  CHECK(result.median_f0() == 220.0f);
+  CHECK(result.mean_f0() == 220.0f);
+}

@@ -464,7 +464,7 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
     profile.bpm = bpm.bpm();
     profile.bpm_confidence = bpm.confidence();
   } catch (...) {
-    profile.bpm = 0.0f;
+    profile.bpm = kNotMeasured;
     profile.bpm_confidence = 0.0f;
   }
 }
@@ -717,7 +717,7 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
 
   json::Object root;
   util::json::put(root, "durationSec", profile.duration_sec);
-  util::json::put(root, "bpm", profile.bpm);
+  put_level(root, "bpm", profile.bpm);
   util::json::put(root, "bpmConfidence", profile.bpm_confidence);
   util::json::put(root, "loudness", std::move(loudness));
   util::json::put(root, "spectral", std::move(spectral));

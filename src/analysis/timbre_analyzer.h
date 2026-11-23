@@ -15,10 +15,12 @@
 namespace sonare {
 
 /// @brief Timbral characteristics of audio.
+/// @details Every field is NaN (not measured) over a window with no frame carrying spectral
+///          energy, and for an input with no frames.
 struct Timbre {
   float brightness;  ///< Spectral brightness [0, 1] (high = bright/harsh)
   float warmth;      ///< Spectral warmth [0, 1] (high = warm/full)
-  float density;     ///< Spectral density [0, 1] (high = rich/complex); 0 without spectral energy
+  float density;     ///< Spectral density [0, 1] (high = rich/complex)
   float roughness;   ///< Spectral flux over ~23 ms, [0, 1] (high = rough/harsh)
   float complexity;  ///< Harmonic complexity [0, 1] (high = complex)
 };

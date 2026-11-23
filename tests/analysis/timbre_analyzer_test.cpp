@@ -479,11 +479,15 @@ TEST_CASE("TimbreAnalyzer centroid and rolloff are invariant to the input rate",
   }
 }
 
-TEST_CASE("TimbreAnalyzer reports no density for silence", "[timbre_analyzer][evidence]") {
+TEST_CASE("TimbreAnalyzer reports nothing measured for silence", "[timbre_analyzer][evidence]") {
   const Audio silence = Audio::from_vector(std::vector<float>(22050 * 2, 0.0f), 22050);
   TimbreAnalyzer analyzer(silence);
-  CHECK(analyzer.density() == 0.0f);
-  for (const Timbre& t : analyzer.timbre_over_time()) CHECK(t.density == 0.0f);
+  const auto all_unmeasured = [](const Timbre& t) {
+    return std::isnan(t.brightness) && std::isnan(t.warmth) && std::isnan(t.density) &&
+           std::isnan(t.roughness) && std::isnan(t.complexity);
+  };
+  CHECK(all_unmeasured(analyzer.timbre()));
+  for (const Timbre& t : analyzer.timbre_over_time()) CHECK(all_unmeasured(t));
 
   // Silence between two noise passages: the window inside the gap reports no density while
   // the noise windows keep theirs.
@@ -498,7 +502,8 @@ TEST_CASE("TimbreAnalyzer reports no density for silence", "[timbre_analyzer][ev
   // 21 frames of 512 samples per window; window 4 spans 1.95-2.41 s, inside the 1.5-3.0 s gap.
   REQUIRE(windows.size() > 5u);
   CHECK(windows[0].density > 0.3f);
-  CHECK(windows[4].density == 0.0f);
+  CHECK(std::isnan(windows[4].density));
+  CHECK(std::isnan(windows[4].brightness));
   CHECK(windows.back().density > 0.3f);
 }
 

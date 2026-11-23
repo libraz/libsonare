@@ -464,7 +464,8 @@ double resolve_assistant_tempo(const std::string& raw, const std::string& first_
   const double bpm =
       static_cast<double>(quick::detect_bpm(mono.data(), mono.size(), track.sample_rate));
   std::vector<float>().swap(first_track->value().mono_fold);
-  return bpm;
+  // No tempo found is the transport-fallback sentinel (0), not a tempo.
+  return std::isfinite(bpm) && bpm > 0 ? bpm : 0.0;
 }
 
 // The assistant's document re-keyed for stdout, as `mastering-suggest` does with

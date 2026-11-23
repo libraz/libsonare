@@ -48,6 +48,26 @@ TEST_CASE("CLI sections threshold registry follows the core default", "[cli][sec
   CHECK(std::stof(threshold->stated_default) == kSectionBoundaryThreshold);
 }
 
+TEST_CASE("CLI rhythm and bpm report no tempo on silence whatever the start tempo",
+          "[cli][rhythm]") {
+  const std::string silent = unique_temp_path("_silent_tempo.wav");
+  create_silent_wav(silent);
+  for (const char* start_bpm : {"120", "80"}) {
+    const auto [code, output] =
+        exec_command(CLI + " rhythm " + silent + " --start-bpm " + start_bpm + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    CHECK_FALSE(payload.contains("bpm"));
+    CHECK_FALSE(payload.contains("syncopation"));
+    CHECK_FALSE(payload.contains("pattern_regularity"));
+    CHECK_FALSE(payload.contains("tempo_stability"));
+  }
+  const auto [text_code, text] = exec_command(CLI + " bpm " + silent + " -q");
+  CHECK(text_code == 0);
+  CHECK(text.find("nan") == std::string::npos);
+  std::remove(silent.c_str());
+}
+
 // Native-only commands have no cross-surface contract, so the conformance
 // harness (which runs every case on both surfaces) has no place for them by
 // design. Their exit codes and message shapes are locked here instead.
@@ -2001,8 +2021,9 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       {"sections", p.sections_wav + " --json -q", "min-duration-sec", "1"},
       {"sections", p.sections_wav + " --min-duration-sec 1 --json -q", "threshold", "0.9"},
       {"dynamics", p.tone_wav + " --json -q", "window-sec", "0.1"},
-      // start-bpm answers only when the estimator finds no tempo, which silence guarantees.
-      {"rhythm", p.silent_wav + " --json -q", "start-bpm", "80"},
+      // start-bpm seeds the beat tracker and is never reported, so silence prints nothing it
+      // moves; the silent-input case below holds that output.
+      {"rhythm", p.silent_wav + " --json -q", "start-bpm", ""},
       {"rhythm", p.click_wav + " --json -q", "bpm-min", "160"},
       {"rhythm", p.click_wav + " --json -q", "bpm-max", "100"},
       {"pitch", p.noisy_wav + " --json -q", "threshold", "0.9"},

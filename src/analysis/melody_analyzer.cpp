@@ -116,6 +116,7 @@ void MelodyAnalyzer::compute_contour_features() {
     sum_log += std::log(f);
   }
   contour_.mean_frequency = std::exp(sum_log / voiced_frequencies.size());
+  contour_.vibrato_rate = 0.0f;
 
   // Pitch range (in octaves)
   float min_freq = *std::min_element(voiced_frequencies.begin(), voiced_frequencies.end());

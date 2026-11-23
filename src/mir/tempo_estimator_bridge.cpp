@@ -13,6 +13,7 @@
 namespace sonare::mir {
 namespace {
 
+using sonare::constants::kDefaultBpm;
 using sonare::constants::kEpsilon;
 using sonare::constants::kSecondsPerMinute;
 // Below this relative change log1p keeps the logarithmic mean accurate near b0 == b1.
@@ -98,7 +99,10 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
   if (decoded_bpm.empty() || decoded_bpm.size() != obs.size()) {
     transport::TempoSegment seg;
     seg.start_ppq = 0.0;
-    seg.bpm = std::max(static_cast<double>(input.bpm) * bpm_scale, 1.0);
+    // An unmeasured (NaN) or non-positive global tempo falls back to the default tempo.
+    const double global_bpm =
+        std::isfinite(input.bpm) && input.bpm > 0.0f ? static_cast<double>(input.bpm) : kDefaultBpm;
+    seg.bpm = std::max(global_bpm * bpm_scale, 1.0);
     seg.start_sample = 0.0;
     segments.push_back(seg);
     return segments;

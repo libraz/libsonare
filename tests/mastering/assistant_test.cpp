@@ -251,7 +251,8 @@ TEST_CASE("Assistant AudioProfile measures a stereo pair with channel summing",
   REQUIRE(stereo.spectral.rolloff_hz == mono.spectral.rolloff_hz);
   REQUIRE(stereo.dynamics.attack_density == mono.dynamics.attack_density);
   REQUIRE(stereo.dynamics.sustain_ratio == mono.dynamics.sustain_ratio);
-  REQUIRE(stereo.bpm == mono.bpm);
+  // A tempo that was not found is NaN on both, which no == holds.
+  REQUIRE((stereo.bpm == mono.bpm || (std::isnan(stereo.bpm) && std::isnan(mono.bpm))));
 
   // The short-term spread is one of those, and the two entry points reach it by
   // different routes: the mono profile reduces the series its own loudness pass

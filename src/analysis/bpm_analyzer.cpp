@@ -6,6 +6,7 @@
 #include "analysis/analysis_rate.h"
 #include "feature/rhythm.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -485,7 +486,7 @@ void BpmAnalyzer::prefer_unconstrained_estimate(const std::vector<float>& onset_
 
 void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int hop_length) {
   if (onset_strength.empty()) {
-    bpm_ = config_.start_bpm;
+    bpm_ = kNotMeasured;
     confidence_ = 0.0f;
     tempogram_.clear();
     local_bpm_curve_.clear();
@@ -500,7 +501,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
   max_lag = std::min(max_lag, static_cast<int>(onset_strength.size()) - 1);
 
   if (max_lag < 2) {
-    bpm_ = config_.start_bpm;
+    bpm_ = kNotMeasured;
     confidence_ = 0.0f;
     if (tempogram_.empty()) tempogram_ = onset_strength;
     return;
@@ -519,7 +520,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
 
   if (candidates_.empty()) {
     const float local_median = median_bpm(local_bpm_curve_);
-    bpm_ = local_median > 0.0f ? local_median : config_.start_bpm;
+    bpm_ = local_median > 0.0f ? local_median : kNotMeasured;
     confidence_ = local_median > 0.0f ? 0.25f : 0.0f;
     prefer_unconstrained_estimate(onset_strength, sr, hop_length);
     if (tempogram_.empty()) tempogram_ = autocorr_;

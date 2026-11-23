@@ -42,7 +42,8 @@ namespace sonare::mir {
 struct BeatAnalysisInput {
   /// Detected beats (time in seconds, optional per-beat strength).
   std::vector<Beat> beats;
-  /// Global BPM estimate from BpmAnalyzer / BeatAnalyzer::bpm().
+  /// Global BPM estimate from BpmAnalyzer / BeatAnalyzer::bpm(). A non-finite or non-positive
+  /// estimate (no tempo found) falls back to the default tempo.
   float bpm = 120.0f;
   /// Beat indices (into `beats`) that are downbeats. Optional; when empty the
   /// bridge derives a phase-0 downbeat grid from the time signature.

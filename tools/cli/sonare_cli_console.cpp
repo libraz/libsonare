@@ -102,9 +102,22 @@ void clear_progress() {
 }
 
 std::string describe_level(float value, const char* low, const char* mid, const char* high) {
+  if (std::isnan(value)) return "-";
   if (value < 0.33f) return low;
   if (value < 0.67f) return mid;
   return high;
+}
+
+std::string measured_text(float value, int precision, const char* unit) {
+  if (std::isnan(value)) return "-";
+  const std::string suffix = unit != nullptr ? unit : "";
+  if (std::isinf(value)) {
+    const std::string infinity = value < 0.0f ? "-inf" : "inf";
+    return suffix == "dB" ? infinity + " dB" : infinity;
+  }
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%.*f", precision, static_cast<double>(value));
+  return suffix.empty() ? std::string(buffer) : std::string(buffer) + " " + suffix;
 }
 
 std::string basename(const std::string& path) {

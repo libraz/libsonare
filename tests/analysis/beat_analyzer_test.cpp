@@ -1097,3 +1097,16 @@ TEST_CASE("a sustained bed between the beats is not a subdivision",
            (marginal_meter.numerator == 6 && marginal_meter.denominator == 8)));
   }
 }
+
+TEST_CASE("BeatAnalyzer reports no tempo while it tracks no beat", "[beat_analyzer]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(22050, 0.0f), 22050);
+  BeatAnalyzer analyzer(silence);
+  CHECK(analyzer.beats().empty());
+  CHECK(std::isnan(analyzer.bpm()));
+
+  // A tempo found on audible input is still reported.
+  const Audio click = create_click_track(120.0f, 22050, 4.0f);
+  const float bpm = BeatAnalyzer(click).bpm();
+  CHECK(std::isfinite(bpm));
+  CHECK(bpm > 0.0f);
+}

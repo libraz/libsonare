@@ -274,7 +274,8 @@ TEST_CASE("Track profile recovers a complete polarity-inverted stereo signal",
         representative.base.dynamics.short_term_lufs_std);
   CHECK(stereo.base.dynamics.attack_density == representative.base.dynamics.attack_density);
   CHECK(stereo.base.dynamics.sustain_ratio == representative.base.dynamics.sustain_ratio);
-  CHECK(stereo.base.bpm == representative.base.bpm);
+  CHECK((stereo.base.bpm == representative.base.bpm ||
+         (std::isnan(stereo.base.bpm) && std::isnan(representative.base.bpm))));
   CHECK(stereo.base.bpm_confidence == representative.base.bpm_confidence);
   CHECK(stereo.bands.energy == representative.bands.energy);
   CHECK(stereo.spectrum.power == representative.spectrum.power);

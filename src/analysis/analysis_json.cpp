@@ -14,6 +14,11 @@ using sonare::util::json::Array;
 using sonare::util::json::Object;
 using sonare::util::json::Value;
 
+/// A value that was not measured (NaN) is an absent member; -inf stays and writes null.
+void put_measured(Object& object, const char* key, float value) {
+  if (!std::isnan(value)) object[key] = Value(value);
+}
+
 Value time_signature_to_value(const TimeSignature& ts) {
   Object o;
   o["numerator"] = Value(ts.numerator);
@@ -138,7 +143,7 @@ const std::vector<std::pair<std::string, std::string>>& analysis_result_null_mea
 
 std::string analysis_result_to_json(const AnalysisResult& result) {
   Object root;
-  root["bpm"] = Value(result.bpm);
+  put_measured(root, "bpm", result.bpm);
   root["bpmConfidence"] = Value(result.bpm_confidence);
   {
     Array candidates;
@@ -269,26 +274,22 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   // Timbre
   {
     Object t;
-    t["brightness"] = Value(result.timbre.brightness);
-    t["warmth"] = Value(result.timbre.warmth);
-    t["density"] = Value(result.timbre.density);
-    t["roughness"] = Value(result.timbre.roughness);
-    t["complexity"] = Value(result.timbre.complexity);
+    put_measured(t, "brightness", result.timbre.brightness);
+    put_measured(t, "warmth", result.timbre.warmth);
+    put_measured(t, "density", result.timbre.density);
+    put_measured(t, "roughness", result.timbre.roughness);
+    put_measured(t, "complexity", result.timbre.complexity);
     root["timbre"] = Value(std::move(t));
   }
 
   // Dynamics fields shared by native and WASM unified results.
   {
     Object d;
-    // A level that was not measured (NaN) is an absent member; -inf stays and writes null.
-    const auto put_measured = [&d](const char* key, float level) {
-      if (!std::isnan(level)) d[key] = Value(level);
-    };
-    put_measured("dynamicRangeDb", result.dynamics.dynamic_range_db);
-    put_measured("peakDb", result.dynamics.peak_db);
-    put_measured("rmsDb", result.dynamics.rms_db);
-    put_measured("crestFactor", result.dynamics.crest_factor);
-    put_measured("loudnessRangeLu", result.dynamics.loudness_range_lu);
+    put_measured(d, "dynamicRangeDb", result.dynamics.dynamic_range_db);
+    put_measured(d, "peakDb", result.dynamics.peak_db);
+    put_measured(d, "rmsDb", result.dynamics.rms_db);
+    put_measured(d, "crestFactor", result.dynamics.crest_factor);
+    put_measured(d, "loudnessRangeLu", result.dynamics.loudness_range_lu);
     d["isCompressed"] = Value(result.dynamics.is_compressed);
     root["dynamics"] = Value(std::move(d));
   }
@@ -297,20 +298,20 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   {
     Object r;
     r["timeSignature"] = time_signature_to_value(result.rhythm.time_signature);
-    r["syncopation"] = Value(result.rhythm.syncopation);
+    put_measured(r, "syncopation", result.rhythm.syncopation);
     r["grooveType"] = Value(result.rhythm.groove_type);
-    r["patternRegularity"] = Value(result.rhythm.pattern_regularity);
-    r["tempoStability"] = Value(result.rhythm.tempo_stability);
+    put_measured(r, "patternRegularity", result.rhythm.pattern_regularity);
+    put_measured(r, "tempoStability", result.rhythm.tempo_stability);
     root["rhythm"] = Value(std::move(r));
   }
 
   // Melody contour
   {
     Object m;
-    m["pitchRangeOctaves"] = Value(result.melody.pitch_range_octaves);
-    m["pitchStability"] = Value(result.melody.pitch_stability);
-    m["meanFrequencyHz"] = Value(result.melody.mean_frequency);
-    m["vibratoRateHz"] = Value(result.melody.vibrato_rate);
+    put_measured(m, "pitchRangeOctaves", result.melody.pitch_range_octaves);
+    put_measured(m, "pitchStability", result.melody.pitch_stability);
+    put_measured(m, "meanFrequencyHz", result.melody.mean_frequency);
+    put_measured(m, "vibratoRateHz", result.melody.vibrato_rate);
     Array pitches;
     pitches.reserve(result.melody.pitches.size());
     for (const auto& point : result.melody.pitches) {

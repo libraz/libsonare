@@ -399,8 +399,10 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   }
   result.bpm = bpm_analyzer().bpm();
   result.bpm_confidence = bpm_analyzer().confidence();
-  result.bpm_candidates.push_back(
-      {result.bpm, result.bpm_confidence, BpmCandidateRelation::Primary});
+  if (!std::isnan(result.bpm)) {
+    result.bpm_candidates.push_back(
+        {result.bpm, result.bpm_confidence, BpmCandidateRelation::Primary});
+  }
   for (const BpmCandidate& candidate : bpm_analyzer().candidates()) {
     const float distance = std::abs(candidate.bpm - result.bpm);
     const float primary_scale = std::max(1.0f, std::abs(result.bpm));

@@ -17,6 +17,7 @@
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/json.h"
 #include "util/parameter_checks.h"
 
@@ -100,7 +101,8 @@ struct DefectProfile {
 
 struct AudioProfile {
   float duration_sec = 0.0f;
-  float bpm = 0.0f;
+  /// Global tempo; not measured (NaN) when no tempo was found.
+  float bpm = sonare::kNotMeasured;
   float bpm_confidence = 0.0f;
   LoudnessProfile loudness{};
   SpectralProfile spectral{};

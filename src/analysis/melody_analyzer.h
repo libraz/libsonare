@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -21,12 +22,13 @@ struct PitchPoint {
 };
 
 /// @brief Melody contour characteristics.
+/// @details The four summary fields are NaN (not measured) until a voiced frame exists.
 struct MelodyContour {
-  std::vector<PitchPoint> pitches;   ///< Pitch trajectory
-  float pitch_range_octaves = 0.0f;  ///< Range of melody in octaves
-  float pitch_stability = 0.0f;      ///< Pitch stability [0, 1] (1 = very stable)
-  float mean_frequency = 0.0f;       ///< Mean pitch frequency in Hz
-  float vibrato_rate = 0.0f;         ///< Vibrato rate in Hz (0 if no vibrato)
+  std::vector<PitchPoint> pitches;           ///< Pitch trajectory
+  float pitch_range_octaves = kNotMeasured;  ///< Range of melody in octaves
+  float pitch_stability = kNotMeasured;      ///< Pitch stability [0, 1] (1 = very stable)
+  float mean_frequency = kNotMeasured;       ///< Mean pitch frequency in Hz
+  float vibrato_rate = kNotMeasured;         ///< Vibrato rate in Hz (0 if no vibrato)
 };
 
 /// @brief Configuration for melody analysis.

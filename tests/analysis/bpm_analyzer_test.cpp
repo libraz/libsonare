@@ -296,7 +296,8 @@ TEST_CASE("BpmAnalyzer degrades gracefully on degenerate onset envelopes", "[bpm
   std::vector<float> single_frame = {1.0f};
   REQUIRE_NOTHROW(BpmAnalyzer(single_frame, sr, hop, config));
   BpmAnalyzer single_analyzer(single_frame, sr, hop, config);
-  REQUIRE_THAT(single_analyzer.bpm(), WithinAbs(config.start_bpm, 1e-3f));
+  // The start tempo is a prior, never a measurement.
+  REQUIRE(std::isnan(single_analyzer.bpm()));
   REQUIRE(single_analyzer.confidence() == 0.0f);
 
   // An empty onset envelope must also not throw.
@@ -598,4 +599,25 @@ TEST_CASE("A tempo just above the lower bound of the range can be chosen", "[bpm
   CHECK_THAT(detect_in(groove, 58.0f, 100.0f), WithinRel(60.0f, 0.03f));
   const Audio click = test::make_noise_click(61.0f, 22050, 30.0f);
   CHECK_THAT(detect_bpm(click), WithinRel(61.0f, 0.02f));
+}
+
+TEST_CASE("BpmAnalyzer reports no tempo for silence whatever the start tempo", "[bpm_analyzer]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(22050, 0.0f), 22050);
+  for (float start_bpm : {80.0f, 120.0f}) {
+    BpmConfig config;
+    config.start_bpm = start_bpm;
+    CHECK(std::isnan(BpmAnalyzer(silence, config).bpm()));
+    CHECK(std::isnan(detect_bpm(silence, config)));
+  }
+  CHECK(BpmAnalyzer(silence).confidence() == 0.0f);
+
+  // A tempo that is found is a measurement and is not read from the prior.
+  const Audio click = test::make_noise_click(120.0f, 22050, 4.0f);
+  for (float start_bpm : {80.0f, 120.0f}) {
+    BpmConfig config;
+    config.start_bpm = start_bpm;
+    const float bpm = detect_bpm(click, config);
+    CHECK(std::isfinite(bpm));
+    CHECK(bpm > 0.0f);
+  }
 }

@@ -173,7 +173,7 @@ class BeatAnalyzer {
     return chord_change_observations_;
   }
 
-  /// @brief Returns estimated BPM from beat intervals.
+  /// @brief Returns estimated BPM from beat intervals, NaN when no tempo was found.
   float bpm() const { return bpm_; }
 
   /// @brief Returns estimated time signature.

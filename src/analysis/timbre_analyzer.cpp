@@ -10,6 +10,7 @@
 #include "feature/onset.h"
 #include "feature/spectral.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
@@ -20,8 +21,9 @@ using constants::kEpsilon;
 
 namespace {
 
-/// @brief Timbre with every descriptor zero, for the no-frames and empty-window cases.
-constexpr Timbre kZeroTimbre = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+/// @brief Timbre with every descriptor not measured, for the no-frames and no-evidence cases.
+constexpr Timbre kUnmeasuredTimbre = {kNotMeasured, kNotMeasured, kNotMeasured, kNotMeasured,
+                                      kNotMeasured};
 
 /// @brief Reference spectral centroid (Hz) mapped to maximum brightness (1.0).
 /// @details Centroids at or above this frequency are perceived as maximally bright;
@@ -93,7 +95,7 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   n_frames_ = spec.n_frames();
 
   if (n_frames_ == 0) {
-    timbre_ = kZeroTimbre;
+    timbre_ = kUnmeasuredTimbre;
     return;
   }
 
@@ -222,7 +224,7 @@ void TimbreAnalyzer::analyze() {
 
 void TimbreAnalyzer::compute_overall_timbre() {
   if (n_frames_ == 0) {
-    timbre_ = kZeroTimbre;
+    timbre_ = kUnmeasuredTimbre;
     return;
   }
 
@@ -230,9 +232,18 @@ void TimbreAnalyzer::compute_overall_timbre() {
 }
 
 Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) const {
-  Timbre t = kZeroTimbre;
+  Timbre t = kUnmeasuredTimbre;
 
   if (start_frame >= end_frame) {
+    return t;
+  }
+
+  // A window with no frame carrying spectral energy has nothing to describe.
+  bool has_energy_frame = false;
+  for (int f = start_frame; f < end_frame && !has_energy_frame; ++f) {
+    has_energy_frame = f < static_cast<int>(frame_l1_.size()) && has_evidence(frame_l1_[f]);
+  }
+  if (!has_energy_frame) {
     return t;
   }
 

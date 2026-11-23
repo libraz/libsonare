@@ -239,7 +239,7 @@ std::string assistant_result_to_json(const AssistantResult& result) {
   };
   json::Object profile;
   util::json::put(profile, "durationSec", result.profile.duration_sec);
-  util::json::put(profile, "bpm", result.profile.bpm);
+  put_level(profile, "bpm", result.profile.bpm);
   util::json::put(profile, "bpmConfidence", result.profile.bpm_confidence);
   util::json::put(profile, "integratedLufs", result.profile.loudness.integrated_lufs);
   put_level(profile, "loudnessRangeLu", result.profile.loudness.lra_lu);

@@ -107,9 +107,9 @@ struct BpmConfig {
   /// preferred when it lies inside it.
   float bpm_min = bpm_constants::kDefaultBpmMin;  ///< Minimum BPM to consider (inclusive)
   float bpm_max = bpm_constants::kDefaultBpmMax;  ///< Maximum BPM to consider (inclusive)
-  float start_bpm = 120.0f;                       ///< Initial BPM estimate (used as fallback)
-  int n_fft = 2048;      ///< Window length in samples at 22050 Hz, rescaled to the input rate
-  int hop_length = 512;  ///< Hop length in samples of the input buffer
+  float start_bpm = 120.0f;  ///< Beat tracker's seed tempo; never reported as a measurement
+  int n_fft = 2048;          ///< Window length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 512;      ///< Hop length in samples of the input buffer
 };
 
 /// @brief Domain of the tempo search hop_length; n_fft takes @ref kStftNFftDomain.
@@ -241,6 +241,7 @@ class BpmAnalyzer {
               const BpmConfig& config = BpmConfig());
 
   /// @brief Returns the estimated BPM.
+  /// @return Tempo in BPM, or NaN (kNotMeasured) when no tempo was found.
   float bpm() const { return bpm_; }
 
   /// @brief Returns confidence of the BPM estimate [0, 1].
@@ -283,7 +284,7 @@ class BpmAnalyzer {
 /// @brief Quick BPM detection function.
 /// @param audio Input audio
 /// @param config BPM configuration
-/// @return Estimated BPM
+/// @return Estimated BPM, or NaN when no tempo was found
 float detect_bpm(const Audio& audio, const BpmConfig& config = BpmConfig());
 
 }  // namespace sonare

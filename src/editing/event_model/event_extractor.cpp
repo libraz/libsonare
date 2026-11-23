@@ -8,6 +8,7 @@
 
 #include "core/convert.h"
 #include "core/spectrum.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
 
@@ -122,9 +123,14 @@ std::vector<PercussiveEvent> extract_percussive_events(
     const double percussive_energy = energy_over(separated.percussive, begin, end);
     const double total = percussive_energy + energy_over(separated.harmonic, begin, end);
     event.percussive_ratio =
-        total > 0.0 ? static_cast<float>(std::clamp(percussive_energy / total, 0.0, 1.0)) : 0.0f;
+        total > 0.0 ? static_cast<float>(std::clamp(percussive_energy / total, 0.0, 1.0))
+                    : kNotMeasured;
 
-    if (event.percussive_ratio < config.min_percussive_ratio) continue;
+    // A silent span has no ratio; it is kept only when no minimum is asked for.
+    if (std::isnan(event.percussive_ratio) ? config.min_percussive_ratio > 0.0f
+                                           : event.percussive_ratio < config.min_percussive_ratio) {
+      continue;
+    }
     events.push_back(event);
   }
 

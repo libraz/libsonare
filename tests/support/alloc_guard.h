@@ -121,6 +121,44 @@ class LiveBlockGuard {
   LiveBlockGuard& operator=(const LiveBlockGuard&) = delete;
 };
 
+// Live-byte peak for memory-bound checks: each operator new block's usable size is added on
+// allocation and subtracted on release while armed, keeping the high-water mark. Windows has no
+// usable-size query for an aligned block of unknown alignment, so it is not measured there.
+#if defined(_WIN32)
+inline constexpr bool kLiveBytesMeasured = false;
+#else
+inline constexpr bool kLiveBytesMeasured = true;
+#endif
+inline std::atomic<bool> g_track_live_bytes{false};
+inline std::atomic<long long> g_live_bytes{0};
+inline std::atomic<long long> g_peak_live_bytes{0};
+
+inline void note_live_bytes(long long delta) noexcept {
+  if (delta == 0 || !g_track_live_bytes.load(std::memory_order_relaxed)) return;
+  const long long now = g_live_bytes.fetch_add(delta, std::memory_order_relaxed) + delta;
+  long long peak = g_peak_live_bytes.load(std::memory_order_relaxed);
+  while (now > peak &&
+         !g_peak_live_bytes.compare_exchange_weak(peak, now, std::memory_order_relaxed)) {
+  }
+}
+
+/// Scoped guard: zeroes and arms the live-byte balance; peak() reports the most bytes held at
+/// once, counted from construction. A release of a block taken before arming lowers the balance,
+/// so the peak is never overstated by memory the guarded call did not take.
+class PeakLiveBytesGuard {
+ public:
+  PeakLiveBytesGuard() {
+    g_live_bytes.store(0, std::memory_order_relaxed);
+    g_peak_live_bytes.store(0, std::memory_order_relaxed);
+    g_track_live_bytes.store(true, std::memory_order_relaxed);
+  }
+  ~PeakLiveBytesGuard() { g_track_live_bytes.store(false, std::memory_order_relaxed); }
+  long long peak() const noexcept { return g_peak_live_bytes.load(std::memory_order_relaxed); }
+
+  PeakLiveBytesGuard(const PeakLiveBytesGuard&) = delete;
+  PeakLiveBytesGuard& operator=(const PeakLiveBytesGuard&) = delete;
+};
+
 /// Scoped guard: zeroes and arms the global allocation counter on construction,
 /// disarms on destruction. count() reports allocations observed while armed.
 class AllocationGuard {

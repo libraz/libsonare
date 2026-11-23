@@ -44,10 +44,10 @@ struct PitchResult {
   /// @brief Returns number of frames.
   int n_frames() const { return static_cast<int>(f0.size()); }
 
-  /// @brief Returns median F0 of voiced frames.
+  /// @brief Returns median F0 of voiced frames, NaN when no frame is voiced.
   float median_f0() const;
 
-  /// @brief Returns mean F0 of voiced frames.
+  /// @brief Returns mean F0 of voiced frames, NaN when no frame is voiced.
   float mean_f0() const;
 };
 

@@ -354,3 +354,22 @@ TEST_CASE("validate_melody_config names the f0 bounds by their parameter names",
   REQUIRE_THROWS_WITH(validate_melody_config(config),
                       "f0_min_hz must be finite and greater than 0");
 }
+
+TEST_CASE("MelodyAnalyzer reports no contour measure when no frame is voiced",
+          "[melody_analyzer]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(11025, 0.0f), 22050);
+  MelodyAnalyzer analyzer(silence);
+  const MelodyContour& contour = analyzer.contour();
+  CHECK_FALSE(analyzer.has_melody());
+  CHECK(std::isnan(contour.mean_frequency));
+  CHECK(std::isnan(contour.pitch_range_octaves));
+  CHECK(std::isnan(contour.pitch_stability));
+  CHECK(std::isnan(contour.vibrato_rate));
+
+  // A voiced contour keeps a measured vibrato rate, 0 for a steady tone.
+  const Audio tone = generate_sine_audio(440.0f, 22050, 0.5f);
+  MelodyAnalyzer voiced(tone);
+  REQUIRE(voiced.has_melody());
+  CHECK(std::isfinite(voiced.contour().vibrato_rate));
+  CHECK(voiced.contour().vibrato_rate == 0.0f);
+}

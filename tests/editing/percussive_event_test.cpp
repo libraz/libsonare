@@ -386,9 +386,12 @@ void require_well_formed(const std::vector<PercussiveEvent>& events, const sonar
     REQUIRE(std::isfinite(event.strength));
     REQUIRE(std::isfinite(event.peak_amplitude));
     REQUIRE(event.peak_amplitude >= 0.0f);
-    REQUIRE(std::isfinite(event.percussive_ratio));
-    REQUIRE(event.percussive_ratio >= 0.0f);
-    REQUIRE(event.percussive_ratio <= 1.0f);
+    // NaN is a silent span, which has no ratio.
+    REQUIRE_FALSE(std::isinf(event.percussive_ratio));
+    if (!std::isnan(event.percussive_ratio)) {
+      REQUIRE(event.percussive_ratio >= 0.0f);
+      REQUIRE(event.percussive_ratio <= 1.0f);
+    }
     REQUIRE(event.edit.is_identity());
   }
 }

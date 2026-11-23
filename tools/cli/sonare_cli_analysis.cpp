@@ -63,8 +63,8 @@ int cmd_bpm(const CliArgs& args, const Audio& audio) {
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
-    std::cout << "  " << color::green << color::bold << "> Estimated BPM : " << std::fixed
-              << std::setprecision(2) << bpm << " BPM" << color::reset << "\n\n";
+    std::cout << "  " << color::green << color::bold
+              << "> Estimated BPM : " << measured_text(bpm, 2, "BPM") << color::reset << "\n\n";
   }
   return 0;
 }
@@ -371,15 +371,15 @@ int cmd_timbre(const CliArgs& args, const Audio& audio) {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::magenta << "> Timbre Analysis:" << color::reset << "\n";
-    printf("    Brightness: %.2f (%s)\n", t.brightness,
+    printf("    Brightness: %s (%s)\n", measured_text(t.brightness, 2).c_str(),
            describe_level(t.brightness, "dark", "neutral", "bright").c_str());
-    printf("    Warmth:     %.2f (%s)\n", t.warmth,
+    printf("    Warmth:     %s (%s)\n", measured_text(t.warmth, 2).c_str(),
            describe_level(t.warmth, "thin", "neutral", "warm").c_str());
-    printf("    Density:    %.2f (%s)\n", t.density,
+    printf("    Density:    %s (%s)\n", measured_text(t.density, 2).c_str(),
            describe_level(t.density, "sparse", "moderate", "rich").c_str());
-    printf("    Roughness:  %.2f (%s)\n", t.roughness,
+    printf("    Roughness:  %s (%s)\n", measured_text(t.roughness, 2).c_str(),
            describe_level(t.roughness, "smooth", "moderate", "rough").c_str());
-    printf("    Complexity: %.2f (%s)\n", t.complexity,
+    printf("    Complexity: %s (%s)\n", measured_text(t.complexity, 2).c_str(),
            describe_level(t.complexity, "simple", "moderate", "complex").c_str());
     std::cout << "\n";
   }
@@ -461,17 +461,23 @@ int cmd_rhythm(const CliArgs& args, const Audio& audio) {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
     std::cout << "  " << color::blue << "> Rhythm Analysis:" << color::reset << "\n";
-    std::cout << "  " << color::green << color::bold << "> Estimated BPM : " << std::fixed
-              << std::setprecision(2) << analyzer.bpm() << " BPM" << color::reset << "\n";
+    std::cout << "  " << color::green << color::bold
+              << "> Estimated BPM : " << measured_text(analyzer.bpm(), 2, "BPM") << color::reset
+              << "\n";
     printf("    Time Signature:    %d/%d (conf %.0f%%)\n", r.time_signature.numerator,
            r.time_signature.denominator, r.time_signature.confidence * 100.0f);
     printf("    Groove Type:       %s\n", r.groove_type.c_str());
-    printf("    Syncopation:       %.2f (%s)\n", r.syncopation,
-           r.syncopation < 0.3f ? "low" : (r.syncopation < 0.7f ? "moderate" : "high"));
-    printf("    Pattern Regularity: %.2f (%s)\n", r.pattern_regularity,
-           r.pattern_regularity > 0.7f ? "regular" : "irregular");
-    printf("    Tempo Stability:   %.2f (%s)\n", r.tempo_stability,
-           r.tempo_stability > 0.8f ? "stable" : "variable");
+    const auto label = [](float value, float cut, const char* below, const char* above) {
+      return std::isnan(value) ? "-" : (value > cut ? above : below);
+    };
+    printf("    Syncopation:       %s (%s)\n", measured_text(r.syncopation, 2).c_str(),
+           std::isnan(r.syncopation)
+               ? "-"
+               : (r.syncopation < 0.3f ? "low" : (r.syncopation < 0.7f ? "moderate" : "high")));
+    printf("    Pattern Regularity: %s (%s)\n", measured_text(r.pattern_regularity, 2).c_str(),
+           label(r.pattern_regularity, 0.7f, "irregular", "regular"));
+    printf("    Tempo Stability:   %s (%s)\n", measured_text(r.tempo_stability, 2).c_str(),
+           label(r.tempo_stability, 0.8f, "variable", "stable"));
     std::cout << "\n";
   }
   return 0;
@@ -673,8 +679,8 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
 
     // Summary line
     std::cout << "  " << color::yellow << "> Duration: " << std::fixed << std::setprecision(1)
-              << audio.duration() << "s, BPM: " << r.bpm << ", Key: " << r.key.to_string()
-              << color::reset << "\n";
+              << audio.duration() << "s, BPM: " << measured_text(r.bpm, 1)
+              << ", Key: " << r.key.to_string() << color::reset << "\n";
 
     // Chord progression (if available)
     if (!r.chords.empty()) {
@@ -701,14 +707,20 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
         int start_mm = static_cast<int>(s.start) / 60;
         int start_ss = static_cast<int>(s.start) % 60;
         float duration = s.end - s.start;
-        int bars = static_cast<int>(std::round(duration / (4.0f * 60.0f / r.bpm)));
+        // Bars need a tempo; without one the figure is left out.
+        std::string bars_text;
+        if (std::isfinite(r.bpm) && r.bpm > 0.0f) {
+          bars_text =
+              std::to_string(static_cast<int>(std::round(duration / (4.0f * 60.0f / r.bpm)))) +
+              "bars, ";
+        }
 
         std::string energy_sym = (s.energy_level < 0.33f)   ? "low E"
                                  : (s.energy_level < 0.67f) ? "mid E"
                                                             : "high E";
 
-        printf("    %zu. %s (%02d:%02d, %dbars, %s)\n", i + 1, s.type_string().c_str(), start_mm,
-               start_ss, bars, energy_sym.c_str());
+        printf("    %zu. %s (%02d:%02d, %s%s)\n", i + 1, s.type_string().c_str(), start_mm,
+               start_ss, bars_text.c_str(), energy_sym.c_str());
       }
     }
 
@@ -718,18 +730,19 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
               << color::reset << "\n";
 
     // Timbre
-    std::cout << "  " << color::magenta << "> Timbre: Brightness " << std::fixed
-              << std::setprecision(1) << r.timbre.brightness << ", Warmth " << r.timbre.warmth
-              << color::reset << "\n";
+    std::cout << "  " << color::magenta << "> Timbre: Brightness "
+              << measured_text(r.timbre.brightness, 1) << ", Warmth "
+              << measured_text(r.timbre.warmth, 1) << color::reset << "\n";
 
     // Dynamics
     std::cout << "  " << color::yellow << "> Dynamics: " << std::fixed << std::setprecision(1)
               << r.dynamics.dynamic_range_db << "dB range" << color::reset << "\n";
 
     // Final BPM and Key results
-    std::cout << "  " << color::green << color::bold << "> Estimated BPM : " << std::fixed
-              << std::setprecision(2) << r.bpm << " BPM  (conf " << std::setprecision(1)
-              << (r.bpm_confidence * 100.0f) << "%)" << color::reset << "\n";
+    std::cout << "  " << color::green << color::bold
+              << "> Estimated BPM : " << measured_text(r.bpm, 2, "BPM") << "  (conf " << std::fixed
+              << std::setprecision(1) << (r.bpm_confidence * 100.0f) << "%)" << color::reset
+              << "\n";
     std::cout << "  " << color::magenta << color::bold << "> Estimated Key : " << r.key.to_string()
               << "  (conf " << std::fixed << std::setprecision(1) << (r.key.confidence * 100.0f)
               << "%)" << color::reset << "\n\n";

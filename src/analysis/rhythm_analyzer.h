@@ -35,10 +35,10 @@ constexpr float kSwingThreshold = 0.6f;
 /// @brief Rhythm characteristics extracted from audio.
 struct RhythmFeatures {
   TimeSignature time_signature;  ///< Detected time signature
-  float syncopation;             ///< Syncopation level [0, 1]
+  float syncopation;             ///< Syncopation level [0, 1]; NaN with no beats or silent accents
   std::string groove_type;       ///< Groove type (straight, shuffle, swing)
-  float pattern_regularity;      ///< Rhythm regularity [0, 1]; 0 with no beat interval
-  float tempo_stability;         ///< Tempo stability over time [0, 1]; 0 below two beat intervals
+  float pattern_regularity;      ///< Rhythm regularity [0, 1]; NaN with no beat interval
+  float tempo_stability;         ///< Tempo stability [0, 1]; NaN with no beat interval, 0 with one
 };
 
 /// @brief Configuration for rhythm analysis.
@@ -109,7 +109,7 @@ class RhythmAnalyzer {
   /// @brief Returns tempo stability [0, 1].
   float tempo_stability() const { return features_.tempo_stability; }
 
-  /// @brief Returns estimated BPM.
+  /// @brief Returns estimated BPM, NaN when no tempo was found.
   float bpm() const { return bpm_; }
 
   /// @brief Returns beat intervals in seconds.

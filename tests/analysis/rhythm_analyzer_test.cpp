@@ -643,11 +643,13 @@ TEST_CASE("time signature and tempo of the same content agree across input sampl
   }
 }
 
-TEST_CASE("RhythmAnalyzer reports no regularity for silence", "[rhythm_analyzer][evidence]") {
+TEST_CASE("RhythmAnalyzer reports nothing measured for silence", "[rhythm_analyzer][evidence]") {
   const Audio silence = Audio::from_vector(std::vector<float>(22050 * 4, 0.0f), 22050);
   RhythmAnalyzer analyzer(silence);
-  CHECK(analyzer.pattern_regularity() == 0.0f);
-  CHECK(analyzer.tempo_stability() == 0.0f);
+  CHECK(std::isnan(analyzer.bpm()));
+  CHECK(std::isnan(analyzer.syncopation()));
+  CHECK(std::isnan(analyzer.pattern_regularity()));
+  CHECK(std::isnan(analyzer.tempo_stability()));
 }
 
 TEST_CASE("rhythm_regularity derives both measures from the intervals it is given",

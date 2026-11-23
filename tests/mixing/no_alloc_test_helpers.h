@@ -14,6 +14,10 @@
 #include <vector>
 #if defined(_WIN32)
 #include <malloc.h>
+#elif defined(__APPLE__)
+#include <malloc/malloc.h>
+#else
+#include <malloc.h>
 #endif
 
 #include "automation/automation_engine.h"
@@ -60,7 +64,20 @@ using sonare::test::allocation_should_fail;
 using sonare::test::AllocationGuard;
 using sonare::test::note_allocation;
 using sonare::test::note_live_allocation;
+using sonare::test::note_live_bytes;
 using sonare::test::note_live_release;
+
+// Bytes the allocator holds for @p ptr; 0 where it cannot say (see kLiveBytesMeasured).
+[[maybe_unused]] long long block_bytes(void* ptr) noexcept {
+#if defined(_WIN32)
+  (void)ptr;
+  return 0;
+#elif defined(__APPLE__)
+  return static_cast<long long>(malloc_size(ptr));
+#else
+  return static_cast<long long>(malloc_usable_size(ptr));
+#endif
+}
 
 [[maybe_unused]] void* allocate_bytes(std::size_t size) {
   note_allocation();
@@ -69,6 +86,7 @@ using sonare::test::note_live_release;
   }
   if (void* ptr = std::malloc(size == 0 ? 1 : size)) {
     note_live_allocation();
+    note_live_bytes(block_bytes(ptr));
     return ptr;
   }
   throw std::bad_alloc();
@@ -93,6 +111,7 @@ using sonare::test::note_live_release;
   }
   if (ptr != nullptr) {
     note_live_allocation();
+    note_live_bytes(block_bytes(ptr));
     return ptr;
   }
 #endif
@@ -101,6 +120,7 @@ using sonare::test::note_live_release;
 
 [[maybe_unused]] void release_bytes(void* ptr) noexcept {
   note_live_release(ptr);
+  if (ptr != nullptr) note_live_bytes(-block_bytes(ptr));
   std::free(ptr);
 }
 
@@ -109,6 +129,7 @@ using sonare::test::note_live_release;
 // freed with std::free.
 [[maybe_unused]] void aligned_free(void* ptr) noexcept {
   note_live_release(ptr);
+  if (ptr != nullptr) note_live_bytes(-block_bytes(ptr));
 #if defined(_WIN32)
   _aligned_free(ptr);
 #else

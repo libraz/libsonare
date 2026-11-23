@@ -13,6 +13,7 @@
 #include "core/convert.h"
 #include "feature/onset.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/peak.h"
 
@@ -160,7 +161,7 @@ void prepend_missed_initial_beat(std::vector<int>& beat_frames, float period) {
 }  // namespace
 
 BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
-    : bpm_(config.start_bpm),
+    : bpm_(kNotMeasured),
       time_signature_{4, 4, 0.0f},
       sr_(audio.sample_rate()),
       hop_length_(config.hop_length),
@@ -202,7 +203,7 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
 BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
                            const BeatConfig& config, int shift_frames)
     : onset_strength_(onset_strength),
-      bpm_(config.start_bpm),
+      bpm_(kNotMeasured),
       time_signature_{4, 4, 0.0f},
       sr_(sr),
       hop_length_(hop_length),
@@ -325,14 +326,13 @@ void BeatAnalyzer::track_beats() {
   bpm_config.start_bpm = config_.start_bpm;
 
   BpmAnalyzer bpm_analyzer(onset_strength_, sr_, hop_length_, bpm_config);
-  bpm_ = bpm_analyzer.bpm();
-
-  if (bpm_ <= 0.0f) {
-    bpm_ = config_.start_bpm;
-  }
+  // The tracker needs a tempo; the prior stands in for it but is never reported.
+  const float estimate = bpm_analyzer.bpm();
+  const float seed = estimate > 0.0f ? estimate : config_.start_bpm;
+  bpm_ = estimate > 0.0f ? estimate : kNotMeasured;
 
   // Convert BPM to period in frames
-  float period = bpm_to_period(bpm_, sr_, hop_length_);
+  float period = bpm_to_period(seed, sr_, hop_length_);
   if (period < 1.0f) {
     beats_.clear();
     return;

@@ -11,6 +11,7 @@
 #include "core/resample.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/non_finite_sample.h"
@@ -125,7 +126,7 @@ float PitchResult::median_f0() const {
     }
   }
   if (voiced_f0.empty()) {
-    return 0.0f;
+    return kNotMeasured;
   }
   std::sort(voiced_f0.begin(), voiced_f0.end());
   size_t mid = voiced_f0.size() / 2;
@@ -144,7 +145,7 @@ float PitchResult::mean_f0() const {
       ++count;
     }
   }
-  return count > 0 ? sum / count : 0.0f;
+  return count > 0 ? sum / count : kNotMeasured;
 }
 
 std::vector<float> yin_difference(const float* frame, int frame_length, int max_lag) {

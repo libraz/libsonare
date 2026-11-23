@@ -71,7 +71,8 @@ struct PercussiveEventExtractorConfig {
   /// detected onset, and is the default because any threshold above it also
   /// drops real hits that happen to sit over a loud sustain -- the ratio is a
   /// property of the span, so those read low too. It is useful on material that
-  /// is mostly drums and wrong on a dense mix.
+  /// is mostly drums and wrong on a dense mix. A silent span has no ratio (NaN) and
+  /// is dropped by any value above 0.
   float min_percussive_ratio = 0.0f;
 };
 

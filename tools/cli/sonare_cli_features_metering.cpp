@@ -256,8 +256,8 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
     std::cout << "Pitch Tracking (" << algo << "):\n";
     printf("  Frames:    %d\n", n_frames);
     printf("  Voiced:    %d (%.1f%%)\n", voiced, ratio * 100.0f);
-    printf("  Median F0: %.1f Hz\n", result.median_f0());
-    printf("  Mean F0:   %.1f Hz\n", result.mean_f0());
+    printf("  Median F0: %s\n", measured_text(result.median_f0(), 1, "Hz").c_str());
+    printf("  Mean F0:   %s\n", measured_text(result.mean_f0(), 1, "Hz").c_str());
   }
   return 0;
 }
