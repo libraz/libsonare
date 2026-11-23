@@ -242,8 +242,8 @@ Before merging, the maintainer brings a change here to the following:
 Before merging, the maintainer brings a change here to the following:
 
 - Emscripten is raised by editing `bindings/wasm/.emscripten-version`; `build:wasm` refuses any other `emcc`, and a build tree first configured with another one, since CMake keeps the compiler it was first configured with — move that tree aside.
-- Every translation unit that contains a `catch` has the `-fexceptions` flag in `src/CMakeLists.txt`, and the exception-scope check has run after a WASM build.
-- Without `-fexceptions` on its own compile line, a translation unit's `catch` is deleted at compile time: no compile error, no link error, no failing test, and the throw reaches JavaScript raw.
+- No translation unit carries its own exception flag: the WASM build turns on native WebAssembly exceptions once, for every unit of both modules, in the top-level `CMakeLists.txt`.
+- A thrown C++ exception reaches JavaScript as a `WebAssembly.Exception`; one function in `bindings/wasm/src/module_state.ts` turns it into the coded error, and no call site inspects a thrown value itself.
 
 ### Build options
 
