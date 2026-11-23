@@ -447,11 +447,18 @@ describe('Project native binding', () => {
     const parsed = JSON.parse(current.toJson());
     current.destroy();
     const document = JSON.stringify({ ...parsed, sampleRate: 44100.5 });
+    // The diagnostic code stays in the diagnostics; the refusal carries the rule alone.
     expect(() => Project.fromJson(document)).toThrow(
-      expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: 'Project.fromJson: sampleRate must be an integer in [8000, 384000]',
+      }),
     );
     expect(() => Project.fromJsonWithDiagnostics(document)).toThrow(
-      expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: 'Project.fromJsonWithDiagnostics: sampleRate must be an integer in [8000, 384000]',
+      }),
     );
     const project = new Project();
     expect(() => project.setSampleRate(44100.5)).toThrow(

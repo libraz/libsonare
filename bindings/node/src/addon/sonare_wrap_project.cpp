@@ -270,8 +270,11 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   if (diag != nullptr) sonare_free_string(diag);
   if (err != SONARE_OK) {
     sonare_project_destroy(handle);
+    // The last error carries the diagnostics without their codes; the codes stay in diagnostics.
+    const char* message = sonare_last_error_message();
     sonare_node::ThrowSonareErrorMessage(
-        env, err, diagnostics.empty() ? "failed to deserialize project JSON" : diagnostics);
+        env, err,
+        message != nullptr && *message != '\0' ? message : "failed to deserialize project JSON");
     return env.Undefined();
   }
   if (!with_diagnostics) return ProjectWrap::Wrap(info, handle);

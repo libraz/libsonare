@@ -1383,7 +1383,10 @@ describe('Sonare WASM Project', () => {
         caught = error;
       }
       expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidFormat);
-      expect(String((caught as Error).message)).toContain('invalid_sample_rate');
+      // The diagnostic code stays in the diagnostics; the refusal carries the rule alone.
+      expect(String((caught as Error).message)).toMatch(
+        /^Project\.fromJson(WithDiagnostics)?: sampleRate must be an integer in \[8000, 384000\]$/,
+      );
     }
     const project = new Project();
     try {
