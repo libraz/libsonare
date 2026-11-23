@@ -258,7 +258,7 @@ const withProject = (fn: (project: Project) => unknown) => withHandle(new Projec
 const withEq = (fn: (eq: StreamingEqualizer) => unknown) =>
   withHandle(new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 128 }), fn);
 
-const withChain = (numChannels: number, fn: (chain: StreamingMasteringChain) => unknown) =>
+const withChain = (numChannels: 1 | 2, fn: (chain: StreamingMasteringChain) => unknown) =>
   withHandle(
     new StreamingMasteringChain({ sampleRate: 48000, maxBlockSize: 128, numChannels }),
     fn,
