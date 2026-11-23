@@ -340,11 +340,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   // Core - Resample
   static Napi::Value Resample(const Napi::CallbackInfo& info);
 
-  // Helper to get pitch class name string
-  static const char* PitchClassName(SonarePitchClass pc);
-  // Helper to get mode name string
-  static const char* ModeName(SonareMode mode);
-
   SonareAudio* audio_;
 };
 

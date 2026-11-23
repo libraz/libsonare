@@ -449,7 +449,8 @@ inline std::vector<int> IntVectorFromValue(const Napi::Value& value, const char*
 ///
 /// @return true when the dims are consistent (no exception thrown).
 bool ValidateMatrixDims(Napi::Env env, int rows, int cols, size_t length);
-const char* PitchClassNameLocal(SonarePitchClass pc);
+/// @brief Name of a pitch class the library wrote; an ordinal outside [0, 12) is InvalidFormat.
+const char* PitchClassNameLocal(Napi::Env env, SonarePitchClass pc);
 /// @brief Resolves a pitch class given as an ordinal in [0, 12) or as its name ("C", "C#", ...,
 /// "B").
 SonarePitchClass PitchClassFromValue(const Napi::Value& value, const char* what);

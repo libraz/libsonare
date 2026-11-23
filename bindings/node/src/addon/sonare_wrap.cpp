@@ -17,34 +17,6 @@
 
 using namespace sonare_node;
 
-const char* SonareWrap::PitchClassName(SonarePitchClass pc) {
-  static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-  int idx = static_cast<int>(pc);
-  if (idx < 0 || idx > 11) return "C";
-  return names[idx];
-}
-
-const char* SonareWrap::ModeName(SonareMode mode) {
-  switch (mode) {
-    case SONARE_MODE_MAJOR:
-      return "major";
-    case SONARE_MODE_MINOR:
-      return "minor";
-    case SONARE_MODE_DORIAN:
-      return "dorian";
-    case SONARE_MODE_PHRYGIAN:
-      return "phrygian";
-    case SONARE_MODE_LYDIAN:
-      return "lydian";
-    case SONARE_MODE_MIXOLYDIAN:
-      return "mixolydian";
-    case SONARE_MODE_LOCRIAN:
-      return "locrian";
-    default:
-      return "unknown";
-  }
-}
-
 Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Audio",

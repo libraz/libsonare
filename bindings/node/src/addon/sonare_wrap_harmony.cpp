@@ -93,8 +93,10 @@ Napi::Array ChordsToJs(Napi::Env env, const SonareChordAnalysisResult& analysis)
     Napi::Object chord = Napi::Object::New(env);
     chord.Set("root", Napi::Number::New(env, static_cast<int>(analysis.chords[i].root)));
     chord.Set("bass", Napi::Number::New(env, static_cast<int>(analysis.chords[i].bass)));
-    chord.Set("rootName", Napi::String::New(env, PitchClassNameLocal(analysis.chords[i].root)));
-    chord.Set("bassName", Napi::String::New(env, PitchClassNameLocal(analysis.chords[i].bass)));
+    chord.Set("rootName",
+              Napi::String::New(env, PitchClassNameLocal(env, analysis.chords[i].root)));
+    chord.Set("bassName",
+              Napi::String::New(env, PitchClassNameLocal(env, analysis.chords[i].bass)));
     chord.Set("quality", Napi::Number::New(env, static_cast<int>(analysis.chords[i].quality)));
     chord.Set("name", Napi::String::New(env, ChordSymbol(analysis.chords[i])));
     chord.Set("startSec", Napi::Number::New(env, analysis.chords[i].start_sec));

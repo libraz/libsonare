@@ -38,8 +38,9 @@ const PITCH_CLASS_NAMES = [
   'B',
 ] as const;
 
+/** Name of a pitch-class ordinal the module wrote. */
 function pitchClassName(value: number): string {
-  return PITCH_CLASS_NAMES[value] ?? 'C';
+  return ordinalToken(PITCH_CLASS_NAMES, value, 'pitch class');
 }
 
 const KEY_MODE_NAMES = [

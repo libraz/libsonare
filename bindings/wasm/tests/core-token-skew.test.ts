@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { convertChordAnalysisResult } from '../src/analysis_helpers.js';
 import { ErrorCode, isSonareError, type SonareError } from '../src/errors.js';
 import {
   libraryToken,
@@ -64,6 +65,20 @@ describe('core token skew', () => {
     expect(skewError('analysis result section is missing its type field').code).toBe(
       ErrorCode.InvalidFormat,
     );
+  });
+
+  it('refuses a chord root or bass outside the twelve pitch classes rather than reading it as C', () => {
+    const chord = { root: 0, bass: 0, quality: 0, startSec: 0, endSec: 1, confidence: 1 };
+    for (const field of ['root', 'bass'] as const) {
+      const error = caught(() =>
+        convertChordAnalysisResult({
+          chords: [{ ...chord, [field]: 12 }],
+          tuningCents: 0,
+        } as unknown as Parameters<typeof convertChordAnalysisResult>[0]),
+      );
+      expect(error.code).toBe(ErrorCode.InvalidFormat);
+      expect(error.message).toBe('unknown pitch class ordinal: 12');
+    }
   });
 
   it('reads a project ordinal table through the same failure', () => {

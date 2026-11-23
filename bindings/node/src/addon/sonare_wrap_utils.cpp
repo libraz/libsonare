@@ -549,10 +549,13 @@ bool ValidateMatrixDims(Napi::Env env, int rows, int cols, size_t length) {
   return true;
 }
 
-const char* PitchClassNameLocal(SonarePitchClass pc) {
+const char* PitchClassNameLocal(Napi::Env env, SonarePitchClass pc) {
   static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-  int idx = static_cast<int>(pc);
-  if (idx < 0 || idx > 11) return "C";
+  const int idx = static_cast<int>(pc);
+  if (idx < SONARE_PITCH_C || idx > SONARE_PITCH_B) {
+    throw MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                          "unknown pitch class ordinal: " + std::to_string(idx));
+  }
   return names[idx];
 }
 
@@ -571,7 +574,7 @@ SonarePitchClass PitchClassFromValue(const Napi::Value& value, const char* what)
   }
   const std::string name = node_narrow_string(env, value, what);
   for (int pc = SONARE_PITCH_C; pc <= SONARE_PITCH_B; ++pc) {
-    if (name == PitchClassNameLocal(static_cast<SonarePitchClass>(pc))) {
+    if (name == PitchClassNameLocal(env, static_cast<SonarePitchClass>(pc))) {
       return static_cast<SonarePitchClass>(pc);
     }
   }
@@ -684,7 +687,7 @@ Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, 
     throw MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
                           "unknown key mode ordinal: " + std::to_string(mode_ordinal));
   }
-  std::string root_name = PitchClassNameLocal(root);
+  std::string root_name = PitchClassNameLocal(env, root);
   std::string mode_name = ModeNameLocal(mode);
   key.Set("root", Napi::Number::New(env, static_cast<double>(root)));
   key.Set("mode", Napi::String::New(env, mode_name));
@@ -748,13 +751,15 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
       Napi::Value bass = chord.Get("bass");
       if (root.IsNumber()) {
         chord.Set("rootName",
-                  Napi::String::New(env, PitchClassNameLocal(static_cast<SonarePitchClass>(
-                                             node_narrow_int(env, root, "root")))));
+                  Napi::String::New(
+                      env, PitchClassNameLocal(env, static_cast<SonarePitchClass>(
+                                                        node_narrow_int(env, root, "root")))));
       }
       if (bass.IsNumber()) {
         chord.Set("bassName",
-                  Napi::String::New(env, PitchClassNameLocal(static_cast<SonarePitchClass>(
-                                             node_narrow_int(env, bass, "bass")))));
+                  Napi::String::New(
+                      env, PitchClassNameLocal(env, static_cast<SonarePitchClass>(
+                                                        node_narrow_int(env, bass, "bass")))));
       }
     }
   }
