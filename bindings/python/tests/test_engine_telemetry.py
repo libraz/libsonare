@@ -10,13 +10,13 @@ import pytest
 
 from libsonare import (
     AutomationPoint,
-    CaptureInputMonitor,
     CapturePunch,
     EngineClip,
     EngineGraphConnection,
     EngineGraphNode,
     EngineGraphParameterBinding,
     EngineGraphSpec,
+    EngineInputMonitorInput,
     EngineMarker,
     EngineMetronomeConfig,
     EngineTelemetryError,
@@ -291,9 +291,9 @@ def test_realtime_engine_process_and_telemetry() -> None:
             capacity_frames=128,
             source="input",
             record_offset_samples=-37,
-            input_monitor=CaptureInputMonitor(enabled=False),
             punch=punch,
         )
+        engine.set_input_monitor(EngineInputMonitorInput(enabled=False))
         engine.reset_capture()
         engine.arm_capture()
         engine.seek_marker(11)
@@ -303,21 +303,13 @@ def test_realtime_engine_process_and_telemetry() -> None:
         captured = engine.captured_audio()
         assert all(math.isclose(sample, 0.25, abs_tol=0.0001) for sample in captured[0])
 
-        engine.configure_capture(
-            capacity_frames=128,
-            source="input",
-            record_offset_samples=-37,
-            input_monitor=CaptureInputMonitor(enabled=True, gain=0.5),
-            punch=punch,
-        )
+        engine.set_input_monitor(EngineInputMonitorInput(enabled=True, gain=0.5))
         engine.seek_marker(11)
         monitored = engine.process([[0.25] * 128, [-0.25] * 128])
         assert all(math.isclose(sample, 0.5, abs_tol=0.0001) for sample in monitored[0])
         assert all(math.isclose(sample, -0.5, abs_tol=0.0001) for sample in monitored[1])
         with pytest.raises(SonareValueError) as bad_monitor_gain_error:
-            engine.configure_capture(
-                capacity_frames=128, input_monitor=CaptureInputMonitor(enabled=True, gain=math.nan)
-            )
+            engine.set_input_monitor(EngineInputMonitorInput(enabled=True, gain=math.nan))
         assert bad_monitor_gain_error.value.code == 4
 
 

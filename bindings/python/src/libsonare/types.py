@@ -275,9 +275,6 @@ from ._types_engine import (
     BoundaryResult as BoundaryResult,
 )
 from ._types_engine import (
-    CaptureInputMonitor as CaptureInputMonitor,
-)
-from ._types_engine import (
     CapturePunch as CapturePunch,
 )
 from ._types_engine import (
@@ -324,6 +321,12 @@ from ._types_engine import (
 )
 from ._types_engine import (
     EngineGraphSpec as EngineGraphSpec,
+)
+from ._types_engine import (
+    EngineInputMonitor as EngineInputMonitor,
+)
+from ._types_engine import (
+    EngineInputMonitorInput as EngineInputMonitorInput,
 )
 from ._types_engine import (
     EngineMarker as EngineMarker,

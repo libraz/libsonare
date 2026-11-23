@@ -939,9 +939,6 @@ from .types import CapabilityCatalogChainList as CapabilityCatalogChainList
 from .types import CapabilityCatalogChainStage as CapabilityCatalogChainStage
 from .types import CapabilityCatalogPresets as CapabilityCatalogPresets
 from .types import (
-    CaptureInputMonitor as CaptureInputMonitor,
-)
-from .types import (
     CapturePunch as CapturePunch,
 )
 from .types import (
@@ -1081,6 +1078,12 @@ from .types import (
 )
 from .types import (
     EngineGraphSpec as EngineGraphSpec,
+)
+from .types import (
+    EngineInputMonitor as EngineInputMonitor,
+)
+from .types import (
+    EngineInputMonitorInput as EngineInputMonitorInput,
 )
 from .types import (
     EngineMarker as EngineMarker,

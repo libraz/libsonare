@@ -666,6 +666,22 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_float,
     ]
+    lib.sonare_engine_input_monitor.restype = ctypes.c_int32
+    lib.sonare_engine_input_monitor.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_float),
+    ]
+    lib.sonare_engine_set_input_track.restype = ctypes.c_int32
+    lib.sonare_engine_set_input_track.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    lib.sonare_engine_clear_input_track.restype = ctypes.c_int32
+    lib.sonare_engine_clear_input_track.argtypes = [ctypes.c_void_p]
+    lib.sonare_engine_input_track.restype = ctypes.c_int32
+    lib.sonare_engine_input_track.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_int),
+    ]
     lib.sonare_engine_reset_capture.restype = ctypes.c_int32
     lib.sonare_engine_reset_capture.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_capture_status.restype = ctypes.c_int32

@@ -243,13 +243,27 @@ _CAPTURE_SOURCES: tuple[str, ...] = get_args(EngineCaptureSource)
 
 
 @dataclass(frozen=True, slots=True)
-class CaptureInputMonitor:
-    """Input monitoring for :meth:`RealtimeEngine.configure_capture`."""
+class EngineInputMonitor:
+    """The realtime engine's dry input monitor, as read back by
+    :meth:`~libsonare.RealtimeEngine.input_monitor`."""
 
     enabled: bool
-    """Whether the live input is monitored through the engine output."""
-    gain: float = 1.0
+    """Whether the live input is added to the engine output ahead of the master."""
+    gain: float
     """Linear monitor gain."""
+
+
+@dataclass(frozen=True, slots=True)
+class EngineInputMonitorInput:
+    """A dry input monitor handed to :meth:`~libsonare.RealtimeEngine.set_input_monitor`.
+
+    Same fields as :class:`EngineInputMonitor`, except that ``gain`` may be omitted for 1.
+    """
+
+    enabled: bool
+    """Whether the live input is added to the engine output ahead of the master."""
+    gain: float = 1.0
+    """Linear monitor gain; finite."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

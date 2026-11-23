@@ -199,6 +199,40 @@ class _EngineMixingMixin:
             )
         )
 
+    @_entry("RealtimeEngine.set_input_track")
+    def set_input_track(self, track_id: int) -> None:
+        """Route the live input into ``track_id``'s lane, ahead of its strip, sends and fader.
+
+        Setting, clearing or moving the input ramps it over 5 ms; a move crossfades the two
+        lanes. The first two input channels feed a stereo lane. The dry input monitor
+        (:meth:`set_input_monitor`) is separate, so with both on dry and wet are heard. May be
+        set before :meth:`prepare` and survives it; dropping the lane through
+        :meth:`set_track_lanes` clears it. A track no lane carries raises ``SonareValueError``
+        and leaves the input track as it was.
+        """
+        _check(
+            _get_lib().sonare_engine_set_input_track(
+                self._require_handle(), _to_c_uint32(track_id, "track_id")
+            )
+        )
+
+    @_entry("RealtimeEngine.clear_input_track")
+    def clear_input_track(self) -> None:
+        """Stop routing the live input into a lane, ramping it out over 5 ms."""
+        _check(_get_lib().sonare_engine_clear_input_track(self._require_handle()))
+
+    @property
+    def input_track(self) -> int | None:
+        """The track the live input is routed into, or ``None``."""
+        track_id = ctypes.c_uint32(0)
+        has_track = ctypes.c_int(0)
+        _check(
+            _get_lib().sonare_engine_input_track(
+                self._require_handle(), ctypes.byref(track_id), ctypes.byref(has_track)
+            )
+        )
+        return int(track_id.value) if has_track.value else None
+
     @_entry("RealtimeEngine.set_track_output_bus")
     def set_track_output_bus(self, track_id: int, bus_id: int | None) -> None:
         """Route one track lane to a bus, leaving its sends and every other lane as published.

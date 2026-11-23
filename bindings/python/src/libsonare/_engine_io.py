@@ -21,7 +21,7 @@ from ._engine_conversions import (
     _scope_telemetry_from_c,
     _telemetry_from_c,
 )
-from ._errors import _entry, _invalid_state, _refuse
+from ._errors import _entry, _invalid_state, _refuse, _refuse_type
 from ._ffi_types_core import (
     SONARE_METER_MAX_INSERTS,
     SonareClipPageRequest,
@@ -75,9 +75,10 @@ from ._runtime import (
 )
 from ._types_engine import (
     _ENGINE_DITHERS,
-    CaptureInputMonitor,
     CapturePunch,
     EngineCaptureSource,
+    EngineInputMonitor,
+    EngineInputMonitorInput,
     EngineProcessWithMonitorResult,
 )
 
@@ -146,7 +147,6 @@ class _EngineIoMixin:
         num_channels: int = 2,
         source: EngineCaptureSource = "output",
         record_offset_samples: int = 0,
-        input_monitor: CaptureInputMonitor | None = None,
         punch: CapturePunch | None = None,
     ) -> None:
         """Configure capture as a whole; an omitted setting takes its default, not its last value.
@@ -156,8 +156,8 @@ class _EngineIoMixin:
         belongs to the end of the pass played before it, so every pass captures the whole loop
         range. The offset has effect only with a ``punch``; while an armed punch capture loops it
         may span at most one loop pass, and a setup that would break that is refused whole. An
-        omitted ``input_monitor`` is enabled at gain 1 and an omitted ``punch`` leaves capture
-        ungated. The buffer is reallocated only when ``num_channels`` or
+        omitted ``punch`` leaves capture ungated. The dry input monitor is not part of capture;
+        it is :meth:`set_input_monitor`'s. The buffer is reallocated only when ``num_channels`` or
         ``capacity_frames`` changes, and reallocating while armed raises ``INVALID_STATE``.
         """
         # Narrowed, not int()-coerced: int(1024.5) is a buffer one frame short.
@@ -165,11 +165,6 @@ class _EngineIoMixin:
         frame_capacity = _narrow_int(capacity_frames, "capacity_frames", 1, _INT64_MAX)
         source_value = _capture_source_value(source, "source")
         offset = _narrow_int(record_offset_samples, "record_offset_samples", _INT64_MIN, _INT64_MAX)
-        monitor = (
-            CaptureInputMonitor(enabled=True)
-            if input_monitor is None
-            else _require_instance(input_monitor, CaptureInputMonitor, "input_monitor")
-        )
         bounds = None
         if punch is not None:
             punch = _require_instance(punch, CapturePunch, "punch")
@@ -182,13 +177,6 @@ class _EngineIoMixin:
         handle = self._require_handle()
         lib = _get_lib()
         _check(lib.sonare_engine_set_capture_source(handle, _to_c_int(source_value, "source")))
-        _check(
-            lib.sonare_engine_set_input_monitor(
-                handle,
-                1 if monitor.enabled else 0,
-                _to_c_float(monitor.gain, "input_monitor.gain"),
-            )
-        )
         (start, start_given), (end, end_given) = (
             bounds
             if bounds is not None
@@ -205,6 +193,39 @@ class _EngineIoMixin:
             ),
             respelled={"punch_start_sample": start_given, "punch_end_sample": end_given},
         )
+
+    @_entry("RealtimeEngine.set_input_monitor")
+    def set_input_monitor(self, monitor: EngineInputMonitor | EngineInputMonitorInput) -> None:
+        """Turn the dry input monitor on or off at ``monitor.gain``; it switches without a ramp.
+
+        Capture source ``"input"`` records the input ahead of the monitor, so what is recorded
+        does not depend on it. A non-finite gain raises ``SonareValueError``.
+        """
+        if not isinstance(monitor, EngineInputMonitor | EngineInputMonitorInput):
+            raise _refuse_type(
+                "monitor must be an EngineInputMonitor or an EngineInputMonitorInput"
+            )
+        given = monitor
+        _check(
+            _get_lib().sonare_engine_set_input_monitor(
+                self._require_handle(),
+                1 if given.enabled else 0,
+                _to_c_float(given.gain, "monitor.gain"),
+            ),
+            respelled={"gain": _Respelling("monitor.gain")},
+        )
+
+    @_entry("RealtimeEngine.input_monitor")
+    def input_monitor(self) -> EngineInputMonitor:
+        """Return the dry input monitor, both fields from one write."""
+        enabled = ctypes.c_int(0)
+        gain = ctypes.c_float(0.0)
+        _check(
+            _get_lib().sonare_engine_input_monitor(
+                self._require_handle(), ctypes.byref(enabled), ctypes.byref(gain)
+            )
+        )
+        return EngineInputMonitor(enabled=enabled.value != 0, gain=float(gain.value))
 
     @_entry("RealtimeEngine.arm_capture")
     def arm_capture(self, armed: bool = True) -> None:

@@ -11996,11 +11996,10 @@ test = "bindings/python/tests/test_engine_telemetry.py::test_configure_capture_a
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.set_input_monitor"
-to = "RealtimeEngine.configure_capture"
-changed = "configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) sets the whole capture setup; an omitted monitor is enabled at gain 1"
+changed = "set_input_monitor(monitor) takes an EngineInputMonitor or EngineInputMonitorInput(enabled, gain=1.0) in place of the enabled and gain arguments; input_monitor() reads the same record back"
 domain = "engine"
-rule = "one-entry-per-operation"
-test = "bindings/python/tests/test_engine_telemetry.py::test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed"
+rule = "one-input-form"
+test = "bindings/python/tests/test_engine_input_track.py::test_input_monitor_round_trips_through_its_reader"
 
 [[entry]]
 kind = "method"
@@ -13312,16 +13311,16 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_input_monitor(enabled)"
-removed = "pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain))"
+removed = "pass set_input_monitor(EngineInputMonitorInput(enabled, gain=1.0))"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "one-input-form"
 
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_input_monitor(gain)"
-removed = "pass configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain))"
+removed = "pass set_input_monitor(EngineInputMonitorInput(enabled, gain=1.0))"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "one-input-form"
 
 [[entry]]
 kind = "option"

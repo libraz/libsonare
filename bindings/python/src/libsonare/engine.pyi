@@ -25,7 +25,6 @@ from ._types_engine import PlanarChannels as PlanarChannels
 from .analyzer import StripRef
 from .types import (
     AutomationPoint,
-    CaptureInputMonitor,
     CapturePunch,
     ClipPageRequest,
     EngineBounceOptions,
@@ -36,6 +35,8 @@ from .types import (
     EngineFreezeOptions,
     EngineFreezeResult,
     EngineGraphSpec,
+    EngineInputMonitor,
+    EngineInputMonitorInput,
     EngineMarker,
     EngineMarkerInput,
     EngineMetronomeConfig,
@@ -203,6 +204,17 @@ class RealtimeEngine:
         """Replace one track lane's sends (``bus_id``, ``level_db``, ``enabled``, ``send_timing``);
         an empty sequence clears them."""
         ...
+    def set_input_track(self, track_id: int) -> None:
+        """Route the live input into a track lane, ahead of its strip; an unknown track raises
+        SonareValueError and changes nothing."""
+        ...
+    def clear_input_track(self) -> None:
+        """Stop routing the live input into a lane."""
+        ...
+    @property
+    def input_track(self) -> int | None:
+        """The track the live input is routed into, or ``None``."""
+        ...
     def set_track_output_bus(self, track_id: int, bus_id: int | None) -> None:
         """Route a track lane to a bus; ``None`` returns it to the master mix and 0 is refused.
         Unknown track or undeclared bus raises SonareValueError."""
@@ -353,10 +365,15 @@ class RealtimeEngine:
         num_channels: int = 2,
         source: EngineCaptureSource = "output",
         record_offset_samples: int = 0,
-        input_monitor: CaptureInputMonitor | None = None,
         punch: CapturePunch | None = None,
     ) -> None:
         """Configure capture as a whole; an omitted setting takes its default."""
+        ...
+    def set_input_monitor(self, monitor: EngineInputMonitor | EngineInputMonitorInput) -> None:
+        """Turn the dry input monitor on or off at ``monitor.gain``."""
+        ...
+    def input_monitor(self) -> EngineInputMonitor:
+        """Return the dry input monitor, both fields from one write."""
         ...
     def arm_capture(self, armed: bool = True) -> None:
         """Arm (or disarm) recording into the capture buffer."""

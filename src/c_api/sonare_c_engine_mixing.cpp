@@ -2,6 +2,7 @@
 
 #include <array>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -367,6 +368,48 @@ SonareError sonare_engine_set_track_sends(SonareEngine* engine, uint32_t track_i
       engine->engine, engine->engine.set_track_sends(track_id, std::move(configs)),
       MixerEditScope::kTrackSends);
   SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_input_track(SonareEngine* engine, uint32_t track_id) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_REQUIRE_NONNULL(engine);
+#if !defined(SONARE_WITH_MIXING)
+  return refuse_not_compiled_in(Feature::kMixing, track_id);
+#else
+  SONARE_C_TRY
+  engine->engine.set_input_track(track_id);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_clear_input_track(SonareEngine* engine) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_REQUIRE_NONNULL(engine);
+#if !defined(SONARE_WITH_MIXING)
+  return refuse_not_compiled_in(Feature::kMixing);
+#else
+  engine->engine.clear_input_track();
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_input_track(const SonareEngine* engine, uint32_t* out_track_id,
+                                      int* out_has_track) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_track_id, out_has_track);
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_track_id);
+  SONARE_C_REQUIRE_NONNULL(out_has_track);
+#if !defined(SONARE_WITH_MIXING)
+  return refuse_not_compiled_in(Feature::kMixing);
+#else
+  if (const std::optional<uint32_t> track = engine->engine.input_track()) {
+    *out_track_id = *track;
+    *out_has_track = 1;
+  }
+  return SONARE_OK;
 #endif
 }
 

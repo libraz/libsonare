@@ -241,6 +241,19 @@ SonareError sonare_engine_set_input_monitor(SonareEngine* engine, int enabled, f
   return SONARE_OK;
 }
 
+SonareError sonare_engine_input_monitor(const SonareEngine* engine, int* out_enabled,
+                                        float* out_gain) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_ZERO_OUTS(out_enabled, out_gain);
+  SONARE_C_REQUIRE_NONNULL(engine);
+  SONARE_C_REQUIRE_NONNULL(out_enabled);
+  SONARE_C_REQUIRE_NONNULL(out_gain);
+  const engine::RealtimeEngine::InputMonitorState monitor = engine->engine.input_monitor();
+  *out_enabled = monitor.enabled ? 1 : 0;
+  *out_gain = monitor.gain;
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_reset_capture(SonareEngine* engine) {
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);

@@ -414,6 +414,31 @@ SonareError sonare_engine_set_track_sends(SonareEngine* engine, uint32_t track_i
 /// @return As for @ref sonare_engine_set_track_sends.
 SonareError sonare_engine_set_track_output_bus(SonareEngine* engine, uint32_t track_id,
                                                uint32_t output_bus_id);
+/// @brief Routes the live input into @p track_id's lane, ahead of its strip, sends and fader.
+/// @details The input reaches the lane as an instrument does: through the lane's strip inserts,
+///   sends and fader, delayed to the compensated lane latency; master insert latency is not
+///   compensated on this path. The first two input channels feed a stereo lane and the first
+///   feeds a mono engine's lane; further channels stay out of it. Setting, clearing or moving
+///   the input ramps its contribution over 5 ms (a move crossfades the two lanes). The dry input
+///   monitor (@ref sonare_engine_set_input_monitor) is separate: with both on, dry and wet are
+///   both heard. May be called before @ref sonare_engine_prepare and survives it; dropping the
+///   track's lane through @ref sonare_engine_set_track_lanes clears it without a ramp.
+///   Control-thread only; do not call concurrently with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER (subject track_id) when no published lane carries
+///   @p track_id, leaving the input track as it was; SONARE_ERROR_NOT_SUPPORTED when mixing
+///   support is disabled.
+SonareError sonare_engine_set_input_track(SonareEngine* engine, uint32_t track_id);
+/// @brief Stops routing the live input into a lane, ramping it out over 5 ms.
+/// @details Clearing with no input track set is a no-op. Same threading contract as
+///   @ref sonare_engine_set_input_track.
+/// @return SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
+SonareError sonare_engine_clear_input_track(SonareEngine* engine);
+/// @brief Reads the track the live input is routed into.
+/// @param out_track_id Receives the track id, or 0 when none is set.
+/// @param out_has_track Receives 1 when an input track is set, else 0.
+/// @return SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled (outputs zeroed).
+SonareError sonare_engine_input_track(const SonareEngine* engine, uint32_t* out_track_id,
+                                      int* out_has_track);
 /// @brief Keys one insert of a lane strip from another lane's post-strip audio.
 /// @details Sidechain for ducking/sidechainRouter inserts: the source lane's
 ///   post-strip, pre-fader audio feeds the insert's key input. Lanes are
@@ -949,8 +974,16 @@ SonareError sonare_engine_set_capture_timing(SonareEngine* engine, int64_t recor
                                              int64_t punch_start_sample, int64_t punch_end_sample,
                                              int punch_enabled);
 /// @brief Turns the live input monitor on (@p enabled non-zero) or off with the given @p gain.
+/// @details The monitor is the dry input added ahead of the master; it switches without a ramp.
+///   Configuring capture does not touch it, and capture source "input" records the input ahead
+///   of it, so what is recorded does not depend on the monitor.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a non-finite @p gain.
 SonareError sonare_engine_set_input_monitor(SonareEngine* engine, int enabled, float gain);
+/// @brief Reads the live input monitor, both fields from one write.
+/// @param out_enabled Receives 1 when the monitor is on, else 0.
+/// @param out_gain Receives the monitor gain.
+SonareError sonare_engine_input_monitor(const SonareEngine* engine, int* out_enabled,
+                                        float* out_gain);
 /// @brief Clears the captured-frame counter. Issue it while not capturing.
 SonareError sonare_engine_reset_capture(SonareEngine* engine);
 /// @brief Reads the capture state: frames recorded, overflow count, arming, punch and source.
