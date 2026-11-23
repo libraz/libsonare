@@ -7,6 +7,7 @@ returns a number, so the mapping cannot have turned every value into ``None``.
 
 from __future__ import annotations
 
+import ctypes
 import math
 from dataclasses import fields
 
@@ -117,17 +118,20 @@ def test_mixer_meter_arrays_are_channel_sized_and_convert_nan_to_none(num_channe
             plane[1] = math.inf
         if num_channels > 2:
             plane[num_channels - 1] = -3.5
-    for name in (
+    unmeasured_scalars = (
         "correlation",
         "mono_compat_width",
         "momentary_lufs",
         "short_term_lufs",
         "integrated_lufs",
         "max_true_peak_dbtp",
-    ):
-        setattr(raw, name, math.nan)
+    )
+    for name in unmeasured_scalars:
+        setattr(raw, name, ctypes.c_float(math.nan))
 
     snapshot = _mix_meter_from_c(raw)
+    for name in unmeasured_scalars:
+        assert getattr(snapshot, name) is None
     assert snapshot.num_channels == num_channels
     assert (
         len(snapshot.peak_db)

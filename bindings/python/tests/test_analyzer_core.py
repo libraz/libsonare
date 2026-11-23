@@ -31,7 +31,7 @@ def test_ffmpeg_presence_is_a_capabilities_feature() -> None:
 
 
 def test_capabilities_features_agree_with_has_feature() -> None:
-    """Every capabilities() feature field matches the native sonare_has_feature probe."""
+    """Each feature matches its native predicate."""
     import dataclasses
 
     import libsonare
@@ -42,9 +42,12 @@ def test_capabilities_features_agree_with_has_feature() -> None:
     names = [field.name for field in dataclasses.fields(features)]
     assert names
     for name in names:
+        present = getattr(features, name)
+        if name == "live_devices":
+            assert bool(lib.sonare_has_live_devices()) is present
+            continue
         head, *rest = name.split("_")
         key = head + "".join(part.capitalize() for part in rest)
-        present = getattr(features, name)
         assert bool(lib.sonare_has_feature(key.encode())) is present, key
 
 
@@ -97,7 +100,7 @@ def test_capabilities_returns_native_build_descriptor() -> None:
 
 
 def test_capabilities_dataclass_fields_match_the_payload() -> None:
-    """The dataclasses carry exactly the keys the C ABI JSON carries.
+    """The dataclasses carry the C JSON keys and the separately probed live-device field.
 
     Derived from the payload rather than from a written-down list, so a key
     added on the C side fails here instead of drifting until someone reads
@@ -127,6 +130,8 @@ def test_capabilities_dataclass_fields_match_the_payload() -> None:
     ):
         assert isinstance(getattr(descriptor, section), cls), section
         names = {wire_key(field.name) for field in dataclasses.fields(cls)}
+        if section == "features":
+            names.remove("liveDevices")
         assert set(document[section]) == names, section
 
 
@@ -144,8 +149,8 @@ def test_capabilities_and_catalog_are_frozen() -> None:
         catalog.version = "other"  # type: ignore[misc]
 
 
-def test_capabilities_features_are_the_fifteen_build_options() -> None:
-    """capabilities().features has exactly one bool field per build option."""
+def test_capabilities_features_are_core_build_options_and_live_devices() -> None:
+    """capabilities().features has one bool per core build option plus live-device support."""
     import dataclasses
 
     import libsonare
@@ -167,6 +172,7 @@ def test_capabilities_features_are_the_fifteen_build_options() -> None:
         "vocal_edit",
         "voice_changer",
         "assist",
+        "live_devices",
     ]
     assert sorted(field.name for field in dataclasses.fields(features)) == sorted(expected)
     for name in expected:

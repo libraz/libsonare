@@ -51,11 +51,13 @@ def test_encode_wav_round_trips_samples_and_tags() -> None:
     assert libsonare.read_audio_tags(encoded) == tags
     decoded = libsonare.decode_channels(encoded)
     assert decoded.sample_rate == 48000
+    assert decoded.channels.shape == channels.shape
+    # The default PCM16 encoder adds up to one LSB of dither before rounding.
     np.testing.assert_allclose(
         decoded.channels,
         channels,
         rtol=0.0,
-        atol=1.0 / 32768.0,
+        atol=1.5 / 32768.0 + np.finfo(np.float32).eps,
     )
 
 

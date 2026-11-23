@@ -11,6 +11,7 @@ import inspect
 import math
 import re
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -124,6 +125,23 @@ def _insert_param(method: str, ref: Any) -> Callable[[], tuple[Callable[..., Any
     return make
 
 
+def _sidechain(method: str, **target: int | str) -> Callable[[], tuple[Callable[..., Any], dict]]:
+    def make() -> tuple[Callable[..., Any], dict[str, Any]]:
+        return getattr(_engine(), method), {
+            **target,
+            "insert_index": 0,
+            "source": libsonare.SidechainSource("track", 1),
+        }
+
+    return make
+
+
+def _set_note_edit() -> tuple[Callable[..., Any], dict[str, Any]]:
+    analysis = libsonare.PolyphonicAnalysis.analyze(_TONE, _SR)
+    assert analysis.note_count > 0
+    return analysis.set_note_edit, {"note": 0, "edit": libsonare.NoteEditInput()}
+
+
 def _mixer_stereo() -> tuple[Callable[..., Any], dict[str, Any]]:
     mixer = libsonare.Mixer(sample_rate=48000)
     mixer.add_strip("a")
@@ -142,6 +160,9 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "engine_apply_track_strip_insert_param_by_name_now": _insert_param(
         "apply_strip_insert_param_now", 1
     ),
+    "engine_can_set_bus_sidechain": _sidechain("can_set_bus_sidechain", bus_id=1),
+    "engine_can_set_lane_sidechain": _sidechain("can_set_strip_sidechain", ref=1),
+    "engine_can_set_master_sidechain": _sidechain("can_set_strip_sidechain", ref="master"),
     "engine_drain_external_midi": lambda: (_engine().drain_external_midi, {}),
     "engine_resolve_master_automation_id": lambda: (
         _engine().resolve_strip_automation_id,
@@ -159,6 +180,7 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
         "restore_strip_insert_param", 1
     ),
     "engine_set_bus_strip_insert_param_by_name": _insert_param("set_bus_insert_param", 1),
+    "engine_set_bus_sidechain": _sidechain("set_bus_sidechain", bus_id=1),
     "engine_set_capture_buffer": lambda: (
         _engine().configure_capture,
         {"capacity_frames": 1024},
@@ -166,6 +188,8 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "engine_set_master_strip_insert_param_by_name": _insert_param(
         "set_strip_insert_param", "master"
     ),
+    "engine_set_lane_sidechain": _sidechain("set_strip_sidechain", ref=1),
+    "engine_set_master_sidechain": _sidechain("set_strip_sidechain", ref="master"),
     "engine_set_capture_timing": lambda: (
         _engine().configure_capture,
         {"capacity_frames": 1024},
@@ -194,6 +218,7 @@ _METHODS: dict[str, Callable[[], tuple[Callable[..., Any], dict[str, Any]]]] = {
     "playback_renderer_render_offline": _playback(
         "render_offline", samples=_TONE[:128], num_input_channels=1
     ),
+    "polyphonic_set_note_edit": _set_note_edit,
     "project_add_clip": _clip,
     "project_add_loop_recording_takes": _loop_takes,
     "project_import_clip_file": lambda: (libsonare.Project().import_clip_file, {}),
@@ -247,10 +272,12 @@ def _call(entry: str, spelling: str) -> tuple[Callable[..., Any], dict[str, Any]
 
 def _refusals(entry: str, spelling: str) -> list[str]:
     texts = []
+    root, _, field = spelling.partition(".")
     for value in (*_OUTSIDE, *((_MALFORMED,) if spelling in _BUFFERS else ())):
         fn, given = _call(entry, spelling)
         try:
-            fn(**given, **{spelling: value})
+            given[root] = replace(given[root], **{field: value}) if field else value
+            fn(**given)
         except (SonareError, TypeError, ValueError) as exc:
             texts.append(str(exc))
     return texts
@@ -270,7 +297,7 @@ _ROWS = [(*k, v) for k, v in OVERRIDES.items()]
 def test_a_table_row_is_refused_under_the_callers_spelling(
     entry: str, subject: str, spelling: str
 ) -> None:
-    assert spelling in inspect.signature(_call(entry, spelling)[0]).parameters
+    assert spelling.partition(".")[0] in inspect.signature(_call(entry, spelling)[0]).parameters
     texts = _refusals(entry, spelling)
     assert [t for t in texts if _names(t, subject)] == []
     assert any(_names(t, spelling) for t in texts), texts
