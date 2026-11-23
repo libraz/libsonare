@@ -4190,8 +4190,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `AnalysisMelody.meanFrequency` | `AnalysisMelody.meanFrequencyHz` |
-| `AnalysisMelody.vibratoRate` | `AnalysisMelody.vibratoRateHz` |
+| `AnalysisMelody.meanFrequency` | `AnalysisMelody.meanFrequencyHz`: unit in the name; optional, absent when no frame is voiced (was NaN) |
+| `AnalysisMelody.vibratoRate` | `AnalysisMelody.vibratoRateHz`: unit in the name; optional, absent when no frame is voiced (was NaN) |
 | `AnalysisResult.tuning` | `AnalysisResult.tuningCents` |
 | `AnalyzeDynamicsOptions.compressionThreshold` | `AnalyzeDynamicsOptions.compressionThresholdDb` |
 | `AnalyzeDynamicsRequest.compressionThreshold` | `AnalyzeDynamicsRequest.compressionThresholdDb` |
@@ -4203,8 +4203,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `DetectKeyRequest.tuning` | `DetectKeyRequest.tuningCents` |
 | `KeyDetection.tuning` | `KeyDetection.tuningCents` |
 | `MelodyPoint.frequency` | `MelodyPoint.frequencyHz` |
-| `MelodyResult.meanFrequency` | `MelodyResult.meanFrequencyHz` |
-| `MelodyResult.vibratoRate` | `MelodyResult.vibratoRateHz` |
+| `MelodyResult.meanFrequency` | `MelodyResult.meanFrequencyHz`: unit in the name; optional, absent when no frame is voiced (was NaN) |
+| `MelodyResult.vibratoRate` | `MelodyResult.vibratoRateHz`: unit in the name; optional, absent when no frame is voiced (was NaN) |
 | `MusicAnalyzeOptions.tuning` | `MusicAnalyzeOptions.tuningCents` |
 | `MusicAnalyzeRequest.tuning` | `AnalyzeRequest.tuningCents` |
 | `StreamAnalyzer.reset(baseOffset)` | `StreamAnalyzer.reset(startSample)` |
@@ -7850,14 +7850,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `DetectKeyRequest.tuning` | `DetectKeyRequest.tuningCents` |
 | `KeyDetection.tuning` (`./analysis`) | `KeyDetection.tuningCents` |
 | `KeyDetection.tuning` | `KeyDetection.tuningCents` |
-| `MelodyContour.meanFrequency` (`./analysis`) | `AnalysisMelody.meanFrequencyHz` |
-| `MelodyContour.vibratoRate` (`./analysis`) | `AnalysisMelody.vibratoRateHz` |
+| `MelodyContour.meanFrequency` (`./analysis`) | `AnalysisMelody.meanFrequencyHz`: unit in the name; optional, absent when no frame is voiced (was a required number) |
+| `MelodyContour.vibratoRate` (`./analysis`) | `AnalysisMelody.vibratoRateHz`: unit in the name; optional, absent when no frame is voiced (was a required number) |
 | `MelodyPoint.frequency` (`./analysis`) | `MelodyPoint.frequencyHz` |
 | `MelodyPoint.frequency` | `MelodyPoint.frequencyHz` |
-| `MelodyResult.meanFrequency` (`./analysis`) | `MelodyResult.meanFrequencyHz` |
-| `MelodyResult.meanFrequency` | `MelodyResult.meanFrequencyHz` |
-| `MelodyResult.vibratoRate` (`./analysis`) | `MelodyResult.vibratoRateHz` |
-| `MelodyResult.vibratoRate` | `MelodyResult.vibratoRateHz` |
+| `MelodyResult.meanFrequency` (`./analysis`) | `MelodyResult.meanFrequencyHz`: unit in the name; optional, absent when no frame is voiced (was a required number) |
+| `MelodyResult.meanFrequency` | `MelodyResult.meanFrequencyHz`: unit in the name; optional, absent when no frame is voiced (was a required number) |
+| `MelodyResult.vibratoRate` (`./analysis`) | `MelodyResult.vibratoRateHz`: unit in the name; optional, absent when no frame is voiced (was a required number) |
+| `MelodyResult.vibratoRate` | `MelodyResult.vibratoRateHz`: unit in the name; optional, absent when no frame is voiced (was a required number) |
 | `MusicAnalyzeOptions.tuning` (`./analysis`) | `MusicAnalyzeOptions.tuningCents` |
 | `MusicAnalyzeOptions.tuning` | `MusicAnalyzeOptions.tuningCents` |
 | `MusicAnalyzeRequest.tuning` (`./analysis`) | `AnalyzeRequest.tuningCents` |

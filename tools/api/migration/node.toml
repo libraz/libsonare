@@ -5763,16 +5763,20 @@ rule = "loudness-names"
 [[entry]]
 kind = "field"
 old = "AnalysisMelody.meanFrequency"
-new = "AnalysisMelody.meanFrequencyHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was NaN)"
+to = "AnalysisMelody.meanFrequencyHz"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the melody measures on silence"
 
 [[entry]]
 kind = "field"
 old = "AnalysisMelody.vibratoRate"
-new = "AnalysisMelody.vibratoRateHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was NaN)"
+to = "AnalysisMelody.vibratoRateHz"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyze omits the melody measures on silence"
 
 [[entry]]
 kind = "field"
@@ -6442,16 +6446,20 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "MelodyResult.meanFrequency"
-new = "MelodyResult.meanFrequencyHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was NaN)"
+to = "MelodyResult.meanFrequencyHz"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeMelody omits all four on silence"
 
 [[entry]]
 kind = "field"
 old = "MelodyResult.vibratoRate"
-new = "MelodyResult.vibratoRateHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was NaN)"
+to = "MelodyResult.vibratoRateHz"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/node/tests/not-measured-analysis.test.ts::analyzeMelody omits all four on silence"
 
 [[entry]]
 kind = "field"

@@ -13043,18 +13043,22 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 [[entry]]
 kind = "field"
 old = "MelodyContour.meanFrequency"
-new = "AnalysisMelody.meanFrequencyHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was a required number)"
+to = "AnalysisMelody.meanFrequencyHz"
 domain = "analysis"
 rule = "unit-in-name"
 entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyze omits the melody summary on silence"
 
 [[entry]]
 kind = "field"
 old = "MelodyContour.vibratoRate"
-new = "AnalysisMelody.vibratoRateHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was a required number)"
+to = "AnalysisMelody.vibratoRateHz"
 domain = "analysis"
 rule = "unit-in-name"
 entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyze omits the melody summary on silence"
 
 [[entry]]
 kind = "field"
@@ -13119,32 +13123,40 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MelodyResult.meanFrequency"
-new = "MelodyResult.meanFrequencyHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was a required number)"
+to = "MelodyResult.meanFrequencyHz"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
 
 [[entry]]
 kind = "field"
 old = "MelodyResult.meanFrequency"
-new = "MelodyResult.meanFrequencyHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was a required number)"
+to = "MelodyResult.meanFrequencyHz"
 domain = "analysis"
 rule = "unit-in-name"
 entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
 
 [[entry]]
 kind = "field"
 old = "MelodyResult.vibratoRate"
-new = "MelodyResult.vibratoRateHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was a required number)"
+to = "MelodyResult.vibratoRateHz"
 domain = "analysis"
 rule = "unit-in-name"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
 
 [[entry]]
 kind = "field"
 old = "MelodyResult.vibratoRate"
-new = "MelodyResult.vibratoRateHz"
+changed = "unit in the name; optional, absent when no frame is voiced (was a required number)"
+to = "MelodyResult.vibratoRateHz"
 domain = "analysis"
 rule = "unit-in-name"
 entry = "./analysis"
+test = "bindings/wasm/tests/not-measured-analysis.test.ts::analyzeMelody omits the summary on silence"
 
 [[entry]]
 kind = "field"
