@@ -16,6 +16,12 @@ void MixingRuntime::prepare(double sample_rate, int max_block_size) {
   if (strip_) strip_->prepare(sample_rate, max_block_size);
 }
 
+void MixingRuntime::prepare(double sample_rate, int max_block_size, int max_channels) {
+  if (!strip_) return;
+  strip_->set_prepared_channels(max_channels);
+  strip_->prepare(sample_rate, max_block_size);
+}
+
 void MixingRuntime::process(float* const* channels, int num_channels, int num_samples) {
   process_at(channels, num_channels, num_samples, 0);
 }

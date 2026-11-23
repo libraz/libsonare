@@ -43,7 +43,7 @@ void BusProcessor::prepare(double sample_rate, int max_block_size) {
         bypass_scratch_[static_cast<size_t>(ch)].data();
   }
   for (size_t index = 0; index < inserts_.size(); ++index) {
-    inserts_[index]->prepare(sample_rate_, max_block_size_);
+    inserts_[index]->prepare(sample_rate_, max_block_size_, insert_width(insert_spo_[index] != 0));
     prepare_insert_alignment_delays(index);
   }
   meter_.prepare(sample_rate_, max_block_size_);
@@ -112,7 +112,7 @@ void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool
     throw SonareException(ErrorCode::InvalidState, "BusProcessor insert cap exceeded");
   }
   if (max_block_size_ > 0) {
-    processor->prepare(sample_rate_, max_block_size_);
+    processor->prepare(sample_rate_, max_block_size_, insert_width(stereo_pair_only));
   }
   inserts_.push_back(std::move(processor));
   insert_spo_.push_back(stereo_pair_only ? 1 : 0);

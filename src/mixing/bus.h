@@ -125,6 +125,11 @@ class BusProcessor : public rt::ProcessorBase {
   static constexpr int kMaxBusScratchChannels = channel_count(ChannelLayout::SevenPointOne);
   static_assert(kMaxBusScratchChannels == 8, "bypass scratch holds one plane per 7.1 channel");
 
+  /// Width an insert is prepared for: the front pair for a stereo-pair-only insert, else the
+  /// widest bed, since a retained bus may change layout without being prepared again.
+  static constexpr int insert_width(bool stereo_pair_only) noexcept {
+    return stereo_pair_only ? 2 : kMaxBusScratchChannels;
+  }
   void prepare_insert_alignment_delays(size_t insert_index);
 
   /// @brief Every owned processor's discard count added together -- the inserts

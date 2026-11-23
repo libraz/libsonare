@@ -29,6 +29,8 @@ class MixingRuntime final : public rt::ProcessorBase {
   bool bind(mixing::ChannelStrip* strip) noexcept;
 
   void prepare(double sample_rate, int max_block_size) override;
+  /// Declares @p max_channels as the bound strip's width, then prepares it.
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void process_at(float* const* channels, int num_channels, int num_samples,
                   int64_t timeline_sample) noexcept;

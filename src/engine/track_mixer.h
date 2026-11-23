@@ -1143,6 +1143,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // table is built in full before it replaces the live one.
   void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes, uint32_t only_track_id = 0);
   // A strip for a lane that has sends but no bound strip, prepared at the mixer's rate.
+  /// Declares a lane strip's width (a lane is at most stereo) and prepares it at the runtime's
+  /// rate and block.
+  void prepare_lane_strip(mixing::ChannelStrip& strip) const;
   std::unique_ptr<mixing::ChannelStrip> make_seed_strip() const;
   // Builds @p config's send table into @p strip. Throws on an unknown bus or a failed allocation.
   void configure_strip_sends(const TrackLaneConfig& config, mixing::ChannelStrip& strip) const;

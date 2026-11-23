@@ -697,24 +697,19 @@ TEST_CASE("ChannelStrip channel delay reaches every plane of a wide layout", "[m
     strip.prepare(48000.0, static_cast<int>(kFrames));
     strip.settle();
     strip.process(pointers.data(), kPlanes, static_cast<int>(kFrames));
-    return std::make_pair(std::move(planes), strip.alignment_channel_overflow());
+    return planes;
   };
 
-  auto [aligned, aligned_overflow] = run(kPlanes);
-  REQUIRE(aligned_overflow == 0);
-  for (size_t ch = 0; ch < kPlanes; ++ch) {
-    INFO("plane " << ch);
-    REQUIRE_THAT(aligned[ch][0], WithinAbs(0.0f, 0.0001f));
-    REQUIRE_THAT(aligned[ch][kDelay - 1], WithinAbs(0.0f, 0.0001f));
-    REQUIRE_THAT(aligned[ch][kDelay], WithinAbs(1.0f, 0.0001f));
+  // Declared to the layout's width and left at the default width alike.
+  for (const int prepared_channels : {kPlanes, 0}) {
+    const auto aligned = run(prepared_channels);
+    for (size_t ch = 0; ch < kPlanes; ++ch) {
+      INFO("prepared " << prepared_channels << ", plane " << ch);
+      REQUIRE_THAT(aligned[ch][0], WithinAbs(0.0f, 0.0001f));
+      REQUIRE_THAT(aligned[ch][kDelay - 1], WithinAbs(0.0f, 0.0001f));
+      REQUIRE_THAT(aligned[ch][kDelay], WithinAbs(1.0f, 0.0001f));
+    }
   }
-
-  // Left at the default width the upper planes run un-delayed -- which is the
-  // failure this guards -- and the bank now says so instead of staying silent.
-  auto [unprepared, unprepared_overflow] = run(0);
-  REQUIRE(unprepared_overflow == kPlanes - 8);
-  REQUIRE_THAT(unprepared[0][kDelay], WithinAbs(1.0f, 0.0001f));
-  REQUIRE_THAT(unprepared[kPlanes - 1][0], WithinAbs(1.0f, 0.0001f));
 }
 
 TEST_CASE("ChannelStrip applies polarity delay width and dual meter taps", "[mixing]") {

@@ -200,7 +200,7 @@ TEST_CASE("ChannelStrip narrow external send keeps null source and destination p
           "[mixing][send]") {
   constexpr int kChannels = 4;
   auto strip = sonare::mixing::ChannelStrip(test_strip_config());
-  REQUIRE(strip.prepared_channels() == 8);
+  REQUIRE(strip.prepared_channels() == 64);
   const size_t send = strip.add_send({0.0f, sonare::mixing::SendTiming::PostFader, 0.0f});
   strip.prepare(48000.0, kFrames);
 

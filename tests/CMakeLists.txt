@@ -489,6 +489,7 @@ if(BUILD_MIXING)
     mixing/no_alloc_allocators.cpp
     mixing/no_alloc_engine_mixing_test.cpp
     mixing/pan_law_test.cpp
+    mixing/strip_prepared_width_test.cpp
     mixing/surround_panner_test.cpp
     mixing/no_alloc_mastering_eq_test.cpp
     mixing/no_alloc_mastering_dynamics_test.cpp

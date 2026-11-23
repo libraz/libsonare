@@ -189,7 +189,7 @@ size_t TrackMixerRuntime::copy_lane_track_ids(uint32_t* out, size_t capacity) co
 bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip) {
   if (track_id == 0) return false;
   if (strip != nullptr) {
-    if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
+    if (max_block_size_ > 0) prepare_lane_strip(*strip);
     StagedTrackStrip staged;
     if (!stage_track_strip(track_id, *strip, &staged)) return false;
     commit_track_strip(track_id, strip, staged);
@@ -412,7 +412,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   }
   if (!strip) return refuse(MixerEditCause::kStripInsertsRefused);
   if (max_block_size_ > 0) {
-    strip->prepare(sample_rate_, max_block_size_);
+    prepare_lane_strip(*strip);
   }
   if (admit != nullptr && !admit(admit_context, track_id, *strip)) {
     return refuse(MixerEditCause::kInsertAutomationTableFull);
@@ -494,7 +494,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     reset_lane_controls(lane);
     lane.monitor_mode = TrackMonitorMode::kOff;
     if (lane.strip) {
-      lane.strip->prepare(sample_rate_, max_block_size_);
+      prepare_lane_strip(*lane.strip);
     }
   }
   for (BusState& bus : bus_states_) {
@@ -504,8 +504,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     // Every slot, configured or not, so the render never meets an unprepared
     // stage and a surround bus finds state for all of its planes.
     bus.panner.prepare(sample_rate_, max_block_size_);
-    bus.eq.prepare(sample_rate_, max_block_size_);
-    bus.eq.prepare_channels(kMaxBusChannels);
+    bus.eq.prepare(sample_rate_, max_block_size_, kMaxBusChannels);
     if (bus.bus) {
       bus.bus->prepare(sample_rate_, max_block_size_);
     }
@@ -905,9 +904,14 @@ std::unique_ptr<mixing::ChannelStrip> TrackMixerRuntime::make_seed_strip() const
   config.mono_pan_centre_unity = true;
   auto strip = std::make_unique<mixing::ChannelStrip>(config);
   if (max_block_size_ > 0) {
-    strip->prepare(sample_rate_, max_block_size_);
+    prepare_lane_strip(*strip);
   }
   return strip;
+}
+
+void TrackMixerRuntime::prepare_lane_strip(mixing::ChannelStrip& strip) const {
+  strip.set_prepared_channels(kMaxLaneChannels);
+  strip.prepare(sample_rate_, max_block_size_);
 }
 
 mixing::ChannelStrip* TrackMixerRuntime::ensure_owned_strip_for(uint32_t track_id) {

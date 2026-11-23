@@ -284,7 +284,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
         input_capture_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
 #if defined(SONARE_WITH_MIXING)
-  mixing_runtime_.prepare(sample_rate_, max_block_size_);
+  mixing_runtime_.prepare(sample_rate_, max_block_size_, prepared_channels_);
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
   track_mixer_runtime_.prepare(sample_rate_, max_block_size_);
   track_mixer_runtime_.prepare_input_routing(static_cast<int>(std::lround(

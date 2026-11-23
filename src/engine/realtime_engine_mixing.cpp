@@ -170,6 +170,7 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
   try {
     if (max_block_size_ > 0) {
       // Prepare before changing the raw pointer visible to the audio thread.
+      strip->set_prepared_channels(prepared_channels_);
       strip->prepare(sample_rate_, max_block_size_);
     }
   } catch (...) {
@@ -217,7 +218,10 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   try {
     strip = make_channel_strip_from_spec(next_spec, sample_rate_);
     if (strip == nullptr) return refuse(MixerEditCause::kStripInsertsRefused);
-    if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
+    if (max_block_size_ > 0) {
+      strip->set_prepared_channels(prepared_channels_);
+      strip->prepare(sample_rate_, max_block_size_);
+    }
   } catch (const std::bad_alloc&) {
     return refuse(MixerEditCause::kOutOfMemory);
   } catch (...) {

@@ -5,12 +5,14 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 
 #include "mixing/tail_utils.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::mixing {
 
@@ -165,8 +167,7 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   // the bank is sized from the width the host declared, not from the stack cap.
   alignment_delay_.set_prepared_channels(prepared_channels_);
   alignment_delay_.prepare(sample_rate, max_block_size);
-  // Preallocates filter state for kRealtimePreparedChannels; process() never allocates.
-  eq_.prepare(sample_rate, max_block_size);
+  eq_.prepare(sample_rate, max_block_size, prepared_channels_);
   pre_meter_.reset();
   post_meter_.reset();
   if (metering_enabled_) {
@@ -175,11 +176,11 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
     pre_meter_->prepare(sample_rate, max_block_size);
     post_meter_->prepare(sample_rate, max_block_size);
   }
-  for (auto& insert : pre_inserts_) {
-    insert->prepare(sample_rate_, max_block_size_);
+  for (size_t i = 0; i < pre_inserts_.size(); ++i) {
+    prepare_insert(*pre_inserts_[i], pre_insert_spo_[i] != 0);
   }
-  for (auto& insert : post_inserts_) {
-    insert->prepare(sample_rate_, max_block_size_);
+  for (size_t i = 0; i < post_inserts_.size(); ++i) {
+    prepare_insert(*post_inserts_[i], post_insert_spo_[i] != 0);
   }
   // After the inserts: an insert only reports its final latency once prepared.
   prepare_insert_alignment_delays();
@@ -236,6 +237,7 @@ bool ChannelStrip::passes_through(int num_channels) const noexcept {
 
 void ChannelStrip::process_at_skipping_rest(float* const* channels, int num_channels,
                                             int num_samples, int64_t block_start) {
+  require_prepared_width(num_channels);
   if (!passes_through(num_channels)) {
     process_at(channels, num_channels, num_samples, block_start);
     return;
@@ -292,6 +294,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
+  require_prepared_width(num_channels);
   // The EQ, the inserts and the meters each run once per segment below, so the
   // deltas are read here and checked at whichever exit the block takes; either
   // way the block bumps at most once.
@@ -826,10 +829,32 @@ bool ChannelStrip::try_set_channel_delay_samples(int delay_samples) noexcept {
   return alignment_delay_.try_set_delay_samples_q8(bounded << 8, FractionalDelayMode::None);
 }
 
+void ChannelStrip::prepare_insert(rt::ProcessorBase& insert, bool stereo_pair_only) {
+  insert.prepare(sample_rate_, max_block_size_,
+                 stereo_pair_only ? std::min(prepared_channels_, 2) : prepared_channels_);
+}
+
+void ChannelStrip::require_prepared_width(int num_channels) const {
+  if (num_channels <= prepared_channels_) return;
+  util::check::refuse("num_channels", "must be at most the strip's prepared channel count, " +
+                                          std::to_string(prepared_channels_));
+}
+
 void ChannelStrip::set_prepared_channels(int num_channels) {
-  const int next = std::max(1, num_channels);
+  const int next =
+      std::clamp(num_channels, 1, static_cast<int>(mastering::dynamics::kRealtimePreparedChannels));
   if (next == prepared_channels_) return;
   prepared_channels_ = next;
+  if (max_block_size_ > 0) {
+    // A prepared strip re-sizes what the width sizes: the strip EQ and the inserts.
+    eq_.prepare(sample_rate_, max_block_size_, prepared_channels_);
+    for (size_t i = 0; i < pre_inserts_.size(); ++i) {
+      prepare_insert(*pre_inserts_[i], pre_insert_spo_[i] != 0);
+    }
+    for (size_t i = 0; i < post_inserts_.size(); ++i) {
+      prepare_insert(*post_inserts_[i], post_insert_spo_[i] != 0);
+    }
+  }
   // Resize the banks that already exist as well as the ones a later prepare()
   // will build: a host that widens an already-prepared strip must not have to
   // remember the ordering.
@@ -857,17 +882,6 @@ void ChannelStrip::set_prepared_channels(int num_channels) {
   if (!bypass_scratch_.empty()) {
     rebind_plane_ptrs(bypass_scratch_, bypass_scratch_channels_);
   }
-}
-
-int ChannelStrip::alignment_channel_overflow() const noexcept {
-  int widest = alignment_delay_.channel_overflow_high_water();
-  for (const AlignmentDelay& delay : stereo_pair_alignment_delays_) {
-    widest = std::max(widest, delay.channel_overflow_high_water());
-  }
-  for (const AlignmentDelay& delay : bypass_alignment_delays_) {
-    widest = std::max(widest, delay.channel_overflow_high_water());
-  }
-  return widest;
 }
 
 MeterSnapshot ChannelStrip::meter_snapshot(TapPoint tap) const noexcept {
@@ -901,7 +915,7 @@ void ChannelStrip::add_insert_impl(std::unique_ptr<rt::ProcessorBase> processor,
     throw SonareException(ErrorCode::InvalidState, "ChannelStrip insert cap exceeded");
   }
   if (max_block_size_ > 0) {
-    processor->prepare(sample_rate_, max_block_size_);
+    prepare_insert(*processor, stereo_pair_only);
   }
   inserts.push_back(std::move(processor));
   stereo_pair_flags.push_back(stereo_pair_only ? 1u : 0u);
