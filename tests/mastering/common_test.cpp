@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "mastering/api/internal_processor_runner.h"
@@ -33,6 +34,7 @@
 #include "rt/sliding_max.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/lpc.h"
 
 using Catch::Matchers::WithinAbs;
@@ -297,6 +299,18 @@ std::vector<float> oversample_down(const Oversampler& oversampler,
   return output;
 }
 
+template <typename Call>
+void check_oversampler_refusal(Call&& call, const char* subject) {
+  try {
+    call();
+    FAIL("expected an invalid-parameter refusal");
+  } catch (const sonare::SonareParameterRefusal& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(error.subject() == subject);
+    CHECK(std::string(error.what()).rfind(subject, 0) == 0);
+  }
+}
+
 }  // namespace
 
 TEST_CASE("Oversampler filters every phase while interpolating intermediate samples",
@@ -431,6 +445,105 @@ TEST_CASE("Oversampler supports only power of two mastering factors", "[masterin
   oversampler.set_factor(8);
   REQUIRE(oversampler.factor() == 8);
   REQUIRE_THROWS(oversampler.set_factor(3));
+}
+
+TEST_CASE("Oversampler constructor refusal names factor", "[mastering][rt][refusal]") {
+  check_oversampler_refusal(
+      [] {
+        Oversampler invalid(3);
+        static_cast<void>(invalid);
+      },
+      "factor");
+}
+
+TEST_CASE("Oversampler set_factor refusal names factor", "[mastering][rt][refusal]") {
+  Oversampler oversampler(2);
+  check_oversampler_refusal([&] { oversampler.set_factor(3); }, "factor");
+}
+
+TEST_CASE("Oversampler upsample_to refusals name their arguments", "[mastering][rt][refusal]") {
+  const Oversampler oversampler(2);
+  float input[2]{};
+  float output[4]{};
+
+  check_oversampler_refusal([&] { oversampler.upsample_to(nullptr, 1, output, 2); }, "input");
+  check_oversampler_refusal([&] { oversampler.upsample_to(input, 1, nullptr, 2); }, "output");
+  check_oversampler_refusal([&] { oversampler.upsample_to(input, 1, output, 1); }, "output_size");
+}
+
+TEST_CASE("Oversampler downsample_to refusals name their arguments", "[mastering][rt][refusal]") {
+  const Oversampler oversampler(2);
+  float input[4]{};
+  float output[2]{};
+
+  check_oversampler_refusal([&] { oversampler.downsample_to(nullptr, 2, output, 1); }, "input");
+  check_oversampler_refusal([&] { oversampler.downsample_to(input, 2, nullptr, 1); }, "output");
+  check_oversampler_refusal([&] { oversampler.downsample_to(input, 3, output, 1); }, "size");
+  check_oversampler_refusal([&] { oversampler.downsample_to(input, 4, output, 1); }, "output_size");
+}
+
+TEST_CASE("Oversampler prepare_streaming refusal names state", "[mastering][rt][refusal]") {
+  const Oversampler oversampler(2);
+  check_oversampler_refusal([&] { oversampler.prepare_streaming(nullptr, 4); }, "state");
+}
+
+TEST_CASE("Oversampler upsample_to_streaming refusals name their arguments",
+          "[mastering][rt][refusal]") {
+  const Oversampler oversampler(2);
+  float input[2]{};
+  float output[4]{};
+  Oversampler::StreamingState state;
+  oversampler.prepare_streaming(&state, 2);
+
+  check_oversampler_refusal(
+      [&] { oversampler.upsample_to_streaming(nullptr, 1, output, 2, &state); }, "input");
+  check_oversampler_refusal(
+      [&] { oversampler.upsample_to_streaming(input, 1, nullptr, 2, &state); }, "output");
+  check_oversampler_refusal(
+      [&] { oversampler.upsample_to_streaming(input, 1, output, 2, nullptr); }, "state");
+  check_oversampler_refusal([&] { oversampler.upsample_to_streaming(input, 1, output, 1, &state); },
+                            "output_size");
+
+  state.up_history.clear();
+  check_oversampler_refusal([&] { oversampler.upsample_to_streaming(input, 1, output, 2, &state); },
+                            "state.up_history");
+
+  Oversampler::StreamingState short_scratch;
+  oversampler.prepare_streaming(&short_scratch, 1);
+  check_oversampler_refusal(
+      [&] { oversampler.upsample_to_streaming(input, 2, output, 4, &short_scratch); },
+      "state.up_scratch");
+}
+
+TEST_CASE("Oversampler downsample_to_streaming refusals name their arguments",
+          "[mastering][rt][refusal]") {
+  const Oversampler oversampler(2);
+  float input[4]{};
+  float output[2]{};
+  Oversampler::StreamingState state;
+  oversampler.prepare_streaming(&state, 2);
+
+  check_oversampler_refusal(
+      [&] { oversampler.downsample_to_streaming(nullptr, 2, output, 1, &state); }, "input");
+  check_oversampler_refusal(
+      [&] { oversampler.downsample_to_streaming(input, 2, nullptr, 1, &state); }, "output");
+  check_oversampler_refusal(
+      [&] { oversampler.downsample_to_streaming(input, 2, output, 1, nullptr); }, "state");
+  check_oversampler_refusal(
+      [&] { oversampler.downsample_to_streaming(input, 3, output, 1, &state); }, "size");
+  check_oversampler_refusal(
+      [&] { oversampler.downsample_to_streaming(input, 4, output, 1, &state); }, "output_size");
+
+  state.down_history.clear();
+  check_oversampler_refusal(
+      [&] { oversampler.downsample_to_streaming(input, 2, output, 1, &state); },
+      "state.down_history");
+
+  Oversampler::StreamingState short_scratch;
+  oversampler.prepare_streaming(&short_scratch, 1);
+  check_oversampler_refusal(
+      [&] { oversampler.downsample_to_streaming(input, 4, output, 2, &short_scratch); },
+      "state.down_scratch");
 }
 
 TEST_CASE("TruePeakFilter returns sample peak and interpolated output", "[mastering]") {

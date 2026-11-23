@@ -1,9 +1,10 @@
 #include "rt/oversampler.h"
 
 #include <algorithm>
+#include <string>
 
 #include "rt/true_peak_fir.h"
-#include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::rt {
 namespace {
@@ -20,7 +21,9 @@ constexpr int kTapsPerPhase = 48;
 Oversampler::Oversampler(int factor) { set_factor(factor); }
 
 void Oversampler::set_factor(int factor) {
-  SONARE_CHECK(is_supported_polyphase_oversample_factor(factor), ErrorCode::InvalidParameter);
+  if (!is_supported_polyphase_oversample_factor(factor)) {
+    util::check::refuse("factor", "must be one of 1, 2, 4, 8, 16");
+  }
   factor_ = factor;
   if (factor_ == 1) {
     decimation_taps_ = {1.0f};
@@ -35,10 +38,13 @@ void Oversampler::set_factor(int factor) {
 void Oversampler::upsample_to(const float* input, size_t size, float* output,
                               size_t output_size) const {
   if (size == 0) return;
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(output != nullptr, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
   const size_t out_size = size * static_cast<size_t>(factor_);
-  SONARE_CHECK(output_size >= out_size, ErrorCode::InvalidParameter);
+  if (output_size < out_size) {
+    util::check::refuse("output_size",
+                        "must be an integer of at least " + std::to_string(out_size));
+  }
   for (size_t i = 0; i < size; ++i) {
     for (int phase = 0; phase < factor_; ++phase) {
       output[i * static_cast<size_t>(factor_) + static_cast<size_t>(phase)] =
@@ -50,11 +56,16 @@ void Oversampler::upsample_to(const float* input, size_t size, float* output,
 void Oversampler::downsample_to(const float* input, size_t size, float* output,
                                 size_t output_size) const {
   if (size == 0) return;
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(output != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(size % static_cast<size_t>(factor_) == 0, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
+  if (size % static_cast<size_t>(factor_) != 0) {
+    util::check::refuse("size", "must be a multiple of " + std::to_string(factor_));
+  }
   const size_t out_size = size / static_cast<size_t>(factor_);
-  SONARE_CHECK(output_size >= out_size, ErrorCode::InvalidParameter);
+  if (output_size < out_size) {
+    util::check::refuse("output_size",
+                        "must be an integer of at least " + std::to_string(out_size));
+  }
   if (factor_ == 1) {
     std::copy_n(input, out_size, output);
     return;
@@ -78,7 +89,7 @@ void Oversampler::downsample_to(const float* input, size_t size, float* output,
 }
 
 void Oversampler::prepare_streaming(StreamingState* state, size_t max_input_samples) const {
-  SONARE_CHECK(state != nullptr, ErrorCode::InvalidParameter);
+  util::check::non_null(state, "state");
   const size_t up_history_size = static_cast<size_t>(std::max(0, fir_.taps_per_phase));
   const size_t down_history_size = decimation_taps_.size();
   state->up_history.assign(up_history_size, 0.0f);
@@ -99,20 +110,27 @@ void Oversampler::reset_streaming(StreamingState* state) const noexcept {
 void Oversampler::upsample_to_streaming(const float* input, size_t size, float* output,
                                         size_t output_size, StreamingState* state) const {
   if (size == 0) return;
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(output != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(state != nullptr, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
+  util::check::non_null(state, "state");
   const size_t out_size = size * static_cast<size_t>(factor_);
-  SONARE_CHECK(output_size >= out_size, ErrorCode::InvalidParameter);
+  if (output_size < out_size) {
+    util::check::refuse("output_size",
+                        "must be an integer of at least " + std::to_string(out_size));
+  }
   if (factor_ == 1) {
     std::copy_n(input, size, output);
     return;
   }
 
   const size_t history_size = static_cast<size_t>(fir_.taps_per_phase);
-  SONARE_CHECK(
-      state->up_history.size() == history_size && state->up_scratch.size() >= history_size + size,
-      ErrorCode::InvalidParameter);
+  if (state->up_history.size() != history_size) {
+    util::check::refuse("state.up_history", "must have length " + std::to_string(history_size));
+  }
+  if (state->up_scratch.size() < history_size + size) {
+    util::check::refuse("state.up_scratch",
+                        "must have at least " + std::to_string(history_size + size) + " elements");
+  }
   std::copy(state->up_history.begin(), state->up_history.end(), state->up_scratch.begin());
   std::copy_n(input, size, state->up_scratch.begin() + static_cast<std::ptrdiff_t>(history_size));
   const int delay = latency_samples();
@@ -132,21 +150,30 @@ void Oversampler::upsample_to_streaming(const float* input, size_t size, float* 
 void Oversampler::downsample_to_streaming(const float* input, size_t size, float* output,
                                           size_t output_size, StreamingState* state) const {
   if (size == 0) return;
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(output != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(state != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(size % static_cast<size_t>(factor_) == 0, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
+  util::check::non_null(state, "state");
+  if (size % static_cast<size_t>(factor_) != 0) {
+    util::check::refuse("size", "must be a multiple of " + std::to_string(factor_));
+  }
   const size_t out_size = size / static_cast<size_t>(factor_);
-  SONARE_CHECK(output_size >= out_size, ErrorCode::InvalidParameter);
+  if (output_size < out_size) {
+    util::check::refuse("output_size",
+                        "must be an integer of at least " + std::to_string(out_size));
+  }
   if (factor_ == 1) {
     std::copy_n(input, out_size, output);
     return;
   }
 
   const size_t history_size = decimation_taps_.size();
-  SONARE_CHECK(state->down_history.size() == history_size &&
-                   state->down_scratch.size() >= history_size + size,
-               ErrorCode::InvalidParameter);
+  if (state->down_history.size() != history_size) {
+    util::check::refuse("state.down_history", "must have length " + std::to_string(history_size));
+  }
+  if (state->down_scratch.size() < history_size + size) {
+    util::check::refuse("state.down_scratch",
+                        "must have at least " + std::to_string(history_size + size) + " elements");
+  }
   std::copy(state->down_history.begin(), state->down_history.end(), state->down_scratch.begin());
   std::copy_n(input, size, state->down_scratch.begin() + static_cast<std::ptrdiff_t>(history_size));
   const size_t half = history_size / 2;
