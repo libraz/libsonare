@@ -126,7 +126,7 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
     else:
         mode = "impulse response" if args.ir else "blind"
         print(f"  Acoustic ({mode}):")
-        print(f"    RT60:       {result.rt60:.3f} s")
+        print(f"    RT60:       {_fmt_optional(result.rt60, '.3f', ' s')}")
         print(f"    EDT:        {_fmt_optional(result.edt, '.3f', ' s')}")
         print(f"    C50:        {_fmt_optional(result.c50, '.2f', ' dB')}")
         print(f"    C80:        {_fmt_optional(result.c80, '.2f', ' dB')}")
@@ -173,8 +173,12 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
         )
     else:
         print("  Room estimate:")
-        print(f"    Volume:     {est.volume:.1f} m^3")
-        print(f"    Dimensions: {est.length_m:.2f} x {est.width_m:.2f} x {est.height_m:.2f} m")
+        print(f"    Volume:     {_fmt_optional(est.volume, '.1f', ' m^3')}")
+        dims = (est.length_m, est.width_m, est.height_m)
+        if any(d is None for d in dims):
+            print("    Dimensions: -")
+        else:
+            print(f"    Dimensions: {' x '.join(format(d, '.2f') for d in dims)} m")
         print(f"    DRR:        {_fmt_optional(est.drr_db, '.2f', ' dB')}")
         print(f"    Confidence: {est.confidence:.1%}")
     return 0

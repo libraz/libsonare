@@ -162,9 +162,13 @@ typedef struct {
        clarity array is indistinguishable from a genuine 0 dB measurement.
    edt_bands is the one exception to the second rule: it stays a non-NULL array
    of band_count NaNs so that rt60_bands and edt_bands can always be indexed by
-   the same band index. */
+   the same band index.
+
+   A scalar the analyzer could not measure, such as rt60 on a silent input, is
+   NaN too, and an unmeasured band is NaN inside its full-length array; every
+   binding reads such a scalar as absent and keeps the band arrays numeric. */
 typedef struct {
-  float rt60;         ///< Reverberation time in seconds.
+  float rt60;         ///< Reverberation time in seconds; NaN when no decay is measurable.
   float edt;          ///< Early decay time in seconds.
   float c50;          ///< Clarity of the first 50 ms, in dB.
   float c80;          ///< Clarity of the first 80 ms, in dB.

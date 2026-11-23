@@ -35,6 +35,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _unmeasured_as_nan,
 )
 from .types import (
     DereverbClassicalConfig,
@@ -550,8 +551,8 @@ def mastering_repair_dereverb_config_for_room(
         raise _refuse("estimate must not be None")
     bands, band_count = _to_c_float_array(estimate.rt60_bands, arg_name="estimate.rt60_bands")
     c_estimate = SonareRoomEstimate(
-        # Mirrors RoomEstimate.volume, NaN when unmeasured: read as data, not as an argument.
-        volume=_float_data(estimate.volume, "estimate.volume"),
+        # Mirrors RoomEstimate.volume, read as data; an unmeasured None goes back as NaN.
+        volume=_float_data(_unmeasured_as_nan(estimate.volume), "estimate.volume"),
         rt60_bands=ctypes.cast(bands, ctypes.POINTER(ctypes.c_float)),
         band_count=band_count,
     )

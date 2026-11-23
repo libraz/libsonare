@@ -29,20 +29,24 @@ class AcousticResult:
     time, which only a measured impulse response provides, so they are ``None``
     when ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the
     blind estimator only fits the late decay ``rt60`` comes from. ``edt_bands``,
-    ``c50_bands`` and ``c80_bands`` are ``None`` then too."""
+    ``c50_bands`` and ``c80_bands`` are ``None`` then too. A scalar the analyzer
+    could not measure (silence, or a decay it could not fit) is ``None`` as well;
+    a per-band array keeps its length and holds NaN for an unmeasured band."""
 
-    rt60: float
-    """Reverberation time (RT60) in seconds; estimated in both blind and impulse-response modes."""
+    rt60: float | None
+    """Reverberation time (RT60) in seconds, estimated in both blind and impulse-response
+    modes; None when no decay was measurable."""
     edt: float | None
-    """Early decay time in seconds; None when ``is_blind`` is true."""
+    """Early decay time in seconds; None when ``is_blind`` is true or it was not measurable."""
     c50: float | None
-    """Clarity C50 in dB; None when ``is_blind`` is true."""
+    """Clarity C50 in dB; None when ``is_blind`` is true or it was not measurable."""
     c80: float | None
-    """Clarity C80 in dB; None when ``is_blind`` is true."""
+    """Clarity C80 in dB; None when ``is_blind`` is true or it was not measurable."""
     d50: float | None
-    """Definition D50, the early-energy fraction in [0, 1]; None when ``is_blind`` is true."""
+    """Definition D50, the early-energy fraction in [0, 1]; None when ``is_blind`` is true or
+    it was not measurable."""
     rt60_bands: npt.NDArray[np.float32]
-    """RT60 per octave band, in seconds."""
+    """RT60 per octave band, in seconds; NaN where a band was not measurable."""
     edt_bands: npt.NDArray[np.float32] | None
     """Early decay time per octave band, in seconds; None when ``is_blind`` is true."""
     c50_bands: npt.NDArray[np.float32] | None
@@ -148,20 +152,20 @@ class RoomEstimate:
     """Blind equivalent-room estimate (volume/dimensions/absorption/DRR).
 
     ``volume``, ``length_m``, ``width_m`` and ``height_m`` (the names
-    :func:`synthesize_rir` takes) are NaN, with
-    ``confidence`` 0, when the recording has no measurable broadband decay
-    (silence, or an RT60 the analyzer could not fit). NaN is the acoustic
-    family's "not measurable", as in the RT60 bands.
+    :func:`synthesize_rir` takes) are None, with ``confidence`` 0, when the
+    recording has no measurable broadband decay (silence, or an RT60 the
+    analyzer could not fit). A per-band array keeps its length and holds NaN
+    for a band that was not measured.
     """
 
-    volume: float
-    """Equivalent room volume in cubic metres; NaN when no broadband decay was measurable."""
-    length_m: float
-    """Estimated room length in metres; NaN when no broadband decay was measurable."""
-    width_m: float
-    """Estimated room width in metres; NaN when no broadband decay was measurable."""
-    height_m: float
-    """Estimated room height in metres; NaN when no broadband decay was measurable."""
+    volume: float | None
+    """Equivalent room volume in cubic metres; None when no broadband decay was measurable."""
+    length_m: float | None
+    """Estimated room length in metres; None when no broadband decay was measurable."""
+    width_m: float | None
+    """Estimated room width in metres; None when no broadband decay was measurable."""
+    height_m: float | None
+    """Estimated room height in metres; None when no broadband decay was measurable."""
     drr_db: float | None
     """Direct-to-reverberant ratio in dB; None when the input is silent or empty, ``inf`` when
     the direct sound leaves no energy outside its window."""

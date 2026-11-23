@@ -7848,7 +7848,7 @@ test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_chain_c
 [[entry]]
 kind = "field"
 old = "AcousticResult.edt"
-changed = "None when is_blind (was NaN)"
+changed = "None when is_blind or not measurable (was NaN)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
@@ -7856,7 +7856,7 @@ test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_
 [[entry]]
 kind = "field"
 old = "AcousticResult.c50"
-changed = "None when is_blind (was NaN)"
+changed = "None when is_blind or not measurable (was NaN)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
@@ -7864,7 +7864,7 @@ test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_
 [[entry]]
 kind = "field"
 old = "AcousticResult.c80"
-changed = "None when is_blind (was NaN)"
+changed = "None when is_blind or not measurable (was NaN)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
@@ -7872,7 +7872,7 @@ test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_
 [[entry]]
 kind = "field"
 old = "AcousticResult.d50"
-changed = "None when is_blind (was NaN)"
+changed = "None when is_blind or not measurable (was NaN)"
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_absent_measurements.py::test_blind_acoustics_leave_the_direct_sound_measures_absent"
@@ -8445,6 +8445,46 @@ changed = "float | None; None on a silent or empty input, inf when the direct so
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_acoustic.py::test_an_unmeasured_estimate_leaves_the_dereverb_delay_as_given"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimate.volume"
+changed = "float | None; None when no broadband decay was measurable (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_estimate_room_zero_confidence_for_silence"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimate.length_m"
+changed = "float | None; None when no broadband decay was measurable (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_estimate_room_zero_confidence_for_silence"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimate.width_m"
+changed = "float | None; None when no broadband decay was measurable (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_estimate_room_zero_confidence_for_silence"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimate.height_m"
+changed = "float | None; None when no broadband decay was measurable (was NaN)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_estimate_room_zero_confidence_for_silence"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.rt60"
+changed = "float | None; None when no decay was measurable (was NaN); rt60_bands keeps its length with NaN for an unmeasured band"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_measurements.py::test_a_silent_recording_leaves_the_reverberation_time_absent_and_the_bands_full_length"
 
 # The repair analysis is a frozen dataclass and the stages it recommends are stage records.
 

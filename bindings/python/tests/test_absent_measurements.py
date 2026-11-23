@@ -42,6 +42,15 @@ def test_blind_acoustics_leave_the_direct_sound_measures_absent() -> None:
     assert isinstance(result.rt60_bands, np.ndarray) and result.rt60_bands.size > 0
 
 
+def test_a_silent_recording_leaves_the_reverberation_time_absent_and_the_bands_full_length() -> (
+    None
+):
+    result = libsonare.detect_acoustic(np.zeros(SR, dtype=np.float32), sample_rate=SR)
+    assert result.rt60 is None
+    assert result.rt60_bands.size > 0
+    assert np.isnan(result.rt60_bands).all()
+
+
 def test_an_impulse_response_measures_the_direct_sound_quantities() -> None:
     rng = np.random.default_rng(3)
     ir = (np.exp(-np.arange(SR) / SR * 8.0) * rng.standard_normal(SR) * 0.3).astype(np.float32)

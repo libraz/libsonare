@@ -36,6 +36,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
     _to_c_uint,
+    _unmeasured_as_nan,
     _validate_c_int_field,
 )
 from .types import (
@@ -381,10 +382,10 @@ def estimate_room(
         _check(rc, flattened="config")
         count = out.band_count
         return RoomEstimate(
-            volume=float(out.volume),
-            length_m=float(out.length_m),
-            width_m=float(out.width_m),
-            height_m=float(out.height_m),
+            volume=_measured(out.volume),
+            length_m=_measured(out.length_m),
+            width_m=_measured(out.width_m),
+            height_m=_measured(out.height_m),
             drr_db=_measured(out.drr_db),
             confidence=float(out.confidence),
             band_absorption=_optional_from_c_float_array(out.band_absorption, count),
@@ -426,22 +427,20 @@ def room_geometry_from_estimate(
     did not converge are left out of ``band_absorption``.
 
     Raises:
-        SonareValueError: The estimate has no measurable dimensions (NaN).
+        SonareValueError: The estimate has no measurable dimensions (None).
     """
     lib = _get_lib()
     bands_ptr, bands_count, _bands_owner = _band_array_args(
         estimate.band_absorption, arg_name="band_absorption"
     )
-    # Each field mirrors the RoomEstimate field of the same name, which reads an
-    # unmeasured value as NaN, so the fields are read as data rather than as arguments.
+    # Each field mirrors the RoomEstimate field of the same name, read as data rather than as
+    # an argument; an unmeasured None goes back as the NaN the library wrote.
     c_estimate = SonareRoomEstimate(
-        volume=_float_data(estimate.volume, "estimate.volume"),
-        length_m=_float_data(estimate.length_m, "estimate.length_m"),
-        width_m=_float_data(estimate.width_m, "estimate.width_m"),
-        height_m=_float_data(estimate.height_m, "estimate.height_m"),
-        drr_db=_float_data(
-            math.nan if estimate.drr_db is None else estimate.drr_db, "estimate.drr_db"
-        ),
+        volume=_float_data(_unmeasured_as_nan(estimate.volume), "estimate.volume"),
+        length_m=_float_data(_unmeasured_as_nan(estimate.length_m), "estimate.length_m"),
+        width_m=_float_data(_unmeasured_as_nan(estimate.width_m), "estimate.width_m"),
+        height_m=_float_data(_unmeasured_as_nan(estimate.height_m), "estimate.height_m"),
+        drr_db=_float_data(_unmeasured_as_nan(estimate.drr_db), "estimate.drr_db"),
         confidence=_float_data(estimate.confidence, "estimate.confidence"),
         band_absorption=bands_ptr,
         rt60_bands=None,

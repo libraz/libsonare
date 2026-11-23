@@ -100,6 +100,43 @@ def test_estimate_room_omits_an_unmeasured_drr_and_writes_an_infinite_one_as_nul
     assert ("DRR:        -" in text) is (drr_db is None)
 
 
+def test_an_unmeasured_room_and_reverberation_time_print_as_a_dash(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.0], 48000))
+    room = SimpleNamespace(
+        volume=None,
+        length_m=None,
+        width_m=None,
+        height_m=None,
+        drr_db=None,
+        confidence=0.0,
+        rt60_bands=[],
+        band_absorption=[],
+    )
+    monkeypatch.setattr(libsonare, "estimate_room", lambda _samples, **_kwargs: room)
+    args = argparse.Namespace(
+        file="in.wav",
+        json=False,
+        aspect_lw=1.0,
+        aspect_lh=1.0,
+        reference_absorption=0.15,
+        sabine=False,
+        n_octave_bands=None,
+    )
+    assert acoustic.cmd_estimate_room(args) == 0
+    text = capsys.readouterr().out
+    assert "Volume:     -" in text and "Dimensions: -" in text and "nan" not in text
+
+    result = _acoustic_result(blind=True)
+    result.rt60 = None
+    monkeypatch.setattr(libsonare, "detect_acoustic", lambda _samples, **_kwargs: result)
+    args = argparse.Namespace(file="in.wav", json=False, ir=False, n_octave_bands=1)
+    assert acoustic.cmd_acoustic(args) == 0
+    text = capsys.readouterr().out
+    assert "RT60:       -" in text and "nan" not in text
+
+
 def _vocal_note(*, pitched: bool) -> SimpleNamespace:
     return SimpleNamespace(
         id=1,

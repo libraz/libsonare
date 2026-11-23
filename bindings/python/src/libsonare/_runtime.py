@@ -803,6 +803,11 @@ def _measured(value: float) -> float | None:
     return None if math.isnan(value) else value
 
 
+def _unmeasured_as_nan(value: float | None) -> float:
+    """A measured value handed back to the library: ``None`` is the NaN the core wrote."""
+    return math.nan if value is None else value
+
+
 def _measured_level(value: float) -> float | None:
     """A level as a float, ``None`` where the core did not measure it (NaN).
 

@@ -2214,13 +2214,18 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `AcousticResult.c50` | None when is_blind (was NaN) |
-| `AcousticResult.c80` | None when is_blind (was NaN) |
-| `AcousticResult.d50` | None when is_blind (was NaN) |
-| `AcousticResult.edt` | None when is_blind (was NaN) |
+| `AcousticResult.c50` | None when is_blind or not measurable (was NaN) |
+| `AcousticResult.c80` | None when is_blind or not measurable (was NaN) |
+| `AcousticResult.d50` | None when is_blind or not measurable (was NaN) |
+| `AcousticResult.edt` | None when is_blind or not measurable (was NaN) |
+| `AcousticResult.rt60` | float \| None; None when no decay was measurable (was NaN); rt60_bands keeps its length with NaN for an unmeasured band |
 | `ClipDetection.flat_level` | None when no flat run was found (was 0.0) |
 | `NoteObject.median_hz` | None for a note with no pitch (was 0.0); None is what a caller writes for no pitch, and 0 or a negative value raises SonareValueError |
 | `RoomEstimate.drr_db` | float \| None; None on a silent or empty input, inf when the direct sound leaves no energy outside its window |
+| `RoomEstimate.height_m` | float \| None; None when no broadband decay was measurable (was NaN) |
+| `RoomEstimate.length_m` | float \| None; None when no broadband decay was measurable (was NaN) |
+| `RoomEstimate.volume` | float \| None; None when no broadband decay was measurable (was NaN) |
+| `RoomEstimate.width_m` | float \| None; None when no broadband decay was measurable (was NaN) |
 | `SpectralRegionOp.high_hz` | float \| None, default None: None is Nyquist, and 0 or a negative edge raises SonareValueError instead of reading as Nyquist |
 | `StreamingRetune.constructor(grain_size)` | `StreamingRetune.constructor(grain_size_samples)`: grain_size -> grain_size_samples; None derives the grain from the sample rate, an explicit 0 raises SonareValueError, and any other grain must be a multiple of 4 in [4, 8192] (it was rounded up before) |
 | `StreamingRetune.set_config(grain_size)` | `StreamingRetune.set_config(grain_size_samples)`: grain_size -> grain_size_samples; None derives the grain from the sample rate, an explicit 0 raises SonareValueError, and any other grain must be a multiple of 4 in [4, 8192] (it was rounded up before) |

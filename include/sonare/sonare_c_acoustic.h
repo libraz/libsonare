@@ -163,7 +163,8 @@ typedef struct {
   int mode;
 } SonareRoomEstimateConfig;
 
-/// @brief Equivalent-room estimate. Free with sonare_free_room_estimate.
+/// @brief Equivalent-room estimate. Free with sonare_free_room_estimate. NaN is the C-level
+///        "not measured"; every binding reads an unmeasured scalar as absent.
 typedef struct {
   float volume;    ///< Equivalent interior volume in m^3; NaN when no decay is measurable.
   float length_m;  ///< Representative room length in metres; NaN likewise.

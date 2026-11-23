@@ -205,7 +205,7 @@ def test_room_morph_adds_a_target_tail_and_is_deterministic() -> None:
 def test_estimate_room_zero_confidence_for_silence() -> None:
     est = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
     assert est.confidence == 0.0
-    assert all(math.isnan(v) for v in (est.volume, est.length_m, est.width_m, est.height_m))
+    assert (est.volume, est.length_m, est.width_m, est.height_m) == (None, None, None, None)
 
 
 @acoustic
@@ -803,8 +803,8 @@ def test_room_geometry_from_estimate_places_a_small_room_inside_itself() -> None
 @acoustic
 def test_room_geometry_from_estimate_refuses_an_unmeasured_room() -> None:
     silent = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
-    assert math.isnan(silent.length_m)
-    # The estimate's own NaN reaches the library, which names the cause.
+    assert silent.length_m is None
+    # The unmeasured dimensions go back as the library's NaN, and the library names the cause.
     with pytest.raises(
         libsonare.SonareValueError,
         match=r"^room_geometry_from_estimate: room estimate has no measurable dimensions",
@@ -819,7 +819,7 @@ def test_room_geometry_from_estimate_refuses_an_unmeasured_room() -> None:
 @acoustic
 def test_an_unmeasured_estimate_leaves_the_dereverb_delay_as_given() -> None:
     silent = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
-    assert math.isnan(silent.volume)
+    assert silent.volume is None
     # A silent input has no direct sound to measure a ratio against.
     assert silent.drr_db is None
     config = libsonare.mastering_repair_dereverb_config_for_room(silent, late_delay_ms=33.0)
