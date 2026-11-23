@@ -189,4 +189,26 @@ describe('runtime refusal parity (WASM)', () => {
       eq.destroy();
     }
   });
+  it('respells a structured refusal a core class raises directly, without a C-ABI entry in between', () => {
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      eq.setBand(0, {
+        enabled: true,
+        type: 'peak',
+        frequencyHz: 1000,
+        gainDb: 3,
+        q: 1,
+        placement: 'mid',
+      });
+      expectRefusal(
+        () => eq.processMono(new Float32Array(64)),
+        RangeError,
+        exactly(
+          'StreamingEqualizer.processMono: numChannels must be 2 when bands[0].placement is mid or side',
+        ),
+      );
+    } finally {
+      eq.destroy();
+    }
+  });
 });
