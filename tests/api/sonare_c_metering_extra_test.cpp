@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -850,6 +851,50 @@ TEST_CASE("Handle-form spectrum matches its buffer twin field by field",
 
   sonare_free_spectrum_result(&buffer_result);
   sonare_free_spectrum_result(&handle_result);
+  sonare_audio_destroy(audio);
+}
+
+TEST_CASE("The spectrum entries refuse a non-finite dB reference or floor by name",
+          "[c_api][metering][spectrum]") {
+  const std::vector<float> samples = make_spectrum_frame_fixture();
+  SonareAudio* audio = nullptr;
+  REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), kSpectrumFrameSampleRate,
+                                   &audio) == SONARE_OK);
+  const auto spectrum = [&](int entry, float db_ref, float db_amin) {
+    SonareSpectrumResult result = {};
+    const int rate = kSpectrumFrameSampleRate;
+    SonareError err = SONARE_OK;
+    switch (entry) {
+      case 0:
+        err = sonare_metering_spectrum(samples.data(), samples.size(), rate, 0, 0, 0, db_ref,
+                                       db_amin, &result);
+        break;
+      case 1:
+        err = sonare_metering_spectrum_frame(samples.data(), samples.size(), rate, 0, 0, 0, 0,
+                                             db_ref, db_amin, &result);
+        break;
+      case 2:
+        err = sonare_audio_spectrum(audio, 0, 0, 0, db_ref, db_amin, &result);
+        break;
+      default:
+        err = sonare_audio_spectrum_frame(audio, 0, 0, 0, 0, db_ref, db_amin, &result);
+        break;
+    }
+    sonare_free_spectrum_result(&result);
+    return err;
+  };
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  for (int entry = 0; entry < 4; ++entry) {
+    CAPTURE(entry);
+    CHECK(spectrum(entry, 0.0f, 0.0f) == SONARE_OK);
+    for (const float bad : {nan, inf}) {
+      CHECK(spectrum(entry, bad, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) == "db_ref must be finite and at least 0");
+      CHECK(spectrum(entry, 0.0f, bad) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()) == "db_amin must be finite and at least 0");
+    }
+  }
   sonare_audio_destroy(audio);
 }
 

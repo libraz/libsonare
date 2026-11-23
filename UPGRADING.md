@@ -680,6 +680,10 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareDenoiseStereoResult` | embeds SonareDenoiseReport, whose packed noise detection grew; recompile against the 2.0 header |
 | `SonareMasteringChainResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
 | `SonareMasteringChainStereoResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
+| `sonare_audio_spectrum_frame` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
+| `sonare_audio_spectrum` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
+| `sonare_metering_spectrum_frame` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
+| `sonare_metering_spectrum` | db_ref and db_amin are 0 for the library default and otherwise finite and >= 0; a NaN or +Inf, which selected the default, is refused with SONARE_ERROR_INVALID_PARAMETER 'db_ref must be finite and at least 0' (likewise db_amin) |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
