@@ -6,7 +6,9 @@
  * pin, so `build:wasm` refuses to start when `emcc` on PATH reports a different one, and the source
  * manifest records the release each module was built with so the pack step can refuse a mismatch.
  * CMake keeps the compiler a build tree was first configured with, whatever PATH says later, so
- * the guard also refuses a build tree whose recorded compiler is not the active `emcc`'s.
+ * the guard also refuses a build tree whose recorded compiler is gone or reports another release
+ * than the active `emcc`. The release decides rather than the path, because an `emcc` on PATH may
+ * be a wrapper script that runs the emsdk compiler from a directory no symlink leads to.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -32,11 +34,11 @@ export function parseEmccVersion(text) {
   return match === null ? null : match[1];
 }
 
-/** The release of the `emcc` on PATH in @p env, or null when none runs. */
-export function installedVersion(env = process.env) {
+/** The release @p compiler (by default the `emcc` on PATH in @p env) reports, or null when none runs. */
+export function installedVersion(env = process.env, compiler = 'emcc') {
   let output;
   try {
-    output = execFileSync('emcc', ['--version'], {
+    output = execFileSync(compiler, ['--version'], {
       encoding: 'utf8',
       env,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -100,6 +102,10 @@ export function buildTreeProblem(buildDir, { env = process.env } = {}) {
       ? realpathSync(dir)
       : dir;
   if (configured === active) return null;
+  if (existsSync(compiler)) {
+    const release = installedVersion(env, compiler);
+    if (release !== null && release === installedVersion(env)) return null;
+  }
   return `${buildDir} is configured with ${compiler}, but the active Emscripten is ${join(active, 'emcc')}.\nCMake keeps the compiler a tree was first configured with, so move ${buildDir} aside and build again.`;
 }
 

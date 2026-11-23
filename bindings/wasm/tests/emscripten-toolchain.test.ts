@@ -156,6 +156,30 @@ describe('build:wasm refuses a build tree configured with another compiler', () 
     expect(buildTreeProblem(configuredTree(join(real, 'em++')), { env })).toBeNull();
   });
 
+  it('builds a tree configured through a wrapper emcc that runs the same release elsewhere', () => {
+    const real = join(root, 'emsdk', 'upstream', 'emscripten');
+    mkdirSync(real, { recursive: true });
+    writeFileSync(join(real, 'em++'), `#!/bin/sh\necho '${BANNER(pinnedVersion())}'\n`);
+    chmodSync(join(real, 'em++'), 0o755);
+    // The PATH emcc is a script that would exec the emsdk one, not a symlink to it.
+    const env = stubPath(BANNER(pinnedVersion()));
+    const tree = configuredTree(join(real, 'em++'));
+    expect(buildTreeProblem(tree, { env })).toBeNull();
+    expect(runGuard(env, tree).status).toBe(0);
+  });
+
+  it('refuses a tree whose recorded compiler still runs but reports another release', () => {
+    const other = join(root, 'opt', 'emscripten', 'em++');
+    mkdirSync(join(root, 'opt', 'emscripten'), { recursive: true });
+    writeFileSync(other, `#!/bin/sh\necho '${BANNER('6.0.10')}'\n`);
+    chmodSync(other, 0o755);
+    const env = stubPath(BANNER(pinnedVersion()));
+    const tree = configuredTree(other);
+    const result = runGuard(env, tree);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`${tree} is configured with ${other}`);
+  });
+
   it('lets a tree that was never configured through', () => {
     const env = stubPath(BANNER(pinnedVersion()));
     expect(buildTreeProblem(join(root, 'build-wasm'), { env })).toBeNull();
