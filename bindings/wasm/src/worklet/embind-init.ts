@@ -2,6 +2,9 @@ import { init as initSonareModule, isInitialized } from '../index.js';
 import { invalidState } from '../internal/entry.js';
 import type { ModuleFactory } from '../public_types.js';
 
+/** The module build this realm's processors started, while it is in flight. */
+let realmBuild: Promise<void> | undefined;
+
 type EmbindGlobals = typeof globalThis & {
   SonareEmbindInitPromise?: Promise<void>;
   SonareEmbindModuleFactory?: ModuleFactory;
@@ -42,5 +45,12 @@ export async function initializeEmbindInWorklet(
         'and pass wasmBinary in its processorOptions',
     );
   }
-  await initSonareModule({ locateFile: (path) => path, wasmBinary, moduleFactory });
+  // Each processor holds its own copy of wasmBinary, so the ones arriving mid-build join it.
+  realmBuild ??= initSonareModule({ locateFile: (path) => path, wasmBinary, moduleFactory }).catch(
+    (error: unknown) => {
+      realmBuild = undefined;
+      throw error;
+    },
+  );
+  await realmBuild;
 }
