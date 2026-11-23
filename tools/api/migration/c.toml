@@ -5093,3 +5093,43 @@ to = "SonareDeclipReport.unreconstructed_runs"
 domain = "effects"
 rule = "individual"
 test = "tests/api/sonare_c_mastering_repair_test.cpp::leaves a run past the gap cap clipped"
+
+[[entry]]
+kind = "type"
+old = "SonareNoiseDetection"
+changed = "the band levels are packed: band_count (size_t) follows floor_dbfs, band_floor_dbfs holds the measured bands low to high and band_floor_band the index of each, so read [0, band_count) of both arrays instead of skipping NaN across all 32 slots; a band no analysis bin reaches is left out rather than NaN"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_mastering_repair_detect_test.cpp::sonare_mastering_repair_noise_band_bins"
+
+[[entry]]
+kind = "type"
+old = "SonareDenoiseReport"
+changed = "embeds the packed SonareNoiseDetection, so detected grows and every later field moves; recompile against the 2.0 header"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::every band slot is measured, not just the first"
+
+[[entry]]
+kind = "type"
+old = "SonareDenoiseStereoResult"
+changed = "embeds SonareDenoiseReport, whose packed noise detection grew; recompile against the 2.0 header"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::every band slot is measured, not just the first"
+
+[[entry]]
+kind = "type"
+old = "SonareMasteringChainResult"
+changed = "gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_mastering_test.cpp::chain results carry the loudness stage gain"
+
+[[entry]]
+kind = "type"
+old = "SonareMasteringChainStereoResult"
+changed = "gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_mastering_test.cpp::chain results carry the loudness stage gain"

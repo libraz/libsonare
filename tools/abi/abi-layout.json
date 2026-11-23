@@ -1890,40 +1890,40 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 24,
-        "size": 144
+        "size": 288
       }
     ],
-    "size": 168
+    "size": 312
   },
   "SonareDenoiseReport": {
-    "align": 4,
+    "align": 8,
     "fields": [
       {
         "kind": "aggregate",
         "name": "detected",
         "offset": 0,
-        "size": 132
+        "size": 272
       },
       {
         "kind": "float",
         "name": "mean_reduction_db",
-        "offset": 132,
+        "offset": 272,
         "size": 4
       },
       {
         "kind": "float",
         "name": "max_reduction_db",
-        "offset": 136,
+        "offset": 276,
         "size": 4
       },
       {
         "kind": "float",
         "name": "floor_limited_fraction",
-        "offset": 140,
+        "offset": 280,
         "size": 4
       }
     ],
-    "size": 144
+    "size": 288
   },
   "SonareDenoiseResult": {
     "align": 8,
@@ -1944,10 +1944,10 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 16,
-        "size": 144
+        "size": 288
       }
     ],
-    "size": 160
+    "size": 304
   },
   "SonareDenoiseStereoResult": {
     "align": 8,
@@ -1974,10 +1974,10 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 24,
-        "size": 144
+        "size": 288
       }
     ],
-    "size": 168
+    "size": 312
   },
   "SonareDereverbClassicalConfig": {
     "align": 8,
@@ -4104,16 +4104,22 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 88,
-        "size": 180
+        "size": 184
       },
       {
         "kind": "unsigned",
         "name": "non_finite_substitution_count",
         "offset": 272,
         "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "loudness_gain_db",
+        "offset": 280,
+        "size": 4
       }
     ],
-    "size": 280
+    "size": 288
   },
   "SonareMasteringChainStereoResult": {
     "align": 8,
@@ -4212,16 +4218,22 @@
         "kind": "aggregate",
         "name": "report",
         "offset": 96,
-        "size": 180
+        "size": 184
       },
       {
         "kind": "unsigned",
         "name": "non_finite_substitution_count",
         "offset": 280,
         "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "loudness_gain_db",
+        "offset": 288,
+        "size": 4
       }
     ],
-    "size": 288
+    "size": 296
   },
   "SonareMasteringConfig": {
     "align": 4,
@@ -4357,9 +4369,15 @@
         "name": "band_energy_delta_db",
         "offset": 52,
         "size": 128
+      },
+      {
+        "kind": "float",
+        "name": "loudness_gain_db",
+        "offset": 180,
+        "size": 4
       }
     ],
-    "size": 180
+    "size": 184
   },
   "SonareMasteringResult": {
     "align": 8,
@@ -5592,7 +5610,7 @@
     "size": 24
   },
   "SonareNoiseDetection": {
-    "align": 4,
+    "align": 8,
     "fields": [
       {
         "kind": "float",
@@ -5601,13 +5619,25 @@
         "size": 4
       },
       {
+        "kind": "unsigned",
+        "name": "band_count",
+        "offset": 8,
+        "size": 8
+      },
+      {
         "kind": "aggregate",
         "name": "band_floor_dbfs",
-        "offset": 4,
+        "offset": 16,
+        "size": 128
+      },
+      {
+        "kind": "aggregate",
+        "name": "band_floor_band",
+        "offset": 144,
         "size": 128
       }
     ],
-    "size": 132
+    "size": 272
   },
   "SonareNoteEdit": {
     "align": 8,

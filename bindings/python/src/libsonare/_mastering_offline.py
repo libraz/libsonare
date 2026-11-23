@@ -724,6 +724,7 @@ def _extract_mastering_report(raw: object) -> MasteringReport:
         band_energy_delta_db=_from_c_float_array(
             report.band_energy_delta_db, len(report.band_energy_delta_db)
         ),
+        loudness_gain_db=_measured_level(report.loudness_gain_db),
     )
 
 
@@ -782,6 +783,7 @@ def _chain_result_fields(out: Any) -> dict[str, Any]:
         ),
         "report": _extract_mastering_report(out.report),
         "non_finite_substitution_count": int(out.non_finite_substitution_count),
+        "loudness_gain_db": _measured_level(out.loudness_gain_db),
     }
 
 

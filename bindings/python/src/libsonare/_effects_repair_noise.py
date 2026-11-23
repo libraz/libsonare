@@ -153,14 +153,12 @@ def mastering_repair_denoise_classical(
 
 
 def _extract_noise_detection(raw: Any) -> NoiseDetection:
-    levels = _from_c_float_array(raw.band_floor_dbfs, len(raw.band_floor_dbfs))
-    # A band holding no bin is NaN in the C struct; it is left out with its index.
-    measured = ~np.isnan(levels)
+    count = int(raw.band_count)
     floor = float(raw.floor_dbfs)
     return NoiseDetection(
         floor_dbfs=None if math.isnan(floor) else floor,
-        band_floor_dbfs=levels[measured],
-        band_floor_band=np.flatnonzero(measured).astype(np.int32),
+        band_floor_dbfs=_from_c_float_array(raw.band_floor_dbfs, count),
+        band_floor_band=np.array(raw.band_floor_band[:count], dtype=np.int32),
     )
 
 

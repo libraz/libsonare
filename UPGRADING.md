@@ -657,6 +657,16 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_ebur128_loudness_range` | `sonare_ebur128_loudness_range_lu` |
 | `sonare_metering_true_peak_db` | `sonare_metering_true_peak_dbtp` |
 
+#### A value that is not given is absent, never 0, -1 or ''
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareDenoiseReport` | embeds the packed SonareNoiseDetection, so detected grows and every later field moves; recompile against the 2.0 header |
+| `SonareDenoiseStereoResult` | embeds SonareDenoiseReport, whose packed noise detection grew; recompile against the 2.0 header |
+| `SonareMasteringChainResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
+| `SonareMasteringChainStereoResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
+| `SonareNoiseDetection` | the band levels are packed: band_count (size_t) follows floor_dbfs, band_floor_dbfs holds the measured bands low to high and band_floor_band the index of each, so read [0, band_count) of both arrays instead of skipping NaN across all 32 slots; a band no analysis bin reaches is left out rather than NaN |
+
 #### Silence is an infinite level; a measurement that was not taken is absent
 
 | 1.x | 2.0.0 |
@@ -5685,6 +5695,9 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `DynamicRangeReport.dynamicRangeDb` | optional: `Infinity` when the low percentile lands on a silent window, absent when the high percentile is silent too or the input is empty |
+| `DynamicRangeReport.highPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
+| `DynamicRangeReport.lowPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
 | `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
 | `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
@@ -10383,6 +10396,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `DynamicRangeReport.dynamicRangeDb` | optional: `Infinity` when the low percentile lands on a silent window, absent when the high percentile is silent too or the input is empty |
+| `DynamicRangeReport.highPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
+| `DynamicRangeReport.lowPercentileDb` | optional: `-Infinity` on a silent window, absent for empty input |
 | `MasteringAssistantProfile.crestFactorDb` | optional: absent for silence, where no RMS level is measured; never -Infinity |
 | `MasteringAssistantProfile.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |
 | `MasteringStreamingPreviewPlatform.integratedLufs` | T \| null -> number: `-Infinity` for silence or when nothing passes the gate, never null |

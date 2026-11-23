@@ -164,7 +164,7 @@ class SonareDenoiseClassicalConfig(CStruct):
     ]
 
 
-# Length of SonareNoiseDetection.band_floor_dbfs; matches
+# Capacity of SonareNoiseDetection.band_floor_dbfs; matches
 # SONARE_REPAIR_NOISE_BAND_COUNT in sonare_c_mastering.h.
 SONARE_REPAIR_NOISE_BAND_COUNT = 32
 
@@ -174,7 +174,9 @@ class SonareNoiseDetection(CStruct):
 
     _fields_ = [
         ("floor_dbfs", ctypes.c_float),
+        ("band_count", ctypes.c_size_t),
         ("band_floor_dbfs", ctypes.c_float * SONARE_REPAIR_NOISE_BAND_COUNT),
+        ("band_floor_band", ctypes.c_int32 * SONARE_REPAIR_NOISE_BAND_COUNT),
     ]
 
 

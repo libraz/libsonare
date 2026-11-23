@@ -345,25 +345,24 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
 
     // A mirror carrying only band_floor_dbfs[0] passes any check written against
     // the first entry alone, so the whole array has to say something. A band no
-    // bin reaches is NaN; every other band is a finite level.
+    // bin reaches is left out; every entry kept is a finite level.
     SonareDenoiseClassicalConfig defaults;
     sonare_denoise_classical_config_init(&defaults);
     int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
     REQUIRE(sonare_mastering_repair_noise_band_bins(defaults.n_fft, sr, bins) == SONARE_OK);
-    int measured = 0;
-    float first_measured = 0.0f;
+    const SonareNoiseDetection& detected = out.report.detected;
+    size_t entry = 0;
     bool any_differs = false;
     for (int b = 0; b < SONARE_REPAIR_NOISE_BAND_COUNT; ++b) {
-      const float band = out.report.detected.band_floor_dbfs[b];
-      if (bins[b] == bins[b + 1]) {
-        REQUIRE(std::isnan(band));
-        continue;
-      }
-      REQUIRE(std::isfinite(band));
-      if (measured++ == 0) first_measured = band;
-      if (band != first_measured) any_differs = true;
+      if (bins[b] == bins[b + 1]) continue;
+      REQUIRE(entry < detected.band_count);
+      REQUIRE(detected.band_floor_band[entry] == b);
+      REQUIRE(std::isfinite(detected.band_floor_dbfs[entry]));
+      if (detected.band_floor_dbfs[entry] != detected.band_floor_dbfs[0]) any_differs = true;
+      ++entry;
     }
-    REQUIRE(measured > 1);
+    REQUIRE(entry == detected.band_count);
+    REQUIRE(detected.band_count > 1);
     REQUIRE(any_differs);
 
     sonare_free_denoise_stereo_result(&out);

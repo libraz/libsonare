@@ -342,6 +342,12 @@ class MasteringReport:
     band_energy_delta_db: npt.NDArray[np.float32] = field(default_factory=_empty_float32)
     """32 log-spaced after-minus-before spectral energy deltas in dB, 20 Hz to Nyquist; NaN in a
     band where either spectrum has no level."""
+    loudness_gain_db: float | None = None
+    """Static gain the loudness stage applied, in dB; 0 when the input already sat at the target.
+
+    None when not measured: the stage is disabled, or the input is too quiet for an integrated
+    loudness.
+    """
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -393,6 +399,8 @@ class MasteringChainResult:
     #: replacing.
     non_finite_substitution_count: int = 0
     """Number of samples a stage replaced with a finite value."""
+    loudness_gain_db: float | None = None
+    """Same value as ``report.loudness_gain_db``; None when not measured."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -428,3 +436,5 @@ class MasteringChainStereoResult:
     #: both channels.
     non_finite_substitution_count: int = 0
     """Number of samples a stage replaced with a finite value."""
+    loudness_gain_db: float | None = None
+    """Same value as ``report.loudness_gain_db``; None when not measured."""

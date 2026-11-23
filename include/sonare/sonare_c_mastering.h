@@ -125,6 +125,10 @@ typedef struct {
   int loudness_target_limited;
   /// Output-minus-input long-term spectral energy per band, dB.
   float band_energy_delta_db[SONARE_MASTERING_REPORT_BAND_COUNT];
+  /// Static gain the loudness stage applied, dB; 0 when the input already sat at the
+  /// target. NaN when it was not measured: the stage is disabled, or the input is
+  /// too quiet for an integrated loudness (silence is not measured, never 0).
+  float loudness_gain_db;
 } SonareMasteringReport;
 
 /// @brief Result of running the mastering chain on a mono buffer.
@@ -181,6 +185,9 @@ typedef struct {
   /// limiter and the loudness stage both disabled a zero here means no stage
   /// was able to replace anything rather than that nothing needed replacing.
   size_t non_finite_substitution_count;
+  /// The same value as @c report.loudness_gain_db, kept here beside the other
+  /// whole-run fields because the report is also returned on its own.
+  float loudness_gain_db;
 } SonareMasteringChainResult;
 
 /// @brief Result of running the mastering chain on a stereo pair.
@@ -209,6 +216,8 @@ typedef struct {
   SonareMasteringReport report;        ///< Before/after measurements of the whole run.
   /// @copydoc SonareMasteringChainResult::non_finite_substitution_count
   size_t non_finite_substitution_count;
+  /// @copydoc SonareMasteringChainResult::loudness_gain_db
+  float loudness_gain_db;
 } SonareMasteringChainStereoResult;
 
 /// @details This call always runs exactly one true-peak limiter, so
@@ -1317,7 +1326,7 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_declick_result(SonareDeclickResult* result);
 
-/// Bands a denoise noise floor is reported in, and the length of
+/// Bands a denoise noise floor is reported in, and the capacity of
 /// SonareNoiseDetection::band_floor_dbfs. A geometric grid from 20 Hz to Nyquist,
 /// the same axis the mastering report's band_energy_delta_db uses.
 #define SONARE_REPAIR_NOISE_BAND_COUNT 32
@@ -1332,9 +1341,16 @@ void sonare_free_declick_result(SonareDeclickResult* result);
 ///   runs on the channel-summed power, so two identical channels read about 3 dB
 ///   above the same material through the mono entry point. Compare a stereo floor
 ///   against another stereo floor, never against a mono one.
+///   A band no analysis bin lands in (the lowest bands of a short n_fft) has no
+///   level and is left out, so only the first @c band_count entries of the two
+///   arrays are meaningful; the entries after them are zero and are not levels.
 typedef struct {
-  float floor_dbfs;                                       ///< broadband estimated noise floor
-  float band_floor_dbfs[SONARE_REPAIR_NOISE_BAND_COUNT];  ///< per band, low to high
+  float floor_dbfs;   ///< broadband estimated noise floor; NaN when not measured
+  size_t band_count;  ///< bands that carry a level, in [0, SONARE_REPAIR_NOISE_BAND_COUNT]
+  /// Level of each measured band, low to high; [0, band_count) is valid.
+  float band_floor_dbfs[SONARE_REPAIR_NOISE_BAND_COUNT];
+  /// Band index, in [0, SONARE_REPAIR_NOISE_BAND_COUNT), of each level, ascending.
+  int32_t band_floor_band[SONARE_REPAIR_NOISE_BAND_COUNT];
 } SonareNoiseDetection;
 
 /// @brief Measures the noise floor without denoising.

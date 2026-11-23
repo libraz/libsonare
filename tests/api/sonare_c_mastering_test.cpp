@@ -2828,3 +2828,46 @@ TEST_CASE("an unknown insert key is kept as a shape refusal and a later domain r
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_c_detail::last_parameter_refusal() == nullptr);
 }
+
+TEST_CASE("chain results carry the loudness stage gain, NaN where it was not measured",
+          "[c_api][mastering][loudness]") {
+  constexpr int kSampleRate = 22050;
+  const auto tone = generate_sine(440.0f, kSampleRate, 2.0f);
+  const std::vector<float> silence(tone.size(), 0.0f);
+  const char* enabled = "{\"loudness.enabled\":1,\"loudness.targetLufs\":-14}";
+  const char* disabled = "{\"loudness.enabled\":0}";
+
+  auto mono = [&](const std::vector<float>& input, const char* overrides) {
+    SonareMasteringChainResult out{};
+    REQUIRE(sonare_master_audio(nullptr, input.data(), input.size(), kSampleRate, overrides,
+                                nullptr, &out) == SONARE_OK);
+    const std::pair<float, float> gains{out.loudness_gain_db, out.report.loudness_gain_db};
+    sonare_free_mastering_chain_result(&out);
+    return gains;
+  };
+  auto stereo = [&](const std::vector<float>& input, const char* overrides) {
+    SonareMasteringChainStereoResult out{};
+    REQUIRE(sonare_master_audio_stereo(nullptr, input.data(), input.data(), input.size(),
+                                       kSampleRate, overrides, nullptr, &out) == SONARE_OK);
+    const std::pair<float, float> gains{out.loudness_gain_db, out.report.loudness_gain_db};
+    sonare_free_mastering_chain_stereo_result(&out);
+    return gains;
+  };
+
+  auto check = [&](auto run) {
+    const auto applied = run(tone, enabled);
+    CHECK(std::isfinite(applied.first));
+    CHECK(applied.first != 0.0f);
+    CHECK(applied.second == applied.first);
+
+    const auto off = run(tone, disabled);
+    CHECK(std::isnan(off.first));
+    CHECK(std::isnan(off.second));
+
+    const auto silent = run(silence, enabled);
+    CHECK(std::isnan(silent.first));
+    CHECK(std::isnan(silent.second));
+  };
+  check(mono);
+  check(stereo);
+}

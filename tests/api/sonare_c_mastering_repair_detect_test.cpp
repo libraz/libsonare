@@ -5,6 +5,7 @@
 #include <limits>
 #include <random>
 #include <string>
+#include <vector>
 
 #include "sonare_c_test_helpers.h"
 #include "util/db.h"
@@ -449,10 +450,15 @@ TEST_CASE("sonare_mastering_repair_detect_noise_floor", "[c_api][mastering]") {
     sonare_denoise_classical_config_init(&defaults);
     int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
     REQUIRE(sonare_mastering_repair_noise_band_bins(defaults.n_fft, kSr, bins) == SONARE_OK);
+    size_t entry = 0;
     for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) {
-      const float level = from_loud.band_floor_dbfs[k];
-      REQUIRE((bins[k] == bins[k + 1] ? std::isnan(level) : std::isfinite(level)));
+      if (bins[k] == bins[k + 1]) continue;
+      REQUIRE(entry < from_loud.band_count);
+      REQUIRE(from_loud.band_floor_band[entry] == k);
+      REQUIRE(std::isfinite(from_loud.band_floor_dbfs[entry]));
+      ++entry;
     }
+    REQUIRE(entry == from_loud.band_count);
   }
 
   SECTION("pads a buffer shorter than n_fft") {
@@ -475,6 +481,7 @@ TEST_CASE("sonare_mastering_repair_detect_noise_floor", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_repair_detect_noise_floor(nullptr, 0, kSr, nullptr, &detection) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(detection.floor_dbfs == 0.0f);
+    REQUIRE(detection.band_count == 0);
     REQUIRE(detection.band_floor_dbfs[0] == 0.0f);
 
     SonareDenoiseClassicalConfig config = default_denoise_config();
@@ -497,7 +504,7 @@ TEST_CASE("sonare_mastering_repair_noise_band_bins", "[c_api][mastering]") {
     for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) REQUIRE(bins[k] <= bins[k + 1]);
   }
 
-  SECTION("an empty band is why a level reads NaN, not a quiet region") {
+  SECTION("an empty band is left out, not reported as a quiet region") {
     int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
     REQUIRE(sonare_mastering_repair_noise_band_bins(config.n_fft, kSr, bins) == SONARE_OK);
     SonareNoiseDetection detection{};
@@ -508,18 +515,27 @@ TEST_CASE("sonare_mastering_repair_noise_band_bins", "[c_api][mastering]") {
     // 48 kHz the 1024-point grid's lowest bands are narrower than the bin spacing
     // while its upper ones hold many bins.
     int empty_bands = 0;
-    int occupied_bands = 0;
+    std::vector<int32_t> occupied;
     for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) {
       if (bins[k] == bins[k + 1]) {
-        REQUIRE(std::isnan(detection.band_floor_dbfs[k]));
         ++empty_bands;
       } else {
-        REQUIRE(std::isfinite(detection.band_floor_dbfs[k]));
-        ++occupied_bands;
+        occupied.push_back(k);
       }
     }
     REQUIRE(empty_bands > 0);
-    REQUIRE(occupied_bands > 0);
+    REQUIRE(!occupied.empty());
+    REQUIRE(detection.band_count == occupied.size());
+    REQUIRE(detection.band_count < static_cast<size_t>(SONARE_REPAIR_NOISE_BAND_COUNT));
+    for (size_t i = 0; i < detection.band_count; ++i) {
+      REQUIRE(detection.band_floor_band[i] == occupied[i]);
+      REQUIRE(std::isfinite(detection.band_floor_dbfs[i]));
+    }
+    // The tail past band_count is zero, never a NaN placeholder.
+    for (size_t i = detection.band_count; i < SONARE_REPAIR_NOISE_BAND_COUNT; ++i) {
+      REQUIRE(detection.band_floor_dbfs[i] == 0.0f);
+      REQUIRE(detection.band_floor_band[i] == 0);
+    }
   }
 
   SECTION("follows both halves of the geometry it was given") {

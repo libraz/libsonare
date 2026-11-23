@@ -342,7 +342,13 @@ SonareNoiseDetection to_c_noise_detection(const sonare::mastering::repair::Noise
   static_assert(static_cast<std::size_t>(SONARE_REPAIR_NOISE_BAND_COUNT) ==
                     sonare::mastering::repair::kRepairNoiseBandCount,
                 "C band level array must match the core's band count");
-  std::memcpy(c.band_floor_dbfs, cpp.band_floor_dbfs, sizeof(c.band_floor_dbfs));
+  // A band no analysis bin lands in is NaN in the core; the C record leaves it out.
+  for (std::size_t band = 0; band < sonare::mastering::repair::kRepairNoiseBandCount; ++band) {
+    if (std::isnan(cpp.band_floor_dbfs[band])) continue;
+    c.band_floor_dbfs[c.band_count] = cpp.band_floor_dbfs[band];
+    c.band_floor_band[c.band_count] = static_cast<int32_t>(band);
+    ++c.band_count;
+  }
   return c;
 }
 

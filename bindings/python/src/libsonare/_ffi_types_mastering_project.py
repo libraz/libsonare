@@ -87,6 +87,7 @@ class SonareMasteringReport(CStruct):
         ("max_gain_reduction_db", ctypes.c_float),
         ("loudness_target_limited", ctypes.c_int),
         ("band_energy_delta_db", ctypes.c_float * 32),
+        ("loudness_gain_db", ctypes.c_float),
     ]
 
 
@@ -110,6 +111,7 @@ class SonareMasteringChainResult(CStruct):
         ("stage_gain_reductions_count", ctypes.c_size_t),
         ("report", SonareMasteringReport),
         ("non_finite_substitution_count", ctypes.c_size_t),
+        ("loudness_gain_db", ctypes.c_float),
     ]
 
 
@@ -134,6 +136,7 @@ class SonareMasteringChainStereoResult(CStruct):
         ("stage_gain_reductions_count", ctypes.c_size_t),
         ("report", SonareMasteringReport),
         ("non_finite_substitution_count", ctypes.c_size_t),
+        ("loudness_gain_db", ctypes.c_float),
     ]
 
 

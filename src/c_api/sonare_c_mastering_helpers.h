@@ -118,6 +118,7 @@ inline void zero_chain_metrics(ChainResultT* out) {
   out->output_loudness_range_lu = 0.0f;
   out->loudness_target_limited = 0;
   out->non_finite_substitution_count = 0;
+  out->loudness_gain_db = 0.0f;
   out->stage_gain_reduction_stages = nullptr;
   out->stage_gain_reduction_values = nullptr;
   out->stage_gain_reductions_count = 0;
@@ -252,6 +253,7 @@ inline void set_mastering_report(const sonare::mastering::api::MasteringReport& 
       "C report band count must match the C++ report");
   std::memcpy(out->report.band_energy_delta_db, report.band_energy_delta_db.data(),
               sizeof(out->report.band_energy_delta_db));
+  out->report.loudness_gain_db = report.loudness_gain_db;
 }
 
 // Copy the chain-metric fields from the C++ result into the C struct. The
@@ -263,6 +265,7 @@ inline void set_chain_metrics(const sonare::mastering::api::ChainMetrics& metric
   out->output_true_peak_dbtp = metrics.output_true_peak_dbtp;
   out->output_loudness_range_lu = metrics.output_loudness_range_lu;
   out->loudness_target_limited = metrics.loudness_target_limited ? 1 : 0;
+  out->loudness_gain_db = metrics.loudness_gain_db;
   set_mastering_report(metrics.report, out);
   const auto& reductions = metrics.stage_gain_reductions;
   out->stage_gain_reductions_count = reductions.size();

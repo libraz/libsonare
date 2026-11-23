@@ -128,6 +128,26 @@ def test_mastering_report_reads_a_short_take_as_unmeasured_and_silence_as_minus_
     assert silent.output_true_peak_dbtp == -math.inf
 
 
+def test_chain_loudness_gain_is_none_when_the_stage_is_off_or_the_input_is_silent() -> None:
+    enabled = {"loudness": {"enabled": True, "targetLufs": -14.0}}
+    disabled = {"loudness": {"enabled": False}}
+    tone = _tone(2.0)
+    for run in (
+        lambda x, cfg: libsonare.master_audio(x, SR, overrides=cfg),
+        lambda x, cfg: libsonare.master_audio_stereo(x, x, SR, overrides=cfg),
+    ):
+        applied = run(tone, enabled)
+        assert applied.report is not None
+        assert applied.loudness_gain_db is not None
+        assert math.isfinite(applied.loudness_gain_db)
+        assert applied.loudness_gain_db != 0.0
+        assert applied.report.loudness_gain_db == applied.loudness_gain_db
+        for result in (run(tone, disabled), run(SILENCE, enabled)):
+            assert result.report is not None
+            assert result.loudness_gain_db is None
+            assert result.report.loudness_gain_db is None
+
+
 def test_meter_telemetry_reads_nan_scalars_as_none_and_keeps_plane_arrays() -> None:
     raw = SonareMeterTelemetryRecord()
     raw.num_channels = 2
