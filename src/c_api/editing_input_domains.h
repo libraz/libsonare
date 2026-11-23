@@ -22,5 +22,11 @@ inline constexpr sonare::util::check::NumericDomain kVocalCreateFrameLengthDomai
 /// @brief What the pitch analysis hop of a vocal session's create options accepts.
 inline constexpr sonare::util::check::NumericDomain kVocalCreateHopLengthDomain =
     sonare::util::check::integer_domain_of<uint32_t>(1);
+/// @brief What a given spectrum-meter FFT size accepts; 0 selects the library default.
+inline constexpr sonare::util::check::NumericDomain kSpectrumNFftDomain =
+    sonare::util::check::integer_domain(1, 1LL << 30);
+/// @brief What a given spectrum-meter octave-smoothing fraction accepts; 0 selects the default.
+inline constexpr sonare::util::check::NumericDomain kSpectrumOctaveFractionDomain =
+    sonare::util::check::integer_domain_of<int>(1);
 
 }  // namespace sonare_c_detail

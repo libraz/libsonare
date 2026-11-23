@@ -291,6 +291,39 @@ SonareError validate_track_args(const float* f0_hz, const float* voiced_prob, co
   });
 }
 
+/// Refuses a track cadence the note model cannot step: at least one sample per frame, and a
+/// frame no longer than an int of samples. Called once @p sample_rate is known to be valid.
+SonareError validate_track_cadence(float frame_rate, int sample_rate) {
+  return run_validation([&] {
+    if (frame_rate > static_cast<float>(sample_rate)) {
+      util::check::refuse_relation({"frame_rate", "sample_rate"}, "{0} must be at most {1}");
+    }
+    util::check::at_least(frame_rate,
+                          static_cast<double>(sample_rate) / std::numeric_limits<int>::max(),
+                          "frame_rate");
+  });
+}
+
+/// Refuses a note span that does not lie inside the track, naming the note.
+SonareError validate_note_spans(const SonareNoteObject* notes, size_t note_count, size_t n_frames) {
+  return run_validation([&] {
+    for (size_t i = 0; i < note_count; ++i) {
+      const std::string note = "notes[" + std::to_string(i) + "]";
+      const std::string start = note + ".frame_start";
+      const std::string end = note + ".frame_end";
+      if (notes[i].frame_start < 0) {
+        util::check::refuse(start.c_str(), util::refusal::integer_at_least_predicate(0));
+      }
+      if (notes[i].frame_start >= notes[i].frame_end) {
+        util::check::refuse_relation({start, end}, "{0} must be less than {1}");
+      }
+      if (static_cast<size_t>(notes[i].frame_end) > n_frames) {
+        util::check::refuse_relation({end, "n_frames"}, "{0} must be at most {1}");
+      }
+    }
+  });
+}
+
 /// Builds the core track from the caller's frame arrays.
 editing::pitch_editor::F0Track make_track(const float* f0_hz, const float* voiced_prob,
                                           const int32_t* voiced, size_t n_frames, float frame_rate,
@@ -454,19 +487,24 @@ SonareError fill_note_objects_result(const std::vector<editing::note_model::Note
 
 /// Shared body of sonare_split_note and sonare_merge_notes: both validate the
 /// same arguments, rebuild the same note set, and return the same result shape.
-/// @p out must already be non-null and cleared.
-template <typename Fn>
+/// @p out must already be non-null and cleared. @p check refuses the edit's own
+/// arguments once the track and the note spans are known to be valid.
+template <typename Check, typename Fn>
 SonareError run_note_set_edit(const char* name, const float* samples, size_t length,
                               int sample_rate, const float* f0_hz, const float* voiced_prob,
                               const int32_t* voiced, size_t n_frames, float frame_rate,
                               const SonareNoteExtractorConfig* config,
                               const SonareNoteObject* notes, size_t note_count,
                               const float* envelopes, size_t envelope_count,
-                              SonareNoteObjectsResult* out, Fn apply) {
+                              SonareNoteObjectsResult* out, Check check, Fn apply) {
   const SonareError track_error =
       validate_track_args(f0_hz, voiced_prob, voiced, n_frames, frame_rate);
   if (track_error != SONARE_OK) return track_error;
   SONARE_C_REQUIRE_NONNULL_WHEN_COUNT(notes, note_count);
+  const SonareError span_error = validate_note_spans(notes, note_count, n_frames);
+  if (span_error != SONARE_OK) return span_error;
+  const SonareError argument_error = check();
+  if (argument_error != SONARE_OK) return argument_error;
 
   editing::note_model::NoteExtractorConfig extractor_config;
   const SonareError config_error = resolve_extractor_config(config, extractor_config);
@@ -483,6 +521,8 @@ SonareError run_note_set_edit(const char* name, const float* samples, size_t len
   }
 
   return run_offline(name, samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    const SonareError cadence_error = validate_track_cadence(frame_rate, sample_rate);
+    if (cadence_error != SONARE_OK) return cadence_error;
     const editing::pitch_editor::F0Track track =
         make_track(f0_hz, voiced_prob, voiced, n_frames, frame_rate, sample_rate,
                    extractor_config.voiced_threshold);
@@ -815,16 +855,18 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
   const SonareError config_error = resolve_extractor_config(config, extractor_config);
   if (config_error != SONARE_OK) return config_error;
 
-  return run_offline("samples", samples, length, sample_rate,
-                     [&](const Audio& audio) -> SonareError {
-                       const editing::pitch_editor::F0Track track =
-                           make_track(f0_hz, voiced_prob, voiced, n_frames, frame_rate, sample_rate,
-                                      extractor_config.voiced_threshold);
-                       // Extraction produces identity edits, so the result's envelope pool stays
-                       // NULL.
-                       return fill_note_objects_result(
-                           editing::note_model::extract_notes(audio, track, extractor_config), out);
-                     });
+  return run_offline(
+      "samples", samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+        const SonareError cadence_error = validate_track_cadence(frame_rate, sample_rate);
+        if (cadence_error != SONARE_OK) return cadence_error;
+        const editing::pitch_editor::F0Track track =
+            make_track(f0_hz, voiced_prob, voiced, n_frames, frame_rate, sample_rate,
+                       extractor_config.voiced_threshold);
+        // Extraction produces identity edits, so the result's envelope pool stays
+        // NULL.
+        return fill_note_objects_result(
+            editing::note_model::extract_notes(audio, track, extractor_config), out);
+      });
 #else
   return refuse_not_compiled_in(Feature::kPitchEditor, samples, length, sample_rate, f0_hz,
                                 voiced_prob, voiced, n_frames, frame_rate, config, out);
@@ -1012,10 +1054,18 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
       util::check::refuse_relation({"index", "note_count"}, "{0} must be less than {1}");
     });
   }
+  const auto check_frame = [&] {
+    if (frame > notes[index].frame_start && frame < notes[index].frame_end) return SONARE_OK;
+    return run_validation([&] {
+      const std::string note = "notes[" + std::to_string(index) + "]";
+      util::check::refuse_relation({"frame", note + ".frame_start", note + ".frame_end"},
+                                   "{0} must be greater than {1} and less than {2}");
+    });
+  };
 
   return run_note_set_edit("samples", samples, length, sample_rate, f0_hz, voiced_prob, voiced,
                            n_frames, frame_rate, config, notes, note_count, envelopes,
-                           envelope_count, out,
+                           envelope_count, out, check_frame,
                            [&](const Audio& audio, const editing::pitch_editor::F0Track& track,
                                const std::vector<editing::note_model::NoteObject>& core_notes,
                                const editing::note_model::NoteExtractorConfig& extractor_config) {
@@ -1051,10 +1101,18 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
     return run_validation(
         [&] { util::check::refuse_relation({"last", "note_count"}, "{0} must be less than {1}"); });
   }
+  const auto check_order = [&] {
+    if (notes[last].frame_end > notes[first].frame_start) return SONARE_OK;
+    return run_validation([&] {
+      util::check::refuse_relation({"notes[" + std::to_string(last) + "].frame_end",
+                                    "notes[" + std::to_string(first) + "].frame_start"},
+                                   "{0} must be greater than {1}");
+    });
+  };
 
   return run_note_set_edit("samples", samples, length, sample_rate, f0_hz, voiced_prob, voiced,
                            n_frames, frame_rate, config, notes, note_count, envelopes,
-                           envelope_count, out,
+                           envelope_count, out, check_order,
                            [&](const Audio& audio, const editing::pitch_editor::F0Track& track,
                                const std::vector<editing::note_model::NoteObject>& core_notes,
                                const editing::note_model::NoteExtractorConfig& extractor_config) {

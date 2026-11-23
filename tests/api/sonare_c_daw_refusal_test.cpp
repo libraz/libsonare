@@ -395,6 +395,56 @@ TEST_CASE("the note extraction entries refuse the track and config by name",
   CHECK(last_message() == "config.voiced_threshold must be finite and in [0, 1]");
 }
 
+TEST_CASE("the note set edits name a note span, split frame or merge order they refuse",
+          "[c_api][engine_refusal]") {
+  const std::vector<float> samples = make_samples();
+  std::vector<float> f0(kFrames, 220.0f);
+  std::vector<int32_t> voiced(kFrames, 1);
+  SonareNoteObjectsResult result{};
+  auto note = [](int32_t start, int32_t end) {
+    SonareNoteObject n{};
+    sonare_note_edit_init(&n.edit);
+    n.frame_start = start;
+    n.frame_end = end;
+    return n;
+  };
+  auto split = [&](const std::vector<SonareNoteObject>& notes, size_t index, int32_t frame) {
+    return sonare_split_note(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
+                             kFrames, 100.0f, nullptr, notes.data(), notes.size(), nullptr, 0,
+                             index, frame, &result);
+  };
+  auto merge = [&](const std::vector<SonareNoteObject>& notes, size_t first, size_t last) {
+    return sonare_merge_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
+                              kFrames, 100.0f, nullptr, notes.data(), notes.size(), nullptr, 0,
+                              first, last, &result);
+  };
+
+  CHECK(split({note(2, 8), note(4, 11)}, 0, 5) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "notes[1].frame_end must be at most n_frames");
+  CHECK(merge({note(-1, 4), note(5, 8)}, 0, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "notes[0].frame_start must be an integer of at least 0");
+  CHECK(merge({note(1, 4), note(6, 6)}, 0, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "notes[1].frame_start must be less than notes[1].frame_end");
+
+  CHECK(split({note(2, 8)}, 0, 8) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "frame must be greater than notes[0].frame_start and less than notes[0].frame_end");
+  CHECK(split({note(2, 8)}, 0, 40) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "frame must be greater than notes[0].frame_start and less than notes[0].frame_end");
+
+  CHECK(merge({note(6, 9), note(1, 4)}, 0, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "notes[1].frame_end must be greater than notes[0].frame_start");
+
+  // A frame rate above the sample rate leaves less than one sample per frame.
+  CHECK(sonare_extract_notes(samples.data(), kLength, kRate, f0.data(), nullptr, voiced.data(),
+                             kFrames, 30000.0f, nullptr,
+                             &result) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "frame_rate must be at most sample_rate");
+  CHECK(split({note(2, 8)}, 0, 5) == SONARE_OK);
+  sonare_free_note_objects_result(&result);
+}
+
 TEST_CASE("the note extraction entries refuse both voicing arrays given together",
           "[c_api][engine_refusal]") {
   const std::vector<float> samples = make_samples();

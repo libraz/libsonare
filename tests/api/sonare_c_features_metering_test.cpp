@@ -1079,6 +1079,20 @@ TEST_CASE("sonare_metering_spectrum", "[c_api]") {
     SonareSpectrumResult result = {};
     REQUIRE(sonare_metering_spectrum(samples.data(), samples.size(), 48000, 1500, 0, 0, 0.0f, 0.0f,
                                      &result) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          "n_fft must be a power of two in [1, 1073741824]");
+  }
+
+  SECTION("names a refused dB knob rather than leaving the message empty") {
+    auto samples = generate_sine(440.0f, 48000, 0.1f);
+    SonareSpectrumResult result = {};
+    REQUIRE(sonare_metering_spectrum(samples.data(), samples.size(), 48000, 0, 0, 0, -1.0f, 0.0f,
+                                     &result) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "db_ref must be finite and at least 0");
+    REQUIRE(sonare_metering_spectrum(samples.data(), samples.size(), 48000, 0, 0, 0, 0.0f,
+                                     std::numeric_limits<float>::quiet_NaN(),
+                                     &result) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) == "db_amin must be finite and at least 0");
   }
 }
 

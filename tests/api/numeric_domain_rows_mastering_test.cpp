@@ -314,6 +314,52 @@ SonareError probe_audio_silence_ratio(const std::string& param, double value) {
   return err;
 }
 
+/// Runs one spectrum entry with the row's member set and the other at its default (0).
+template <typename Call>
+SonareError probe_spectrum(const std::string& param, double value, Call call) {
+  const int n_fft = is_param(param, "n_fft") ? as_int(value) : 0;
+  const int octave_fraction = is_param(param, "octave_fraction") ? as_int(value) : 0;
+  SonareSpectrumResult out{};
+  const SonareError err = call(n_fft, octave_fraction, &out);
+  sonare_free_spectrum_result(&out);
+  return err;
+}
+
+SonareError probe_metering_spectrum(const std::string& param, double value) {
+  return probe_spectrum(param, value, [](int n_fft, int fraction, SonareSpectrumResult* out) {
+    return sonare_metering_spectrum(analysis_samples().data(), analysis_samples().size(),
+                                    kAnalysisRate, n_fft, 1, fraction, 0.0f, 0.0f, out);
+  });
+}
+
+SonareError probe_metering_spectrum_frame(const std::string& param, double value) {
+  return probe_spectrum(param, value, [](int n_fft, int fraction, SonareSpectrumResult* out) {
+    return sonare_metering_spectrum_frame(analysis_samples().data(), analysis_samples().size(),
+                                          kAnalysisRate, 0, n_fft, 1, fraction, 0.0f, 0.0f, out);
+  });
+}
+
+SonareError probe_audio_spectrum_entry(const std::string& param, double value, bool frame) {
+  SonareAudio* audio = nullptr;
+  REQUIRE(sonare_audio_from_buffer(analysis_samples().data(), analysis_samples().size(),
+                                   kAnalysisRate, &audio) == SONARE_OK);
+  const SonareError err =
+      probe_spectrum(param, value, [&](int n_fft, int fraction, SonareSpectrumResult* out) {
+        return frame ? sonare_audio_spectrum_frame(audio, 0, n_fft, 1, fraction, 0.0f, 0.0f, out)
+                     : sonare_audio_spectrum(audio, n_fft, 1, fraction, 0.0f, 0.0f, out);
+      });
+  sonare_audio_destroy(audio);
+  return err;
+}
+
+SonareError probe_audio_spectrum(const std::string& param, double value) {
+  return probe_audio_spectrum_entry(param, value, false);
+}
+
+SonareError probe_audio_spectrum_frame(const std::string& param, double value) {
+  return probe_audio_spectrum_entry(param, value, true);
+}
+
 SonareError probe_metering_detect_clipping(const std::string& param, double value) {
   const float threshold_db = is_param(param, "threshold_db") ? static_cast<float>(value) : -1.0f;
   SonareClippingResult out{};
@@ -866,6 +912,8 @@ const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"audio_silence_ratio", probe_audio_silence_ratio},
       {"audio_detect_clipping", probe_audio_detect_clipping},
+      {"audio_spectrum", probe_audio_spectrum},
+      {"audio_spectrum_frame", probe_audio_spectrum_frame},
       {"cqt_to_audio", probe_cqt_to_audio},
       {"frame_signal", probe_frame_signal},
       {"griffin_lim", probe_griffin_lim},
@@ -875,6 +923,8 @@ const std::map<std::string, Probe>& probes() {
       {"mel_to_stft", probe_mel_to_stft},
       {"metering_silence_ratio", probe_metering_silence_ratio},
       {"metering_detect_clipping", probe_metering_detect_clipping},
+      {"metering_spectrum", probe_metering_spectrum},
+      {"metering_spectrum_frame", probe_metering_spectrum_frame},
       {"mfcc_to_audio", probe_mfcc_to_audio},
       {"mfcc_to_mel", probe_mfcc_to_mel},
       {"pcen", probe_pcen},

@@ -364,6 +364,50 @@
       "sentinel": null
     },
     {
+      "entry": "audio_spectrum",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 1073741824,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "power_of_two",
+      "sentinel": 0
+    },
+    {
+      "entry": "audio_spectrum",
+      "param": "octave_fraction",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
+      "entry": "audio_spectrum_frame",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 1073741824,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "power_of_two",
+      "sentinel": 0
+    },
+    {
+      "entry": "audio_spectrum_frame",
+      "param": "octave_fraction",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
       "entry": "bass_chroma",
       "param": "hop_length",
       "kind": "integer",
@@ -3310,6 +3354,50 @@
       "hi_included": true,
       "stricter": null,
       "sentinel": null
+    },
+    {
+      "entry": "metering_spectrum",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 1073741824,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "power_of_two",
+      "sentinel": 0
+    },
+    {
+      "entry": "metering_spectrum",
+      "param": "octave_fraction",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
+    },
+    {
+      "entry": "metering_spectrum_frame",
+      "param": "n_fft",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 1073741824,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": "power_of_two",
+      "sentinel": 0
+    },
+    {
+      "entry": "metering_spectrum_frame",
+      "param": "octave_fraction",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": 0
     },
     {
       "entry": "mfcc",

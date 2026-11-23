@@ -5,6 +5,7 @@
 ///        room and framing C entries.
 
 #include "analysis/room_estimator.h"
+#include "c_api/editing_input_domains.h"
 #include "c_api/inverse_input_domains.h"
 #include "c_api/mastering_input_domains.h"
 #include "c_api/numeric_domain_row.h"
@@ -40,6 +41,14 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
     {"audio_silence_ratio", "frame_length", sonare::metering::kSilenceRatioFrameLengthDomain,
      nullptr},
     {"audio_silence_ratio", "hop_length", sonare::metering::kSilenceRatioHopLengthDomain, nullptr},
+    {"audio_spectrum", "n_fft", sonare::util::check::with_sentinel(kSpectrumNFftDomain, 0),
+     "power_of_two"},
+    {"audio_spectrum", "octave_fraction",
+     sonare::util::check::with_sentinel(kSpectrumOctaveFractionDomain, 0), nullptr},
+    {"audio_spectrum_frame", "n_fft", sonare::util::check::with_sentinel(kSpectrumNFftDomain, 0),
+     "power_of_two"},
+    {"audio_spectrum_frame", "octave_fraction",
+     sonare::util::check::with_sentinel(kSpectrumOctaveFractionDomain, 0), nullptr},
     {"cqt_to_audio", "n_frames", kInverseSpectrogramExtentDomain, nullptr},
     {"cqt_to_audio", "n_iter", kGriffinLimIterationsDomain, nullptr},
     {"cqt_to_audio", "sample_rate", sonare::kAudioSampleRateDomain, nullptr},
@@ -173,6 +182,14 @@ inline const NumericDomainRow kMasteringDomainRows[] = {
      nullptr},
     {"metering_silence_ratio", "hop_length", sonare::metering::kSilenceRatioHopLengthDomain,
      nullptr},
+    {"metering_spectrum", "n_fft", sonare::util::check::with_sentinel(kSpectrumNFftDomain, 0),
+     "power_of_two"},
+    {"metering_spectrum", "octave_fraction",
+     sonare::util::check::with_sentinel(kSpectrumOctaveFractionDomain, 0), nullptr},
+    {"metering_spectrum_frame", "n_fft", sonare::util::check::with_sentinel(kSpectrumNFftDomain, 0),
+     "power_of_two"},
+    {"metering_spectrum_frame", "octave_fraction",
+     sonare::util::check::with_sentinel(kSpectrumOctaveFractionDomain, 0), nullptr},
     {"mfcc_to_audio", "n_fft", sonare::kMelToAudioFftSizeDomain, "even"},
     {"mfcc_to_audio", "n_frames", sonare::kMelToStftFramesDomain, nullptr},
     {"mfcc_to_audio", "n_iter", sonare::kInverseIterationsDomain, nullptr},

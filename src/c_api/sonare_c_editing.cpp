@@ -34,7 +34,6 @@
 #include "rt/true_peak_fir.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
-#include "util/math_utils.h"
 #include "util/parameter_checks.h"
 
 using namespace sonare;
@@ -373,21 +372,22 @@ namespace {
 
 // Decode the shared spectrum config knobs (n_fft / smoothing / dB) from the C
 // args, applying the "0 = default, anything else outside the domain = error"
-// convention. Returns false (and the error code via *err) on an invalid value.
+// convention. Returns false (and the refusal's code via *err) on an invalid value.
 bool decode_spectrum_config(int n_fft, int apply_octave_smoothing, int octave_fraction,
                             float db_ref, float db_amin, metering::SpectrumConfig* cfg,
                             SonareError* err) {
-  // A `< 0` test would leave NaN and +Inf to the `> 0` substitution below.
-  if (n_fft < 0 || octave_fraction < 0 || !numeric::finite_non_negative(db_ref) ||
-      !numeric::finite_non_negative(db_amin)) {
-    *err = SONARE_ERROR_INVALID_PARAMETER;
-    return false;
-  }
+  *err = run_validation([&] {
+    if (n_fft != 0) util::check::power_of_two_within(n_fft, kSpectrumNFftDomain, "n_fft");
+    if (octave_fraction != 0) {
+      util::check::integer_within(octave_fraction, kSpectrumOctaveFractionDomain,
+                                  "octave_fraction");
+    }
+    // at_least refuses NaN and +Inf, which a `< 0` test would leave to the `> 0` substitution.
+    util::check::at_least(db_ref, 0.0, "db_ref");
+    util::check::at_least(db_amin, 0.0, "db_amin");
+  });
+  if (*err != SONARE_OK) return false;
   if (n_fft > 0) cfg->n_fft = n_fft;
-  if (!is_power_of_two(cfg->n_fft)) {
-    *err = SONARE_ERROR_INVALID_PARAMETER;
-    return false;
-  }
   cfg->apply_octave_smoothing = apply_octave_smoothing != 0;
   if (octave_fraction > 0) cfg->octave_fraction = octave_fraction;
   if (db_ref > 0.0f) cfg->db_ref = db_ref;
