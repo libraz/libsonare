@@ -9,6 +9,7 @@
 /// the whole editing model rests on.
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -55,6 +56,12 @@ bool is_valid_note_edit(const NoteEdit& edit) noexcept;
 ///          at the half-open endpoint: @p offset_sample may equal
 ///          @p audio_samples.
 bool is_valid_note_span(const NoteObject& note, int64_t audio_samples) noexcept;
+
+/// @brief Refuses a note whose span or edit fields @ref is_valid_note_span and
+///        @ref is_valid_note_edit reject, naming each field under @p subject_prefix
+///        (the span bound is skipped when @p audio_samples is negative).
+void validate_note_span_and_edit(const NoteObject& note, int64_t audio_samples,
+                                 const std::string& subject_prefix);
 
 /// @brief Validates one note's span and edit fields as @ref render_notes does.
 /// @details Exposed because the polyphonic chain makes the same per-note checks

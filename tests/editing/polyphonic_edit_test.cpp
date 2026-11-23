@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -1187,6 +1188,7 @@ TEST_CASE("analyze_polyphonic rejects the audio and the configurations its stage
   const sonare::Audio too_short = audio_of(std::vector<float>(100, 0.01f));
   REQUIRE(sonare::stft_frame_count(too_short.size(), polyphony_stft_defaults()) == 1);
   REQUIRE(code_of([&] { return analyze_polyphonic(too_short); }) == kInvalid);
+  REQUIRE_THROWS_WITH(analyze_polyphonic(too_short), Catch::Matchers::ContainsSubstring("audio"));
 
   // The contract also refuses an audio longer than the carried length can hold.
   // Not written: an int reaches 2 GSamples, so standing at that bound means
@@ -1461,6 +1463,8 @@ TEST_CASE("render_polyphonic rejects every note the render chain rejects, at eit
   std::swap(reversed.notes[1].onset_sample, reversed.notes[1].offset_sample);
   REQUIRE(reversed.notes[1].edit.is_identity());
   REQUIRE(code_of([&] { return render_polyphonic(reversed); }) == kInvalid);
+  REQUIRE_THROWS_WITH(render_polyphonic(reversed),
+                      Catch::Matchers::ContainsSubstring("analysis.notes[1].offset_sample"));
 
   // And the span checks end there. A span moved off the frames its mask spans is
   // not a rejection -- the mask decides which audio the note is and the span

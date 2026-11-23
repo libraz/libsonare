@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <numeric>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -19,6 +20,7 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::note_model {
 namespace {
@@ -34,8 +36,12 @@ void check_disjoint_spans(const std::vector<NoteObject>& notes) {
     return notes[a].onset_sample < notes[b].onset_sample;
   });
   for (size_t i = 1; i < order.size(); ++i) {
-    SONARE_CHECK(notes[order[i]].onset_sample >= notes[order[i - 1]].offset_sample,
-                 ErrorCode::InvalidParameter);
+    if (notes[order[i]].onset_sample < notes[order[i - 1]].offset_sample) {
+      util::check::refuse_relation(
+          {util::check::indexed_subject("notes", order[i], "onset_sample"),
+           util::check::indexed_subject("notes", order[i - 1], "offset_sample")},
+          "{0} must be at or after {1}");
+    }
   }
 }
 
@@ -160,12 +166,32 @@ bool has_usable_pitch(const std::vector<float>& f0_hz) noexcept {
 /// curve, so -1 cancels a component and 0 leaves it alone. Duration-preserving,
 /// so the segment keeps its length for the rest of the chain.
 Audio apply_pitch_curve(const Audio& segment, const NoteObject& note,
-                        const NoteRenderConfig& config) {
-  const PitchDecomposition split = decompose_pitch(note, config.decomposition);
+                        const NoteRenderConfig& config, size_t note_index) {
+  PitchDecomposition split;
+  try {
+    split = decompose_pitch(note, config.decomposition);
+  } catch (const SonareParameterRefusal& e) {
+    throw e.respelled(
+        e.code(),
+        [note_index](const std::string& subject) {
+          if (subject.compare(0, 5, "note.") == 0) {
+            return util::check::indexed_subject("notes", note_index, subject.substr(5).c_str());
+          }
+          if (subject == "config.vibrato_cutoff_hz") {
+            return std::string("config.decomposition.vibrato_cutoff_hz");
+          }
+          return subject;
+        },
+        e.caller_spelled());
+  }
   const size_t n = note.f0_hz.values.size();
   // Unreachable while validation and decompose_pitch agree on what a usable
   // curve is; an error rather than a skip so that they cannot part silently.
-  SONARE_CHECK(split.drift.size() == n, ErrorCode::InvalidParameter);
+  if (split.drift.size() != n) {
+    util::check::finite_float(
+        note.median_hz, util::check::indexed_subject("notes", note_index, "median_hz").c_str());
+    SONARE_CHECK(split.drift.size() == n, ErrorCode::InvalidParameter);
+  }
 
   std::vector<float> deltas(n);
   for (size_t i = 0; i < n; ++i) {
@@ -187,10 +213,98 @@ Audio apply_pitch_curve(const Audio& segment, const NoteObject& note,
   track.sample_rate = segment.sample_rate();
   track.frame_rate_hz = note.f0_hz.frame_rate_hz;
 
-  return pitch_editor::PitchCorrector().resynthesize(segment, track, deltas);
+  try {
+    return pitch_editor::PitchCorrector().resynthesize(segment, track, deltas);
+  } catch (const SonareParameterRefusal& e) {
+    if (e.subject().compare(0, 17, "deltas_semitones[") != 0) throw;
+    const std::string drift_subject =
+        util::check::indexed_subject("notes", note_index, "edit.drift_change");
+    const std::string vibrato_subject =
+        util::check::indexed_subject("notes", note_index, "edit.vibrato_depth_change");
+    if (note.edit.drift_change != 0.0f && note.edit.vibrato_depth_change != 0.0f) {
+      throw SonareParameterRefusal::relation(e.code(), {drift_subject, vibrato_subject},
+                                             "{0} and {1} must keep the pitch correction finite");
+    }
+    util::check::refuse(
+        note.edit.drift_change != 0.0f ? drift_subject.c_str() : vibrato_subject.c_str(),
+        "must keep the pitch correction finite");
+  }
+}
+
+void validate_note_for_render_fields(const NoteObject& note, int64_t audio_samples,
+                                     const std::string& subject_prefix) {
+  validate_note_span_and_edit(note, audio_samples, subject_prefix);
+  const auto subject = [&subject_prefix](const char* field) { return subject_prefix + field; };
+  const NoteEdit& edit = note.edit;
+  if (edit.vibrato_depth_change != 0.0f || edit.drift_change != 0.0f) {
+    const bool has_pitch = note.median_hz > 0.0f && note.f0_hz.frame_rate_hz > 0.0f &&
+                           has_usable_pitch(note.f0_hz.values);
+    if (!has_pitch && edit.vibrato_depth_change != 0.0f) {
+      util::check::refuse(subject("edit.vibrato_depth_change").c_str(),
+                          "must be 0 when the note has no usable pitch curve");
+    }
+    if (!has_pitch && edit.drift_change != 0.0f) {
+      util::check::refuse(subject("edit.drift_change").c_str(),
+                          "must be 0 when the note has no usable pitch curve");
+    }
+  }
 }
 
 }  // namespace
+
+void validate_note_span_and_edit(const NoteObject& note, int64_t audio_samples,
+                                 const std::string& subject_prefix) {
+  const auto subject = [&subject_prefix](const char* field) { return subject_prefix + field; };
+  if (note.onset_sample < 0) {
+    util::check::integer_at_least(note.onset_sample, 0, subject("onset_sample").c_str());
+  }
+  if (!(note.offset_sample > note.onset_sample)) {
+    util::check::refuse_relation({subject("offset_sample"), subject("onset_sample")},
+                                 "{0} must be greater than {1}");
+  }
+  if (audio_samples >= 0 && note.offset_sample > audio_samples) {
+    util::check::integer_in_range(note.offset_sample, 0, audio_samples,
+                                  subject("offset_sample").c_str());
+  }
+
+  const NoteEdit& edit = note.edit;
+  if (!std::isfinite(edit.pitch_shift_semitones)) {
+    util::check::finite_float(edit.pitch_shift_semitones, subject("edit.pitch_semitones").c_str());
+  }
+  if (!std::isfinite(edit.gain_db)) {
+    util::check::finite_float(edit.gain_db, subject("edit.gain_db").c_str());
+  }
+  if (!(std::isfinite(edit.time_stretch_ratio) && edit.time_stretch_ratio > 0.0f)) {
+    util::check::greater_than(edit.time_stretch_ratio, 0.0,
+                              subject("edit.time_stretch_ratio").c_str());
+  }
+  if (!std::isfinite(edit.formant_shift_semitones)) {
+    util::check::finite_float(edit.formant_shift_semitones,
+                              subject("edit.formant_semitones").c_str());
+  }
+  if (!std::isfinite(edit.vibrato_depth_change)) {
+    util::check::finite_float(edit.vibrato_depth_change,
+                              subject("edit.vibrato_depth_change").c_str());
+  }
+  if (!std::isfinite(edit.drift_change)) {
+    util::check::finite_float(edit.drift_change, subject("edit.drift_change").c_str());
+  }
+  const float linear_gain = db_to_linear(edit.gain_db);
+  if (!std::isfinite(linear_gain)) {
+    util::check::refuse(subject("edit.gain_db").c_str(), "must produce a finite linear gain");
+  }
+  for (const float value : edit.amplitude_envelope) {
+    if (!(std::isfinite(value) && value >= 0.0f)) {
+      util::check::at_least(value, 0.0, subject("edit.amplitude_envelope").c_str());
+    }
+    const double combined_gain = static_cast<double>(linear_gain) * static_cast<double>(value);
+    if (!(std::isfinite(combined_gain) &&
+          combined_gain <= static_cast<double>(std::numeric_limits<float>::max()))) {
+      util::check::refuse_relation({subject("edit.amplitude_envelope"), subject("edit.gain_db")},
+                                   "{0} must produce finite gain when combined with {1}");
+    }
+  }
+}
 
 void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
                 int64_t fade) {
@@ -223,47 +337,43 @@ bool is_valid_note_span(const NoteObject& note, int64_t audio_samples) noexcept 
 }
 
 void validate_note_for_render(const NoteObject& note, int64_t audio_samples) {
-  // Check the ordering and the optional audio bound before deriving a length:
-  // malformed INT64_MIN/MAX pairs must never reach a signed subtraction.
-  SONARE_CHECK(note.onset_sample >= 0 && note.offset_sample > note.onset_sample,
-               ErrorCode::InvalidParameter);
-  if (audio_samples >= 0) {
-    SONARE_CHECK(is_valid_note_span(note, audio_samples), ErrorCode::InvalidParameter);
-  }
-  const NoteEdit& edit = note.edit;
-  SONARE_CHECK(is_valid_note_edit(edit), ErrorCode::InvalidParameter);
-  // A pitch-curve edit with no curve to read is a wiring bug, not a no-op.
-  // The frames are scanned too: a median can outlive every frame that
-  // produced it, and decompose_pitch reports such a note as unmeasured.
-  if (edit.vibrato_depth_change != 0.0f || edit.drift_change != 0.0f) {
-    SONARE_CHECK(note.median_hz > 0.0f && note.f0_hz.frame_rate_hz > 0.0f &&
-                     has_usable_pitch(note.f0_hz.values),
-                 ErrorCode::InvalidParameter);
-  }
+  validate_note_for_render_fields(note, audio_samples, "note.");
 }
 
 void validate_note_for_render(const NoteObject& note) { validate_note_for_render(note, -1); }
 
 void validate_render_config(const NoteRenderConfig& config) {
-  SONARE_CHECK(std::isfinite(config.fade_ms) && config.fade_ms >= 0.0f,
-               ErrorCode::InvalidParameter);
+  util::check::at_least(config.fade_ms, 0.0, "config.fade_ms");
 }
 
 Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
                    const NoteRenderConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", "must not be empty");
   validate_render_config(config);
 
   bool all_identity = true;
-  for (const NoteObject& note : notes) {
-    validate_note_for_render(note, static_cast<int64_t>(audio.size()));
+  for (size_t i = 0; i < notes.size(); ++i) {
+    const NoteObject& note = notes[i];
+    try {
+      validate_note_for_render_fields(note, static_cast<int64_t>(audio.size()), "note.");
+    } catch (const SonareParameterRefusal& e) {
+      throw e.respelled(
+          e.code(),
+          [i](const std::string& subject) {
+            if (subject.compare(0, 5, "note.") == 0) {
+              return util::check::indexed_subject("notes", i, subject.substr(5).c_str());
+            }
+            return subject;
+          },
+          e.caller_spelled());
+    }
     all_identity = all_identity && note.edit.is_identity();
   }
   check_disjoint_spans(notes);
 
   // Nothing to resynthesize: the source passes through unchanged, bit for bit.
   if (all_identity) {
-    SONARE_CHECK(numeric::all_finite(audio.data(), audio.size()), ErrorCode::InvalidParameter);
+    validate_offline_audio_samples("audio", audio.data(), audio.size(), 0);
     return Audio::from_buffer(audio.data(), audio.size(), audio.sample_rate());
   }
 
@@ -273,7 +383,8 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
   // Vacate every edited source span before rendering any destination. A moved
   // note may land on another edited note's source span, so erasing one note
   // while rendering the next would otherwise remove an earlier destination.
-  for (const NoteObject& note : notes) {
+  for (size_t i = 0; i < notes.size(); ++i) {
+    const NoteObject& note = notes[i];
     if (note.edit.is_identity()) continue;
 
     const int64_t onset = note.onset_sample;
@@ -289,7 +400,8 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
 
   // Render in vector order after clearing all edited source spans. Later notes
   // overwrite earlier destinations, with an edge blend against existing audio.
-  for (const NoteObject& note : notes) {
+  for (size_t i = 0; i < notes.size(); ++i) {
+    const NoteObject& note = notes[i];
     if (note.edit.is_identity() || note.edit.muted) continue;
 
     const int64_t onset = note.onset_sample;
@@ -299,7 +411,7 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     // buffer.
     Audio staged = audio.slice_samples(static_cast<size_t>(onset), static_cast<size_t>(offset));
     if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
-      staged = apply_pitch_curve(staged, note, config);
+      staged = apply_pitch_curve(staged, note, config, i);
     }
     if (note.edit.time_stretch_ratio != 1.0f) {
       TimeStretchConfig stretch_config;

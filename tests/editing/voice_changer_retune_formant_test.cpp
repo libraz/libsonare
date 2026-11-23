@@ -1,6 +1,8 @@
 /// @file voice_changer_retune_formant_test.cpp
 /// @brief Retune and formant voice changer tests.
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 #include "voice_changer_test_helpers.h"
 
 TEST_CASE("StreamingRetune shifts block pitch up an octave", "[voice_changer]") {
@@ -483,6 +485,12 @@ TEST_CASE("VoiceChanger combines pitch and formant controls", "[voice_changer]")
   REQUIRE(!changed.empty());
   REQUIRE(changed.sample_rate() == audio.sample_rate());
   REQUIRE_THAT(changed.duration(), WithinRel(audio.duration(), 0.05f));
+}
+
+TEST_CASE("VoiceChanger names the empty audio it refuses", "[voice_changer]") {
+  const sonare::Audio empty_audio;
+  REQUIRE_THROWS_WITH(VoiceChanger().process(empty_audio),
+                      Catch::Matchers::ContainsSubstring("audio must not be empty"));
 }
 
 TEST_CASE("VoiceChanger rejects a non-finite pitch instead of reporting a no-op success",

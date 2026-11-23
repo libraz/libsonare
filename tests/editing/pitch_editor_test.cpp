@@ -550,6 +550,9 @@ TEST_CASE("ScaleQuantizer validates only the reference MIDI domain", "[pitch_edi
     REQUIRE_THROWS_AS(ScaleQuantizer({0, 0b101010110101, reference}), sonare::SonareException);
   }
 
+  CHECK_THROWS_WITH(ScaleQuantizer({0, 0b101010110101, nan}),
+                    "reference_midi must be finite and in [0, 127]");
+
   for (const float reference : {0.0f, std::nextafter(0.0f, 1.0f), 69.5f,
                                 std::nextafter(kMaxReferenceMidi, 0.0f), kMaxReferenceMidi}) {
     CAPTURE(reference);
@@ -999,6 +1002,16 @@ TEST_CASE("PitchCorrector refuses each parameter under its own core name", "[pit
   CHECK(text_of([&] { corrector.estimate_median_midi(track); }) ==
         "voiced must mark at least one frame whose f0_hz is greater than 0");
 
+  track = good;
+  track.f0_hz[5] = std::numeric_limits<float>::denorm_min();
+  CHECK(text_of([&] { corrector.correct_to_scale_timevarying(audio, track); }) ==
+        "f0_hz[5] must yield a finite pitch correction delta");
+  PitchCorrectionConfig no_retune;
+  no_retune.retune_amount = 0.0f;
+  CHECK(text_of([&] {
+          PitchCorrector(no_retune).correct_to_midi_timevarying(audio, track, 70.0f);
+        }) == "f0_hz[5] must yield a finite pitch correction delta");
+
   const std::vector<float> deltas(16, 0.0f);
   CHECK(text_of([&] { corrector.resynthesize(audio, good, deltas, 0.0, 0.5); }) ==
         "samples_per_frame must be finite and at least 1");
@@ -1006,6 +1019,10 @@ TEST_CASE("PitchCorrector refuses each parameter under its own core name", "[pit
         "deltas_semitones must have the same length as f0_hz");
   CHECK(text_of([&] { corrector.resynthesize(audio, good, deltas, nan); }) ==
         "frame_origin_sample must be finite");
+  std::vector<float> non_finite_deltas = deltas;
+  non_finite_deltas[5] = nan;
+  CHECK(text_of([&] { corrector.resynthesize(audio, good, non_finite_deltas); }) ==
+        "deltas_semitones[5] must be finite and in [-3.4028235e38, 3.4028235e38]");
   const sonare::Audio no_audio = sonare::Audio::from_vector(std::vector<float>{}, sample_rate);
   CHECK(text_of([&] { corrector.resynthesize(no_audio, good, deltas); }) ==
         "audio must not be empty");
@@ -1018,6 +1035,9 @@ TEST_CASE("PitchCorrector refuses each parameter under its own core name", "[pit
           corrector.resynthesize_window(audio, good, std::vector<float>(3, 0.0f), 0.0, 256.0, 0,
                                         16);
         }) == "window_deltas must have the same length as f0_hz");
+  CHECK(text_of([&] {
+          corrector.resynthesize_window(audio, good, non_finite_deltas, 0.0, 256.0, 0, 16);
+        }) == "window_deltas[5] must be finite and in [-3.4028235e38, 3.4028235e38]");
 }
 
 TEST_CASE("PitchCorrector constant MIDI transpose reaches its target independent of sample rate",
@@ -1918,6 +1938,7 @@ TEST_CASE("NoteEditor rejects invalid fade configuration", "[pitch_editor]") {
     } catch (const sonare::SonareException& error) {
       threw = true;
       CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()) == "fade_ms must be finite and at least 0");
     }
     CHECK(threw);
   }
@@ -2049,6 +2070,10 @@ TEST_CASE("NoteEditor refuses a move target with no room in the buffer", "[pitch
   region.onset_sample = 400;
   region.offset_sample = 600;
   NoteEditor editor({5.0f, sonare::StretchBackend::NativeSpectral});
+
+  const sonare::Audio empty_audio = sonare::Audio::from_vector(std::vector<float>{}, sample_rate);
+  CHECK_THROWS_WITH(editor.move_note(empty_audio, region, 0), "audio must not be empty");
+  CHECK_THROWS_WITH(editor.stretch_note(empty_audio, region, 1.0f), "audio must not be empty");
 
   // The vacated span is ramped out before the paste, so a target with nowhere to
   // land used to erase the note and write it nowhere, under a successful return.

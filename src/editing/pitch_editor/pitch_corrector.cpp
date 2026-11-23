@@ -152,7 +152,8 @@ bool clamp_log2_to_bounds(double& value, double lower, double upper, float sourc
 
 Audio resynthesize_validated(const Audio& audio, const F0Track& track,
                              const std::vector<float>& deltas_semitones, double frame_origin_sample,
-                             double samples_per_frame, int first_frame, int total_frames);
+                             double samples_per_frame, int first_frame, int total_frames,
+                             const char* deltas_subject = nullptr);
 
 }  // namespace
 
@@ -574,9 +575,12 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
 // Everything resynthesize does once the track and curve have been validated.
 Audio resynthesize_validated(const Audio& audio, const F0Track& track,
                              const std::vector<float>& deltas_semitones, double frame_origin_sample,
-                             double samples_per_frame, int first_frame, int total_frames) {
-  SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
-               ErrorCode::InvalidParameter);
+                             double samples_per_frame, int first_frame, int total_frames,
+                             const char* deltas_subject) {
+  if (audio.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    check::refuse("audio", "must hold at most " + std::to_string(std::numeric_limits<int>::max()) +
+                               " samples");
+  }
   const int n_samples = static_cast<int>(audio.size());
   const double sample_rate = static_cast<double>(audio.sample_rate());
   const double min_target_log2 = std::log2(sample_rate / static_cast<double>(n_samples));
@@ -591,7 +595,16 @@ Audio resynthesize_validated(const Audio& audio, const F0Track& track,
   for (int frame = 0; frame < n_frames; ++frame) {
     const size_t index = static_cast<size_t>(frame);
     const float requested = deltas_semitones[index];
-    SONARE_CHECK(std::isfinite(requested), ErrorCode::InvalidParameter);
+    if (!std::isfinite(requested)) {
+      const std::string subject =
+          std::string(deltas_subject == nullptr ? "f0_hz" : deltas_subject) + "[" +
+          std::to_string(index) + "]";
+      if (deltas_subject == nullptr) {
+        // A positive subnormal F0 can underflow in the Hz-to-MIDI conversion.
+        check::refuse(subject.c_str(), "must yield a finite pitch correction delta");
+      }
+      check::refuse(subject.c_str(), util::refusal::kFloatRangePredicate);
+    }
     if (!track.voiced[index]) continue;
 
     double source = std::log2(static_cast<double>(track.f0_hz[index]));
@@ -688,7 +701,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   refuse_non_finite_origin(frame_origin_sample);
   validate_f0_track(audio, track);
   return resynthesize_validated(audio, track, deltas_semitones, frame_origin_sample,
-                                samples_per_frame, 0, track.n_frames());
+                                samples_per_frame, 0, track.n_frames(), "deltas_semitones");
 }
 
 Audio PitchCorrector::resynthesize_window(const Audio& audio, const F0Track& window,
@@ -715,7 +728,7 @@ Audio PitchCorrector::resynthesize_window(const Audio& audio, const F0Track& win
   refuse_non_finite_origin(frame_origin_sample);
   validate_f0_track(audio, window);
   return resynthesize_validated(audio, window, window_deltas, frame_origin_sample,
-                                samples_per_frame, first_frame, total_frames);
+                                samples_per_frame, first_frame, total_frames, "window_deltas");
 }
 
 }  // namespace sonare::editing::pitch_editor

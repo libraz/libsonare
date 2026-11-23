@@ -6,6 +6,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -16,9 +17,12 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::polyphony {
 namespace {
+
+namespace check = sonare::util::check;
 
 using sonare::constants::kCentsPerOctave;
 using sonare::constants::kPi;
@@ -73,62 +77,96 @@ double refine_ceiling_hz(const SharedBinConfig& config, double sample_rate, doub
 }
 
 void check_config(const SharedBinConfig& config) {
-  SONARE_CHECK(config.window_frames >= kMinWindowFrames && config.window_frames <= kMaxWindowFrames,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.min_partial_separation) &&
-                   config.min_partial_separation > 0.0f && config.min_partial_separation <= kPi,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.max_fit_residual) && config.max_fit_residual > 0.0f &&
-                   config.max_fit_residual <= 1.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.max_weight_modulus) && config.max_weight_modulus >= 1.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.max_refine_hz) && config.max_refine_hz >= 0.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.f0_tolerance_cents) && config.f0_tolerance_cents > 0.0f &&
-                   config.f0_tolerance_cents <= kCentsPerOctave,
-               ErrorCode::InvalidParameter);
+  check::integer_in_range(config.window_frames, kMinWindowFrames, kMaxWindowFrames,
+                          "config.window_frames");
+  check::in_interval(config.min_partial_separation, 0.0, false, kPi, true,
+                     "config.min_partial_separation");
+  check::in_interval(config.max_fit_residual, 0.0, false, 1.0, true, "config.max_fit_residual");
+  check::at_least(config.max_weight_modulus, 1.0, "config.max_weight_modulus");
+  check::at_least(config.max_refine_hz, 0.0, "config.max_refine_hz");
+  check::in_interval(config.f0_tolerance_cents, 0.0, false, kCentsPerOctave, true,
+                     "config.f0_tolerance_cents");
 }
 
 void check_inputs(const StftGeometry& geometry, const NoteMaskSet& masks, const MultiF0Track& track,
-                  const SharedBinConfig& config) {
-  SONARE_CHECK(!geometry.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(geometry.n_fft > 0 && geometry.hop_length > 0 && geometry.sample_rate > 0,
-               ErrorCode::InvalidParameter);
+                  const SharedBinConfig& config, const std::string& geometry_subject) {
+  if (geometry.empty()) {
+    check::refuse(geometry_subject.c_str(), "must not be empty");
+  }
+  check::integer_at_least(geometry.n_fft, 1, (geometry_subject + ".n_fft").c_str());
+  check::integer_at_least(geometry.hop_length, 1, (geometry_subject + ".hop_length").c_str());
+  check::integer_at_least(geometry.sample_rate, 1, (geometry_subject + ".sample_rate").c_str());
   // The hop and the rate as well as the sizes: a set from another framing indexes
   // the same array while meaning different times.
-  SONARE_CHECK(masks.n_bins == geometry.n_bins && masks.n_frames == geometry.n_frames &&
-                   masks.hop_length == geometry.hop_length &&
-                   masks.sample_rate == geometry.sample_rate,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(masks.notes.size() == track.ridges.size(), ErrorCode::InvalidParameter);
+  if (masks.n_bins != geometry.n_bins) {
+    check::refuse_relation({"masks.n_bins", geometry_subject + ".n_bins"}, "{0} must equal {1}");
+  }
+  if (masks.n_frames != geometry.n_frames) {
+    check::refuse_relation({"masks.n_frames", geometry_subject + ".n_frames"},
+                           "{0} must equal {1}");
+  }
+  if (masks.hop_length != geometry.hop_length) {
+    check::refuse_relation({"masks.hop_length", geometry_subject + ".hop_length"},
+                           "{0} must equal {1}");
+  }
+  if (masks.sample_rate != geometry.sample_rate) {
+    check::refuse_relation({"masks.sample_rate", geometry_subject + ".sample_rate"},
+                           "{0} must equal {1}");
+  }
+  if (masks.notes.size() != track.ridges.size()) {
+    check::refuse_relation({"masks.notes", "track.ridges"},
+                           "{0} must have the same number of entries as {1}");
+  }
   // Read rather than carried here, so its shape is checked here: the set's own note
   // says a stage that interprets the claims validates the geometry for itself, and
   // a vector shorter than the notes would quietly read the scalar for the rest.
   // These are effective stretches, so a negative one is not a refusal but a value
   // partial_claims refuses, and a NaN passes every comparison that would catch it.
-  SONARE_CHECK(masks.inharmonicity.empty() || masks.inharmonicity.size() == masks.notes.size(),
-               ErrorCode::InvalidParameter);
-  for (const float stretch : masks.inharmonicity) {
-    SONARE_CHECK(std::isfinite(stretch) && stretch >= 0.0f, ErrorCode::InvalidParameter);
+  if (!(masks.inharmonicity.empty() || masks.inharmonicity.size() == masks.notes.size())) {
+    check::refuse_relation({"masks.inharmonicity", "masks.notes"},
+                           "{0} must be empty or have one value per entry in {1}");
+  }
+  for (size_t i = 0; i < masks.inharmonicity.size(); ++i) {
+    check::at_least(masks.inharmonicity[i], 0.0,
+                    ("masks.inharmonicity[" + std::to_string(i) + "]").c_str());
   }
   // The track carries the instants the ridges mean, so a hop or a rate of its own
   // indexes the same frames while describing different times.
-  SONARE_CHECK(track.n_frames == geometry.n_frames && track.hop_length == geometry.hop_length &&
-                   track.sample_rate == geometry.sample_rate,
-               ErrorCode::InvalidParameter);
-  for (const F0Ridge& ridge : track.ridges) {
-    SONARE_CHECK(
-        ridge.frame_start >= 0 && !ridge.f0_hz.empty() && ridge.frame_end() <= geometry.n_frames,
-        ErrorCode::InvalidParameter);
+  if (track.n_frames != geometry.n_frames) {
+    check::refuse_relation({"track.n_frames", geometry_subject + ".n_frames"},
+                           "{0} must equal {1}");
+  }
+  if (track.hop_length != geometry.hop_length) {
+    check::refuse_relation({"track.hop_length", geometry_subject + ".hop_length"},
+                           "{0} must equal {1}");
+  }
+  if (track.sample_rate != geometry.sample_rate) {
+    check::refuse_relation({"track.sample_rate", geometry_subject + ".sample_rate"},
+                           "{0} must equal {1}");
+  }
+  for (size_t i = 0; i < track.ridges.size(); ++i) {
+    const F0Ridge& ridge = track.ridges[i];
+    const std::string ridge_path = "track.ridges[" + std::to_string(i) + "]";
+    check::integer_at_least(ridge.frame_start, 0, (ridge_path + ".frame_start").c_str());
+    if (ridge.f0_hz.empty()) check::refuse((ridge_path + ".f0_hz").c_str(), "must not be empty");
+    if (ridge.frame_end() > geometry.n_frames) {
+      check::refuse_relation(
+          {ridge_path + ".frame_start", ridge_path + ".f0_hz", geometry_subject + ".n_frames"},
+          "{0} plus the length of {1} must be at most {2}");
+    }
     // The same standard build_note_masks holds the same struct to: a value one
     // entry point refuses and another absorbs is where a validation gap hides.
-    for (const float f0_hz : ridge.f0_hz) {
-      SONARE_CHECK(std::isfinite(f0_hz) && f0_hz > 0.0f, ErrorCode::InvalidParameter);
+    for (size_t j = 0; j < ridge.f0_hz.size(); ++j) {
+      const float hz = ridge.f0_hz[j];
+      if (!(std::isfinite(hz) && hz > 0.0f)) {
+        check::refuse_outside(check::real_domain_above(0.0, false),
+                              (ridge_path + ".f0_hz[" + std::to_string(j) + "]").c_str());
+      }
     }
   }
-  for (const NoteMask& mask : masks.notes) {
-    detail::check_mask_shape(mask, masks.n_bins, masks.n_frames);
+  for (size_t i = 0; i < masks.notes.size(); ++i) {
+    detail::check_mask_shape(masks.notes[i], masks.n_bins, masks.n_frames,
+                             "masks.notes[" + std::to_string(i) + "]", "masks.n_frames");
   }
   check_config(config);
 }
@@ -512,8 +550,8 @@ std::vector<float> refine_from_claims(const StftGeometry& geometry, const Cells&
 template <typename Cells>
 void solve_in_place(const StftGeometry& geometry, const Cells& at, NoteMaskSet& masks,
                     const MultiF0Track& track, const SharedBinConfig& config,
-                    SharedBinReport* report) {
-  check_inputs(geometry, masks, track, config);
+                    SharedBinReport* report, const std::string& geometry_subject) {
+  check_inputs(geometry, masks, track, config, geometry_subject);
 
   std::vector<size_t> bin_start;
   std::vector<BinClaim> claims;
@@ -750,11 +788,19 @@ void solve_in_place(const StftGeometry& geometry, const Cells& at, NoteMaskSet& 
 /// rest, then solves in place.
 void solve_over_cells(const MaskedCells& cells, NoteMaskSet& masks, const MultiF0Track& track,
                       const SharedBinConfig& config, SharedBinReport* report) {
-  SONARE_CHECK(cells.notes.size() == masks.notes.size(), ErrorCode::InvalidParameter);
-  for (size_t i = 0; i < masks.notes.size(); ++i) {
-    SONARE_CHECK(cells.notes[i].size() == masks.notes[i].bins.size(), ErrorCode::InvalidParameter);
+  if (cells.notes.size() != masks.notes.size()) {
+    check::refuse_relation({"cells.notes", "masks.notes"},
+                           "{0} must have the same number of entries as {1}");
   }
-  solve_in_place(cells.geometry, SparseCells{&cells}, masks, track, config, report);
+  for (size_t i = 0; i < masks.notes.size(); ++i) {
+    if (cells.notes[i].size() != masks.notes[i].bins.size()) {
+      check::refuse_relation(
+          {"cells.notes[" + std::to_string(i) + "]", "masks.notes[" + std::to_string(i) + "].bins"},
+          "{0} must have the same number of entries as {1}");
+    }
+  }
+  solve_in_place(cells.geometry, SparseCells{&cells}, masks, track, config, report,
+                 "cells.geometry");
 }
 
 }  // namespace
@@ -762,7 +808,7 @@ void solve_over_cells(const MaskedCells& cells, NoteMaskSet& masks, const MultiF
 std::vector<float> refine_track_f0(const Spectrogram& spec, const MultiF0Track& track,
                                    const NoteMaskSet& masks, const SharedBinConfig& config) {
   const StftGeometry geometry = geometry_of(spec);
-  check_inputs(geometry, masks, track, config);
+  check_inputs(geometry, masks, track, config, "spec");
 
   std::vector<size_t> bin_start;
   std::vector<BinClaim> claims;
@@ -776,7 +822,7 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
                               SharedBinReport* report) {
   NoteMaskSet result = masks;
   solve_in_place(geometry_of(spec), DenseCells{spec.complex_data(), spec.n_frames()}, result, track,
-                 config, report);
+                 config, report, "spec");
   return result;
 }
 
@@ -785,7 +831,7 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, NoteMaskSet&& masks,
                               SharedBinReport* report) {
   NoteMaskSet result = std::move(masks);
   solve_in_place(geometry_of(spec), DenseCells{spec.complex_data(), spec.n_frames()}, result, track,
-                 config, report);
+                 config, report, "spec");
   return result;
 }
 

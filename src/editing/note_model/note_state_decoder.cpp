@@ -312,7 +312,7 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
   std::vector<std::int8_t> back_q(n, 0);
   const std::size_t n_cells = util::check::element_count(
       static_cast<std::uint64_t>(n), static_cast<std::uint64_t>(nb),
-      resource::kMaxOfflineAudioSamples, "fmin_hz", "the trellis backpointers");
+      resource::kMaxOfflineAudioSamples, "f0_min_hz", "the trellis backpointers");
   std::vector<std::int8_t> back_a(n_cells, 0);
   std::vector<std::int8_t> back_s(n_cells, 0);
   std::vector<std::int32_t> top1_at(n, 0);

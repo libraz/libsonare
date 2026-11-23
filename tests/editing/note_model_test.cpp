@@ -2,6 +2,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -1007,18 +1008,23 @@ TEST_CASE("render_notes rejects malformed spans, edits and config", "[note_model
   };
 
   const sonare::Audio empty_audio;
-  REQUIRE_THROWS_AS(render_notes(empty_audio, {edited(0, 1600)}), sonare::SonareException);
+  REQUIRE_THROWS_WITH(render_notes(empty_audio, {edited(0, 1600)}),
+                      Catch::Matchers::ContainsSubstring("audio"));
 
   // Empty and reversed spans.
-  REQUIRE_THROWS_AS(render_notes(audio, {edited(1920, 1920)}), sonare::SonareException);
-  REQUIRE_THROWS_AS(render_notes(audio, {edited(4000, 1920)}), sonare::SonareException);
+  REQUIRE_THROWS_WITH(render_notes(audio, {edited(1920, 1920)}),
+                      Catch::Matchers::ContainsSubstring("notes[0].offset_sample"));
+  REQUIRE_THROWS_WITH(render_notes(audio, {edited(4000, 1920)}),
+                      Catch::Matchers::ContainsSubstring("notes[0].offset_sample"));
 
   // A negative onset has no position in the source buffer.
-  REQUIRE_THROWS_AS(render_notes(audio, {edited(-160, 1600)}), sonare::SonareException);
+  REQUIRE_THROWS_WITH(render_notes(audio, {edited(-160, 1600)}),
+                      Catch::Matchers::ContainsSubstring("notes[0].onset_sample"));
 
   // Overlapping spans: the model is monophonic, so this is not a renderable set.
   const std::vector<NoteObject> overlapping = {edited(0, 3200), edited(1600, 4800)};
-  REQUIRE_THROWS_AS(render_notes(audio, overlapping), sonare::SonareException);
+  REQUIRE_THROWS_WITH(render_notes(audio, overlapping),
+                      Catch::Matchers::ContainsSubstring("notes[1].onset_sample"));
   // Adjacent spans share a boundary without overlapping and stay legal.
   const std::vector<NoteObject> adjacent = {edited(0, 3200), edited(3200, 4800)};
   REQUIRE_NOTHROW(render_notes(audio, adjacent));
@@ -1027,34 +1033,57 @@ TEST_CASE("render_notes rejects malformed spans, edits and config", "[note_model
     NoteObject pitch = edited(1920, 4800);
     pitch.edit.gain_db = 0.0f;
     pitch.edit.pitch_shift_semitones = bad;
-    REQUIRE_THROWS_AS(render_notes(audio, {pitch}), sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {pitch}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.pitch_semitones"));
 
     NoteObject gain = edited(1920, 4800);
     gain.edit.gain_db = bad;
-    REQUIRE_THROWS_AS(render_notes(audio, {gain}), sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {gain}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.gain_db"));
 
     NoteObject stretch = edited(1920, 4800);
     stretch.edit.time_stretch_ratio = bad;
-    REQUIRE_THROWS_AS(render_notes(audio, {stretch}), sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {stretch}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.time_stretch_ratio"));
   }
 
   // A non-positive stretch ratio has no length to render into.
-  for (const float ratio : {0.0f, -1.0f}) {
+  for (const float ratio : {0.0f, -1.0f, kInf}) {
     NoteObject stretch = edited(1920, 4800);
     stretch.edit.time_stretch_ratio = ratio;
-    REQUIRE_THROWS_AS(render_notes(audio, {stretch}), sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {stretch}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.time_stretch_ratio"));
   }
 
   for (const float fade_ms : {kNaN, kInf, -1.0f}) {
     NoteRenderConfig config;
     config.fade_ms = fade_ms;
-    REQUIRE_THROWS_AS(render_notes(audio, {edited(1920, 4800)}, config), sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {edited(1920, 4800)}, config),
+                        Catch::Matchers::ContainsSubstring("config.fade_ms"));
   }
 
   NoteRenderConfig valid;
   valid.fade_ms = 5.0f;
   valid.stretch_backend = sonare::StretchBackend::NativeSpectral;
   REQUIRE_NOTHROW(render_notes(audio, {edited(1920, 4800)}, valid));
+}
+
+TEST_CASE("note render validation names note and config fields", "[note_model]") {
+  NoteObject note = synthetic_note(0, 1600, 440.0f);
+  note.edit.formant_shift_semitones = kNaN;
+  REQUIRE_THROWS_WITH(validate_note_for_render(note),
+                      Catch::Matchers::ContainsSubstring("note.edit.formant_semitones"));
+
+  note = synthetic_note(0, 1600, 440.0f);
+  note.f0_hz.values.assign(note.f0_hz.values.size(), 0.0f);
+  note.edit.vibrato_depth_change = 1.0f;
+  REQUIRE_THROWS_WITH(validate_note_for_render(note),
+                      Catch::Matchers::ContainsSubstring("note.edit.vibrato_depth_change"));
+
+  NoteRenderConfig config;
+  config.fade_ms = kNaN;
+  REQUIRE_THROWS_WITH(validate_render_config(config),
+                      Catch::Matchers::ContainsSubstring("config.fade_ms"));
 }
 
 TEST_CASE("render_notes rejects source bounds outside the audio and at int64 extremes",
@@ -1065,7 +1094,8 @@ TEST_CASE("render_notes rejects source bounds outside the audio and at int64 ext
   // An otherwise valid note that reaches past the final sample must not be
   // silently clipped: clipping would hide a bad physical span from callers.
   NoteObject outside = synthetic_note(6399, 6401, 440.0f);
-  CHECK_THROWS_AS(render_notes(audio, {outside}), sonare::SonareException);
+  CHECK_THROWS_WITH(render_notes(audio, {outside}),
+                    Catch::Matchers::ContainsSubstring("notes[0].offset_sample"));
 
   // These spans have a positive mathematical length, but their positions are
   // not representable in this audio. They also exercise validation before any
@@ -1156,29 +1186,54 @@ TEST_CASE("extract_notes rejects a voicing array whose length is not the track's
   F0Track short_voiced = voiced_track(440.0f, 40);
   short_voiced.voiced.resize(39);
   REQUIRE(short_voiced.n_frames() == 40);
-  REQUIRE_THROWS_AS(extract_notes(audio, short_voiced), sonare::SonareException);
+  REQUIRE_THROWS_WITH(extract_notes(audio, short_voiced),
+                      Catch::Matchers::ContainsSubstring("track.voiced"));
 
   F0Track long_voiced = voiced_track(440.0f, 40);
   long_voiced.voiced.push_back(true);
-  REQUIRE_THROWS_AS(extract_notes(audio, long_voiced), sonare::SonareException);
+  REQUIRE_THROWS_WITH(extract_notes(audio, long_voiced),
+                      Catch::Matchers::ContainsSubstring("track.voiced"));
 
   // With no explicit flags the probabilities carry the decision, so their length
   // is the one that has to match.
   F0Track short_prob = voiced_track(440.0f, 40);
   short_prob.voiced.clear();
   short_prob.voiced_prob.resize(39);
-  REQUIRE_THROWS_AS(extract_notes(audio, short_prob), sonare::SonareException);
+  REQUIRE_THROWS_WITH(extract_notes(audio, short_prob),
+                      Catch::Matchers::ContainsSubstring("track.voiced_prob"));
 
   F0Track long_prob = voiced_track(440.0f, 40);
   long_prob.voiced.clear();
   long_prob.voiced_prob.push_back(1.0f);
-  REQUIRE_THROWS_AS(extract_notes(audio, long_prob), sonare::SonareException);
+  REQUIRE_THROWS_WITH(extract_notes(audio, long_prob),
+                      Catch::Matchers::ContainsSubstring("track.voiced_prob"));
 
   // voiced_prob is optional wherever voiced is populated, so an absent one is
   // not a mismatch.
   F0Track flags_only = voiced_track(440.0f, 40);
   flags_only.voiced_prob.clear();
   REQUIRE_NOTHROW(extract_notes(audio, flags_only));
+}
+
+TEST_CASE("extract_notes names empty inputs, rate mismatches and config fields", "[note_model]") {
+  const F0Track track = voiced_track(440.0f, 40);
+  REQUIRE_THROWS_WITH(extract_notes(sonare::Audio{}, track),
+                      Catch::Matchers::ContainsSubstring("audio"));
+
+  F0Track no_frames = track;
+  no_frames.f0_hz.clear();
+  REQUIRE_THROWS_WITH(extract_notes(tone(440.0f, 0.5f, 6400), no_frames),
+                      Catch::Matchers::ContainsSubstring("track.f0_hz"));
+
+  F0Track wrong_rate = track;
+  wrong_rate.sample_rate = kSampleRate / 2;
+  REQUIRE_THROWS_WITH(extract_notes(tone(440.0f, 0.5f, 6400), wrong_rate),
+                      Catch::Matchers::ContainsSubstring("track.sample_rate"));
+
+  NoteExtractorConfig config;
+  config.voiced_threshold = kNaN;
+  REQUIRE_THROWS_WITH(extract_notes(tone(440.0f, 0.5f, 6400), track, config),
+                      Catch::Matchers::ContainsSubstring("config.voiced_threshold"));
 }
 
 TEST_CASE("render_notes ignores the other edit fields of a muted note", "[note_model]") {
@@ -1339,7 +1394,8 @@ TEST_CASE("render_notes rejects a non-finite formant shift", "[note_model]") {
     NoteObject note = synthetic_note(1920, 4800, 440.0f);
     note.edit.formant_shift_semitones = bad;
     REQUIRE_FALSE(note.edit.is_identity());
-    REQUIRE_THROWS_AS(render_notes(audio, {note}), sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {note}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.formant_semitones"));
   }
 
   // A wide but finite shift is an edit, not an error.
@@ -1528,11 +1584,23 @@ TEST_CASE("render_notes rejects a non-finite or negative amplitude envelope valu
   };
 
   for (const float bad : {kNaN, kInf, -kInf, -0.1f}) {
-    REQUIRE_THROWS_AS(render_notes(audio, {with_envelope({bad})}), sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {with_envelope({bad})}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.amplitude_envelope"));
     // Not only the first entry.
-    REQUIRE_THROWS_AS(render_notes(audio, {with_envelope({1.0f, 0.5f, bad})}),
-                      sonare::SonareException);
+    REQUIRE_THROWS_WITH(render_notes(audio, {with_envelope({1.0f, 0.5f, bad})}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.amplitude_envelope"));
   }
+
+  NoteObject overflowing_product = with_envelope({std::numeric_limits<float>::max()});
+  overflowing_product.edit.gain_db = 20.0f;
+  REQUIRE_THROWS_WITH(render_notes(audio, {overflowing_product}),
+                      Catch::Matchers::ContainsSubstring("notes[0].edit.amplitude_envelope"));
+
+  NoteObject second_note = with_envelope({-1.0f});
+  second_note.onset_sample = 4800;
+  second_note.offset_sample = 6400;
+  REQUIRE_THROWS_WITH(render_notes(audio, {synthetic_note(0, 3200, 440.0f), second_note}),
+                      Catch::Matchers::ContainsSubstring("notes[1].edit.amplitude_envelope"));
 
   // Zero is a legal envelope value: silencing part of a note is an edit.
   REQUIRE_NOTHROW(render_notes(audio, {with_envelope({0.0f, 1.0f})}));
@@ -1540,6 +1608,26 @@ TEST_CASE("render_notes rejects a non-finite or negative amplitude envelope valu
 }
 
 // --- make_note ------------------------------------------------------------
+
+TEST_CASE("make_note names frame and window bounds", "[note_model]") {
+  const sonare::Audio audio = tone(440.0f, 0.5f, 6400);
+  const F0Track track = voiced_track(440.0f, 40);
+  REQUIRE_THROWS_WITH(make_note(audio, track, -1, 5),
+                      Catch::Matchers::ContainsSubstring("frame_start"));
+
+  REQUIRE_THROWS_WITH(make_note(audio, -1, static_cast<int64_t>(audio.size()), track, 0, 5),
+                      Catch::Matchers::ContainsSubstring("segment_start"));
+
+  const F0Track window = voiced_track(440.0f, 10);
+  REQUIRE_THROWS_WITH(
+      make_note(audio, 0, static_cast<int64_t>(audio.size()), F0Track{}, 0, 20, 1, 5),
+      Catch::Matchers::ContainsSubstring("window.f0_hz"));
+  REQUIRE_THROWS_WITH(
+      make_note(audio, 0, static_cast<int64_t>(audio.size()), window, 15, 20, 15, 18),
+      Catch::Matchers::ContainsSubstring("first_frame"));
+  REQUIRE_THROWS_WITH(make_note(audio, 0, static_cast<int64_t>(audio.size()), window, 0, 20, 1, 11),
+                      Catch::Matchers::ContainsSubstring("frame_end"));
+}
 
 TEST_CASE("make_note reproduces the note extract_notes builds for the same span", "[note_model]") {
   const sonare::Audio audio = two_pitch_tone(6400);
@@ -2199,14 +2287,20 @@ TEST_CASE("split_note rejects an out-of-range index and a frame outside the note
   REQUIRE(notes[0].frame_end == 40);
 
   const std::vector<NoteObject> none;
-  REQUIRE_THROWS_AS(split_note(audio, track, none, 0, 20), sonare::SonareException);
-  REQUIRE_THROWS_AS(split_note(audio, track, notes, 1, 20), sonare::SonareException);
+  REQUIRE_THROWS_WITH(split_note(audio, track, none, 0, 20),
+                      Catch::Matchers::ContainsSubstring("index"));
+  REQUIRE_THROWS_WITH(split_note(audio, track, notes, 1, 20),
+                      Catch::Matchers::ContainsSubstring("index"));
 
   // Strictly inside the span, so neither end is a legal cut.
-  REQUIRE_THROWS_AS(split_note(audio, track, notes, 0, 0), sonare::SonareException);
-  REQUIRE_THROWS_AS(split_note(audio, track, notes, 0, 40), sonare::SonareException);
-  REQUIRE_THROWS_AS(split_note(audio, track, notes, 0, -1), sonare::SonareException);
-  REQUIRE_THROWS_AS(split_note(audio, track, notes, 0, 41), sonare::SonareException);
+  REQUIRE_THROWS_WITH(split_note(audio, track, notes, 0, 0),
+                      Catch::Matchers::ContainsSubstring("frame"));
+  REQUIRE_THROWS_WITH(split_note(audio, track, notes, 0, 40),
+                      Catch::Matchers::ContainsSubstring("frame"));
+  REQUIRE_THROWS_WITH(split_note(audio, track, notes, 0, -1),
+                      Catch::Matchers::ContainsSubstring("frame"));
+  REQUIRE_THROWS_WITH(split_note(audio, track, notes, 0, 41),
+                      Catch::Matchers::ContainsSubstring("frame"));
 
   // One frame in from either end is legal, and both halves keep a span.
   for (const int frame : {1, 39}) {
@@ -2226,15 +2320,19 @@ TEST_CASE("split_note and merge_notes reject negative stretch on every note", "[
   // The selected note is invalid in both operations.
   std::vector<NoteObject> selected_invalid = extracted;
   selected_invalid[0].edit.time_stretch_ratio = -1.0f;
-  CHECK_THROWS_AS(split_note(audio, track, selected_invalid, 0, 8), sonare::SonareException);
-  CHECK_THROWS_AS(merge_notes(audio, track, selected_invalid, 0, 1), sonare::SonareException);
+  CHECK_THROWS_WITH(split_note(audio, track, selected_invalid, 0, 8),
+                    Catch::Matchers::ContainsSubstring("notes[0].edit.time_stretch_ratio"));
+  CHECK_THROWS_WITH(merge_notes(audio, track, selected_invalid, 0, 1),
+                    Catch::Matchers::ContainsSubstring("notes[0].edit.time_stretch_ratio"));
 
   // The untouched/pass-through note is still an input to the operation and
   // must not be allowed to carry an invalid edit through the returned set.
   std::vector<NoteObject> pass_through_invalid = extracted;
   pass_through_invalid[1].edit.time_stretch_ratio = -1.0f;
-  CHECK_THROWS_AS(split_note(audio, track, pass_through_invalid, 0, 8), sonare::SonareException);
-  CHECK_THROWS_AS(merge_notes(audio, track, pass_through_invalid, 0, 1), sonare::SonareException);
+  CHECK_THROWS_WITH(split_note(audio, track, pass_through_invalid, 0, 8),
+                    Catch::Matchers::ContainsSubstring("notes[1].edit.time_stretch_ratio"));
+  CHECK_THROWS_WITH(merge_notes(audio, track, pass_through_invalid, 0, 1),
+                    Catch::Matchers::ContainsSubstring("notes[1].edit.time_stretch_ratio"));
 
   // Physical sample bounds are also part of native split/merge input. This
   // keeps repair_split_boundary and envelope coordinates away from signed
@@ -2441,15 +2539,20 @@ TEST_CASE("merge_notes rejects a first/last pair that is not an ascending in-ran
   REQUIRE(notes.size() == 3);
 
   // A run of one is not a merge, and a run cannot run backwards.
-  REQUIRE_THROWS_AS(merge_notes(audio, track, notes, 1, 1), sonare::SonareException);
-  REQUIRE_THROWS_AS(merge_notes(audio, track, notes, 2, 1), sonare::SonareException);
+  REQUIRE_THROWS_WITH(merge_notes(audio, track, notes, 1, 1),
+                      Catch::Matchers::ContainsSubstring("first"));
+  REQUIRE_THROWS_WITH(merge_notes(audio, track, notes, 2, 1),
+                      Catch::Matchers::ContainsSubstring("first"));
 
   // last indexes past the end, with and without first inside the list.
-  REQUIRE_THROWS_AS(merge_notes(audio, track, notes, 0, 3), sonare::SonareException);
-  REQUIRE_THROWS_AS(merge_notes(audio, track, notes, 3, 4), sonare::SonareException);
+  REQUIRE_THROWS_WITH(merge_notes(audio, track, notes, 0, 3),
+                      Catch::Matchers::ContainsSubstring("last"));
+  REQUIRE_THROWS_WITH(merge_notes(audio, track, notes, 3, 4),
+                      Catch::Matchers::ContainsSubstring("last"));
 
   const std::vector<NoteObject> none;
-  REQUIRE_THROWS_AS(merge_notes(audio, track, none, 0, 1), sonare::SonareException);
+  REQUIRE_THROWS_WITH(merge_notes(audio, track, none, 0, 1),
+                      Catch::Matchers::ContainsSubstring("last"));
 
   REQUIRE_NOTHROW(merge_notes(audio, track, notes, 0, 1));
   REQUIRE_NOTHROW(merge_notes(audio, track, notes, 0, 2));

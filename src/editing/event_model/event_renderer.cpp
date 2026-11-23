@@ -15,9 +15,12 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::event_model {
 namespace {
+
+namespace check = util::check;
 
 using sonare::constants::kHalfPi;
 
@@ -35,8 +38,11 @@ void check_disjoint_spans(const std::vector<PercussiveEvent>& events) {
     return events[a].onset_sample < events[b].onset_sample;
   });
   for (size_t i = 1; i < order.size(); ++i) {
-    SONARE_CHECK(events[order[i]].onset_sample >= events[order[i - 1]].offset_sample,
-                 ErrorCode::InvalidParameter);
+    if (events[order[i]].onset_sample < events[order[i - 1]].offset_sample) {
+      check::refuse_relation({check::indexed_subject("events", order[i], "onset_sample"),
+                              check::indexed_subject("events", order[i - 1], "offset_sample")},
+                             "{0} must be at least {1}");
+    }
   }
 }
 
@@ -65,8 +71,8 @@ float tail_gain(int64_t k, int64_t length, int64_t fade) noexcept {
 
 Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveEvent>& events,
                                const PercussiveEventRenderConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.fade_ms) && config.fade_ms > 0.0f, ErrorCode::InvalidParameter);
+  if (audio.empty()) check::refuse("audio", util::refusal::kNonEmptyPredicate);
+  check::greater_than(config.fade_ms, 0.0, "config.fade_ms");
   // Checked here rather than left to the HPSS call, which the identity path
   // never reaches: an unusable framing is an error on every set.
   const StftConfig framing = stft_for(config.separation);
@@ -76,12 +82,29 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
   const int64_t n_samples = static_cast<int64_t>(audio.size());
 
   bool all_identity = true;
-  for (const PercussiveEvent& event : events) {
-    SONARE_CHECK(event.onset_sample >= 0 && event.offset_sample > event.onset_sample &&
-                     event.offset_sample <= n_samples,
-                 ErrorCode::InvalidParameter);
-    SONARE_CHECK(std::isfinite(event.edit.gain_db), ErrorCode::InvalidParameter);
-    SONARE_CHECK(std::isfinite(db_to_linear(event.edit.gain_db)), ErrorCode::InvalidParameter);
+  for (size_t i = 0; i < events.size(); ++i) {
+    const PercussiveEvent& event = events[i];
+    if (event.onset_sample < 0) {
+      check::refuse_outside(check::integer_domain_at_least(0),
+                            check::indexed_subject("events", i, "onset_sample").c_str());
+    }
+    if (event.offset_sample <= event.onset_sample) {
+      check::refuse_relation({check::indexed_subject("events", i, "offset_sample"),
+                              check::indexed_subject("events", i, "onset_sample")},
+                             "{0} must be greater than {1}");
+    }
+    if (event.offset_sample > n_samples) {
+      check::refuse(check::indexed_subject("events", i, "offset_sample").c_str(),
+                    "must be at most the length of the input buffer");
+    }
+    if (!std::isfinite(event.edit.gain_db)) {
+      check::refuse(check::indexed_subject("events", i, "edit.gain_db").c_str(),
+                    util::refusal::kFloatRangePredicate);
+    }
+    if (!std::isfinite(db_to_linear(event.edit.gain_db))) {
+      check::refuse(check::indexed_subject("events", i, "edit.gain_db").c_str(),
+                    "must produce a finite linear gain");
+    }
     all_identity = all_identity && event.edit.is_identity();
   }
   check_disjoint_spans(events);
@@ -89,7 +112,7 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
   // Nothing to lift: the source passes through unchanged, bit for bit, and no
   // separation runs at all.
   if (all_identity) {
-    SONARE_CHECK(numeric::all_finite(audio.data(), audio.size()), ErrorCode::InvalidParameter);
+    validate_offline_audio_samples("audio", audio.data(), audio.size(), 0);
     return Audio::from_buffer(audio.data(), audio.size(), audio.sample_rate());
   }
 

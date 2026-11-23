@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <iterator>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "core/spectrum.h"
@@ -196,8 +197,10 @@ constexpr int kExplainedByTaken = -1;
 /// @p config with its F0 ceiling raised an octave, the axis the estimator searches.
 SalienceConfig search_range(const SalienceConfig& config) {
   // The kernel checks the raised ceiling, so the configured one is checked here.
-  SONARE_CHECK(std::isfinite(config.f0_max_hz) && config.f0_max_hz > config.f0_min_hz,
-               ErrorCode::InvalidParameter);
+  if (!(std::isfinite(config.f0_max_hz) && config.f0_max_hz > config.f0_min_hz)) {
+    util::check::refuse_relation({"f0_max_hz", "f0_min_hz"},
+                                 "{0} must be finite and greater than {1}");
+  }
   SalienceConfig search = config;
   search.f0_max_hz = 2.0f * config.f0_max_hz;
   return search;
@@ -209,19 +212,13 @@ MultiF0Estimator::MultiF0Estimator(const CentAxis& spectrum_axis, const MultiF0C
     : kernel_(spectrum_axis, search_range(config.salience)), config_(config) {
   // Bounded above as well as below because the iteration count is derived from
   // it; what 64 refuses is on MultiF0Config::max_polyphony.
-  SONARE_CHECK(config.max_polyphony >= 1 && config.max_polyphony <= kMaxPolyphonyVoices,
-               ErrorCode::InvalidParameter);
+  util::check::integer_in_range(config.max_polyphony, 1, kMaxPolyphonyVoices, "max_polyphony");
   // The last bin an axis ending at the configured ceiling would have carried.
   report_max_hz_ =
       kernel_.f0_axis().hz_at(std::ceil(kernel_.f0_axis().bin_at(config.salience.f0_max_hz)));
-  SONARE_CHECK(std::isfinite(config.min_frame_peak_ratio) && config.min_frame_peak_ratio >= 0.0f &&
-                   config.min_frame_peak_ratio <= 1.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.min_separation_cents) && config.min_separation_cents >= 0.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.subtraction_factor) && config.subtraction_factor > 0.0f &&
-                   config.subtraction_factor <= 1.0f,
-               ErrorCode::InvalidParameter);
+  util::check::in_range(config.min_frame_peak_ratio, 0.0, 1.0, "min_frame_peak_ratio");
+  util::check::at_least(config.min_separation_cents, 0.0, "min_separation_cents");
+  util::check::in_interval(config.subtraction_factor, 0.0, false, 1.0, true, "subtraction_factor");
 
   residual_.resize(static_cast<size_t>(kernel_.spectrum_axis().n_bins));
   salience_.resize(static_cast<size_t>(kernel_.f0_axis().n_bins));
@@ -356,30 +353,40 @@ int MultiF0Estimator::explaining_subharmonic(int peak, float peak_hz,
 
 std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>& frames,
                                      int hop_length, int sample_rate, const RidgeConfig& config) {
-  SONARE_CHECK(hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.max_jump_cents) && config.max_jump_cents > 0.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.min_ridge_peak_ratio) && config.min_ridge_peak_ratio >= 0.0f &&
-                   config.min_ridge_peak_ratio <= 1.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.min_duration_ms) && config.min_duration_ms >= 0.0f,
-               ErrorCode::InvalidParameter);
+  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  util::check::greater_than(config.max_jump_cents, 0.0, "max_jump_cents");
+  util::check::in_range(config.min_ridge_peak_ratio, 0.0, 1.0, "min_ridge_peak_ratio");
+  util::check::at_least(config.min_duration_ms, 0.0, "min_duration_ms");
   if (!(std::isfinite(config.reattack_ratio) &&
         (config.reattack_ratio == 0.0f || config.reattack_ratio > 1.0f))) {
     util::check::refuse_relation({"reattack_ratio"}, "{0} must be 0 or finite and greater than 1");
   }
-  SONARE_CHECK(std::isfinite(config.max_gap_ms) && config.max_gap_ms >= 0.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.attack_window_ms) && config.attack_window_ms >= 0.0f,
-               ErrorCode::InvalidParameter);
-  for (const std::vector<F0Candidate>& frame : frames) {
-    for (const F0Candidate& candidate : frame) {
+  util::check::at_least(config.max_gap_ms, 0.0, "max_gap_ms");
+  util::check::at_least(config.attack_window_ms, 0.0, "attack_window_ms");
+  for (std::size_t frame_index = 0; frame_index < frames.size(); ++frame_index) {
+    const std::vector<F0Candidate>& frame = frames[frame_index];
+    const auto indexed_candidate_subject = [frame_index](std::size_t candidate_index,
+                                                         const char* field) {
+      const std::string frame_path = "frames[" + std::to_string(frame_index) + "]";
+      return util::check::indexed_subject(frame_path.c_str(), candidate_index, field);
+    };
+    for (std::size_t candidate_index = 0; candidate_index < frame.size(); ++candidate_index) {
+      const F0Candidate& candidate = frame[candidate_index];
       // The salience too: a NaN would make the candidate ordering below
       // intransitive rather than merely arbitrary.
-      SONARE_CHECK(std::isfinite(candidate.f0_hz) && candidate.f0_hz > 0.0f &&
-                       std::isfinite(candidate.salience) && std::isfinite(candidate.attack_frames),
-                   ErrorCode::InvalidParameter);
+      if (!(std::isfinite(candidate.f0_hz) && candidate.f0_hz > 0.0f)) {
+        const std::string subject = indexed_candidate_subject(candidate_index, "f0_hz");
+        util::check::greater_than(candidate.f0_hz, 0.0, subject.c_str());
+      }
+      if (!std::isfinite(candidate.salience)) {
+        const std::string subject = indexed_candidate_subject(candidate_index, "salience");
+        util::check::finite_float(candidate.salience, subject.c_str());
+      }
+      if (!std::isfinite(candidate.attack_frames)) {
+        const std::string subject = indexed_candidate_subject(candidate_index, "attack_frames");
+        util::check::finite_float(candidate.attack_frames, subject.c_str());
+      }
     }
   }
 
@@ -596,7 +603,7 @@ MultiF0Track track_from_frames(const Audio& audio,
 
 MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
                               const MultiF0ExtractorConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   // Checked rather than trusted: a spectrogram of another framing would put every
   // ridge on frames it never measured.
   validate_reused_geometry(spec, polyphony_stft_at_rate(config.stft, audio.sample_rate()),
@@ -622,7 +629,7 @@ MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
 }
 
 MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const StftConfig stft = polyphony_stft_at_rate(config.stft, audio.sample_rate());
 
   // The cent spectrum reads one frame back for its phase advance, so each tile
@@ -636,6 +643,9 @@ MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& 
   MagnitudeHistory history(stft.n_fft / 2 + 1,
                            kAttackHistoryWindows * (stft.n_fft / stft.hop_length) + 1);
   for_each_stft_tile(audio, stft, 1, [&](const Spectrogram& tile, int first_frame, int discard) {
+    if (tile.n_frames() < 2) {
+      util::check::refuse("audio", "must produce at least two frames with the requested framing");
+    }
     const CentSpectrum spectrum = compute_cent_spectrum(tile, config.spectrum);
     if (!estimator) estimator.emplace(spectrum.axis, config.estimation);
     for (int frame = discard; frame < spectrum.n_frames; ++frame) {

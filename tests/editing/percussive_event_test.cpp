@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -1007,6 +1008,8 @@ TEST_CASE("extract_percussive_events rejects malformed audio and config", "[even
   const sonare::Audio empty_audio;
   REQUIRE(empty_audio.empty());
   REQUIRE(code_of([&] { extract_percussive_events(empty_audio); }) == kInvalid);
+  REQUIRE_THROWS_WITH(extract_percussive_events(empty_audio),
+                      Catch::Matchers::ContainsSubstring("audio must not be empty"));
 
   // The separation is an inverse STFT, so a framing that cannot be overlap-added
   // back is an error before any audio is read.
@@ -1023,6 +1026,8 @@ TEST_CASE("extract_percussive_events rejects malformed audio and config", "[even
     PercussiveEventExtractorConfig config;
     config.max_event_ms = bad;
     REQUIRE(code_of([&] { extract_percussive_events(audio, config); }) == kInvalid);
+    REQUIRE_THROWS_WITH(extract_percussive_events(audio, config),
+                        Catch::Matchers::ContainsSubstring("config.max_event_ms"));
   }
 
   for (const float bad : {-0.01f, -1.0f, 1.01f, 2.0f, kNaN, kInf, -kInf}) {
@@ -1030,6 +1035,8 @@ TEST_CASE("extract_percussive_events rejects malformed audio and config", "[even
     PercussiveEventExtractorConfig config;
     config.min_percussive_ratio = bad;
     REQUIRE(code_of([&] { extract_percussive_events(audio, config); }) == kInvalid);
+    REQUIRE_THROWS_WITH(extract_percussive_events(audio, config),
+                        Catch::Matchers::ContainsSubstring("config.min_percussive_ratio"));
   }
 
   // Both ends of the documented range are inside it.
@@ -1086,6 +1093,9 @@ TEST_CASE("render_percussive_events rejects malformed audio, spans, edits and co
   const std::vector<PercussiveEvent> adjacent = {edited_event(0, 22050),
                                                  edited_event(22050, 33075)};
   REQUIRE_NOTHROW(render_percussive_events(audio, adjacent));
+  REQUIRE_THROWS_WITH(render_percussive_events(audio, {overlapping[1], overlapping[0]}),
+                      Catch::Matchers::ContainsSubstring(
+                          "events[0].onset_sample must be at least events[1].offset_sample"));
 
   for (const float bad : {kNaN, kInf, -kInf}) {
     INFO("gain_db " << bad);
@@ -1093,6 +1103,8 @@ TEST_CASE("render_percussive_events rejects malformed audio, spans, edits and co
     event.edit.gain_db = bad;
     REQUIRE_FALSE(event.edit.is_identity());
     REQUIRE(code_of([&] { render_percussive_events(audio, {event}); }) == kInvalid);
+    REQUIRE_THROWS_WITH(render_percussive_events(audio, {edited_event(0, 4410), event}),
+                        Catch::Matchers::ContainsSubstring("events[1].edit.gain_db"));
   }
 
   // A zero-length fade is rejected, not degraded to a hard cut: what the fade
@@ -1105,6 +1117,8 @@ TEST_CASE("render_percussive_events rejects malformed audio, spans, edits and co
     REQUIRE(code_of([&] {
               render_percussive_events(audio, {edited_event(4410, 15435)}, config);
             }) == kInvalid);
+    REQUIRE_THROWS_WITH(render_percussive_events(audio, {}, config),
+                        Catch::Matchers::ContainsSubstring("config.fade_ms"));
   }
 
   // The renderer repeats the extraction's separation, so it is under the same

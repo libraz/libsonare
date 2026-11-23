@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -1000,6 +1001,27 @@ TEST_CASE("a rejected note anywhere in the set is rejected", "[polyphony_render]
       REQUIRE(code_of([&] { return render_masked_notes(spec, masks, notes, length); }) == kInvalid);
     }
   }
+}
+
+TEST_CASE("render_masked_notes names its caller fields", "[polyphony_render]") {
+  const sonare::Spectrogram spec = source_spectrogram();
+  const int length = static_cast<int>(kSourceSamples);
+  const MultiF0Track track = track_over(spec, {steady_ridge(kLowHz, 4, 12)});
+  const NoteMaskSet masks = build_note_masks(spec, track);
+
+  REQUIRE_THROWS_WITH(render_masked_notes(spec, masks, {valid_note()}, -1),
+                      Catch::Matchers::ContainsSubstring("length"));
+  REQUIRE_THROWS_WITH(render_masked_notes(spec, masks, {}, length),
+                      Catch::Matchers::ContainsSubstring("notes"));
+
+  NoteObject invalid = valid_note();
+  invalid.edit.pitch_shift_semitones = kNaN;
+  REQUIRE_THROWS_WITH(render_masked_notes(spec, masks, {invalid}, length),
+                      Catch::Matchers::ContainsSubstring("notes[0].edit.pitch_semitones"));
+
+  const sonare::Spectrogram empty;
+  REQUIRE_THROWS_WITH(render_masked_notes(empty, masks, {valid_note()}, length),
+                      Catch::Matchers::ContainsSubstring("spec"));
 }
 
 TEST_CASE("a config is refused up front or where it is read, and never only here",

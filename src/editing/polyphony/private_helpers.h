@@ -3,32 +3,58 @@
 #include <algorithm>
 #include <cstddef>
 #include <numeric>
+#include <string>
 #include <vector>
 
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
-#include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::polyphony::detail {
 
 /// Every bin and frame a mask names lands inside the spectrum, and its own
 /// sparse indexing is consistent.
-inline void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames) {
-  SONARE_CHECK(mask.n_frames >= 0 && mask.frame_start >= 0 && mask.frame_end() <= n_frames,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.frame_offset.size() == static_cast<size_t>(mask.n_frames) + 1,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.weights.size() == mask.bins.size(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.frame_offset.front() == 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(static_cast<size_t>(mask.frame_offset.back()) == mask.bins.size(),
-               ErrorCode::InvalidParameter);
-  for (size_t i = 1; i < mask.frame_offset.size(); ++i) {
-    SONARE_CHECK(mask.frame_offset[i] >= mask.frame_offset[i - 1], ErrorCode::InvalidParameter);
+inline void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames,
+                             const std::string& subject, const std::string& frame_count_subject) {
+  const std::string mask_n_frames = subject + ".n_frames";
+  const std::string mask_frame_start = subject + ".frame_start";
+  util::check::integer_at_least(mask.n_frames, 0, mask_n_frames.c_str());
+  util::check::integer_at_least(mask.frame_start, 0, mask_frame_start.c_str());
+  if (mask.frame_end() > n_frames) {
+    util::check::refuse_relation({mask_frame_start, mask_n_frames, frame_count_subject},
+                                 "{0} plus the number of {1} must be at most {2}");
   }
-  for (const int32_t bin : mask.bins) {
-    SONARE_CHECK(bin >= 0 && bin < n_bins, ErrorCode::InvalidParameter);
+  if (mask.frame_offset.size() != static_cast<size_t>(mask.n_frames) + 1) {
+    util::check::refuse_relation({subject + ".frame_offset", mask_n_frames},
+                                 "{0} must have {1} + 1 entries");
+  }
+  if (mask.weights.size() != mask.bins.size()) {
+    util::check::refuse_relation({subject + ".weights", subject + ".bins"},
+                                 "{0} and {1} must have the same number of entries");
+  }
+  if (mask.frame_offset.front() != 0) {
+    util::check::integer_in_range(mask.frame_offset.front(), 0, 0,
+                                  (subject + ".frame_offset[0]").c_str());
+  }
+  if (static_cast<size_t>(mask.frame_offset.back()) != mask.bins.size()) {
+    util::check::refuse_relation({subject + ".frame_offset", subject + ".bins"},
+                                 "{0} must end at the size of {1}");
+  }
+  for (size_t i = 1; i < mask.frame_offset.size(); ++i) {
+    if (mask.frame_offset[i] < mask.frame_offset[i - 1]) {
+      util::check::refuse_relation({subject + ".frame_offset[" + std::to_string(i) + "]",
+                                    subject + ".frame_offset[" + std::to_string(i - 1) + "]"},
+                                   "{0} must be at least {1}");
+    }
+  }
+  for (size_t i = 0; i < mask.bins.size(); ++i) {
+    const int32_t bin = mask.bins[i];
+    if (!(bin >= 0 && bin < n_bins)) {
+      util::check::integer_in_range(bin, 0, static_cast<long long>(n_bins) - 1,
+                                    (subject + ".bins[" + std::to_string(i) + "]").c_str());
+    }
   }
 }
 

@@ -9,7 +9,6 @@
 #include "core/convert.h"
 #include "core/spectrum.h"
 #include "util/db.h"
-#include "util/exception.h"
 #include "util/parameter_checks.h"
 
 namespace sonare::editing::event_model {
@@ -72,14 +71,12 @@ void check_percussive_extract_controls(int onset_wait, float onset_delta, float 
 
 std::vector<PercussiveEvent> extract_percussive_events(
     const Audio& audio, const PercussiveEventExtractorConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   // The separation inverts an STFT, so its framing has to overlap-add.
   const StftConfig framing = stft_for(config.separation);
   validate_cola_geometry(framing.n_fft, framing.hop_length);
-  SONARE_CHECK(std::isfinite(config.max_event_ms) && config.max_event_ms > 0.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.min_percussive_ratio >= 0.0f && config.min_percussive_ratio <= 1.0f,
-               ErrorCode::InvalidParameter);
+  util::check::greater_than(config.max_event_ms, 0.0, "config.max_event_ms");
+  util::check::in_range(config.min_percussive_ratio, 0.0, 1.0, "config.min_percussive_ratio");
 
   const HpssAudioResult separated = hpss(audio, config.separation.hpss, framing);
 

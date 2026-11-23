@@ -79,7 +79,7 @@ std::optional<SonareParameterRefusal> absolute_formant_reach_refusal(
 VoiceChanger::VoiceChanger(VoiceChangerConfig config) : config_(config) {}
 
 Audio VoiceChanger::process(const Audio& audio) const {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) check::refuse("audio", util::refusal::kNonEmptyPredicate);
   // The epsilon test below answers "is this near zero", and a NaN answers false
   // to every comparison -- so an unguarded NaN skipped the pitch branch
   // entirely and returned the input unchanged while reporting success. The

@@ -41,17 +41,18 @@ void check_region(const Audio& audio, const NoteRegion& region) {
 }  // namespace
 
 NoteEditor::NoteEditor(NoteEditorConfig config) : config_(config) {
-  SONARE_CHECK(std::isfinite(config_.fade_ms) && config_.fade_ms >= 0.0f,
-               ErrorCode::InvalidParameter);
+  util::check::at_least(config_.fade_ms, 0.0, "fade_ms");
 }
 
 Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
                             int target_onset_sample) const {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   // clamp_region stores the audio bound in an int, and the output indexing below
   // relies on that same bound. Reject an unrepresentable Audio before narrowing
   // its size or doing any region arithmetic.
-  SONARE_CHECK(audio.size() <= static_cast<std::size_t>(INT_MAX), ErrorCode::InvalidParameter);
+  if (audio.size() > static_cast<std::size_t>(INT_MAX)) {
+    util::check::refuse("audio", "must hold at most " + std::to_string(INT_MAX) + " samples");
+  }
   check_region(audio, region);
   NoteRegion clipped = clamp_region(audio, region);
   const int length = clipped.offset_sample - clipped.onset_sample;
@@ -88,10 +89,12 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
 
 Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
                                float stretch_ratio) const {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   // clamp_region narrows audio.size() to int below; reject an oversized buffer
   // before that conversion even when the edit would otherwise be a no-op.
-  SONARE_CHECK(audio.size() <= static_cast<std::size_t>(INT_MAX), ErrorCode::InvalidParameter);
+  if (audio.size() > static_cast<std::size_t>(INT_MAX)) {
+    util::check::refuse("audio", "must hold at most " + std::to_string(INT_MAX) + " samples");
+  }
   check_region(audio, region);
   util::check::greater_than(stretch_ratio, 0.0, "stretch_ratio");
   NoteRegion clipped = clamp_region(audio, region);

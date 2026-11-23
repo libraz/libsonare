@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -832,6 +833,15 @@ TEST_CASE("decompose_pitch rejects a non-finite or non-positive cutoff and frame
   }
 
   REQUIRE(code_of([&] { decompose_pitch(note); }) == ErrorCode::Ok);
+
+  PitchDecompositionConfig bad_config;
+  bad_config.vibrato_cutoff_hz = kInf;
+  REQUIRE_THROWS_WITH(decompose_pitch(note, bad_config),
+                      Catch::Matchers::ContainsSubstring("config.vibrato_cutoff_hz"));
+  NoteObject bad_cadence = note;
+  bad_cadence.f0_hz.frame_rate_hz = kInf;
+  REQUIRE_THROWS_WITH(decompose_pitch(bad_cadence),
+                      Catch::Matchers::ContainsSubstring("note.f0_hz.frame_rate_hz"));
 }
 
 TEST_CASE("decompose_pitch carries the note's cadence, offset and its own config back",
@@ -1091,11 +1101,13 @@ TEST_CASE("render_notes rejects a curve edit on a note with no pitch and renders
     NoteObject vibrato = no_pitch;
     vibrato.edit.vibrato_depth_change = change;
     INFO("vibrato_depth_change " << change);
-    REQUIRE(code_of([&] { render_notes(audio, {vibrato}); }) == ErrorCode::InvalidParameter);
+    REQUIRE_THROWS_WITH(render_notes(audio, {vibrato}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.vibrato_depth_change"));
 
     NoteObject drift = no_pitch;
     drift.edit.drift_change = change;
-    REQUIRE(code_of([&] { render_notes(audio, {drift}); }) == ErrorCode::InvalidParameter);
+    REQUIRE_THROWS_WITH(render_notes(audio, {drift}),
+                        Catch::Matchers::ContainsSubstring("notes[0].edit.drift_change"));
   }
 
   // The other half: the same note renders every other edit it is given.
@@ -1117,12 +1129,25 @@ TEST_CASE("render_notes rejects a curve edit on a note with no pitch and renders
   NoteObject no_curve = table_note(kNoteAStart, kNoteAEnd);
   no_curve.f0_hz.values.clear();
   no_curve.edit.vibrato_depth_change = 0.5f;
-  REQUIRE(code_of([&] { render_notes(audio, {no_curve}); }) == ErrorCode::InvalidParameter);
+  REQUIRE_THROWS_WITH(render_notes(audio, {no_curve}),
+                      Catch::Matchers::ContainsSubstring("notes[0].edit.vibrato_depth_change"));
 
   NoteObject no_cadence = table_note(kNoteAStart, kNoteAEnd);
   no_cadence.f0_hz.frame_rate_hz = 0.0f;
   no_cadence.edit.drift_change = 0.5f;
-  REQUIRE(code_of([&] { render_notes(audio, {no_cadence}); }) == ErrorCode::InvalidParameter);
+  REQUIRE_THROWS_WITH(render_notes(audio, {no_cadence}),
+                      Catch::Matchers::ContainsSubstring("notes[0].edit.drift_change"));
+
+  NoteObject unbounded_median = table_note(kNoteAStart, kNoteAEnd);
+  unbounded_median.median_hz = kInf;
+  unbounded_median.edit.vibrato_depth_change = 0.5f;
+  REQUIRE_THROWS_WITH(render_notes(audio, {unbounded_median}),
+                      Catch::Matchers::ContainsSubstring("notes[0].median_hz"));
+
+  NoteObject overflowing_delta = table_note(kNoteAStart, kNoteAEnd);
+  overflowing_delta.edit.vibrato_depth_change = std::numeric_limits<float>::max();
+  REQUIRE_THROWS_WITH(render_notes(audio, {overflowing_delta}),
+                      Catch::Matchers::ContainsSubstring("notes[0].edit.vibrato_depth_change"));
 }
 
 TEST_CASE("render_notes rejects a non-finite vibrato or drift change", "[note_pitch_curve]") {

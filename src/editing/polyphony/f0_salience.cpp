@@ -142,8 +142,8 @@ void for_each_stft_tile(
     const Audio& audio, const StftConfig& config, int overlap,
     const std::function<void(const Spectrogram& tile, int first_frame, int discard)>& fn) {
   const StftConfig checked = Validated<StftConfig>::make(config).get();
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(overlap >= 0 && overlap < kStftTileFrames, ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
+  util::check::integer_in_range(overlap, 0, kStftTileFrames - 1, "overlap");
 
   const int n_frames = stft_frame_count(audio.size(), checked);
   for (int first = 0; first < n_frames; first += kStftTileFrames) {
@@ -165,8 +165,8 @@ float CentAxis::bin_at(float hz) const {
 }
 
 std::vector<float> tonality_weights(const float* inst_freq_hz, int n_bins, float bin_hz) {
-  SONARE_CHECK(n_bins >= 2, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(bin_hz) && bin_hz > 0.0f, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(n_bins, 2, "n_bins");
+  util::check::greater_than(bin_hz, 0.0, "bin_hz");
 
   std::vector<float> weights(static_cast<size_t>(n_bins));
   for (int bin = 0; bin < n_bins; ++bin) {
@@ -195,7 +195,7 @@ float* CentSpectrum::column(int frame) {
 }
 
 CentSpectrum compute_cent_spectrum(const Spectrogram& spec, const CentSpectrumConfig& config) {
-  SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(spec.n_frames(), 2, "spec.n_frames");
   // Named rather than bare: these three are set straight through from every
   // binding, so the refusal is the only place a caller learns the bound.
   util::check::greater_than(config.ref_hz, 0.0, "ref_hz");
@@ -274,22 +274,20 @@ CentSpectrum compute_cent_spectrum(const Spectrogram& spec, const CentSpectrumCo
 }
 
 SalienceKernel::SalienceKernel(const CentAxis& spectrum_axis, const SalienceConfig& config) {
-  SONARE_CHECK(spectrum_axis.n_bins > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(spectrum_axis.ref_hz) && spectrum_axis.ref_hz > 0.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(spectrum_axis.cents_per_bin) && spectrum_axis.cents_per_bin >= 1.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(spectrum_axis.n_bins <= kMaxAxisBins, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_harmonics > 0 && config.n_harmonics <= kMaxSalienceHarmonics,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.f0_min_hz) && std::isfinite(config.f0_max_hz) &&
-                   config.f0_max_hz > config.f0_min_hz,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.f0_min_hz > 0.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.beta_hz) && config.beta_hz > 0.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.alpha_hz), ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.inharmonicity) && config.inharmonicity >= 0.0f,
-               ErrorCode::InvalidParameter);
+  util::check::integer_at_least(spectrum_axis.n_bins, 1, "spectrum_axis.n_bins");
+  util::check::greater_than(spectrum_axis.ref_hz, 0.0, "spectrum_axis.ref_hz");
+  util::check::at_least(spectrum_axis.cents_per_bin, 1.0, "spectrum_axis.cents_per_bin");
+  util::check::integer_in_range(spectrum_axis.n_bins, 1, kMaxAxisBins, "spectrum_axis.n_bins");
+  util::check::integer_in_range(config.n_harmonics, 1, kMaxSalienceHarmonics, "n_harmonics");
+  util::check::finite_float(config.f0_min_hz, "f0_min_hz");
+  if (!(std::isfinite(config.f0_max_hz) && config.f0_max_hz > config.f0_min_hz)) {
+    util::check::refuse_relation({"f0_max_hz", "f0_min_hz"},
+                                 "{0} must be finite and greater than {1}");
+  }
+  util::check::greater_than(config.f0_min_hz, 0.0, "f0_min_hz");
+  util::check::greater_than(config.beta_hz, 0.0, "beta_hz");
+  util::check::finite_float(config.alpha_hz, "alpha_hz");
+  util::check::at_least(config.inharmonicity, 0.0, "inharmonicity");
 
   spectrum_axis_ = spectrum_axis;
   // The F0 axis runs from f0_min_hz at the spectrum's own resolution, which is
@@ -395,10 +393,12 @@ const float* SalienceSurface::column(int frame) const {
 }
 
 SalienceSurface compute_salience(const CentSpectrum& spectrum, const SalienceConfig& config) {
-  SONARE_CHECK(spectrum.n_frames > 0 && spectrum.axis.n_bins > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(
-      spectrum.values.size() == static_cast<size_t>(spectrum.n_frames) * spectrum.axis.n_bins,
-      ErrorCode::InvalidParameter);
+  util::check::integer_at_least(spectrum.n_frames, 1, "spectrum.n_frames");
+  util::check::integer_at_least(spectrum.axis.n_bins, 1, "spectrum.axis.n_bins");
+  if (spectrum.values.size() !=
+      static_cast<size_t>(spectrum.n_frames) * static_cast<size_t>(spectrum.axis.n_bins)) {
+    util::check::refuse("spectrum.values", "must have one entry per frame and axis bin");
+  }
 
   const SalienceKernel kernel(spectrum.axis, config);
 

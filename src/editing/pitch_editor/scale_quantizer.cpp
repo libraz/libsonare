@@ -3,14 +3,12 @@
 #include <algorithm>
 #include <cmath>
 
-#include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::pitch_editor {
 
 ScaleQuantizer::ScaleQuantizer(ScaleQuantizerConfig config) : config_(config) {
-  SONARE_CHECK(std::isfinite(config_.reference_midi) && config_.reference_midi >= 0.0f &&
-                   config_.reference_midi <= kMaxReferenceMidi,
-               ErrorCode::InvalidParameter);
+  util::check::in_range(config_.reference_midi, 0.0, kMaxReferenceMidi, "reference_midi");
 }
 
 float ScaleQuantizer::quantize_midi(float midi) const noexcept {

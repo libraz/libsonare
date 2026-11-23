@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -2413,6 +2414,42 @@ TEST_CASE("both entry points reject a config outside its documented ranges",
     REQUIRE_NOTHROW(solve_shared_bins(spec, masks, track, entry.second));
     REQUIRE_NOTHROW(refine_track_f0(spec, track, masks, entry.second));
   }
+}
+
+TEST_CASE("shared-bin refusals name their caller fields", "[polyphony_shared_bins]") {
+  const sonare::Spectrogram spec = spectrogram_of_tones(
+      {ToneSpec{300.0, 0.3, 8, 1.0, 0.0, 0.0, 0.0}, ToneSpec{451.5, 0.25, 8, 1.4, 0.7, 0.0, 0.0}},
+      0.4f);
+  const MultiF0Track track = track_of_pitches(spec, {300.0f, 451.5f});
+  const NoteMaskSet masks = matched_masks(spec, track);
+
+  SharedBinConfig invalid_config;
+  invalid_config.window_frames = 1;
+  REQUIRE_THROWS_WITH(solve_shared_bins(spec, masks, track, invalid_config),
+                      Catch::Matchers::ContainsSubstring("config.window_frames"));
+  REQUIRE_THROWS_WITH(refine_track_f0(spec, track, masks, invalid_config),
+                      Catch::Matchers::ContainsSubstring("config.window_frames"));
+
+  MultiF0Track invalid_pitch = track;
+  invalid_pitch.ridges[0].f0_hz[0] = 0.0f;
+  REQUIRE_THROWS_WITH(solve_shared_bins(spec, masks, invalid_pitch),
+                      Catch::Matchers::ContainsSubstring("track.ridges[0].f0_hz[0]"));
+  REQUIRE_THROWS_WITH(refine_track_f0(spec, invalid_pitch, masks),
+                      Catch::Matchers::ContainsSubstring("track.ridges[0].f0_hz[0]"));
+
+  NoteMaskSet invalid_mask = masks;
+  invalid_mask.notes[0].bins[0] = spec.n_bins();
+  REQUIRE_THROWS_WITH(solve_shared_bins(spec, invalid_mask, track),
+                      Catch::Matchers::ContainsSubstring("masks.notes[0].bins[0]"));
+  REQUIRE_THROWS_WITH(refine_track_f0(spec, track, invalid_mask),
+                      Catch::Matchers::ContainsSubstring("masks.notes[0].bins[0]"));
+
+  sonare::Audio audio = spec.to_audio(0);
+  MaskedCells cells = read_masked_cells(audio, analysis_stft(), masks);
+  REQUIRE(cells.notes.size() == masks.notes.size());
+  cells.notes.pop_back();
+  REQUIRE_THROWS_WITH(solve_shared_bins(cells, masks, track),
+                      Catch::Matchers::ContainsSubstring("cells.notes"));
 }
 
 TEST_CASE("the report is optional and is replaced rather than added to",

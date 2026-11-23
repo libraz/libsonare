@@ -7,6 +7,7 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::note_model {
 namespace {
@@ -50,8 +51,7 @@ std::vector<float> moving_average(const std::vector<float>& values, int taps) {
 }  // namespace
 
 PitchDecomposition decompose_pitch(const NoteObject& note, const PitchDecompositionConfig& config) {
-  SONARE_CHECK(std::isfinite(config.vibrato_cutoff_hz) && config.vibrato_cutoff_hz > 0.0f,
-               ErrorCode::InvalidParameter);
+  util::check::greater_than(config.vibrato_cutoff_hz, 0.0, "config.vibrato_cutoff_hz");
 
   PitchDecomposition result;
   result.frame_rate_hz = note.f0_hz.frame_rate_hz;
@@ -78,8 +78,7 @@ PitchDecomposition decompose_pitch(const NoteObject& note, const PitchDecomposit
   if (first_usable == n) return result;
   // Below the short circuits, so a note with nothing to decompose never fails
   // on a cadence that could not have been read anyway.
-  SONARE_CHECK(note.f0_hz.frame_rate_hz > 0.0f && std::isfinite(note.f0_hz.frame_rate_hz),
-               ErrorCode::InvalidParameter);
+  util::check::greater_than(note.f0_hz.frame_rate_hz, 0.0, "note.f0_hz.frame_rate_hz");
   std::fill(cents.begin(), cents.begin() + static_cast<std::ptrdiff_t>(first_usable),
             cents[first_usable]);
 

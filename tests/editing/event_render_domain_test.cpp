@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -77,12 +78,16 @@ TEST_CASE("event renderer rejects extreme source spans before deriving their len
   REQUIRE(code_of([&] {
             sonare::editing::event_model::render_percussive_events(audio, {underflowing});
           }) == invalid);
+  REQUIRE_THROWS_WITH(sonare::editing::event_model::render_percussive_events(audio, {underflowing}),
+                      Catch::Matchers::ContainsSubstring("events[0].offset_sample"));
 
   const auto beyond_audio =
       event_span(std::numeric_limits<int64_t>::max() - 1, std::numeric_limits<int64_t>::max());
   REQUIRE(code_of([&] {
             sonare::editing::event_model::render_percussive_events(audio, {beyond_audio});
           }) == invalid);
+  REQUIRE_THROWS_WITH(sonare::editing::event_model::render_percussive_events(audio, {beyond_audio}),
+                      Catch::Matchers::ContainsSubstring("events[0].offset_sample"));
   REQUIRE(length > 0);
 }
 
@@ -104,6 +109,9 @@ TEST_CASE("event renderer validates converted gain on muted and audible events",
       REQUIRE(code_of([&] {
                 sonare::editing::event_model::render_percussive_events(audio, {event}, config);
               }) == invalid);
+      REQUIRE_THROWS_WITH(
+          sonare::editing::event_model::render_percussive_events(audio, {event}, config),
+          Catch::Matchers::ContainsSubstring("events[0].edit.gain_db"));
     }
   }
 }
@@ -121,6 +129,8 @@ TEST_CASE("event renderer rejects non-finite identity audio", "[event_render_dom
     REQUIRE(code_of([&] {
               sonare::editing::event_model::render_percussive_events(audio, {identity});
             }) == invalid);
+    REQUIRE_THROWS_WITH(sonare::editing::event_model::render_percussive_events(audio, {identity}),
+                        Catch::Matchers::ContainsSubstring("audio contains a non-finite sample"));
   }
 }
 

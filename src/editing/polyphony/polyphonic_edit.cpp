@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <string>
 #include <utility>
 
 #include "editing/polyphony/f0_salience.h"
@@ -10,19 +11,29 @@
 #include "editing/polyphony/masked_renderer.h"
 #include "editing/polyphony/shared_bins.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::polyphony {
 
+namespace check = sonare::util::check;
+
 PolyphonicAnalysis analyze_polyphonic(const Audio& audio, const PolyphonicEditConfig& config) {
   // Truncating here would describe a prefix of the source as the whole of it.
-  SONARE_CHECK(audio.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
-               ErrorCode::InvalidParameter);
+  if (audio.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    check::refuse("audio", "must hold at most " + std::to_string(std::numeric_limits<int>::max()) +
+                               " samples");
+  }
 
   PolyphonicAnalysis analysis;
   analysis.length = static_cast<int>(audio.size());
   analysis.spectrum = Spectrogram::compute(
       audio, polyphony_stft_at_rate(config.extraction.stft, audio.sample_rate()));
-  analysis.track = extract_multi_f0(audio, analysis.spectrum, config.extraction);
+  try {
+    analysis.track = extract_multi_f0(audio, analysis.spectrum, config.extraction);
+  } catch (const SonareParameterRefusal& e) {
+    if (e.code() != ErrorCode::InvalidParameter || e.subject() != "spec.n_frames") throw;
+    check::refuse("audio", "must produce at least two frames with the requested framing");
+  }
   analysis.masks = build_note_masks(analysis.spectrum, analysis.track, config.masks);
   if (config.estimate_inharmonicity) {
     // The fit reads the declared geometry to tell a contested partial from a clear
@@ -43,8 +54,10 @@ PolyphonicAnalysis analyze_polyphonic(const Audio& audio, const PolyphonicEditCo
 
 std::vector<note_model::NoteObject> transcribe_polyphonic(const Audio& audio,
                                                           const PolyphonicEditConfig& config) {
-  SONARE_CHECK(audio.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
-               ErrorCode::InvalidParameter);
+  if (audio.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    check::refuse("audio", "must hold at most " + std::to_string(std::numeric_limits<int>::max()) +
+                               " samples");
+  }
   // The fit reads the spectrum's magnitude over a ridge's frames, which no mask names.
   if (config.estimate_inharmonicity) return analyze_polyphonic(audio, config).notes;
 
@@ -60,8 +73,24 @@ std::vector<note_model::NoteObject> transcribe_polyphonic(const Audio& audio,
 
 Audio render_polyphonic(const PolyphonicAnalysis& analysis,
                         const note_model::NoteRenderConfig& config) {
-  return render_masked_notes(analysis.spectrum, analysis.masks, analysis.notes, analysis.length,
-                             config);
+  try {
+    return render_masked_notes(analysis.spectrum, analysis.masks, analysis.notes, analysis.length,
+                               config);
+  } catch (const SonareParameterRefusal& e) {
+    throw e.respelled(
+        e.code(),
+        [](const std::string& subject) {
+          if (subject == "spec" || subject.compare(0, 5, "spec.") == 0) {
+            return "analysis.spectrum" + subject.substr(4);
+          }
+          if (subject == "length" || subject == "masks" || subject == "notes" ||
+              subject.compare(0, 6, "masks.") == 0 || subject.compare(0, 6, "notes[") == 0) {
+            return "analysis." + subject;
+          }
+          return subject;
+        },
+        e.caller_spelled());
+  }
 }
 
 }  // namespace sonare::editing::polyphony

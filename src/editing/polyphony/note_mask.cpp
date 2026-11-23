@@ -5,6 +5,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -12,9 +13,12 @@
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/private_helpers.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::polyphony {
 namespace {
+
+namespace check = sonare::util::check;
 
 /// Past this a claim spans the whole spectrum at every framing, so the width is
 /// sizing a loop rather than describing a window.
@@ -62,40 +66,46 @@ void place_claims(float f0_hz, const NoteMaskConfig& config, double bins_per_hz,
 
 /// The framing and geometry checks @ref build_note_masks and @ref partial_claims
 /// share, so one cannot drift into accepting what the other refuses.
-void check_geometry(const StftGeometry& geometry, const NoteMaskConfig& config) {
-  SONARE_CHECK(!geometry.empty(), ErrorCode::InvalidParameter);
+void check_geometry(const StftGeometry& geometry, const NoteMaskConfig& config,
+                    const std::string& geometry_subject) {
+  if (geometry.empty()) {
+    check::refuse(geometry_subject.c_str(), "must not be empty");
+  }
   // A partial is a frequency read at one bin spacing over one lobe, so a
   // spectrogram carrying neither is not an input this can read.
-  SONARE_CHECK(geometry.n_fft > 0 && geometry.win_length > 0 && geometry.hop_length > 0 &&
-                   geometry.sample_rate > 0,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_harmonics >= 1 && config.n_harmonics <= kMaxNoteMaskHarmonics,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.claim_lobes) && config.claim_lobes > 0.0f &&
-                   config.claim_lobes <= kMaxClaimLobes,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.inharmonicity) && config.inharmonicity >= 0.0f,
-               ErrorCode::InvalidParameter);
+  check::integer_at_least(geometry.n_fft, 1, (geometry_subject + ".n_fft").c_str());
+  check::integer_at_least(geometry.win_length, 1, (geometry_subject + ".win_length").c_str());
+  check::integer_at_least(geometry.hop_length, 1, (geometry_subject + ".hop_length").c_str());
+  check::integer_at_least(geometry.sample_rate, 1, (geometry_subject + ".sample_rate").c_str());
+  check::integer_in_range(config.n_harmonics, 1, kMaxNoteMaskHarmonics, "config.n_harmonics");
+  check::in_interval(config.claim_lobes, 0.0, false, kMaxClaimLobes, true, "config.claim_lobes");
+  check::at_least(config.inharmonicity, 0.0, "config.inharmonicity");
 }
 
 /// Every bin and frame a mask names lands inside a @p n_bins x @p n_frames
 /// spectrum, and its own sparse indexing is consistent.
-void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames) {
-  detail::check_mask_shape(mask, n_bins, n_frames);
+void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames, const std::string& subject,
+                      const std::string& frame_count_subject) {
+  detail::check_mask_shape(mask, n_bins, n_frames, subject, frame_count_subject);
   // Zero or non-finite is not a shape error and would leave the total and the
   // residual wrong with no call having failed, which is worse than a rejection.
   // An estimated weight carries a phase and is not bounded above by one.
-  for (const std::complex<float>& weight : mask.weights) {
-    SONARE_CHECK(std::isfinite(weight.real()) && std::isfinite(weight.imag()) &&
-                     weight != std::complex<float>(0.0f, 0.0f),
-                 ErrorCode::InvalidParameter);
+  for (size_t i = 0; i < mask.weights.size(); ++i) {
+    const std::complex<float>& weight = mask.weights[i];
+    if (!(std::isfinite(weight.real()) && std::isfinite(weight.imag()) &&
+          weight != std::complex<float>(0.0f, 0.0f))) {
+      check::refuse((subject + ".weights[" + std::to_string(i) + "]").c_str(),
+                    "must be finite and nonzero");
+    }
   }
 }
 
 void check_set_shape(const NoteMaskSet& masks) {
-  SONARE_CHECK(masks.n_bins > 0 && masks.n_frames > 0, ErrorCode::InvalidParameter);
-  for (const NoteMask& mask : masks.notes) {
-    check_mask_shape(mask, masks.n_bins, masks.n_frames);
+  check::integer_at_least(masks.n_bins, 1, "masks.n_bins");
+  check::integer_at_least(masks.n_frames, 1, "masks.n_frames");
+  for (size_t i = 0; i < masks.notes.size(); ++i) {
+    const std::string subject = "masks.notes[" + std::to_string(i) + "]";
+    check_mask_shape(masks.notes[i], masks.n_bins, masks.n_frames, subject, "masks.n_frames");
   }
 }
 
@@ -129,13 +139,15 @@ Spectrogram scaled_like(const Spectrogram& spec, std::vector<std::complex<float>
 
 std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
                                          const NoteMaskConfig& config) {
-  return partial_claims(geometry_of(spec), f0_hz, config);
+  const StftGeometry geometry = geometry_of(spec);
+  if (geometry.empty()) check::refuse("spec", "must not be empty");
+  return partial_claims(geometry, f0_hz, config);
 }
 
 std::vector<PartialClaim> partial_claims(const StftGeometry& geometry, float f0_hz,
                                          const NoteMaskConfig& config) {
-  check_geometry(geometry, config);
-  SONARE_CHECK(std::isfinite(f0_hz) && f0_hz > 0.0f, ErrorCode::InvalidParameter);
+  check_geometry(geometry, config, "geometry");
+  check::greater_than(f0_hz, 0.0, "f0_hz");
 
   std::vector<PartialClaim> claims;
   place_claims(f0_hz, config, static_cast<double>(geometry.n_fft) / geometry.sample_rate,
@@ -145,13 +157,24 @@ std::vector<PartialClaim> partial_claims(const StftGeometry& geometry, float f0_
 
 NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                              const NoteMaskConfig& config) {
-  return build_note_masks(geometry_of(spec), track, config, std::vector<float>{});
+  return build_note_masks(spec, track, config, std::vector<float>{});
 }
 
 NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                              const NoteMaskConfig& config,
                              const std::vector<float>& per_ridge_stretch) {
-  return build_note_masks(geometry_of(spec), track, config, per_ridge_stretch);
+  const StftGeometry geometry = geometry_of(spec);
+  if (geometry.empty()) check::refuse("spec", "must not be empty");
+  try {
+    return build_note_masks(geometry, track, config, per_ridge_stretch);
+  } catch (const SonareParameterRefusal& e) {
+    throw e.respelled(
+        e.code(),
+        [](const std::string& subject) {
+          return subject.compare(0, 9, "geometry.") == 0 ? "spec" + subject.substr(8) : subject;
+        },
+        e.caller_spelled());
+  }
 }
 
 NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& track,
@@ -162,17 +185,35 @@ NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& t
 NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& track,
                              const NoteMaskConfig& config,
                              const std::vector<float>& per_ridge_stretch) {
-  check_geometry(geometry, config);
-  SONARE_CHECK(track.n_frames == geometry.n_frames && track.hop_length == geometry.hop_length &&
-                   track.sample_rate == geometry.sample_rate,
-               ErrorCode::InvalidParameter);
-  for (const F0Ridge& ridge : track.ridges) {
-    SONARE_CHECK(ridge.frame_start >= 0 && ridge.frame_end() <= geometry.n_frames,
-                 ErrorCode::InvalidParameter);
+  check_geometry(geometry, config, "geometry");
+  // The track and its framing are caller inputs; each mismatch names the two
+  // fields whose values disagree.
+  if (track.n_frames != geometry.n_frames) {
+    check::refuse_relation({"track.n_frames", "geometry.n_frames"}, "{0} must equal {1}");
+  }
+  if (track.hop_length != geometry.hop_length) {
+    check::refuse_relation({"track.hop_length", "geometry.hop_length"}, "{0} must equal {1}");
+  }
+  if (track.sample_rate != geometry.sample_rate) {
+    check::refuse_relation({"track.sample_rate", "geometry.sample_rate"}, "{0} must equal {1}");
+  }
+  for (size_t i = 0; i < track.ridges.size(); ++i) {
+    const F0Ridge& ridge = track.ridges[i];
+    const std::string ridge_path = "track.ridges[" + std::to_string(i) + "]";
+    check::integer_at_least(ridge.frame_start, 0, (ridge_path + ".frame_start").c_str());
+    if (ridge.frame_end() > geometry.n_frames) {
+      check::refuse_relation(
+          {ridge_path + ".frame_start", ridge_path + ".f0_hz", "geometry.n_frames"},
+          "{0} plus the length of {1} must be at most {2}");
+    }
     // Rejected here as track_f0_ridges rejects it: a value one entry point
     // refuses and another absorbs is where a validation gap hides.
-    for (const float f0_hz : ridge.f0_hz) {
-      SONARE_CHECK(std::isfinite(f0_hz) && f0_hz > 0.0f, ErrorCode::InvalidParameter);
+    for (size_t j = 0; j < ridge.f0_hz.size(); ++j) {
+      const float hz = ridge.f0_hz[j];
+      if (!(std::isfinite(hz) && hz > 0.0f)) {
+        check::refuse_outside(check::real_domain_above(0.0, false),
+                              (ridge_path + ".f0_hz[" + std::to_string(j) + "]").c_str());
+      }
     }
   }
   SONARE_CHECK_MSG(per_ridge_stretch.empty() || per_ridge_stretch.size() == track.ridges.size(),
@@ -263,8 +304,8 @@ NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& t
 }
 
 Spectrogram apply_note_mask(const Spectrogram& spec, const NoteMask& mask) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  check_mask_shape(mask, spec.n_bins(), spec.n_frames());
+  if (spec.empty()) check::refuse("spec", "must not be empty");
+  check_mask_shape(mask, spec.n_bins(), spec.n_frames(), "mask", "spec.n_frames");
 
   const int n_frames = spec.n_frames();
   const std::complex<float>* data = spec.complex_data();
@@ -287,10 +328,13 @@ namespace {
 /// spectrogram at mask entry @p k, which sits at (@p bin, @p frame).
 template <typename CellAt>
 NoteSegment invert_cells(const StftGeometry& geometry, const NoteMask& mask, int length,
-                         const CellAt& cell_at) {
-  SONARE_CHECK(!geometry.empty(), ErrorCode::InvalidParameter);
-  check_mask_shape(mask, geometry.n_bins, geometry.n_frames);
-  SONARE_CHECK(length >= 0, ErrorCode::InvalidParameter);
+                         const std::string& geometry_subject, const std::string& mask_subject,
+                         const std::string& frame_count_subject, const CellAt& cell_at) {
+  if (geometry.empty()) {
+    check::refuse(geometry_subject.c_str(), "must not be empty");
+  }
+  check_mask_shape(mask, geometry.n_bins, geometry.n_frames, mask_subject, frame_count_subject);
+  check::integer_at_least(length, 0, "length");
 
   const int n_bins = geometry.n_bins;
   const int n_frames = geometry.n_frames;
@@ -339,20 +383,30 @@ NoteSegment invert_cells(const StftGeometry& geometry, const NoteMask& mask, int
 }  // namespace
 
 NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int length) {
+  const StftGeometry geometry = geometry_of(spec);
+  if (geometry.empty()) check::refuse("spec", "must not be empty");
   const std::complex<float>* data = spec.complex_data();
   const auto n_frames = static_cast<size_t>(spec.n_frames());
-  return invert_cells(geometry_of(spec), mask, length, [&](size_t, size_t bin, size_t frame) {
-    return data[bin * n_frames + frame];
-  });
+  return invert_cells(
+      geometry, mask, length, "spec", "mask", "spec.n_frames",
+      [&](size_t, size_t bin, size_t frame) { return data[bin * n_frames + frame]; });
 }
 
 NoteSegment invert_note_mask(const MaskedCells& cells, const NoteMaskSet& masks, std::size_t note,
                              int length) {
-  SONARE_CHECK(note < masks.notes.size() && note < cells.notes.size(), ErrorCode::InvalidParameter);
+  if (!(note < masks.notes.size() && note < cells.notes.size())) {
+    check::refuse("note", "must name a note in both masks.notes and cells.notes");
+  }
   const NoteMask& mask = masks.notes[note];
   const std::vector<std::complex<float>>& values = cells.notes[note];
-  SONARE_CHECK(values.size() == mask.bins.size(), ErrorCode::InvalidParameter);
-  return invert_cells(cells.geometry, mask, length,
+  if (values.size() != mask.bins.size()) {
+    check::refuse_relation({"cells.notes[" + std::to_string(note) + "]",
+                            "masks.notes[" + std::to_string(note) + "].bins"},
+                           "{0} must have the same number of entries as {1}");
+  }
+  const std::string mask_subject = "masks.notes[" + std::to_string(note) + "]";
+  return invert_cells(cells.geometry, mask, length, "cells.geometry", mask_subject,
+                      "cells.geometry.n_frames",
                       [&](size_t k, size_t, size_t) { return values[k]; });
 }
 
@@ -360,10 +414,19 @@ MaskedCells read_masked_cells(const Audio& audio, const StftConfig& stft,
                               const NoteMaskSet& masks) {
   MaskedCells cells;
   cells.geometry = stft_geometry(stft, audio.sample_rate(), audio.size());
-  SONARE_CHECK(masks.n_bins == cells.geometry.n_bins && masks.n_frames == cells.geometry.n_frames &&
-                   masks.hop_length == cells.geometry.hop_length &&
-                   masks.sample_rate == cells.geometry.sample_rate,
-               ErrorCode::InvalidParameter);
+  if (masks.n_bins != cells.geometry.n_bins) {
+    check::refuse_relation({"masks.n_bins", "stft.n_fft"}, "{0} must equal {1} / 2 + 1");
+  }
+  if (masks.n_frames != cells.geometry.n_frames) {
+    check::refuse_relation({"masks.n_frames", "audio", "stft"},
+                           "{0} must describe the frame count from {1} with {2}");
+  }
+  if (masks.hop_length != cells.geometry.hop_length) {
+    check::refuse_relation({"masks.hop_length", "stft.hop_length"}, "{0} must equal {1}");
+  }
+  if (masks.sample_rate != cells.geometry.sample_rate) {
+    check::refuse_relation({"masks.sample_rate", "audio.sample_rate"}, "{0} must equal {1}");
+  }
   check_set_shape(masks);
 
   cells.notes.resize(masks.notes.size());
@@ -392,12 +455,21 @@ MaskedCells read_masked_cells(const Audio& audio, const StftConfig& stft,
 }
 
 Spectrogram residual_spectrum(const Spectrogram& spec, const NoteMaskSet& masks) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  if (spec.empty()) check::refuse("spec", "must not be empty");
   // The hop and the rate as well as the sizes: a set from another framing indexes
   // the same array while meaning different times.
-  SONARE_CHECK(masks.n_bins == spec.n_bins() && masks.n_frames == spec.n_frames() &&
-                   masks.hop_length == spec.hop_length() && masks.sample_rate == spec.sample_rate(),
-               ErrorCode::InvalidParameter);
+  if (masks.n_bins != spec.n_bins()) {
+    check::refuse_relation({"masks.n_bins", "spec.n_bins"}, "{0} must equal {1}");
+  }
+  if (masks.n_frames != spec.n_frames()) {
+    check::refuse_relation({"masks.n_frames", "spec.n_frames"}, "{0} must equal {1}");
+  }
+  if (masks.hop_length != spec.hop_length()) {
+    check::refuse_relation({"masks.hop_length", "spec.hop_length"}, "{0} must equal {1}");
+  }
+  if (masks.sample_rate != spec.sample_rate()) {
+    check::refuse_relation({"masks.sample_rate", "spec.sample_rate"}, "{0} must equal {1}");
+  }
   check_set_shape(masks);
 
   const std::vector<std::complex<float>> total = accumulate_total(masks);

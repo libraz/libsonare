@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <limits>
 #include <numeric>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -14,6 +15,7 @@
 #include "editing/note_model/note_renderer.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::editing::note_model {
 namespace {
@@ -36,9 +38,9 @@ float envelope_at_sample(const std::vector<float>& envelope, long double sample,
 }
 
 void validate_all_notes(const std::vector<NoteObject>& notes, int64_t audio_samples) {
-  for (const NoteObject& note : notes) {
-    SONARE_CHECK(is_valid_note_span(note, audio_samples), ErrorCode::InvalidParameter);
-    SONARE_CHECK(is_valid_note_edit(note.edit), ErrorCode::InvalidParameter);
+  for (size_t i = 0; i < notes.size(); ++i) {
+    validate_note_span_and_edit(notes[i], audio_samples,
+                                util::check::indexed_subject("notes", i, ""));
   }
 }
 
@@ -68,14 +70,16 @@ bool checked_lcm(std::uint64_t lhs, std::uint64_t rhs, std::uint64_t limit,
 /// envelope while the checked products keep the arithmetic defined.
 std::vector<float> resample_envelope_piece(const std::vector<float>& envelope,
                                            int64_t source_length, int64_t begin_sample,
-                                           int64_t end_sample) {
+                                           int64_t end_sample, const std::string& subject) {
   if (envelope.empty()) return {};
   // Built from the element: GCC 13 -Warray-bounds misreads a one-element vector copy.
   if (envelope.size() == 1) return std::vector<float>(1, envelope.front());
   SONARE_CHECK(source_length > 0 && begin_sample >= 0 && end_sample >= begin_sample &&
                    end_sample < source_length,
                ErrorCode::InvalidParameter);
-  SONARE_CHECK(envelope.size() <= kMaxAudioBufferSize, ErrorCode::InvalidParameter);
+  util::check::integer_within(
+      envelope.size(), util::check::integer_domain(0, static_cast<long long>(kMaxAudioBufferSize)),
+      subject.c_str());
 
   const std::uint64_t source_span = static_cast<std::uint64_t>(source_length - 1);
   const std::uint64_t piece_span = static_cast<std::uint64_t>(end_sample - begin_sample);
@@ -132,7 +136,8 @@ std::vector<float> resample_envelope_piece(const std::vector<float>& envelope,
 /// a node of the child interpolation.
 void split_envelope(const std::vector<float>& envelope, double position, int64_t source_length,
                     int64_t head_end_sample, int64_t tail_begin_sample, int64_t tail_end_sample,
-                    std::vector<float>& head, std::vector<float>& tail) {
+                    std::vector<float>& head, std::vector<float>& tail,
+                    const std::string& subject) {
   head.clear();
   tail.clear();
   if (envelope.empty()) return;
@@ -151,8 +156,9 @@ void split_envelope(const std::vector<float>& envelope, double position, int64_t
     return;
   }
 
-  head = resample_envelope_piece(envelope, source_length, 0, head_end_sample);
-  tail = resample_envelope_piece(envelope, source_length, tail_begin_sample, tail_end_sample);
+  head = resample_envelope_piece(envelope, source_length, 0, head_end_sample, subject);
+  tail =
+      resample_envelope_piece(envelope, source_length, tail_begin_sample, tail_end_sample, subject);
 }
 
 int64_t stretch_growth(int64_t source_length, float ratio) noexcept {
@@ -207,10 +213,18 @@ void repair_split_boundary(const NoteObject& source, NoteObject& head, NoteObjec
 std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Track& track,
                                    const std::vector<NoteObject>& notes, size_t index, int frame,
                                    const NoteExtractorConfig& config) {
-  SONARE_CHECK(index < notes.size(), ErrorCode::InvalidParameter);
+  if (index >= notes.size()) {
+    util::check::refuse_relation({"index", "notes"},
+                                 "{0} must be less than the number of entries in {1}");
+  }
   validate_all_notes(notes, static_cast<int64_t>(audio.size()));
   const NoteObject& source = notes[index];
-  SONARE_CHECK(frame > source.frame_start && frame < source.frame_end, ErrorCode::InvalidParameter);
+  if (!(frame > source.frame_start && frame < source.frame_end)) {
+    util::check::refuse_relation(
+        {"frame", util::check::indexed_subject("notes", index, "frame_start"),
+         util::check::indexed_subject("notes", index, "frame_end")},
+        "{0} must be greater than {1} and less than {2}");
+  }
 
   NoteObject head = make_note(audio, track, source.frame_start, frame, config);
   NoteObject tail = make_note(audio, track, frame, source.frame_end, config);
@@ -232,7 +246,8 @@ std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Tra
     const int64_t tail_end_sample = tail.offset_sample - source.onset_sample - 1;
     split_envelope(source.edit.amplitude_envelope, position, source_length, head_end_sample,
                    tail_begin_sample, tail_end_sample, head.edit.amplitude_envelope,
-                   tail.edit.amplitude_envelope);
+                   tail.edit.amplitude_envelope,
+                   util::check::indexed_subject("notes", index, "edit.amplitude_envelope"));
   }
 
   std::vector<NoteObject> result;
@@ -247,14 +262,24 @@ std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Tra
 std::vector<NoteObject> merge_notes(const Audio& audio, const pitch_editor::F0Track& track,
                                     const std::vector<NoteObject>& notes, size_t first, size_t last,
                                     const NoteExtractorConfig& config) {
-  SONARE_CHECK(first < last && last < notes.size(), ErrorCode::InvalidParameter);
+  if (!(first < last)) {
+    util::check::refuse_relation({"first", "last"}, "{0} must be less than {1}");
+  }
+  if (last >= notes.size()) {
+    util::check::refuse_relation({"last", "notes"},
+                                 "{0} must be less than the number of entries in {1}");
+  }
   validate_all_notes(notes, static_cast<int64_t>(audio.size()));
 
   NoteObject merged =
       make_note(audio, track, notes[first].frame_start, notes[last].frame_end, config);
   const int64_t physical_onset = notes[first].onset_sample;
   const int64_t physical_offset = notes[last].offset_sample;
-  SONARE_CHECK(physical_onset < physical_offset, ErrorCode::InvalidParameter);
+  if (!(physical_onset < physical_offset)) {
+    util::check::refuse_relation({util::check::indexed_subject("notes", first, "onset_sample"),
+                                  util::check::indexed_subject("notes", last, "offset_sample")},
+                                 "{0} must be less than {1}");
+  }
   merged.onset_sample = std::clamp(merged.onset_sample, physical_onset, physical_offset);
   merged.offset_sample = std::clamp(merged.offset_sample, physical_onset, physical_offset);
   if (merged.offset_sample < merged.onset_sample) merged.offset_sample = merged.onset_sample;

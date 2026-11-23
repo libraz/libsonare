@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -1043,6 +1044,50 @@ TEST_CASE("a negative length and an empty spectrogram are rejected", "[polyphony
   REQUIRE(code_of([&] { return make_masked_notes(empty, track, masks, 0); }) == kInvalid);
   REQUIRE(code_of([&] { return make_masked_notes(empty, nothing_tracked, no_masks, 0); }) ==
           kInvalid);
+  REQUIRE_THROWS_WITH(make_masked_notes(empty, track, masks, 0),
+                      Catch::Matchers::ContainsSubstring("spec"));
+}
+
+TEST_CASE("make_masked_notes names its input fields", "[polyphony_notes]") {
+  const sonare::Audio audio = source_audio();
+  const sonare::Spectrogram spec = source_spectrogram();
+  const int length = static_cast<int>(audio.size());
+  const MultiF0Track track =
+      track_over(spec, {steady_ridge(kLowHz, 4, 16), steady_ridge(kHighHz, 8, 12)});
+  const NoteMaskSet masks = build_note_masks(spec, track);
+
+  NoteMaskSet wrong_geometry = masks;
+  ++wrong_geometry.n_bins;
+  REQUIRE_THROWS_WITH(make_masked_notes(spec, track, wrong_geometry, length),
+                      Catch::Matchers::ContainsSubstring("masks.n_bins"));
+
+  MultiF0Track invalid_pitch = track;
+  invalid_pitch.ridges[0].f0_hz[0] = 0.0f;
+  REQUIRE_THROWS_WITH(make_masked_notes(spec, invalid_pitch, masks, length),
+                      Catch::Matchers::ContainsSubstring("track.ridges[0].f0_hz[0]"));
+
+  NoteMaskSet mismatched_ridge = masks;
+  ++mismatched_ridge.notes[0].frame_start;
+  REQUIRE_THROWS_WITH(make_masked_notes(spec, track, mismatched_ridge, length),
+                      Catch::Matchers::ContainsSubstring("masks.notes[0].frame_start"));
+
+  NoteMaskSet malformed_mask = masks;
+  malformed_mask.notes[0].bins[0] = spec.n_bins();
+  REQUIRE_THROWS_WITH(make_masked_notes(spec, track, malformed_mask, length),
+                      Catch::Matchers::ContainsSubstring("masks.notes[0].bins[0]"));
+
+  NoteExtractorConfig bad_reference;
+  bad_reference.segmenter.reference_hz = 0.0f;
+  REQUIRE_THROWS_WITH(make_masked_notes(spec, track, masks, length, bad_reference),
+                      Catch::Matchers::ContainsSubstring("config.segmenter.reference_hz"));
+  REQUIRE_THROWS_WITH(make_masked_notes(spec, track, masks, -1),
+                      Catch::Matchers::ContainsSubstring("length"));
+
+  const sonare::StftConfig stft = stft_config();
+  MaskedCells cells = read_masked_cells(audio, stft, masks);
+  cells.notes.pop_back();
+  REQUIRE_THROWS_WITH(make_masked_notes(cells, track, masks, length),
+                      Catch::Matchers::ContainsSubstring("cells.notes"));
 }
 
 TEST_CASE("a spec and length whose inverse carries no samples is rejected per mask",

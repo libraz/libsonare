@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -1251,6 +1252,59 @@ TEST_CASE("build_note_masks rejects a ridge outside the framing or carrying no p
       REQUIRE(code_of([&] { return build_note_masks(spec, second); }) == kInvalid);
     }
   }
+}
+
+TEST_CASE("polyphony mask refusals name their caller inputs", "[polyphony_mask]") {
+  const sonare::Audio audio = tone_audio(330.0f);
+  const sonare::Spectrogram spec = spectrogram_of(audio);
+  const MultiF0Track track = single_note_track(spec, 330.0f);
+  const NoteMaskSet masks = build_note_masks(spec, track);
+  const NoteMask& mask = masks.notes[0];
+  const int length = static_cast<int>(audio.size());
+
+  REQUIRE_THROWS_WITH(partial_claims(spec, 0.0f, NoteMaskConfig{}),
+                      Catch::Matchers::ContainsSubstring("f0_hz"));
+  REQUIRE_THROWS_WITH(partial_claims(geometry_of(spec), 0.0f, NoteMaskConfig{}),
+                      Catch::Matchers::ContainsSubstring("f0_hz"));
+
+  NoteMaskConfig bad_config;
+  bad_config.n_harmonics = 0;
+  REQUIRE_THROWS_WITH(build_note_masks(spec, track, bad_config),
+                      Catch::Matchers::ContainsSubstring("config.n_harmonics"));
+  REQUIRE_THROWS_WITH(build_note_masks(geometry_of(spec), track, bad_config),
+                      Catch::Matchers::ContainsSubstring("config.n_harmonics"));
+
+  NoteMask bad_mask = mask;
+  bad_mask.bins[0] = spec.n_bins();
+  REQUIRE_THROWS_WITH(apply_note_mask(spec, bad_mask),
+                      Catch::Matchers::ContainsSubstring("mask.bins[0]"));
+  REQUIRE_THROWS_WITH(invert_note_mask(spec, bad_mask, length),
+                      Catch::Matchers::ContainsSubstring("mask.bins[0]"));
+  REQUIRE_THROWS_WITH(invert_note_mask(spec, mask, -1),
+                      Catch::Matchers::ContainsSubstring("length"));
+
+  const sonare::StftConfig stft = polyphony_stft_defaults();
+  const MaskedCells cells = read_masked_cells(audio, stft, masks);
+  REQUIRE_THROWS_WITH(invert_note_mask(cells, masks, 1, length),
+                      Catch::Matchers::ContainsSubstring("note"));
+  REQUIRE_THROWS_WITH(invert_note_mask(cells, masks, 0, -1),
+                      Catch::Matchers::ContainsSubstring("length"));
+
+  NoteMaskSet malformed = masks;
+  malformed.notes[0].bins[0] = spec.n_bins();
+  REQUIRE_THROWS_WITH(residual_spectrum(spec, malformed),
+                      Catch::Matchers::ContainsSubstring("masks.notes[0].bins[0]"));
+  REQUIRE_THROWS_WITH(mask_total(malformed),
+                      Catch::Matchers::ContainsSubstring("masks.notes[0].bins[0]"));
+  REQUIRE_THROWS_WITH(read_masked_cells(audio, stft, NoteMaskSet{}),
+                      Catch::Matchers::ContainsSubstring("masks.n_bins"));
+
+  const sonare::Spectrogram empty;
+  REQUIRE_THROWS_WITH(build_note_masks(empty, track), Catch::Matchers::ContainsSubstring("spec"));
+  REQUIRE_THROWS_WITH(apply_note_mask(empty, mask), Catch::Matchers::ContainsSubstring("spec"));
+  REQUIRE_THROWS_WITH(invert_note_mask(empty, mask, length),
+                      Catch::Matchers::ContainsSubstring("spec"));
+  REQUIRE_THROWS_WITH(residual_spectrum(empty, masks), Catch::Matchers::ContainsSubstring("spec"));
 }
 
 TEST_CASE("a claim at either edge of the spectrum stays inside it", "[polyphony_mask]") {

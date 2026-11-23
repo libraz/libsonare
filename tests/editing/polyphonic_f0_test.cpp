@@ -525,6 +525,10 @@ TEST_CASE("tonality_weights rejects fewer than two bins and a non-positive spaci
     INFO("bin_hz " << bad);
     REQUIRE(code_of([&] { tonality_weights(frequencies.data(), 8, bad); }) == kInvalid);
   }
+  CHECK_THROWS_WITH(tonality_weights(frequencies.data(), 1, bin_hz),
+                    "n_bins must be an integer in [2, 2147483647]");
+  CHECK_THROWS_WITH(tonality_weights(frequencies.data(), 8, 0.0f),
+                    "bin_hz must be finite and greater than 0");
 
   // Two bins is the inclusive floor of the documented range.
   REQUIRE_NOTHROW(tonality_weights(frequencies.data(), 2, bin_hz));
@@ -645,6 +649,8 @@ TEST_CASE("compute_cent_spectrum rejects a one-frame spectrogram and a malformed
   // An empty spectrogram has no frames at all.
   const sonare::Spectrogram empty;
   REQUIRE(code_of([&] { compute_cent_spectrum(empty); }) == kInvalid);
+  CHECK_THROWS_WITH(compute_cent_spectrum(empty),
+                    "spec.n_frames must be an integer in [2, 2147483647]");
 
   // One frame carries no phase difference to read a frequency from.
   const std::vector<std::complex<float>> one_column(static_cast<size_t>(kNfft / 2 + 1),
@@ -654,6 +660,8 @@ TEST_CASE("compute_cent_spectrum rejects a one-frame spectrogram and a malformed
                                         kSampleRate, sonare::WindowType::Hann);
   REQUIRE(single.n_frames() == 1);
   REQUIRE(code_of([&] { compute_cent_spectrum(single); }) == kInvalid);
+  CHECK_THROWS_WITH(compute_cent_spectrum(single),
+                    "spec.n_frames must be an integer in [2, 2147483647]");
 
   for (const float bad : {0.0f, -55.0f, -1.0f}) {
     INFO("ref_hz " << bad);
@@ -1064,15 +1072,27 @@ TEST_CASE("SalienceKernel rejects a malformed axis and configuration", "[polypho
     empty.n_bins = bad;
     REQUIRE(code_of([&] { return SalienceKernel(empty, SalienceConfig{}); }) == kInvalid);
   }
+  CentAxis empty_axis = axis;
+  empty_axis.n_bins = 0;
+  CHECK_THROWS_WITH(SalienceKernel(empty_axis, SalienceConfig{}),
+                    "spectrum_axis.n_bins must be an integer in [1, 2147483647]");
   // The axis is bounded above as well: 32769 is just outside and 32768 just
   // inside, so a ceiling off by a factor does not pass here.
   {
     CentAxis oversized = axis;
     oversized.n_bins = 32769;
     REQUIRE(code_of([&] { return SalienceKernel(oversized, SalienceConfig{}); }) == kInvalid);
+    CHECK_THROWS_WITH(SalienceKernel(oversized, SalienceConfig{}),
+                      "spectrum_axis.n_bins must be an integer in [1, 32768]");
     CentAxis at_ceiling = axis;
     at_ceiling.n_bins = 32768;
     REQUIRE_NOTHROW(SalienceKernel(at_ceiling, SalienceConfig{}));
+  }
+  {
+    CentAxis invalid_reference = axis;
+    invalid_reference.ref_hz = 0.0f;
+    CHECK_THROWS_WITH(SalienceKernel(invalid_reference, SalienceConfig{}),
+                      "spectrum_axis.ref_hz must be finite and greater than 0");
   }
   // And below, by resolution rather than by count.
   for (const float bad : {0.999f, 0.5f, 0.0f, -1.0f, kNaN}) {
@@ -1080,6 +1100,12 @@ TEST_CASE("SalienceKernel rejects a malformed axis and configuration", "[polypho
     CentAxis fine = axis;
     fine.cents_per_bin = bad;
     REQUIRE(code_of([&] { return SalienceKernel(fine, SalienceConfig{}); }) == kInvalid);
+  }
+  {
+    CentAxis fine = axis;
+    fine.cents_per_bin = 0.5f;
+    CHECK_THROWS_WITH(SalienceKernel(fine, SalienceConfig{}),
+                      "spectrum_axis.cents_per_bin must be finite and at least 1");
   }
   {
     CentAxis at_floor = axis;
@@ -1095,6 +1121,11 @@ TEST_CASE("SalienceKernel rejects a malformed axis and configuration", "[polypho
     REQUIRE(code_of([&] { return SalienceKernel(axis, config); }) == kInvalid);
   }
   {
+    SalienceConfig config;
+    config.n_harmonics = 0;
+    CHECK_THROWS_WITH(SalienceKernel(axis, config), "n_harmonics must be an integer in [1, 128]");
+  }
+  {
     SalienceConfig at_cap;
     at_cap.n_harmonics = 128;
     REQUIRE_NOTHROW(SalienceKernel(axis, at_cap));
@@ -1106,11 +1137,28 @@ TEST_CASE("SalienceKernel rejects a malformed axis and configuration", "[polypho
     config.f0_max_hz = bad;
     REQUIRE(code_of([&] { return SalienceKernel(axis, config); }) == kInvalid);
   }
+  {
+    SalienceConfig config;
+    config.f0_max_hz = config.f0_min_hz;
+    CHECK_THROWS_WITH(SalienceKernel(axis, config),
+                      "f0_max_hz must be finite and greater than f0_min_hz");
+  }
   for (const float bad : {0.0f, -55.0f, kNaN}) {
     INFO("f0_min_hz " << bad);
     SalienceConfig config;
     config.f0_min_hz = bad;
     REQUIRE(code_of([&] { return SalienceKernel(axis, config); }) == kInvalid);
+  }
+  {
+    SalienceConfig config;
+    config.f0_min_hz = kNaN;
+    CHECK_THROWS_WITH(SalienceKernel(axis, config),
+                      "f0_min_hz must be finite and in [-3.4028235e38, 3.4028235e38]");
+  }
+  {
+    SalienceConfig config;
+    config.f0_min_hz = 0.0f;
+    CHECK_THROWS_WITH(SalienceKernel(axis, config), "f0_min_hz must be finite and greater than 0");
   }
   for (const float bad : {0.0f, -320.0f, kNaN}) {
     INFO("beta_hz " << bad);
@@ -1118,11 +1166,27 @@ TEST_CASE("SalienceKernel rejects a malformed axis and configuration", "[polypho
     config.beta_hz = bad;
     REQUIRE(code_of([&] { return SalienceKernel(axis, config); }) == kInvalid);
   }
+  {
+    SalienceConfig config;
+    config.beta_hz = 0.0f;
+    CHECK_THROWS_WITH(SalienceKernel(axis, config), "beta_hz must be finite and greater than 0");
+  }
+  {
+    SalienceConfig config;
+    config.alpha_hz = kNaN;
+    CHECK_THROWS_WITH(SalienceKernel(axis, config),
+                      "alpha_hz must be finite and in [-3.4028235e38, 3.4028235e38]");
+  }
   for (const float bad : {-1e-6f, -1.0f, kNaN}) {
     INFO("inharmonicity " << bad);
     SalienceConfig config;
     config.inharmonicity = bad;
     REQUIRE(code_of([&] { return SalienceKernel(axis, config); }) == kInvalid);
+  }
+  {
+    SalienceConfig config;
+    config.inharmonicity = -1.0f;
+    CHECK_THROWS_WITH(SalienceKernel(axis, config), "inharmonicity must be finite and at least 0");
   }
 
   // Zero inharmonicity is the documented ideal series and is accepted, as is a
@@ -1195,16 +1259,28 @@ TEST_CASE("compute_salience rejects an empty spectrum and a malformed configurat
   const CentSpectrum empty;
   REQUIRE(empty.n_frames == 0);
   REQUIRE(code_of([&] { compute_salience(empty); }) == kInvalid);
+  CHECK_THROWS_WITH(compute_salience(empty),
+                    "spectrum.n_frames must be an integer in [1, 2147483647]");
 
   CentSpectrum no_bins = spectrum;
   no_bins.axis.n_bins = 0;
   no_bins.values.clear();
   REQUIRE(code_of([&] { compute_salience(no_bins); }) == kInvalid);
+  CHECK_THROWS_WITH(compute_salience(no_bins),
+                    "spectrum.axis.n_bins must be an integer in [1, 2147483647]");
+
+  CentSpectrum wrong_shape = spectrum;
+  wrong_shape.values.pop_back();
+  REQUIRE(code_of([&] { compute_salience(wrong_shape); }) == kInvalid);
+  CHECK_THROWS_WITH(compute_salience(wrong_shape),
+                    "spectrum.values must have one entry per frame and axis bin");
 
   // Every reason the kernel throws reaches here too.
   SalienceConfig inverted;
   inverted.f0_max_hz = inverted.f0_min_hz;
   REQUIRE(code_of([&] { compute_salience(spectrum, inverted); }) == kInvalid);
+  CHECK_THROWS_WITH(compute_salience(spectrum, inverted),
+                    "f0_max_hz must be finite and greater than f0_min_hz");
   SalienceConfig no_harmonics;
   no_harmonics.n_harmonics = 0;
   REQUIRE(code_of([&] { compute_salience(spectrum, no_harmonics); }) == kInvalid);
@@ -1322,6 +1398,30 @@ TEST_CASE("the separation rule keeps one F0 from being taken twice", "[polyphoni
       }
     }
   }
+}
+
+TEST_CASE("MultiF0Estimator names the configuration member it refuses", "[polyphonic_f0]") {
+  const CentAxis axis = spectrum_axis_for(8000.0f);
+
+  MultiF0Config too_many;
+  too_many.max_polyphony = 0;
+  CHECK_THROWS_WITH(MultiF0Estimator(axis, too_many),
+                    "max_polyphony must be an integer in [1, 64]");
+
+  MultiF0Config bad_peak_ratio;
+  bad_peak_ratio.min_frame_peak_ratio = kNaN;
+  CHECK_THROWS_WITH(MultiF0Estimator(axis, bad_peak_ratio),
+                    "min_frame_peak_ratio must be finite and in [0, 1]");
+
+  MultiF0Config negative_separation;
+  negative_separation.min_separation_cents = -1.0f;
+  CHECK_THROWS_WITH(MultiF0Estimator(axis, negative_separation),
+                    "min_separation_cents must be finite and at least 0");
+
+  MultiF0Config no_subtraction;
+  no_subtraction.subtraction_factor = 0.0f;
+  CHECK_THROWS_WITH(MultiF0Estimator(axis, no_subtraction),
+                    "subtraction_factor must be finite and in (0, 1]");
 }
 
 TEST_CASE("parabolic refinement puts an F0 off the axis grid", "[polyphonic_f0]") {
@@ -1791,15 +1891,25 @@ TEST_CASE("track_f0_ridges rejects malformed framing, configuration and candidat
     INFO("hop_length " << bad);
     REQUIRE(code_of([&] { track_f0_ridges(frames, bad, kSampleRate); }) == kInvalid);
   }
+  CHECK_THROWS_WITH(track_f0_ridges(frames, 0, kSampleRate),
+                    "hop_length must be an integer in [1, 2147483647]");
   for (const int bad : {0, -1, -44100}) {
     INFO("sample_rate " << bad);
     REQUIRE(code_of([&] { track_f0_ridges(frames, kHopLength, bad); }) == kInvalid);
   }
+  CHECK_THROWS_WITH(track_f0_ridges(frames, kHopLength, 0),
+                    "sample_rate must be an integer in [1, 2147483647]");
   for (const float bad : {0.0f, -1.0f, -50.0f}) {
     INFO("max_jump_cents " << bad);
     RidgeConfig config;
     config.max_jump_cents = bad;
     REQUIRE(code_of([&] { track_f0_ridges(frames, kHopLength, kSampleRate, config); }) == kInvalid);
+  }
+  {
+    RidgeConfig config;
+    config.max_jump_cents = 0.0f;
+    CHECK_THROWS_WITH(track_f0_ridges(frames, kHopLength, kSampleRate, config),
+                      "max_jump_cents must be finite and greater than 0");
   }
   for (const float bad : {-0.01f, -1.0f, 1.01f, 2.0f, kNaN, kInf}) {
     INFO("min_ridge_peak_ratio " << bad);
@@ -1807,11 +1917,23 @@ TEST_CASE("track_f0_ridges rejects malformed framing, configuration and candidat
     config.min_ridge_peak_ratio = bad;
     REQUIRE(code_of([&] { track_f0_ridges(frames, kHopLength, kSampleRate, config); }) == kInvalid);
   }
+  {
+    RidgeConfig config;
+    config.min_ridge_peak_ratio = -0.01f;
+    CHECK_THROWS_WITH(track_f0_ridges(frames, kHopLength, kSampleRate, config),
+                      "min_ridge_peak_ratio must be finite and in [0, 1]");
+  }
   for (const float bad : {-0.01f, -1.0f, -140.0f}) {
     INFO("min_duration_ms " << bad);
     RidgeConfig config;
     config.min_duration_ms = bad;
     REQUIRE(code_of([&] { track_f0_ridges(frames, kHopLength, kSampleRate, config); }) == kInvalid);
+  }
+  {
+    RidgeConfig config;
+    config.min_duration_ms = -1.0f;
+    CHECK_THROWS_WITH(track_f0_ridges(frames, kHopLength, kSampleRate, config),
+                      "min_duration_ms must be finite and at least 0");
   }
 
   // A candidate F0 has to be positive and finite, wherever it sits.
@@ -1826,6 +1948,15 @@ TEST_CASE("track_f0_ridges rejects malformed framing, configuration and candidat
     hidden[17] = {candidate(220.0f, 1.0f), candidate(bad, 0.5f)};
     REQUIRE(code_of([&] { track_f0_ridges(hidden, kHopLength, kSampleRate); }) == kInvalid);
   }
+  {
+    std::vector<std::vector<F0Candidate>> broken = frames;
+    broken[17] = {candidate(0.0f, 1.0f)};
+    CHECK_THROWS_WITH(track_f0_ridges(broken, kHopLength, kSampleRate),
+                      "frames[17][0].f0_hz must be finite and greater than 0");
+    broken[17] = {candidate(220.0f, 1.0f), candidate(0.0f, 0.5f)};
+    CHECK_THROWS_WITH(track_f0_ridges(broken, kHopLength, kSampleRate),
+                      "frames[17][1].f0_hz must be finite and greater than 0");
+  }
 
   // The salience too: the candidate ordering is by salience, so a NaN there
   // makes the comparison intransitive rather than merely odd.
@@ -1837,6 +1968,28 @@ TEST_CASE("track_f0_ridges rejects malformed framing, configuration and candidat
     std::vector<std::vector<F0Candidate>> hidden = frames;
     hidden[17] = {candidate(220.0f, 1.0f), candidate(226.0f, bad)};
     REQUIRE(code_of([&] { track_f0_ridges(hidden, kHopLength, kSampleRate); }) == kInvalid);
+  }
+  {
+    std::vector<std::vector<F0Candidate>> broken = frames;
+    broken[17] = {candidate(220.0f, kNaN)};
+    CHECK_THROWS_WITH(track_f0_ridges(broken, kHopLength, kSampleRate),
+                      "frames[17][0].salience must be finite and in [-3.4028235e38, 3.4028235e38]");
+    F0Candidate candidate_with_bad_attack = candidate(220.0f, 1.0f);
+    candidate_with_bad_attack.attack_frames = kNaN;
+    broken[17] = {candidate_with_bad_attack};
+    CHECK_THROWS_WITH(
+        track_f0_ridges(broken, kHopLength, kSampleRate),
+        "frames[17][0].attack_frames must be finite and in [-3.4028235e38, 3.4028235e38]");
+  }
+  {
+    RidgeConfig config;
+    config.max_gap_ms = kNaN;
+    CHECK_THROWS_WITH(track_f0_ridges(frames, kHopLength, kSampleRate, config),
+                      "max_gap_ms must be finite and at least 0");
+    config = {};
+    config.attack_window_ms = -1.0f;
+    CHECK_THROWS_WITH(track_f0_ridges(frames, kHopLength, kSampleRate, config),
+                      "attack_window_ms must be finite and at least 0");
   }
   // A finite negative salience is not rejected: only non-finite is.
   {
@@ -2303,11 +2456,14 @@ TEST_CASE(
   const sonare::Audio empty;
   REQUIRE(empty.empty());
   REQUIRE(code_of([&] { extract_multi_f0(empty); }) == kInvalid);
+  CHECK_THROWS_WITH(extract_multi_f0(empty), "audio must not be empty");
 
   // Under one hop of audio a centred framing yields a single frame, which has no
   // phase difference to read an instantaneous frequency from.
   const sonare::Audio too_short = audio_of(std::vector<float>(100, 0.01f));
   REQUIRE(code_of([&] { extract_multi_f0(too_short); }) == kInvalid);
+  CHECK_THROWS_WITH(extract_multi_f0(too_short),
+                    "audio must produce at least two frames with the requested framing");
 
   // Every stage's rules reach the entry point.
   MultiF0ExtractorConfig bad_axis;
@@ -2530,7 +2686,9 @@ TEST_CASE("the spectrogram form rejects empty audio and inherits the audio form'
   const sonare::Spectrogram empty_spec = sonare::Spectrogram::compute(empty, config.stft);
   REQUIRE(empty_spec.empty());
   REQUIRE(code_of([&] { extract_multi_f0(empty, empty_spec, config); }) == kInvalid);
+  CHECK_THROWS_WITH(extract_multi_f0(empty, empty_spec, config), "audio must not be empty");
   REQUIRE(code_of([&] { extract_multi_f0(empty, spec, config); }) == kInvalid);
+  CHECK_THROWS_WITH(extract_multi_f0(empty, spec, config), "audio must not be empty");
 
   // One frame is the correct framing of a signal this short and still too little
   // to read an instantaneous frequency from, so a spec that passes the geometry
@@ -2613,9 +2771,15 @@ TEST_CASE("for_each_stft_tile is the spectrogram in tiles, bit for bit", "[polyp
             for_each_stft_tile(sonare::Audio(), stft, 0,
                                [](const sonare::Spectrogram&, int, int) {});
           }) == sonare::ErrorCode::InvalidParameter);
+  CHECK_THROWS_WITH(
+      for_each_stft_tile(sonare::Audio(), stft, 0, [](const sonare::Spectrogram&, int, int) {}),
+      "audio must not be empty");
   REQUIRE(code_of([&] {
             for_each_stft_tile(audio, stft, -1, [](const sonare::Spectrogram&, int, int) {});
           }) == sonare::ErrorCode::InvalidParameter);
+  CHECK_THROWS_WITH(
+      for_each_stft_tile(audio, stft, -1, [](const sonare::Spectrogram&, int, int) {}),
+      "overlap must be an integer in [0, 127]");
 }
 
 // --- Sub-harmonic ordering and the range ceiling ----------------------------
