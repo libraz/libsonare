@@ -475,7 +475,10 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareWorkletProcessor extends Base {
-      private readonly lifecycle: WorkletProcessorLifecycle<SonareWorkletProcessor>;
+      private readonly lifecycle: WorkletProcessorLifecycle<
+        SonareWorkletProcessor,
+        SonareWorkletMessage
+      >;
       readonly port?: WorkletPort;
 
       constructor(options?: { processorOptions?: SonareWorkletProcessorOptions }) {
@@ -493,11 +496,9 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
               transport: { postMessage: (message) => port?.postMessage?.(message) },
             }),
           ready: () => ({ type: 'ready', runtimeTarget: 'embind' }),
-          deliver: (bridge, data) => {
-            if (isWorkletMessage(data)) {
-              bridge.receiveMessage(data);
-            }
-          },
+          kind: 'mixer',
+          accepts: isWorkletMessage,
+          deliver: (bridge, message) => bridge.receiveMessage(message),
         });
       }
 

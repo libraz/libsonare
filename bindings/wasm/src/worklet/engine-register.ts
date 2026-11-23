@@ -30,7 +30,10 @@ export function registerSonareRealtimeEngineWorkletProcessor(
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareRealtimeEngineWorkletProcessor extends Base {
-      private readonly lifecycle: WorkletProcessorLifecycle<SonareRealtimeEngineWorkletProcessor>;
+      private readonly lifecycle: WorkletProcessorLifecycle<
+        SonareRealtimeEngineWorkletProcessor,
+        unknown
+      >;
       readonly port?: WorkletPort;
 
       constructor(options?: { processorOptions?: SonareRealtimeEngineWorkletProcessorOptions }) {
@@ -61,6 +64,9 @@ export function registerSonareRealtimeEngineWorkletProcessor(
             return bridge;
           },
           ready: () => ({ type: 'ready', runtimeTarget: 'embind' }),
+          // receiveMessage refuses a type it does not know on the engine's syncError channel.
+          kind: 'engine',
+          accepts: (_data): _data is unknown => true,
           deliver: (bridge, data) => bridge.receiveMessage(data),
         });
       }

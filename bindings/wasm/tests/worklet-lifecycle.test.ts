@@ -161,7 +161,43 @@ describe('stock worklet processor lifecycle', () => {
         wiring.label,
       ).toBe(true);
     }
-    expect(await settled(held)).toEqual({ type: 'ready', runtimeTarget: 'embind' });
+    await settled(held);
+    // The held control is started: its unknown messages are replayed and refused, then it is ready.
+    const replayed = held.port.posted;
+    expect(replayed.at(-1)).toEqual({ type: 'ready', runtimeTarget: 'embind' });
+    expect(replayed.filter((m) => m.type === 'error' && m.request === 'invalid')).toHaveLength(
+      1024,
+    );
+  });
+
+  it('refuses a port message of a type the processor does not take, as a TypeError', async () => {
+    const all = await wirings();
+    const kinds: Record<string, string> = {
+      mixer: 'mixer',
+      playback: 'playback',
+      'voice changer': 'voice changer',
+    };
+    const analyzer = {
+      label: 'stream analyzer',
+      ctor: register(registerSonareStreamAnalyzerWorkletProcessor, 'lifecycle-analyzer-unknown'),
+      options: {},
+    };
+    kinds['stream analyzer'] = 'stream analyzer';
+    for (const wiring of [...all.filter((w) => w.label !== 'engine'), analyzer]) {
+      const instance = new wiring.ctor({ processorOptions: wiring.options });
+      expect((await settled(instance)).type, wiring.label).toBe('ready');
+      instance.port.onmessage?.({ data: { type: 'bogus' } });
+      instance.port.onmessage?.({ data: 42 });
+      const errors = instance.port.posted.filter((m) => m.type === 'error');
+      expect(errors, wiring.label).toEqual(
+        ['bogus', 'undefined'].map((type) => ({
+          type: 'error',
+          request: 'invalid',
+          message: `Unrecognized ${kinds[wiring.label]} message: ${type}`,
+          failure: expect.objectContaining({ name: 'TypeError' }),
+        })),
+      );
+    }
   });
 
   it('reports a render quantum that throws, answers it with silence and ends the processor', async () => {

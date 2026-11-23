@@ -258,7 +258,10 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonarePlaybackWorkletProcessor extends Base {
-      private readonly lifecycle: WorkletProcessorLifecycle<SonarePlaybackWorkletProcessor>;
+      private readonly lifecycle: WorkletProcessorLifecycle<
+        SonarePlaybackWorkletProcessor,
+        SonarePlaybackMessage
+      >;
       readonly port?: WorkletPort;
 
       constructor(options?: { processorOptions?: SonarePlaybackWorkletProcessorOptions }) {
@@ -272,11 +275,9 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
           wasmBinary: processorOptions.wasmBinary,
           create: () => new SonarePlaybackWorkletProcessor({ ...processorOptions, port }),
           ready: () => ({ type: 'ready', runtimeTarget: 'embind' }),
-          deliver: (bridge, data) => {
-            if (isPlaybackMessage(data)) {
-              bridge.receiveMessage(data);
-            }
-          },
+          kind: 'playback',
+          accepts: isPlaybackMessage,
+          deliver: (bridge, message) => bridge.receiveMessage(message),
         });
       }
 

@@ -1,6 +1,9 @@
 import { ErrorCode } from '../errors.js';
 import { codedError, withEntry } from '../internal/entry.js';
-import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
+import type {
+  SonareStreamAnalyzerChunkMessage,
+  SonareStreamAnalyzerMessage,
+} from '../internal/stream_analyzer_messages.js';
 import { WorkletProcessorLifecycle } from '../internal/worklet_lifecycle.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type {
@@ -189,7 +192,10 @@ export function registerSonareStreamAnalyzerWorkletProcessor(
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareStreamAnalyzerWorkletProcessor extends Base {
-      private readonly lifecycle: WorkletProcessorLifecycle<SonareStreamAnalyzerWorkletProcessor>;
+      private readonly lifecycle: WorkletProcessorLifecycle<
+        SonareStreamAnalyzerWorkletProcessor,
+        SonareStreamAnalyzerMessage
+      >;
       readonly port?: WorkletPort;
 
       constructor(options?: { processorOptions?: SonareStreamAnalyzerWorkletProcessorOptions }) {
@@ -203,11 +209,9 @@ export function registerSonareStreamAnalyzerWorkletProcessor(
           // The processor posts its own ready from its constructor.
           create: () => new SonareStreamAnalyzerWorkletProcessor({ ...processorOptions, port }),
           ready: () => undefined,
-          deliver: (bridge, data) => {
-            if (isStreamAnalyzerMessage(data)) {
-              bridge.receiveMessage(data);
-            }
-          },
+          kind: 'stream analyzer',
+          accepts: isStreamAnalyzerMessage,
+          deliver: (bridge, message) => bridge.receiveMessage(message),
         });
       }
 

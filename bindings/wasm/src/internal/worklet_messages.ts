@@ -106,7 +106,7 @@ export interface WorkletErrorMessage {
 /** Posted when a control message is refused (e.g. a changed prepare key). */
 export interface SonarePlaybackErrorMessage {
   type: 'error';
-  request: SonarePlaybackMessage['type'] | 'init' | 'process';
+  request: SonarePlaybackMessage['type'] | 'init' | 'invalid' | 'process';
   message: string;
   failure: SonareFailurePayload;
 }

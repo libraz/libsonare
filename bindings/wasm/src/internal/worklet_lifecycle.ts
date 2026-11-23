@@ -6,7 +6,7 @@
  */
 import type { WorkletInput, WorkletOutput } from '../worklet/audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from '../worklet/embind-init.js';
-import { invalidState } from './entry.js';
+import { invalidState, refuseType } from './entry.js';
 import { errorText, failurePayload } from './failure_payload.js';
 import type { WorkletErrorMessage, WorkletPort } from './worklet_messages.js';
 
@@ -18,7 +18,7 @@ interface WorkletBridge {
 }
 
 /** What a registration supplies to {@link WorkletProcessorLifecycle}. */
-export interface WorkletLifecycleSpec<B extends WorkletBridge> {
+export interface WorkletLifecycleSpec<B extends WorkletBridge, M> {
   port: WorkletPort | undefined;
   /** Whether the processor needs the WASM module in this realm. */
   usesModule: boolean;
@@ -27,25 +27,26 @@ export interface WorkletLifecycleSpec<B extends WorkletBridge> {
   create(): B;
   /** The `ready` message to post, or `undefined` when the processor posts its own. */
   ready(bridge: B): Record<string, unknown> | undefined;
-  /** Hands one port message to the processor; a throw is reported under {@link requestOf}. */
-  deliver(bridge: B, data: unknown): void;
-  /** The `request` a refused message is reported under; default its `type`, else `'invalid'`. */
-  requestOf?(data: unknown): string;
+  /** Names the processor in the refusal of a message it does not take. */
+  kind: string;
+  /** Whether the processor takes a port message; any other is refused as a `TypeError` under `request: 'invalid'`. */
+  accepts(data: unknown): data is M;
+  /** Hands one accepted message to the processor; a throw is reported under the message's `type`. */
+  deliver(bridge: B, message: M): void;
 }
 
-function requestOf(data: unknown): string {
-  const type = (data as { type?: unknown } | null)?.type;
-  return typeof type === 'string' ? type : 'invalid';
+function messageType(data: unknown): unknown {
+  return (data as { type?: unknown } | null)?.type;
 }
 
 /** One stock registration's processor: start, message delivery and the guarded render call. */
-export class WorkletProcessorLifecycle<B extends WorkletBridge> {
+export class WorkletProcessorLifecycle<B extends WorkletBridge, M> {
   private bridge?: B;
   private failed = false;
   private overflowed = false;
   private readonly pending: unknown[] = [];
 
-  constructor(private readonly spec: WorkletLifecycleSpec<B>) {
+  constructor(private readonly spec: WorkletLifecycleSpec<B, M>) {
     if (!spec.usesModule || isEmbindReady()) {
       this.start();
     } else {
@@ -119,10 +120,16 @@ export class WorkletProcessorLifecycle<B extends WorkletBridge> {
   }
 
   private deliver(bridge: B, data: unknown): void {
+    if (!this.spec.accepts(data)) {
+      const type = String(messageType(data));
+      this.report('invalid', refuseType(`Unrecognized ${this.spec.kind} message: ${type}`));
+      return;
+    }
     try {
       this.spec.deliver(bridge, data);
     } catch (error) {
-      this.report((this.spec.requestOf ?? requestOf)(data), error);
+      const type = messageType(data);
+      this.report(typeof type === 'string' ? type : 'invalid', error);
     }
   }
 

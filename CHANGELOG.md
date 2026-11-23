@@ -196,7 +196,7 @@ This release gives the public interface one set of conventions on every surface 
 - The Python command line resolves an omitted polyphonic `--reattack-ratio` to 2.0, so both front-ends write the same notes.
 - A refused `mastering-profile` or `mastering-streaming` call on the native command line exits with the library's code and message.
 - Both command lines write the playback renderer config with the camelCase keys the config document reads and report `--json` diagnostics in snake_case.
-- On WASM, every stock AudioWorklet registration reports a render quantum that throws as an `error` message with `request: 'process'`, renders silence and ends the processor, and a port message beyond the 1024 held before the module is ready fails the start with `InvalidState` instead of being dropped. The engine worklet answers a message type it does not know with a `syncError` carrying a `TypeError`, where it dropped any type not beginning with `sync`.
+- On WASM, every stock AudioWorklet registration reports a render quantum that throws as an `error` message with `request: 'process'`, renders silence and ends the processor, and a port message beyond the 1024 held before the module is ready fails the start with `InvalidState` instead of being dropped. The engine worklet answers a message type it does not know with a `syncError` carrying a `TypeError`, where it dropped any type not beginning with `sync`. The mixer, playback, voice-changer and stream-analyzer processors refuse a message type they do not take as an `error` message with `request: 'invalid'` and a `TypeError` naming the type, as the voice changer already did; the mixer and playback processors dropped it silently and the stream analyzer ignored it.
 
 ### Fixes
 

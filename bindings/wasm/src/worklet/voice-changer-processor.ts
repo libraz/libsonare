@@ -2,6 +2,7 @@ import { ErrorCode } from '../errors.js';
 import { RealtimeVoiceChanger } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
 import type {
+  SonareRealtimeVoiceChangerMessage,
   SonareRealtimeVoiceChangerNodeStatusReplyMessage,
   SonareRealtimeVoiceChangerReadyMessage,
 } from '../internal/voice_changer_messages.js';
@@ -280,7 +281,10 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
     }
     const Base = scope.AudioWorkletProcessor;
     class RegisteredSonareRealtimeVoiceChangerWorkletProcessor extends Base {
-      private readonly lifecycle: WorkletProcessorLifecycle<SonareRealtimeVoiceChangerWorkletProcessor>;
+      private readonly lifecycle: WorkletProcessorLifecycle<
+        SonareRealtimeVoiceChangerWorkletProcessor,
+        SonareRealtimeVoiceChangerMessage
+      >;
       readonly port?: WorkletPort;
 
       constructor(options?: {
@@ -309,14 +313,9 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
               runtimeTarget: 'embind',
               latencySamples: bridge.status().latencySamples,
             }) satisfies SonareRealtimeVoiceChangerReadyMessage,
-          deliver: (bridge, data) => {
-            if (!isRealtimeVoiceChangerMessage(data)) {
-              const type = (data as { type?: unknown } | null)?.type;
-              throw refuseType(`Unrecognized voice changer message: ${String(type)}`);
-            }
-            bridge.receiveMessage(data);
-          },
-          requestOf: (data) => (isRealtimeVoiceChangerMessage(data) ? data.type : 'invalid'),
+          kind: 'voice changer',
+          accepts: isRealtimeVoiceChangerMessage,
+          deliver: (bridge, message) => bridge.receiveMessage(message),
         });
       }
 

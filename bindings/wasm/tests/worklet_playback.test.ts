@@ -460,8 +460,13 @@ describe('SonarePlaybackWorkletProcessor', () => {
       expect(instance.process([noiseBlock(2, 3)], [outputBlock(6)])).toBe(true);
       listener?.({ data: { type: 'diagnostics' } });
       listener?.({ data: { type: 'unknown' } });
-      expect(posted).toHaveLength(2);
+      expect(posted).toHaveLength(3);
       expect((posted[1] as Posted).type).toBe('diagnostics');
+      expect(posted[2]).toMatchObject({
+        type: 'error',
+        request: 'invalid',
+        message: 'Unrecognized playback message: unknown',
+      });
       listener?.({ data: { type: 'destroy' } });
     } finally {
       delete scope.AudioWorkletProcessor;
