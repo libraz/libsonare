@@ -8,6 +8,7 @@ import {
 import { entryClass, nameNativeError, refuse, refuseType } from './internal/entry.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
+import { measured } from './internal/metering_native.js';
 import { assertStripMetering } from './internal/mix_scene.js';
 import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { getSonareModule } from './module_state.js';
@@ -519,15 +520,15 @@ export class Mixer {
    * Read one field of the snapshot latched by {@link latchMeterSnapshot}.
    *
    * @param field - A {@link MeterScratchField} value (`0` to `6`).
-   * @returns The value; `-Infinity` for no energy, NaN when not measured.
+   * @returns The value; `-Infinity` for no energy, `undefined` when not measured.
    * @throws TypeError for a non-number; RangeError for a value outside `[0, 6]`.
    */
-  meterScratchValue(field: MeterScratchField): number {
+  meterScratchValue(field: MeterScratchField): number | undefined {
     assertIntegerValue(field, 'field');
     if (field < 0 || field >= METER_SCRATCH_FIELD_COUNT) {
       throw refuse(`field must be in [0, ${METER_SCRATCH_FIELD_COUNT - 1}]`);
     }
-    return this.mixer.meterScratchValue(field);
+    return measured(this.mixer.meterScratchValue(field));
   }
 
   /** Number of strips in the mixer (e.g. strips loaded from the scene). */

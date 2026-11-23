@@ -672,7 +672,10 @@ export interface EqSpectrumSnapshot {
 
 /** Loudness measurement result (EBU R128 / ITU-R BS.1770). */
 export interface LufsResult {
-  /** Integrated loudness over the whole signal, in LUFS. `-Infinity` when nothing passes the gate. */
+  /**
+   * Integrated loudness over the whole signal, in LUFS. `-Infinity` when nothing passes the gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   integratedLufs: number;
   /** Final complete 400 ms window, not Max-M. `-Infinity` for zero energy; absent when the signal is shorter than one window. */
   momentaryLufs?: number;
@@ -682,7 +685,10 @@ export interface LufsResult {
   maxMomentaryLufs?: number;
   /** Maximum 3 s window (EBU R128 Max-S). `-Infinity` for zero energy; absent when the signal is shorter than one window. */
   maxShortTermLufs?: number;
-  /** Loudness range in LU. Absent when not measured. */
+  /**
+   * Loudness range in LU. Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
 }
 
@@ -691,9 +697,9 @@ export interface LufsResult {
  * LUFS. A signal shorter than a window yields an empty series for it.
  */
 export interface LufsSeriesResult {
-  /** 400 ms momentary series. */
+  /** 400 ms momentary series, one value per 100 ms hop; empty when the input is shorter than 400 ms. */
   momentaryLufs: Float32Array;
-  /** 3 s short-term series. */
+  /** 3 s short-term series, one value per 100 ms hop; empty when the input is shorter than 3 s. */
   shortTermLufs: Float32Array;
 }
 

@@ -1,5 +1,5 @@
 import { ErrorCode } from '../errors.js';
-import type { MixerRealtimeBuffer } from '../index.js';
+import type { MeterScratchField, MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
 import { WorkletProcessorLifecycle } from '../internal/worklet_lifecycle.js';
@@ -251,6 +251,11 @@ export class SonareWorkletProcessor {
     this.destroy();
   }
 
+  /** One latched scratch field, NaN when not measured: the ring and `omitNaN` both read NaN as absent. */
+  private scratch(field: MeterScratchField): number {
+    return this.mixer.meterScratchValue(field) ?? Number.NaN;
+  }
+
   private publishMeter(): void {
     // Symmetric with the engine processor: a ring-only configuration still has
     // meters to publish, so the absence of a transport alone must not skip it.
@@ -280,13 +285,13 @@ export class SonareWorkletProcessor {
       // postMessage path below.
       const meter = this.meterScratch;
       meter.frame = this.processedFrames;
-      meter.peakDbL = this.mixer.meterScratchValue(0);
-      meter.peakDbR = this.mixer.meterScratchValue(1);
-      meter.rmsDbL = this.mixer.meterScratchValue(2);
-      meter.rmsDbR = this.mixer.meterScratchValue(3);
-      meter.correlation = this.mixer.meterScratchValue(4);
-      meter.truePeakDbtpL = this.mixer.meterScratchValue(5);
-      meter.truePeakDbtpR = this.mixer.meterScratchValue(6);
+      meter.peakDbL = this.scratch(0);
+      meter.peakDbR = this.scratch(1);
+      meter.rmsDbL = this.scratch(2);
+      meter.rmsDbR = this.scratch(3);
+      meter.correlation = this.scratch(4);
+      meter.truePeakDbtpL = this.scratch(5);
+      meter.truePeakDbtpR = this.scratch(6);
       this.writeMeterRing(meter);
       return;
     }
@@ -299,13 +304,13 @@ export class SonareWorkletProcessor {
       targetId: 0,
       frame: this.processedFrames,
       ...omitNaN({
-        peakDbL: this.mixer.meterScratchValue(0),
-        peakDbR: this.mixer.meterScratchValue(1),
-        rmsDbL: this.mixer.meterScratchValue(2),
-        rmsDbR: this.mixer.meterScratchValue(3),
-        correlation: this.mixer.meterScratchValue(4),
-        truePeakDbtpL: this.mixer.meterScratchValue(5),
-        truePeakDbtpR: this.mixer.meterScratchValue(6),
+        peakDbL: this.scratch(0),
+        peakDbR: this.scratch(1),
+        rmsDbL: this.scratch(2),
+        rmsDbR: this.scratch(3),
+        correlation: this.scratch(4),
+        truePeakDbtpL: this.scratch(5),
+        truePeakDbtpR: this.scratch(6),
       }),
       // LUFS, gain reduction and input peak are absent: the mixer worklet measures none of them.
     };

@@ -62,7 +62,7 @@ describe('geometric room acoustics', () => {
     expect(est.volume).toBeGreaterThan(105 * 0.8);
     expect(est.volume).toBeLessThan(105 * 1.2);
     expect(est.confidence).toBeGreaterThan(0);
-    expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
+    expect(est.rt60Bands?.length ?? 0).toBeGreaterThanOrEqual(4);
     expect(Number.isFinite(est.drrDb)).toBe(true);
   });
 
@@ -375,7 +375,7 @@ describe('geometric room acoustics', () => {
     const dflt = estimateRoom(rir.rir, 48000);
     // Non-vacuity: the analyzer's 0.01 floor is far smaller than the default.
     const floored = estimateRoom(rir.rir, 48000, { referenceAbsorption: 0.01 });
-    expect(floored.volume).toBeLessThan(dflt.volume / 1000);
+    expect(floored.volume).toBeLessThan((dflt.volume ?? 0) / 1000);
   });
 
   it('emits absorption and rt60 bands at the same length', () => {
@@ -387,7 +387,7 @@ describe('geometric room acoustics', () => {
       absorption: 0.15,
     });
     const est = estimateRoom(rir.rir, 48000);
-    expect(est.bandAbsorption.length).toBe(est.rt60Bands.length);
+    expect(est.bandAbsorption?.length).toBe(est.rt60Bands?.length);
   });
 
   // The diagnostic list is transcribed by the WASM wrapper independently of the
@@ -457,7 +457,7 @@ describe('geometric room acoustics', () => {
     expect(() => estimateRoom(rir.rir, 48000, { aspectHintLw: 0 })).toThrow(RangeError);
     expect(() => estimateRoom(rir.rir, 48000, { aspectHintLh: 0 })).toThrow(RangeError);
     const est = estimateRoom(rir.rir, 48000);
-    expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
+    expect(est.rt60Bands?.length ?? 0).toBeGreaterThanOrEqual(4);
   });
   // The ISO 9613-1 atmospheric term reached only the streaming insert
   // ("effects.reverb.room") until these options existed; the offline entry
@@ -640,7 +640,7 @@ describe('named selectors and estimate-to-geometry', () => {
     expect(Object.keys(geometry).sort()).toEqual(
       ['absorption', 'bandAbsorption', 'heightM', 'lengthM', 'listener', 'source', 'widthM'].sort(),
     );
-    expect(geometry.lengthM).toBeCloseTo(estimate.lengthM, 5);
+    expect(geometry.lengthM).toBeCloseTo(estimate.lengthM ?? Number.NaN, 5);
     const options = { maxSec: 0.1, ismOrder: 2 };
     const mapped = synthesizeRir({ sampleRate: 48000, ...geometry, ...options });
     const byHand = synthesizeRir({
@@ -691,8 +691,8 @@ describe('named selectors and estimate-to-geometry', () => {
 
   it('refuses an estimate with no measurable room', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
-    expect(Number.isNaN(silent.lengthM)).toBe(true);
-    // The library refuses the estimate's non-finite geometry as a refused argument.
+    expect(silent.lengthM).toBeUndefined();
+    // The library refuses an estimate with no dimensions as a refused argument.
     expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(RangeError);
     expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(
       /^roomGeometryFromEstimate: room estimate has no measurable dimensions/,

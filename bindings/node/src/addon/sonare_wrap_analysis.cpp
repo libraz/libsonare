@@ -627,21 +627,23 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
 
 namespace {
 
-/// @brief Copies one acoustic band vector out of a SonareAcousticResult.
-/// @details A null band pointer means "not computed in this mode" -- the
-///          clarity family in blind mode, per sonare_c_types_analysis.h -- and
-///          absence has exactly one observable form across the bindings: an
-///          empty array. Allocating band_count entries and leaving them zeroed
-///          would publish a fabricated measurement (six bands of 0 dB clarity
-///          read as a real result), and it made the same TypeScript type mean
-///          different things on Node and on WASM for the same C result.
-Napi::Float32Array acoustic_band_array(Napi::Env env, const float* source, size_t band_count) {
-  const size_t length = source == nullptr ? 0 : band_count;
-  auto array = Napi::Float32Array::New(env, length);
-  if (length > 0) {
-    std::memcpy(array.Data(), source, length * sizeof(float));
-  }
-  return array;
+/// @brief The one JS spelling of a SonareAcousticResult: a scalar or band array that was not
+///        measured is an absent member (a null band pointer is the blind path's clarity family,
+///        an all-NaN one its decay times), never NaN or an empty or zero-filled array.
+Napi::Object AcousticResultToObject(Napi::Env env, const SonareAcousticResult& acoustic) {
+  Napi::Object result = Napi::Object::New(env);
+  SetMeasured(result, "rt60", acoustic.rt60);
+  SetMeasured(result, "edt", acoustic.edt);
+  SetMeasured(result, "c50", acoustic.c50);
+  SetMeasured(result, "c80", acoustic.c80);
+  SetMeasured(result, "d50", acoustic.d50);
+  result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
+  result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
+  SetMeasuredArray(result, "rt60Bands", acoustic.rt60_bands, acoustic.band_count);
+  SetMeasuredArray(result, "edtBands", acoustic.edt_bands, acoustic.band_count);
+  SetMeasuredArray(result, "c50Bands", acoustic.c50_bands, acoustic.band_count);
+  SetMeasuredArray(result, "c80Bands", acoustic.c80_bands, acoustic.band_count);
+  return result;
 }
 
 }  // namespace
@@ -679,23 +681,7 @@ Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("rt60", Napi::Number::New(env, acoustic.rt60));
-  result.Set("edt", Napi::Number::New(env, acoustic.edt));
-  result.Set("c50", Napi::Number::New(env, acoustic.c50));
-  result.Set("c80", Napi::Number::New(env, acoustic.c80));
-  result.Set("d50", Napi::Number::New(env, acoustic.d50));
-  result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
-  result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
-
-  auto rt60_bands = acoustic_band_array(env, acoustic.rt60_bands, acoustic.band_count);
-  auto edt_bands = acoustic_band_array(env, acoustic.edt_bands, acoustic.band_count);
-  auto c50_bands = acoustic_band_array(env, acoustic.c50_bands, acoustic.band_count);
-  auto c80_bands = acoustic_band_array(env, acoustic.c80_bands, acoustic.band_count);
-  result.Set("rt60Bands", rt60_bands);
-  result.Set("edtBands", edt_bands);
-  result.Set("c50Bands", c50_bands);
-  result.Set("c80Bands", c80_bands);
+  Napi::Object result = AcousticResultToObject(env, acoustic);
 
   sonare_free_acoustic_result(&acoustic);
   return result;
@@ -743,23 +729,7 @@ Napi::Value SonareWrap::DetectAcoustic(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("rt60", Napi::Number::New(env, acoustic.rt60));
-  result.Set("edt", Napi::Number::New(env, acoustic.edt));
-  result.Set("c50", Napi::Number::New(env, acoustic.c50));
-  result.Set("c80", Napi::Number::New(env, acoustic.c80));
-  result.Set("d50", Napi::Number::New(env, acoustic.d50));
-  result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
-  result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
-
-  auto rt60_bands = acoustic_band_array(env, acoustic.rt60_bands, acoustic.band_count);
-  auto edt_bands = acoustic_band_array(env, acoustic.edt_bands, acoustic.band_count);
-  auto c50_bands = acoustic_band_array(env, acoustic.c50_bands, acoustic.band_count);
-  auto c80_bands = acoustic_band_array(env, acoustic.c80_bands, acoustic.band_count);
-  result.Set("rt60Bands", rt60_bands);
-  result.Set("edtBands", edt_bands);
-  result.Set("c50Bands", c50_bands);
-  result.Set("c80Bands", c80_bands);
+  Napi::Object result = AcousticResultToObject(env, acoustic);
 
   sonare_free_acoustic_result(&acoustic);
   return result;

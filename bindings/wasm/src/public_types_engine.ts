@@ -428,7 +428,10 @@ export interface EngineBounceResult {
   channels: Float32Array[];
   /** Sample rate of `channels` in Hz. */
   sampleRate: number;
-  /** Integrated loudness of the bounce in LUFS. */
+  /**
+   * Integrated loudness of the bounce in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   integratedLufs: number;
 }
 

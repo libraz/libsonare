@@ -13210,9 +13210,15 @@ export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckL
 
 /** Loudness group of {@link MasteringAudioProfile}. */
 export interface MasteringAudioProfileLoudness {
-  /** Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate. */
+  /**
+   * Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   integratedLufs: number;
-  /** EBU Tech 3342 loudness range, in LU. Absent when not measured. */
+  /**
+   * EBU Tech 3342 loudness range, in LU. Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
   /** True peak, in dBTP. `-Infinity` for silence; absent for an empty input. */
   truePeakDbtp?: number;
@@ -13299,9 +13305,15 @@ export interface MasteringAssistantProfile {
   bpm: number;
   /** Confidence of the tempo estimate. */
   bpmConfidence: number;
-  /** Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate. */
+  /**
+   * Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   integratedLufs: number;
-  /** EBU Tech 3342 loudness range, in LU. Absent when not measured. */
+  /**
+   * EBU Tech 3342 loudness range, in LU. Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
   /** True peak, in dBTP. `-Infinity` for silence; absent for an empty input. */
   truePeakDbtp?: number;
@@ -13331,9 +13343,15 @@ export interface MasteringAssistantResult {
 export interface MasteringStreamingPreviewPlatform {
   /** Platform name, echoed from the requested target. */
   name: string;
-  /** Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate. */
+  /**
+   * Integrated loudness in LUFS; `-Infinity` for silence or when nothing passes the gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   integratedLufs: number;
-  /** True peak of the take, in dBTP. `-Infinity` for silence. */
+  /**
+   * True peak of the take, in dBTP. `-Infinity` for silence.
+   * Never absent: every input sample measures it.
+   */
   truePeakDbtp: number;
   /** Gain that lands the take on the platform's target; absent when the take has no measurable loudness. */
   normalizationGainDb?: number;
@@ -13349,9 +13367,15 @@ export interface MasteringStreamingPreviewResult {
 
 /** Result of the `match.referenceLoudness` pair analysis. */
 export interface MatchReferenceLoudnessResult {
-  /** Integrated loudness of the source in LUFS. `-Infinity` below the gate. */
+  /**
+   * Integrated loudness of the source in LUFS. `-Infinity` below the gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   sourceLufs: number;
-  /** Integrated loudness of the reference in LUFS. `-Infinity` below the gate. */
+  /**
+   * Integrated loudness of the reference in LUFS. `-Infinity` below the gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   referenceLufs: number;
   /** Gain in dB that brings the source to the reference loudness. Absent when either side has no measurable loudness. */
   gainToMatchDb?: number;
@@ -13481,9 +13505,15 @@ export interface StreamingLoudnessGainResult {
    * input has no measurable loudness (silence, or nothing above the absolute gate).
    */
   loudnessStaticGainDb?: number;
-  /** True peak in dBTP of the loudness stage's input; `-Infinity` for digital silence. */
+  /**
+   * True peak in dBTP of the loudness stage's input; `-Infinity` for digital silence.
+   * Never absent: every input sample measures it.
+   */
   truePeakDbtp: number;
-  /** Integrated loudness in LUFS of the loudness stage's input; `-Infinity` below the absolute gate. */
+  /**
+   * Integrated loudness in LUFS of the loudness stage's input; `-Infinity` below the absolute gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   integratedLufs: number;
 }
 
@@ -13494,17 +13524,17 @@ export interface LoudnessMatchResult {
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
   /**
-   * The reference take's BS.1770 integrated loudness. Non-finite for a silent
-   * or below-gate take — the documented outcome, not a failure.
+   * The reference take's BS.1770 integrated loudness. Always finite: a silent or
+   * below-gate take on either side is refused with `RangeError` ("... has no
+   * measurable loudness").
    */
   referenceLufs: number;
-  /** The matched take's, before the gain. Non-finite in the same case. */
+  /** The matched take's, before the gain. Always finite, as `referenceLufs`. */
   sourceLufs: number;
   /**
    * The gain that lands the remeasured source on `referenceLufs`; equals
    * `referenceLufs - sourceLufs` unless the gain moves blocks across the
-   * absolute gate. Applied with no upper bound, and 0 whenever either loudness
-   * is non-finite.
+   * absolute gate. Applied with no upper bound.
    */
   appliedGainDb: number;
   /**
@@ -13514,6 +13544,7 @@ export interface LoudnessMatchResult {
    * headroom would leave a near-full-scale source at its own loudness, which is
    * the one thing a loudness match must not do. Limit downstream if the peak
    * matters more than the match. `-Infinity` for silence.
+   * Never absent: every input sample measures it.
    */
   matchedTruePeakDbtp: number;
 }
@@ -13526,13 +13557,22 @@ export interface LoudnessMatchStereoResult {
   right: Float32Array;
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
-  /** The reference program's BS.1770 integrated loudness. */
+  /**
+   * The reference program's BS.1770 integrated loudness.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   referenceLufs: number;
-  /** The stereo source program's loudness before the gain. */
+  /**
+   * The stereo source program's loudness before the gain.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   sourceLufs: number;
   /** One gain applied to both source channels, in dB. */
   appliedGainDb: number;
-  /** Maximum true peak across the matched left and right channels, in dBTP. `-Infinity` for silence. */
+  /**
+   * Maximum true peak across the matched left and right channels, in dBTP. `-Infinity` for silence.
+   * Never absent: every input sample measures it.
+   */
   matchedTruePeakDbtp: number;
 }
 
@@ -13544,9 +13584,15 @@ export interface MasteringResult {
   samples: Float32Array;
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
-  /** Integrated loudness of the input in LUFS. */
+  /**
+   * Integrated loudness of the input in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   inputLufs: number;
-  /** Integrated loudness of the output in LUFS. */
+  /**
+   * Integrated loudness of the output in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   outputLufs: number;
   /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
@@ -14088,15 +14134,21 @@ export interface StageGainReduction {
 
 /** Existing EBU R128 measurements captured before or after mastering. */
 export interface MasteringLoudnessSummary {
-  /** Integrated loudness in LUFS. `-Infinity` for silence or when nothing passes the gate. */
+  /**
+   * Integrated loudness in LUFS. `-Infinity` for silence or when nothing passes the gate.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   integratedLufs: number;
   /** Maximum momentary loudness in LUFS. `-Infinity` for silence; absent when the signal is shorter than one window. */
   maxMomentaryLufs?: number;
   /** Maximum short-term loudness in LUFS. `-Infinity` for silence; absent when the signal is shorter than one window. */
   maxShortTermLufs?: number;
-  /** True peak in dBTP. `-Infinity` for silence. */
+  /** True peak in dBTP. `-Infinity` for silence. Never absent: every input sample measures it. */
   truePeakDbtp: number;
-  /** EBU Tech 3342 loudness range, in LU. Absent when not measured. */
+  /**
+   * EBU Tech 3342 loudness range, in LU. Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
 }
 
@@ -14124,9 +14176,15 @@ export interface MasteringChainResult {
   samples: Float32Array;
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
-  /** Integrated loudness of the input in LUFS. */
+  /**
+   * Integrated loudness of the input in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   inputLufs: number;
-  /** Integrated loudness of the output in LUFS. */
+  /**
+   * Integrated loudness of the output in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   outputLufs: number;
   /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
@@ -14179,9 +14237,15 @@ export interface MasteringChainStereoResult {
   right: Float32Array;
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
-  /** Integrated loudness of the input in LUFS. */
+  /**
+   * Integrated loudness of the input in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   inputLufs: number;
-  /** Integrated loudness of the output in LUFS. */
+  /**
+   * Integrated loudness of the output in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   outputLufs: number;
   /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
@@ -14214,9 +14278,15 @@ export interface MasteringStereoResult {
   right: Float32Array;
   /** Sample rate of the returned audio in Hz. */
   sampleRate: number;
-  /** Integrated loudness of the input in LUFS. */
+  /**
+   * Integrated loudness of the input in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   inputLufs: number;
-  /** Integrated loudness of the output in LUFS. */
+  /**
+   * Integrated loudness of the output in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   outputLufs: number;
   /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;

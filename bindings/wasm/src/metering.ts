@@ -182,7 +182,7 @@ function monoMeter(
   return getSonareModule()[requestName](r.samples, r.sampleRate);
 }
 
-/** Peak level in dBFS. */
+/** Peak level in dBFS; `-Infinity` for silence. Always a number: empty input is refused first. */
 export function meteringPeakDb(request: MeteringPeakDbRequest): number;
 export function meteringPeakDb(
   samples: Float32Array,
@@ -195,7 +195,7 @@ export function meteringPeakDb(...args: unknown[]): number {
   });
 }
 
-/** RMS level in dBFS. */
+/** RMS level in dBFS; `-Infinity` for silence. Always a number: empty input is refused first. */
 export function meteringRmsDb(request: MeteringRmsDbRequest): number;
 export function meteringRmsDb(
   samples: Float32Array,
@@ -272,7 +272,7 @@ export function meteringCrestFactorDbStereo(...args: unknown[]): number | undefi
   });
 }
 
-/** DC offset of the signal (its mean). */
+/** DC offset of the signal (its mean). Always a number: empty input is refused first. */
 export function meteringDcOffset(request: MeteringDcOffsetRequest): number;
 export function meteringDcOffset(
   samples: Float32Array,
@@ -285,7 +285,10 @@ export function meteringDcOffset(...args: unknown[]): number {
   });
 }
 
-/** Inter-sample (true) peak in dBTP. `oversampleFactor` is a power of two in [1, 16]; omit it for 4. */
+/**
+ * Inter-sample (true) peak in dBTP; `-Infinity` for silence. Always a number: empty input is
+ * refused first. `oversampleFactor` is a power of two in [1, 16]; omit it for 4.
+ */
 export function meteringTruePeakDbtp(request: MeteringTruePeakDbtpRequest): number;
 export function meteringTruePeakDbtp(
   samples: Float32Array,

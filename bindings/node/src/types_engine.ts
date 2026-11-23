@@ -618,7 +618,10 @@ export interface EngineBounceResult {
   readonly channels: Float32Array[];
   /** Sample rate of the returned audio in Hz. */
   readonly sampleRate: number;
-  /** Integrated loudness of the returned audio, in LUFS. */
+  /**
+   * Integrated loudness of the returned audio, in LUFS.
+   * Never absent: the integrated measurement clamps to the input, so silence reads `-Infinity`.
+   */
   readonly integratedLufs: number;
 }
 

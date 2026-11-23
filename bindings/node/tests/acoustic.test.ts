@@ -51,7 +51,7 @@ describe('geometric room acoustics', () => {
     expect(est.volume).toBeGreaterThan(105 * 0.8);
     expect(est.volume).toBeLessThan(105 * 1.2);
     expect(est.confidence).toBeGreaterThan(0);
-    expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
+    expect(est.rt60Bands?.length ?? 0).toBeGreaterThanOrEqual(4);
     expect(Number.isFinite(est.drrDb)).toBe(true);
   });
 
@@ -189,14 +189,6 @@ describe('geometric room acoustics', () => {
     // the entry above is the clamp's rather than one every call carries.
     const unclamped = roomMorph(samples, 48000, { ...base, ismOrder: 2 });
     expect(unclamped.diagnostics.map((d) => d.code)).not.toContain('acoustic.ism_order_clamped');
-  });
-
-  it('reports NaN geometry when no decay is measurable', () => {
-    const est = estimateRoom(new Float32Array(48000), 48000);
-    expect(est.confidence).toBe(0);
-    for (const value of [est.volume, est.lengthM, est.widthM, est.heightM]) {
-      expect(Number.isNaN(value)).toBe(true);
-    }
   });
 
   it('rejects out-of-range sample rates', () => {
@@ -401,7 +393,7 @@ describe('geometric room acoustics', () => {
     const dflt = estimateRoom(rir.rir, 48000);
     // Non-vacuity: the analyzer's 0.01 floor is far smaller than the default.
     const floored = estimateRoom(rir.rir, 48000, { referenceAbsorption: 0.01 });
-    expect(floored.volume).toBeLessThan(dflt.volume / 1000);
+    expect(floored.volume).toBeLessThan((dflt.volume ?? 0) / 1000);
   });
 
   it('emits absorption and rt60 bands at the same length', () => {
@@ -413,15 +405,12 @@ describe('geometric room acoustics', () => {
       absorption: 0.15,
     });
     const est = estimateRoom(rir.rir, 48000);
-    expect(est.bandAbsorption.length).toBe(est.rt60Bands.length);
+    expect(est.bandAbsorption?.length).toBe(est.rt60Bands?.length);
   });
 
-  it('keeps the full band count when one of the two estimates fails', () => {
-    // Absorption (the inverse problem) and RT60 (the decay fit) are independent:
-    // white noise has no usable broadband decay, so the absorption solve bails
-    // out with no bands at all while the analyzer still reports its per-band
-    // vector. Reporting both at the shorter length threw the surviving vector
-    // away; the C ABI NaN-fills the failed side instead and Node now matches.
+  it('omits a band array none of whose bands was measured', () => {
+    // White noise has no usable decay: the absorption solve returns no bands and the
+    // decay fit measures none of its bands, so both arrays are absent, not all-NaN.
     let state = 7;
     const noise = new Float32Array(48000);
     for (let i = 0; i < noise.length; i++) {
@@ -435,13 +424,13 @@ describe('geometric room acoustics', () => {
       heightM: 3,
       absorption: 0.15,
     });
-    const bandCount = estimateRoom(analyzable.rir, 48000).rt60Bands.length;
+    const bandCount = estimateRoom(analyzable.rir, 48000).rt60Bands?.length ?? 0;
     expect(bandCount).toBeGreaterThan(0);
 
     const degraded = estimateRoom(noise, 48000);
     expect(degraded.confidence).toBe(0);
-    expect(degraded.rt60Bands.length).toBe(bandCount);
-    expect(degraded.bandAbsorption.length).toBe(degraded.rt60Bands.length);
+    expect(degraded.rt60Bands).toBeUndefined();
+    expect(degraded.bandAbsorption).toBeUndefined();
   });
 
   it('names the refused value and its range in the thrown error, and carries warnings on success', () => {
@@ -562,7 +551,7 @@ describe('geometric room acoustics', () => {
     expect(() => estimateRoom(rir.rir, 48000, { aspectHintLw: 0 })).toThrow(RangeError);
     expect(() => estimateRoom(rir.rir, 48000, { aspectHintLh: 0 })).toThrow(RangeError);
     const est = estimateRoom(rir.rir, 48000);
-    expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
+    expect(est.rt60Bands?.length ?? 0).toBeGreaterThanOrEqual(4);
   });
   // The ISO 9613-1 atmospheric term reached only the streaming insert
   // ("effects.reverb.room") until these options existed; the offline entry
@@ -748,7 +737,7 @@ describe('named selectors and estimate-to-geometry', () => {
     expect(Object.keys(geometry).sort()).toEqual(
       ['absorption', 'bandAbsorption', 'heightM', 'lengthM', 'listener', 'source', 'widthM'].sort(),
     );
-    expect(geometry.lengthM).toBeCloseTo(estimate.lengthM, 5);
+    expect(geometry.lengthM).toBeCloseTo(estimate.lengthM ?? Number.NaN, 5);
     const options = { sampleRate: 48000, maxSec: 0.1, ismOrder: 2 };
     const mapped = synthesizeRir({ ...geometry, ...options });
     const byHand = synthesizeRir({
@@ -799,8 +788,8 @@ describe('named selectors and estimate-to-geometry', () => {
 
   it('refuses an estimate with no measurable room', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
-    expect(Number.isNaN(silent.lengthM)).toBe(true);
-    // The estimate's own NaN geometry reaches the library, which refuses the room, not a field.
+    expect(silent.lengthM).toBeUndefined();
+    // The estimate's absent geometry reaches the library, which refuses the room, not a field.
     expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(
       /^roomGeometryFromEstimate: room estimate has no measurable dimensions/,
     );

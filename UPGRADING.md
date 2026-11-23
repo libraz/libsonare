@@ -1547,7 +1547,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `LufsResult.max_short_term_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
 | `LufsResult.momentary_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
 | `LufsResult.short_term_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
-| `SilenceCommonReport.silence_ceiling_db` | float -> float \| None: None when any signal's peak is 0 or it holds an exactly zero frame |
+| `SilenceCommonReport.silence_ceiling_db` | float -> float \| None: None (not measured) when every signal is silent; +inf when every signal with a level holds an exactly zero frame |
 
 #### Every call scans its input for non-finite values
 
@@ -5254,6 +5254,26 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `HpssRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `AcousticResult.c50Bands` | Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty |
+| `AcousticResult.c50` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.c80Bands` | Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty |
+| `AcousticResult.c80` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.d50` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.edtBands` | Float32Array -> optional Float32Array: absent when no band was measured (the blind path), never all-NaN |
+| `AcousticResult.edt` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted |
+| `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
+| `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomEstimateResult.lengthM` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.volume` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomEstimateResult.widthM` | number -> optional number: absent when no decay is measurable, never NaN |
 
 #### Every call scans its input for non-finite values
 
@@ -9671,6 +9691,26 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PitchShiftRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `TimeStretchRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `AcousticResult.c50Bands` | Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty |
+| `AcousticResult.c50` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.c80Bands` | Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty |
+| `AcousticResult.c80` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.d50` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.edtBands` | Float32Array -> optional Float32Array: absent when no band was measured (the blind path), never all-NaN |
+| `AcousticResult.edt` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
+| `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted |
+| `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
+| `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomEstimateResult.lengthM` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.volume` | number -> optional number: absent when no decay is measurable, never NaN |
+| `RoomEstimateResult.widthM` | number -> optional number: absent when no decay is measurable, never NaN |
+
 #### Every call scans its input for non-finite values
 
 | 1.x | 2.0.0 |
@@ -12000,7 +12040,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineMeterTelemetry.rmsDbL` | `EngineMeterTelemetry.rmsDb`: rmsDbL -> rmsDb[0]: one entry per plane, numChannels long |
 | `EngineMeterTelemetry.rmsDbR` | `EngineMeterTelemetry.rmsDb`: rmsDbR -> rmsDb[1]: one entry per plane, numChannels long |
 | `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
-| `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0 |
+| `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0. Returns number \| undefined: a value not measured (the correlation of silence) is undefined, not NaN |
 | `RealtimeEngine.clipPageRequestScratchClipId` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.clipPageRequestScratchSample` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.consumeExternalMidiScratch` | removed: use drainExternalMidi(maxRecords), which returns ExternalMidiEvent[] |

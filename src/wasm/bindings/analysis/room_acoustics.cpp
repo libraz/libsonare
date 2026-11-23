@@ -21,15 +21,16 @@
 
 val acousticParametersToVal(const AcousticParameters& params) {
   val out = val::object();
-  out.set("rt60", params.rt60);
-  out.set("edt", params.edt);
-  out.set("c50", params.c50);
-  out.set("c80", params.c80);
-  out.set("d50", params.d50);
-  out.set("rt60Bands", vectorToFloat32Array(params.rt60_bands));
-  out.set("edtBands", vectorToFloat32Array(params.edt_bands));
-  out.set("c50Bands", vectorToFloat32Array(params.c50_bands));
-  out.set("c80Bands", vectorToFloat32Array(params.c80_bands));
+  setMeasured(out, "rt60", params.rt60);
+  setMeasured(out, "edt", params.edt);
+  setMeasured(out, "c50", params.c50);
+  setMeasured(out, "c80", params.c80);
+  setMeasured(out, "d50", params.d50);
+  const std::size_t band_count = params.rt60_bands.size();
+  setMeasuredArray(out, "rt60Bands", params.rt60_bands, band_count);
+  setMeasuredArray(out, "edtBands", params.edt_bands, band_count);
+  setMeasuredArray(out, "c50Bands", params.c50_bands, band_count);
+  setMeasuredArray(out, "c80Bands", params.c80_bands, band_count);
   out.set("confidence", params.confidence);
   out.set("isBlind", params.is_blind);
   return out;
@@ -279,28 +280,26 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   }
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, config);
-  // Absorption (from the inverse problem) and RT60 (from the decay fit) are
-  // independent estimates and either can fail on its own. Both arrays report at
-  // the longer length with the failed side NaN-filled, exactly as the C ABI does
-  // (sonare_c_acoustic.cpp): truncating to the shorter side discarded a
-  // fully-computed vector precisely when its sibling failed, which is when the
-  // caller needs the surviving one most.
+  // Absorption (from the inverse problem) and RT60 (from the decay fit) are independent estimates
+  // and either can fail on its own: a failed side is absent, and a surviving shorter one is padded
+  // with NaN to the other's length so the bands line up.
   const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
   const auto pad_with_nan = [band_count](std::vector<float> values) {
-    values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
+    if (!values.empty()) values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
     return values;
   };
-  const std::vector<float> absorption_bands = pad_with_nan(est.absorption_bands);
-  const std::vector<float> rt60_bands = pad_with_nan(est.rt60_bands);
   val out = val::object();
-  out.set("volume", est.volume);
-  out.set("lengthM", est.dims.length);
-  out.set("widthM", est.dims.width);
-  out.set("heightM", est.dims.height);
+  setMeasured(out, "volume", est.volume);
+  setMeasured(out, "lengthM", est.dims.length);
+  setMeasured(out, "widthM", est.dims.width);
+  setMeasured(out, "heightM", est.dims.height);
   out.set("drrDb", est.drr_db);
   out.set("confidence", est.confidence);
-  out.set("bandAbsorption", vectorToFloat32Array(absorption_bands));
-  out.set("rt60Bands", vectorToFloat32Array(rt60_bands));
+  // nOctaveBands is at least 1, so no band at all means both estimates failed.
+  if (band_count > 0) {
+    setMeasuredArray(out, "bandAbsorption", pad_with_nan(est.absorption_bands), band_count);
+    setMeasuredArray(out, "rt60Bands", pad_with_nan(est.rt60_bands), band_count);
+  }
   return out;
 }
 
@@ -394,7 +393,7 @@ val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val op
 // set to the mean of the finite bands. Absorption bands that did not converge are left out.
 val js_room_geometry_from_estimate(val estimate) {
   const float nan = std::numeric_limits<float>::quiet_NaN();
-  // Mirrors RoomEstimateResult.lengthM/widthM/heightM, NaN when the estimate could not measure.
+  // RoomEstimateResult omits a dimension it could not measure; the core spells that NaN.
   const float length = floatOption(estimate, "lengthM", nan);
   const float width = floatOption(estimate, "widthM", nan);
   const float height = floatOption(estimate, "heightM", nan);

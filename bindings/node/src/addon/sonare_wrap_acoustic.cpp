@@ -244,28 +244,30 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
     check::integer_at_least(cfg.acoustic.n_octave_bands, 1, "nOctaveBands");
   }
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
-  // Absorption (from the inverse problem) and RT60 (from the decay fit) are
-  // independent estimates and either can fail on its own. Both arrays report at
-  // the longer length with the failed side NaN-filled, exactly as the C ABI does
-  // (sonare_c_acoustic.cpp): truncating to the shorter side discarded a
-  // fully-computed vector precisely when its sibling failed, which is when the
-  // caller needs the surviving one most.
+  // Absorption (from the inverse problem) and RT60 (from the decay fit) are independent estimates
+  // and either can fail on its own: a failed side is absent, and a surviving shorter one is padded
+  // with NaN to the other's length so the bands line up.
   const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
   const auto pad_with_nan = [band_count](std::vector<float> values) {
-    values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
+    if (!values.empty()) values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
     return values;
   };
   const std::vector<float> absorption_bands = pad_with_nan(est.absorption_bands);
   const std::vector<float> rt60_bands = pad_with_nan(est.rt60_bands);
   Napi::Object out = Napi::Object::New(env);
-  out.Set("volume", Napi::Number::New(env, est.volume));
-  out.Set("lengthM", Napi::Number::New(env, est.dims.length));
-  out.Set("widthM", Napi::Number::New(env, est.dims.width));
-  out.Set("heightM", Napi::Number::New(env, est.dims.height));
+  SetMeasured(out, "volume", est.volume);
+  SetMeasured(out, "lengthM", est.dims.length);
+  SetMeasured(out, "widthM", est.dims.width);
+  SetMeasured(out, "heightM", est.dims.height);
   out.Set("drrDb", Napi::Number::New(env, est.drr_db));
   out.Set("confidence", Napi::Number::New(env, est.confidence));
-  out.Set("bandAbsorption", Float32ArrayFrom(env, absorption_bands));
-  out.Set("rt60Bands", Float32ArrayFrom(env, rt60_bands));
+  // nOctaveBands is at least 1, so no band at all means both estimates failed.
+  if (band_count > 0) {
+    SetMeasuredArray(out, "bandAbsorption",
+                     absorption_bands.empty() ? nullptr : absorption_bands.data(), band_count);
+    SetMeasuredArray(out, "rt60Bands", rt60_bands.empty() ? nullptr : rt60_bands.data(),
+                     band_count);
+  }
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -281,10 +283,11 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   const Napi::Object estimate = info[0].As<Napi::Object>();
   std::vector<float> bands = FloatArrayProperty(estimate, "bandAbsorption");
   SonareRoomEstimate c_estimate{};
-  // Mirrors RoomEstimateResult.lengthM/widthM/heightM, NaN when the estimate could not measure.
-  c_estimate.length_m = FloatDataProperty(estimate, "lengthM", c_estimate.length_m);
-  c_estimate.width_m = FloatDataProperty(estimate, "widthM", c_estimate.width_m);
-  c_estimate.height_m = FloatDataProperty(estimate, "heightM", c_estimate.height_m);
+  // RoomEstimateResult omits a dimension it could not measure; the C ABI spells that NaN.
+  constexpr float kNotMeasured = std::numeric_limits<float>::quiet_NaN();
+  c_estimate.length_m = FloatDataProperty(estimate, "lengthM", kNotMeasured);
+  c_estimate.width_m = FloatDataProperty(estimate, "widthM", kNotMeasured);
+  c_estimate.height_m = FloatDataProperty(estimate, "heightM", kNotMeasured);
   c_estimate.band_absorption = bands.empty() ? nullptr : bands.data();
   c_estimate.band_count = bands.size();
 

@@ -381,6 +381,21 @@ describe('mixer master meter', () => {
     });
   });
 
+  it('meterScratchValue reads a silent level as -Infinity and an unmeasured correlation as undefined', () => {
+    withPreset((mixer) => {
+      mixer.configureMeter({ enabled: true });
+      const silence = Array.from({ length: mixer.stripCount }, () => new Float32Array(BLOCK));
+      for (let block = 0; block < 4; block++) {
+        mixer.processStereo(silence, silence);
+      }
+      expect(mixer.latchMeterSnapshot()).toBe(true);
+      for (const field of [0, 1, 2, 3, 5, 6] as const) {
+        expect(mixer.meterScratchValue(field), String(field)).toBe(Number.NEGATIVE_INFINITY);
+      }
+      expect(mixer.meterScratchValue(4)).toBeUndefined();
+    });
+  });
+
   it('meterScratchValue refuses a field outside the map', () => {
     withPreset((mixer) => {
       mixer.configureMeter({ enabled: true });

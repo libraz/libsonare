@@ -17214,10 +17214,10 @@ test = "bindings/wasm/tests/surface/engine-mixer.test.ts::configureMeter takes a
 [[entry]]
 kind = "method"
 old = "Mixer.meterScratchValue"
-changed = "field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0"
+changed = "field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0. Returns number | undefined: a value not measured (the correlation of silence) is undefined, not NaN"
 domain = "engine"
 rule = "individual"
-test = "bindings/wasm/tests/surface/engine-mixer.test.ts::meterScratchValue refuses a field"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::meterScratchValue re"
 
 [[entry]]
 kind = "type"
@@ -35892,3 +35892,123 @@ removed = "private; SonareRealtimeEngineWorkletProcessor.receiveMessage notes th
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.rt60"
+changed = "number -> optional number: absent when not measured, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.edt"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c50"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c80"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.d50"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.rt60Bands"
+changed = "Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.edtBands"
+changed = "Float32Array -> optional Float32Array: absent when no band was measured (the blind path), never all-NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c50Bands"
+changed = "Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c80Bands"
+changed = "Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.volume"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.lengthM"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.widthM"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.heightM"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.bandAbsorption"
+changed = "Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.rt60Bands"
+changed = "Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"

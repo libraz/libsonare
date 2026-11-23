@@ -51,7 +51,7 @@ export interface MixMeterSnapshot {
   rmsDbL?: number;
   /** Right-channel RMS level in dBFS. `-Infinity` for silence; absent when not measured. */
   rmsDbR?: number;
-  /** Inter-channel correlation in `[-1, 1]`. Absent when not measured. */
+  /** Inter-channel correlation in `[-1, 1]`. Absent when not measured (no audio yet, or a channel has zero energy). */
   correlation?: number;
   /**
    * Stereo width measured by the mono-compatibility check. Absent when not

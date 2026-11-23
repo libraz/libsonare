@@ -317,15 +317,15 @@ export interface WasmChordAnalysisResult {
 }
 
 export interface WasmAcousticResult {
-  rt60: number;
-  edt: number;
-  c50: number;
-  c80: number;
-  d50: number;
-  rt60Bands: Float32Array;
-  edtBands: Float32Array;
-  c50Bands: Float32Array;
-  c80Bands: Float32Array;
+  rt60?: number;
+  edt?: number;
+  c50?: number;
+  c80?: number;
+  d50?: number;
+  rt60Bands?: Float32Array;
+  edtBands?: Float32Array;
+  c50Bands?: Float32Array;
+  c80Bands?: Float32Array;
   confidence: number;
   isBlind: boolean;
 }
@@ -392,14 +392,14 @@ export interface WasmRoomEstimateOptions {
 }
 
 export interface WasmRoomEstimateResult {
-  volume: number;
-  lengthM: number;
-  widthM: number;
-  heightM: number;
+  volume?: number;
+  lengthM?: number;
+  widthM?: number;
+  heightM?: number;
   drrDb: number;
   confidence: number;
-  bandAbsorption: Float32Array;
-  rt60Bands: Float32Array;
+  bandAbsorption?: Float32Array;
+  rt60Bands?: Float32Array;
 }
 
 /** Every field of a dereverb config, as `masteringRepairDereverbConfigForRoom` returns it. */
@@ -965,29 +965,29 @@ export interface WasmMasteringStereoResult {
 }
 
 export interface WasmMixMeterSnapshot {
-  peakDbL: number;
-  peakDbR: number;
-  rmsDbL: number;
-  rmsDbR: number;
-  correlation: number;
-  monoCompatWidth: number;
+  peakDbL?: number;
+  peakDbR?: number;
+  rmsDbL?: number;
+  rmsDbR?: number;
+  correlation?: number;
+  monoCompatWidth?: number;
   monoCompatPeak: number;
   monoCompatSideRms: number;
   likelyMonoCompatible: boolean;
-  momentaryLufs: number;
-  shortTermLufs: number;
-  integratedLufs: number;
+  momentaryLufs?: number;
+  shortTermLufs?: number;
+  integratedLufs?: number;
   gainReductionDb: number;
   /**
    * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4 polyphase reconstruction.
    * A streaming measurement that runs one reconstruction-filter group delay (a few samples) behind
    * the block, so every value has its whole stencil and the reading does not depend on the block size.
    */
-  truePeakDbtpL: number;
+  truePeakDbtpL?: number;
   /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
-  truePeakDbtpR: number;
+  truePeakDbtpR?: number;
   /** Maximum inter-sample peak across channels in dBTP. See {@link truePeakDbtpL}. */
-  maxTruePeakDbtp: number;
+  maxTruePeakDbtp?: number;
   seq: number;
   numChannels: number;
   peakDb: number[];
@@ -2089,9 +2089,9 @@ export interface SonareModule {
     options: WasmRoomMorphStereoOptions,
   ) => WasmRoomMorphStereoResult;
   roomGeometryFromEstimate?: (estimate: {
-    lengthM: number;
-    widthM: number;
-    heightM: number;
+    lengthM?: number;
+    widthM?: number;
+    heightM?: number;
     bandAbsorption?: Float32Array | number[];
   }) => Omit<WasmRoomGeometryOptions, 'materialPreset'>;
   analyzeBpm: (

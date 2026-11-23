@@ -83,7 +83,10 @@ export interface MasteringRepairAnalysis {
    * from `recommended` even though flat runs were found.
    */
   declipThresholdSafe: boolean;
-  /** Programme loudness in LUFS the noise floor is compared against. `-Infinity` for silence. */
+  /**
+   * Programme loudness in LUFS the noise floor is compared against. `-Infinity` for silence.
+   * Never absent: the integrated measurement clamps to the input.
+   */
   integratedLufs: number;
   /**
    * Stages the measurement supports, in application order, each with every setting. Pass it to

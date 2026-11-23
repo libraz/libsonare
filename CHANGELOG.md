@@ -154,6 +154,7 @@ This release gives the public interface one set of conventions on every surface 
 - Streaming chord and key analysis are unchanged.
 - `zero_crossings` refuses a non-finite sample in the core, so the C ABI and Python refuse it as the JS facades did.
 - `chordSymbolFromAnalysis` on Node and WASM leaves `slashBassPc` out when the bass is the root instead of returning 255.
+- On Node and WASM an acoustic value that was not measured is an absent key instead of NaN: the `rt60`, `edt`, `c50`, `c80` and `d50` of `detectAcoustic` / `analyzeImpulseResponse` (the blind path measures only `rt60`), and the `volume` and dimensions of `estimateRoom`. A band array none of whose bands was measured is absent instead of empty or all-NaN (`edtBands`, `c50Bands` and `c80Bands` on the blind path, `bandAbsorption` and `rt60Bands` of an estimate with no measurable decay); a measured one keeps every band, NaN where one band was not fitted.
 
 #### Editing and alignment
 
@@ -181,6 +182,7 @@ This release gives the public interface one set of conventions on every surface 
 - Under the auto input layout a `PlaybackRenderer` whose stream never changes layout reports zero layout switches.
 - Applying an auto-tempo candidate's time signature (`sonare_project_auto_tempo`, and the candidates `analyzeTempo` / `analyze_tempo` report) puts the first signature on the first downbeat's bar phase, at most one bar in, so the bars before the downbeat line up with it and only the opening bar is shortened; a lead-in of a whole number of bars starts the signature at ppq 0.
 - `RealtimeEngine` on WASM refuses 0 or a negative in an engine field whose native 0 is a sentinel (`setMetronome`, `setClips`, `setMidiClips`, `setGraph`, `bounceOffline`, `freezeOffline`) with the range text Node prints, and `clickSamples` is bounded at 384000, `clickSec` at (0, 1] and `ditherBits` at [2, 32].
+- `Mixer.meterScratchValue` on WASM returns `undefined` for a value that was not measured (the correlation of silence) instead of NaN; a silent level is still `-Infinity`.
 
 #### MIDI and synthesizer
 

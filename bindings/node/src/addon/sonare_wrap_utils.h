@@ -4,6 +4,7 @@
 #include <napi.h>
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <exception>
@@ -310,6 +311,18 @@ inline Napi::Float32Array Float32ArrayFrom(Napi::Env env, const float* data, siz
   auto array = Napi::Float32Array::New(env, n);
   if (n > 0 && data != nullptr) std::memcpy(array.Data(), data, n * sizeof(float));
   return array;
+}
+
+/// @brief Sets @p key to a Float32Array of the @p n floats a measurement of @p n elements took,
+///        unless none was measured (a null @p data or every element NaN): an array not measured as
+///        a whole is an absent member, while a measured one keeps its length, with NaN for each
+///        element that was not measured. A measurement of zero elements is an empty array.
+inline void SetMeasuredArray(Napi::Object& out, const char* key, const float* data, size_t n) {
+  if (n > 0 &&
+      (data == nullptr || std::all_of(data, data + n, [](float v) { return std::isnan(v); }))) {
+    return;
+  }
+  out.Set(key, Float32ArrayFrom(out.Env(), data, n));
 }
 
 inline Napi::Float32Array Float32ArrayFrom(Napi::Env env, const std::vector<float>& values) {

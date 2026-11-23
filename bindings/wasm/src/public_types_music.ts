@@ -591,7 +591,10 @@ export interface AnalysisDynamics {
   peakDb?: number;
   /** RMS level in dB. `-Infinity` for silence; absent when not measured. */
   rmsDb?: number;
-  /** Loudness range in LU (EBU R128). Absent when not measured. */
+  /**
+   * Loudness range in LU (EBU R128). Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
   /** Peak-to-RMS ratio of the signal. Absent when not measured. */
   crestFactor?: number;
@@ -862,13 +865,16 @@ export interface RhythmResult {
 export interface DynamicsResult {
   /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
-  /** Peak level in dB. `-Infinity` for silence. */
+  /** Peak level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
   peakDb: number;
-  /** RMS level in dB. `-Infinity` for silence. */
+  /** RMS level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
   rmsDb: number;
   /** Peak-to-RMS ratio of the signal. Absent when not measured. */
   crestFactor?: number;
-  /** Loudness range in LU (EBU R128). Absent when not measured. */
+  /**
+   * Loudness range in LU (EBU R128). Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
   /** True when the signal is flagged as compressed. */
   isCompressed: boolean;

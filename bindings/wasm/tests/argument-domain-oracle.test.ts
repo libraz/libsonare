@@ -202,7 +202,7 @@ describe('acoustic analysis options', () => {
   });
 
   it('accepts zero bands', () => {
-    expect(analyzeImpulseResponse(ir, 48000, { nOctaveBands: 0 }).rt60Bands.length).toBe(0);
+    expect(analyzeImpulseResponse(ir, 48000, { nOctaveBands: 0 }).rt60Bands?.length).toBe(0);
   });
 });
 

@@ -186,7 +186,10 @@ export interface AnalysisDynamics {
   rmsDb?: number;
   /** Peak-to-RMS ratio of the signal. Absent when not measured. */
   crestFactor?: number;
-  /** Loudness range in LU. Absent when not measured. */
+  /**
+   * Loudness range in LU. Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
   /** True when the signal is flagged as compressed. */
   isCompressed: boolean;
@@ -636,35 +639,33 @@ export interface BpmAnalysisResult {
  *
  * Only `rt60` (and `rt60Bands`) is estimated in both modes. `c50`/`c80`/`d50`
  * and `edt` require a known direct-sound arrival time, which only a measured
- * impulse response provides, so they are NaN when `isBlind` is true -- `edt`
- * measures the 0 to -10 dB decay and the blind estimator only fits the late
- * decay `rt60` comes from.
+ * impulse response provides, so they and their band arrays are absent when
+ * `isBlind` is true -- `edt` measures the 0 to -10 dB decay and the blind
+ * estimator only fits the late decay `rt60` comes from.
  *
- * A band array that was not computed is EMPTY, never zero-filled: a zero-filled
- * clarity array is indistinguishable from a genuine 0 dB measurement. So
- * `c50Bands` and `c80Bands` have length 0 when `isBlind` is true. `edtBands` is
- * the exception -- it keeps its full length and is all NaN, so it can be indexed
- * by the same band index as `rt60Bands`.
+ * A value that was not measured is an absent key, never NaN. A band array that
+ * was measured keeps its full length, indexed like `rt60Bands`, with NaN for
+ * each band that could not be fitted; one with no band measured is absent.
  */
 export interface AcousticResult {
-  /** Reverberation time RT60 in seconds. */
-  rt60: number;
-  /** Early decay time in seconds; NaN when `isBlind` is true. */
-  edt: number;
-  /** Clarity C50 in dB; NaN when `isBlind` is true. */
-  c50: number;
-  /** Clarity C80 in dB; NaN when `isBlind` is true. */
-  c80: number;
-  /** Definition D50, the early-energy fraction in `[0, 1]`; NaN when `isBlind` is true. */
-  d50: number;
-  /** RT60 per octave band, in seconds. */
-  rt60Bands: Float32Array;
-  /** Early decay time per octave band, in seconds; all NaN when `isBlind` is true. */
-  edtBands: Float32Array;
-  /** Clarity C50 per octave band, in dB; empty when `isBlind` is true. */
-  c50Bands: Float32Array;
-  /** Clarity C80 per octave band, in dB; empty when `isBlind` is true. */
-  c80Bands: Float32Array;
+  /** Broadband reverberation time (RT60) in seconds; absent when no decay could be fitted. */
+  rt60?: number;
+  /** Early decay time in seconds; absent when `isBlind` or not fitted. */
+  edt?: number;
+  /** Clarity C50 in dB; absent when `isBlind` or not measurable. */
+  c50?: number;
+  /** Clarity C80 in dB; absent when `isBlind` or not measurable. */
+  c80?: number;
+  /** Definition D50, the early-energy fraction in `[0, 1]`; absent when `isBlind` or not measurable. */
+  d50?: number;
+  /** RT60 per octave band, in seconds; NaN for a band not fitted, absent when no band was. */
+  rt60Bands?: Float32Array;
+  /** Early decay time per octave band, in seconds; absent when `isBlind` or no band was fitted. */
+  edtBands?: Float32Array;
+  /** Clarity C50 per octave band, in dB; absent when `isBlind` or no band was measured. */
+  c50Bands?: Float32Array;
+  /** Clarity C80 per octave band, in dB; absent when `isBlind` or no band was measured. */
+  c80Bands?: Float32Array;
   /** Confidence of the estimate, in `[0, 1]`. */
   confidence: number;
   /** True when the result was estimated from a recording rather than a measured impulse response. */
@@ -823,31 +824,29 @@ export interface RoomEstimateOptions {
 export interface RoomEstimateResult {
   /**
    * Equivalent volume (m^3) and representative dimensions (m), under the names
-   * {@link RoomGeometry} takes. NaN, with `confidence` 0, when the
-   * recording has no measurable broadband decay (silence, or an RT60 the
-   * analyzer could not fit) — the acoustic family's "not measurable", as in
-   * `rt60Bands`.
+   * {@link RoomGeometry} takes. Absent, with `confidence` 0, when the recording
+   * has no measurable broadband decay (silence, or an RT60 the analyzer could
+   * not fit).
    */
-  volume: number;
-  /** Estimated room length in metres. */
-  lengthM: number;
-  /** Estimated room width in metres. */
-  widthM: number;
-  /** Estimated room height in metres. */
-  heightM: number;
+  volume?: number;
+  /** Estimated room length in metres; absent when no decay is measurable. */
+  lengthM?: number;
+  /** Estimated room width in metres; absent when no decay is measurable. */
+  widthM?: number;
+  /** Estimated room height in metres; absent when no decay is measurable. */
+  heightM?: number;
   /** Direct-to-reverberant ratio in dB. */
   drrDb: number;
   /** Confidence of the estimate, in `[0, 1]`; 0 when nothing was measurable. */
   confidence: number;
   /**
-   * Per-octave-band mean absorption and RT60 (s). The two are independent
-   * estimates and either can fail to converge on its own; both arrays are always
-   * the same length, with the failed side NaN-filled rather than truncating both
-   * to the shorter (possibly empty) one.
+   * Per-octave-band mean absorption. Absorption and `rt60Bands` are independent
+   * estimates and either can fail on its own: a failed one is absent, and when
+   * both are present they have the same length, the shorter padded with NaN.
    */
-  bandAbsorption: Float32Array;
-  /** RT60 per octave band, in seconds. */
-  rt60Bands: Float32Array;
+  bandAbsorption?: Float32Array;
+  /** RT60 per octave band, in seconds; NaN for a band not fitted, absent when no band was. */
+  rt60Bands?: Float32Array;
 }
 
 /** A position inside a room, in metres. */
@@ -990,13 +989,16 @@ export interface RhythmResult {
 export interface DynamicsResult {
   /** Dynamic range in dB. `+Infinity` when the low percentile window is silent; absent when not measured. */
   dynamicRangeDb?: number;
-  /** Peak level in dB. `-Infinity` for silence. */
+  /** Peak level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
   peakDb: number;
-  /** RMS level in dB. `-Infinity` for silence. */
+  /** RMS level in dB. `-Infinity` for silence. Never absent: every input sample measures it. */
   rmsDb: number;
   /** Peak-to-RMS ratio of the signal. Absent when not measured. */
   crestFactor?: number;
-  /** Loudness range in LU. Absent when not measured. */
+  /**
+   * Loudness range in LU. Absent for silence and when no 3 s block passes the gates:
+   * a spread, not a level, so never `-Infinity`.
+   */
   loudnessRangeLu?: number;
   /** True when the signal is flagged as compressed. */
   isCompressed: boolean;

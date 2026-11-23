@@ -164,6 +164,18 @@ val vectorToInt32Array(const std::vector<int>& vec);
 inline void setMeasured(val& out, const char* key, double value) {
   if (!std::isnan(value)) out.set(key, value);
 }
+/// Sets @p key to a Float32Array of @p values, taken by a measurement of @p count elements, unless
+/// none was measured (empty or every element NaN): an array not measured as a whole is an absent
+/// member, while a measured one keeps its length, with NaN for each element that was not measured.
+/// A measurement of zero elements is an empty array.
+inline void setMeasuredArray(val& out, const char* key, const std::vector<float>& values,
+                             std::size_t count) {
+  if (count > 0 &&
+      std::all_of(values.begin(), values.end(), [](float v) { return std::isnan(v); })) {
+    return;
+  }
+  out.set(key, vectorToFloat32Array(values));
+}
 val vectorToUint8Array(const uint8_t* data, std::size_t n);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
 /// @brief An argument the binding layer refused itself, before any library call.

@@ -256,7 +256,7 @@ describe('acoustic room options', () => {
   it('refuses a fractional nOctaveBands rather than estimating over six', () => {
     expectSentinelRefused(
       (nOctaveBands) => estimateRoom({ samples: MIXED, sampleRate: SR, nOctaveBands }),
-      (result) => String(result.rt60Bands.length),
+      (result) => String(result.rt60Bands?.length),
       8,
       'refused',
     );

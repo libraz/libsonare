@@ -19114,3 +19114,123 @@ to = "DeclipReport.unreconstructedRuns"
 domain = "effects"
 rule = "individual"
 test = "bindings/node/tests/mastering-repair-declip-stereo.test.ts::reconstructs the union of both channels runs"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.rt60"
+changed = "number -> optional number: absent when not measured, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.edt"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c50"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c80"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.d50"
+changed = "number -> optional number: absent when not measured (the blind path does not measure it), never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.rt60Bands"
+changed = "Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.edtBands"
+changed = "Float32Array -> optional Float32Array: absent when no band was measured (the blind path), never all-NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c50Bands"
+changed = "Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c80Bands"
+changed = "Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the clarity family and its band arrays on the blind path"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.volume"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.lengthM"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.widthM"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.heightM"
+changed = "number -> optional number: absent when no decay is measurable, never NaN"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.bandAbsorption"
+changed = "Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.rt60Bands"
+changed = "Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"

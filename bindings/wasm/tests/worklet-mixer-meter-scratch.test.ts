@@ -65,7 +65,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
     mixer.meterScratchValue = function (this: Mixer, field: MeterScratchField) {
       const value = realValue.call(this, field);
       calls.fieldsPerLatch[calls.fieldsPerLatch.length - 1]?.push(field);
-      calls.valuesPerLatch[calls.valuesPerLatch.length - 1]?.push(value);
+      calls.valuesPerLatch[calls.valuesPerLatch.length - 1]?.push(value ?? Number.NaN);
       return value;
     };
     return calls;
