@@ -426,6 +426,9 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
 ///        the id of the first added clip. The file's tempo map and meter map
 ///        replace the project's: the span before its first Set Tempo plays at
 ///        120 BPM, and a file with no Time Signature leaves the meter map empty.
+///        A first Time Signature after tick 0 gets the format's 4/4 stored at
+///        ppq 0 before it, and a signature at 0 that the next one repeats
+///        unchanged is stored once, at the later position.
 ///        Unrecoverable malformed tracks return
 ///        SONARE_ERROR_INVALID_FORMAT without mutating the project; a recoverable
 ///        truncated prefix is installed and reported through the normal success
@@ -439,7 +442,8 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
 
 /// @brief Exports the project's tempo map + MIDI clips to an SMF byte buffer.
 ///        Time Signature events are the project's meter map as it stands; an
-///        empty map writes none.
+///        empty map writes none, and a first signature starting after ppq 0 is
+///        also written at tick 0, since the project reads it from 0.
 /// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
 /// @param out_len   Receives the byte length.
 /// @note Valid MIDI 1.0/2.0 channel-voice UMP words stored via
@@ -457,8 +461,9 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 ///        registered controllers, bank-valid Program Change) without loss.
 ///        Adds one MIDI track + clip. @p out_first_clip_id (optional) receives
 ///        the added clip id. The file's tempo map and meter map replace the
-///        project's, as @ref sonare_project_import_smf describes. Malformed
-///        input returns an error without crashing.
+///        project's, as @ref sonare_project_import_smf describes, except that a
+///        late first Time Signature gets no 4/4 before it: the format states no
+///        default. Malformed input returns an error without crashing.
 ///        A valid MIDI Clip File can still be rejected when the projected
 ///        persistent Project JSON would exceed its aggregate resource budgets;
 ///        that rejection is also SONARE_ERROR_INVALID_FORMAT, because it is a
@@ -470,7 +475,8 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
 ///        byte buffer (single-clip container). MIDI 2.0-only events are written
 ///        WITHOUT loss — the reason to prefer this over @ref
 ///        sonare_project_export_smf when MIDI 2.0 fidelity matters. An empty
-///        meter map writes no Time Signature.
+///        meter map writes no Time Signature, and a first signature starting
+///        after ppq 0 is also written at tick 0.
 /// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
 /// @param out_len   Receives the byte length.
 /// @return SONARE_ERROR_INVALID_STATE when a stored clip expands past the

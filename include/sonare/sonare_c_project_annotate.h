@@ -245,7 +245,10 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
 ///          @ref sonare_project_analyze_tempo run on the same @p options, so a
 ///          caller pairs the two rather than mixing option sets. When
 ///          @p apply_time_signatures is nonzero, the candidate's complete
-///          detected meter sequence is also installed. @p out_bpm (optional)
+///          detected meter sequence is also installed; its first signature
+///          starts on the first downbeat's bar phase, at most one bar in, so
+///          only the opening bar is shortened, and a lead-in of a whole number
+///          of bars starts it at ppq 0. @p out_bpm (optional)
 ///          receives the selected BPM. A NULL @p options is the defaults. Read
 ///          the installed map back with @ref sonare_project_tempo_segment_count
 ///          and @ref sonare_project_tempo_segment_by_index.
