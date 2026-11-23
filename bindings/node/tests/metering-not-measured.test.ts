@@ -10,6 +10,8 @@ import {
   meteringDetectClipping,
   meteringPhaseScope,
   meteringSilenceRatio,
+  meteringStereoCorrelation,
+  meteringStereoWidth,
   meteringTruePeakDbtp,
 } from '../src/index.js';
 
@@ -36,6 +38,38 @@ describe('a phase scope point at exact silence has no angle', () => {
     expect(Number.isFinite(angles[angles.length - 1])).toBe(true);
     expect(result.averageAbsAngleRad).toBeDefined();
     expect(Number.isFinite(result.averageAbsAngleRad as number)).toBe(true);
+  });
+});
+
+describe('a stereo relation over a silent channel is not measured', () => {
+  const tone = halfSilent.map((_, i) => Math.sin((2 * Math.PI * 440 * i) / sampleRate));
+  const inverted = tone.map((value) => -value);
+
+  it('omits the phase scope correlation when either channel is silent', () => {
+    for (const [left, right] of [
+      [silence, silence],
+      [tone, silence],
+    ]) {
+      expect('correlation' in meteringPhaseScope({ left, right, sampleRate })).toBe(false);
+    }
+    expect(meteringPhaseScope({ left: tone, right: tone, sampleRate }).correlation).toBeCloseTo(
+      1,
+      5,
+    );
+  });
+
+  it('returns no stereo correlation, never 0, when either channel is silent', () => {
+    expect(
+      meteringStereoCorrelation({ left: silence, right: silence, sampleRate }),
+    ).toBeUndefined();
+    expect(meteringStereoCorrelation({ left: tone, right: silence, sampleRate })).toBeUndefined();
+  });
+
+  it('returns no width for silence and Infinity for a silent mid under a side', () => {
+    expect(meteringStereoWidth({ left: silence, right: silence, sampleRate })).toBeUndefined();
+    expect(meteringStereoWidth({ left: tone, right: inverted, sampleRate })).toBe(
+      Number.POSITIVE_INFINITY,
+    );
   });
 });
 

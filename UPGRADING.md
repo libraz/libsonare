@@ -5738,6 +5738,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
 | `PhaseScopeReport.angleRad` | NaN at a silent point, which has no angle (was 0); the array keeps one element per point |
 | `PhaseScopeReport.averageAbsAngleRad` | optional; absent when every point is silent (was 0) |
+| `PhaseScopeReport.correlation` | optional; absent when either channel has zero energy (was a required number) |
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
@@ -10466,6 +10467,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
 | `PhaseScopeReport.angleRad` | NaN at a silent point, which has no angle (was 0); the array keeps one element per point |
 | `PhaseScopeReport.averageAbsAngleRad` | optional; absent when every point is silent (was 0) |
+| `PhaseScopeReport.correlation` | optional; absent when either channel has zero energy (was a required number) |
 | `SpectrumOptions.dbAmin` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |

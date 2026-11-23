@@ -19298,3 +19298,11 @@ changed = "NaN at a silent point, which has no angle (was 0); the array keeps on
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/metering-not-measured.test.ts::keeps one NaN angle per silent point and omits the mean when every point is silent"
+
+[[entry]]
+kind = "field"
+old = "PhaseScopeReport.correlation"
+changed = "optional; absent when either channel has zero energy (was a required number)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/metering-not-measured.test.ts::omits the phase scope correlation when either channel is silent"
