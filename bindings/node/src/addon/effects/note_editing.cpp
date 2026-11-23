@@ -7,6 +7,7 @@
 #include "sonare_wrap_note_objects.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare_node;
 
@@ -446,8 +447,9 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
     }
     const Napi::Value voiced_value = opts.Get("voiced");
     if (!voiced_value.IsUndefined() && !voiced_value.IsNull() && f0_data == nullptr) {
-      Napi::TypeError::New(env, "voiced requires f0Hz").ThrowAsJavaScriptException();
-      return env.Undefined();
+      // Worded as the C ABI words it; the presence requirement makes it a shape refusal.
+      sonare::util::check::refuse_relation({"f0Hz", "voiced"},
+                                           "{0} {must_be_present} when {1} {is_present}");
     }
     if (!ReadOptionalVoicedFlags(env, voiced_value, n_frames, &voiced, &voiced_data)) {
       return env.Undefined();

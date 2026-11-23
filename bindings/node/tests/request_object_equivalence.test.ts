@@ -1934,7 +1934,7 @@ const ROWS: Row[] = [
       },
       {
         fields: ['voicedProb', 'voiced'],
-        error: 'TypeError: extractNotes: give voiced or voicedProb',
+        error: 'TypeError: extractNotes: voicedProb and voiced must not both be omitted',
       },
     ],
   },
@@ -1953,7 +1953,7 @@ const ROWS: Row[] = [
       { fields: ['frameRate'], error: 'TypeError: splitNote: frameRate must be a number' },
       {
         fields: ['voicedProb', 'voiced'],
-        error: 'TypeError: splitNote: give voiced or voicedProb',
+        error: 'TypeError: splitNote: voicedProb and voiced must not both be omitted',
       },
       { fields: ['notes'], error: 'TypeError: splitNote: notes must be an array' },
       { fields: ['index'], error: 'TypeError: splitNote: index must be a number' },
@@ -1978,7 +1978,7 @@ const ROWS: Row[] = [
       { fields: ['frameRate'], error: 'TypeError: mergeNotes: frameRate must be a number' },
       {
         fields: ['voicedProb', 'voiced'],
-        error: 'TypeError: mergeNotes: give voiced or voicedProb',
+        error: 'TypeError: mergeNotes: voicedProb and voiced must not both be omitted',
       },
       { fields: ['notes'], error: 'TypeError: mergeNotes: notes must be an array' },
       { fields: ['first'], error: 'TypeError: mergeNotes: first must be a number' },

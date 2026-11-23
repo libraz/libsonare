@@ -9,7 +9,7 @@ import {
   resolveEntryTimes,
   toVoicedFloat32,
 } from './internal/effects_common.js';
-import { codedError, mergeRespelled, refuse, refuseType, withEntry } from './internal/entry.js';
+import { codedError, mergeRespelled, refuseType, withEntry } from './internal/entry.js';
 import { requireOneOf } from './internal/one_of.js';
 import { withRespelled } from './internal/respell.js';
 import { isAbsent } from './internal/value_guards.js';
@@ -48,9 +48,6 @@ function assertNoteTrack(request: ExtractNotesRequest | NoteSetRequest): Float32
     throw refuseType(`f0Hz must be a Float32Array`);
   }
   assertFiniteScalar(request.frameRate, 'frameRate');
-  if (request.voiced == null && request.voicedProb == null) {
-    throw refuseType(`give voiced or voicedProb`);
-  }
   const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
   assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
   return voicedF32;
@@ -501,9 +498,6 @@ export function renderNotes(...args: unknown[]): Float32Array {
     }
     const { voiced: publicVoiced, ...withoutVoiced } = request;
     const voiced = publicVoiced == null ? undefined : toVoicedFloat32(publicVoiced);
-    if (publicVoiced != null && f0Hz === undefined) {
-      throw refuse('voiced requires f0Hz');
-    }
     if (f0Hz !== undefined) {
       assertPitchTrackLengths(f0Hz, publicVoiced);
     }

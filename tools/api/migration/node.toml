@@ -8382,7 +8382,7 @@ test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a des
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setPartRig"
-changed = "request-only; the positional (destinationId, part, mode, inserts?) form is gone, an absent part selects every part and insert params are an object; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry"
+changed = "request-only; the positional (destinationId, part, mode, inserts?) form is gone, an absent part selects every part and insert params are an object; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain')"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/engine.test.ts::takes the part rig as a request object with an optional part"
@@ -9505,7 +9505,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "function"
 old = "renderNotes"
-changed = "one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array"
+changed = "one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array; voiced without f0Hz is a TypeError ('f0Hz must be given when voiced is given') instead of a RangeError"
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -11059,7 +11059,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "Project.setPartRig"
-changed = "takes one request object; the positional form is gone; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry"
+changed = "takes one request object; the positional form is gone; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry; inserts beside a mode other than chain, or a chain mode with none, is a TypeError instead of a RangeError (the keys given are the fault: 'must be omitted unless mode is chain' / 'must be given when mode is chain')"
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/project.test.ts::sets a program and a part rig"

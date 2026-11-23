@@ -105,13 +105,13 @@ describe('Sonare WASM part rig', () => {
       expect(
         expectRefusalOf(
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
-          RangeError,
+          TypeError,
         ).message,
       ).toBe('Project.setPartRig: insertsJson must be omitted unless mode is chain');
       expect(
         expectRefusalOf(
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
-          RangeError,
+          TypeError,
         ).message,
       ).toBe('Project.setPartRig: insertsJson must be given when mode is chain');
       expect(

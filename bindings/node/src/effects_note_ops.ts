@@ -8,7 +8,7 @@ import {
   resolveEntryTimes,
   toVoicedInt32,
 } from './internal/effects_common.js';
-import { mergeRespelled, refuse, refuseType, withEntry } from './internal/entry.js';
+import { mergeRespelled, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
 import { withRespelled } from './internal/respell.js';
@@ -234,9 +234,6 @@ function assertNoteTrackRequest(request: ExtractNotesRequest): Int32Array | unde
     throw refuseType(`f0Hz must be a Float32Array`);
   }
   assertFiniteScalar(request.frameRate, 'frameRate');
-  if (request.voiced == null && request.voicedProb == null) {
-    throw refuseType(`give voiced or voicedProb`);
-  }
   // Normalize first so an unsupported container cannot be mistaken for a
   // length error merely because it happens to expose a matching `length`.
   const nativeVoiced = request.voiced != null ? toVoicedInt32(request.voiced) : undefined;
@@ -487,10 +484,7 @@ export function renderNotes(...args: unknown[]): Float32Array {
       assertFiniteScalar(options.frameRate as number, 'frameRate');
     }
     const nativeVoiced = voiced != null ? toVoicedInt32(voiced) : undefined;
-    if (nativeVoiced !== undefined) {
-      if (options.f0Hz === undefined) {
-        throw refuse('voiced requires f0Hz');
-      }
+    if (nativeVoiced !== undefined && options.f0Hz !== undefined) {
       assertPitchTrackLengths(options.f0Hz, voiced);
     }
     const { entries: nativeNotes, respelled } = resolveEntryTimes(notes, 'notes', sampleRate, true);

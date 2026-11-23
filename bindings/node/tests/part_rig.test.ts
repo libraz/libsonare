@@ -129,7 +129,8 @@ describe('part rig on a project', () => {
       RangeError,
       'inserts[0].processor must name an insert processor',
     );
-    expect(set({ mode: 'none', inserts: chain })).toThrow(RangeError);
+    // Inserts beside a mode that takes none refuse which keys were given: a shape error.
+    expect(set({ mode: 'none', inserts: chain })).toThrow(TypeError);
     expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
   });
 });

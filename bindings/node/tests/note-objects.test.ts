@@ -798,7 +798,7 @@ describe('renderNotes pitch curve edits', () => {
     validFlags[13] = 0;
     expect(() =>
       renderNotes({ samples, sampleRate: SR, notes: [{ ...note, edit }], voiced: validFlags }),
-    ).toThrow('renderNotes: voiced requires f0Hz');
+    ).toThrow(new TypeError('renderNotes: f0Hz must be given when voiced is given'));
     for (const malformed of [
       '0'.repeat(SET_FRAMES),
       new Float64Array(SET_FRAMES),

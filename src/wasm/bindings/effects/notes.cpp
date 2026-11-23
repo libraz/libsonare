@@ -71,7 +71,9 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   if (!has_voiced && !has_prob) {
-    throw WasmRangeError("voiced or voicedProb must be given");
+    // Worded as the C ABI words it; the presence requirement makes it a shape refusal.
+    sonare::util::check::refuse_relation({"voicedProb", "voiced"},
+                                         "{0} and {1} {must_not_both_be_absent}");
   }
   if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
     throw WasmRangeError("frameRate must be finite and greater than 0");
@@ -299,7 +301,9 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   const val voiced = objectProperty(options, "voiced");
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   if (has_voiced && !has_track) {
-    throw WasmRangeError("voiced requires f0Hz");
+    // Worded as the C ABI words it; the presence requirement makes it a shape refusal.
+    sonare::util::check::refuse_relation({"f0Hz", "voiced"},
+                                         "{0} {must_be_present} when {1} {is_present}");
   }
   const float frame_rate = floatProperty(options, "frameRate", 0.0f);
   std::vector<float> f0;

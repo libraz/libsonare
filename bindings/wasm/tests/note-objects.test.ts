@@ -1384,7 +1384,7 @@ describe('renderNotes voiced masks', () => {
         notes: [],
         voiced: new Int32Array(fixtureFrames).fill(1),
       }),
-    ).toThrow('renderNotes: voiced requires f0Hz');
+    ).toThrow(new TypeError('renderNotes: f0Hz must be given when voiced is given'));
     expect(() =>
       renderNotes({
         samples: source,

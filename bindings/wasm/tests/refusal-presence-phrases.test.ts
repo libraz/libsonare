@@ -4,9 +4,8 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Project, renderNotes } from '../dist/index.js';
+import { extractNotes, init, Project, renderNotes } from '../dist/index.js';
 import { getSonareModule } from '../src/module_state.js';
-import { expectRefusalOf } from './_helpers';
 import { shareBuiltModuleWithSource } from './_module_realm.js';
 
 const INVALID_PARAMETER = 4;
@@ -87,14 +86,29 @@ describe('presence tokens in a refusal', () => {
     const omitted = caught(
       set({ mode: 'none', inserts: [{ processor: 'saturation.overdrive', params: {} }] }),
     );
-    expect(omitted).toBeInstanceOf(RangeError);
+    // The requirement is which keys were given, so the refusal is a shape error.
+    expect(omitted).toBeInstanceOf(TypeError);
     expect(omitted.message).toMatch(/must be omitted unless mode is chain$/);
     expect((omitted as never as Record<symbol, { text: string }>)[REFUSAL].text).toMatch(
       /must be omitted unless mode is chain$/,
     );
-    expect(expectRefusalOf(set({ mode: 'chain' })).message).toMatch(
-      /must be given when mode is chain$/,
+    const missing = caught(set({ mode: 'chain' }));
+    expect(missing).toBeInstanceOf(TypeError);
+    expect(missing.message).toMatch(/must be given when mode is chain$/);
+  });
+
+  it('refuses a presence requirement as a TypeError, worded as the C ABI words it', () => {
+    const sampleRate = 22050;
+    const samples = new Float32Array(11000);
+    const f0Hz = new Float32Array(10).fill(220);
+    const neither = caught(() => extractNotes({ samples, sampleRate, f0Hz, frameRate: 40 }));
+    expect(neither).toBeInstanceOf(TypeError);
+    expect(neither.message).toBe('extractNotes: voicedProb and voiced must not both be omitted');
+    const maskOnly = caught(() =>
+      renderNotes({ samples, sampleRate, notes: [], voiced: new Int32Array(10).fill(1) }),
     );
+    expect(maskOnly).toBeInstanceOf(TypeError);
+    expect(maskOnly.message).toBe('renderNotes: f0Hz must be given when voiced is given');
   });
 
   it('words a curve edit with no track as one made while the track is omitted', () => {
