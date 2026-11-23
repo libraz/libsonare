@@ -3,6 +3,9 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 #include "c_api/part_rig_json.h"
+#if defined(SONARE_WITH_MASTERING)
+#include "mastering/api/insert_factory.h"
+#endif
 #include "midi/part_rig.h"
 #include "util/json_budget.h"
 #include "util/parameter_checks.h"
@@ -71,7 +74,7 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
   // The part was admitted above, so what is left to refuse is the content of inserts_json.
   if (!midi::validate_part_rig(part, rig)) sonare_c_detail::refuse_part_rig_stage_count();
 #if defined(SONARE_WITH_MASTERING)
-  sonare_c_detail::validate_part_rig_chain(rig.stages);
+  sonare::mastering::api::validate_part_rig_chain(rig.stages);
 #else
   if (rig.mode == midi::PartRigMode::kChain) {
     return sonare_c_detail::refuse_value_not_compiled_in(sonare_c_detail::Feature::kMastering,

@@ -14,7 +14,6 @@
 
 #include <sonare/sonare_c_types.h>
 
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,10 +21,6 @@
 #include "util/exception.h"
 #include "util/json_budget.h"
 #include "util/json_schema.h"
-
-#if defined(SONARE_WITH_MASTERING)
-#include "mastering/api/insert_factory.h"
-#endif
 
 namespace sonare_c_detail {
 
@@ -45,8 +40,8 @@ inline constexpr const char* kPartRigInsertsSubject = "inserts";
       .as_caller_spelled();
 }
 
-/// Reads the inserts array into chain stages. Shape only; names are resolved by
-/// validate_part_rig_chain.
+/// Reads the inserts array into chain stages. Shape only; names, params and latency are
+/// resolved by mastering::api::validate_part_rig_chain.
 inline std::vector<sonare::midi::PartRigStage> read_part_rig_inserts(const char* inserts_json) {
   namespace json = sonare::util::json;
   namespace schema = sonare::util::json::schema;
@@ -101,38 +96,5 @@ inline std::vector<sonare::midi::PartRigStage> read_part_rig_inserts(const char*
                                               std::to_string(sonare::midi::kMaxPartRigStages) +
                                               " entries for a chain rig");
 }
-
-#if defined(SONARE_WITH_MASTERING)
-/// Every stage must build, accept its params, and stay within the latency bound
-/// at the reference rate.
-inline void validate_part_rig_chain(const std::vector<sonare::midi::PartRigStage>& stages) {
-  constexpr double kValidationSampleRate = 48000.0;
-  constexpr int kValidationBlockSize = 512;
-  namespace schema = sonare::util::json::schema;
-  for (std::size_t i = 0; i < stages.size(); ++i) {
-    const sonare::midi::PartRigStage& stage = stages[i];
-    const std::string at = schema::index_path(kPartRigInsertsSubject, i);
-    std::unique_ptr<sonare::rt::ProcessorBase> insert;
-    try {
-      insert = sonare::mastering::api::make_insert(stage.processor, stage.params_json);
-      if (insert) insert->prepare(kValidationSampleRate, kValidationBlockSize);
-    } catch (const sonare::SonareParameterRefusal& ex) {
-      throw schema::relabel_under(ex, schema::child_path(at, "params"),
-                                  sonare::ErrorCode::InvalidParameter)
-          .as_caller_spelled();
-    } catch (const sonare::SonareException& ex) {
-      refuse_part_rig(at, std::string("is refused: ") + ex.what());
-    }
-    if (!insert) {
-      refuse_part_rig(schema::child_path(at, "processor"),
-                      "must name a processor that can be built");
-    }
-    if (insert->latency_samples_q8() > (sonare::midi::kMaxPartRigLatencySamples << 8)) {
-      refuse_part_rig(at, "must report a latency of at most " +
-                              std::to_string(sonare::midi::kMaxPartRigLatencySamples) + " samples");
-    }
-  }
-}
-#endif
 
 }  // namespace sonare_c_detail

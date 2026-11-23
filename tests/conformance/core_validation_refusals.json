@@ -185,12 +185,15 @@
       { "id": "missing_processor", "inserts": [{"params": {}}], "cause": "shape", "code": "InvalidParameter", "message": "inserts[0].processor must be given" },
       { "id": "unknown_key", "inserts": [{"processor": "utility.gain", "parmas": {"gainDb": -6}}], "cause": "shape", "code": "InvalidParameter", "message": "unknown key inserts[0].parmas (expected processor, params)" },
       { "id": "empty_processor", "inserts": [{"processor": ""}], "cause": "argument", "code": "InvalidParameter", "message": "inserts[0].processor must not be empty" },
-      { "id": "unknown_processor", "inserts": [{"processor": "no.such.processor", "params": {}}], "cause": "argument", "code": "InvalidParameter", "message": "inserts[0].processor must name a processor that can be built" },
+      { "id": "unknown_processor", "inserts": [{"processor": "no.such.processor", "params": {}}], "cause": "argument", "code": "InvalidParameter", "message": "inserts[0].processor must name an insert processor" },
       { "id": "params_not_object", "inserts": [{"processor": "saturation.softClipper", "params": "{}"}], "cause": "shape", "code": "InvalidParameter", "message": "inserts[0].params must be an object" },
-      { "id": "param_wrong_kind", "inserts": [{"processor": "saturation.softClipper", "params": {}}, {"processor": "utility.gain", "params": {"gainDb": "x"}}], "cause": "shape", "code": "InvalidParameter", "message": "inserts[1].params.gainDb must be a number or a boolean" }
+      { "id": "param_wrong_kind", "inserts": [{"processor": "saturation.softClipper", "params": {}}, {"processor": "utility.gain", "params": {"gainDb": "x"}}], "cause": "shape", "code": "InvalidParameter", "message": "inserts[1].params.gainDb must be a number or a boolean" },
+      { "id": "unread_param_key", "inserts": [{"processor": "saturation.softClipper", "params": {"drive": 0.5}}], "cause": "shape", "code": "InvalidParameter", "message": "unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)" }
     ],
     "project_document": [
-      { "id": "processor_not_string", "inserts": [{"processor": 5}], "cause": "format", "code": "InvalidFormat", "message": "partRigs[0].inserts[0].processor must be a string" }
+      { "id": "processor_not_string", "inserts": [{"processor": 5}], "cause": "format", "code": "InvalidFormat", "message": "partRigs[0].inserts[0].processor must be a string" },
+      { "id": "unknown_processor", "inserts": [{"processor": "no.such.processor", "params": {}}], "cause": "format", "code": "InvalidFormat", "message": "partRigs[0].inserts[0].processor must name an insert processor" },
+      { "id": "unread_param_key", "inserts": [{"processor": "saturation.softClipper", "params": {"drive": 0.5}}], "cause": "format", "code": "InvalidFormat", "message": "unknown key partRigs[0].inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)" }
     ]
   },
   "midi_fx_config": {

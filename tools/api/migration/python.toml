@@ -7084,7 +7084,7 @@ test = "bindings/python/tests/test_articulation.py::test_an_unknown_articulation
 [[entry]]
 kind = "method"
 old = "Project.set_part_rig"
-changed = "mode takes a PartRigMode token; an ordinal is TypeError; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)')"
+changed = "mode takes a PartRigMode token; an ordinal is TypeError; raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)'), as is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)')"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_part_rig.py::test_invalid_input_is_refused"
@@ -13725,7 +13725,7 @@ test = "bindings/python/tests/test_binding_consistency.py::test_estimate_meter_k
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.set_part_rig"
-changed = "raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)')"
+changed = "raises SonareValueError (INVALID_PARAMETER) instead of SonareError (INVALID_FORMAT) for inserts the library refuses, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); an insert is forwarded as given, so its annotation keys ($comment, x-*) are accepted and any other unknown key is refused by the library ('unknown key inserts[0].parmas (expected processor, params)'), as is a params key the processor does not read ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)')"
 domain = "engine"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_core_validation_refusals.py::test_part_rig_inserts_refused_as_an_argument"

@@ -640,7 +640,7 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
   // The part was admitted above, so what is left to refuse is the content of inserts_json.
   if (!sonare::midi::validate_part_rig(part, rig)) refuse_part_rig_stage_count();
 #if defined(SONARE_WITH_MASTERING)
-  validate_part_rig_chain(rig.stages);
+  mastering::api::validate_part_rig_chain(rig.stages);
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
     return refuse_value_not_compiled_in(Feature::kMastering, "mode");

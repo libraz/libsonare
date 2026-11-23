@@ -455,7 +455,7 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
     sonare_c_detail::refuse_part_rig_stage_count();
   }
 #if defined(SONARE_WITH_MASTERING)
-  sonare_c_detail::validate_part_rig_chain(rig.stages);
+  sonare::mastering::api::validate_part_rig_chain(rig.stages);
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
     throw sonare::SonareException(sonare::ErrorCode::NotSupported,
