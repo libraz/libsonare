@@ -254,6 +254,51 @@ val js_nullable_string(const char* value) {
   return value != nullptr ? val(std::string(value)) : val::null();
 }
 
+// The MIDI 1.0 <-> 2.0 value scalers: each argument is read by the shared reader of its C
+// parameter's width (the template refuses a mismatch), and the C call owns the MIDI range.
+namespace {
+
+template <typename In, typename Out>
+double midiScale(In input, SonareError (*scale)(In, Out*)) {
+  Out out{};
+  const SonareError err = scale(input, &out);
+  if (err != SONARE_OK) throwCodedCError(err);
+  return static_cast<double>(out);
+}
+
+}  // namespace
+
+double js_midi_velocity_to_midi2(const val& v) {
+  return midiScale(checkedByteFromVal(v, "velocity"), sonare_midi_velocity_to_midi2);
+}
+double js_midi_note_on_velocity_to_midi2(const val& v) {
+  return midiScale(checkedByteFromVal(v, "velocity"), sonare_midi_note_on_velocity_to_midi2);
+}
+double js_midi2_velocity_to_midi1(const val& v) {
+  return midiScale(checkedUint16FromVal(v, "velocity16"), sonare_midi2_velocity_to_midi1);
+}
+double js_midi2_note_on_velocity_to_midi1(const val& v) {
+  return midiScale(checkedUint16FromVal(v, "velocity16"), sonare_midi2_note_on_velocity_to_midi1);
+}
+double js_midi_control_to_midi2(const val& v) {
+  return midiScale(checkedByteFromVal(v, "value"), sonare_midi_control_to_midi2);
+}
+double js_midi_control14_to_midi2(const val& v) {
+  return midiScale(checkedUint16FromVal(v, "value14"), sonare_midi_control14_to_midi2);
+}
+double js_midi2_control_to_midi1(const val& v) {
+  return midiScale(checkedUintFromVal(v, "value32"), sonare_midi2_control_to_midi1);
+}
+double js_midi2_control_to_midi1_control14(const val& v) {
+  return midiScale(checkedUintFromVal(v, "value32"), sonare_midi2_control_to_midi1_control14);
+}
+double js_midi_pitch_bend_to_midi2(const val& v) {
+  return midiScale(checkedUint16FromVal(v, "bend14"), sonare_midi_pitch_bend_to_midi2);
+}
+double js_midi2_pitch_bend_to_midi1(const val& v) {
+  return midiScale(checkedUintFromVal(v, "bend32"), sonare_midi2_pitch_bend_to_midi1);
+}
+
 val js_midi_gm_instrument_name(const val& program) {
   return js_nullable_string(sonare_midi_gm_instrument_name(checkedIntFromVal(program, "program")));
 }

@@ -343,6 +343,16 @@ struct ProjectWasm {
 // Standalone MIDI helper / GM-table free functions (bodies in project_midi.cpp).
 uint32_t js_project_abi_version();
 val js_nullable_string(const char* value);
+double js_midi_velocity_to_midi2(const val& v);
+double js_midi_note_on_velocity_to_midi2(const val& v);
+double js_midi2_velocity_to_midi1(const val& v);
+double js_midi2_note_on_velocity_to_midi1(const val& v);
+double js_midi_control_to_midi2(const val& v);
+double js_midi_control14_to_midi2(const val& v);
+double js_midi2_control_to_midi1(const val& v);
+double js_midi2_control_to_midi1_control14(const val& v);
+double js_midi_pitch_bend_to_midi2(const val& v);
+double js_midi2_pitch_bend_to_midi1(const val& v);
 val js_midi_gm_instrument_name(const val& program);
 int js_midi_gm_program_for_name(const std::string& name);
 val js_midi_gm_family_name(const val& family);

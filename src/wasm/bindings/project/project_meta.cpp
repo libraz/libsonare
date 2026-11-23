@@ -532,6 +532,16 @@ std::string js_synth_patch_param_info() {
 
 void registerProjectFreeFunctions() {
   function("projectAbiVersion", &js_project_abi_version);
+  function("midiVelocityToMidi2", &js_midi_velocity_to_midi2);
+  function("midiNoteOnVelocityToMidi2", &js_midi_note_on_velocity_to_midi2);
+  function("midi2VelocityToMidi1", &js_midi2_velocity_to_midi1);
+  function("midi2NoteOnVelocityToMidi1", &js_midi2_note_on_velocity_to_midi1);
+  function("midiControlToMidi2", &js_midi_control_to_midi2);
+  function("midiControl14ToMidi2", &js_midi_control14_to_midi2);
+  function("midi2ControlToMidi1", &js_midi2_control_to_midi1);
+  function("midi2ControlToMidi1Control14", &js_midi2_control_to_midi1_control14);
+  function("midiPitchBendToMidi2", &js_midi_pitch_bend_to_midi2);
+  function("midi2PitchBendToMidi1", &js_midi2_pitch_bend_to_midi1);
   function("midiGmInstrumentName", &js_midi_gm_instrument_name);
   function("midiGmProgramForName", &js_midi_gm_program_for_name);
   function("midiGmFamilyName", &js_midi_gm_family_name);

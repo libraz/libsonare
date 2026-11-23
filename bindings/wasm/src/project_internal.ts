@@ -616,6 +616,16 @@ export interface ProjectModule {
   controllerProfileNames: () => string[];
   _synthEnumTables: () => SynthEnumTables;
   _synthPatchRoundTrip: (patch: SynthPatch) => SynthPatch;
+  midiVelocityToMidi2: (velocity: number) => number;
+  midiNoteOnVelocityToMidi2: (velocity: number) => number;
+  midi2VelocityToMidi1: (velocity16: number) => number;
+  midi2NoteOnVelocityToMidi1: (velocity16: number) => number;
+  midiControlToMidi2: (value: number) => number;
+  midiControl14ToMidi2: (value14: number) => number;
+  midi2ControlToMidi1: (value32: number) => number;
+  midi2ControlToMidi1Control14: (value32: number) => number;
+  midiPitchBendToMidi2: (bend14: number) => number;
+  midi2PitchBendToMidi1: (bend32: number) => number;
   midiGmInstrumentName: (program: number) => string | null;
   midiGmProgramForName: (name: string) => number;
   midiGmFamilyName: (family: number) => string | null;

@@ -518,6 +518,9 @@ uint32_t wordProperty(val object, const char* key, uint32_t default_value);
 /// @throws WasmArgumentError naming @p key.
 uint8_t checkedByteFromVal(const val& value, const char* key);
 uint8_t byteProperty(val object, const char* key, uint8_t default_value);
+/// @brief 16-bit sibling of @ref checkedByteFromVal: 65536 would wrap to 0, inside the type.
+/// @throws WasmArgumentError naming @p key.
+uint16_t checkedUint16FromVal(const val& value, const char* key);
 /// @brief 64-bit sibling of @ref checkedIntFromVal.
 /// @details Reading through double instead of the BigInt conversion turns NaN
 ///          into 0 and truncates a fractional frame position, neither of which

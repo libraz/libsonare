@@ -571,6 +571,125 @@ function foundIndex(value: number, what: string): number {
   return value;
 }
 
+// MIDI 1.0 <-> MIDI 2.0 value scaling: the conversions the packers and Standard MIDI File import
+// and export apply. Widening is min-center-max, so the center lands on exactly 0x8000 / 0x80000000
+// and the maximum on all ones; narrowing keeps the top bits, so widening then narrowing returns the
+// input exactly. Each calls the library's own conversion.
+
+/**
+ * Widens a MIDI 1.0 velocity to MIDI 2.0's 16 bits; `0` stays `0`.
+ *
+ * @param velocity - `0`..`127`
+ * @throws TypeError when `velocity` is not a number
+ * @throws RangeError when `velocity` is not an integer in its range
+ */
+export function midiVelocityToMidi2(velocity: number): number {
+  return withEntry('midiVelocityToMidi2', () => addon.midiVelocityToMidi2(velocity));
+}
+
+/**
+ * Widens a MIDI 1.0 note-on velocity to MIDI 2.0's 16 bits.
+ *
+ * @param velocity - `1`..`127`; `0` is refused, since a MIDI 1.0 note-on with velocity 0 is a note-off
+ * @throws TypeError when `velocity` is not a number
+ * @throws RangeError when `velocity` is not an integer in its range
+ */
+export function midiNoteOnVelocityToMidi2(velocity: number): number {
+  return withEntry('midiNoteOnVelocityToMidi2', () => addon.midiNoteOnVelocityToMidi2(velocity));
+}
+
+/**
+ * Narrows a MIDI 2.0 velocity to MIDI 1.0's 7 bits (its top 7 bits).
+ *
+ * @param velocity16 - `0`..`65535`
+ * @throws TypeError when `velocity16` is not a number
+ * @throws RangeError when `velocity16` is not an integer in its range
+ */
+export function midi2VelocityToMidi1(velocity16: number): number {
+  return withEntry('midi2VelocityToMidi1', () => addon.midi2VelocityToMidi1(velocity16));
+}
+
+/**
+ * Narrows a MIDI 2.0 note-on velocity to MIDI 1.0's 7 bits; a result of `0` reads `1`, because every MIDI 2.0 note-on sounds.
+ *
+ * @param velocity16 - `0`..`65535`
+ * @throws TypeError when `velocity16` is not a number
+ * @throws RangeError when `velocity16` is not an integer in its range
+ */
+export function midi2NoteOnVelocityToMidi1(velocity16: number): number {
+  return withEntry('midi2NoteOnVelocityToMidi1', () =>
+    addon.midi2NoteOnVelocityToMidi1(velocity16),
+  );
+}
+
+/**
+ * Widens a 7-bit controller value to MIDI 2.0's 32 bits; `64` lands on `0x80000000`.
+ *
+ * @param value - `0`..`127`
+ * @throws TypeError when `value` is not a number
+ * @throws RangeError when `value` is not an integer in its range
+ */
+export function midiControlToMidi2(value: number): number {
+  return withEntry('midiControlToMidi2', () => addon.midiControlToMidi2(value));
+}
+
+/**
+ * Widens a 14-bit controller value to MIDI 2.0's 32 bits; `8192` lands on `0x80000000`.
+ *
+ * @param value14 - `0`..`16383`
+ * @throws TypeError when `value14` is not a number
+ * @throws RangeError when `value14` is not an integer in its range
+ */
+export function midiControl14ToMidi2(value14: number): number {
+  return withEntry('midiControl14ToMidi2', () => addon.midiControl14ToMidi2(value14));
+}
+
+/**
+ * Narrows a MIDI 2.0 controller value to 7 bits (its top 7 bits).
+ *
+ * @param value32 - `0`..`0xFFFFFFFF`
+ * @throws TypeError when `value32` is not a number
+ * @throws RangeError when `value32` is not an integer in its range
+ */
+export function midi2ControlToMidi1(value32: number): number {
+  return withEntry('midi2ControlToMidi1', () => addon.midi2ControlToMidi1(value32));
+}
+
+/**
+ * Narrows a MIDI 2.0 controller value to a 14-bit controller value (its top 14 bits).
+ *
+ * @param value32 - `0`..`0xFFFFFFFF`
+ * @throws TypeError when `value32` is not a number
+ * @throws RangeError when `value32` is not an integer in its range
+ */
+export function midi2ControlToMidi1Control14(value32: number): number {
+  return withEntry('midi2ControlToMidi1Control14', () =>
+    addon.midi2ControlToMidi1Control14(value32),
+  );
+}
+
+/**
+ * Widens a 14-bit pitch bend to MIDI 2.0's 32 bits; the center `8192` lands on `0x80000000`.
+ *
+ * @param bend14 - `0`..`16383`
+ * @throws TypeError when `bend14` is not a number
+ * @throws RangeError when `bend14` is not an integer in its range
+ */
+export function midiPitchBendToMidi2(bend14: number): number {
+  return withEntry('midiPitchBendToMidi2', () => addon.midiPitchBendToMidi2(bend14));
+}
+
+/**
+ * Narrows a MIDI 2.0 pitch bend to 14 bits (its top 14 bits).
+ *
+ * @param bend32 - `0`..`0xFFFFFFFF`
+ * @throws TypeError when `bend32` is not a number
+ * @throws RangeError when `bend32` is not an integer in its range
+ */
+export function midi2PitchBendToMidi1(bend32: number): number {
+  return withEntry('midi2PitchBendToMidi1', () => addon.midi2PitchBendToMidi1(bend32));
+}
+
 /**
  * Returns the General MIDI instrument name for `program`.
  *

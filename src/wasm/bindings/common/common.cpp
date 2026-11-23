@@ -623,6 +623,11 @@ uint8_t checkedByteFromVal(const val& value, const char* key) {
       checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint8_t>::max())));
 }
 
+uint16_t checkedUint16FromVal(const val& value, const char* key) {
+  return static_cast<uint16_t>(
+      checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint16_t>::max())));
+}
+
 uint8_t byteProperty(val object, const char* key, uint8_t default_value) {
   val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedByteFromVal(value, key);

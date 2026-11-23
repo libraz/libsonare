@@ -136,6 +136,78 @@ Napi::Value MidiGm2DrumName(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+// The MIDI 1.0 <-> 2.0 value scalers: each argument is read at its C parameter's width, refusing a
+// value the narrowing cast would wrap (300 reads as 44 in a byte), and the C call owns the MIDI
+// range.
+bool ReadScaleInput(Napi::Env env, const Napi::Value& value, const char* name, uint8_t* out) {
+  return sonare_node::RequiredMidiByteValue(env, value, name, out);
+}
+
+bool ReadScaleInput(Napi::Env env, const Napi::Value& value, const char* name, uint16_t* out) {
+  return sonare_node::RequiredUint16Value(env, value, name, out);
+}
+
+bool ReadScaleInput(Napi::Env env, const Napi::Value& value, const char* name, uint32_t* out) {
+  return sonare_node::RequiredUint32Value(env, value, name, out);
+}
+
+template <typename In, typename Out>
+Napi::Value MidiScale(const Napi::CallbackInfo& info, const char* name,
+                      SonareError (*scale)(In, Out*)) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  In value{};
+  if (!ReadScaleInput(env, info[0], name, &value)) return env.Undefined();
+  Out out{};
+  const SonareError err = scale(value, &out);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, static_cast<double>(out));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value MidiVelocityToMidi2(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "velocity", sonare_midi_velocity_to_midi2);
+}
+
+Napi::Value MidiNoteOnVelocityToMidi2(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "velocity", sonare_midi_note_on_velocity_to_midi2);
+}
+
+Napi::Value Midi2VelocityToMidi1(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "velocity16", sonare_midi2_velocity_to_midi1);
+}
+
+Napi::Value Midi2NoteOnVelocityToMidi1(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "velocity16", sonare_midi2_note_on_velocity_to_midi1);
+}
+
+Napi::Value MidiControlToMidi2(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "value", sonare_midi_control_to_midi2);
+}
+
+Napi::Value MidiControl14ToMidi2(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "value14", sonare_midi_control14_to_midi2);
+}
+
+Napi::Value Midi2ControlToMidi1(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "value32", sonare_midi2_control_to_midi1);
+}
+
+Napi::Value Midi2ControlToMidi1Control14(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "value32", sonare_midi2_control_to_midi1_control14);
+}
+
+Napi::Value MidiPitchBendToMidi2(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "bend14", sonare_midi_pitch_bend_to_midi2);
+}
+
+Napi::Value Midi2PitchBendToMidi1(const Napi::CallbackInfo& info) {
+  return MidiScale(info, "bend32", sonare_midi2_pitch_bend_to_midi1);
+}
+
 Napi::Value MidiCcName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -653,6 +725,26 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("_synthEnumTables", Napi::Function::New(env, SynthEnumTables, "_synthEnumTables"));
   exports.Set("_synthPatchRoundTrip",
               Napi::Function::New(env, SynthPatchRoundTrip, "_synthPatchRoundTrip"));
+  exports.Set("midiVelocityToMidi2",
+              Napi::Function::New(env, MidiVelocityToMidi2, "midiVelocityToMidi2"));
+  exports.Set("midiNoteOnVelocityToMidi2",
+              Napi::Function::New(env, MidiNoteOnVelocityToMidi2, "midiNoteOnVelocityToMidi2"));
+  exports.Set("midi2VelocityToMidi1",
+              Napi::Function::New(env, Midi2VelocityToMidi1, "midi2VelocityToMidi1"));
+  exports.Set("midi2NoteOnVelocityToMidi1",
+              Napi::Function::New(env, Midi2NoteOnVelocityToMidi1, "midi2NoteOnVelocityToMidi1"));
+  exports.Set("midiControlToMidi2",
+              Napi::Function::New(env, MidiControlToMidi2, "midiControlToMidi2"));
+  exports.Set("midiControl14ToMidi2",
+              Napi::Function::New(env, MidiControl14ToMidi2, "midiControl14ToMidi2"));
+  exports.Set("midi2ControlToMidi1",
+              Napi::Function::New(env, Midi2ControlToMidi1, "midi2ControlToMidi1"));
+  exports.Set("midi2ControlToMidi1Control14", Napi::Function::New(env, Midi2ControlToMidi1Control14,
+                                                                  "midi2ControlToMidi1Control14"));
+  exports.Set("midiPitchBendToMidi2",
+              Napi::Function::New(env, MidiPitchBendToMidi2, "midiPitchBendToMidi2"));
+  exports.Set("midi2PitchBendToMidi1",
+              Napi::Function::New(env, Midi2PitchBendToMidi1, "midi2PitchBendToMidi1"));
   exports.Set("midiGmInstrumentName",
               Napi::Function::New(env, MidiGmInstrumentName, "midiGmInstrumentName"));
   exports.Set("midiGmProgramForName",
