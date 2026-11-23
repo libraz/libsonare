@@ -120,6 +120,7 @@ mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
   }
   cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
   cfg.iterations = intProperty(options, "iterations", cfg.iterations);
+  cfg.link_channels = boolProperty(options, "linkChannels", cfg.link_channels);
   return cfg;
 }
 
@@ -458,11 +459,8 @@ val js_mastering_repair_declip(val samples, const val& sample_rate, val options)
   return monoResultToVal(result, declipReportToVal(report));
 }
 
-// Declips a stereo pair, reconstructing the union of both channels' own
-// clipped runs: a channel with at least one clipped sample in a union run
-// reconstructs the whole of it, so a plateau clipped in only one channel
-// produces no linking, while overlapping runs of different extents do (the
-// narrower channel is what reaches past its own clipped samples). Calls the
+// Declips a stereo pair: each channel repairs its own clipped runs, or with
+// linkChannels every union run it has at least one clipped sample in. Calls the
 // core directly rather than the C ABI, matching every other wrapper in this
 // file -- sonare_c_mastering_repair.cpp is not part of the WASM binding
 // sources.

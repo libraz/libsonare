@@ -35769,6 +35769,31 @@ entry = "./analysis"
 
 [[entry]]
 kind = "field"
+old = "DeclipReport.linkedRuns"
+changed = "0 unless linkChannels: true is passed: each channel of a stereo declip, in masteringRepairDeclipStereo and in a masteringRepairApply declip stage, repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); linkChannels: true restores the union"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/mastering-repair-declip-stereo.test.ts::repairs each channel on its own by default, leaving every unclipped sample bit-identical"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.declip"
+changed = "a new linkChannels, default false: on more than one channel each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); true restores the union"
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/mastering-repair-declip-stereo.test.ts::chain repair.declip follows linkChannels the way the stereo entry does"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.declip"
+changed = "a new linkChannels, default false: on more than one channel each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); true restores the union"
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/mastering-repair-declip-stereo.test.ts::chain repair.declip follows linkChannels the way the stereo entry does"
+
+[[entry]]
+kind = "field"
 old = "StreamingMasteringChainConfig.repair.declip.lpcBlend"
 removed = true
 no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"

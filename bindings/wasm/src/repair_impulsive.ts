@@ -123,6 +123,11 @@ export interface MasteringRepairDeclipRequest extends DeclipOptions {
 
 /** Request form of `masteringRepairDeclipStereo`. */
 export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
+  /**
+   * Reconstruct both channels over the union of their clipped runs. Default `false`:
+   * linked, the channels' repair errors agree, at the cost of re-estimating unclipped samples in the quieter channel; use it on near-mono material. Off, each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical.
+   */
+  linkChannels?: boolean;
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -195,13 +200,12 @@ export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
 /**
  * Offline LPC-based declipper for a stereo pair.
  *
- * Takes the union of both channels' clipped runs. Each channel reconstructs
- * the whole of every union run it has at least one clipped sample in; a
- * channel with none is left untouched there — reconstructing unclipped audio
- * to match the other side would replace real samples with an estimate. A
- * plateau clipped in only one channel therefore produces no linking:
- * `linkedRuns` is non-zero only where both channels are clipped in the same
- * region with different extents.
+ * By default each channel repairs its own clipped runs and leaves every sample
+ * it did not clip bit-identical. With `linkChannels`, the union of both
+ * channels' runs is the region set: each channel reconstructs the whole of
+ * every union run it has at least one clipped sample in, and a channel with
+ * none is left untouched there. `linkedRuns` is non-zero only then, where both
+ * channels are clipped in the same region with different extents.
  */
 export function masteringRepairDeclipStereo(
   request: MasteringRepairDeclipStereoRequest,

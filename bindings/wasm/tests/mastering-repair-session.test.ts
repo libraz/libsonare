@@ -5,6 +5,7 @@ import {
   masteringRepairAnalyze,
   masteringRepairApply,
   masteringRepairDeclickStereo,
+  masteringRepairDeclipStereo,
   masteringRepairDenoiseClassicalLinked,
 } from '../src/index';
 
@@ -113,6 +114,34 @@ describe('masteringRepairApply', () => {
     if (report?.stage === 'denoise') {
       expect(report.reports[0].detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
       expect(report.reports[0]).toEqual(linked.reports[0]);
+    }
+  });
+
+  it('declips each channel on its own unless the stage sets linkChannels', () => {
+    const left = material(440, 8);
+    const right = material(660, 9);
+    left.fill(0.95, 3000, 3006);
+    right.fill(0.95, 3000, 3020);
+    const options = { clipThresholdDb: -0.9151 };
+    for (const linkChannels of [undefined, true]) {
+      const session = masteringRepairApply({
+        channels: [left, right],
+        sampleRate: SR,
+        stages: [{ stage: 'declip', ...options, ...(linkChannels ? { linkChannels } : {}) }],
+      });
+      const pair = masteringRepairDeclipStereo({
+        left,
+        right,
+        sampleRate: SR,
+        ...options,
+        ...(linkChannels ? { linkChannels } : {}),
+      });
+      expect(session.channels).toEqual(pair.channels);
+      const report = session.reports[0];
+      expect(report?.stage).toBe('declip');
+      if (report?.stage === 'declip') {
+        expect(report.reports[0].linkedRuns).toBe(linkChannels ? 1 : 0);
+      }
     }
   });
 

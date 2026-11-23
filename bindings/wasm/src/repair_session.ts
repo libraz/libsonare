@@ -17,7 +17,12 @@ import type {
   DereverbReport,
 } from './public_types_repair.js';
 import type { DereverbClassicalOptions } from './repair_dereverb.js';
-import type { DeclickOptions, DeclipOptions, DecrackleOptions } from './repair_impulsive.js';
+import type {
+  DeclickOptions,
+  DeclipOptions,
+  DecrackleOptions,
+  MasteringRepairDeclipStereoRequest,
+} from './repair_impulsive.js';
 import type { DehumOptions, DenoiseClassicalOptions } from './repair_noise.js';
 import { assertAudioChannels, requestOnly } from './validation.js';
 
@@ -39,7 +44,8 @@ export type MasteringRepairStage =
   | ({
       /** Stage to apply. */
       stage: 'declip';
-    } & DeclipOptions)
+    } & DeclipOptions &
+      Pick<MasteringRepairDeclipStereoRequest, 'linkChannels'>)
   | ({
       /** Stage to apply. */
       stage: 'declick';
@@ -235,8 +241,9 @@ export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnaly
  * Applies repair stages to every channel, in the fixed order declip, declick, decrackle, dehum,
  * denoise, dereverb whatever order `stages` gives.
  *
- * Declip, declick and dehum decide over the whole channel set (a defect found in one channel is
- * repaired in all of them, and dehum tracks one fundamental) and report per channel; decrackle
+ * Declick and dehum decide over the whole channel set (a defect found in one channel is repaired
+ * in all of them, and dehum tracks one fundamental) and report per channel; declip repairs each
+ * channel's own clipped runs unless `linkChannels` is set, and reports per channel; decrackle
  * runs each channel alone; denoise and dereverb apply one linked mask and report once for the
  * set. A stage named twice is refused.
  *

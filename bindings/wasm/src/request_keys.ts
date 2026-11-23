@@ -1203,6 +1203,7 @@ const MasteringRepairDeclipStereoRequestKeys = keysOf<MasteringRepairDeclipStere
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
+  'linkChannels',
 ]);
 const MasteringRepairDecrackleRequestKeys = keysOf<MasteringRepairDecrackleRequest>()([
   'samples',
