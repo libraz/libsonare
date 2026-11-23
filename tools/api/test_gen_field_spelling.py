@@ -110,6 +110,17 @@ class RequestFieldTest(unittest.TestCase):
         )
         self.assertEqual((unbound, idle), ([], []))
 
+    def test_a_free_function_answers_to_the_c_entries_parity_aliases_to_it(self) -> None:
+        facts = [Fact("playback_render_interleaved", "in_channels", "param", "node", None)]
+        request = {
+            "node": [{"entry": "renderPlayback", "param": "request", "fields": ["numChannels"]}]
+        }
+        rows, unbound, idle = gen.derive(facts, request, {"node": {"in_channels": "numChannels"}})
+        self.assertEqual(
+            rows["node"], [gen.Row("playback_render_interleaved", "in_channels", "numChannels")]
+        )
+        self.assertEqual((unbound, idle), ([], []))
+
     def test_a_dotted_rename_binds_on_the_object_the_facade_takes(self) -> None:
         facts = [
             Fact("engine_set_bus_sidechain", "source_id", "param", "node", None),

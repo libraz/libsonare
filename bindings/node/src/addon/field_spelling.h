@@ -20,7 +20,7 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the node facade binds under another name, sorted.
-inline constexpr std::array<Override, 74> kOverrides = {{
+inline constexpr std::array<Override, 78> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
     {"engine_apply_bus_strip_insert_param_by_name_now", "param_name", "param.name"},
@@ -68,6 +68,8 @@ inline constexpr std::array<Override, 74> kOverrides = {{
     {"engine_set_track_strip_pan_law", "track_id", "ref"},
     {"engine_set_track_strip_pan_mode", "track_id", "ref"},
     {"engine_set_track_strip_surround_pan", "track_id", "ref"},
+    {"lufs_interleaved", "num_channels", "channels"},
+    {"lufs_series_interleaved", "num_channels", "channels"},
     {"mel_to_audio", "mel", "power"},
     {"mel_to_stft", "mel", "power"},
     {"metering_spectrum_frame", "frame_offset", "startSample"},
@@ -79,6 +81,8 @@ inline constexpr std::array<Override, 74> kOverrides = {{
     {"mixing_scene_preset_json", "preset_name", "name"},
     {"note_targets_from_smf", "bytes", "data"},
     {"playback_loudness_meter_push_interleaved", "in", "samples"},
+    {"playback_render_interleaved", "in", "samples"},
+    {"playback_render_interleaved", "in_channels", "numChannels"},
     {"playback_renderer_process_interleaved", "in", "samples"},
     {"playback_renderer_process_planar", "in", "planes"},
     {"playback_renderer_render_offline", "in", "samples"},

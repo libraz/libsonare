@@ -113,9 +113,19 @@ def entry_keys(entry: str) -> set[str]:
     prefixes the parity tables map to it (``RealtimeEngine.renderOffline`` is
     ``engine_render_offline``), and under each C function of those prefixes parity aliases
     to the method (``RealtimeEngine.setStripInsertParam`` is
-    ``engine_set_track_strip_insert_param_by_name``)."""
+    ``engine_set_track_strip_insert_param_by_name``); a free function also answers under each
+    C entry parity aliases to it (``renderPlayback`` is ``playback_render_interleaved``)."""
     keys = {entry_key(entry)}
     owner, dot, method = entry.partition(".")
+    if not dot:
+        from compare import _ALIAS_COVERAGE, _handle_prefix
+
+        # A free function parity aliases to a differently named C entry answers under it too.
+        keys.update(
+            key
+            for key, aliases in _ALIAS_COVERAGE.items()
+            if entry_key(entry) in aliases and _handle_prefix(key) is None
+        )
     if dot:
         from compare import _ALIAS_COVERAGE, _HANDLE_FULL_PREFIXES
 
