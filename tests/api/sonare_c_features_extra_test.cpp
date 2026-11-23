@@ -716,8 +716,8 @@ TEST_CASE("sonare_split_silence_common report separates the three ways one inter
   }
 
   SECTION("takes that each go quiet, but never together") {
-    // The quiet halves sit on a floor rather than exact zeros: a zero frame has no
-    // finite depth, so its ceiling would not be measured.
+    // The quiet halves sit on a floor rather than exact zeros, so the ceiling is a
+    // finite depth rather than the +inf an exactly-zero frame reports.
     constexpr float kQuietFloor = 1e-6f;
     std::vector<float> early(tenth * 10, kQuietFloor);
     std::vector<float> late(tenth * 10, kQuietFloor);

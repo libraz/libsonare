@@ -486,8 +486,8 @@ class SilenceCommonReport:
     """
 
     silence_ceiling_db: float | None
-    """Largest ``top_db`` at which every signal still shows silence; None when any signal's peak is
-    0 or it holds an exactly zero frame, where the depth has no finite value."""
+    """Largest ``top_db`` at which every signal still shows silence; None only when every signal is
+    silent; +inf when every signal with a level holds an exactly zero frame."""
     max_signal_intervals: int
     """Interval count of the most fragmented signal on its own, before the union."""
     min_signal_intervals: int

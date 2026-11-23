@@ -13682,7 +13682,7 @@
             },
             "report": {
               "keys": {
-                "silence_ceiling_db": "number",
+                "silence_ceiling_db": "number|null",
                 "max_signal_intervals": "integer",
                 "min_signal_intervals": "integer"
               }

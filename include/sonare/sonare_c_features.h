@@ -1150,9 +1150,10 @@ typedef struct {
   /// @details A frame counts as silent when it sits at least @p top_db under its
   ///   own signal's peak RMS, so each signal's deepest dip decides whether any
   ///   threshold can find silence in it, and the union needs all of them quiet at
-  ///   once — hence the minimum across the signals. 0 for an all-silent signal,
-  ///   where the peak is 0 and the ratio has no value; 120 is the floor the dB
-  ///   conversion clamps at, reported for a signal holding a zero-valued frame.
+  ///   once — hence the minimum across the signals. A signal with no peak is
+  ///   silent everywhere and constrains nothing; +inf when every signal that has
+  ///   a level holds an exactly-zero frame, which every threshold calls silent;
+  ///   NaN (not measured) when every signal is silent.
   float silence_ceiling_db;
   /// @brief How many intervals the most and least fragmented signal produced alone.
   /// @details Counted before the union merges anything, and a measure of shape
