@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <string>
 
 #include "core/audio.h"
@@ -16,6 +17,7 @@
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -79,9 +81,10 @@ std::vector<std::complex<float>> fourier_tempogram_complex(const std::vector<flo
 
   // Use kissfft via core/fft.h.
   FFT fft(win);
-  std::vector<std::complex<float>> spec(
-      static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
-      std::complex<float>(0.0f, 0.0f));
+  const auto n_cells = util::check::element_count(
+      static_cast<std::uint64_t>(n_bins), static_cast<std::uint64_t>(n_frames),
+      resource::kMaxOfflineAudioSamples, "win_length", "the tempogram");
+  std::vector<std::complex<float>> spec(n_cells, std::complex<float>(0.0f, 0.0f));
   std::vector<float> buf(win);
   std::vector<std::complex<float>> out(n_bins);
   for (int t = 0; t < n_frames; ++t) {
@@ -118,7 +121,10 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
   const int n_frames = tempogram_frame_count(onset_envelope.size(), win, config.center);
   const auto window = create_window(config.window, win);
 
-  std::vector<float> tg(static_cast<std::size_t>(win) * static_cast<std::size_t>(n_frames), 0.0f);
+  const auto n_cells = util::check::element_count(
+      static_cast<std::uint64_t>(win), static_cast<std::uint64_t>(n_frames),
+      resource::kMaxOfflineAudioSamples, "win_length", "the tempogram");
+  std::vector<float> tg(n_cells, 0.0f);
 
   std::vector<double> frame(win);
   std::vector<double> ac(win, 0.0);
@@ -231,8 +237,10 @@ std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, in
   const std::vector<float> ft = detail::fourier_tempogram_of_envelope(onset_envelope, config);
   const int fourier_bins = config.win_length / 2 + 1;
   const int n_frames = static_cast<int>(ft.size() / static_cast<std::size_t>(fourier_bins));
-  std::vector<float> cyclic(static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
-                            0.0f);
+  const auto n_cells = util::check::element_count(
+      static_cast<std::uint64_t>(n_bins), static_cast<std::uint64_t>(n_frames),
+      resource::kMaxOfflineAudioSamples, "n_bins", "the cyclic tempogram");
+  std::vector<float> cyclic(n_cells, 0.0f);
 
   const double octave_width = std::log(2.0);
   for (int bin = 1; bin < fourier_bins; ++bin) {

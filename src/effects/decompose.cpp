@@ -4,6 +4,7 @@
 #include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <random>
 
 #include "core/audio.h"
@@ -13,6 +14,7 @@
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 #include "util/validated.h"
 
 namespace sonare {
@@ -29,8 +31,14 @@ void init_random(std::vector<float>& W, std::vector<float>& H, int n_features, i
                  int n_frames) {
   std::mt19937 rng(42);
   std::uniform_real_distribution<float> dist(0.01f, 1.0f);
-  W.assign(static_cast<size_t>(n_features) * n_components, 0.0f);
-  H.assign(static_cast<size_t>(n_components) * n_frames, 0.0f);
+  W.assign(util::check::element_count(
+               static_cast<std::uint64_t>(n_features), static_cast<std::uint64_t>(n_components),
+               resource::kMaxOfflineAudioSamples, "n_components", "the component weights"),
+           0.0f);
+  H.assign(util::check::element_count(
+               static_cast<std::uint64_t>(n_components), static_cast<std::uint64_t>(n_frames),
+               resource::kMaxOfflineAudioSamples, "n_components", "the component activations"),
+           0.0f);
   for (auto& v : W) v = dist(rng);
   for (auto& v : H) v = dist(rng);
 }
@@ -57,8 +65,14 @@ void init_nndsvd(const float* S, std::vector<float>& W, std::vector<float>& H, i
   const Eigen::VectorXd sv = svd.singularValues();
 
   const int rank = std::min({n_components, static_cast<int>(sv.size())});
-  W.assign(static_cast<size_t>(n_features) * n_components, 0.0f);
-  H.assign(static_cast<size_t>(n_components) * n_frames, 0.0f);
+  W.assign(util::check::element_count(
+               static_cast<std::uint64_t>(n_features), static_cast<std::uint64_t>(n_components),
+               resource::kMaxOfflineAudioSamples, "n_components", "the component weights"),
+           0.0f);
+  H.assign(util::check::element_count(
+               static_cast<std::uint64_t>(n_components), static_cast<std::uint64_t>(n_frames),
+               resource::kMaxOfflineAudioSamples, "n_components", "the component activations"),
+           0.0f);
 
   if (rank == 0) return;
 
@@ -138,8 +152,13 @@ void multiply_WH(const std::vector<float>& W, const std::vector<float>& H, int n
 void build_component_model(const DecomposeResult& factors, int n_bins, int n_frames, int k,
                            float mask_power, std::vector<float>& model,
                            std::vector<float>& denominator) {
-  const std::size_t cells = static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames);
-  model.assign(cells * static_cast<std::size_t>(k), 0.0f);
+  const std::size_t cells = util::check::element_count(
+      static_cast<std::uint64_t>(n_bins), static_cast<std::uint64_t>(n_frames),
+      resource::kMaxOfflineAudioSamples, "n_components", "the component model");
+  model.assign(util::check::element_count(cells, static_cast<std::uint64_t>(k),
+                                          resource::kMaxOfflineAudioSamples, "n_components",
+                                          "the component model"),
+               0.0f);
   denominator.assign(cells, 0.0f);
   // Each cell is weighed against its loudest component, so the weights sit in
   // [0, 1] whatever the input level and no power of them can overflow.

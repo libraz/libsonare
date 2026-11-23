@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -20,6 +21,8 @@
 #include "util/non_finite_sample.h"
 #include "util/number_format.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare::playback {
 
@@ -648,8 +651,11 @@ std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* i
   SONARE_CHECK_MSG(frames != 0, ErrorCode::InvalidParameter, "input samples must not be empty");
   SONARE_CHECK_MSG(in != nullptr, ErrorCode::InvalidParameter, "input samples is null");
   SONARE_CHECK_MSG(in_channels > 0, ErrorCode::InvalidParameter, "in_channels must be positive");
-  SONARE_CHECK_MSG(numeric::all_finite(in, frames * static_cast<size_t>(in_channels)),
-                   ErrorCode::InvalidParameter, "input samples contains a non-finite sample");
+  const size_t in_count = util::check::element_count(
+      frames, static_cast<std::uint64_t>(in_channels), resource::kMaxOfflineAudioSamples,
+      "in_channels", "the input samples");
+  SONARE_CHECK_MSG(numeric::all_finite(in, in_count), ErrorCode::InvalidParameter,
+                   "input samples contains a non-finite sample");
   const InputLayout input_layout = renderer.config().prepare.input_layout;
   ChannelLayout layout = ChannelLayout::Stereo;
   const bool valid = input_layout == InputLayout::Auto
@@ -672,7 +678,10 @@ std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* i
       static_cast<size_t>(std::min(kOfflineRenderBlockFrames, renderer.max_block_size()));
   const auto in_ch = static_cast<size_t>(in_channels);
   const auto out_ch = static_cast<size_t>(channels);
-  std::vector<float> result(frames * out_ch, 0.0f);
+  std::vector<float> result(
+      util::check::element_count(frames, out_ch, resource::kMaxOfflineAudioSamples, "frames",
+                                 "the rendered output"),
+      0.0f);
   std::vector<float> in_block(block * in_ch, 0.0f);
   std::vector<float> out_block(block * out_ch, 0.0f);
 

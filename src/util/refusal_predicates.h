@@ -165,6 +165,11 @@ inline std::string integer_at_least_predicate(long long bound) {
   return "must be an integer of at least " + std::to_string(bound);
 }
 
+/// @brief "must keep <what> within N elements", for an argument that scales a sized buffer.
+inline std::string element_limit_predicate(const std::string& what, unsigned long long limit) {
+  return "must keep " + what + " within " + std::to_string(limit) + " elements";
+}
+
 /// @brief "must name a declared value".
 inline constexpr const char* kDeclaredValuePredicate = "must name a declared value";
 

@@ -21,6 +21,7 @@
 #include "util/numeric_validation.h"
 #include "util/parallel_for.h"
 #include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -512,12 +513,9 @@ std::vector<std::complex<float>> apply_sparse_kernel_frames(
   }
 
   // Pre-allocate output (promote to size_t before multiplying to avoid int overflow)
-  size_t output_elements = 0;
-  SONARE_CHECK(
-      numeric::checked_size_product(static_cast<size_t>(n_bins), static_cast<size_t>(n_frames),
-                                    kMaxAudioBufferSize, &output_elements),
-      ErrorCode::InvalidParameter);
-  std::vector<std::complex<float>> output(output_elements);
+  std::vector<std::complex<float>> output(util::check::element_count(
+      static_cast<std::uint64_t>(n_bins), static_cast<std::uint64_t>(n_frames),
+      resource::kMaxOfflineAudioSamples, "hop_length", "the constant-Q output"));
 
   // Create FFT processor
   FFT fft(fft_length);
@@ -658,7 +656,10 @@ Audio icqt(const CqtResult& cqt_result, int length) {
     }
   }
 
-  std::vector<float> output_padded(static_cast<size_t>(n_fft + (n_frames - 1) * hop_length), 0.0f);
+  const std::size_t hop_span = util::check::element_count(
+      static_cast<std::uint64_t>(n_frames - 1), static_cast<std::uint64_t>(hop_length),
+      resource::kMaxOfflineAudioSamples, "hop_length", "the reconstructed signal");
+  std::vector<float> output_padded(static_cast<std::size_t>(n_fft) + hop_span, 0.0f);
   std::vector<float> weight(output_padded.size(), 0.0f);
   std::vector<std::complex<float>> spectrum(n_freq);
   std::vector<float> frame(n_fft, 0.0f);
@@ -735,8 +736,11 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
 
   // Phase is not estimated: the magnitude is stored in the real part so
   // magnitude() returns it.
-  std::vector<std::complex<float>> data(static_cast<size_t>(config.n_bins) * n_frames,
-                                        std::complex<float>(0.0f, 0.0f));
+  std::vector<std::complex<float>> data(
+      util::check::element_count(
+          static_cast<std::uint64_t>(config.n_bins), static_cast<std::uint64_t>(n_frames),
+          resource::kMaxOfflineAudioSamples, "hop_length", "the constant-Q output"),
+      std::complex<float>(0.0f, 0.0f));
   // Sparse columns are ascending; each selected magnitude row is contiguous.
   std::vector<float> acc(static_cast<size_t>(n_frames), 0.0f);
   for (int k = 0; k < config.n_bins; ++k) {
@@ -791,7 +795,10 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
     low.n_bins = n_split;
     CqtResult low_result = cqt(audio, low);
     n_frames = low_result.n_frames();
-    data.assign(static_cast<size_t>(config.n_bins) * n_frames, std::complex<float>(0.0f, 0.0f));
+    data.assign(util::check::element_count(
+                    static_cast<std::uint64_t>(config.n_bins), static_cast<std::uint64_t>(n_frames),
+                    resource::kMaxOfflineAudioSamples, "hop_length", "the constant-Q output"),
+                std::complex<float>(0.0f, 0.0f));
     for (int k = 0; k < n_split; ++k) {
       for (int t = 0; t < n_frames; ++t) {
         data[k * n_frames + t] = low_result.at(k, t);
@@ -806,7 +813,11 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
 
     if (n_frames == 0) {
       n_frames = high_result.n_frames();
-      data.assign(static_cast<size_t>(config.n_bins) * n_frames, std::complex<float>(0.0f, 0.0f));
+      data.assign(util::check::element_count(static_cast<std::uint64_t>(config.n_bins),
+                                             static_cast<std::uint64_t>(n_frames),
+                                             resource::kMaxOfflineAudioSamples, "hop_length",
+                                             "the constant-Q output"),
+                  std::complex<float>(0.0f, 0.0f));
     }
     const int copy_n = std::min(n_frames, high_result.n_frames());
     for (int k = n_split; k < config.n_bins; ++k) {

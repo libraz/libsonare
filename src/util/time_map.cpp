@@ -8,6 +8,8 @@
 
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 #include "util/resource_limits.h"
 
 namespace sonare {
@@ -16,13 +18,18 @@ namespace {
 constexpr size_t kMaxCount =
     std::min<size_t>(resource::kMaxOfflineAudioSamples, static_cast<size_t>(INT_MAX));
 
+/// Refuses a stretched length past kMaxCount, naming the speed ratio that scales it.
+[[noreturn]] void refuse_stretched_length() {
+  util::check::refuse("speed_ratio",
+                      util::refusal::element_limit_predicate("the stretched output", kMaxCount));
+}
+
 /// Rounds a real output position up to a whole frame and rejects anything the
 /// scalar form would have rejected.
 size_t checked_ceil(double position) {
   SONARE_CHECK(std::isfinite(position), ErrorCode::InvalidParameter);
   const double rounded = std::ceil(position);
-  SONARE_CHECK(rounded >= 0.0 && rounded <= static_cast<double>(kMaxCount),
-               ErrorCode::InvalidParameter);
+  if (!(rounded >= 0.0 && rounded <= static_cast<double>(kMaxCount))) refuse_stretched_length();
   return static_cast<size_t>(rounded);
 }
 
@@ -130,9 +137,10 @@ int TimeStretchMap::output_frame_count(int input_frame_count) const {
   SONARE_CHECK(input_frame_count >= 0, ErrorCode::InvalidParameter);
   if (constant()) {
     size_t count = 0;
-    SONARE_CHECK(numeric::checked_projected_count(static_cast<size_t>(input_frame_count),
-                                                  segments_[0].rate, kMaxCount, &count),
-                 ErrorCode::InvalidParameter);
+    if (!numeric::checked_projected_count(static_cast<size_t>(input_frame_count), segments_[0].rate,
+                                          kMaxCount, &count)) {
+      refuse_stretched_length();
+    }
     return static_cast<int>(count);
   }
   return static_cast<int>(
@@ -143,9 +151,10 @@ size_t TimeStretchMap::output_sample_count(size_t input_sample_count, int hop_le
   SONARE_CHECK(hop_length > 0, ErrorCode::InvalidParameter);
   if (constant()) {
     size_t count = 0;
-    SONARE_CHECK(
-        numeric::checked_projected_count(input_sample_count, segments_[0].rate, kMaxCount, &count),
-        ErrorCode::InvalidParameter);
+    if (!numeric::checked_projected_count(input_sample_count, segments_[0].rate, kMaxCount,
+                                          &count)) {
+      refuse_stretched_length();
+    }
     return count;
   }
   const double hop = static_cast<double>(hop_length);

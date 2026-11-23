@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -77,7 +80,14 @@ std::vector<float> interp_harmonics(const float* x, int n_bins, int n_frames,
     throw SonareException(ErrorCode::InvalidParameter, "freqs size must equal n_bins");
   }
   const int H = static_cast<int>(harmonics.size());
-  std::vector<float> out(static_cast<size_t>(H) * n_bins * n_frames, 0.0f);
+  const auto plane_rows = util::check::element_count(
+      static_cast<std::uint64_t>(H), static_cast<std::uint64_t>(n_bins),
+      resource::kMaxOfflineAudioSamples, "harmonics", "the harmonic spectra");
+  std::vector<float> out(
+      util::check::element_count(plane_rows, static_cast<std::uint64_t>(n_frames),
+                                 resource::kMaxOfflineAudioSamples, "harmonics",
+                                 "the harmonic spectra"),
+      0.0f);
   for (int h = 0; h < H; ++h) {
     float mult = harmonics[h];
     for (int k = 0; k < n_bins; ++k) {
@@ -167,7 +177,10 @@ std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
     throw SonareException(ErrorCode::InvalidParameter, "f0 size must equal n_frames");
   }
   const int H = static_cast<int>(harmonics.size());
-  std::vector<float> out(static_cast<size_t>(H) * n_frames, 0.0f);
+  std::vector<float> out(util::check::element_count(
+                             static_cast<std::uint64_t>(H), static_cast<std::uint64_t>(n_frames),
+                             resource::kMaxOfflineAudioSamples, "harmonics", "the harmonic tracks"),
+                         0.0f);
   for (int h = 0; h < H; ++h) {
     float mult = harmonics[h];
     for (int t = 0; t < n_frames; ++t) {

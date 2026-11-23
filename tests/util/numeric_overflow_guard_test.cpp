@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -39,6 +40,23 @@ TEST_CASE("checked projected counts reject non-finite and oversized results",
   REQUIRE(out == 200);
   REQUIRE_FALSE(
       numeric::checked_size_product(std::size_t{10}, std::size_t{21}, std::size_t{200}, &out));
+}
+
+TEST_CASE("checked_size_product refuses a product the 32-bit size type cannot hold",
+          "[numeric][overflow]") {
+  // 65536 * 65536 is 2^32: one past what a wasm32 size_t holds, and exactly 0 if multiplied there.
+  constexpr std::uint64_t kUnlimited = std::numeric_limits<std::uint64_t>::max();
+  std::uint32_t narrow = 7;
+  REQUIRE_FALSE(numeric::checked_size_product(65536u, 65536u, kUnlimited, &narrow));
+  REQUIRE(narrow == 7);
+  REQUIRE(numeric::checked_size_product(65536u, 65535u, kUnlimited, &narrow));
+  REQUIRE(narrow == 65536u * 65535u);
+
+  std::uint64_t wide = 0;
+  REQUIRE(numeric::checked_size_product(65536u, 65536u, kUnlimited, &wide));
+  REQUIRE(wide == (std::uint64_t{1} << 32));
+  REQUIRE_FALSE(numeric::checked_size_product(std::uint64_t{1} << 32, std::uint64_t{1} << 32,
+                                              kUnlimited, &wide));
 }
 
 TEST_CASE("checked and saturating addition handle both signed boundaries", "[numeric][overflow]") {

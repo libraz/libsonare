@@ -97,14 +97,18 @@ inline bool checked_round_cast(Float value, Int* out) noexcept {
   return true;
 }
 
-/// Multiplies two element counts without overflowing and enforces an explicit
-/// resource limit. `out` is only written on success.
-inline bool checked_size_product(std::size_t lhs, std::size_t rhs, std::size_t limit,
-                                 std::size_t* out) noexcept {
+/// Multiplies two element counts in 64-bit arithmetic and accepts the product only when it is
+/// within @p limit and representable in @p Size, the size type of the target (`std::size_t` is
+/// 32-bit on wasm32; a test passes `std::uint32_t` to exercise that width natively). `out` is only
+/// written on success.
+template <typename Size>
+inline bool checked_size_product(std::uint64_t lhs, std::uint64_t rhs, std::uint64_t limit,
+                                 Size* out) noexcept {
+  static_assert(std::is_integral_v<Size> && std::is_unsigned_v<Size>);
   if (out == nullptr || (rhs != 0 && lhs > limit / rhs)) return false;
-  const std::size_t product = lhs * rhs;
-  if (product > limit) return false;
-  *out = product;
+  const std::uint64_t product = lhs * rhs;
+  if (product > limit || product > std::numeric_limits<Size>::max()) return false;
+  *out = static_cast<Size>(product);
   return true;
 }
 

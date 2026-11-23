@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <string>
 #include <vector>
 
 #include "util/exception.h"
@@ -60,5 +61,20 @@ TEST_CASE("frame matches librosa output exactly", "[librosa][util][frame]") {
   const size_t last_off = (static_cast<size_t>(n_frames) - 1) * static_cast<size_t>(frame_length);
   for (size_t i = 0; i < last_arr.size(); ++i) {
     REQUIRE_THAT(out[last_off + i], WithinAbs(last_arr[i].as_float(), 1e-6f));
+  }
+}
+
+TEST_CASE("frame refuses an output past the offline limit before allocating it",
+          "[util][frame][edge]") {
+  // 1,044,481 frames of 4096 samples: about 4.3e9 floats from a 1Mi-sample input. On a 32-bit
+  // size_t that product wraps, so it has to be refused before the buffer is sized from it.
+  const std::vector<float> x(std::size_t{1} << 20, 0.25f);
+  try {
+    (void)frame(x, 4096, 1);
+    FAIL("frame accepted an output past the offline limit");
+  } catch (const SonareException& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(std::string(e.what()) ==
+            "hop_length must keep the framed output within 500000000 elements");
   }
 }

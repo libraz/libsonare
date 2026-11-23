@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 #include "core/resample.h"
 #include "playback/default_hrtf.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare::playback {
 
@@ -51,7 +54,14 @@ HrtfSet HrtfSet::resampled(int sample_rate) const {
       if (new_taps == 0) {
         new_taps = static_cast<int>(channel.size());
         result.header.taps = new_taps;
-        result.hrir.assign(direction_count * 2 * static_cast<size_t>(new_taps), 0.0f);
+        const std::size_t channel_count =
+            util::check::element_count(direction_count, 2, resource::kMaxOfflineAudioSamples,
+                                       "sample_rate", "the resampled response set");
+        result.hrir.assign(
+            util::check::element_count(channel_count, static_cast<std::uint64_t>(new_taps),
+                                       resource::kMaxOfflineAudioSamples, "sample_rate",
+                                       "the resampled response set"),
+            0.0f);
       }
       const size_t new_offset =
           (direction * 2 + static_cast<size_t>(ear)) * static_cast<size_t>(new_taps);

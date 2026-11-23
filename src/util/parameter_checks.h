@@ -7,10 +7,12 @@
 ///          refusal_predicates.h. A layer that read the member from a caller's key respells the
 ///          subject (mastering/api/param_map.h, with_caller_keys).
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -21,6 +23,7 @@
 #include <vector>
 
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 #include "util/refusal_predicates.h"
 
 namespace sonare::util::check {
@@ -293,6 +296,22 @@ inline void odd_integer_in_range(long long value, long long lo, long long hi, co
     throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
                                             refusal::odd_integer_predicate(lo, hi));
   }
+}
+
+/// @brief The element count @p lhs * @p rhs, computed in 64 bits and refused naming @p subject —
+///        the argument the caller scales the product by — when it passes @p limit:
+///        "<subject> must keep <what> within N elements". @p Size is the target's size type.
+template <typename Size = std::size_t>
+Size element_count(std::uint64_t lhs, std::uint64_t rhs, std::uint64_t limit, const char* subject,
+                   const char* what) {
+  const std::uint64_t bound =
+      std::min<std::uint64_t>(limit, std::numeric_limits<Size>::max());  // the limit that binds
+  Size count = 0;
+  if (!numeric::checked_size_product(lhs, rhs, bound, &count)) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            refusal::element_limit_predicate(what, bound));
+  }
+  return count;
 }
 
 /// @brief power_of_two_in_range over a closed integer @p domain, so the range is a named constant.

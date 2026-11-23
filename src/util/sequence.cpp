@@ -6,16 +6,11 @@
 #include <limits>
 
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
 namespace {
-
-// Whether a * b stays addressable by an int index expression.
-bool fits_int_product(int a, int b) {
-  return static_cast<int64_t>(a) * static_cast<int64_t>(b) <=
-         static_cast<int64_t>(std::numeric_limits<int>::max());
-}
 
 // Probability floor applied before a log.
 constexpr float kProbabilityFloor = 1e-30f;
@@ -109,9 +104,9 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   // (UB) before any allocation. The largest index is X_cols * Y_cols - 1, so
   // guard that product. (~46k x 46k cells is already far beyond any musical
   // alignment.)
-  if (!fits_int_product(X_cols, Y_cols)) {
-    throw SonareException(ErrorCode::InvalidParameter, "cost matrix too large");
-  }
+  const auto n_cells = util::check::element_count(
+      static_cast<std::uint64_t>(X_cols), static_cast<std::uint64_t>(Y_cols),
+      std::numeric_limits<int>::max(), "X_cols", "the cost matrix");
 
   // Resolve the step pattern. Default is symmetric P0: {(1,1),(1,0),(0,1)}.
   std::vector<std::pair<int, int>> steps =
@@ -132,8 +127,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   }
 
   DtwResult result;
-  result.accumulated_cost.assign(static_cast<size_t>(X_cols) * Y_cols,
-                                 std::numeric_limits<float>::infinity());
+  result.accumulated_cost.assign(n_cells, std::numeric_limits<float>::infinity());
   auto& D = result.accumulated_cost;
 
   // Each local cost is consumed by the single cell that owns it, so it is
@@ -165,7 +159,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   }
   // Forward recursion using the supplied step pattern.
   // Backpointers store the index into `steps` for traceback.
-  std::vector<int> back(static_cast<size_t>(X_cols) * Y_cols, -1);
+  std::vector<int> back(n_cells, -1);
   for (int i = 0; i < X_cols; ++i) {
     for (int j = 0; j < Y_cols; ++j) {
       if (i == 0 && j == 0) continue;
@@ -229,9 +223,8 @@ RqaResult rqa(const float* rec, int n) {
   if (rec == nullptr || n <= 0) return out;
   // rec is an n x n matrix indexed with the int expression `i * n + j`; reject a
   // size whose element count would overflow int (UB) before iterating.
-  if (!fits_int_product(n, n)) {
-    throw SonareException(ErrorCode::InvalidParameter, "recurrence matrix too large");
-  }
+  util::check::element_count(static_cast<std::uint64_t>(n), static_cast<std::uint64_t>(n),
+                             std::numeric_limits<int>::max(), "n", "the recurrence matrix");
   int n2 = n * n;
   int n_rec = 0;
   for (int i = 0; i < n2; ++i)
@@ -279,13 +272,16 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
   // backpointers with `t * n_states + s`, and the transition matrix with
   // `p * n_states + s`; reject sizes whose element counts would overflow int
   // (UB) before iterating, matching dtw/rqa above.
-  if (!fits_int_product(n_states, n_steps) || !fits_int_product(n_states, n_states)) {
-    throw SonareException(ErrorCode::InvalidParameter, "trellis too large");
-  }
+  const auto n_trellis = util::check::element_count(
+      static_cast<std::uint64_t>(n_states), static_cast<std::uint64_t>(n_steps),
+      std::numeric_limits<int>::max(), "n_steps", "the trellis");
+  const auto n_transitions = util::check::element_count(
+      static_cast<std::uint64_t>(n_states), static_cast<std::uint64_t>(n_states),
+      std::numeric_limits<int>::max(), "n_states", "the trellis");
   // Transition logs are step-invariant; a single-step path never reads them.
   std::vector<float> log_transition;
   if (n_steps > 1) {
-    log_transition.resize(static_cast<size_t>(n_states) * n_states);
+    log_transition.resize(n_transitions);
     for (size_t i = 0; i < log_transition.size(); ++i) {
       log_transition[i] = std::log(std::max(transition[i], kProbabilityFloor));
     }
@@ -297,7 +293,7 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
   // and the backtrack pass reads one element per step.
   std::vector<float> prev_scores(static_cast<size_t>(n_states), minus_inf);
   std::vector<float> curr_scores(static_cast<size_t>(n_states), minus_inf);
-  std::vector<int> backtrack(static_cast<size_t>(n_states) * n_steps, 0);
+  std::vector<int> backtrack(n_trellis, 0);
 
   // Initial step.
   for (int s = 0; s < n_states; ++s) {
@@ -359,10 +355,9 @@ std::vector<int> viterbi_discriminative(const float* posteriors, int n_states, i
   if (n_states <= 0 || n_steps <= 0) return {};
   // Mirror viterbi's overflow guard: this function indexes `s * n_steps + t` with
   // int arithmetic in the loop below, before delegating to viterbi().
-  if (!fits_int_product(n_states, n_steps)) {
-    throw SonareException(ErrorCode::InvalidParameter, "trellis too large");
-  }
-  std::vector<float> log_prob(static_cast<size_t>(n_states) * n_steps);
+  std::vector<float> log_prob(util::check::element_count(
+      static_cast<std::uint64_t>(n_states), static_cast<std::uint64_t>(n_steps),
+      std::numeric_limits<int>::max(), "n_steps", "the trellis"));
   for (int s = 0; s < n_states; ++s) {
     float lp_state = std::log(std::max(p_state[s], kProbabilityFloor));
     for (int t = 0; t < n_steps; ++t) {

@@ -13,6 +13,7 @@
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::editing::pitch_editor {
 
@@ -106,9 +107,12 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
   const float rate = 1.0f / stretch_ratio;
   // The region's stretched length is what stretching the region alone yields.
   std::size_t projected = 0;
-  SONARE_CHECK(numeric::checked_projected_count(static_cast<std::size_t>(length), rate,
-                                                static_cast<std::size_t>(INT_MAX), &projected),
-               ErrorCode::InvalidParameter);
+  if (!numeric::checked_projected_count(static_cast<std::size_t>(length), rate,
+                                        static_cast<std::size_t>(INT_MAX), &projected)) {
+    util::check::refuse("stretch_ratio",
+                        util::refusal::element_limit_predicate("the stretched note",
+                                                               static_cast<std::size_t>(INT_MAX)));
+  }
   const int stretched_len = static_cast<int>(projected);
 
   // Stretched with source context on both sides, so the copy can be read early or late.

@@ -9,7 +9,9 @@
 #include "editing/note_model/monophonic_onset_evidence.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/peak.h"
+#include "util/resource_limits.h"
 
 namespace sonare::editing::note_model {
 
@@ -308,8 +310,11 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
   // Backpointers. Silent: 0 from Silent, 1 from Stable top1. Attack: 0 Silent, 1 Attack,
   // 2 Stable of another bin, 3 Stable of the same bin. Stable: 0 Stable, 1 Attack.
   std::vector<std::int8_t> back_q(n, 0);
-  std::vector<std::int8_t> back_a(n * nb, 0);
-  std::vector<std::int8_t> back_s(n * nb, 0);
+  const std::size_t n_cells = util::check::element_count(
+      static_cast<std::uint64_t>(n), static_cast<std::uint64_t>(nb),
+      resource::kMaxOfflineAudioSamples, "fmin_hz", "the trellis backpointers");
+  std::vector<std::int8_t> back_a(n_cells, 0);
+  std::vector<std::int8_t> back_s(n_cells, 0);
   std::vector<std::int32_t> top1_at(n, 0);
   std::vector<std::int32_t> top2_at(n, 0);
 

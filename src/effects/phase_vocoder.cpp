@@ -5,6 +5,7 @@
 #include <climits>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -12,9 +13,9 @@
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
-#include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
 #include "util/phase.h"
+#include "util/resource_limits.h"
 #include "util/time_map.h"
 
 namespace sonare {
@@ -36,11 +37,9 @@ float instantaneous_frequency_for_bin(float current_phase, float previous_phase,
 int checked_output_frames(int n_bins, int input_frames, const TimeStretchMap& map) {
   SONARE_CHECK(n_bins > 0 && input_frames > 0, ErrorCode::InvalidParameter);
   const size_t output_frames = static_cast<size_t>(map.output_frame_count(input_frames));
-  size_t output_elements = 0;
-  SONARE_CHECK(numeric::checked_size_product(static_cast<size_t>(n_bins), output_frames,
-                                             kMaxAudioBufferSize, &output_elements),
-               ErrorCode::InvalidParameter);
-  (void)output_elements;
+  util::check::element_count(static_cast<std::uint64_t>(n_bins), output_frames,
+                             resource::kMaxOfflineAudioSamples, "speed_ratio",
+                             "the stretched spectrogram");
   return static_cast<int>(output_frames);
 }
 

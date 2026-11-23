@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <random>
@@ -19,6 +20,7 @@
 #include "util/padding.h"
 #include "util/parameter_checks.h"
 #include "util/reflect_padding.h"
+#include "util/resource_limits.h"
 #include "util/validated.h"
 
 namespace sonare {
@@ -659,20 +661,11 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // hop_length this refuses never reaches the int product below.
   const StftConfig checked = Validated<StftConfig>::make(stft_config).get();
 
-  // The reconstruction length comes from the geometry rather than from any
-  // buffer the caller passed, so it is bounded here. Past this ceiling the int
-  // product wraps, and what the caller receives is std::vector's own length
-  // error, which names neither the argument nor a limit.
-  std::size_t reconstructed_samples = 0;
-  if (!numeric::checked_size_product(static_cast<std::size_t>(n_frames - 1),
-                                     static_cast<std::size_t>(checked.hop_length),
-                                     kMaxAudioBufferSize, &reconstructed_samples) ||
-      !numeric::checked_add(reconstructed_samples, static_cast<std::size_t>(checked.n_fft),
-                            &reconstructed_samples) ||
-      reconstructed_samples > kMaxAudioBufferSize) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "reconstruction exceeds the offline resource limit");
-  }
+  // The length comes from the geometry, not a caller buffer, so the hop span is bounded here;
+  // n_fft <= kMaxStftNFft keeps the int sum below in range.
+  util::check::element_count(static_cast<std::uint64_t>(n_frames - 1),
+                             static_cast<std::uint64_t>(checked.hop_length),
+                             resource::kMaxOfflineAudioSamples, "hop_length", "the reconstruction");
   const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
   // n_fft, hop_length, window and geometry are fixed for the whole call, so

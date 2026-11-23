@@ -439,3 +439,19 @@ TEST_CASE("a refusal requiring a value left out or supplied is a shape error", "
   CHECK_FALSE(caught([] { check::finite(std::nan(""), "x"); }).shape_error());
   CHECK_FALSE(caught([] { check::refuse("x", "must be odd"); }).shape_error());
 }
+
+TEST_CASE("element_count refuses the scaling argument once the product passes its limit",
+          "[util][parameter_checks]") {
+  CHECK(check::element_count(1000u, 1000u, 1'000'000u, "hop_length", "the framed output") ==
+        1'000'000u);
+  CHECK(refusal_text([] {
+          (void)check::element_count(1000u, 1001u, 1'000'000u, "hop_length", "the framed output");
+        }) == "hop_length must keep the framed output within 1000000 elements");
+  // At the wasm32 width the size type binds before an unlimited limit does, and the text says so.
+  CHECK(refusal_text([] {
+          (void)check::element_count<std::uint32_t>(65536u, 65536u, UINT64_MAX, "n_components",
+                                                    "the activation matrix");
+        }) == "n_components must keep the activation matrix within 4294967295 elements");
+  CHECK(check::element_count<std::uint32_t>(65536u, 65535u, UINT64_MAX, "n_components",
+                                            "the activation matrix") == 65536u * 65535u);
+}

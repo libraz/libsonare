@@ -20,6 +20,7 @@
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
 #include "util/refusal_predicates.h"
+#include "util/resource_limits.h"
 
 namespace sonare::mastering::match {
 namespace {
@@ -270,7 +271,10 @@ void composite_response_db(const std::vector<float>& omegas, const std::vector<f
 std::vector<float> band_sensitivity(const std::vector<float>& omegas,
                                     const std::vector<float>& centres, float q,
                                     double sample_rate) {
-  std::vector<float> sensitivity(omegas.size() * centres.size(), 0.0f);
+  std::vector<float> sensitivity(
+      util::check::element_count(omegas.size(), centres.size(), resource::kMaxOfflineAudioSamples,
+                                 "max_bands", "the band sensitivity matrix"),
+      0.0f);
   for (size_t band = 0; band < centres.size(); ++band) {
     const auto boosted = peak_section(centres[band], q, kSolverProbeDb, sample_rate);
     const auto cut = peak_section(centres[band], q, -kSolverProbeDb, sample_rate);

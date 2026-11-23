@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
 
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/refusal_predicates.h"
+#include "util/resource_limits.h"
 
 namespace sonare::acoustic {
 
@@ -258,7 +261,13 @@ void VoxelGrid::build(const std::vector<Triangle>& faces, int resolution) {
   cell_size_ = {extent.x / static_cast<float>(nx_), extent.y / static_cast<float>(ny_),
                 extent.z / static_cast<float>(nz_)};
 
-  cells_.assign(static_cast<size_t>(nx_) * ny_ * nz_, {});
+  const size_t plane_cells =
+      util::check::element_count(static_cast<std::uint64_t>(nx_), static_cast<std::uint64_t>(ny_),
+                                 resource::kMaxOfflineAudioSamples, "resolution", "the voxel grid");
+  cells_.assign(
+      util::check::element_count(plane_cells, static_cast<std::uint64_t>(nz_),
+                                 resource::kMaxOfflineAudioSamples, "resolution", "the voxel grid"),
+      {});
 
   // Bin each face into every cell its AABB overlaps (conservative).
   face_cells_.resize(faces.size());

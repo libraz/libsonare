@@ -3,12 +3,14 @@
 
 #include "util/frame.h"
 
+#include <cstdint>
 #include <cstring>
 #include <limits>
 
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -37,8 +39,11 @@ std::vector<float> frame(const float* x, std::size_t n, int frame_length, int ho
     return {};
   }
 
-  std::vector<float> out(static_cast<std::size_t>(n_frames) *
-                         static_cast<std::size_t>(frame_length));
+  // The frame count fits an int, but its product with the frame length can wrap a 32-bit size_t.
+  const auto total = util::check::element_count(static_cast<std::uint64_t>(n_frames), frame_length,
+                                                resource::kMaxOfflineAudioSamples, "hop_length",
+                                                "the framed output");
+  std::vector<float> out(total);
   const std::size_t flen = static_cast<std::size_t>(frame_length);
   const std::size_t hop = static_cast<std::size_t>(hop_length);
   for (int i = 0; i < n_frames; ++i) {

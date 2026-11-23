@@ -15,6 +15,7 @@
 #include "util/exception.h"
 #include "util/parameter_checks.h"
 #include "util/reflect_padding.h"
+#include "util/resource_limits.h"
 #include "util/validated.h"
 
 namespace sonare::editing::polyphony {
@@ -218,7 +219,11 @@ CentSpectrum compute_cent_spectrum(const Spectrogram& spec, const CentSpectrumCo
   spectrum.axis.ref_hz = config.ref_hz;
   spectrum.axis.cents_per_bin = config.cents_per_bin;
   spectrum.axis.n_bins = axis_bins(config.ref_hz, config.max_hz, config.cents_per_bin);
-  spectrum.values.assign(static_cast<size_t>(n_frames) * spectrum.axis.n_bins, 0.0f);
+  spectrum.values.assign(
+      util::check::element_count(
+          static_cast<std::uint64_t>(n_frames), static_cast<std::uint64_t>(spectrum.axis.n_bins),
+          resource::kMaxOfflineAudioSamples, "cents_per_bin", "the cent spectrum"),
+      0.0f);
   spectrum.n_frames = n_frames;
   spectrum.hop_length = spec.hop_length();
   spectrum.sample_rate = spec.sample_rate();
@@ -399,7 +404,11 @@ SalienceSurface compute_salience(const CentSpectrum& spectrum, const SalienceCon
 
   SalienceSurface surface;
   surface.axis = kernel.f0_axis();
-  surface.values.assign(static_cast<size_t>(spectrum.n_frames) * surface.axis.n_bins, 0.0f);
+  surface.values.assign(util::check::element_count(static_cast<std::uint64_t>(spectrum.n_frames),
+                                                   static_cast<std::uint64_t>(surface.axis.n_bins),
+                                                   resource::kMaxOfflineAudioSamples, "f0_min_hz",
+                                                   "the salience matrix"),
+                        0.0f);
   surface.n_frames = spectrum.n_frames;
   surface.hop_length = spectrum.hop_length;
   surface.sample_rate = spectrum.sample_rate;

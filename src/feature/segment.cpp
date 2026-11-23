@@ -12,6 +12,8 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -23,15 +25,6 @@ namespace {
 void require_finite_features(const float* m, std::size_t count) {
   SONARE_CHECK_MSG(numeric::all_finite(m, count), ErrorCode::InvalidParameter,
                    "features contain a non-finite value");
-}
-
-std::size_t checked_feature_count(int rows, int cols) {
-  std::size_t count = 0;
-  if (!numeric::checked_matrix_element_count(rows, cols, &count) ||
-      count > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid or oversized feature matrix");
-  }
-  return count;
 }
 
 inline float column_norm(const float* X, int rows, int cols, int j) {
@@ -176,12 +169,16 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
   if (X_cols <= 0 || Y_cols <= 0) return {};
   // The output is indexed with the int expression `i * Y_cols + j`; reject a size
   // whose element count would overflow int (UB) before iterating.
-  if (static_cast<int64_t>(X_cols) * static_cast<int64_t>(Y_cols) >
-      static_cast<int64_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "matrix too large");
-  }
-  const std::size_t x_count = checked_feature_count(X_rows, X_cols);
-  const std::size_t y_count = checked_feature_count(Y_rows, Y_cols);
+  const std::size_t n_cells = util::check::element_count(
+      static_cast<std::uint64_t>(X_cols), static_cast<std::uint64_t>(Y_cols),
+      std::numeric_limits<int>::max(), "X_cols", "the similarity matrix");
+  util::check::integer_at_least(X_rows, 0, "X_rows");
+  const std::size_t x_count = util::check::element_count(
+      static_cast<std::uint64_t>(X_rows), static_cast<std::uint64_t>(X_cols),
+      std::numeric_limits<int>::max(), "X_cols", "the feature matrix");
+  const std::size_t y_count = util::check::element_count(
+      static_cast<std::uint64_t>(Y_rows), static_cast<std::uint64_t>(Y_cols),
+      std::numeric_limits<int>::max(), "Y_cols", "the feature matrix");
   require_finite_features(X, x_count);
   if (Y != X || y_count > x_count) require_finite_features(Y, y_count);
 
@@ -203,7 +200,7 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
   }
 
   // mode == "connectivity": raw similarity (cosine sim or -euclidean), top-k trimmed.
-  std::vector<float> out(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
+  std::vector<float> out(n_cells, 0.0f);
   const bool use_cosine = (metric == "cosine");
   const std::vector<float> nx = use_cosine ? column_norms(X, X_rows, X_cols) : std::vector<float>();
   const std::vector<float> ny = use_cosine ? column_norms(Y, X_rows, Y_cols) : std::vector<float>();
@@ -242,11 +239,13 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
   if (cols <= 0) return {};
   // The output is indexed with the int expression `i * cols + j`; reject a size
   // whose element count would overflow int (UB) before iterating.
-  if (static_cast<int64_t>(cols) * static_cast<int64_t>(cols) >
-      static_cast<int64_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "matrix too large");
-  }
-  const std::size_t feature_count = checked_feature_count(rows, cols);
+  const std::size_t n_cells =
+      util::check::element_count(static_cast<std::uint64_t>(cols), static_cast<std::uint64_t>(cols),
+                                 std::numeric_limits<int>::max(), "cols", "the recurrence matrix");
+  util::check::integer_at_least(rows, 0, "rows");
+  const std::size_t feature_count =
+      util::check::element_count(static_cast<std::uint64_t>(rows), static_cast<std::uint64_t>(cols),
+                                 std::numeric_limits<int>::max(), "cols", "the feature matrix");
   require_finite_features(data, feature_count);
   if (width < 1) width = 1;
 
@@ -277,7 +276,7 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
   // Which cells are neighbours is tracked apart from their values: a euclidean
   // similarity is a negative distance, so no value, zero included, can stand for
   // "not a neighbour". The |i - j| < width band is never a candidate.
-  std::vector<unsigned char> selected(static_cast<size_t>(cols) * cols, 0);
+  std::vector<unsigned char> selected(n_cells, 0);
   std::vector<size_t> candidates;
   candidates.reserve(static_cast<size_t>(cols));
   for (int i = 0; i < cols; ++i) {
@@ -306,15 +305,15 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
 
 std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad) {
   if (rec == nullptr || n <= 0) return {};
-  const int n_lags = pad ? 2 * n : n;
-  // The output is indexed with the int expression `lag * n + i`; reject a
-  // size whose element count would overflow int (UB) before iterating.
-  if (static_cast<int64_t>(n) * static_cast<int64_t>(n_lags) >
-      static_cast<int64_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "matrix too large");
-  }
+  // The output is indexed with the int expression `lag * n + i`; reject a size whose element
+  // count would overflow int (UB) before iterating, with the padded lag count taken in 64 bits.
+  const std::uint64_t lag_count = static_cast<std::uint64_t>(n) * (pad ? 2u : 1u);
+  const std::size_t n_cells =
+      util::check::element_count(static_cast<std::uint64_t>(n), lag_count,
+                                 std::numeric_limits<int>::max(), "n", "the lag matrix");
+  const int n_lags = static_cast<int>(lag_count);
   // Column i is column i of the (zero-padded) recurrence rolled up by i rows.
-  std::vector<float> out(static_cast<size_t>(n_lags) * n, 0.0f);
+  std::vector<float> out(n_cells, 0.0f);
   for (int lag = 0; lag < n_lags; ++lag) {
     for (int i = 0; i < n; ++i) {
       const int row = (lag + i) % n_lags;
@@ -430,7 +429,9 @@ std::vector<int> contiguous_ward_runs(const float* block, int rows, int len, int
 std::vector<int> subsegment(const float* data, int rows, int cols,
                             const std::vector<int>& boundaries, int n_segments) {
   if (data == nullptr || rows <= 0 || cols <= 0 || n_segments <= 0) return boundaries;
-  const std::size_t feature_count = checked_feature_count(rows, cols);
+  const std::size_t feature_count =
+      util::check::element_count(static_cast<std::uint64_t>(rows), static_cast<std::uint64_t>(cols),
+                                 std::numeric_limits<int>::max(), "cols", "the feature matrix");
   require_finite_features(data, feature_count);
 
   // Normalize the parent boundaries: clamp into [0, cols], add the 0 and cols
@@ -493,7 +494,10 @@ std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
   }
   k = std::min(k, cols);
   if (cols <= 0) return {};
-  const std::size_t feature_count = checked_feature_count(rows, cols);
+  util::check::integer_at_least(rows, 0, "rows");
+  const std::size_t feature_count =
+      util::check::element_count(static_cast<std::uint64_t>(rows), static_cast<std::uint64_t>(cols),
+                                 std::numeric_limits<int>::max(), "cols", "the feature matrix");
   require_finite_features(data, feature_count);
   if (k >= cols) {
     std::vector<int> labels(cols);
@@ -503,7 +507,10 @@ std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
 
   // Pairwise squared-euclidean distance matrix. We track an `active` flag so we
   // can mark merged clusters as removed in-place rather than reshuffling.
-  std::vector<float> D(static_cast<size_t>(cols) * cols, 0.0f);
+  std::vector<float> D(
+      util::check::element_count(static_cast<std::uint64_t>(cols), static_cast<std::uint64_t>(cols),
+                                 resource::kMaxOfflineAudioSamples, "cols", "the distance matrix"),
+      0.0f);
   for (int i = 0; i < cols; ++i) {
     for (int j = i + 1; j < cols; ++j) {
       float s = 0.0f;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <memory>
 
@@ -19,6 +20,7 @@
 #include "util/padding.h"
 #include "util/parameter_checks.h"
 #include "util/reflect_padding.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -464,8 +466,10 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   const auto obs_idx = [n_states](int t, int s) {
     return static_cast<size_t>(t) * static_cast<size_t>(n_states) + static_cast<size_t>(s);
   };
-  std::vector<double> observation(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states),
-                                  0.0);
+  const auto n_cells = util::check::element_count(
+      static_cast<std::uint64_t>(n_frames), static_cast<std::uint64_t>(n_states),
+      resource::kMaxOfflineAudioSamples, "hop_length", "the observation matrix");
+  std::vector<double> observation(n_cells, 0.0);
   std::vector<double> voiced_prob(static_cast<size_t>(n_frames), 0.0);
   YinDiffContext yin_ctx;
   std::vector<float> yin_diff;
@@ -613,7 +617,7 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   const double log_neg_inf = -std::numeric_limits<double>::infinity();
   std::vector<double> viterbi_prev(static_cast<size_t>(n_states), log_neg_inf);
   std::vector<double> viterbi_curr(static_cast<size_t>(n_states), log_neg_inf);
-  std::vector<int> backtrack(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states), -1);
+  std::vector<int> backtrack(n_cells, -1);
   const double log_init = -std::log(static_cast<double>(n_states));
   for (int state = 0; state < n_states; ++state) {
     viterbi_prev[static_cast<size_t>(state)] =
