@@ -408,9 +408,9 @@ describe('geometric room acoustics', () => {
     expect(est.bandAbsorption?.length).toBe(est.rt60Bands?.length);
   });
 
-  it('omits a band array none of whose bands was measured', () => {
+  it('keeps a band array none of whose bands was measured at full length as NaN', () => {
     // White noise has no usable decay: the absorption solve returns no bands and the
-    // decay fit measures none of its bands, so both arrays are absent, not all-NaN.
+    // decay fit measures none of its bands, so both arrays are all-NaN at the band count.
     let state = 7;
     const noise = new Float32Array(48000);
     for (let i = 0; i < noise.length; i++) {
@@ -429,8 +429,10 @@ describe('geometric room acoustics', () => {
 
     const degraded = estimateRoom(noise, 48000);
     expect(degraded.confidence).toBe(0);
-    expect(degraded.rt60Bands).toBeUndefined();
-    expect(degraded.bandAbsorption).toBeUndefined();
+    for (const bands of [degraded.rt60Bands, degraded.bandAbsorption]) {
+      expect(bands).toHaveLength(bandCount);
+      expect(Array.from(bands ?? []).every(Number.isNaN)).toBe(true);
+    }
   });
 
   it('names the refused value and its range in the thrown error, and carries warnings on success', () => {

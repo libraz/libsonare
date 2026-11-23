@@ -5384,15 +5384,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AcousticResult.c80Bands` | Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty |
 | `AcousticResult.c80` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
 | `AcousticResult.d50` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
-| `AcousticResult.edtBands` | Float32Array -> optional Float32Array: absent when no band was measured (the blind path), never all-NaN |
+| `AcousticResult.edtBands` | Float32Array -> optional Float32Array: absent on the blind path, which does not measure EDT; otherwise full length, NaN for each band not fitted |
 | `AcousticResult.edt` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
-| `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted |
+| `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: always full length, NaN for each band not fitted, even when no band was |
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
-| `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent together with rt60Bands only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when the absorption solve fails |
 | `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.lengthM` | number -> optional number: absent when no decay is measurable, never NaN |
-| `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent together with bandAbsorption only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when no band decay was measured |
 | `RoomEstimateResult.volume` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.widthM` | number -> optional number: absent when no decay is measurable, never NaN |
 
@@ -9908,15 +9908,15 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AcousticResult.c80Bands` | Float32Array -> optional Float32Array: absent when not measured (the blind path), never empty |
 | `AcousticResult.c80` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
 | `AcousticResult.d50` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
-| `AcousticResult.edtBands` | Float32Array -> optional Float32Array: absent when no band was measured (the blind path), never all-NaN |
+| `AcousticResult.edtBands` | Float32Array -> optional Float32Array: absent on the blind path, which does not measure EDT; otherwise full length, NaN for each band not fitted |
 | `AcousticResult.edt` | number -> optional number: absent when not measured (the blind path does not measure it), never NaN |
-| `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted |
+| `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: always full length, NaN for each band not fitted, even when no band was |
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
-| `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent together with rt60Bands only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when the absorption solve fails |
 | `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.lengthM` | number -> optional number: absent when no decay is measurable, never NaN |
-| `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent together with bandAbsorption only when neither estimate produced a band; otherwise padded with NaN to the longer band count, all NaN when no band decay was measured |
 | `RoomEstimateResult.volume` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.widthM` | number -> optional number: absent when no decay is measurable, never NaN |
 

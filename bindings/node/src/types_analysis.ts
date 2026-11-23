@@ -645,7 +645,7 @@ export interface BpmAnalysisResult {
  *
  * A value that was not measured is an absent key, never NaN. A band array that
  * was measured keeps its full length, indexed like `rt60Bands`, with NaN for
- * each band that could not be fitted; one with no band measured is absent.
+ * each band that could not be fitted, even when no band could be.
  */
 export interface AcousticResult {
   /** Broadband reverberation time (RT60) in seconds; absent when no decay could be fitted. */
@@ -658,13 +658,13 @@ export interface AcousticResult {
   c80?: number;
   /** Definition D50, the early-energy fraction in `[0, 1]`; absent when `isBlind` or not measurable. */
   d50?: number;
-  /** RT60 per octave band, in seconds; NaN for a band not fitted, absent when no band was. */
+  /** RT60 per octave band, in seconds; NaN for a band not fitted. */
   rt60Bands?: Float32Array;
-  /** Early decay time per octave band, in seconds; absent when `isBlind` or no band was fitted. */
+  /** Early decay time per octave band, in seconds; NaN for a band not fitted, absent when `isBlind`. */
   edtBands?: Float32Array;
-  /** Clarity C50 per octave band, in dB; absent when `isBlind` or no band was measured. */
+  /** Clarity C50 per octave band, in dB; NaN for a band not measured, absent when `isBlind`. */
   c50Bands?: Float32Array;
-  /** Clarity C80 per octave band, in dB; absent when `isBlind` or no band was measured. */
+  /** Clarity C80 per octave band, in dB; NaN for a band not measured, absent when `isBlind`. */
   c80Bands?: Float32Array;
   /** Confidence of the estimate, in `[0, 1]`. */
   confidence: number;
@@ -844,11 +844,11 @@ export interface RoomEstimateResult {
   confidence: number;
   /**
    * Per-octave-band mean absorption. Absorption and `rt60Bands` are independent
-   * estimates and either can fail on its own: a failed one is absent, and when
-   * both are present they have the same length, the shorter padded with NaN.
+   * estimates and either can fail on its own; both have the same length, the shorter
+   * or failed one padded with NaN, and both are absent only when neither produced a band.
    */
   bandAbsorption?: Float32Array;
-  /** RT60 per octave band, in seconds; NaN for a band not fitted, absent when no band was. */
+  /** RT60 per octave band, in seconds; NaN for a band not fitted, absent with `bandAbsorption`. */
   rt60Bands?: Float32Array;
 }
 

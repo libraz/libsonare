@@ -633,9 +633,9 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
 
 namespace {
 
-/// @brief The one JS spelling of a SonareAcousticResult: a scalar or band array that was not
-///        measured is an absent member (a null band pointer is the blind path's clarity family,
-///        an all-NaN one its decay times), never NaN or an empty or zero-filled array.
+/// @brief The one JS spelling of a SonareAcousticResult: a scalar that was not measured is an
+///        absent member, never NaN; a band array is absent only when its measurement was not taken
+///        (the blind path's clarity and EDT families), and otherwise full length with NaN per band.
 Napi::Object AcousticResultToObject(Napi::Env env, const SonareAcousticResult& acoustic) {
   Napi::Object result = Napi::Object::New(env);
   SetMeasured(result, "rt60", acoustic.rt60);
@@ -646,7 +646,10 @@ Napi::Object AcousticResultToObject(Napi::Env env, const SonareAcousticResult& a
   result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
   result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
   SetMeasuredArray(result, "rt60Bands", acoustic.rt60_bands, acoustic.band_count);
-  SetMeasuredArray(result, "edtBands", acoustic.edt_bands, acoustic.band_count);
+  // The C ABI fills blind-mode EDT bands with NaN; EDT is not estimated there, so it is absent.
+  if (acoustic.is_blind == 0) {
+    SetMeasuredArray(result, "edtBands", acoustic.edt_bands, acoustic.band_count);
+  }
   SetMeasuredArray(result, "c50Bands", acoustic.c50_bands, acoustic.band_count);
   SetMeasuredArray(result, "c80Bands", acoustic.c80_bands, acoustic.band_count);
   return result;

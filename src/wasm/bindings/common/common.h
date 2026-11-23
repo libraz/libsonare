@@ -170,15 +170,12 @@ inline void setOptionalCount(val& out, const char* key, const std::optional<std:
   if (value) out.set(key, static_cast<double>(*value));
 }
 /// Sets @p key to a Float32Array of @p values, taken by a measurement of @p count elements, unless
-/// none was measured (empty or every element NaN): an array not measured as a whole is an absent
-/// member, while a measured one keeps its length, with NaN for each element that was not measured.
-/// A measurement of zero elements is an empty array.
+/// the measurement was not taken (empty @p values): an array not measured as a whole is an absent
+/// member, while a measured one keeps its length, with NaN for each element that was not measured,
+/// even when that is every element. A measurement of zero elements is an empty array.
 inline void setMeasuredArray(val& out, const char* key, const std::vector<float>& values,
                              std::size_t count) {
-  if (count > 0 &&
-      std::all_of(values.begin(), values.end(), [](float v) { return std::isnan(v); })) {
-    return;
-  }
+  if (count > 0 && values.empty()) return;
   out.set(key, vectorToFloat32Array(values));
 }
 val vectorToUint8Array(const uint8_t* data, std::size_t n);

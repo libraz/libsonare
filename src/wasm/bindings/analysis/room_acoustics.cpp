@@ -28,7 +28,8 @@ val acousticParametersToVal(const AcousticParameters& params) {
   setMeasured(out, "d50", params.d50);
   const std::size_t band_count = params.rt60_bands.size();
   setMeasuredArray(out, "rt60Bands", params.rt60_bands, band_count);
-  setMeasuredArray(out, "edtBands", params.edt_bands, band_count);
+  // The blind estimator fills EDT bands with NaN; EDT is not estimated there, so it is absent.
+  if (!params.is_blind) setMeasuredArray(out, "edtBands", params.edt_bands, band_count);
   setMeasuredArray(out, "c50Bands", params.c50_bands, band_count);
   setMeasuredArray(out, "c80Bands", params.c80_bands, band_count);
   out.set("confidence", params.confidence);
@@ -280,11 +281,11 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, config);
   // Absorption (from the inverse problem) and RT60 (from the decay fit) are independent estimates
-  // and either can fail on its own: a failed side is absent, and a surviving shorter one is padded
-  // with NaN to the other's length so the bands line up.
+  // and either can fail on its own: both are padded with NaN to the longer one's length, a failed
+  // side to all NaN, so the bands line up as the C ABI hands them.
   const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
   const auto pad_with_nan = [band_count](std::vector<float> values) {
-    if (!values.empty()) values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
+    values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
     return values;
   };
   val out = val::object();

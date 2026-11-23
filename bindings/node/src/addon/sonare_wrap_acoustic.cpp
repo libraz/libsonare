@@ -246,11 +246,11 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   }
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
   // Absorption (from the inverse problem) and RT60 (from the decay fit) are independent estimates
-  // and either can fail on its own: a failed side is absent, and a surviving shorter one is padded
-  // with NaN to the other's length so the bands line up.
+  // and either can fail on its own: both are padded with NaN to the longer one's length, a failed
+  // side to all NaN, so the bands line up as the C ABI hands them.
   const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
   const auto pad_with_nan = [band_count](std::vector<float> values) {
-    if (!values.empty()) values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
+    values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
     return values;
   };
   const std::vector<float> absorption_bands = pad_with_nan(est.absorption_bands);
@@ -264,10 +264,8 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   out.Set("confidence", Napi::Number::New(env, est.confidence));
   // nOctaveBands is at least 1, so no band at all means both estimates failed.
   if (band_count > 0) {
-    SetMeasuredArray(out, "bandAbsorption",
-                     absorption_bands.empty() ? nullptr : absorption_bands.data(), band_count);
-    SetMeasuredArray(out, "rt60Bands", rt60_bands.empty() ? nullptr : rt60_bands.data(),
-                     band_count);
+    SetMeasuredArray(out, "bandAbsorption", absorption_bands.data(), band_count);
+    SetMeasuredArray(out, "rt60Bands", rt60_bands.data(), band_count);
   }
   return out;
   SONARE_NODE_CATCH(env)

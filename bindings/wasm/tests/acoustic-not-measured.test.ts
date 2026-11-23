@@ -1,6 +1,6 @@
 /**
- * An acoustic value the analyzer did not measure is an absent key, never NaN, an empty array or an
- * all-NaN array; a band array that was measured keeps its full length with NaN per band not fitted.
+ * An acoustic value the analyzer did not measure is an absent key, never NaN; a band array of a
+ * measurement that was taken keeps its full length with NaN per band not fitted, even every band.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -43,10 +43,7 @@ describe('acoustic values that were not measured', () => {
         expect(Number.isNaN(result[key]), key).toBe(false);
       }
     }
-    if (result.rt60Bands !== undefined) {
-      expect(result.rt60Bands).toHaveLength(6);
-      expect(result.rt60Bands.some((value) => !Number.isNaN(value))).toBe(true);
-    }
+    expect(result.rt60Bands).toHaveLength(6);
   });
 
   it('keeps every band array of a measured impulse response at full length', () => {
@@ -67,19 +64,15 @@ describe('acoustic values that were not measured', () => {
     }
   });
 
-  it('omits the dimensions, the DRR and both band arrays of a silent room estimate', () => {
+  it('omits the dimensions and the DRR of a silent room estimate and keeps both band arrays as NaN', () => {
     const estimate = estimateRoom(new Float32Array(48000), 48000);
     expect(estimate.confidence).toBe(0);
-    for (const key of [
-      'volume',
-      'lengthM',
-      'widthM',
-      'heightM',
-      'drrDb',
-      'bandAbsorption',
-      'rt60Bands',
-    ] as const) {
+    for (const key of ['volume', 'lengthM', 'widthM', 'heightM', 'drrDb'] as const) {
       expect(key in estimate, key).toBe(false);
+    }
+    for (const key of ['bandAbsorption', 'rt60Bands'] as const) {
+      expect(estimate[key], key).toHaveLength(6);
+      expect(Array.from(estimate[key] ?? []).every(Number.isNaN), key).toBe(true);
     }
     expect(() => roomGeometryFromEstimate({ estimate })).toThrow(/no measurable dimensions/);
   });
@@ -94,14 +87,12 @@ describe('acoustic values that were not measured', () => {
 });
 
 describe('a room and reverberation time that were not measured', () => {
-  it('omits the reverberation time of a silent recording', () => {
+  it('omits the reverberation time of a silent recording and keeps its bands as NaN', () => {
     const result = detectAcoustic({ samples: new Float32Array(48000), sampleRate: 48000 });
     expect('rt60' in result).toBe(false);
-    for (const key of ['rt60Bands'] as const) {
-      if (key in result) {
-        expect(result[key]).toHaveLength(6);
-      }
-    }
+    expect(result.rt60Bands).toHaveLength(6);
+    expect(Array.from(result.rt60Bands ?? []).every(Number.isNaN)).toBe(true);
+    expect('edtBands' in result).toBe(false);
   });
 
   it('keeps the volume and dimensions of a measured estimate as numbers', () => {
