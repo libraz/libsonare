@@ -19,7 +19,6 @@
 "engine_set_lane_sidechain.source_track_id" = "rename: node id, python id, wasm id"
 "engine_set_master_sidechain.source_id" = "rename: node id, python id, wasm id"
 "engine_set_master_sidechain.source_kind" = "rename: node kind, python kind, wasm kind"
-"engine_set_record_offset_samples.offset_samples" = "rename: node recordOffsetSamples, python record_offset_samples, wasm recordOffsetSamples"
 "playback_render_interleaved.in" = "rename: node samples, python samples, wasm samples"
 "playback_render_interleaved.in_channels" = "rename: node numChannels, python num_channels, wasm numChannels"
 "playback_render_interleaved.document" = "document root: node config, python config, wasm config, once src/playback/config.cpp raises structured refusals"

@@ -36,6 +36,7 @@ inserts_json = "inserts"
 source_id = "source.id"
 source_track_id = "source.id"
 source_kind = "source.kind"
+offset_samples = "recordOffsetSamples"
 
 [wasm]
 reference_sample_rate = "sampleRate"
@@ -70,6 +71,7 @@ inserts_json = "inserts"
 source_id = "source.id"
 source_track_id = "source.id"
 source_kind = "source.kind"
+offset_samples = "recordOffsetSamples"
 
 [python]
 fmin_hz = "fmin"

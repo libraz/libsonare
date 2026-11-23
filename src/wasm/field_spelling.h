@@ -20,7 +20,7 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the wasm facade binds under another name, sorted.
-inline constexpr std::array<Override, 73> kOverrides = {{
+inline constexpr std::array<Override, 74> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
     {"engine_apply_bus_strip_insert_param_by_name_now", "param_name", "param.name"},
@@ -55,6 +55,7 @@ inline constexpr std::array<Override, 73> kOverrides = {{
     {"engine_set_master_strip_insert_param_by_name", "param_name", "param.name"},
     {"engine_set_midi_destination_external", "external", "midiDestinationExternal"},
     {"engine_set_part_rig", "inserts_json", "inserts"},
+    {"engine_set_record_offset_samples", "offset_samples", "recordOffsetSamples"},
     {"engine_set_track_output_bus", "output_bus_id", "busId"},
     {"engine_set_track_strip_channel_delay_samples", "track_id", "ref"},
     {"engine_set_track_strip_dual_pan", "track_id", "ref"},
