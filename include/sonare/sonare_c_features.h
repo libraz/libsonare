@@ -176,6 +176,8 @@ void sonare_analyze_melody_options_init(SonareAnalyzeMelodyOptions* options);
 ///   minimum must fall below, while for pYIN it is the UPPER BOUND of the swept
 ///   threshold distribution -- see @ref sonare_pitch_pyin.
 /// @param out Receives heap-owned arrays; free with sonare_free_melody_result.
+/// @note A @p hop_length that would make the observation matrix pass 500000000 elements is refused
+/// with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate,
                                   float f0_min_hz, float f0_max_hz, size_t frame_length,
                                   size_t hop_length, float threshold,
@@ -248,16 +250,21 @@ typedef struct {
 
 /// @brief Computes the Constant-Q Transform magnitude.
 /// @param filter_scale Filter length scale factor, finite and > 0 (librosa default 1).
+/// @note A @p hop_length that would make the output pass 500000000 elements, or an @p n_bins whose
+/// filter kernel would pass 33554432 elements, is refused with @c SONARE_ERROR_INVALID_PARAMETER
+/// naming it.
 SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, size_t hop_length,
                        float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
                        SonareCqtResult* out);
 /// @brief Computes a faster pseudo-CQT magnitude approximation.
 /// @param filter_scale As @ref sonare_cqt.
+/// @note The work-size limits of @ref sonare_cqt apply to @p hop_length and @p n_bins.
 SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate,
                               size_t hop_length, float fmin_hz, int n_bins, int bins_per_octave,
                               float filter_scale, SonareCqtResult* out);
 /// @brief Computes a hybrid CQT magnitude.
 /// @param filter_scale As @ref sonare_cqt.
+/// @note The work-size limits of @ref sonare_cqt apply to @p hop_length and @p n_bins.
 SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate,
                               size_t hop_length, float fmin_hz, int n_bins, int bins_per_octave,
                               float filter_scale, SonareCqtResult* out);
@@ -266,6 +273,7 @@ SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_ra
 /// @param gamma Optional bandwidth offset in Hz, finite and >= 0. NaN (not given) selects the
 /// librosa-compatible ERB-derived automatic value; 0 is the constant-Q bandwidth; a negative
 /// or infinite value is refused. The value the transform ran with is @c out->gamma.
+/// @note The work-size limits of @ref sonare_cqt apply to @p hop_length and @p n_bins.
 SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, size_t hop_length,
                        float fmin_hz, int n_bins, int bins_per_octave, float filter_scale,
                        float gamma, SonareCqtResult* out);
@@ -277,6 +285,9 @@ void sonare_free_cqt_result(SonareCqtResult* result);
 /// @details @p input_length must equal @p n_bins * @p n_frames, otherwise the call returns
 ///   @c SONARE_ERROR_INVALID_PARAMETER. Iterations must be in [1, 256]. The output is owned
 ///   by the caller and released with @ref sonare_free_floats.
+/// @note A @p hop_length that would make the reconstructed signal, or an @p n_frames that would
+/// make its STFT magnitude, pass 500000000 elements is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int n_bins,
                                 int n_frames, int sample_rate, size_t hop_length, float fmin_hz,
                                 int bins_per_octave, int n_iter, float** out, size_t* out_length);
@@ -287,6 +298,7 @@ SonareError sonare_cqt_to_audio(const float* magnitude, size_t input_length, int
 /// >= 0, NaN (not given) selecting the ERB-derived automatic value and 0 the constant-Q
 /// bandwidth; a negative or infinite value is refused with @c SONARE_ERROR_INVALID_PARAMETER.
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note The work-size limits of @ref sonare_cqt_to_audio apply to @p hop_length and @p n_frames.
 SonareError sonare_vqt_to_audio(const float* magnitude, size_t input_length, int n_bins,
                                 int n_frames, int sample_rate, size_t hop_length, float fmin_hz,
                                 int bins_per_octave, float gamma, int n_iter, float** out,
@@ -852,6 +864,8 @@ typedef struct SonareSegmentIndices {
 /// @brief Cross-similarity of column-feature matrices. `metric` is `cosine` or
 /// `euclidean`; `mode` is `connectivity` or `affinity`.
 /// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
+/// @note An @p x_cols that would make the similarity matrix pass 2147483647 elements is refused
+/// with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_segment_cross_similarity(const float* x, int x_rows, int x_cols, const float* y,
                                             int y_rows, int y_cols, int k, const char* metric,
                                             const char* mode, SonareSegmentMatrix* out);
@@ -947,6 +961,8 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 ///          by it; it uses it only to derive voicing when no explicit @c voiced
 ///          array is supplied.
 /// @param out Receives heap-owned arrays; free with sonare_free_pitch_result.
+/// @note A @p hop_length that would make the observation matrix pass 500000000 elements is refused
+/// with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
                               size_t frame_length, size_t hop_length, float f0_min_hz,
                               float f0_max_hz, float threshold, int fill_na,
@@ -1190,6 +1206,8 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
                                         SonareSilenceCommonReport* out_report);
 
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p hop_length that would make the framed output pass 500000000 elements is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_frame_signal(const float* samples, size_t length, size_t frame_length,
                                 size_t hop_length, float** out, size_t* out_length,
                                 int* out_n_frames);
@@ -1199,11 +1217,15 @@ SonareError sonare_frame_signal(const float* samples, size_t length, size_t fram
 /// finite. It carries no sentinel, so a non-finite one is out of domain rather
 /// than a request for a default.
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p target_size above 500000000 elements is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_pad_center(const float* values, size_t length, size_t target_size,
                               float pad_value, float** out, size_t* out_length);
 /// @brief Pads with @p pad_value on the right, or truncates, to @p target_size.
 /// @param pad_value As in @ref sonare_pad_center; must be finite.
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p target_size above 500000000 elements is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_fix_length(const float* values, size_t length, size_t target_size,
                               float pad_value, float** out, size_t* out_length);
 /// @brief Clamps, pads and de-duplicates frame indices (librosa.util.fix_frames).
@@ -1250,14 +1272,20 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
 SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, float** out,
                            size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p win_length that would make the tempogram pass 500000000 elements is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                              size_t hop_length, size_t win_length, int center, int norm, int mode,
                              float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p win_length or @p n_bins that would make the tempogram pass 500000000 elements is
+/// refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                                     size_t hop_length, size_t win_length, float bpm_min, int n_bins,
                                     float** out, size_t* out_length, int* out_n_frames);
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p win_length that would make the tempogram pass 500000000 elements is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_rate,
                        size_t hop_length, float bpm_min, float bpm_max, size_t win_length,
                        float** out, size_t* out_length);
@@ -1280,6 +1308,8 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
 /// @details Returns a magnitude matrix [n_bins x n_frames] row-major, where
 ///   n_bins = win_length / 2 + 1 (derivable as out_length / out_n_frames).
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p win_length that would make the tempogram pass 500000000 elements is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length, int sample_rate,
                                      size_t hop_length, size_t win_length, int center, int norm,
                                      float** out, size_t* out_length, int* out_n_frames);

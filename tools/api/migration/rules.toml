@@ -1228,6 +1228,20 @@ from libsonare import ProgressCallback
 '''
 
 [[rule]]
+slug = "work-size-limit"
+title = "An argument that would size a result past the library's limit is refused by name"
+summary = "A hop, bin count, window, stretch ratio, target size or channel count that would make an output or work buffer larger than the library can hold is refused before anything is allocated, naming that argument and the limit, instead of exhausting memory. Audio-length outputs and work buffers stop at 500,000,000 elements, a constant-Q filter kernel at 33,554,432, and the segment matrices and note stretch ratio at 2,147,483,647."
+[[rule.example]]
+surface = "python"
+before = '''
+frames = frame_signal(np.zeros(70000, np.float32), 35000, 1)  # tried to allocate 1.2e9 floats
+'''
+after = '''
+frame_signal(np.zeros(70000, np.float32), 35000, 1)
+# SonareValueError: frame_signal: hop_length must keep the framed output within 500000000 elements
+'''
+
+[[rule]]
 slug = "individual"
 title = "Other individual changes"
 summary = "Changes specific to a single symbol that follow no shared convention are listed in the tables below."

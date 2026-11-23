@@ -4824,7 +4824,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_q
 kind = "option"
 old = "phase_vocoder(rate)"
 to = "phase_vocoder(speed_ratio)"
-changed = "renamed to speed_ratio and required"
+changed = "renamed to speed_ratio and required; one that would make the stretched spectrogram larger than 500000000 elements is refused by name ('speed_ratio must keep the stretched spectrogram within 500000000 elements')"
 domain = "effects"
 rule = "sample-rate-name"
 test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_quantity_is_required"
@@ -12112,7 +12112,7 @@ test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framin
 [[entry]]
 kind = "option"
 old = "decompose_stems(n_components)"
-changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
+changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError; one that would make the component weights or activations larger than 500000000 elements is refused by name ('n_components must keep the component weights or activations within 500000000 elements')"
 domain = "effects"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
@@ -12168,7 +12168,7 @@ test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framin
 [[entry]]
 kind = "option"
 old = "decompose_stems_linked(n_components)"
-changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
+changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError; one that would make the component weights or activations larger than 500000000 elements is refused by name ('n_components must keep the component weights or activations within 500000000 elements')"
 domain = "effects"
 rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
@@ -12974,7 +12974,7 @@ test = "bindings/python/tests/test_project_edit_ops.py::test_set_max_history_byt
 [[entry]]
 kind = "option"
 old = "pad_center(target_size)"
-changed = "a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError"
+changed = "a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError; one that would make the padded output larger than 500000000 elements is refused by name ('target_size must keep the padded output within 500000000 elements')"
 domain = "analysis"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_surface_analysis.py::test_target_size_is_refused_by_cause"
@@ -12982,7 +12982,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_target_size_is_refu
 [[entry]]
 kind = "option"
 old = "fix_length(target_size)"
-changed = "a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError"
+changed = "a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError; one that would make the padded output larger than 500000000 elements is refused by name ('target_size must keep the padded output within 500000000 elements')"
 domain = "analysis"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_surface_analysis.py::test_target_size_is_refused_by_cause"
@@ -14528,3 +14528,195 @@ old = "Mixer.from_scene_json(json)"
 new = "Mixer.from_json(document)"
 domain = "engine"
 rule = "json-input-kinds"
+
+[[entry]]
+kind = "option"
+old = "cqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_cqt_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "cqt(hop_length)"
+changed = "a hop_length that would make the constant-Q output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the constant-Q output within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_cqt_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "pseudo_cqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_pseudo_cqt_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "hybrid_cqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_hybrid_cqt_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "hybrid_cqt(hop_length)"
+changed = "a hop_length that would make the constant-Q output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the constant-Q output within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_hybrid_cqt_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "vqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_vqt_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "vqt(hop_length)"
+changed = "a hop_length that would make the constant-Q output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the constant-Q output within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_vqt_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "cqt_to_audio(hop_length)"
+changed = "a hop_length that would make the reconstructed signal larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the reconstructed signal within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_cqt_to_audio_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "cqt_to_audio(magnitude)"
+changed = "a magnitude with more frames than the STFT magnitude can hold within 500000000 elements is refused by name instead of exhausting memory ('magnitude length must keep the STFT magnitude within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_cqt_to_audio_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "vqt_to_audio(hop_length)"
+changed = "a hop_length that would make the reconstructed signal larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the reconstructed signal within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_vqt_to_audio_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "vqt_to_audio(magnitude)"
+changed = "a magnitude with more frames than the STFT magnitude can hold within 500000000 elements is refused by name instead of exhausting memory ('magnitude length must keep the STFT magnitude within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_vqt_to_audio_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "pitch_pyin(hop_length)"
+changed = "a hop_length that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the observation matrix within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_pitch_pyin_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "analyze_melody(hop_length)"
+changed = "a hop_length that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the observation matrix within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_analyze_melody_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.constructor(cents_per_bin)"
+changed = "a cents_per_bin that would make the cent spectrum larger than 500000000 elements is refused by name instead of exhausting memory ('cents_per_bin must keep the cent spectrum within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_polyphonic_analysis_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.analyze(cents_per_bin)"
+changed = "a cents_per_bin that would make the cent spectrum larger than 500000000 elements is refused by name instead of exhausting memory ('cents_per_bin must keep the cent spectrum within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_polyphonic_analysis_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "decompose(n_components)"
+changed = "a n_components that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('n_components must keep the component weights or activations within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_decompose_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "note_stretch(stretch_ratio)"
+changed = "a stretch_ratio that would make the stretched note larger than 2147483647 elements is refused by name instead of exhausting memory ('stretch_ratio must keep the stretched note within 2147483647 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_note_stretch_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "fourier_tempogram(win_length)"
+changed = "a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_fourier_tempogram_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "cyclic_tempogram(win_length)"
+changed = "a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_cyclic_tempogram_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "cyclic_tempogram(n_bins)"
+changed = "a n_bins that would make the cyclic tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('n_bins must keep the cyclic tempogram within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_cyclic_tempogram_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "plp(win_length)"
+changed = "a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_plp_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "tempogram(win_length)"
+changed = "a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_tempogram_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "frame_signal(hop_length)"
+changed = "a hop_length that would make the framed output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the framed output within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_frame_signal_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "option"
+old = "remix(intervals)"
+changed = "a intervals that would make the remixed signal larger than 500000000 elements is refused by name instead of exhausting memory ('intervals must keep the remixed signal within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "bindings/python/tests/test_work_size_limit.py::test_remix_refuses_past_the_work_size_limit"

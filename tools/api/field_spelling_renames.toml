@@ -117,6 +117,9 @@ param_name = ["name", "kind"]
 offset_samples = "record_offset_samples"
 
 [python.length_of]
+"cqt_to_audio.n_frames" = "magnitude"
+"vqt_to_audio.n_frames" = "magnitude"
+"segment_cross_similarity.x_cols" = "x"
 "align_take_to_reference.reference_len" = "reference"
 "align_take_to_reference.take_len" = "take"
 "chord_functions.count" = "chords"

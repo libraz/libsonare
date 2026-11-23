@@ -139,6 +139,7 @@ RULE_SLUGS = (
     "config-keys",
     "old-documents-refused",
     "python-public-names",
+    "work-size-limit",
     "individual",
 )
 ALLOW_CATEGORIES = (

@@ -23,7 +23,7 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"clip_page_provider_create", "num_channels", kEngineClipPageChannelsDomain, nullptr},
     {"clip_page_provider_create", "num_samples", kEngineClipSamplesDomain, nullptr},
     {"clip_page_provider_create", "page_frames", kEngineClipPageFramesDomain, nullptr},
-    {"decompose", "n_components", sonare::kDecomposeNComponentsDomain, nullptr},
+    {"decompose", "n_components", sonare::kDecomposeNComponentsDomain, "within_work_size_limit"},
     {"decompose", "n_features", sonare::kDecomposeNFeaturesDomain, nullptr},
     {"decompose", "n_frames", sonare::kDecomposeNFramesDomain, nullptr},
     {"decompose", "n_iter", sonare::kDecomposeIterDomain, nullptr},

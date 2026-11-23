@@ -195,7 +195,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -668,7 +668,7 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -679,7 +679,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -701,7 +701,7 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -723,7 +723,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -767,7 +767,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -789,7 +789,7 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -800,7 +800,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -2351,7 +2351,7 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -2373,7 +2373,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -2494,7 +2494,7 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -2505,7 +2505,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -2615,7 +2615,7 @@
       "hi": null,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -5244,7 +5244,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -5321,7 +5321,7 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -6542,7 +6542,7 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -6553,7 +6553,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -7070,7 +7070,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -7796,7 +7796,7 @@
       "hi": 12288,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -8137,7 +8137,7 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -8148,7 +8148,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -8181,7 +8181,7 @@
       "hi": 65536,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {
@@ -8203,7 +8203,7 @@
       "hi": 2147483647,
       "lo_included": true,
       "hi_included": true,
-      "stricter": null,
+      "stricter": "within_work_size_limit",
       "sentinel": null
     },
     {

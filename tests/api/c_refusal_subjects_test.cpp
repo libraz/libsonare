@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -1229,5 +1230,353 @@ TEST_CASE("an empty SMF or MIDI Clip File buffer is refused as empty, not as lef
     uint32_t first_clip_id = 0;
     CHECK(entry(project.get(), &byte, 0, &first_clip_id) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(last_message() == "bytes must not be empty");
+  }
+}
+
+namespace {
+
+constexpr int kSr = 22050;
+constexpr const char* kElementLimit = "500000000";
+
+std::vector<float> sine(size_t count) {
+  std::vector<float> values(count);
+  for (size_t i = 0; i < count; ++i) values[i] = std::sin(0.05f * static_cast<float>(i));
+  return values;
+}
+
+/// @brief The refusal text "<subject> must keep <what> within <limit> elements".
+std::string element_limit(const std::string& subject, const std::string& what,
+                          const std::string& limit = kElementLimit) {
+  return subject + " must keep " + what + " within " + limit + " elements";
+}
+
+/// @brief Checks that the last call was refused as an invalid parameter with exactly @p text.
+void check_refused(SonareError rc, const std::string& text) {
+  CHECK(rc == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == text);
+}
+
+constexpr int kKernelNBins = 33554432 / 2 + 1;
+constexpr size_t kOutputSamples = 1000001;
+
+}  // namespace
+
+TEST_CASE("sonare_cqt refuses an n_bins and a hop_length past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> small(4096, 0.0f);
+  SonareCqtResult out{};
+  check_refused(
+      sonare_cqt(small.data(), small.size(), kSr, 512, 32.7f, kKernelNBins, 12, 1.0f, &out),
+      element_limit("n_bins", "the filter kernel", "33554432"));
+  const std::vector<float> long_input(kOutputSamples, 0.0f);
+  check_refused(
+      sonare_cqt(long_input.data(), long_input.size(), kSr, 1, kSr / 4.0f, 500, 500, 1.0f, &out),
+      element_limit("hop_length", "the constant-Q output"));
+}
+
+TEST_CASE("sonare_pseudo_cqt refuses an n_bins past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> small(4096, 0.0f);
+  SonareCqtResult out{};
+  check_refused(
+      sonare_pseudo_cqt(small.data(), small.size(), kSr, 512, 32.7f, kKernelNBins, 12, 1.0f, &out),
+      element_limit("n_bins", "the filter kernel", "33554432"));
+}
+
+TEST_CASE("sonare_hybrid_cqt refuses an n_bins and a hop_length past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> small(4096, 0.0f);
+  SonareCqtResult out{};
+  check_refused(
+      sonare_hybrid_cqt(small.data(), small.size(), kSr, 512, 32.7f, kKernelNBins, 12, 1.0f, &out),
+      element_limit("n_bins", "the filter kernel", "33554432"));
+  const std::vector<float> long_input(kOutputSamples, 0.0f);
+  check_refused(sonare_hybrid_cqt(long_input.data(), long_input.size(), kSr, 1, kSr / 4.0f, 500,
+                                  500, 1.0f, &out),
+                element_limit("hop_length", "the constant-Q output"));
+}
+
+TEST_CASE("sonare_vqt refuses an n_bins and a hop_length past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> small(4096, 0.0f);
+  SonareCqtResult out{};
+  const float automatic_gamma = std::numeric_limits<float>::quiet_NaN();
+  check_refused(sonare_vqt(small.data(), small.size(), kSr, 512, 32.7f, kKernelNBins, 12, 1.0f,
+                           automatic_gamma, &out),
+                element_limit("n_bins", "the filter kernel", "33554432"));
+  const std::vector<float> long_input(kOutputSamples, 0.0f);
+  check_refused(sonare_vqt(long_input.data(), long_input.size(), kSr, 1, kSr / 4.0f, 500, 500, 1.0f,
+                           automatic_gamma, &out),
+                element_limit("hop_length", "the constant-Q output"));
+}
+
+TEST_CASE("sonare_cqt_to_audio refuses a hop_length and an n_frames past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> magnitude(7631, 1.0f);
+  float* out = nullptr;
+  size_t out_length = 0;
+  check_refused(sonare_cqt_to_audio(magnitude.data(), magnitude.size(), 1, 7631, kSr, 65536, 32.7f,
+                                    12, 1, &out, &out_length),
+                element_limit("hop_length", "the reconstructed signal"));
+  check_refused(sonare_cqt_to_audio(magnitude.data(), magnitude.size(), 1, 7631, kSr, 1, 0.3f, 1, 1,
+                                    &out, &out_length),
+                element_limit("n_frames", "the STFT magnitude"));
+}
+
+TEST_CASE("sonare_vqt_to_audio refuses a hop_length and an n_frames past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> magnitude(7631, 1.0f);
+  float* out = nullptr;
+  size_t out_length = 0;
+  check_refused(
+      sonare_vqt_to_audio(magnitude.data(), magnitude.size(), 1, 7631, kSr, 65536, 32.7f, 12,
+                          std::numeric_limits<float>::quiet_NaN(), 1, &out, &out_length),
+      element_limit("hop_length", "the reconstructed signal"));
+  check_refused(sonare_vqt_to_audio(magnitude.data(), magnitude.size(), 1, 7631, kSr, 1, 0.3f, 1,
+                                    1e-3f, 1, &out, &out_length),
+                element_limit("n_frames", "the STFT magnitude"));
+}
+
+TEST_CASE("sonare_pitch_pyin refuses a hop_length past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples(220000, 0.0f);
+  SonarePitchResult out{};
+  check_refused(sonare_pitch_pyin(samples.data(), samples.size(), kSr, 2048, 1, kSr / 2040.0f,
+                                  kSr / 2.1f, 0.1f, 0, &out),
+                element_limit("hop_length", "the observation matrix"));
+}
+
+TEST_CASE("sonare_analyze_melody refuses a hop_length past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples(220000, 0.0f);
+  SonareAnalyzeMelodyOptions options;
+  sonare_analyze_melody_options_init(&options);
+  options.use_pyin = 1;
+  SonareMelodyResult out{};
+  check_refused(sonare_analyze_melody(samples.data(), samples.size(), kSr, kSr / 2040.0f,
+                                      kSr / 2.1f, 2048, 1, 0.1f, &options, &out),
+                element_limit("hop_length", "the observation matrix"));
+}
+
+TEST_CASE("sonare_polyphonic_analyze refuses a cents_per_bin past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples(20000, 0.0f);
+  SonarePolyphonicConfig config;
+  sonare_polyphonic_config_init(&config);
+  config.n_fft = 64;
+  config.hop_length = 1;
+  config.cents_per_bin = 1.0f;
+  config.cent_ref_hz = 1.0f;
+  config.cent_max_hz = 1e8f;
+  SonarePolyphonicAnalysis* out = nullptr;
+  check_refused(sonare_polyphonic_analyze(samples.data(), samples.size(), 44100, &config, &out),
+                element_limit("cents_per_bin", "the cent spectrum"));
+  CHECK(out == nullptr);
+}
+
+TEST_CASE("sonare_decompose refuses an n_components past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> single(1, 1.0f);
+  const std::vector<float> row(5001, 1.0f);
+  float* w = nullptr;
+  float* h = nullptr;
+  size_t w_length = 0;
+  size_t h_length = 0;
+  check_refused(sonare_decompose(single.data(), 1, 1, 500000001, 0, 2.0f, nullptr, &w, &w_length,
+                                 &h, &h_length),
+                element_limit("n_components", "the component weights"));
+  check_refused(
+      sonare_decompose(row.data(), 1, 5001, 100000, 0, 2.0f, nullptr, &w, &w_length, &h, &h_length),
+      element_limit("n_components", "the component activations"));
+}
+
+TEST_CASE("sonare_decompose_stems refuses an n_components past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples = sine(8192);
+  SonareDecomposeStemsConfig config;
+  sonare_decompose_stems_config_init(&config);
+  config.n_fft = 4;
+  config.hop_length = 1;
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_n_components = 0;
+  config.n_components = 500000001;
+  check_refused(
+      sonare_decompose_stems(samples.data(), samples.size(), kSr, &config, &out, &out_frames,
+                             &out_n_components, nullptr, nullptr, nullptr, nullptr),
+      element_limit("n_components", "the component weights"));
+  config.n_components = 100000;
+  check_refused(
+      sonare_decompose_stems(samples.data(), samples.size(), kSr, &config, &out, &out_frames,
+                             &out_n_components, nullptr, nullptr, nullptr, nullptr),
+      element_limit("n_components", "the component activations"));
+}
+
+TEST_CASE("sonare_decompose_stems_linked refuses an n_components past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples = sine(8192);
+  const float* channels[2] = {samples.data(), samples.data()};
+  SonareDecomposeStemsConfig config;
+  sonare_decompose_stems_config_init(&config);
+  config.n_fft = 4;
+  config.hop_length = 1;
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_n_components = 0;
+  config.n_components = 500000001;
+  check_refused(
+      sonare_decompose_stems_linked(channels, 2, samples.size(), kSr, &config, &out, &out_frames,
+                                    &out_n_components, nullptr, nullptr, nullptr, nullptr),
+      element_limit("n_components", "the component weights"));
+  config.n_components = 100000;
+  check_refused(
+      sonare_decompose_stems_linked(channels, 2, samples.size(), kSr, &config, &out, &out_frames,
+                                    &out_n_components, nullptr, nullptr, nullptr, nullptr),
+      element_limit("n_components", "the component activations"));
+}
+
+TEST_CASE("sonare_phase_vocoder refuses a speed_ratio past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples = sine(8192);
+  float* out = nullptr;
+  size_t out_length = 0;
+  check_refused(sonare_phase_vocoder(samples.data(), samples.size(), kSr, 1e-6f, 2048, 512, &out,
+                                     &out_length),
+                element_limit("speed_ratio", "the stretched spectrogram"));
+}
+
+TEST_CASE("sonare_note_stretch refuses a stretch_ratio past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples = sine(8192);
+  float* out = nullptr;
+  size_t out_length = 0;
+  check_refused(
+      sonare_note_stretch(samples.data(), samples.size(), kSr, 1000, 6000, 1e6f, &out, &out_length),
+      element_limit("stretch_ratio", "the stretched note", "2147483647"));
+}
+
+TEST_CASE("the tempogram entries refuse a win_length and an n_bins past the work size limit",
+          "[c_api][work_size_limit]") {
+  constexpr size_t kWindow = 12288;
+  const std::vector<float> envelope(81400, 1.0f);
+  const std::vector<float> short_envelope(40700, 1.0f);
+  const std::vector<float> small(1000, 1.0f);
+  const std::string tempogram = element_limit("win_length", "the tempogram");
+  float* out = nullptr;
+  size_t out_length = 0;
+  int n_frames = 0;
+
+  SECTION("sonare_fourier_tempogram") {
+    check_refused(sonare_fourier_tempogram(envelope.data(), envelope.size(), kSr, 512, kWindow, 1,
+                                           0, &out, &out_length, &n_frames),
+                  tempogram);
+  }
+  SECTION("sonare_cyclic_tempogram") {
+    check_refused(sonare_cyclic_tempogram(envelope.data(), envelope.size(), kSr, 512, kWindow,
+                                          60.0f, 60, &out, &out_length, &n_frames),
+                  tempogram);
+    check_refused(sonare_cyclic_tempogram(small.data(), small.size(), kSr, 512, 8, 60.0f, 500001,
+                                          &out, &out_length, &n_frames),
+                  element_limit("n_bins", "the cyclic tempogram"));
+  }
+  SECTION("sonare_plp") {
+    check_refused(sonare_plp(envelope.data(), envelope.size(), kSr, 512, 60.0f, 200.0f, kWindow,
+                             &out, &out_length),
+                  tempogram);
+  }
+  SECTION("sonare_tempogram") {
+    check_refused(
+        sonare_tempogram(short_envelope.data(), short_envelope.size(), kSr, 512, kWindow, 1, 1,
+                         SONARE_TEMPOGRAM_AUTOCORRELATION, &out, &out_length, &n_frames),
+        tempogram);
+  }
+}
+
+TEST_CASE("sonare_segment_cross_similarity refuses an x_cols past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> features(46341, 1.0f);
+  SonareSegmentMatrix out{};
+  check_refused(sonare_segment_cross_similarity(features.data(), 1, 46341, features.data(), 1,
+                                                46341, 0, "cosine", "connectivity", &out),
+                element_limit("x_cols", "the similarity matrix", "2147483647"));
+}
+
+TEST_CASE("sonare_frame_signal refuses a hop_length past the work size limit",
+          "[c_api][work_size_limit]") {
+  const std::vector<float> samples(70000, 0.0f);
+  float* out = nullptr;
+  size_t out_length = 0;
+  int n_frames = 0;
+  check_refused(
+      sonare_frame_signal(samples.data(), samples.size(), 35000, 1, &out, &out_length, &n_frames),
+      element_limit("hop_length", "the framed output"));
+}
+
+TEST_CASE("sonare_remix refuses intervals past the work size limit", "[c_api][work_size_limit]") {
+  const std::vector<float> samples(1000000, 0.0f);
+  std::vector<int> intervals;
+  for (int i = 0; i < 501; ++i) {
+    intervals.push_back(0);
+    intervals.push_back(1000000);
+  }
+  float* out = nullptr;
+  size_t out_length = 0;
+  check_refused(sonare_remix(samples.data(), samples.size(), kSr, intervals.data(), 501, 0, &out,
+                             &out_length),
+                element_limit("intervals", "the remixed signal"));
+}
+
+TEST_CASE("sonare_pad_center refuses a target_size past the work size limit",
+          "[c_api][work_size_limit]") {
+  const float value = 1.0f;
+  float* out = nullptr;
+  size_t out_length = 0;
+  check_refused(sonare_pad_center(&value, 1, 500000001, 0.0f, &out, &out_length),
+                element_limit("target_size", "the padded output"));
+}
+
+TEST_CASE("sonare_fix_length refuses a target_size past the work size limit",
+          "[c_api][work_size_limit]") {
+  const float value = 1.0f;
+  float* out = nullptr;
+  size_t out_length = 0;
+  check_refused(sonare_fix_length(&value, 1, 500000001, 0.0f, &out, &out_length),
+                element_limit("target_size", "the padded output"));
+}
+
+TEST_CASE("sonare_mastering_repair_analyze refuses a num_channels past the work size limit",
+          "[c_api][work_size_limit]") {
+  constexpr size_t kLength = 65536;
+  constexpr size_t kChannels = 7630;
+  const std::vector<float> plane(kLength, 0.0f);
+  const std::vector<const float*> channels(kChannels, plane.data());
+  char* json = nullptr;
+  check_refused(
+      sonare_mastering_repair_analyze(channels.data(), kChannels, kLength, 48000, "{}", &json),
+      element_limit("num_channels", "the interleaved audio"));
+  CHECK(json == nullptr);
+}
+
+TEST_CASE("the playback render entries refuse an in_channels past the work size limit",
+          "[c_api][work_size_limit]") {
+  const float sample = 0.0f;
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_channels = 0;
+  const std::string expected = element_limit("in_channels", "the input samples");
+
+  SECTION("sonare_playback_render_interleaved") {
+    check_refused(sonare_playback_render_interleaved(&sample, 1, 500000001, 48000, "{}", nullptr,
+                                                     &out, &out_frames, &out_channels),
+                  expected);
+  }
+  SECTION("sonare_playback_renderer_render_offline") {
+    SonarePlaybackRenderer* raw = nullptr;
+    REQUIRE(sonare_playback_renderer_create_json("{}", nullptr, 48000, 512, &raw) == SONARE_OK);
+    const std::unique_ptr<SonarePlaybackRenderer, decltype(&sonare_playback_renderer_destroy)>
+        renderer(raw, sonare_playback_renderer_destroy);
+    check_refused(sonare_playback_renderer_render_offline(renderer.get(), &sample, 1, 500000001,
+                                                          &out, &out_frames, &out_channels),
+                  expected);
   }
 }

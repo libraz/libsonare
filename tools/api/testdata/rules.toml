@@ -335,6 +335,11 @@ title = "Title of python-public-names"
 summary = "Summary of python-public-names."
 
 [[rule]]
+slug = "work-size-limit"
+title = "Title of work-size-limit"
+summary = "Summary of work-size-limit."
+
+[[rule]]
 slug = "individual"
 title = "Title of individual"
 summary = "Summary of individual."

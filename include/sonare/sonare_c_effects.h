@@ -234,6 +234,8 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
 ///        out-of-domain value comes back as SONARE_ERROR_INVALID_PARAMETER with
 ///        the core's own text on sonare_last_error_message().
 /// @note Free @p out with @ref sonare_free_floats.
+/// @note A @p stretch_ratio that would make the stretched note pass 2147483647 samples is refused
+/// with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int64_t onset_sample, int64_t offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length);
@@ -1099,6 +1101,8 @@ void sonare_decompose_options_init(SonareDecomposeOptions* options);
 /// @param out_w_length Receives n_features * n_components.
 /// @param out_h Receives the [n_components x n_frames] activation matrix.
 /// @param out_h_length Receives n_components * n_frames.
+/// @note An @p n_components that would make the component weights or activations pass 500000000
+/// elements is refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
                              int n_iter, float beta, const SonareDecomposeOptions* options,
                              float** out_w, size_t* out_w_length, float** out_h,
@@ -1154,6 +1158,8 @@ void sonare_decompose_stems_config_init(SonareDecomposeStemsConfig* config);
 ///        config hop. NULL skips it. Release with @ref sonare_free_floats.
 /// @param out_h_length Optional; receives n_components * n_frames. Required
 ///        when @p out_h is non-NULL.
+/// @note An @p n_components that would make the component weights or activations pass 500000000
+/// elements is refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_decompose_stems(const float* samples, size_t length, int sample_rate,
                                    const SonareDecomposeStemsConfig* config, float** out,
                                    size_t* out_frames, int* out_n_components, float** out_w,
@@ -1193,6 +1199,8 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
 ///        config hop. NULL skips it. Release with @ref sonare_free_floats.
 /// @param out_h_length Optional; receives n_components * n_frames. Required
 ///        when @p out_h is non-NULL.
+/// @note An @p n_components that would make the component weights or activations pass 500000000
+/// elements is refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_decompose_stems_linked(const float* const* channels, size_t num_channels,
                                           size_t length, int sample_rate,
                                           const SonareDecomposeStemsConfig* config, float** out,
@@ -1231,6 +1239,8 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
 /// @param align_zeros Snap boundaries to zero-crossings (non-zero = true).
 /// @param out Receives the remixed signal buffer.
 /// @param out_length Receives the remixed signal length.
+/// @note @p intervals whose spans would make the remixed signal pass 500000000 samples is refused
+/// with @c SONARE_ERROR_INVALID_PARAMETER naming them.
 SonareError sonare_remix(const float* samples, size_t length, int sample_rate, const int* intervals,
                          size_t interval_count, int align_zeros, float** out, size_t* out_length);
 
@@ -1279,6 +1289,8 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
 /// @note Positional facades use the same order after the audio buffer:
 /// sample_rate, rate, n_fft, hop_length. Prefer a request object where the
 /// language binding provides one.
+/// @note A @p speed_ratio that would make the stretched spectrogram pass 500000000 elements is
+/// refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate,
                                  float speed_ratio, int n_fft, size_t hop_length, float** out,
                                  size_t* out_length);

@@ -2251,6 +2251,8 @@ void sonare_free_trim_silence_result(SonareTrimSilenceResult* result);
 ///   track its noise frame by frame.
 /// @param json_out Receives the analysis; release with @ref sonare_free_string.
 ///   Set to NULL before any validation.
+/// @note A @p num_channels that would make the interleaved audio pass 500000000 samples is refused
+/// with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t num_channels,
                                             size_t length, int sample_rate,
                                             const char* request_json, char** json_out);

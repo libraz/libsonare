@@ -175,6 +175,8 @@ SonareError sonare_playback_renderer_non_finite_discard_count(
 /// @note Release @p out with @ref sonare_free_floats.
 /// @note SONARE_ERROR_INVALID_PARAMETER when @p frames is 0, @p in is null, or
 ///       @p in contains a non-finite sample.
+/// @note An @p in_channels that would make the input pass 500000000 samples is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_playback_render_interleaved(const float* in, size_t frames, int in_channels,
                                                int sample_rate, const char* document,
                                                const SonareHrtfSet* hrtf, float** out,
@@ -188,6 +190,8 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
 /// @note SONARE_ERROR_INVALID_PARAMETER when @p renderer is null, @p frames is 0,
 ///       @p in is null, @p in_channels does not match the input layout, or
 ///       @p in contains a non-finite sample.
+/// @note An @p in_channels that would make the input pass 500000000 samples is refused with
+/// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* renderer,
                                                     const float* in, size_t frames, int in_channels,
                                                     float** out, size_t* out_frames,

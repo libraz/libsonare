@@ -300,7 +300,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_analyze_bpm(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_analyze_dynamics(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_analyze_melody(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_analyze_melody(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_analyze_melody(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the observation matrix larger than 500000000 elements is refused by name ('hop_length must keep the observation matrix within 500000000 elements') |
 | `sonare_analyze_rhythm(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_analyze_timbre(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_bass_chroma(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
@@ -308,19 +308,19 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_chroma_cens(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_chroma_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_clicks(length)` | the length is a size_t instead of an int; a value above the offline audio limit is refused |
-| `sonare_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_cqt_to_audio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the constant-Q output larger than 500000000 elements is refused by name ('hop_length must keep the constant-Q output within 500000000 elements') |
+| `sonare_cqt_to_audio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the reconstructed signal larger than 500000000 elements is refused by name ('hop_length must keep the reconstructed signal within 500000000 elements') |
 | `sonare_cyclic_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_cyclic_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_cyclic_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements') |
 | `sonare_estimate_tuning(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_fourier_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_fourier_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_fourier_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements') |
 | `sonare_frame_signal(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_frame_signal(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_frame_signal(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the framed output larger than 500000000 elements is refused by name ('hop_length must keep the framed output within 500000000 elements') |
 | `sonare_frames_to_samples(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_frames_to_time(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_griffin_lim(hop_length)` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
-| `sonare_hybrid_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_hybrid_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the constant-Q output larger than 500000000 elements is refused by name ('hop_length must keep the constant-Q output within 500000000 elements') |
 | `sonare_mel_spectrogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_mel_to_audio(hop_length)` | the hop is a size_t instead of an int; 0 selects a quarter of n_fft, and a value above 2147483647 is refused |
 | `sonare_mfcc(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
@@ -330,11 +330,11 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_pcen(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_piptrack(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_pitch_pyin(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_pitch_pyin(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_pitch_pyin(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the observation matrix larger than 500000000 elements is refused by name ('hop_length must keep the observation matrix within 500000000 elements') |
 | `sonare_pitch_yin(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_pitch_yin(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_plp(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_plp(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_plp(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements') |
 | `sonare_poly_features(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_polyphonic_frame_count(out_count)` | the count is written through a size_t* instead of an int pointer |
 | `sonare_pseudo_cqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
@@ -355,7 +355,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_stft(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_stream_analyzer_frame_count(out_count)` | the count is written through a size_t* instead of an int pointer |
 | `sonare_tempogram(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_tempogram(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements') |
 | `sonare_tempogram_ratio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_tempogram_ratio(win_length)` | the window length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_time_to_frames(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
@@ -363,8 +363,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_trim_silence(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_trim_silence(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_trim_silence(start_sample)` | the sample position is an int64_t instead of an int |
-| `sonare_vqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
-| `sonare_vqt_to_audio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
+| `sonare_vqt(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the constant-Q output larger than 500000000 elements is refused by name ('hop_length must keep the constant-Q output within 500000000 elements') |
+| `sonare_vqt_to_audio(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the reconstructed signal larger than 500000000 elements is refused by name ('hop_length must keep the reconstructed signal within 500000000 elements') |
 | `sonare_zero_crossing_rate(frame_length)` | the length is a size_t instead of an int; a value above 2147483647 is refused |
 | `sonare_zero_crossing_rate(hop_length)` | the hop is a size_t instead of an int; a value above 2147483647 is refused |
 
@@ -438,6 +438,21 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_reference_hz_to_tuning` | out_tuning_cents is in cents (1.x: a fraction of a semitone) |
 | `sonare_tuning_to_reference_hz(tuning)` | `sonare_tuning_to_reference_hz(tuning_cents)` |
 | `sonare_tuning_to_reference_hz` | tuning_cents is in cents (1.x: a fraction of a semitone) |
+
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_cqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `sonare_cqt_to_audio(n_frames)` | a n_frames that would make the STFT magnitude larger than 500000000 elements is refused by name instead of exhausting memory ('n_frames must keep the STFT magnitude within 500000000 elements') |
+| `sonare_cyclic_tempogram(n_bins)` | a n_bins that would make the cyclic tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('n_bins must keep the cyclic tempogram within 500000000 elements') |
+| `sonare_fix_length(target_size)` | a target_size that would make the padded output larger than 500000000 elements is refused by name instead of exhausting memory ('target_size must keep the padded output within 500000000 elements') |
+| `sonare_hybrid_cqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `sonare_pad_center(target_size)` | a target_size that would make the padded output larger than 500000000 elements is refused by name instead of exhausting memory ('target_size must keep the padded output within 500000000 elements') |
+| `sonare_pseudo_cqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `sonare_segment_cross_similarity(x_cols)` | a x_cols that would make the similarity matrix larger than 2147483647 elements is refused by name instead of exhausting memory ('x_cols must keep the similarity matrix within 2147483647 elements') |
+| `sonare_vqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `sonare_vqt_to_audio(n_frames)` | a n_frames that would make the STFT magnitude larger than 500000000 elements is refused by name instead of exhausting memory ('n_frames must keep the STFT magnitude within 500000000 elements') |
 
 #### Other individual changes
 
@@ -646,6 +661,15 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `sonare_mastering_repair_apply` | a refused stages_json (malformed JSON, an unknown stage or setting, a repeated stage, a bad value) is SONARE_ERROR_INVALID_PARAMETER naming stages[<i>].<key>, where 1.x returned SONARE_ERROR_INVALID_FORMAT |
 | `sonare_realtime_voice_changer_validate_preset_json(json)` | `sonare_realtime_voice_changer_validate_preset_json(document)` |
+
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_decompose(n_components)` | a n_components that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('n_components must keep the component weights or activations within 500000000 elements') |
+| `sonare_note_stretch(stretch_ratio)` | a stretch_ratio that would make the stretched note larger than 2147483647 elements is refused by name instead of exhausting memory ('stretch_ratio must keep the stretched note within 2147483647 elements') |
+| `sonare_phase_vocoder(rate)` | `sonare_phase_vocoder(speed_ratio)`: renamed to speed_ratio; a speed_ratio that would make the stretched spectrogram larger than 500000000 elements is refused by name instead of exhausting memory ('speed_ratio must keep the stretched spectrogram within 500000000 elements') |
+| `sonare_remix(intervals)` | a intervals that would make the remixed signal larger than 500000000 elements is refused by name instead of exhausting memory ('intervals must keep the remixed signal within 500000000 elements') |
 
 #### Other individual changes
 
@@ -998,6 +1022,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_playback_render_interleaved(config_json)` | `sonare_playback_render_interleaved(document)` |
 | `sonare_playback_renderer_create_json(config_json)` | `sonare_playback_renderer_create_json(document)` |
 | `sonare_playback_renderer_set_config_json(config_json)` | `sonare_playback_renderer_set_config_json(document)` |
+
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_playback_render_interleaved(in_channels)` | a in_channels that would make the input samples larger than 500000000 elements is refused by name instead of exhausting memory ('in_channels must keep the input samples within 500000000 elements') |
+| `sonare_playback_renderer_render_offline(in_channels)` | a in_channels that would make the input samples larger than 500000000 elements is refused by name instead of exhausting memory ('in_channels must keep the input samples within 500000000 elements') |
 
 #### Other individual changes
 
@@ -1970,8 +2001,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `analyze_impulse_response(n_octave_bands)` | a bool or a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError |
-| `fix_length(target_size)` | a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError |
-| `pad_center(target_size)` | a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError |
+| `fix_length(target_size)` | a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError; one that would make the padded output larger than 500000000 elements is refused by name ('target_size must keep the padded output within 500000000 elements') |
+| `pad_center(target_size)` | a value that is not a number raises TypeError instead of SonareValueError; a negative or non-integer number stays SonareValueError; one that would make the padded output larger than 500000000 elements is refused by name ('target_size must keep the padded output within 500000000 elements') |
 
 #### Cheap scalar state reads are getters and properties
 
@@ -2146,6 +2177,32 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `SonareStreamQuantizeConfig` | removed: a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns |
 | `SonareStreamStats` | removed: a ctypes mirror of the C struct, never part of the API; use the dataclass the libsonare function returns |
 
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `PolyphonicAnalysis.analyze(cents_per_bin)` | a cents_per_bin that would make the cent spectrum larger than 500000000 elements is refused by name instead of exhausting memory ('cents_per_bin must keep the cent spectrum within 500000000 elements') |
+| `PolyphonicAnalysis.constructor(cents_per_bin)` | a cents_per_bin that would make the cent spectrum larger than 500000000 elements is refused by name instead of exhausting memory ('cents_per_bin must keep the cent spectrum within 500000000 elements') |
+| `analyze_melody(hop_length)` | a hop_length that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the observation matrix within 500000000 elements') |
+| `cqt(hop_length)` | a hop_length that would make the constant-Q output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the constant-Q output within 500000000 elements') |
+| `cqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `cqt_to_audio(hop_length)` | a hop_length that would make the reconstructed signal larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the reconstructed signal within 500000000 elements') |
+| `cqt_to_audio(magnitude)` | a magnitude with more frames than the STFT magnitude can hold within 500000000 elements is refused by name instead of exhausting memory ('magnitude length must keep the STFT magnitude within 500000000 elements') |
+| `cyclic_tempogram(n_bins)` | a n_bins that would make the cyclic tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('n_bins must keep the cyclic tempogram within 500000000 elements') |
+| `cyclic_tempogram(win_length)` | a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements') |
+| `fourier_tempogram(win_length)` | a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements') |
+| `frame_signal(hop_length)` | a hop_length that would make the framed output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the framed output within 500000000 elements') |
+| `hybrid_cqt(hop_length)` | a hop_length that would make the constant-Q output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the constant-Q output within 500000000 elements') |
+| `hybrid_cqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `pitch_pyin(hop_length)` | a hop_length that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the observation matrix within 500000000 elements') |
+| `plp(win_length)` | a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements') |
+| `pseudo_cqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `tempogram(win_length)` | a win_length that would make the tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('win_length must keep the tempogram within 500000000 elements') |
+| `vqt(hop_length)` | a hop_length that would make the constant-Q output larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the constant-Q output within 500000000 elements') |
+| `vqt(n_bins)` | a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements') |
+| `vqt_to_audio(hop_length)` | a hop_length that would make the reconstructed signal larger than 500000000 elements is refused by name instead of exhausting memory ('hop_length must keep the reconstructed signal within 500000000 elements') |
+| `vqt_to_audio(magnitude)` | a magnitude with more frames than the STFT magnitude can hold within 500000000 elements is refused by name instead of exhausting memory ('magnitude length must keep the STFT magnitude within 500000000 elements') |
+
 #### Other individual changes
 
 | 1.x | 2.0.0 |
@@ -2223,7 +2280,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `phase_vocoder(rate)` | `phase_vocoder(speed_ratio)`: renamed to speed_ratio and required |
+| `phase_vocoder(rate)` | `phase_vocoder(speed_ratio)`: renamed to speed_ratio and required; one that would make the stretched spectrogram larger than 500000000 elements is refused by name ('speed_ratio must keep the stretched spectrogram within 500000000 elements') |
 | `remix(sample_rate)` | `remix(sr)` |
 | `time_stretch(rate)` | `time_stretch(speed_ratio)`: renamed to speed_ratio and required |
 
@@ -2317,13 +2374,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `decompose_stems(beta)` | omitted hands the core its default (was the literal 2.0) |
 | `decompose_stems(hop_length)` | omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError |
 | `decompose_stems(mask_power)` | omitted hands the core its default (was the literal 1.0); an explicit 0 raises SonareValueError |
-| `decompose_stems(n_components)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError |
+| `decompose_stems(n_components)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError; one that would make the component weights or activations larger than 500000000 elements is refused by name ('n_components must keep the component weights or activations within 500000000 elements') |
 | `decompose_stems(n_fft)` | omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError |
 | `decompose_stems(n_iter)` | omitted hands the core its default (was the literal 100); an explicit 0 raises SonareValueError |
 | `decompose_stems_linked(beta)` | omitted hands the core its default (was the literal 2.0) |
 | `decompose_stems_linked(hop_length)` | omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError |
 | `decompose_stems_linked(mask_power)` | omitted hands the core its default (was the literal 1.0); an explicit 0 raises SonareValueError |
-| `decompose_stems_linked(n_components)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError |
+| `decompose_stems_linked(n_components)` | omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError; one that would make the component weights or activations larger than 500000000 elements is refused by name ('n_components must keep the component weights or activations within 500000000 elements') |
 | `decompose_stems_linked(n_fft)` | omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError |
 | `decompose_stems_linked(n_iter)` | omitted hands the core its default (was the literal 100); an explicit 0 raises SonareValueError |
 | `hpss(hop_length)` | omitted is n_fft // 4 instead of a fixed 512, so a small n_fft with no hop resynthesizes |
@@ -2593,6 +2650,14 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `RealtimeVoiceChanger.set_config(preset)` | `RealtimeVoiceChanger.set_config(config)`: renamed to config; a string is a preset id only and JSON text raises SonareValueError, a mapping is a document. A flat config document carries harmonySteps (an array of three) instead of harmonyStep1..3, which are refused as unknown fields |
+
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `decompose(n_components)` | a n_components that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('n_components must keep the component weights or activations within 500000000 elements') |
+| `note_stretch(stretch_ratio)` | a stretch_ratio that would make the stretched note larger than 2147483647 elements is refused by name instead of exhausting memory ('stretch_ratio must keep the stretched note within 2147483647 elements') |
+| `remix(intervals)` | a intervals that would make the remixed signal larger than 500000000 elements is refused by name instead of exhausting memory ('intervals must keep the remixed signal within 500000000 elements') |
 
 #### Other individual changes
 
@@ -14988,6 +15053,23 @@ Python, 2.0.0:
 
 ```python
 from libsonare import ProgressCallback
+```
+
+### An argument that would size a result past the library's limit is refused by name
+
+A hop, bin count, window, stretch ratio, target size or channel count that would make an output or work buffer larger than the library can hold is refused before anything is allocated, naming that argument and the limit, instead of exhausting memory. Audio-length outputs and work buffers stop at 500,000,000 elements, a constant-Q filter kernel at 33,554,432, and the segment matrices and note stretch ratio at 2,147,483,647.
+
+Python, 1.x:
+
+```python
+frames = frame_signal(np.zeros(70000, np.float32), 35000, 1)  # tried to allocate 1.2e9 floats
+```
+
+Python, 2.0.0:
+
+```python
+frame_signal(np.zeros(70000, np.float32), 35000, 1)
+# SonareValueError: frame_signal: hop_length must keep the framed output within 500000000 elements
 ```
 
 ### Other individual changes

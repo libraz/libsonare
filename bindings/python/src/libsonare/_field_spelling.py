@@ -128,6 +128,7 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("align_take_to_reference", "reference_len"): "reference",
     ("align_take_to_reference", "take_len"): "take",
     ("chord_functions", "count"): "chords",
+    ("cqt_to_audio", "n_frames"): "magnitude",
     ("detect_key", "mode_count"): "modes",
     ("detect_key_candidates", "mode_count"): "modes",
     ("downmix", "num_channels"): "channels",
@@ -177,6 +178,7 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("room_morph", "band_scattering_count"): "band_scattering",
     ("room_morph_stereo", "band_absorption_count"): "band_absorption",
     ("room_morph_stereo", "band_scattering_count"): "band_scattering",
+    ("segment_cross_similarity", "x_cols"): "x",
     ("split_note", "n_frames"): "f0_hz",
     ("split_note", "note_count"): "notes",
     ("streaming_mastering_chain_process_mono", "num_samples"): "samples",
@@ -185,6 +187,7 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("synthesize_rir", "band_absorption_count"): "band_absorption",
     ("synthesize_rir", "band_scattering_count"): "band_scattering",
     ("vocal_draft_apply", "count"): "operations",
+    ("vqt_to_audio", "n_frames"): "magnitude",
 }
 
 # (C entry key, C-ABI frame count subject) pairs whose value is the named interleaved array's

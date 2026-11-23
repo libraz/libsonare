@@ -211,6 +211,8 @@ void sonare_polyphonic_config_init(SonarePolyphonicConfig* config);
 ///       @c config->struct_size is below sizeof, or when a field is outside its range.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the pitch
 ///       editor.
+/// @note A @c config->cents_per_bin that would make the cent spectrum pass 500000000 elements is
+/// refused with @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int sample_rate,
                                       const SonarePolyphonicConfig* config,
                                       SonarePolyphonicAnalysis** out);

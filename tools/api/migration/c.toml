@@ -2996,7 +2996,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_analyze_melody(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the observation matrix larger than 500000000 elements is refused by name ('hop_length must keep the observation matrix within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3060,7 +3060,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_cqt(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the constant-Q output larger than 500000000 elements is refused by name ('hop_length must keep the constant-Q output within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3068,7 +3068,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_cqt_to_audio(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the reconstructed signal larger than 500000000 elements is refused by name ('hop_length must keep the reconstructed signal within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3084,7 +3084,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_cyclic_tempogram(win_length)"
-changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3108,7 +3108,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_fourier_tempogram(win_length)"
-changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3124,7 +3124,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_frame_signal(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the framed output larger than 500000000 elements is refused by name ('hop_length must keep the framed output within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3156,7 +3156,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_hybrid_cqt(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the constant-Q output larger than 500000000 elements is refused by name ('hop_length must keep the constant-Q output within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3244,7 +3244,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_pitch_pyin(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the observation matrix larger than 500000000 elements is refused by name ('hop_length must keep the observation matrix within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3276,7 +3276,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_plp(win_length)"
-changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3458,7 +3458,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_tempogram(win_length)"
-changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the window length is a size_t instead of an int; a value above 2147483647 is refused; one that would make the tempogram larger than 500000000 elements is refused by name ('win_length must keep the tempogram within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3522,7 +3522,7 @@ test = "tests/api/numeric_domain_rows_effects_test.cpp::an effects value outside
 [[entry]]
 kind = "option"
 old = "sonare_vqt(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the constant-Q output larger than 500000000 elements is refused by name ('hop_length must keep the constant-Q output within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -3530,7 +3530,7 @@ test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outsi
 [[entry]]
 kind = "option"
 old = "sonare_vqt_to_audio(hop_length)"
-changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused"
+changed = "the hop is a size_t instead of an int; a value above 2147483647 is refused; one that would make the reconstructed signal larger than 500000000 elements is refused by name ('hop_length must keep the reconstructed signal within 500000000 elements')"
 domain = "analysis"
 rule = "c-count-types"
 test = "tests/api/numeric_domain_rows_analysis_test.cpp::an analysis value outside its row's domain is refused under the row's subject"
@@ -5580,3 +5580,132 @@ changed = "a refused band_json (malformed JSON, an unknown key, an earlier spell
 domain = "engine"
 rule = "json-input-kinds"
 test = "tests/api/sonare_c_scene_warnings_test.cpp::engine EQ band setters refuse an unknown key by name"
+
+[[entry]]
+kind = "option"
+old = "sonare_cqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_cqt refuses an n_bins"
+
+[[entry]]
+kind = "option"
+old = "sonare_pseudo_cqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_pseudo_cqt refuses an n_bins"
+
+[[entry]]
+kind = "option"
+old = "sonare_hybrid_cqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_hybrid_cqt refuses an n_bins"
+
+[[entry]]
+kind = "option"
+old = "sonare_vqt(n_bins)"
+changed = "a n_bins that would make the filter kernel larger than 33554432 elements is refused by name instead of exhausting memory ('n_bins must keep the filter kernel within 33554432 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_vqt refuses an n_bins"
+
+[[entry]]
+kind = "option"
+old = "sonare_cqt_to_audio(n_frames)"
+changed = "a n_frames that would make the STFT magnitude larger than 500000000 elements is refused by name instead of exhausting memory ('n_frames must keep the STFT magnitude within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_cqt_to_audio refuses a hop_length and an n_frames"
+
+[[entry]]
+kind = "option"
+old = "sonare_vqt_to_audio(n_frames)"
+changed = "a n_frames that would make the STFT magnitude larger than 500000000 elements is refused by name instead of exhausting memory ('n_frames must keep the STFT magnitude within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_vqt_to_audio refuses a hop_length and an n_frames"
+
+[[entry]]
+kind = "option"
+old = "sonare_decompose(n_components)"
+changed = "a n_components that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('n_components must keep the component weights or activations within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_decompose refuses an n_components"
+
+[[entry]]
+kind = "option"
+old = "sonare_phase_vocoder(rate)"
+to = "sonare_phase_vocoder(speed_ratio)"
+changed = "renamed to speed_ratio; a speed_ratio that would make the stretched spectrogram larger than 500000000 elements is refused by name instead of exhausting memory ('speed_ratio must keep the stretched spectrogram within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_phase_vocoder refuses a speed_ratio"
+
+[[entry]]
+kind = "option"
+old = "sonare_note_stretch(stretch_ratio)"
+changed = "a stretch_ratio that would make the stretched note larger than 2147483647 elements is refused by name instead of exhausting memory ('stretch_ratio must keep the stretched note within 2147483647 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_note_stretch refuses a stretch_ratio"
+
+[[entry]]
+kind = "option"
+old = "sonare_cyclic_tempogram(n_bins)"
+changed = "a n_bins that would make the cyclic tempogram larger than 500000000 elements is refused by name instead of exhausting memory ('n_bins must keep the cyclic tempogram within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::the tempogram entries refuse a win_length and an n_bins"
+
+[[entry]]
+kind = "option"
+old = "sonare_segment_cross_similarity(x_cols)"
+changed = "a x_cols that would make the similarity matrix larger than 2147483647 elements is refused by name instead of exhausting memory ('x_cols must keep the similarity matrix within 2147483647 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_segment_cross_similarity refuses an x_cols"
+
+[[entry]]
+kind = "option"
+old = "sonare_remix(intervals)"
+changed = "a intervals that would make the remixed signal larger than 500000000 elements is refused by name instead of exhausting memory ('intervals must keep the remixed signal within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_remix refuses intervals"
+
+[[entry]]
+kind = "option"
+old = "sonare_pad_center(target_size)"
+changed = "a target_size that would make the padded output larger than 500000000 elements is refused by name instead of exhausting memory ('target_size must keep the padded output within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_pad_center refuses a target_size"
+
+[[entry]]
+kind = "option"
+old = "sonare_fix_length(target_size)"
+changed = "a target_size that would make the padded output larger than 500000000 elements is refused by name instead of exhausting memory ('target_size must keep the padded output within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::sonare_fix_length refuses a target_size"
+
+[[entry]]
+kind = "option"
+old = "sonare_playback_render_interleaved(in_channels)"
+changed = "a in_channels that would make the input samples larger than 500000000 elements is refused by name instead of exhausting memory ('in_channels must keep the input samples within 500000000 elements')"
+domain = "engine"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::the playback render entries refuse an in_channels"
+
+[[entry]]
+kind = "option"
+old = "sonare_playback_renderer_render_offline(in_channels)"
+changed = "a in_channels that would make the input samples larger than 500000000 elements is refused by name instead of exhausting memory ('in_channels must keep the input samples within 500000000 elements')"
+domain = "engine"
+rule = "work-size-limit"
+test = "tests/api/c_refusal_subjects_test.cpp::the playback render entries refuse an in_channels"
