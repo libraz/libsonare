@@ -357,7 +357,7 @@ describe('Sonare WASM NativeSynth', () => {
           () => bounceSynth(project, 'no-such-preset', { totalFrames: 128 }),
           RangeError,
         ).message,
-      ).toBe('Project.bounce: unknown synth preset name');
+      ).toBe('Project.bounce: synthInstruments[0].patch.preset must name a synth catalog preset');
     } finally {
       project.destroy();
     }
@@ -450,7 +450,9 @@ describe('Sonare WASM NativeSynth', () => {
       ] as [DistSynthPatch, string][]) {
         const error = rejection(patch);
         expect(error, key).toBeInstanceOf(RangeError);
-        expect((error as Error).message, key).toContain(`synth patch field '${key}': out of range`);
+        expect((error as Error).message, key).toContain(
+          `synthInstruments[0].patch.${key} must be `,
+        );
       }
       // The published ends are accepted.
       expect(() =>
@@ -474,7 +476,9 @@ describe('Sonare WASM NativeSynth', () => {
             ),
           RangeError,
         ).message,
-      ).toBe('Project.bounce: mod routing refused: source and destination must not be none');
+      ).toBe(
+        'Project.bounce: synthInstruments[0].patch.modRoutings[0].source must be an integer in [1, 12]',
+      );
       expect(
         expectRefusalOf(
           () =>
@@ -485,7 +489,9 @@ describe('Sonare WASM NativeSynth', () => {
             ),
           RangeError,
         ).message,
-      ).toBe('Project.bounce: mod routing refused: source and destination must not be none');
+      ).toBe(
+        'Project.bounce: synthInstruments[0].patch.modRoutings[0].destination must be an integer in [1, 12]',
+      );
       // Not vacuous: a real routing on both ends still passes.
       const audio = bounceSynth(
         project,
@@ -803,7 +809,7 @@ describe('Sonare WASM NativeSynth', () => {
           () => engine.setSynthInstrument(7, { preset: 'no-such-preset' }),
           RangeError,
         ).message,
-      ).toBe('RealtimeEngine.setSynthInstrument: unknown synth preset name');
+      ).toBe('RealtimeEngine.setSynthInstrument: patch.preset must name a synth catalog preset');
       expect(engine.midiInstrumentCount).toBe(1);
     } finally {
       engine.destroy();

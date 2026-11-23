@@ -456,7 +456,7 @@ describe('Project.bounce with synthInstruments', () => {
       ] as [SynthPatch, string][]) {
         const error = rejection(patch);
         expect(error.name, key).toBe('RangeError');
-        expect(error.message, key).toContain(`synth patch field '${key}': out of range`);
+        expect(error.message, key).toContain(`patch.${key} must be `);
       }
       // The published ends are accepted.
       expect(() =>

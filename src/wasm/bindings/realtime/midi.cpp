@@ -193,11 +193,8 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
   const sonare_wasm_synth::SynthPatchStorage patch_storage =
       sonare_wasm_synth::synthPatchFromVal(patch);
   const SonareSynthPatch& c_patch = patch_storage.patch;
-  sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
-  if (!sonare_c_detail::synth_config_from_patch_c(c_patch, &cfg, &error)) {
-    throw WasmRangeError(error != nullptr ? error : "invalid synth patch");
-  }
+  sonare::midi::synth::NativeSynthConfig cfg =
+      sonare_c_detail::synth_config_from_patch_c(c_patch, "patch");
   // `useGmPrograms` is a binding convenience beside the patch fields. Keep
   // its strict boolean contract here, where realtime and offline synth
   // bindings meet, and leave the NativeSynth default disabled when omitted.
