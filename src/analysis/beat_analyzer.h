@@ -58,7 +58,9 @@ struct TimeSignature {
 /// @brief Configuration for beat tracking.
 /// @details The default 60-200 BPM search is the one every public tempo entry uses.
 struct BeatConfig {
-  float start_bpm = 120.0f;             ///< Prior estimate for tempo
+  /// Finite, positive BPM prior that seeds beat tracking if the tempo search finds none.
+  /// The result reports measured tempo or NaN.
+  float start_bpm = 120.0f;
   float bpm_min = 60.0f;                ///< Minimum BPM to consider (inclusive)
   float bpm_max = 200.0f;               ///< Maximum BPM to consider (inclusive)
   float tightness = 100.0f;             ///< Tightness of beat distribution

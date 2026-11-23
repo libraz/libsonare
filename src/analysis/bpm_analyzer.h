@@ -107,9 +107,11 @@ struct BpmConfig {
   /// preferred when it lies inside it.
   float bpm_min = bpm_constants::kDefaultBpmMin;  ///< Minimum BPM to consider (inclusive)
   float bpm_max = bpm_constants::kDefaultBpmMax;  ///< Maximum BPM to consider (inclusive)
-  float start_bpm = 120.0f;  ///< Beat tracker's seed tempo; never reported as a measurement
-  int n_fft = 2048;          ///< Window length in samples at 22050 Hz, rescaled to the input rate
-  int hop_length = 512;      ///< Hop length in samples of the input buffer
+  /// Finite, positive beat-tracking prior in BPM. Standalone tempo detection ignores it
+  /// and reports NaN when it finds no tempo.
+  float start_bpm = 120.0f;
+  int n_fft = 2048;      ///< Window length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 512;  ///< Hop length in samples of the input buffer
 };
 
 /// @brief Domain of the tempo search hop_length; n_fft takes @ref kStftNFftDomain.

@@ -48,11 +48,13 @@ struct RhythmFeatures {
 
 /// @brief Configuration for rhythm analysis.
 struct RhythmConfig {
-  float start_bpm = 120.0f;  ///< Prior estimate for tempo
-  float bpm_min = 60.0f;     ///< Minimum BPM to consider
-  float bpm_max = 200.0f;    ///< Maximum BPM to consider
-  int n_fft = 2048;          ///< Window length in samples at 22050 Hz, rescaled to the input rate
-  int hop_length = 512;      ///< Hop length in samples of the input buffer
+  /// Finite, positive BPM prior that seeds beat tracking if the tempo search finds none.
+  /// The result reports measured tempo or NaN.
+  float start_bpm = 120.0f;
+  float bpm_min = 60.0f;   ///< Minimum BPM to consider
+  float bpm_max = 200.0f;  ///< Maximum BPM to consider
+  int n_fft = 2048;        ///< Window length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 512;    ///< Hop length in samples of the input buffer
   /// @brief Meter numerators handed to the meter estimator.
   /// @details Must be kept in step with BeatConfig's copy: this analyzer runs
   ///          its own meter estimate for RhythmFeatures::time_signature, so a
