@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -191,7 +192,8 @@ TEST_CASE("a NULL pointer is refused by name, alone or while its count is set", 
   CHECK(std::string(counted.what()) == "samples must not be NULL when length is not 0");
   CHECK(std::string(check::camel_spelled(counted).what()) ==
         "samples must not be NULL when length is not 0");
-  CHECK_FALSE(counted.shape_error());
+  // Its requirement is a presence token, so it refuses the request's shape.
+  CHECK(counted.shape_error());
 }
 
 TEST_CASE("an empty string, an unknown id and a stated predicate are refused by name",
@@ -377,4 +379,63 @@ TEST_CASE("a presence token renders as NULL in C and in each surface's own terms
   }
   // Brace text that names no subject and no token is kept as written.
   CHECK(relation({"a"}, "{0} {unknown} {7}").text(PresenceSpelling::kJs) == "a {unknown} {7}");
+}
+
+TEST_CASE("a refusal requiring a value left out or supplied is a shape error", "[util][refusal]") {
+  using sonare::SonareParameterRefusal;
+  const auto caught = [](const std::function<void()>& call) {
+    try {
+      call();
+    } catch (const SonareParameterRefusal& e) {
+      return e;
+    }
+    FAIL("the call returned");
+    throw std::logic_error("unreachable");
+  };
+  const std::string must_be_absent = refusal::kMustBeAbsent;
+  const std::string must_be_present = refusal::kMustBePresent;
+  const std::string is_absent = refusal::kIsAbsent;
+  const std::string is_present = refusal::kIsPresent;
+  struct Row {
+    std::vector<std::string> subjects;
+    std::string pattern;
+    bool shape;
+  };
+  const std::vector<Row> rows = {
+      {{"a", "mode"}, "{0} " + must_be_absent + " unless {1} is chain", true},
+      {{"a", "mode"}, "{0} " + must_be_present + " when {1} is chain", true},
+      {{"sync", "ms"}, "{1} " + must_be_absent + " when {0} is tempoSync", true},
+      {{"a", "b"}, std::string("{0} and {1} ") + refusal::kMustNotBothBeAbsent, true},
+      {{"a", "b"}, "{0} " + must_be_present + " when {1} " + is_present, true},
+      // Presence only in the condition: the requirement is a value, so a domain refusal.
+      {{"a", "b", "c"}, "{0} and {1} must be 0 when {2} " + is_absent, false},
+  };
+  for (const Row& row : rows) {
+    CAPTURE(row.pattern);
+    const SonareParameterRefusal e =
+        caught([&] { check::refuse_relation(row.subjects, row.pattern); });
+    CHECK(e.shape_error() == row.shape);
+    CHECK(e.form() == SonareParameterRefusal::Form::Relation);
+    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    // A respelled refusal keeps its text, so it keeps the verdict.
+    CHECK(e.respelled(
+               e.code(), [](const std::string& s) { return s + "X"; }, true)
+              .shape_error() == row.shape);
+  }
+
+  const SonareParameterRefusal non_null = caught([] { check::non_null(nullptr, "out"); });
+  CHECK(non_null.shape_error());
+  CHECK(non_null.form() == SonareParameterRefusal::Form::Predicate);
+  CHECK(non_null.code() == sonare::ErrorCode::InvalidParameter);
+  CHECK(std::string(non_null.what()) == "out must not be NULL");
+
+  const SonareParameterRefusal when_count =
+      caught([] { check::non_null_when_count(nullptr, 3, "values", "count"); });
+  CHECK(when_count.shape_error());
+  CHECK(when_count.code() == sonare::ErrorCode::InvalidParameter);
+  CHECK(std::string(when_count.what()) == "values must not be NULL when count is not 0");
+
+  // A value predicate with no presence token stays a domain refusal.
+  CHECK_FALSE(caught([] { check::finite(std::nan(""), "x"); }).shape_error());
+  CHECK_FALSE(caught([] { check::refuse("x", "must be odd"); }).shape_error());
 }

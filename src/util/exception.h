@@ -81,6 +81,16 @@ inline const char* presence_phrase(const std::string& token, PresenceSpelling sp
   return nullptr;
 }
 
+/// @brief Whether @p pattern requires a value to be left out or supplied: it carries a
+///        `{must_be_absent}`, `{must_be_present}` or `{must_not_both_be_absent}` token. A presence
+///        token in a condition (`{is_absent}`, `{is_present}`) requires nothing of its own.
+inline bool requires_presence(const std::string& pattern) {
+  for (const char* token : {"{must_be_absent}", "{must_be_present}", "{must_not_both_be_absent}"}) {
+    if (pattern.find(token) != std::string::npos) return true;
+  }
+  return false;
+}
+
 /// @brief A refusal of one or more parameters that carries their subject keys as data.
 /// @details The layer that knows where a parameter sits in a document, or how its caller spells
 ///          it, rethrows the refusal with each subject rewritten. what() reads
@@ -89,8 +99,9 @@ inline const char* presence_phrase(const std::string& token, PresenceSpelling sp
 ///          constrains.
 class SonareParameterRefusal : public SonareException {
  public:
-  /// @brief WrongType reads as a Predicate does; it and UnknownKey are shape errors, refusing the
-  ///        request's form rather than a value's domain (TypeError on the JS surfaces).
+  /// @brief WrongType reads as a Predicate does. It and UnknownKey are shape errors, refusing the
+  ///        request's form rather than a value's domain (TypeError on the JS surfaces), and so is
+  ///        any refusal whose requirement is a presence token (see shape_error()).
   enum class Form { Predicate, WrongType, UnknownKey, Relation };
 
   /// @brief A refusal reading "<subject> <predicate>".
@@ -135,9 +146,12 @@ class SonareParameterRefusal : public SonareException {
   }
 
   Form form() const { return form_; }
-  /// @brief Whether the refusal is of the request's shape (an unknown key or a wrong type) rather
-  ///        than of a value's domain.
-  bool shape_error() const { return form_ == Form::WrongType || form_ == Form::UnknownKey; }
+  /// @brief Whether the refusal is of the request's shape rather than of a value's domain: an
+  ///        unknown key, a wrong type, or a value required to be left out or supplied. It is read
+  ///        off the text, so every call site of a presence template gets the same verdict.
+  bool shape_error() const {
+    return form_ == Form::WrongType || form_ == Form::UnknownKey || requires_presence(predicate_);
+  }
   /// @brief The first subject.
   const std::string& subject() const { return subjects_.front(); }
   /// @brief Every subject, in the order the text names them.
