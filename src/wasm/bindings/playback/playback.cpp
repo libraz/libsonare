@@ -87,7 +87,7 @@ class HrtfSetWasm {
  public:
   explicit HrtfSetWasm(val bytes) {
     const std::vector<uint8_t> data = uint8ArrayToVector(bytes, "bytes");
-    checkPlayback(sonare_hrtf_set_create_from_memory(data.data(), data.size(), &set_));
+    checkPlayback(sonare_hrtf_set_create_from_memory(elementData(data), data.size(), &set_));
   }
   ~HrtfSetWasm() { sonare_hrtf_set_destroy(set_); }
   HrtfSetWasm(const HrtfSetWasm&) = delete;
@@ -134,8 +134,8 @@ class PlaybackRendererWasm {
     }
     std::vector<const float*> in(channels.size());
     for (size_t ch = 0; ch < channels.size(); ++ch) in[ch] = channels[ch].data();
-    if (sonare_playback_renderer_process_planar(renderer_.get(), in.data(), in_channels,
-                                                out_ptrs_.data(), out_channels_,
+    if (sonare_playback_renderer_process_planar(renderer_.get(), elementData(in), in_channels,
+                                                elementData(out_ptrs_), out_channels_,
                                                 frames) != SONARE_OK) {
       throwRejectedBlock(in_channels, frames);
     }
@@ -147,8 +147,8 @@ class PlaybackRendererWasm {
     if (frames < 0 || frames > max_block_) {
       throw WasmRangeError("frames must be an integer in [0, " + std::to_string(max_block_) + "]");
     }
-    if (sonare_playback_renderer_process_silence(renderer_.get(), out_ptrs_.data(), out_channels_,
-                                                 frames) != SONARE_OK) {
+    if (sonare_playback_renderer_process_silence(renderer_.get(), elementData(out_ptrs_),
+                                                 out_channels_, frames) != SONARE_OK) {
       throw SonareException(
           ErrorCode::InvalidParameter,
           "the renderer rejected a silent block of " + std::to_string(frames) + " frames");
@@ -171,9 +171,9 @@ class PlaybackRendererWasm {
       throwRejectedBlock(in_channels, static_cast<int>(std::min<size_t>(frames, INT32_MAX)));
     }
     std::vector<float> output(frames * static_cast<size_t>(out_channels_));
-    if (sonare_playback_renderer_process_interleaved(renderer_.get(), input.data(), in_channels,
-                                                     output.data(), out_channels_,
-                                                     static_cast<int>(frames)) != SONARE_OK) {
+    if (sonare_playback_renderer_process_interleaved(
+            renderer_.get(), elementData(input), in_channels, elementData(output), out_channels_,
+            static_cast<int>(frames)) != SONARE_OK) {
       throwRejectedBlock(in_channels, static_cast<int>(frames));
     }
     return vectorToFloat32Array(output);
@@ -186,8 +186,9 @@ class PlaybackRendererWasm {
     float* rendered = nullptr;
     std::size_t out_frames = 0;
     int out_channels = 0;
-    checkPlayback(sonare_playback_renderer_render_offline(
-        renderer_.get(), input.data(), frames, in_channels, &rendered, &out_frames, &out_channels));
+    checkPlayback(sonare_playback_renderer_render_offline(renderer_.get(), elementData(input),
+                                                          frames, in_channels, &rendered,
+                                                          &out_frames, &out_channels));
     std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_floats);
     return vectorToFloat32Array(owned.get(), out_frames * static_cast<std::size_t>(out_channels));
   }
@@ -278,8 +279,9 @@ class PlaybackRendererWasm {
     const int in_channels = checkedIntFromVal(in_channels_val, "inChannels");
     const int frames = checkedIntFromVal(frames_val, "frames");
     if (in_channels < 1 || in_channels > kMaxInputChannels) return SONARE_ERROR_INVALID_PARAMETER;
-    const int err = sonare_playback_renderer_process_planar(
-        renderer_.get(), in_ptrs_.data(), in_channels, out_ptrs_.data(), out_channels_, frames);
+    const int err =
+        sonare_playback_renderer_process_planar(renderer_.get(), elementData(in_ptrs_), in_channels,
+                                                elementData(out_ptrs_), out_channels_, frames);
     return err;
   }
 
@@ -287,7 +289,7 @@ class PlaybackRendererWasm {
   /// layout; returns the C ABI code instead of throwing, as the worklet path requires.
   int processPreparedSilence(const val& frames_val) {
     const int frames = checkedIntFromVal(frames_val, "frames");
-    return sonare_playback_renderer_process_silence(renderer_.get(), out_ptrs_.data(),
+    return sonare_playback_renderer_process_silence(renderer_.get(), elementData(out_ptrs_),
                                                     out_channels_, frames);
   }
 
@@ -335,7 +337,7 @@ class PlaybackLoudnessMeterWasm {
       throw WasmRangeError("interleaved sample count must be a whole number of frames");
     }
     checkPlayback(sonare_playback_loudness_meter_push_interleaved(
-        meter_, input.data(), input.size() / static_cast<size_t>(channels_)));
+        meter_, elementData(input), input.size() / static_cast<size_t>(channels_)));
   }
 
   float integratedLufs() const {
@@ -370,7 +372,7 @@ val renderPlayback(val samples, val channels_val, val sample_rate_val,
   size_t out_frames = 0;
   int out_channels = 0;
   checkPlayback(sonare_playback_render_interleaved(
-      input.data(), frames, channels, sample_rate, wasmCString(config_json, "configJson"),
+      elementData(input), frames, channels, sample_rate, wasmCString(config_json, "configJson"),
       hrtfHandleFromVal(hrtf), &rendered, &out_frames, &out_channels));
   std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_floats);
   val out = val::object();

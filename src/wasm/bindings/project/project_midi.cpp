@@ -130,7 +130,7 @@ val ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_js
   size_t written = 0;
   const SonareError err =
       sonare_project_bake_midi_fx(project_.get(), clip_id, wasmCString(config_json, "configJson"),
-                                  source_index.data(), source_index.size(), &written);
+                                  elementData(source_index), source_index.size(), &written);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
@@ -191,9 +191,9 @@ val ProjectWasm::analyzeTempo(val audio, const val& sample_rate_val, val options
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
   const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
-  const SonareError err =
-      sonare_project_analyze_tempo(project_.get(), samples.data(), samples.size(), sample_rate,
-                                   &resolved, candidates, std::size(candidates), &count);
+  const SonareError err = sonare_project_analyze_tempo(project_.get(), elementData(samples),
+                                                       samples.size(), sample_rate, &resolved,
+                                                       candidates, std::size(candidates), &count);
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }
@@ -224,7 +224,7 @@ float ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& c
   float bpm = 0.0f;
   const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
   const SonareError err = sonare_project_auto_tempo(
-      project_.get(), samples.data(), samples.size(), sample_rate, &resolved,
+      project_.get(), elementData(samples), samples.size(), sample_rate, &resolved,
       static_cast<size_t>(std::max(candidate_index, 0)), apply_time_signatures ? 1 : 0, &bpm);
   if (err != SONARE_OK) throwCodedCError(err);
   return bpm;

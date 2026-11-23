@@ -357,7 +357,9 @@ val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_va
   block_size = resolveOfflineBlock(block_size);
   ChannelBlock block = readChannels(channels_val);
   // Planes past the prepared count would be written as silence rather than refused.
-  checkRenderChannels(static_cast<int>(block.storage.size()), "numChannels");
+  sonare::util::check::with_camel_paths(
+      [&] { checkRenderChannels(static_cast<int>(block.storage.size()), "numChannels"); },
+      kDerivedCountKeys);
   checkPreparedBlock(block_size, "blockSize");
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
                          block.frames, block_size, finalize);

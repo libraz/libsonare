@@ -70,7 +70,7 @@ uint32_t ProjectWasm::addClip(val desc) {
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
       throw WasmRangeError("audio length must be a multiple of audioChannels");
     }
-    d.audio_interleaved = audio.data();
+    d.audio_interleaved = elementData(audio);
     d.audio_frames = static_cast<int64_t>(audio.size()) / d.audio_channels;
   }
   if (hasProperty(desc, "sourceUri")) {
@@ -105,7 +105,7 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
       throw WasmRangeError("audio length must be a multiple of audioChannels");
     }
-    d.audio_interleaved = audio.data();
+    d.audio_interleaved = elementData(audio);
     d.audio_frames = static_cast<int64_t>(audio.size()) / d.audio_channels;
   }
   uint32_t clip_id = 0;
@@ -198,7 +198,8 @@ void ProjectWasm::setWarpMap(val desc) {
   cdesc.name = name.empty() ? nullptr : wasmCString(name, "name");
   cdesc.anchors = anchors.empty() ? nullptr : anchors.data();
   cdesc.anchor_count = anchors.size();
-  checkCodedCError(sonare_project_set_warp_map(project_.get(), &cdesc));
+  const SonareError err = sonare_project_set_warp_map(project_.get(), &cdesc);
+  if (err != SONARE_OK) throwCodedCErrorRenaming(err, kDerivedCountKeys);
 }
 
 void ProjectWasm::removeWarpMap(const val& warp_ref_id_val) {

@@ -209,7 +209,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
       storage->points.push_back({source, midi});
       previous = source;
     }
-    result.target_points = storage->points.data();
+    result.target_points = elementData(storage->points);
     result.target_point_count = storage->points.size();
   } else {
     throw WasmRangeError("unsupported pitch target mode");
@@ -247,7 +247,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
   const val envelope = property(object, "amplitudeEnvelope");
   if (!absent(envelope)) {
     storage->envelope = floatArray(envelope, "edit.amplitudeEnvelope", true);
-    result.amplitude_envelope = storage->envelope.data();
+    result.amplitude_envelope = elementData(storage->envelope);
     result.amplitude_envelope_count = storage->envelope.size();
   }
   return result;
@@ -314,7 +314,7 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
   } else if (kind == "merge") {
     result.kind = SONARE_VOCAL_MERGE;
     storage->ids = idArray(property(object, "noteIds"), "noteIds");
-    result.note_ids = storage->ids.data();
+    result.note_ids = elementData(storage->ids);
     result.note_id_count = storage->ids.size();
     const std::string policy = stringPropertyStrict(object, "policy", "preserve");
     if (policy == "preserve")
@@ -335,7 +335,7 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
   } else if (kind == "reset") {
     result.kind = SONARE_VOCAL_RESET;
     storage->ids = idArray(property(object, "noteIds"), "noteIds");
-    result.note_ids = storage->ids.data();
+    result.note_ids = elementData(storage->ids);
     result.note_id_count = storage->ids.size();
   } else {
     throw WasmRangeError("unsupported vocal edit operation");
@@ -424,8 +424,8 @@ SonareVocalCreateOptions optionsFromVal(const val& object, CreateStorage* storag
     }
     storage->algorithm = stringPropertyStrict(analysis, "algorithmId", "host");
     storage->analysis.algorithm_version = uintProperty(analysis, "algorithmVersion", 1);
-    storage->analysis.f0_hz = storage->f0.data();
-    storage->analysis.voiced = storage->voiced.data();
+    storage->analysis.f0_hz = elementData(storage->f0);
+    storage->analysis.voiced = elementData(storage->voiced);
     storage->analysis.frame_count = storage->f0.size();
     storage->analysis.algorithm_id = wasmCString(storage->algorithm, "analysis.algorithmId");
     storage->options.analysis = &storage->analysis;
@@ -657,7 +657,7 @@ val js_vocal_edit_session_create(val samples, const val& sample_rate_value, val 
   const SonareVocalCreateOptions parsed = optionsFromVal(options, &storage);
   SonareVocalSession* session = nullptr;
   check([&] {
-    return sonare_vocal_session_create(source.data(), static_cast<int64_t>(source.size()), 1,
+    return sonare_vocal_session_create(elementData(source), static_cast<int64_t>(source.size()), 1,
                                        sample_rate, &parsed, &session);
   });
   return val(handleValue(session));
@@ -676,8 +676,9 @@ double js_vocal_edit_session_restore(val samples, const val& sample_rate_value, 
   }
   SonareVocalSession* session = nullptr;
   check([&] {
-    return sonare_vocal_session_restore(source.data(), static_cast<int64_t>(source.size()), 1,
-                                        sample_rate, bytes.data(), bytes.size(), &parsed, &session);
+    return sonare_vocal_session_restore(elementData(source), static_cast<int64_t>(source.size()), 1,
+                                        sample_rate, elementData(bytes), bytes.size(), &parsed,
+                                        &session);
   });
   return handleValue(session);
 }
@@ -783,7 +784,7 @@ val js_vocal_edit_draft_apply(double handle, const val& generation_value, val op
   check([&] {
     return sonare_vocal_draft_apply(
         handlePointer<SonareVocalDraft>(handle, "draft"),
-        checkedDecimalUint64FromVal(generation_value, "expectedGeneration"), parsed.data(),
+        checkedDecimalUint64FromVal(generation_value, "expectedGeneration"), elementData(parsed),
         parsed.size(), &result.value);
   });
   return editResultToVal(result.value);

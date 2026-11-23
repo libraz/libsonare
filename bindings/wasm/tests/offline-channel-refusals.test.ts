@@ -41,6 +41,8 @@ const freeze =
 
 const range = (hi: number) => `numChannels must be an integer in [1, ${hi}]`;
 const layout = 'numChannels must be one of 1, 2, 6, 8';
+// renderOffline derives the count from its channel list, so its refusal names the list's length.
+const renderRange = (hi: number) => `channels.length must be an integer in [1, ${hi}]`;
 const block = 'blockSize must be an integer in [1, 128]';
 
 const CASES: Case[] = [
@@ -49,7 +51,7 @@ const CASES: Case[] = [
     { prepared: 64, label: `bounce ${n}`, run: bounce({ numChannels: n }), refusal: range(64) },
     { prepared: 64, label: `freeze ${n}`, run: freeze({ numChannels: n }), refusal: range(64) },
   ]),
-  { prepared: 64, label: 'render 65', run: render(65), refusal: range(64) },
+  { prepared: 64, label: 'render 65', run: render(65), refusal: renderRange(64) },
   { prepared: 64, label: 'render 0', run: render(0), refusal: 'channels must not be empty' },
   {
     prepared: 64,
@@ -63,7 +65,7 @@ const CASES: Case[] = [
     { prepared: 2, label: `bounce ${n}`, run: bounce({ numChannels: n }), refusal: range(2) },
     { prepared: 2, label: `freeze ${n}`, run: freeze({ numChannels: n }), refusal: range(2) },
   ]),
-  { prepared: 2, label: 'render 3', run: render(3), refusal: range(2) },
+  { prepared: 2, label: 'render 3', run: render(3), refusal: renderRange(2) },
   { prepared: 2, label: 'prime 2', run: prime(2) },
   { prepared: 2, label: 'render 2', run: render(2) },
   { prepared: 8, label: 'bounce 3', run: bounce({ numChannels: 3 }), refusal: layout },
@@ -89,7 +91,7 @@ const CASES: Case[] = [
     prepared: 64,
     label: 'render channels before block',
     run: render(65, 1_000_000),
-    refusal: range(64),
+    refusal: renderRange(64),
   },
   {
     prepared: 64,

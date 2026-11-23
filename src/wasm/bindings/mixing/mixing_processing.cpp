@@ -82,9 +82,9 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
   std::vector<float> out_left(length, 0.0f);
   std::vector<float> out_right(length, 0.0f);
   if (count > 0) {
-    SonareError err = sonare_mixer_process_stereo(mixer_, left_ptrs.data(), right_ptrs.data(),
-                                                  static_cast<size_t>(count), out_left.data(),
-                                                  out_right.data(), length);
+    SonareError err = sonare_mixer_process_stereo(
+        mixer_, elementData(left_ptrs), elementData(right_ptrs), static_cast<size_t>(count),
+        elementData(out_left), elementData(out_right), length);
     if (err != SONARE_OK) throwMixerProcessError(err);
   }
 
@@ -136,8 +136,9 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
   }
 
   SonareError err = sonare_mixer_process_stereo(
-      mixer_, count > 0 ? left_ptrs_.data() : nullptr, count > 0 ? right_ptrs_.data() : nullptr,
-      static_cast<size_t>(count), out_scratch_left_.data(), out_scratch_right_.data(), length);
+      mixer_, count > 0 ? elementData(left_ptrs_) : nullptr,
+      count > 0 ? elementData(right_ptrs_) : nullptr, static_cast<size_t>(count),
+      elementData(out_scratch_left_), elementData(out_scratch_right_), length);
   if (err != SONARE_OK) throwMixerProcessError(err);
   if (length > 0) {
     // As above, these views borrow scratch memory only for the duration of the
@@ -180,8 +181,9 @@ void MixerWasm::processPreparedStereo(const val& num_samples_val) {
   }
   const size_t count = left_scratch_.size();
   SonareError err = sonare_mixer_process_stereo(
-      mixer_, count > 0 ? left_ptrs_.data() : nullptr, count > 0 ? right_ptrs_.data() : nullptr,
-      count, out_scratch_left_.data(), out_scratch_right_.data(), num_samples);
+      mixer_, count > 0 ? elementData(left_ptrs_) : nullptr,
+      count > 0 ? elementData(right_ptrs_) : nullptr, count, elementData(out_scratch_left_),
+      elementData(out_scratch_right_), num_samples);
   if (err != SONARE_OK) throwMixerProcessError(err);
 }
 
@@ -280,7 +282,7 @@ val MixerWasm::drainTailStereo(double num_samples) {
   std::vector<float> out_left(count, 0.0f);
   std::vector<float> out_right(count, 0.0f);
   SonareError err =
-      sonare_mixer_drain_tail_stereo(mixer_, out_left.data(), out_right.data(), count);
+      sonare_mixer_drain_tail_stereo(mixer_, elementData(out_left), elementData(out_right), count);
   if (err != SONARE_OK) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
   }

@@ -540,8 +540,8 @@ val js_decode_channels(val bytes) {
   size_t frames = 0;
   int channels = 0;
   int sample_rate = 0;
-  const SonareError err = sonare_decode_channels(data.data(), data.size(), &planar.data, &frames,
-                                                 &channels, &sample_rate);
+  const SonareError err = sonare_decode_channels(elementData(data), data.size(), &planar.data,
+                                                 &frames, &channels, &sample_rate);
   if (err != SONARE_OK) throwCodedCError(err);
   val planes = val::array();
   for (int channel = 0; channel < channels; ++channel) {
@@ -583,7 +583,7 @@ val js_downmix(val channels, val target_layout_value, val options) {
   fold.normalize = normalize ? 1 : 0;
   CFloatBuffer mixed;
   const SonareError err =
-      sonare_downmix(packed.data(), frames, count, target_layout, &fold, &mixed.data);
+      sonare_downmix(elementData(packed), frames, count, target_layout, &fold, &mixed.data);
   if (err != SONARE_OK) throwCodedCError(err);
   const size_t out_channels =
       static_cast<size_t>(channel_count(static_cast<ChannelLayout>(target_layout)));

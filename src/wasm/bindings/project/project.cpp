@@ -38,7 +38,8 @@ val ProjectWasm::fromJson(const std::string& json, const val& with_diagnostics_v
   wasmRefuseEmbeddedNul(json, "json");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
-  const SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);
+  const SonareError err =
+      sonare_project_deserialize(elementData(json), json.size(), &handle, &diag);
   std::string diagnostics = diag != nullptr ? std::string(diag) : std::string();
   sonare_free_string(diag);
   if (err != SONARE_OK || handle == nullptr) {

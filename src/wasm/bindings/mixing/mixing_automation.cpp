@@ -146,7 +146,7 @@ val MixerWasm::readGoniometerLatest(const val& strip_index_val, double max_point
     return out;
   }
   std::vector<SonareMixGoniometerPoint> points(capped);
-  const size_t count = sonare_strip_read_goniometer_latest(strip, points.data(), capped);
+  const size_t count = sonare_strip_read_goniometer_latest(strip, elementData(points), capped);
   for (size_t index = 0; index < count; ++index) {
     val point = val::object();
     point.set("left", points[index].left);

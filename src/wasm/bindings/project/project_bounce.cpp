@@ -292,7 +292,7 @@ uint32_t SampleBankWasm::addSample(val data, val desc) {
 
   uint32_t index = 0;
   const SonareError err =
-      sonare_sample_bank_add_sample(bank_, frames.data(), frames.size(), &c, &index);
+      sonare_sample_bank_add_sample(bank_, elementData(frames), frames.size(), &c, &index);
   if (err != SONARE_OK) throwCodedCError(err);
   return index;
 }
@@ -576,7 +576,7 @@ val ProjectWasm::soundFontManifest() {
   }
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
-    err = sonare_project_soundfont_manifest(project_.get(), entries.data(), total, &total);
+    err = sonare_project_soundfont_manifest(project_.get(), elementData(entries), total, &total);
     if (err != SONARE_OK) {
       throwCodedCError(err);
     }

@@ -113,8 +113,8 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
   config.voiced_threshold = floatProperty(options, "voicedThreshold", config.voiced_threshold);
   SonareNoteSegmentsResult result{};
   const SonareError error = sonare_note_segments(
-      f0.data(), has_prob ? probabilities.data() : nullptr, has_flags ? flags.data() : nullptr,
-      f0.size(), frame_rate, &config, &result);
+      elementData(f0), has_prob ? elementData(probabilities) : nullptr,
+      has_flags ? elementData(flags) : nullptr, f0.size(), frame_rate, &config, &result);
   if (error != SONARE_OK) {
     throwCodedCError(error);
   }

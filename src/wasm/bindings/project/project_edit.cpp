@@ -96,7 +96,7 @@ void ProjectWasm::setSourceAudio(const val& source_id_val, val audio, const val&
   if (channels <= 0 || samples.size() % static_cast<size_t>(channels) != 0) {
     throw WasmRangeError("audio length must be a multiple of channels");
   }
-  checkCodedCError(sonare_project_set_source_audio(project_.get(), source_id, samples.data(),
+  checkCodedCError(sonare_project_set_source_audio(project_.get(), source_id, elementData(samples),
                                                    static_cast<int64_t>(samples.size() / channels),
                                                    channels, sample_rate));
 }

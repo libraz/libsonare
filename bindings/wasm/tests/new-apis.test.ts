@@ -1174,7 +1174,7 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
       expect(() => engine.setTrackLanes(lanes)).toThrow(RangeError);
       expect(() => engine.setTrackLanes(lanes)).toThrow(
-        /: laneCount must be an integer in \[0, 32\]$/,
+        /: lanes\.length must be an integer in \[0, 32\]$/,
       );
       expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
       // An unknown name is a RangeError and an ordinal, wrapping ones included

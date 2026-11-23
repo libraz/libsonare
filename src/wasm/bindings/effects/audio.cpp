@@ -374,7 +374,7 @@ val js_realtime_voice_changer_render(val samples, const val& sample_rate, std::s
   SonareError err =
       sonare_realtime_voice_changer_config_from_json(wasmCString(preset, "preset"), &config);
   if (err == SONARE_OK) {
-    err = sonare_realtime_voice_changer_render(input.data(), input.size(), rate, &config,
+    err = sonare_realtime_voice_changer_render(elementData(input), input.size(), rate, &config,
                                                channel_count, &output, &output_length);
   }
   if (err != SONARE_OK) {
@@ -478,8 +478,8 @@ val js_fade(val samples, const val& sample_rate, const val& fade_in_sec, const v
   std::vector<float> input = float32ArrayToVector(samples, "samples");
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError err =
-      sonare_fade(input.data(), input.size(), rate, fade_in, fade_out, &output, &output_length);
+  const SonareError err = sonare_fade(elementData(input), input.size(), rate, fade_in, fade_out,
+                                      &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     throwCodedCError(err);
@@ -506,8 +506,8 @@ val js_biquad_filter(val samples, const val& sample_rate, const val& type, const
   std::vector<float> input = float32ArrayToVector(samples, "samples");
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError err =
-      sonare_biquad_filter(input.data(), input.size(), rate, &config, &output, &output_length);
+  const SonareError err = sonare_biquad_filter(elementData(input), input.size(), rate, &config,
+                                               &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     throwCodedCError(err);

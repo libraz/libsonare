@@ -414,9 +414,9 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       right_ptrs[static_cast<size_t>(index)] = right_inputs[static_cast<size_t>(index)].data();
     }
 
-    SonareError err = sonare_mixer_process_stereo(mixer, left_ptrs.data(), right_ptrs.data(),
-                                                  static_cast<size_t>(count), out_left.data(),
-                                                  out_right.data(), length);
+    SonareError err = sonare_mixer_process_stereo(
+        mixer, elementData(left_ptrs), elementData(right_ptrs), static_cast<size_t>(count),
+        elementData(out_left), elementData(out_right), length);
     if (err != SONARE_OK) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidState, cErrorMessage(err));
     }

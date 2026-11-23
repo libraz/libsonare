@@ -77,7 +77,7 @@ val ProjectWasm::importExternalStems(val request) {
     descriptor.name = wasmCString(names.back(), "name");
     descriptor.role = has_role ? wasmCString(roles.back(), "role") : nullptr;
     descriptor.layout = layout;
-    descriptor.planar_samples = planes.data();
+    descriptor.planar_samples = elementData(planes);
     descriptor.frame_count = frames;
     descriptor.start_frame =
         optionalDomainValue<int64_t>(stem["startFrame"], "startFrame",
@@ -91,7 +91,7 @@ val ProjectWasm::importExternalStems(val request) {
       optionalDomainValue<int>(request["sampleRate"], "sampleRate",
                                sonare_c_detail::kExternalStemSampleRateDomain)
           .value_or(request_desc.sample_rate);
-  request_desc.stems = descriptors.data();
+  request_desc.stems = elementData(descriptors);
   request_desc.stem_count = descriptors.size();
   SonareExternalStemImportResult result{};
   const SonareError error =
