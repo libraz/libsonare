@@ -304,9 +304,10 @@ EditCommandPtr RemoveAssistSidecarInternal::invert(const Project& before,
 
 bool UnsplitClip::apply(Project& project, MidiContentStore& store) {
   EditClip* left = project.find_clip_mutable(original_id_);
-  if (left == nullptr) {
+  if (left == nullptr || original_id_ == new_clip_id_) {
     return false;
   }
+  EditClip restored = original_;
   if (has_restore_events_) {
     // Restore the exact pre-split merged list captured by SplitClip::invert. This
     // preserves the original event order (including same-ppq tie order), which a
@@ -325,10 +326,10 @@ bool UnsplitClip::apply(Project& project, MidiContentStore& store) {
                                  right_events->second.end());
     }
   }
-  // Remove the right clip created by the split and restore the original.
+  // Restore the left before erasing a vector element that could move it.
+  *left = std::move(restored);
   project.remove_clip(new_clip_id_);
   store.events.erase(new_clip_id_);
-  *left = original_;
   return true;
 }
 

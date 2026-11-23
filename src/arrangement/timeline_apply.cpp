@@ -3,6 +3,7 @@
 #include <limits>
 #include <new>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,11 +23,14 @@ using transport::kDefaultTimeSignature;
 
 namespace {
 
-ApplyResult apply_refused(ErrorCode code, std::string message) {
+ApplyResult apply_refused(ErrorCode code, std::string_view message) {
   ApplyResult result;
   result.code = code;
-  result.message = std::move(message);
   result.outcome = ApplyOutcome::kUnchanged;
+  try {
+    result.message = message;
+  } catch (const std::bad_alloc&) {
+  }
   return result;
 }
 
@@ -210,15 +214,11 @@ void clear_timeline_domains(engine::RealtimeEngine& engine) noexcept {
   attempt([&] { engine.set_applied_timeline_sample_rate(0.0); });
 }
 
-ApplyResult apply_cleared(engine::RealtimeEngine& engine, ErrorCode code, std::string message) {
+ApplyResult apply_cleared(engine::RealtimeEngine& engine, ErrorCode code,
+                          std::string_view message) {
   clear_timeline_domains(engine);
-  ApplyResult result;
-  result.code = code;
+  ApplyResult result = apply_refused(code, message);
   result.outcome = ApplyOutcome::kCleared;
-  try {
-    result.message = std::move(message);
-  } catch (...) {
-  }
   return result;
 }
 

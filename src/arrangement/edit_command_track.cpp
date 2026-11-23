@@ -181,10 +181,10 @@ EditCommandPtr SetTrackMidiDestination::invert(const Project& before,
 
 bool SetTrackGain::apply(Project& project, MidiContentStore& /*store*/) {
   Track* t = project.find_track_mutable(id_);
-  if (t == nullptr) {
+  if (t == nullptr || !std::isfinite(gain_)) {
     return false;
   }
-  t->gain = std::isfinite(gain_) ? std::max(0.0f, gain_) : 1.0f;
+  t->gain = std::max(0.0f, gain_);
   return true;
 }
 

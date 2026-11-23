@@ -115,6 +115,30 @@ TEST_CASE("relink changes the reference and restores decoded audio", "[arrangeme
   CHECK(fixture.audio.sources.find(fixture.source_id) == fixture.audio.sources.end());
 }
 
+TEST_CASE("relink charges retained PCM once per history entry", "[arrangement][relink]") {
+  Fixture fixture;
+  const auto old_pcm = samples_with_value(0.25f);
+  fixture.audio.sources.at(fixture.source_id) = old_pcm;
+  const size_t pcm_bytes =
+      old_pcm.channels.size() * old_pcm.channels.front().size() * sizeof(float);
+  arr::EditHistory history(std::move(fixture.project));
+  const size_t budget = pcm_bytes + pcm_bytes / 2;
+  history.set_max_history_bytes(budget);
+
+  auto commands = arr::make_relink_source_commands(history.project(), &fixture.audio,
+                                                   fixture.source_id, "new.wav");
+  REQUIRE(commands);
+  REQUIRE(history.apply_transaction(std::move(commands.commands)));
+  CHECK(history.retained_history_bytes() >= pcm_bytes);
+  CHECK(history.retained_history_bytes() <= budget);
+  REQUIRE(history.undo());
+  CHECK(fixture.audio.sources.at(fixture.source_id).channels == old_pcm.channels);
+  REQUIRE(history.redo());
+  CHECK(fixture.audio.sources.count(fixture.source_id) == 0);
+  CHECK(history.retained_history_bytes() >= pcm_bytes);
+  CHECK(history.retained_history_bytes() <= budget);
+}
+
 TEST_CASE("relink invalidates source warps and undo restores the old decoded and warped audio",
           "[arrangement][relink]") {
   constexpr arr::WarpRefId kWarp = 55;

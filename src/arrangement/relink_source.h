@@ -87,8 +87,9 @@ inline void swap_relinked_audio_content(RelinkAudioContentState& state) noexcept
 
 class RelinkAudioContent final : public EditCommand, public EditCommandExternalEffects {
  public:
-  explicit RelinkAudioContent(std::shared_ptr<RelinkAudioContentState> state)
-      : state_(std::move(state)) {}
+  explicit RelinkAudioContent(std::shared_ptr<RelinkAudioContentState> state,
+                              bool counts_shared_state = true)
+      : state_(std::move(state)), counts_shared_state_(counts_shared_state) {}
 
   bool apply(Project& /*project*/, MidiContentStore& /*midi*/) override {
     applied_ = false;
@@ -113,14 +114,15 @@ class RelinkAudioContent final : public EditCommand, public EditCommandExternalE
 
   EditCommandPtr invert(const Project& /*before*/,
                         const MidiContentStore& /*midi_before*/) const override {
-    return std::make_unique<RelinkAudioContent>(state_);
+    return std::make_unique<RelinkAudioContent>(state_, !counts_shared_state_);
   }
 
   const char* type_name() const noexcept override { return "RelinkAudioContent"; }
 
   std::size_t retained_bytes() const noexcept override {
     std::size_t total = sizeof(*this);
-    if (state_ != nullptr) {
+    // The forward and inverse share this state for the lifetime of their history entry.
+    if (state_ != nullptr && counts_shared_state_) {
       total = retained::saturating_add(total, sizeof(*state_));
       total = retained::saturating_add(total, retained::dynamic_bytes(state_->contents));
       total = retained::saturating_add(total, retained::dynamic_bytes(state_->warped_contents));
@@ -135,6 +137,7 @@ class RelinkAudioContent final : public EditCommand, public EditCommandExternalE
 
  private:
   std::shared_ptr<RelinkAudioContentState> state_;
+  bool counts_shared_state_;
   bool applied_ = false;
 };
 

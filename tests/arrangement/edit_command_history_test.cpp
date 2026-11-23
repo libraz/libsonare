@@ -1081,6 +1081,30 @@ TEST_CASE("SplitClip then undo restores an unsorted event list verbatim", "[arra
   CHECK(h.midi_content().events.find(right_id) == h.midi_content().events.end());
 }
 
+TEST_CASE("UnsplitClip restores the left clip when the right clip comes first",
+          "[arrangement][unsplit]") {
+  Fixture f;
+  MidiContentStore midi;
+  const EditClip original = *f.project.find_clip(f.audio_clip);
+  const EditClip neighbor = *f.project.find_clip(f.midi_clip);
+  constexpr double kSplitPpq = 960.0;
+  f.project.find_clip_mutable(f.audio_clip)->length_ppq = kSplitPpq;
+  EditClip right = original;
+  right.id = f.project.next_clip_id();
+  right.start_ppq = kSplitPpq;
+  right.length_ppq -= kSplitPpq;
+  const ClipId right_id = right.id;
+  REQUIRE(f.project.insert_clip_raw(std::move(right), 0));
+  REQUIRE(f.project.clips().front().id == right_id);
+
+  REQUIRE(UnsplitClip(original.id, right_id, kSplitPpq, original).apply(f.project, midi));
+  CHECK(f.project.find_clip(right_id) == nullptr);
+  REQUIRE(f.project.find_clip(original.id) != nullptr);
+  CHECK(clip_equal(*f.project.find_clip(original.id), original));
+  REQUIRE(f.project.find_clip(neighbor.id) != nullptr);
+  CHECK(clip_equal(*f.project.find_clip(neighbor.id), neighbor));
+}
+
 TEST_CASE("Metadata-only edit round-trips without disturbing MIDI content", "[arrangement]") {
   Fixture f;
   const ClipId midi_clip = f.midi_clip;
@@ -1105,6 +1129,21 @@ TEST_CASE("Metadata-only edit round-trips without disturbing MIDI content", "[ar
   REQUIRE(h.undo());
   CHECK(h.project().find_track(track)->gain == prior_gain);
   CHECK(h.midi_content() == store_before);
+}
+
+TEST_CASE("SetTrackGain refuses non-finite edits without recording history",
+          "[arrangement][track-gain]") {
+  Fixture f;
+  EditHistory history{std::move(f.project)};
+  constexpr float kGain = 0.75f;
+  REQUIRE(history.apply(std::make_unique<SetTrackGain>(f.audio_track, kGain)));
+  for (const float invalid :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    CHECK_FALSE(history.apply(std::make_unique<SetTrackGain>(f.audio_track, invalid)));
+    CHECK(history.project().find_track(f.audio_track)->gain == kGain);
+    CHECK(history.undo_depth() == 1);
+  }
 }
 
 TEST_CASE("SplitClip rebases takes and comp segments for both halves", "[arrangement]") {

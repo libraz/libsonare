@@ -19,6 +19,7 @@
 #include "engine/realtime_engine_internal.h"
 #include "midi/ump.h"
 #include "rt/command.h"
+#include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -247,6 +248,42 @@ TEST_CASE(
   const arr::CompiledTimeline mismatch = make_timeline(mismatch_spec);
   require_refused_unchanged(mismatch, {}, ErrorCode::InvalidParameter);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("timeline apply reports allocation failure without losing the outcome",
+          "[arrangement][timeline-apply][oom]") {
+  const auto before = timeline_a();
+  RealtimeEngine engine;
+  REQUIRE(arr::apply_to_engine(before, *prepared(engine)).ok());
+  REQUIRE(engine.marker_count() > 0);
+  arr::CompiledTimeline incoming;
+  incoming.sample_rate = kSr;
+  arr::ApplyResult failed;
+
+  SECTION("failure before publication keeps the old timeline") {
+    const size_t markers = engine.marker_count();
+    {
+      sonare::test::AllocationFailureGuard no_heap(1);
+      failed = arr::apply_to_engine(incoming, engine);
+    }
+    CHECK(failed.code == ErrorCode::OutOfMemory);
+    CHECK(failed.outcome == arr::ApplyOutcome::kUnchanged);
+    CHECK(engine.marker_count() == markers);
+  }
+  SECTION("failure publishing markers clears the timeline") {
+    constexpr size_t kLargeAllocation = size_t{1} << 20;
+    incoming.markers.resize(kLargeAllocation / sizeof(sonare::transport::Marker) + 1);
+    {
+      sonare::test::AllocationFailureGuard no_large_allocation(kLargeAllocation);
+      failed = arr::apply_to_engine(incoming, engine);
+    }
+    CHECK(failed.code == ErrorCode::OutOfMemory);
+    CHECK(failed.outcome == arr::ApplyOutcome::kCleared);
+    CHECK(engine.marker_count() == 0);
+    CHECK(engine.applied_timeline_sample_rate() == 0.0);
+  }
+}
+#endif
 
 TEST_CASE("compiled timeline sample rate survives value copies", "[arrangement][timeline-apply]") {
   ProjectSpec spec;
