@@ -204,16 +204,16 @@ CommonSplitReport split_common_with_report(const float* const* signals, const st
           false);
     }
     const int count = static_cast<int>(one.intervals.size());
+    // A signal with no peak is silent everywhere and constrains nothing.
+    if (!std::isnan(one.silence_ceiling_db)) {
+      out.silence_ceiling_db = std::isnan(out.silence_ceiling_db)
+                                   ? one.silence_ceiling_db
+                                   : std::min(out.silence_ceiling_db, one.silence_ceiling_db);
+    }
     if (index == 0) {
-      out.silence_ceiling_db = one.silence_ceiling_db;
       out.max_signal_intervals = count;
       out.min_signal_intervals = count;
     } else {
-      // One signal with no measurable ceiling leaves the shared ceiling not measured.
-      out.silence_ceiling_db =
-          std::isnan(out.silence_ceiling_db) || std::isnan(one.silence_ceiling_db)
-              ? kNotMeasured
-              : std::min(out.silence_ceiling_db, one.silence_ceiling_db);
       out.max_signal_intervals = std::max(out.max_signal_intervals, count);
       out.min_signal_intervals = std::min(out.min_signal_intervals, count);
     }

@@ -120,10 +120,26 @@ TEST_CASE(
         Catch::Matchers::WithinAbs(240.0, 0.5));
   }
 
-  // One signal without a measurable ceiling leaves the shared ceiling not measured.
+  // A silent signal constrains nothing, in either position; only all-silent is not measured.
   const std::vector<float> silent(2 * kHalf, 0.0f);
-  const float* signals[2] = {quiet_middle.data(), silent.data()};
-  const std::size_t lengths[2] = {quiet_middle.size(), silent.size()};
-  CHECK(std::isnan(
-      split_common_with_report(signals, lengths, 2, 60.0f, kFrame, kHop).silence_ceiling_db));
+  {
+    const float* signals[2] = {quiet_middle.data(), silent.data()};
+    const std::size_t lengths[2] = {quiet_middle.size(), silent.size()};
+    CHECK_THAT(
+        split_common_with_report(signals, lengths, 2, 60.0f, kFrame, kHop).silence_ceiling_db,
+        Catch::Matchers::WithinAbs(240.0, 0.5));
+  }
+  {
+    const float* signals[2] = {silent.data(), quiet_middle.data()};
+    const std::size_t lengths[2] = {silent.size(), quiet_middle.size()};
+    CHECK_THAT(
+        split_common_with_report(signals, lengths, 2, 60.0f, kFrame, kHop).silence_ceiling_db,
+        Catch::Matchers::WithinAbs(240.0, 0.5));
+  }
+  {
+    const float* signals[2] = {silent.data(), silent.data()};
+    const std::size_t lengths[2] = {silent.size(), silent.size()};
+    CHECK(std::isnan(
+        split_common_with_report(signals, lengths, 2, 60.0f, kFrame, kHop).silence_ceiling_db));
+  }
 }

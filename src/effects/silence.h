@@ -109,8 +109,8 @@ struct CommonSplitReport {
   std::vector<std::pair<int, int>> intervals;
   /// @brief The smallest @ref SplitReport::silence_ceiling_db across the signals.
   /// @details The union needs every signal quiet at the same place, so the signal
-  ///   with the least headroom is the binding constraint. NaN when any signal's
-  ///   ceiling is not measured.
+  ///   with the least headroom is the binding constraint. A signal with no peak is
+  ///   silent everywhere and constrains nothing; NaN when every signal is silent.
   float silence_ceiling_db = kNotMeasured;
   int max_signal_intervals = 0;  ///< Intervals the most fragmented signal produced alone.
   int min_signal_intervals = 0;  ///< Intervals the least fragmented signal produced alone.
