@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -24,6 +25,8 @@
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare::mastering::assistant {
 namespace {
@@ -227,12 +230,17 @@ auto read_settings(const json::Object& object, const std::string& stage_path, Re
                                                "must be a number, a boolean or a choice name");
     }
   }
-  // The catalog builder names a setting by its key; the refusal is placed under the stage.
+  // A processor names a setting by its C field; the stage key is that name in camel case.
   try {
     return reader(map);
   } catch (const SonareParameterRefusal& e) {
     if (e.code() != ErrorCode::InvalidParameter) throw;
-    schema::rethrow_under(e, stage_path, ErrorCode::InvalidParameter);
+    throw e.respelled(
+        ErrorCode::InvalidParameter,
+        [&stage_path](const std::string& subject) {
+          return schema::child_path(stage_path, util::check::camel_path(subject));
+        },
+        true);
   }
 }
 
@@ -510,11 +518,14 @@ std::string repair_analyze_json(const float* const* channels, std::size_t channe
                                 std::size_t length, int sample_rate,
                                 const std::string& request_json) {
   validate_channel_set("channels", channels, channel_count, length, sample_rate);
+  const std::size_t interleaved_count = util::check::element_count(
+      static_cast<std::uint64_t>(length), static_cast<std::uint64_t>(channel_count),
+      resource::kMaxOfflineAudioSamples, "num_channels", "the interleaved audio");
   const AssistantConfig config = read_analyze_request(request_json);
 
   const ChannelSetDefects defects =
       measure_defects_planar(channels, channel_count, length, sample_rate);
-  std::vector<float> interleaved(length * channel_count);
+  std::vector<float> interleaved(interleaved_count);
   for (std::size_t frame = 0; frame < length; ++frame) {
     for (std::size_t c = 0; c < channel_count; ++c) {
       interleaved[frame * channel_count + c] = channels[c][frame];

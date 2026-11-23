@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
 #include <cstddef>
 #include <random>
@@ -313,8 +314,16 @@ TEST_CASE("repair analysis and apply refuse their request and stages as the call
         std::pair<Form, std::string>{Form::WrongType, "stages"});
   CHECK(stages_refusal(R"([{"stage":"dehum"},{"stage":"dehum"}])") ==
         std::pair<Form, std::string>{Form::Predicate, "stages[1].stage"});
-  CHECK(stages_refusal(R"([{"stage":"declick","lpcOrder":2049}])").second.rfind("stages[0].", 0) ==
-        0);
+  // A processor refuses by its snake field; under `stages` it reads as the camel stage key.
+  CHECK(stages_refusal(R"([{"stage":"declick","lpcOrder":2049}])").second == "stages[0].lpcOrder");
+  CHECK(stages_refusal(R"([{"stage":"declick","maxClickSamples":0}])").second ==
+        "stages[0].maxClickSamples");
+  CHECK(stages_refusal(R"([{"stage":"dereverb","lateDelayMs":-1}])").second ==
+        "stages[0].lateDelayMs");
+  CHECK(stages_refusal(R"([{"stage":"denoise","noiseEstimationQuantile":2}])").second ==
+        "stages[0].noiseEstimationQuantile");
+  CHECK(stages_refusal(R"([{"stage":"declip","clipThresholdDb":1}])").second ==
+        "stages[0].clipThresholdDb");
 }
 
 TEST_CASE("repair apply reports progress per stage and stops when cancelled",
@@ -336,4 +345,14 @@ TEST_CASE("repair apply reports progress per stage and stops when cancelled",
   for (const auto& plane : cancelled.channels) {
     CHECK(std::all_of(plane.begin(), plane.end(), [](float s) { return s == -7.0f; }));
   }
+}
+
+TEST_CASE("repair analysis refuses a channel set whose interleaved copy passes the offline limit",
+          "[mastering][assistant]") {
+  // 501 one-million-sample channels interleave to 501 million samples; the planes share storage.
+  const std::vector<float> plane(1'000'000, 0.0f);
+  const std::vector<const float*> channels(501, plane.data());
+  CHECK_THROWS_WITH(
+      assistant::repair_analyze_json(channels.data(), channels.size(), plane.size(), kSr, ""),
+      "num_channels must keep the interleaved audio within 500000000 elements");
 }
