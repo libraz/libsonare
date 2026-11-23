@@ -919,6 +919,39 @@ SonareError probe_realtime_voice_changer_preset_config(const std::string&, doubl
 
 #endif  // SONARE_WITH_VOICE_CHANGER
 
+#if defined(SONARE_WITH_PLAYBACK)
+/// One second of silence, enough frames for any channel count a probe asks for.
+const std::vector<float>& playback_input() {
+  static const std::vector<float> samples(48000, 0.0f);
+  return samples;
+}
+
+SonareError probe_playback_render_interleaved(const std::string&, double value) {
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_channels = 0;
+  const SonareError err =
+      sonare_playback_render_interleaved(playback_input().data(), 16, static_cast<int>(value),
+                                         48000, "{}", nullptr, &out, &out_frames, &out_channels);
+  if (err == SONARE_OK) sonare_free_floats(out);
+  return err;
+}
+
+SonareError probe_playback_renderer_render_offline(const std::string&, double value) {
+  SonarePlaybackRenderer* renderer = nullptr;
+  REQUIRE(sonare_playback_renderer_create_json("{}", nullptr, 48000, 512, &renderer) == SONARE_OK);
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_channels = 0;
+  const SonareError err = sonare_playback_renderer_render_offline(renderer, playback_input().data(),
+                                                                  16, static_cast<int>(value), &out,
+                                                                  &out_frames, &out_channels);
+  if (err == SONARE_OK) sonare_free_floats(out);
+  sonare_playback_renderer_destroy(renderer);
+  return err;
+}
+#endif
+
 const std::map<std::string, Probe>& probes() {
   static const std::map<std::string, Probe> table = {
       {"biquad_filter", probe_biquad_filter},
@@ -984,6 +1017,10 @@ const std::map<std::string, Probe>& probes() {
       {"engine_set_track_lanes", probe_engine_set_track_lanes},
       {"engine_set_track_strip_eq_band_json", probe_engine_set_track_strip_eq_band_json},
       {"strip_set_channel_delay_samples", probe_strip_set_channel_delay_samples},
+#endif
+#if defined(SONARE_WITH_PLAYBACK)
+      {"playback_render_interleaved", probe_playback_render_interleaved},
+      {"playback_renderer_render_offline", probe_playback_renderer_render_offline},
 #endif
 #if defined(SONARE_WITH_PITCH_EDITOR)
       {"assign_note_targets", probe_assign_note_targets},

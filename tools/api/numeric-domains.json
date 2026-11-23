@@ -5292,6 +5292,28 @@
       "sentinel": null
     },
     {
+      "entry": "playback_render_interleaved",
+      "param": "in_channels",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "playback_renderer_render_offline",
+      "param": "in_channels",
+      "kind": "integer",
+      "lo": 1,
+      "hi": 2147483647,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "plp",
       "param": "hop_length",
       "kind": "integer",

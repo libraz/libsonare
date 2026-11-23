@@ -24,6 +24,7 @@ _UNROWED: dict[str, str] = {
     "kEngineInsertIndexDomain": "the insert-count relation refuses first; inserts are capped below the domain's bound",
     "kEngineMidiCc14NumberDomain": "binding.cc_number's row is kEngineMidiControllerDomain; this bound is its below_32_when_14_bit relation",
     "kMultibandDynamicBandCountDomain": "the band-list builders stop at DynamicEq::kMaxBands, so no C entry reaches the bound",
+    "kSegmentFeatureRowsDomain": "the C segment entries refuse rows outside kSegmentMatrixExtentDomain first",
     "kSilenceIndexableLengthDomain": "refuses only a buffer longer than INT_MAX samples",
     "kSilenceSignalCountDomain": "split_silence_common_ex refuses a signal_count below 1 with its own at-least check first",
     "kStftWinLengthDomain": "polyphonic_analyze, the one C entry taking win_length, checks kColaWinLengthDomain first",

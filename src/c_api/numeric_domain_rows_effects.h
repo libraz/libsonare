@@ -8,6 +8,7 @@
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
 #include "c_api/numeric_domain_row.h"
+#include "c_api/playback_domains.h"
 #include "c_api/ppq_domains.h"
 #include "core/spectrum.h"
 #include "editing/pitch_editor/f0_provider.h"
@@ -146,6 +147,8 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
      sonare::editing::pitch_editor::kF0TrackHopLengthDomain, nullptr},
     {"pitch_correct_to_midi_timevarying", "n_frames", kTimeVaryingFrameCountDomain, nullptr},
     {"pitch_shift", "options.n_fft", sonare::kColaNFftDomain, "even"},
+    {"playback_render_interleaved", "in_channels", kPlaybackRenderInChannelsDomain, nullptr},
+    {"playback_renderer_render_offline", "in_channels", kPlaybackRenderInChannelsDomain, nullptr},
     {"realtime_voice_changer_preset_config", "preset", kVoiceChangerPresetDomain, nullptr},
     {"realtime_voice_changer_render", "channels", kVoiceChangerChannelsDomain, nullptr},
     {"render_notes", "n_frames", kF0FrameCountDomain, nullptr},

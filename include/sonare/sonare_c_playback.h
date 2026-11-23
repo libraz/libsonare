@@ -173,8 +173,8 @@ SonareError sonare_playback_renderer_non_finite_discard_count(
 ///          The output is aligned with the input (the renderer latency is
 ///          removed) and has @p frames frames of @p out_channels channels.
 /// @note Release @p out with @ref sonare_free_floats.
-/// @note SONARE_ERROR_INVALID_PARAMETER when @p frames is 0, @p in is null, or
-///       @p in contains a non-finite sample.
+/// @note SONARE_ERROR_INVALID_PARAMETER when @p in_channels is outside [1, 2147483647],
+///       @p frames is 0, @p in is null, or @p in contains a non-finite sample.
 /// @note An @p in_channels that would make the input pass 500000000 samples is refused with
 /// @c SONARE_ERROR_INVALID_PARAMETER naming it.
 SonareError sonare_playback_render_interleaved(const float* in, size_t frames, int in_channels,
@@ -187,8 +187,8 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
 ///          and @ref sonare_playback_renderer_diagnostics_json afterwards
 ///          describes this render.
 /// @note Release @p out with @ref sonare_free_floats.
-/// @note SONARE_ERROR_INVALID_PARAMETER when @p renderer is null, @p frames is 0,
-///       @p in is null, @p in_channels does not match the input layout, or
+/// @note SONARE_ERROR_INVALID_PARAMETER when @p renderer is null, @p in_channels is outside
+///       [1, 2147483647] or does not match the input layout, @p frames is 0, @p in is null, or
 ///       @p in contains a non-finite sample.
 /// @note An @p in_channels that would make the input pass 500000000 samples is refused with
 /// @c SONARE_ERROR_INVALID_PARAMETER naming it.
