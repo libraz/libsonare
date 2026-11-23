@@ -174,6 +174,23 @@ add_executable(sonare_tests
   rt/overflow_counter_test.cpp
   rt/open_end_radiation_test.cpp
   automation/automation_test.cpp
+  automation/lane_identity_test.cpp
+  analysis/beat_accent_meter_identity_test.cpp
+  api/codec_tags_encode_test.cpp
+  api/engine_midi_cc_bindings_test.cpp
+  api/error_reason_test.cpp
+  api/istft_test.cpp
+  api/live_session_test.cpp
+  api/meter_beats_test.cpp
+  api/readers_devices_layout_test.cpp
+  core/audio_encode_test.cpp
+  core/audio_tags_test.cpp
+  engine/live_driver_slot_test.cpp
+  engine/midi_capture_tap_test.cpp
+  engine/midi_cc_consume_test.cpp
+  host/live_ring_test.cpp
+  transport/seconds_to_ppq_test.cpp
+  util/error_reason_test.cpp
   engine/boundary_splitter_test.cpp
   engine/capture_test.cpp
   engine/clip_player_test.cpp
@@ -399,6 +416,9 @@ if(BUILD_MASTERING)
     mastering/repair_stereo_impulse_test.cpp
     mastering/repair_stereo_hum_test.cpp
     mastering/repair_session_test.cpp
+    mastering/repair_session_changes_test.cpp
+    mastering/pair_stereo_test.cpp
+    api/mastering_pair_stereo_test.cpp
     mastering/repair_insert_test.cpp
     mastering/dereverb_room_test.cpp
     mastering/saturation_test.cpp
@@ -448,6 +468,7 @@ if(BUILD_MIXING)
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
+    engine/track_lane_width_send_test.cpp
     engine/track_mixer_concurrency_test.cpp
     engine/track_mixer_routing_test.cpp
     mixing/downmix_test.cpp
@@ -755,10 +776,15 @@ target_sources(sonare_tests PRIVATE
   ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_part_rig.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_tempo.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_instruments.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_automation_validate.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_assist.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_sample_bank.cpp
+  # Compiled on every platform: without SONARE_WITH_LIVE_DEVICES its entries refuse.
+  ${PROJECT_SOURCE_DIR}/src/c_api/live_session.cpp
 )
 
 if(BUILD_ARRANGEMENT)
@@ -766,6 +792,22 @@ if(BUILD_ARRANGEMENT)
     editing/polyphonic_f0_eval_test.cpp
     engine/offline_bounce_golden_test.cpp
     arrangement/edit_model_test.cpp
+    arrangement/arrangement_end_ppq_test.cpp
+    arrangement/destination_instrument_test.cpp
+    arrangement/relink_command_test.cpp
+    arrangement/scene_presence_test.cpp
+    api/automation_target_kind_names_test.cpp
+    api/project_auto_tempo_result_test.cpp
+    api/project_bounce_additions_test.cpp
+    api/project_effective_timeline_test.cpp
+    api/project_readers_test.cpp
+    api/project_tempo_test.cpp
+    api/project_writers_test.cpp
+    midi/offline_tail_test.cpp
+    mir/auto_tempo_meter_test.cpp
+    mir/auto_tempo_phase_test.cpp
+    serialize/project_v7_additions_test.cpp
+    transport/effective_timeline_test.cpp
     arrangement/vocal_sidecar_lifecycle_test.cpp
     arrangement/c_abi_vocal_project_test.cpp
     arrangement/external_stems_test.cpp
@@ -1007,8 +1049,15 @@ if(APPLE AND (BUILD_COREAUDIO OR BUILD_COREMIDI OR BUILD_AU_HOST))
     target_compile_definitions(sonare_tests PRIVATE SONARE_HOST_TEST_AU=1)
   endif()
   if(TARGET sonare_host_live_session)
-    target_sources(sonare_tests PRIVATE host/live_session_test.cpp)
+    target_sources(sonare_tests PRIVATE
+      host/live_session_test.cpp
+      host/live_input_only_test.cpp
+      host/live_midi_virtual_source_test.cpp)
     target_link_libraries(sonare_tests PRIVATE sonare_host_live_session)
+    if(BUILD_LIVE_DEVICES)
+      set_source_files_properties(${PROJECT_SOURCE_DIR}/src/c_api/live_session.cpp PROPERTIES
+        COMPILE_DEFINITIONS SONARE_WITH_LIVE_DEVICES=1)
+    endif()
   endif()
 endif()
 

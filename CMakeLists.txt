@@ -128,6 +128,17 @@ option(BUILD_COREAUDIO "macOS CoreAudio host backend (host::AudioDevice)" OFF)
 option(BUILD_COREMIDI  "macOS CoreMIDI host backend (host::MidiInputSource/Sink)" OFF)
 option(BUILD_AU_HOST   "macOS Audio Unit plugin host (host::InstrumentProvider)" OFF)
 
+# Live audio and MIDI devices behind the C ABI's live session. On by default on
+# macOS, where it needs the arrangement subsystem and raises both device
+# backends; elsewhere the live entries compile as not-compiled-in refusals.
+include(CMakeDependentOption)
+cmake_dependent_option(BUILD_LIVE_DEVICES "Live audio/MIDI devices behind the C ABI (macOS)" ON
+                       "APPLE;BUILD_ARRANGEMENT" OFF)
+if(BUILD_LIVE_DEVICES)
+  set(BUILD_COREAUDIO ON)
+  set(BUILD_COREMIDI ON)
+endif()
+
 # The analysis-only WebAssembly entry rejects BUILD_MASTERING / BUILD_MIXING, and
 # BUILD_MIXING_ASSISTANT pulls both of them back on below. Drop the dependent
 # rather than letting the raise fight the rejection: an option that defaults ON
@@ -329,6 +340,12 @@ if(BUILD_COREAUDIO OR BUILD_COREMIDI OR BUILD_AU_HOST)
   else()
     message(STATUS "libsonare: host backends (CoreAudio/CoreMIDI/AU) are macOS-only; ignoring on this platform")
   endif()
+endif()
+
+# The shared library's live-session TU reads the devices through this archive,
+# which exists only once the backends above are declared.
+if(BUILD_SHARED AND APPLE AND BUILD_LIVE_DEVICES)
+  target_link_libraries(sonare_shared PRIVATE sonare_host_live_session)
 endif()
 
 if(BUILD_TESTING AND NOT BUILD_WASM)

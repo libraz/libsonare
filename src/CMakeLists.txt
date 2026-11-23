@@ -86,6 +86,9 @@ set(SONARE_SOURCES
   core/window.cpp
   core/fft.cpp
   core/audio_io.cpp
+  core/audio_tags.cpp
+  core/audio_tags_id3.cpp
+  core/audio_encode.cpp
   core/audio.cpp
   core/stereo_pair.cpp
   core/db_convert.cpp
@@ -214,6 +217,7 @@ set(SONARE_SOURCES
   c_api/eq_band_json.cpp
   c_api/core_analysis.cpp
   c_api/core_audio.cpp
+  c_api/codec.cpp
   c_api/core_common.cpp
   c_api/core_cqt.cpp
   c_api/core_quick.cpp
@@ -254,6 +258,9 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_midi.cpp
   c_api/project_mir.cpp
   c_api/project_part_rig.cpp
+  c_api/project_tempo.cpp
+  c_api/project_instruments.cpp
+  c_api/project_automation_validate.cpp
   c_api/sonare_c_transcribe.cpp
   c_api/sonare_c_assist.cpp
   c_api/project_soundfont.cpp
@@ -1069,6 +1076,7 @@ if(BUILD_ARRANGEMENT)
 
   add_library(sonare_arrangement STATIC
     arrangement/edit_model.cpp
+    arrangement/destination_instrument.cpp
     arrangement/vocal_edit_sidecar.cpp
     arrangement/external_stems.cpp
     arrangement/edit_command_track.cpp
@@ -1204,11 +1212,19 @@ if(BUILD_SHARED)
   # where every entry point returns NOT_SUPPORTED.
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_playback.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_streaming_retune.cpp)
+  # Always compiled so the live-device symbols exist on every platform; without
+  # SONARE_WITH_LIVE_DEVICES each entry refuses as not compiled in. The device
+  # backends it drives are linked at the top level, after src/host/backends.
+  list(APPEND SONARE_SHARED_SOURCES c_api/live_session.cpp)
   # The project (arrangement) C ABI sources are always compiled so their
   # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
   # unless the arrangement subsystem is linked (see the BUILD_ARRANGEMENT block).
   list(APPEND SONARE_SHARED_SOURCES ${SONARE_C_PROJECT_SOURCES})
   add_library(sonare_shared SHARED ${SONARE_SHARED_SOURCES})
+  if(APPLE AND BUILD_LIVE_DEVICES)
+    set_source_files_properties(c_api/live_session.cpp PROPERTIES
+      COMPILE_DEFINITIONS SONARE_WITH_LIVE_DEVICES=1)
+  endif()
   set_target_properties(sonare_shared PROPERTIES
     OUTPUT_NAME sonare
     VERSION ${PROJECT_VERSION}
@@ -1587,6 +1603,9 @@ if(BUILD_WASM)
       c_api/project_midi.cpp
       c_api/project_mir.cpp
       c_api/project_part_rig.cpp
+      c_api/project_tempo.cpp
+      c_api/project_instruments.cpp
+      c_api/project_automation_validate.cpp
       c_api/sonare_c_transcribe.cpp
       c_api/sonare_c_assist.cpp
       c_api/project_soundfont.cpp
@@ -1672,6 +1691,7 @@ if(BUILD_WASM)
     set_source_files_properties(
       c_api/core_analysis.cpp
       c_api/core_audio.cpp
+      c_api/codec.cpp
       c_api/core_common.cpp
       c_api/core_cqt.cpp
       c_api/core_quick.cpp

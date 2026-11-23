@@ -692,7 +692,7 @@ test-hardening: test-hardening-asan test-hardening-tsan test-hardening-host test
 # happens, so one kind of failure can never hide the report of another.
 FEATURE_MATRIX_OPTIONS := BUILD_MASTERING BUILD_MIXING BUILD_MIXING_ASSISTANT BUILD_GRAPH \
        BUILD_FX BUILD_ACOUSTIC_SIM BUILD_PITCH_EDITOR BUILD_VOICE_CHANGER BUILD_ARRANGEMENT \
-       BUILD_ASSIST BUILD_PLAYBACK
+       BUILD_ASSIST BUILD_PLAYBACK BUILD_LIVE_DEVICES
 FEATURE_MATRIX_ALL_OFF := $(foreach opt,$(FEATURE_MATRIX_OPTIONS),-D$(opt)=OFF)
 
 build-feature-matrix:

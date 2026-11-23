@@ -24,7 +24,7 @@ if(BUILD_COREAUDIO)
   find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
   find_library(AUDIOUNIT_FRAMEWORK AudioUnit REQUIRED)
 
-  add_library(sonare_host_coreaudio STATIC coreaudio/coreaudio_device.mm)
+  add_library(sonare_host_coreaudio STATIC coreaudio/coreaudio_device.mm coreaudio/coreaudio_input.mm)
   target_link_libraries(sonare_host_coreaudio PUBLIC sonare_engine)
   target_link_libraries(sonare_host_coreaudio PRIVATE
     ${COREAUDIO_FRAMEWORK} ${AUDIOTOOLBOX_FRAMEWORK} ${AUDIOUNIT_FRAMEWORK}
