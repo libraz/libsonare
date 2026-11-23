@@ -8,6 +8,8 @@ measure.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -81,6 +83,12 @@ def test_all_silent_signals_return_no_intervals() -> None:
     )
 
 
+def test_report_leaves_the_ceiling_unmeasured_when_every_signal_is_silent() -> None:
+    silence = np.zeros(int(SR * DURATION), dtype=np.float32)
+    result = split_silence_common_with_report([silence, silence], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
+    assert result.report.silence_ceiling_db is None
+
+
 def test_empty_signal_among_others_is_rejected_by_name() -> None:
     with pytest.raises(SonareValueError, match=r"signals\[1\]"):
         split_silence_common([SIGNAL_A, []], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
@@ -104,8 +112,9 @@ def test_report_reads_a_part_that_never_stops_as_unfixable_by_threshold() -> Non
     assert report.silence_ceiling_db < 6.0
 
 
-def test_report_leaves_the_ceiling_unmeasured_for_takes_holding_a_zero_frame() -> None:
-    """Takes that never go quiet together, each with an exactly zero frame, have no ceiling."""
+def test_report_puts_the_ceiling_at_infinity_for_takes_holding_a_zero_frame() -> None:
+    """Takes that never go quiet together, each with an exactly zero frame: every threshold sees
+    silence, so the ceiling is +inf rather than not measured."""
     early = _tone_in_window(0.0, 0.5)
     late = _tone_in_window(0.5, 1.0)
     result = split_silence_common_with_report([early, late], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
@@ -114,7 +123,7 @@ def test_report_leaves_the_ceiling_unmeasured_for_takes_holding_a_zero_frame() -
     # A take holding an exactly zero frame has no finite ceiling. The interval
     # counts do NOT say the takes fail to share it -- a take that sounds once
     # and stops counts 1, the same as a take with no silence at all.
-    assert report.silence_ceiling_db is None
+    assert report.silence_ceiling_db == math.inf
     assert report.max_signal_intervals == 1
     assert report.min_signal_intervals == 1
 

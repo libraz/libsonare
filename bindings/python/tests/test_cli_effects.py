@@ -362,8 +362,9 @@ def test_split_silence_cli_unions_the_takes(tmp_path) -> None:
         assert _split_silence_covers(both_intervals, item["end_sample"] - 1)
 
 
-def test_split_silence_cli_prints_an_unmeasured_ceiling_as_a_dash(tmp_path) -> None:
-    """Takes each holding an exactly zero frame, never quiet together, have no ceiling to print."""
+def test_split_silence_cli_prints_an_infinite_ceiling_as_inf_db(tmp_path) -> None:
+    """Takes each holding an exactly zero frame, never quiet together: the ceiling is +inf, and a
+    dash would claim it was not measured."""
     sample_rate = 22050
     early = str(tmp_path / "early.wav")
     late = str(tmp_path / "late.wav")
@@ -372,7 +373,7 @@ def test_split_silence_cli_prints_an_unmeasured_ceiling_as_a_dash(tmp_path) -> N
 
     result = _run_cli(["split-silence", early, late, "--report"])
     assert result.returncode == 0, result.stderr
-    assert "  silence ceiling - at --top-db " in result.stdout
+    assert "  silence ceiling inf dB at --top-db " in result.stdout
 
 
 def test_split_silence_cli_single_take_matches_the_facade(tmp_path) -> None:
