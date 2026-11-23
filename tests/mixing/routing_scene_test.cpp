@@ -1234,7 +1234,9 @@ TEST_CASE("Scene load refuses an unknown key at every nesting level, naming its 
   };
   for (const Case& c : cases) {
     CAPTURE(c.document);
-    CHECK(scene_refusal(c.document) == std::string("unknown key ") + c.path);
+    CHECK(
+        scene_refusal(c.document).rfind(std::string("unknown key ") + c.path + " (expected ", 0) ==
+        0);
   }
 }
 
@@ -1242,8 +1244,8 @@ TEST_CASE(
     "Scene load refuses an unknown key under its original array index and escapes control "
     "characters",
     "[mixing][routing]") {
-  CHECK(scene_refusal(R"({"version":2,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})") ==
-        "unknown key strips[2].bogus");
+  CHECK(scene_refusal(R"({"version":2,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})")
+            .rfind("unknown key strips[2].bogus (expected ", 0) == 0);
   // A non-object element is refused too.
   CHECK_THROWS_AS(
       sonare::mixing::api::scene_from_json(R"({"version":2,"strips":[1,{"id":"b","bogus":1}]})"),
@@ -1271,7 +1273,8 @@ TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing]"
     "connections": [{"source": "a", "destination": "m", "x-c": 1}]
   })";
   CHECK_NOTHROW(sonare::mixing::api::scene_from_json(annotated));
-  CHECK(scene_refusal(R"({"version":2,"xnote":1})") == "unknown key xnote");
+  CHECK(scene_refusal(R"({"version":2,"xnote":1})") ==
+        "unknown key xnote (expected buses, connections, strips, vcaGroups, version)");
 }
 
 TEST_CASE("Scene load reports an earlier spelling as such, not as an unknown key",

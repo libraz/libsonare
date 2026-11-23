@@ -74,7 +74,7 @@ TEST_CASE("sonare_project_deserialize refuses unknown scene keys", "[c_api][proj
   CHECK(loaded == nullptr);
   CHECK(report.find("invalid_format: unknown key scene.strips[0].faderDB") != std::string::npos);
   // The error text carries the message alone; the diagnostics keep the code.
-  CHECK(last_error() == "unknown key scene.strips[0].faderDB");
+  CHECK(last_error().rfind("unknown key scene.strips[0].faderDB (expected ", 0) == 0);
   CHECK(report.find("unknown_scene_key") == std::string::npos);
   CHECK(report.find("x-note") == std::string::npos);
 
@@ -120,13 +120,16 @@ TEST_CASE("engine strip setters refuse an unknown key by name", "[c_api][engine]
 
   REQUIRE(sonare_engine_set_track_strip_json(f.engine, 10, strip_typo) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "unknown key settings.faderDB");
+  CHECK(last_error().rfind("unknown key settings.faderDB (expected ", 0) == 0);
   REQUIRE(sonare_engine_set_master_strip_json(f.engine, strip_typo) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "unknown key settings.faderDB");
+  CHECK(last_error().rfind("unknown key settings.faderDB (expected ", 0) == 0);
   REQUIRE(sonare_engine_set_bus_strip_json(f.engine, 1, bus_typo) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "unknown key settings.roel");
+  CHECK(last_error() ==
+        "unknown key settings.roel (expected dualPanLeft, dualPanRight, eq, id, inputTrimDb, "
+        "inserts, layout, pan, panLaw, panMode, polarityInvertLeft, polarityInvertRight, role, "
+        "width)");
 
   // A key that would forge a second line is reported escaped, on one line.
   const char* control = "{\"id\":\"s\",\"a\\nb\":1}";
@@ -158,13 +161,13 @@ TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engin
   const char* typo = R"({"type":"peak","frequencyHz":1000,"gainDB":3,"qq":1})";
   REQUIRE(sonare_engine_set_track_strip_eq_band_json(f.engine, 10, 0, typo) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "unknown key band.gainDB");
+  CHECK(last_error().rfind("unknown key band.gainDB (expected ", 0) == 0);
   REQUIRE(sonare_engine_set_master_strip_eq_band_json(f.engine, 0, typo) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "unknown key band.gainDB");
+  CHECK(last_error().rfind("unknown key band.gainDB (expected ", 0) == 0);
   REQUIRE(sonare_engine_set_bus_strip_eq_band_json(f.engine, 1, 0, typo) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_error() == "unknown key band.gainDB");
+  CHECK(last_error().rfind("unknown key band.gainDB (expected ", 0) == 0);
 
   const char* control = "{\"a\\nb\":1}";
   REQUIRE(sonare_engine_set_track_strip_eq_band_json(f.engine, 10, 0, control) ==
@@ -196,7 +199,8 @@ TEST_CASE("sonare_eq_set_band refuses an unknown key by name", "[c_api][warning]
   REQUIRE(eq != nullptr);
   CHECK(sonare_eq_set_band(eq, 0, R"({"type":"peak","gainDB":3})") ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()) == "unknown key band.gainDB");
+  CHECK(std::string(sonare_last_error_message()).rfind("unknown key band.gainDB (expected ", 0) ==
+        0);
   CHECK(sonare_eq_set_band(eq, 0, R"({"type":"peak","gainDb":3,"x-note":"keep"})") == SONARE_OK);
   sonare_eq_destroy(eq);
 }

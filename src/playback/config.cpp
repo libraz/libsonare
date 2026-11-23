@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "util/exception.h"
 #include "util/json_budget.h"
@@ -33,8 +34,8 @@ constexpr int kRendererConfigVersion = 2;
       .as_caller_spelled();
 }
 
-[[noreturn]] void refuse_unknown(const std::string& path) {
-  throw Refusal::unknown(kDocumentError, path).as_caller_spelled();
+[[noreturn]] void refuse_unknown(const std::string& path, const std::string& expected) {
+  throw Refusal::unknown(kDocumentError, path, std::string(), expected).as_caller_spelled();
 }
 
 void validate_renderer_values(const RendererConfig& config, ErrorCode code);
@@ -115,7 +116,7 @@ void check_keys(const Value& object, const std::string& path,
             .as_caller_spelled();
       }
     }
-    refuse_unknown(at);
+    refuse_unknown(at, schema::expected_keys(std::vector<std::string>(keys.begin(), keys.end())));
   }
 }
 
@@ -292,7 +293,12 @@ void parse_target(const Value& target, RendererConfig& config) {
       const std::string entry_path = schema::child_path(speakers_path, entry.first);
       refuse_earlier_role(entry.first, entry_path, &speakers_path);
       if (!parse_speaker_role(entry.first, &role) || role == SpeakerRole::LFE) {
-        refuse_unknown(entry_path);
+        std::vector<std::string> roles;
+        for (SpeakerRole named : {SpeakerRole::L, SpeakerRole::R, SpeakerRole::C, SpeakerRole::Ls,
+                                  SpeakerRole::Rs, SpeakerRole::Lss, SpeakerRole::Rss}) {
+          roles.emplace_back(speaker_role_name(named));
+        }
+        refuse_unknown(entry_path, schema::expected_keys(roles));
       }
       if (prepare.target_kind != TargetKind::Speakers ||
           !layout_has_speaker(prepare.target_layout, role)) {

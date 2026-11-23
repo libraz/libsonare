@@ -6,6 +6,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/realtime/config_ranges.h"
@@ -463,7 +464,12 @@ bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec
       }
     }
     if (!allowed) {
-      if (error) *error = schema::unknown_key(schema::child_path(path, key));
+      if (error) {
+        std::vector<std::string> accepted;
+        for (const FieldSpec& field : fields) accepted.emplace_back(field.key);
+        *error = schema::unknown_key_expected(schema::child_path(path, key),
+                                              schema::expected_keys(accepted));
+      }
       return false;
     }
   }
@@ -1305,7 +1311,13 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           allowed = true;
         }
         if (!allowed) {
-          if (error) *error = schema::unknown_key(key);
+          if (error) {
+            std::vector<std::string> accepted(kFlatPodKeys.begin(), kFlatPodKeys.end());
+            accepted.insert(accepted.end(), kTransformKeys.begin(), kTransformKeys.end());
+            accepted.emplace_back("retuneGrainSizeSamples");
+            accepted.emplace_back("formantMode");
+            *error = schema::unknown_key_expected(key, schema::expected_keys(accepted));
+          }
           return false;
         }
       }

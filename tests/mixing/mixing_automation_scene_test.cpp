@@ -328,10 +328,12 @@ TEST_CASE("Mixing Scene JSON refuses unknown fields and keeps annotation keys", 
     }
     return {};
   };
-  CHECK(refusal(R"({"version":2,"futureScalar":42})") == "unknown key futureScalar");
-  CHECK(refusal(R"({"version":2,"futureField":{"nested":{}}})") == "unknown key futureField");
-  CHECK(refusal(R"({"version":2,"strips":[{"id":"vox","futureStripArray":[{"x":1}]}]})") ==
-        "unknown key strips[0].futureStripArray");
+  CHECK(refusal(R"({"version":2,"futureScalar":42})")
+            .rfind("unknown key futureScalar (expected ", 0) == 0);
+  CHECK(refusal(R"({"version":2,"futureField":{"nested":{}}})")
+            .rfind("unknown key futureField (expected ", 0) == 0);
+  CHECK(refusal(R"({"version":2,"strips":[{"id":"vox","futureStripArray":[{"x":1}]}]})")
+            .rfind("unknown key strips[0].futureStripArray (expected ", 0) == 0);
 
   const std::string annotated =
       R"({"version":2,"x-future":{"nested":[1,2]},"$comment":"c",)"

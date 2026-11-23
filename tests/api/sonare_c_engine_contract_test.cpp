@@ -466,7 +466,9 @@ TEST_CASE("the strip setters refuse a malformed or wrapped settings object as an
   REQUIRE(std::string(sonare_last_error_message()).rfind("settings must be valid JSON: ", 0) == 0);
   REQUIRE(sonare_engine_set_master_strip_json(engine, scene_wrapper) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(std::string(sonare_last_error_message()) == "unknown key settings.buses");
+  REQUIRE(
+      std::string(sonare_last_error_message()).rfind("unknown key settings.buses (expected ", 0) ==
+      0);
   REQUIRE(sonare_engine_set_master_strip_json(engine, unknown_insert_slot) ==
           SONARE_ERROR_INVALID_PARAMETER);
 

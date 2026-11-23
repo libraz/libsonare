@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "c_api/sonare_c_internal.h"
 #include "midi/midi_fx.h"
@@ -78,43 +79,40 @@ inline bool float_or(const json::Value& obj, const char* key, float fallback, fl
   return sonare::numeric::checked_float_cast(value->as_number(), out);
 }
 
-// Earlier snake_case spelling of each key, refused by name rather than as unknown.
+// Each key the config reads, and whether it holds an array rather than a number.
 struct KeySpelling {
   const char* current;
-  const char* earlier;
   bool array = false;
 };
 constexpr KeySpelling kKeys[] = {
-    {"transposeSemitones", "transpose_semitones"},
-    {"velocityScale", "velocity_scale"},
-    {"velocityOffset", "velocity_offset"},
-    {"velocityGamma", "velocity_gamma"},
-    {"quantizePpq", "quantize_ppq"},
-    {"quantizeStrength", "quantize_strength"},
-    {"chordIntervals", "chord_intervals", true},
-    {"arpeggiatorIntervals", "arpeggiator_intervals", true},
-    {"arpeggiatorStepPpq", "arpeggiator_step_ppq"},
-    {"arpeggiatorGatePpq", "arpeggiator_gate_ppq"},
-    {"humanizePpq", "humanize_ppq"},
-    {"humanizeVelocity", "humanize_velocity"},
-    {"seed", nullptr},
+    {"transposeSemitones"},
+    {"velocityScale"},
+    {"velocityOffset"},
+    {"velocityGamma"},
+    {"quantizePpq"},
+    {"quantizeStrength"},
+    {"chordIntervals", true},
+    {"arpeggiatorIntervals", true},
+    {"arpeggiatorStepPpq"},
+    {"arpeggiatorGatePpq"},
+    {"humanizePpq"},
+    {"humanizeVelocity"},
+    {"seed"},
 };
 
-// Refuses an unknown key, naming an earlier spelling's replacement; annotation keys pass.
+// Refuses an unknown key by listing the keys the config reads; annotation keys pass.
 inline void refuse_unknown_keys(const json::Value& root) {
   for (const auto& entry : root.as_object()) {
     const std::string& key = entry.first;
     if (json::is_annotation_key(key)) continue;
-    const KeySpelling* earlier = nullptr;
-    bool known = false;
-    for (const KeySpelling& spelling : kKeys) {
-      known = known || key == spelling.current;
-      if (spelling.earlier != nullptr && key == spelling.earlier) earlier = &spelling;
-    }
+    const bool known =
+        std::any_of(std::begin(kKeys), std::end(kKeys),
+                    [&key](const KeySpelling& spelling) { return key == spelling.current; });
     if (known) continue;
-    throw sonare::SonareParameterRefusal::unknown(
-        sonare::ErrorCode::InvalidParameter, at(key),
-        earlier != nullptr ? at(earlier->current) : std::string())
+    std::vector<std::string> accepted;
+    for (const KeySpelling& spelling : kKeys) accepted.emplace_back(spelling.current);
+    throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, at(key),
+                                                  std::string(), schema::expected_keys(accepted))
         .as_caller_spelled();
   }
 }

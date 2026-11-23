@@ -255,16 +255,16 @@ TEST_CASE("mixing strip entries refuse NULL, id and domain by name", "[c_api][en
   CHECK(last_message() == "settings_json must not be NULL");
   CHECK(sonare_engine_set_track_strip_json(engine, 1, kWholeScene) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "unknown key settings.buses");
+  CHECK(last_message().rfind("unknown key settings.buses (expected ", 0) == 0);
   CHECK(sonare_engine_set_master_strip_json(engine, kWholeScene) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "unknown key settings.buses");
+  CHECK(last_message().rfind("unknown key settings.buses (expected ", 0) == 0);
   CHECK(sonare_engine_set_master_strip_json(engine, "{bad") == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message().rfind("settings must be valid JSON: ", 0) == 0);
   CHECK(sonare_engine_set_master_strip_json(engine, "[]") == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() == "settings must be an object");
   CHECK(sonare_engine_set_master_strip_json(engine, R"({"faderDB":-1})") ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "unknown key settings.faderDB");
+  CHECK(last_message().rfind("unknown key settings.faderDB (expected ", 0) == 0);
 
   CHECK(sonare_engine_set_track_strip_eq_band_json(engine, 1, -1, "{}") ==
         SONARE_ERROR_INVALID_PARAMETER);

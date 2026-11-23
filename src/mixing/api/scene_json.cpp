@@ -3,6 +3,7 @@
 #include <string>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "mastering/eq/eq_band_value.h"
 #include "mastering/eq/parametric.h"
@@ -105,8 +106,9 @@ std::optional<ChannelLayout> channel_layout_token(const std::string& value) {
       .as_caller_spelled();
 }
 
-[[noreturn]] void refuse_unknown(const std::string& at) {
-  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, at).as_caller_spelled();
+[[noreturn]] void refuse_unknown(const std::string& at, const std::string& expected) {
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, at, std::string(), expected)
+      .as_caller_spelled();
 }
 
 // A closed set is read only as its token; a number is refused naming the tokens.
@@ -159,7 +161,8 @@ void refuse_unknown_keys(const JsonValue& object, const std::string& path, const
   for (const auto& entry : object.as_object()) {
     const std::string& key = entry.first;
     if (known.count(key) != 0 || util::json::is_annotation_key(key)) continue;
-    refuse_unknown(schema::child_path(path, key));
+    refuse_unknown(schema::child_path(path, key),
+                   schema::expected_keys(std::vector<std::string>(known.begin(), known.end())));
   }
 }
 

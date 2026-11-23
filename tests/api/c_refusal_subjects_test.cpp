@@ -1245,7 +1245,7 @@ TEST_CASE("a strip setter refusal names the caller's settings object", "[c_api][
     CHECK(std::string(sonare_last_refusal_entry()) == entry);
     REQUIRE(last_refusal_subjects() == std::vector<std::string>{"settings.faderDB"});
     CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(last_message() == "unknown key settings.faderDB");
+    CHECK(last_message().rfind("unknown key settings.faderDB (expected ", 0) == 0);
 
     set_strip_object(entry, "{\"id\":\"1\",\"pan\":\"left\"}");
     CHECK(last_message() == "settings.pan must be a number");

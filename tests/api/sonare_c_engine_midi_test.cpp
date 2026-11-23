@@ -922,19 +922,25 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
           SONARE_OK);
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
 
-  // An earlier snake_case key is refused naming the key to write, an unknown
-  // key by its own name, and an annotation key passes.
+  // An unknown key, an earlier snake_case spelling included, is refused by listing
+  // the keys the config reads, sorted; an annotation key passes.
+  const std::string expected =
+      " (expected arpeggiatorGatePpq, arpeggiatorIntervals, arpeggiatorStepPpq, chordIntervals, "
+      "humanizePpq, humanizeVelocity, quantizePpq, quantizeStrength, seed, transposeSemitones, "
+      "velocityGamma, velocityOffset, velocityScale)";
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) ==
-        "unknown key config.transpose_semitones (renamed to config.transposeSemitones)");
+        "unknown key config.transpose_semitones" + expected);
+  CHECK(sonare_last_refusal_subject_count() == 1);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"arpeggiator_gate_ppq\":0.5}") ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()) ==
-        "unknown key config.arpeggiator_gate_ppq (renamed to config.arpeggiatorGatePpq)");
+        "unknown key config.arpeggiator_gate_ppq" + expected);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transposeSemitone\":12}") ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()) == "unknown key config.transposeSemitone");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "unknown key config.transposeSemitone" + expected);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5,
                                     "{\"$comment\":\"up\",\"x-ui\":1,\"transposeSemitones\":12}") ==
           SONARE_OK);

@@ -30,7 +30,8 @@ void refuse_unknown_band_keys(const sonare::util::json::Value& json) {
       continue;
     }
     throw sonare::SonareParameterRefusal::unknown(
-        sonare::ErrorCode::InvalidParameter, sonare::util::json::schema::child_path(kRoot, key));
+        sonare::ErrorCode::InvalidParameter, sonare::util::json::schema::child_path(kRoot, key),
+        std::string(), sonare::util::json::schema::expected_keys(known));
   }
 }
 

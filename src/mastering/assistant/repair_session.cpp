@@ -183,9 +183,13 @@ json::Object settings_of(const repair::DereverbClassicalConfig& config) {
 #undef SONARE_WRITE_SETTING
 
 /// Refuses an unknown setting by its path.
-[[noreturn]] void refuse_unknown_setting(const std::string& stage_path, const std::string& key) {
+[[noreturn]] void refuse_unknown_setting(const std::string& stage_path, const std::string& key,
+                                         const ParamMap& declared) {
+  std::vector<std::string> accepted(declared.probed_keys().begin(), declared.probed_keys().end());
+  accepted.emplace_back("stage");
   throw SonareParameterRefusal::unknown(ErrorCode::InvalidParameter,
-                                        schema::child_path(stage_path, key));
+                                        schema::child_path(stage_path, key), std::string(),
+                                        schema::expected_keys(accepted));
 }
 
 std::string choice_names(const std::vector<api::detail::EnumChoice>& choices) {
@@ -207,7 +211,7 @@ auto read_settings(const json::Object& object, const std::string& stage_path, Re
   ParamMap map;
   for (const auto& [key, value] : object) {
     if (key == "stage") continue;
-    if (declared.probed_keys().count(key) == 0) refuse_unknown_setting(stage_path, key);
+    if (declared.probed_keys().count(key) == 0) refuse_unknown_setting(stage_path, key, declared);
     if (value.is_bool()) {
       map[key] = value.as_bool() ? 1.0 : 0.0;
     } else if (value.is_number()) {

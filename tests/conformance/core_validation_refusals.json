@@ -203,7 +203,7 @@
       { "id": "annotations", "config": {"$comment": "up", "x-ui": 1, "transposeSemitones": 12} }
     ],
     "refused": [
-      { "id": "renamed_key", "config": {"transpose_semitones": 12}, "cause": "shape", "code": "InvalidParameter", "message": "unknown key config.transpose_semitones (renamed to config.transposeSemitones)" },
+      { "id": "earlier_spelling", "config": {"transpose_semitones": 12}, "cause": "shape", "code": "InvalidParameter", "message": "unknown key config.transpose_semitones (expected arpeggiatorGatePpq, arpeggiatorIntervals, arpeggiatorStepPpq, chordIntervals, humanizePpq, humanizeVelocity, quantizePpq, quantizeStrength, seed, transposeSemitones, velocityGamma, velocityOffset, velocityScale)" },
       { "id": "unknown_key", "config": {"transposeSemitone": 12}, "cause": "shape", "code": "InvalidParameter", "message": "unknown key config.transposeSemitone" },
       { "id": "wrong_kind", "config": {"velocityScale": true}, "cause": "shape", "code": "InvalidParameter", "message": "config.velocityScale must be a number" },
       { "id": "out_of_domain", "config": {"velocityGamma": 0}, "cause": "argument", "code": "InvalidParameter", "message": "config.velocityGamma must be > 0" },

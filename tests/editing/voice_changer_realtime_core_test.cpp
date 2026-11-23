@@ -62,6 +62,12 @@ TEST_CASE("RealtimeVoiceChanger preset JSON refuses unknown keys and out-of-doma
     REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(document),
                         Catch::Matchers::ContainsSubstring(message));
   }
+  // A flat POD's unknown key lists every key the flat form accepts, sorted.
+  REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(R"({"retuneMix":0.5,"futureKey":1})"),
+                      Catch::Matchers::ContainsSubstring("unknown key futureKey (expected ") &&
+                          Catch::Matchers::ContainsSubstring(", formantMode, ") &&
+                          Catch::Matchers::ContainsSubstring(", retuneGrainSizeSamples, ") &&
+                          Catch::Matchers::ContainsSubstring(", retuneMix, "));
 
   // A value outside its domain is refused by name, never moved onto the nearest bound.
   const std::tuple<const char*, const char*, double, const char*> refused[] = {

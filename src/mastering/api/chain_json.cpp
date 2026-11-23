@@ -354,7 +354,8 @@ std::vector<ChainFlatParam> read_chain_document(const std::string& text,
       if (key == "version" || key == "params" || sonare::util::json::is_annotation_key(key)) {
         continue;
       }
-      throw_invalid_json(schema::unknown_key(schema::child_path("", key)));
+      throw_invalid_json(
+          schema::unknown_key_expected(schema::child_path("", key), "params, version"));
     }
     if (const JsonValue* version = root.find("version")) {
       if (!version->is_number() || version->as_number() != kChainDocumentVersion) {
