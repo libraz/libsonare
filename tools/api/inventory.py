@@ -1442,6 +1442,39 @@ def _native_aliases(call: str) -> dict[str, list[str]]:
     return out
 
 
+def _top_level_split(text: str) -> list[str]:
+    """`text` cut at the commas outside any bracket or string literal, each part stripped."""
+    parts, depth, start, i = [], 0, 0, 0
+    while i < len(text):
+        ch = text[i]
+        if ch == '"':
+            i = text.index('"', i + 1)
+        elif ch in "({[":
+            depth += 1
+        elif ch in ")}]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(text[start:i].strip())
+            start = i + 1
+        i += 1
+    parts.append(text[start:].strip())
+    return parts
+
+
+def _native_unbuilt_options(call: str, kind: str) -> list[str]:
+    """Entries of a registration's option list that build no option inside the call itself."""
+    args = _top_level_split(call)
+    at = 3 if kind == "add_command" else 1
+    if len(args) <= at or not args[at].startswith("{"):
+        return []
+    fixed = re.compile(rf"\b(?:{'|'.join(_NATIVE_FIXED)})\s*\(")
+    return [
+        entry
+        for entry in _top_level_split(args[at][1:-1])
+        if entry and not (_NATIVE_BUILDER.search(entry) or fixed.search(entry))
+    ]
+
+
 def _native_forwarded(text: str, at: int, name: str) -> bool:
     """Whether `name` at `at` is a `const char*` parameter of the helper the call sits in."""
     return (
@@ -1504,6 +1537,11 @@ def _native_cli(root: Path) -> tuple[dict[str, dict], int, int, list[str]]:
                     )
             if not names:
                 continue
+            # An option built elsewhere and passed in is invisible to this scan.
+            for entry in _native_unbuilt_options(call, m.group(1)):
+                problems.append(
+                    f"{rel}:{_line_of(raw, m.start())}: option {entry} is not built in the call"
+                )
             flags = ["json"] + _NATIVE_OPTION.findall(call)
             flags += [v for k, v in _NATIVE_FIXED.items() if re.search(rf"\b{k}\s*\(", call)]
             switches = {"json", *_NATIVE_SWITCH.findall(call)}

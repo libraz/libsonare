@@ -892,6 +892,28 @@ n = meter.num_channels
 '''
 
 [[rule]]
+slug = "channel-planes"
+title = "Per-channel measurements are arrays sized to numChannels"
+summary = "A meter record carries one array per measurement, `numChannels` (`num_channels`) long and indexed by channel; the per-side `*L` / `*R` (`*_l` / `*_r`) scalars and the separate wide record are gone, so a mono target has one plane and a surround target has all of them. A plane the library did not measure is `undefined` in JavaScript; in Python it is `None` in a mixer snapshot's tuples and NaN in the engine telemetry's float32 arrays."
+[[rule.example]]
+surface = "node"
+before = '''
+const left = record.peakDbL;
+const right = record.peakDbR;
+'''
+after = '''
+const [left, right] = record.peakDb; // record.peakDb.length === record.numChannels
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+left, right = record.peak_db_l, record.peak_db_r
+'''
+after = '''
+left, right = record.peak_db[0], record.peak_db[1]  # len(record.peak_db) == record.num_channels
+'''
+
+[[rule]]
 slug = "no-positional-bools"
 title = "Setters take labelled objects, not positional booleans"
 summary = "Setters with booleans take a labelled object, and Python analysis functions are keyword-only after `sample_rate` (librosa mirrors excepted). Boolean option names are positive (`tonality`, not `tonalityOff`)."

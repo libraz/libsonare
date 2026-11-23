@@ -230,6 +230,11 @@ title = "Title of num-channels"
 summary = "Summary of num-channels."
 
 [[rule]]
+slug = "channel-planes"
+title = "Title of channel-planes"
+summary = "Summary of channel-planes."
+
+[[rule]]
 slug = "no-positional-bools"
 title = "Title of no-positional-bools"
 summary = "Summary of no-positional-bools."

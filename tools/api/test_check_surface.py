@@ -1797,6 +1797,16 @@ class CEnumFields(CheckerCase):
             lines,
         )
 
+    def test_a_predicate_flag_names_no_quantity(self):
+        self.add(
+            self.field("SonareBeats.has_attack", "Zero-or-one flag per beat.", ty="const uint8_t*"),
+            self.field("SonareBeats.is_release", "Zero-or-one flag.", ty="uint8_t"),
+            self.field("SonareBeats.attack", "Attack of each beat.", ty="const float*"),
+        )
+        _, lines = self.run_check("--surface", "c", "--check", "unit-in-name")
+        bad = [x.strip().split(":")[0] for x in lines if "names a physical quantity" in x]
+        self.assertEqual(bad, ["c field SonareBeats.attack"])
+
     def test_an_enum_field_whose_doc_does_not_open_with_the_reference_is_reported(self):
         self.add(
             *self.enum("SonareChannelLayout", "SONARE_CHANNEL_LAYOUT_MONO"),
@@ -3356,6 +3366,19 @@ class CliFlagLiteralTest(unittest.TestCase):
         _, _, _, problems = self._native("  add_command(commands, kNames[0], true, {});\n")
         self.assertEqual(len(problems), 1)
         self.assertRegex(problems[0], r"registry\.cpp:5: unknown registration shape")
+
+    def test_native_option_built_outside_the_call_fails(self):
+        commands, _, _, problems = self._native(
+            '  auto prior = int_value("start-bpm");\n'
+            '  add_command(commands, "rhythm", true, {std::move(prior), int_value("bpm-min")});\n'
+            '  add_command(commands, "tempo", true, {output_value(), library_default(tempo('
+            'number_value("bpm-max")), "200.0")});\n'
+        )
+        self.assertEqual(
+            problems,
+            ["tools/cli/registry.cpp:6: option std::move(prior) is not built in the call"],
+        )
+        self.assertEqual(sorted(commands), ["rhythm", "tempo"])
 
     def test_zero_registrations_fail(self):
         import inventory

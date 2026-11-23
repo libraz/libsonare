@@ -118,6 +118,7 @@ RULE_SLUGS = (
     "planar-channels",
     "stereo-pair",
     "num-channels",
+    "channel-planes",
     "no-positional-bools",
     "strip-ref",
     "high-pass",
@@ -1422,6 +1423,9 @@ def _unit_hit(r: dict):
     """unit-in-name's verdict input for one record: (stem, unit), or None when it names no quantity."""
     # A CLI switch takes no value, so it carries no quantity to name a unit for.
     if (r["kind"] == "flag" and r.get("boolean")) or not _numeric_type(r):
+        return None
+    # A has_ / is_ predicate is a yes-or-no flag even when C spells it as an integer.
+    if re.match(r"(?:has|is)_", snake(bare(r))):
         return None
     return _unit_split(bare(r))
 
