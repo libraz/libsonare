@@ -42,7 +42,8 @@ const SURFACES = {
   wasm: {
     facade: 'bindings/wasm/src',
     table: 'bindings/wasm/src/internal/native_entries.ts',
-    skip: ['bindings/wasm/src/internal/entry.ts', 'bindings/wasm/src/module_state.ts'],
+    // memory_budget.ts reads the heap headroom, a query that never refuses; the refusal there is the facade's own.
+    skip: ['bindings/wasm/src/internal/entry.ts', 'bindings/wasm/src/module_state.ts', 'bindings/wasm/src/internal/memory_budget.ts'],
     entries: ['index.ts', 'analysis.ts', 'worklet.ts', 'worker.ts', 'vocal_edit_worker.ts'],
     typescript: 'bindings/wasm/node_modules/typescript',
     tsconfig: 'bindings/wasm/tsconfig.json',

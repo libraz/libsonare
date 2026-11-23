@@ -2,4 +2,18 @@
 /** Public entry name for each native key whose own name is not the one a consumer called. */
 export const NATIVE_ENTRIES: Readonly<Record<string, string>> = {
   'RealtimeEngine.stop': 'bindMicrophoneInput',
+  _detectKeyCandidates: 'detectKeyCandidates',
+  _detectKeyWithOptions: 'detectKey',
+  lufsInterleaved: 'lufsMultichannel',
+  lufsSeriesInterleaved: 'lufsSeriesMultichannel',
+  masteringPairAnalyze: 'masteringAnalyzePair',
+  masteringPairProcess: 'masteringApplyPairProcessor',
+  masteringPairProcessStereo: 'masteringApplyPairProcessorStereo',
+  masteringProcess: 'masteringApplyProcessor',
+  masteringProcessStereo: 'masteringApplyProcessorStereo',
+  masteringStereoAnalyze: 'masteringAnalyzeStereo',
+  masteringStreamingLoudnessGain: 'streamingLoudnessGain',
+  masteringStreamingLoudnessGainStereo: 'streamingLoudnessGainStereo',
+  meteringTruePeakDb: 'meteringTruePeakDbtp',
+  onsetEnvelope: 'onsetStrength',
 };
