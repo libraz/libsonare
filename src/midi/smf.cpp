@@ -869,11 +869,14 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
 
   transport::sort_by_start(&result.tempo_segments);
   transport::sort_by_start(&result.time_signatures);
+  // A file with no Time Signature is 4/4 throughout, which an empty list already reads as;
+  // one whose first Time Signature is late is 4/4 until it, which is stored explicitly.
+  transport::TimeSignatureSegment smf_default;
+  smf_default.time_sig = transport::kDefaultTimeSignature;
+  store_imported_time_signatures(&result.time_signatures, smf_default);
   // Until a file's first Set Tempo its ticks play at the SMF default of 120 BPM,
   // so the tempo map starts with it unless an event sits at tick 0; a recovered
-  // truncated import gets it too. The implied 4/4 before the first Time
-  // Signature sets no timing and is not a signature the file holds, so the meter
-  // map is reported as the file wrote it (TempoMap::set_time_signatures).
+  // truncated import gets it too.
   if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
     transport::TempoSegment seg;
     seg.start_ppq = 0.0;
@@ -1017,7 +1020,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     for (const SmfTempoEvent& tempo : smf_tempo_events(tempo_segments, ppqn)) {
       items.push_back({tempo.tick, 0, tempo.bpm, 0, 0, 24, 8, {}});
     }
-    for (const auto& seg : time_signatures) {
+    for (const auto& seg : exported_time_signatures(time_signatures)) {
       items.push_back({smf_ppq_to_ticks(seg.start_ppq, ppqn),
                        1,
                        0.0,

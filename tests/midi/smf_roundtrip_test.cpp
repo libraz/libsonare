@@ -1911,8 +1911,7 @@ TEST_CASE("note_targets_from_smf refuses bytes that are not an SMF", "[midi][smf
   REQUIRE_THROWS_AS(note_targets_from_smf(nullptr, 32, 0), sonare::SonareException);
 }
 
-TEST_CASE("SMF import plays the stretch before the first tempo at 120 BPM and adds no meter",
-          "[midi]") {
+TEST_CASE("SMF import plays the stretch before the first tempo at 120 BPM and in 4/4", "[midi]") {
   // The first Set Tempo (60 BPM) and Time Signature (3/4) sit one quarter in.
   std::vector<uint8_t> body = {0x00, 0x90, 60, 100};
   body.insert(body.end(), {0x83, 0x60, 0xFF, 0x51, 0x03, 0x0F, 0x42, 0x40});
@@ -1925,10 +1924,13 @@ TEST_CASE("SMF import plays the stretch before the first tempo at 120 BPM and ad
   CHECK(r.tempo_segments[0].bpm == Catch::Approx(sonare::constants::kDefaultBpm));
   CHECK(r.tempo_segments[1].start_ppq == Catch::Approx(1.0));
   CHECK(r.tempo_segments[1].bpm == Catch::Approx(60.0));
-  // The implied 4/4 before the first Time Signature is not a signature the file holds.
-  REQUIRE(r.time_signatures.size() == 1);
-  CHECK(r.time_signatures[0].start_ppq == Catch::Approx(1.0));
-  CHECK(r.time_signatures[0].time_sig.numerator == 3);
+  // The format's 4/4 holds until the first Time Signature, so it is stored at ppq 0.
+  REQUIRE(r.time_signatures.size() == 2);
+  CHECK(r.time_signatures[0].start_ppq == 0.0);
+  CHECK(r.time_signatures[0].time_sig.numerator == 4);
+  CHECK(r.time_signatures[0].time_sig.denominator == 4);
+  CHECK(r.time_signatures[1].start_ppq == Catch::Approx(1.0));
+  CHECK(r.time_signatures[1].time_sig.numerator == 3);
 }
 
 TEST_CASE("SMF export then import keeps a tempo and meter map that starts after zero", "[midi]") {
@@ -2050,4 +2052,144 @@ TEST_CASE("SMF export saturates a tick past the int64 range and counts the clamp
   REQUIRE(exported.ok());
   CHECK(exported.clamped_delta_events == 1);
   CHECK(exported.skipped_events == 0);
+}
+
+namespace {
+
+using sonare::transport::TimeSignatureSegment;
+
+TimeSignatureSegment signature_at(double start_ppq, int numerator) {
+  TimeSignatureSegment segment;
+  segment.start_ppq = start_ppq;
+  segment.time_sig.numerator = numerator;
+  segment.time_sig.denominator = 4;
+  return segment;
+}
+
+// A format-0 SMF at 480 PPQN holding one quarter-note C4 and a 4/4- or 3/4-style Time
+// Signature (denominator 4) at each (tick, numerator) given.
+std::vector<uint8_t> smf_with_signatures(const std::vector<std::pair<uint32_t, uint8_t>>& sigs) {
+  std::vector<uint8_t> body;
+  uint32_t tick = 0;
+  for (const auto& [at, numerator] : sigs) {
+    push_vlq(&body, at - tick);
+    tick = at;
+    for (const uint8_t b : {uint8_t{0xFF}, uint8_t{0x58}, uint8_t{0x04}, numerator, uint8_t{0x02},
+                            uint8_t{0x18}, uint8_t{0x08}}) {
+      body.push_back(b);
+    }
+  }
+  push_vlq(&body, 0);
+  for (const uint8_t b : {uint8_t{0x90}, uint8_t{0x3C}, uint8_t{0x64}}) body.push_back(b);
+  push_vlq(&body, 480);
+  for (const uint8_t b : {uint8_t{0x80}, uint8_t{0x3C}, uint8_t{0x00}}) body.push_back(b);
+  for (const uint8_t b : {uint8_t{0x00}, uint8_t{0xFF}, uint8_t{0x2F}, uint8_t{0x00}}) {
+    body.push_back(b);
+  }
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
+struct BarReading {
+  double bar_start = 0.0;
+  int64_t bar = 0;
+  int beat = 0;
+  double beat_fraction = 0.0;
+};
+
+// Bar start and bar/beat position every eighth note over the first @p span_ppq.
+std::vector<BarReading> bar_readings(const std::vector<TimeSignatureSegment>& sigs,
+                                     double span_ppq) {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_time_signatures(sigs);
+  std::vector<BarReading> out;
+  for (double ppq = 0.0; ppq < span_ppq; ppq += 0.5) {
+    const sonare::transport::BarBeat position = map.ppq_to_bar_beat(ppq);
+    out.push_back({map.bar_start_ppq(ppq), position.bar, position.beat, position.beat_fraction});
+  }
+  return out;
+}
+
+bool same_readings(const std::vector<BarReading>& a, const std::vector<BarReading>& b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); ++i) {
+    if (a[i].bar_start != b[i].bar_start || a[i].bar != b[i].bar || a[i].beat != b[i].beat ||
+        a[i].beat_fraction != b[i].beat_fraction) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool same_signatures(const std::vector<TimeSignatureSegment>& a,
+                     const std::vector<TimeSignatureSegment>& b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); ++i) {
+    if (a[i].start_ppq != b[i].start_ppq || a[i].time_sig.numerator != b[i].time_sig.numerator ||
+        a[i].time_sig.denominator != b[i].time_sig.denominator ||
+        a[i].clocks_per_metronome_click != b[i].clocks_per_metronome_click ||
+        a[i].thirty_seconds_per_quarter != b[i].thirty_seconds_per_quarter) {
+      return false;
+    }
+  }
+  return true;
+}
+
+size_t time_signature_meta_count(const std::vector<uint8_t>& bytes) {
+  size_t count = 0;
+  for (size_t i = 0; i + 2 < bytes.size(); ++i) {
+    if (bytes[i] == 0xFFu && bytes[i + 1] == 0x58u && bytes[i + 2] == 0x04u) ++count;
+  }
+  return count;
+}
+
+}  // namespace
+
+TEST_CASE("SMF export writes a late first time signature at tick 0 too", "[midi]") {
+  // Three-four from ppq 2: the model reads it from ppq 0, so the file must too.
+  const std::vector<TimeSignatureSegment> stored = {signature_at(2.0, 3)};
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf({}, {}, stored, {}, opts);
+  REQUIRE(exported.ok());
+  CHECK(time_signature_meta_count(exported.bytes) == 2);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  // The tick-0 copy folds into the later entry, so the stored list comes back unchanged.
+  CHECK(same_signatures(round.time_signatures, stored));
+  CHECK(same_readings(bar_readings(round.time_signatures, 8.0), bar_readings(stored, 8.0)));
+}
+
+TEST_CASE("SMF import reads the format's 4/4 before a late first time signature", "[midi]") {
+  // A file with its first Time Signature at ppq 4 is 4/4 until it.
+  const SmfImportResult late = import_smf(smf_with_signatures({{1920, 3}}));
+  REQUIRE(late.ok());
+  CHECK(same_signatures(late.time_signatures, {signature_at(0.0, 4), signature_at(4.0, 3)}));
+
+  // A tick-0 signature equal to the next folds into it, with the same bars.
+  const std::vector<TimeSignatureSegment> restated = {signature_at(0.0, 3), signature_at(6.0, 3)};
+  const SmfImportResult folded = import_smf(smf_with_signatures({{0, 3}, {2880, 3}}));
+  REQUIRE(folded.ok());
+  CHECK(same_signatures(folded.time_signatures, {signature_at(6.0, 3)}));
+  CHECK(same_readings(bar_readings(folded.time_signatures, 12.0), bar_readings(restated, 12.0)));
+
+  // Different meters at 0 and later are both kept.
+  const SmfImportResult changed = import_smf(smf_with_signatures({{0, 4}, {1920, 3}}));
+  REQUIRE(changed.ok());
+  CHECK(same_signatures(changed.time_signatures, {signature_at(0.0, 4), signature_at(4.0, 3)}));
+
+  // No Time Signature at all stays an empty list, which reads as 4/4 throughout.
+  const SmfImportResult meterless = import_smf(smf_with_signatures({}));
+  REQUIRE(meterless.ok());
+  CHECK(meterless.time_signatures.empty());
 }

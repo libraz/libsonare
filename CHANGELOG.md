@@ -186,6 +186,7 @@ This release gives the public interface one set of conventions on every surface 
 - Built-in drum kit pieces and several GM programs and presets sound different, in level as well as timbre.
 - Drum keys 0 to 16 and 27 to 30 of the built-in kit sound voices of their own instead of one shared burst.
 - A GS drum kit with voices of its own sounds only the keys its tone map lists, on the built-in synth and the SoundFont player's drum fallback alike.
+- A Standard MIDI File whose first Time Signature comes after tick 0 imports with the format's 4/4 stored at ppq 0 before it, so a file 1.x exported from a project whose first signature started late now imports as 4/4 up to that signature; export, to a MIDI Clip File as well, also writes a copy of a late first signature at tick 0, and an imported signature at 0 repeated unchanged by the next one is kept once, at the later position.
 
 #### Command-line tools
 

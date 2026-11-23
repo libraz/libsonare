@@ -922,8 +922,9 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   }
 
   result.ticks_per_quarter = dctpq;
-  // 120 BPM holds until the first tempo message, which arrive in tick order. The
-  // meter map is reported as the file wrote it, with no implied 4/4 added.
+  // 120 BPM holds until the first tempo message, which arrive in tick order. A Clip File
+  // states no default signature, so a late first one is not given one at 0.
+  store_imported_time_signatures(&result.time_signatures, std::nullopt);
   if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
     result.tempo_segments.insert(result.tempo_segments.begin(),
                                  {0.0, sonare::constants::kDefaultBpm, 0.0});
@@ -1011,8 +1012,10 @@ bool emit_sysex8(std::vector<SeqItem>* items, uint64_t tick, const SysExBody& bo
 
 Smf2ExportResult export_clip_file(
     const MidiClip& clip, const std::vector<transport::TempoSegment>& tempo_segments,
-    const std::vector<transport::TimeSignatureSegment>& time_signatures,
+    const std::vector<transport::TimeSignatureSegment>& stored_time_signatures,
     const Smf2ExportOptions& options) {
+  const std::vector<transport::TimeSignatureSegment> time_signatures =
+      exported_time_signatures(stored_time_signatures);
   Smf2ExportResult result;
   const uint16_t dctpq =
       options.ticks_per_quarter == 0 ? kDefaultTicksPerQuarter : options.ticks_per_quarter;
@@ -1024,10 +1027,9 @@ Smf2ExportResult export_clip_file(
   put_word(&out, delta_clockstamp_word(0));
   put_word(&out, dctpq_word(dctpq));
 
-  // The config header carries only the tick-0 initial state. The tempo map holds
-  // its first tempo back to ppq 0, so the first tempo event is always at tick 0;
-  // a first time signature anchored at start_ppq > 0 stays a DCS-positioned
-  // sequence-data item below so the round-trip keeps its real position.
+  // The config header carries only the tick-0 initial state. The tempo map holds its first
+  // tempo and its first signature back to ppq 0, so both have an event at tick 0; a first
+  // signature stored at start_ppq > 0 also stays a DCS-positioned item at its position.
   const std::vector<SmfTempoEvent> tempo_events = smf_tempo_events(tempo_segments, dctpq);
   const bool tempo_in_header = !tempo_events.empty() && tempo_events.front().tick == 0;
   const bool tsig_in_header = !time_signatures.empty() && time_signatures.front().start_ppq == 0.0;

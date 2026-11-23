@@ -1774,3 +1774,35 @@ TEST_CASE("MIDI Clip File export then import keeps a meter map that starts after
     CHECK(after.ppq_to_bar_beat(ppq).beat == before.ppq_to_bar_beat(ppq).beat);
   }
 }
+
+TEST_CASE("SMF2 export writes a late first time signature at tick 0 too", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
+  clip.add_event(ev(8.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  sonare::transport::TimeSignatureSegment sig;
+  sig.start_ppq = 2.0;
+  sig.time_sig.numerator = 3;
+  sig.time_sig.denominator = 4;
+  const std::vector<sonare::transport::TimeSignatureSegment> stored = {sig};
+
+  const auto exported = export_clip_file(clip, {}, stored, Smf2ExportOptions{});
+  REQUIRE(exported.ok());
+  // One in the configuration header at tick 0, one at the stored position.
+  size_t packets = 0;
+  for (size_t offset = 8; offset + 8 <= exported.bytes.size(); offset += 4) {
+    const uint32_t word = read_word(exported.bytes, offset);
+    if (((word >> 28) & 0x0Fu) == 0xDu && ((word >> 8) & 0xFFu) == 0x00u &&
+        (word & 0xFFu) == 0x01u) {
+      ++packets;
+    }
+  }
+  CHECK(packets == 2);
+
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  // The tick-0 copy folds into the later entry, so the stored list comes back unchanged.
+  REQUIRE(imported.time_signatures.size() == 1);
+  CHECK(imported.time_signatures[0].start_ppq == Catch::Approx(2.0).margin(1e-9));
+  CHECK(imported.time_signatures[0].time_sig.numerator == 3);
+  CHECK(imported.time_signatures[0].time_sig.denominator == 4);
+}
