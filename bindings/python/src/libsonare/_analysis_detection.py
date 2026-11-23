@@ -437,9 +437,11 @@ _BPM_RELATIONS = frozenset({"primary", "half", "double", "other"})
 
 
 def _bpm_relation(raw: Any) -> BpmCandidateRelation:
-    """Spell a candidate's relation token; an unrecognized one reads ``"other"``."""
-    token = str(raw) if raw is not None else "other"
-    return cast(BpmCandidateRelation, token) if token in _BPM_RELATIONS else "other"
+    """Spell a candidate's relation token; one outside the mirror has drifted and is refused."""
+    token = str(raw)
+    if token not in _BPM_RELATIONS:
+        raise _refuse(f"unknown analysis BPM candidate relation: {token}")
+    return cast(BpmCandidateRelation, token)
 
 
 def _section_type_from_ordinal(raw: Any) -> SectionType:
@@ -459,9 +461,7 @@ def _section_type_from_ordinal(raw: Any) -> SectionType:
 
 
 def _beat_from_wire(record: dict[str, Any]) -> Beat:
-    return Beat(
-        time_sec=float(record.get("timeSec", 0.0)), strength=float(record.get("strength", 0.0))
-    )
+    return Beat(time_sec=float(record["timeSec"]), strength=float(record["strength"]))
 
 
 def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
@@ -472,53 +472,53 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     """
     _fill_null_ends(data, "analysis_result")
     # Key
-    key_d = data.get("key", {})
+    key_d = data["key"]
     key = Key(
-        root=PitchClass(int(key_d.get("root", 0))),
-        mode=_key_mode_token(int(key_d.get("mode", 0))),
-        confidence=float(key_d.get("confidence", 0.0)),
+        root=PitchClass(int(key_d["root"])),
+        mode=_key_mode_token(int(key_d["mode"])),
+        confidence=float(key_d["confidence"]),
     )
 
     # Time signature (top-level)
-    ts_d = data.get("timeSignature", {})
+    ts_d = data["timeSignature"]
     time_signature = TimeSignature(
-        numerator=int(ts_d.get("numerator", 4)),
-        denominator=int(ts_d.get("denominator", 4)),
-        confidence=float(ts_d.get("confidence", 0.0)),
+        numerator=int(ts_d["numerator"]),
+        denominator=int(ts_d["denominator"]),
+        confidence=float(ts_d["confidence"]),
     )
 
     bpm_candidates = [
         AnalysisBpmCandidate(
-            bpm=float(candidate.get("bpm", 0.0)),
-            confidence=float(candidate.get("confidence", 0.0)),
-            relation=_bpm_relation(candidate.get("relation")),
+            bpm=float(candidate["bpm"]),
+            confidence=float(candidate["confidence"]),
+            relation=_bpm_relation(candidate["relation"]),
         )
-        for candidate in data.get("bpmCandidates", [])
+        for candidate in data["bpmCandidates"]
     ]
 
     time_signature_candidates = [
         TimeSignature(
-            numerator=int(candidate.get("numerator", 4)),
-            denominator=int(candidate.get("denominator", 4)),
-            confidence=float(candidate.get("confidence", 0.0)),
+            numerator=int(candidate["numerator"]),
+            denominator=int(candidate["denominator"]),
+            confidence=float(candidate["confidence"]),
         )
-        for candidate in data.get("timeSignatureCandidates", [])
+        for candidate in data["timeSignatureCandidates"]
     ]
 
     # Beats and downbeats are both lists of {timeSec, strength} beat records.
-    beats = [_beat_from_wire(b) for b in data.get("beats", [])]
-    downbeats = [_beat_from_wire(b) for b in data.get("downbeats", [])]
-    downbeat_phase = int(data.get("downbeatPhase", 0))
+    beats = [_beat_from_wire(b) for b in data["beats"]]
+    downbeats = [_beat_from_wire(b) for b in data["downbeats"]]
+    downbeat_phase = int(data["downbeatPhase"])
 
     # Beat-level evidence the downbeat and meter pass scores. Each stream is
     # beat-indexed; an empty one means the analysis could not produce it rather
     # than that every beat scored zero.
-    obs_d = data.get("beatObservations", {})
+    obs_d = data["beatObservations"]
     beat_observations = (
         BeatObservations(
-            onset_strength=np.asarray(obs_d.get("onsetStrength", []), dtype=np.float32),
-            low_frequency_energy=np.asarray(obs_d.get("lowFrequencyEnergy", []), dtype=np.float32),
-            chord_change=np.asarray(obs_d.get("chordChange", []), dtype=np.float32),
+            onset_strength=np.asarray(obs_d["onsetStrength"], dtype=np.float32),
+            low_frequency_energy=np.asarray(obs_d["lowFrequencyEnergy"], dtype=np.float32),
+            chord_change=np.asarray(obs_d["chordChange"], dtype=np.float32),
         )
         if obs_d
         else None
@@ -526,51 +526,45 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
 
     # Beat-indexed like the streams above, and likewise empty rather than absent
     # when it was not produced -- here because the caller did not ask for it.
-    beat_local_bpm = np.asarray(data.get("beatLocalBpm", []), dtype=np.float32)
+    beat_local_bpm = np.asarray(data["beatLocalBpm"], dtype=np.float32)
 
     # Chords
     chords: list[AnalysisChord] = []
-    for c in data.get("chords", []):
-        q_raw = c.get("quality", _UNKNOWN_QUALITY_ORDINAL)
-        # quality field may be int (enum value) or str (name from JSON)
-        if isinstance(q_raw, int):
-            # "unknown" is a quality the analyzer genuinely reports, so it has an
-            # ordinal of its own. An ordinal outside the table is something else
-            # -- the mirror has drifted -- and folding the two together would
-            # present that as a detection result.
-            if not 0 <= q_raw < len(CHORD_QUALITIES):
-                raise _refuse(f"unknown analysis chord quality ordinal: {q_raw}")
-            quality_str = CHORD_QUALITIES[q_raw]
-        else:
-            quality_str = str(q_raw) if str(q_raw) in CHORD_QUALITIES else "unknown"
-        root = PitchClass(int(c.get("root", 0)))
-        bass = PitchClass(int(c.get("bass", c.get("root", 0))))
+    for c in data["chords"]:
+        q_raw = int(c["quality"])
+        # "unknown" is a quality the analyzer genuinely reports, so it has an ordinal of its
+        # own. An ordinal outside the table means the mirror has drifted and is refused.
+        if not 0 <= q_raw < len(CHORD_QUALITIES):
+            raise _refuse(f"unknown analysis chord quality ordinal: {q_raw}")
+        quality_str = CHORD_QUALITIES[q_raw]
+        root = PitchClass(int(c["root"]))
+        bass = PitchClass(int(c["bass"]))
         chords.append(
             AnalysisChord(
                 root=root,
                 bass=bass,
                 quality=quality_str,
-                start_sec=float(c.get("startSec", 0.0)),
-                end_sec=float(c.get("endSec", 0.0)),
-                confidence=float(c.get("confidence", 0.0)),
-                name=str(c.get("name", "")) or _chord_symbol(root, quality_str, bass),
-                roman_numeral=str(c.get("romanNumeral", "")),
+                start_sec=float(c["startSec"]),
+                end_sec=float(c["endSec"]),
+                confidence=float(c["confidence"]),
+                name=str(c["name"]) or _chord_symbol(root, quality_str, bass),
+                roman_numeral=str(c["romanNumeral"]),
             )
         )
 
     # Sections
     sections: list[Section] = []
-    for s in data.get("sections", []):
+    for s in data["sections"]:
         section_type = _section_type_from_ordinal(s.get("type"))
         sections.append(
             Section(
                 type=section_type,
-                start_sec=float(s.get("startSec", 0.0)),
-                end_sec=float(s.get("endSec", 0.0)),
-                energy_level=float(s.get("energyLevel", 0.0)),
-                confidence=float(s.get("confidence", 0.0)),
+                start_sec=float(s["startSec"]),
+                end_sec=float(s["endSec"]),
+                energy_level=float(s["energyLevel"]),
+                confidence=float(s["confidence"]),
                 group=int(s["group"]),
-                name=str(s.get("name", "")) or _SECTION_NAMES[section_type],
+                name=str(s["name"]) or _SECTION_NAMES[section_type],
             )
         )
 
@@ -624,7 +618,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
 
     return AnalysisResult(
         bpm=_measured_float(data, "bpm"),
-        bpm_confidence=float(data.get("bpmConfidence", 0.0)),
+        bpm_confidence=float(data["bpmConfidence"]),
         key=key,
         time_signature=time_signature,
         beats=beats,
@@ -640,6 +634,6 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         melody=melody,
         beat_observations=beat_observations,
         beat_local_bpm=beat_local_bpm,
-        form=str(data.get("form", "")),
+        form=str(data["form"]),
         tuning_cents=float(data["tuningCents"]),
     )

@@ -510,26 +510,24 @@ def estimate_meter(
         if out_json.value:
             lib.sonare_free_string(out_json)
 
-    ts_d = data.get("timeSignature", {})
+    ts_d = data["timeSignature"]
     return MeterEstimate(
         time_signature=TimeSignature(
-            numerator=int(ts_d.get("numerator", 4)),
-            denominator=int(ts_d.get("denominator", 4)),
-            confidence=float(ts_d.get("confidence", 0.0)),
+            numerator=int(ts_d["numerator"]),
+            denominator=int(ts_d["denominator"]),
+            confidence=float(ts_d["confidence"]),
         ),
-        downbeat_phase=int(data.get("downbeatPhase", 0)),
-        # Absent only if the payload predates the field; the conservative
-        # reading of a missing flag is that nothing was searched.
-        searched=bool(data.get("searched", False)),
-        grouping=np.asarray(data.get("grouping", []), dtype=np.int32),
-        candidate_scores=np.asarray(data.get("candidateScores", []), dtype=np.float32),
+        downbeat_phase=int(data["downbeatPhase"]),
+        searched=bool(data["searched"]),
+        grouping=np.asarray(data["grouping"], dtype=np.int32),
+        candidate_scores=np.asarray(data["candidateScores"], dtype=np.float32),
         candidates=[
             TimeSignature(
-                numerator=int(candidate.get("numerator", 4)),
-                denominator=int(candidate.get("denominator", 4)),
-                confidence=float(candidate.get("confidence", 0.0)),
+                numerator=int(candidate["numerator"]),
+                denominator=int(candidate["denominator"]),
+                confidence=float(candidate["confidence"]),
             )
-            for candidate in data.get("candidates", [])
+            for candidate in data["candidates"]
         ],
     )
 

@@ -75,12 +75,57 @@ _SUMMARY_BLOCKS: dict[str, object] = {
 }
 
 
+_CHORD: dict[str, object] = {
+    "root": 0,
+    "bass": 0,
+    "quality": 0,
+    "startSec": 0.0,
+    "endSec": 1.0,
+    "durationSec": 1.0,
+    "confidence": 1.0,
+    "name": "C",
+    "romanNumeral": "",
+}
+_SECTION: dict[str, object] = {
+    "type": 3,
+    "startSec": 0.0,
+    "endSec": 1.0,
+    "energyLevel": 0.5,
+    "confidence": 1.0,
+    "group": 0,
+    "name": "Chorus",
+}
+
+
+def _payload(**fields: object) -> dict[str, object]:
+    """A document with every key the core always writes, ``fields`` replacing top-level keys."""
+    meter = {"numerator": 4, "denominator": 4, "confidence": 0.8}
+    base: dict[str, object] = {
+        "bpmConfidence": 0.0,
+        "bpmCandidates": [],
+        "key": {"root": 0, "mode": 0, "confidence": 0.0, "name": "C major", "shortName": "C"},
+        "timeSignature": dict(meter),
+        "timeSignatureCandidates": [],
+        "beats": [],
+        "downbeats": [],
+        "downbeatPhase": 0,
+        "beatObservations": {"onsetStrength": [], "lowFrequencyEnergy": [], "chordChange": []},
+        "beatLocalBpm": [],
+        "chords": [],
+        "sections": [],
+        "form": "",
+        "tuningCents": 0.0,
+        **_SUMMARY_BLOCKS,
+    }
+    return {**base, **fields}
+
+
 def test_parse_analysis_json_requires_every_summary_block() -> None:
     """The core always writes timbre, dynamics, rhythm and melody, so a missing one is refused."""
     from libsonare._analysis_detection import _parse_analysis_json
 
     for missing in _SUMMARY_BLOCKS:
-        payload = {"key": {}, "beats": [], "tuningCents": 0.0, **_SUMMARY_BLOCKS}
+        payload = _payload()
         del payload[missing]
         with pytest.raises(KeyError, match=missing):
             _parse_analysis_json(payload)
@@ -101,23 +146,18 @@ def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
     from libsonare._analysis_detection import _parse_analysis_json
 
     result = _parse_analysis_json(
-        {
-            "tuningCents": 0.0,
-            "bpm": 120.0,
-            "bpmConfidence": 0.9,
-            "bpmCandidates": [
+        _payload(
+            bpm=120.0,
+            bpmConfidence=0.9,
+            bpmCandidates=[
                 {"bpm": 120.0, "confidence": 0.9, "relation": "primary"},
                 {"bpm": 60.0, "confidence": 0.4, "relation": "half"},
             ],
-            "key": {},
-            "timeSignature": {"numerator": 4, "denominator": 4, "confidence": 0.8},
-            "timeSignatureCandidates": [
+            timeSignatureCandidates=[
                 {"numerator": 4, "denominator": 4, "confidence": 0.7},
                 {"numerator": 3, "denominator": 4, "confidence": 0.3},
             ],
-            "beats": [],
-            **_SUMMARY_BLOCKS,
-        }
+        )
     )
 
     assert [(candidate.bpm, candidate.relation) for candidate in result.bpm_candidates] == [
@@ -195,32 +235,10 @@ def test_analysis_json_uses_canonical_display_names() -> None:
     from libsonare._analysis_detection import _parse_analysis_json
 
     result = _parse_analysis_json(
-        {
-            "tuningCents": 0.0,
-            "chords": [
-                {
-                    "root": 0,
-                    "bass": 0,
-                    "quality": 0,
-                    "startSec": 0,
-                    "endSec": 1,
-                    "confidence": 1,
-                    "name": "canonical-chord",
-                }
-            ],
-            "sections": [
-                {
-                    "type": 2,
-                    "startSec": 0,
-                    "endSec": 1,
-                    "energyLevel": 0.5,
-                    "confidence": 1,
-                    "name": "canonical-section",
-                    "group": 3,
-                }
-            ],
-            **_SUMMARY_BLOCKS,
-        }
+        _payload(
+            chords=[{**_CHORD, "name": "canonical-chord"}],
+            sections=[{**_SECTION, "type": 2, "name": "canonical-section", "group": 3}],
+        )
     )
     assert result.chords[0].name == "canonical-chord"
     assert result.sections[0].name == "canonical-section"
@@ -373,23 +391,17 @@ def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
     from libsonare._analysis_detection import _parse_analysis_json
 
     def parse(section: dict[str, object]) -> object:
-        return _parse_analysis_json(
-            {
-                "key": {},
-                "beats": [],
-                "sections": [section],
-                "tuningCents": 0.0,
-                **_SUMMARY_BLOCKS,
-            }
-        )
+        return _parse_analysis_json(_payload(sections=[section]))
 
     with pytest.raises(SonareValueError, match="99"):
-        parse({"type": 99, "startSec": 0.0, "endSec": 1.0})
+        parse({**_SECTION, "type": 99})
 
+    untyped = dict(_SECTION)
+    del untyped["type"]
     with pytest.raises(SonareValueError, match="missing its type"):
-        parse({"startSec": 0.0, "endSec": 1.0})
+        parse(untyped)
 
-    result = parse({"type": 3, "startSec": 0.0, "endSec": 1.0, "group": 0})
+    result = parse(_SECTION)
     assert result.sections[0].type == "chorus"  # type: ignore[attr-defined]
 
 
@@ -404,17 +416,24 @@ def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:
     from libsonare._analysis_detection import _parse_analysis_json
 
     def parse(chord: dict[str, object]) -> object:
-        return _parse_analysis_json(
-            {"key": {}, "beats": [], "chords": [chord], "tuningCents": 0.0, **_SUMMARY_BLOCKS}
-        )
+        return _parse_analysis_json(_payload(chords=[chord]))
 
     with pytest.raises(SonareValueError, match="99"):
-        parse({"root": 0, "quality": 99, "startSec": 0.0, "endSec": 1.0})
+        parse({**_CHORD, "quality": 99})
 
-    # The genuine "unknown" quality still round-trips, including as the default
-    # when the producer omitted the field.
-    assert (
-        parse({"root": 0, "quality": 9, "startSec": 0.0, "endSec": 1.0}).chords[0].quality
-        == "unknown"
-    )  # type: ignore[attr-defined]
-    assert parse({"root": 0, "startSec": 0.0, "endSec": 1.0}).chords[0].quality == "unknown"  # type: ignore[attr-defined]
+    # The genuine "unknown" quality round-trips; a chord with no quality is not a chord the
+    # core writes, so it is refused rather than read as "unknown".
+    assert parse({**_CHORD, "quality": 9}).chords[0].quality == "unknown"  # type: ignore[attr-defined]
+    unqualified = dict(_CHORD)
+    del unqualified["quality"]
+    with pytest.raises(KeyError, match="quality"):
+        parse(unqualified)
+
+
+def test_parse_analysis_json_refuses_an_unmirrored_bpm_relation() -> None:
+    from libsonare import SonareValueError
+    from libsonare._analysis_detection import _parse_analysis_json
+
+    candidate = {"bpm": 120.0, "confidence": 0.9, "relation": "triple"}
+    with pytest.raises(SonareValueError, match="triple"):
+        _parse_analysis_json(_payload(bpmCandidates=[candidate]))
