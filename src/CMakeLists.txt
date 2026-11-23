@@ -1097,6 +1097,11 @@ if(BUILD_ARRANGEMENT)
   # so the compiler's flag guards match the build. This is a ONE-WAY dependency:
   # no core/engine/rt target links sonare_arrangement.
   target_link_libraries(sonare_arrangement PUBLIC sonare_automation sonare_engine sonare_midi sonare_core)
+  if(BUILD_MASTERING)
+    # Project::set_part_rig builds each chain stage through the insert factory before storing it.
+    target_link_libraries(sonare_arrangement PUBLIC sonare_mastering)
+    target_compile_definitions(sonare_arrangement PRIVATE SONARE_WITH_MASTERING=1)
+  endif()
   target_compile_options(sonare_arrangement PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_arrangement PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_compile_definitions(sonare_arrangement PUBLIC SONARE_WITH_ARRANGEMENT=1)

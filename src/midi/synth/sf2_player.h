@@ -93,7 +93,8 @@ struct Sf2PlayerConfig {
   /// keep their SoundFont kit routing.
   bool prefer_model_for_modeled_families = false;
   /// Per-part rig entries, as set_part_rig() would install them. kBank, the
-  /// default, installs no entry, so the part takes whatever ranks below.
+  /// default, installs no entry, so the part takes whatever ranks below. An entry
+  /// set_part_rig() would refuse makes the constructor throw InvalidParameter.
   std::array<PartRig, 16> part_rigs{};
   /// Injected insert-factory: builds a streaming ProcessorBase from a name +
   /// JSON params, for rig chains and GS insertion units. Left null (the

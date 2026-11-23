@@ -1,6 +1,7 @@
 #include "midi/synth/part_fx_stage.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -287,7 +288,7 @@ bool PartFxStage::set_part_rig(uint8_t part, const PartRig& rig) {
     for (const PartRigStage& stage : rig.stages) {
       std::unique_ptr<rt::ProcessorBase> proc =
           config_.insert_factory(stage.processor, stage.params_json);
-      if (proc == nullptr) continue;
+      if (proc == nullptr) return false;
       proc->prepare(kPartRigValidationSampleRate, kPartRigValidationBlockSize);
       if (proc->latency_samples_q8() > (kMaxPartRigLatencySamples << 8)) return false;
     }
@@ -522,7 +523,7 @@ Sf2EfxUnitRt PartFxStage::build_unit(const GsEfx& efx) const {
 
 std::shared_ptr<const PartChainRuntime> PartFxStage::realize_chain(
     int part, std::vector<std::pair<std::string, std::string>> request,
-    const PartFxSnapshot* previous) const {
+    [[maybe_unused]] size_t stored_stages, const PartFxSnapshot* previous) const {
   if (request.empty()) return nullptr;
   const std::shared_ptr<const PartChainRuntime>* kept =
       previous != nullptr ? &previous->chains[static_cast<size_t>(part)] : nullptr;
@@ -535,10 +536,13 @@ std::shared_ptr<const PartChainRuntime> PartFxStage::realize_chain(
   }
   auto chain = std::make_shared<PartChainRuntime>();
   chain->epoch = chain_epoch_;
-  // A stage the factory declines is skipped, so a partial rig still runs. The
-  // mono pickup runs through the last amplifier built.
-  for (const auto& [name, params] : request) {
+  // set_part_rig() refused a stored stage the factory declines, so each of those builds. A
+  // bank-rig stage the factory declines is skipped and reported. The mono pickup runs through
+  // the last amplifier built.
+  for (size_t i = 0; i < request.size(); ++i) {
+    const auto& [name, params] = request[i];
     auto proc = config_.insert_factory(name, params);
+    assert(proc != nullptr || i >= stored_stages);
     if (proc == nullptr) {
       if (recorder_ != nullptr) recorder_->note_refused_stage(part, name);
       chain->refused.push_back(name);
@@ -602,7 +606,8 @@ std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot(UnitTracks& tracks, 
         request.emplace_back(stage.name, stage.params_json);
       }
     }
-    out->chains[p] = realize_chain(part, std::move(request), previous);
+    const size_t stored_stages = explicit_chain ? entry->stages.size() : 0;
+    out->chains[p] = realize_chain(part, std::move(request), stored_stages, previous);
     const PartChainRuntime* chain = out->chains[p].get();
     if (chain != nullptr) {
       out->stage_names[p] = chain->names;

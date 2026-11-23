@@ -768,9 +768,12 @@ class Project {
   /// Removes a warp map by id and returns the removed map plus success flag.
   std::pair<WarpMapRef, bool> remove_warp_map(WarpRefId id);
 
-  /// Replaces or inserts a part rig by (destination_id, part). Returns false
-  /// when the shape fails @ref sonare::midi::validate_part_rig.
-  bool set_part_rig(ProjectPartRig entry);
+  /// Replaces or inserts a part rig by (destination_id, part). Refuses (InvalidParameter, as a
+  /// SonareParameterRefusal naming `part`, `inserts` or `inserts[i]...`) a rig failing
+  /// @ref sonare::midi::validate_part_rig or a chain no player can build
+  /// (mastering::api::validate_part_rig_chain); a chain in a build without insert chains is
+  /// NotSupported naming `mode`. The project is unchanged on a refusal.
+  void set_part_rig(ProjectPartRig entry);
   /// Removes a part rig. Returns false when no such entry exists.
   bool remove_part_rig(uint32_t destination_id, uint8_t part);
 

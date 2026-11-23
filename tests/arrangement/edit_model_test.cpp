@@ -532,7 +532,7 @@ TEST_CASE("Part rigs are found, replaced and removed by (destination, part)", "[
     ProjectPartRig entry;
     entry.destination_id = destination;
     entry.part = part;
-    REQUIRE(p.set_part_rig(entry));
+    p.set_part_rig(entry);
   }
   REQUIRE(p.part_rigs().size() == keys.size());
   for (size_t i = 1; i < p.part_rigs().size(); ++i) {
@@ -553,7 +553,7 @@ TEST_CASE("Part rigs are found, replaced and removed by (destination, part)", "[
   ProjectPartRig replacement;
   replacement.destination_id = 7;
   replacement.part = 0;
-  REQUIRE(p.set_part_rig(replacement));
+  p.set_part_rig(replacement);
   CHECK(p.part_rigs().size() == keys.size());
 
   CHECK(p.remove_part_rig(7, 0));

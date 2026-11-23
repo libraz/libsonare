@@ -69,7 +69,7 @@ struct PartChainRuntime {
   std::vector<std::unique_ptr<rt::ProcessorBase>> procs;
   /// The stages asked for, as (processor, params JSON), in order.
   std::vector<std::pair<std::string, std::string>> request;
-  /// Names of the stages built, in signal order, and of those the factory declined.
+  /// Names of the stages built, in signal order, and of the bank-rig stages the factory declined.
   std::vector<std::string> names;
   std::vector<std::string> refused;
   uint8_t mono_prefix = 0;
@@ -186,7 +186,7 @@ class PartFxStage {
 
   bool enabled() const noexcept { return static_cast<bool>(config_.insert_factory); }
 
-  /// Offline render thread: record refused rig stages and every parameter byte
+  /// Offline render thread: record refused bank-rig stages and every parameter byte
   /// apply_unit_sysex() moves into @p recorder; null detaches. Diagnostic only.
   void set_path_recorder(RenderPathRecorder* recorder) noexcept { recorder_ = recorder; }
   /// "part", "destination", "bank" or "none": which entry selects @p part's rig.
@@ -209,9 +209,9 @@ class PartFxStage {
   void publish();
 
   /// CONTROL thread: store @p rig for @p part (kPartRigAllParts for the
-  /// destination default). Returns false when it fails validate_part_rig or a
-  /// built chain stage exceeds 256 samples at the 48 kHz reference rate. A
-  /// factory or processor prepare may throw. Does not publish.
+  /// destination default). Returns false when it fails validate_part_rig, the
+  /// factory declines a chain stage, or a built stage exceeds 256 samples at the
+  /// 48 kHz reference rate. A factory or processor prepare may throw. Does not publish.
   bool set_part_rig(uint8_t part, const PartRig& rig);
   /// CONTROL thread: install @p rig and, when @p publish_now is true, publish
   /// the rebuilt chains. A failed rebuild restores the prior rig table; all
@@ -432,9 +432,10 @@ class PartFxStage {
   /// units where nothing changed. @p tracks and @p next_id come in describing
   /// the last publication and leave describing this one.
   std::shared_ptr<PartFxSnapshot> build_snapshot(UnitTracks& tracks, uint64_t& next_id);
-  /// The chain for @p request: the previous snapshot's when it asked for the same.
+  /// The chain for @p request: the previous snapshot's when it asked for the same. Its first
+  /// @p stored_stages entries are the stored rig's, which set_part_rig() already built once.
   std::shared_ptr<const PartChainRuntime> realize_chain(
-      int part, std::vector<std::pair<std::string, std::string>> request,
+      int part, std::vector<std::pair<std::string, std::string>> request, size_t stored_stages,
       const PartFxSnapshot* previous) const;
   /// Whether @p track still describes what building unit @p unit would give.
   bool unit_track_current(const UnitTrack& track, size_t unit) const noexcept;

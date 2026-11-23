@@ -1910,7 +1910,7 @@ TEST_CASE("assist protects every project global while allowing sidecars", "[assi
 
   sonare::midi::PartRig rig;
   rig.mode = sonare::midi::PartRigMode::kChain;
-  rig.stages.push_back({"chorus", "{\"mix\":0.3}"});
+  rig.stages.push_back({"saturation.softClipper", "{\"driveDb\":3}"});
 
   AssistSidecar sidecar;
   sidecar.module_id = "scope-sidecar";

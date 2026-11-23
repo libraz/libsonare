@@ -14,6 +14,7 @@
 #include "rt/biquad_design.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
@@ -112,7 +113,11 @@ Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
   part_fx_ = PartFxStage(std::move(fx));
   for (uint8_t part = 0; part < 16; ++part) {
     const PartRig& rig = config_.part_rigs[part];
-    if (rig.mode != PartRigMode::kBank) part_fx_.set_part_rig(part, rig);
+    if (rig.mode != PartRigMode::kBank && !part_fx_.set_part_rig(part, rig)) {
+      throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter,
+                                              "part_rigs[" + std::to_string(part) + "]",
+                                              "is not a rig this player can build");
+    }
   }
 #if defined(SONARE_MIDI_WITH_FX)
   effects_ = std::make_unique<GsEffectBus>(config_.effects);

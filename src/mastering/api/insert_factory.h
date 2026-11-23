@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "mastering/api/named_processor.h"
+#include "midi/part_rig.h"
 #include "rt/processor_base.h"
 #include "util/resource_limits.h"
 
@@ -230,6 +231,15 @@ struct InsertTiming {
 ///         construction or prepare refuses.
 InsertTiming insert_timing(const std::string& name, const std::string& json_params,
                            double sample_rate);
+
+/// @brief Refuses a part-rig chain no player can build: each stage is built with every key it
+///        is given read, prepared at kInsertProbeSampleRate, and held to
+///        midi::kMaxPartRigLatencySamples.
+/// @details Refusals are SonareParameterRefusal (InvalidParameter) rooted at @c inserts
+///          (`inserts[i].processor`, `inserts[i].params.<key>`, `inserts[i]`), for the caller to
+///          relabel under where the chain sits. The stage count and empty names are the shape
+///          check's (midi::validate_part_rig), not this one's.
+void validate_part_rig_chain(const std::vector<midi::PartRigStage>& stages);
 
 /// @brief Canonical field paths for one entry of the parameter info array.
 /// @details The array is the root, so each path begins with the `[]` element

@@ -188,6 +188,27 @@ TEST_CASE("Recorded rig stages are the chains the player published", "[midi][rig
   CHECK(recorder.complete());
 }
 
+TEST_CASE("A bank-rig stage the factory declines is recorded as skipped",
+          "[midi][rig][render-path]") {
+  Sf2PlayerConfig cfg = player_config();
+  cfg.insert_factory = [](std::string_view name,
+                          std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+    if (name == "saturation.ampSim") return nullptr;
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player player(cfg);
+  RenderPathRecorder recorder;
+  REQUIRE(player.set_render_path_recorder(&recorder));
+  (void)play(player);
+  const RenderPathTopology* topology = last_topology(recorder);
+  REQUIRE(topology != nullptr);
+  CHECK(topology->parts[0].program == 27);
+  CHECK(std::string_view(topology->parts[0].rig_source) == "bank");
+  CHECK(topology->parts[0].stages.empty());
+  CHECK(topology->parts[0].skipped == std::vector<std::string>{"saturation.ampSim"});
+  CHECK_FALSE(recorder.complete());
+}
+
 TEST_CASE("An OD Sw edit is recorded at the frame it took effect", "[midi][rig][render-path]") {
   Sf2Player player(player_config());
   RenderPathRecorder recorder;

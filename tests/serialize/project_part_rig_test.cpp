@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <string>
+#include <vector>
 
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_history.h"
@@ -12,6 +13,7 @@
 #include "arrangement/retained_bytes.h"
 #include "midi/part_rig.h"
 #include "serialize/project_serializer.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 namespace {
@@ -23,7 +25,7 @@ using sonare::midi::PartRigStage;
 
 constexpr const char* kChainJson =
     R"([{"processor":"saturation.softClipper","params":{}},)"
-    R"({"processor":"saturation.softClipper","params":{"drive":0.5}}])";
+    R"({"processor":"saturation.softClipper","params":{"driveDb":0.5}}])";
 
 struct ProjectHandle {
   SonareProject* p = nullptr;
@@ -83,7 +85,7 @@ TEST_CASE("part rigs round-trip", "[serialize][part_rig]") {
   const json::Value* drive_params = chain.find("inserts")->as_array()[1].find("params");
   REQUIRE(drive_params != nullptr);
   REQUIRE(drive_params->is_object());
-  CHECK(drive_params->find("drive")->as_number() == 0.5);
+  CHECK(drive_params->find("driveDb")->as_number() == 0.5);
   const json::Value& dest_default = rigs->as_array()[2];
   CHECK(dest_default.find("part")->as_number() == 255.0);
   CHECK(dest_default.find("mode")->as_string() == "none");
@@ -225,26 +227,21 @@ TEST_CASE("part rig entries survive without a referencing track", "[serialize][p
   sonare_project_destroy(loaded);
 }
 
-TEST_CASE("part rig decode honours the schema version and shape", "[serialize][part_rig]") {
+TEST_CASE("part rig decode honours the schema version", "[serialize][part_rig]") {
   using sonare::serialize::project_from_json;
   const char* body =
       R"("partRigs":[{"destinationId":3,"part":1,"mode":"none"},)"
-      R"({"destinationId":3,"part":16,"mode":"none"},)"
-      R"({"destinationId":3,"part":2,"mode":"bogus"},)"
-      R"({"destinationId":3,"part":4,"mode":"chain"},)"
-      R"({"destinationId":3,"part":5,"mode":"bank","inserts":[{"processor":"a","params":{}}]},)"
       R"({"destinationId":3,"part":6,"mode":"chain",)"
-      R"("inserts":[{"processor":"x.y","params":{}}]}]})";
+      R"("inserts":[{"processor":"saturation.softClipper","params":{"driveDb":3}}]}]})";
 
-  const auto v5 = project_from_json(std::string(R"({"version":7,)") + body);
-  REQUIRE(v5.ok());
-  // Only the well-formed entries load; the rest are dropped with warnings.
-  REQUIRE(v5.project->part_rigs().size() == 2);
-  CHECK(v5.project->part_rigs()[0].part == 1);
-  CHECK(v5.project->part_rigs()[0].rig.mode == PartRigMode::kNone);
-  CHECK(v5.project->part_rigs()[1].part == 6);
-  CHECK(v5.project->part_rigs()[1].rig.stages[0].processor == "x.y");
-  CHECK_FALSE(v5.diagnostics.empty());
+  const auto current = project_from_json(std::string(R"({"version":7,)") + body);
+  REQUIRE(current.ok());
+  REQUIRE(current.project->part_rigs().size() == 2);
+  CHECK(current.project->part_rigs()[0].part == 1);
+  CHECK(current.project->part_rigs()[0].rig.mode == PartRigMode::kNone);
+  CHECK(current.project->part_rigs()[1].part == 6);
+  CHECK(current.project->part_rigs()[1].rig.stages[0].processor == "saturation.softClipper");
+  CHECK(current.diagnostics.empty());
 
   // An earlier or later document is refused, never read.
   for (const char* version : {"4", "5", "6", "8"}) {
@@ -254,7 +251,51 @@ TEST_CASE("part rig decode honours the schema version and shape", "[serialize][p
   }
 }
 
-TEST_CASE("part rig decode bounds malformed-entry diagnostics", "[serialize][part_rig]") {
+TEST_CASE("part rig decode refuses a malformed entry under its document path",
+          "[serialize][part_rig]") {
+  using sonare::serialize::project_from_json;
+  struct Row {
+    const char* entry;
+    const char* refusal;
+  };
+  const Row rows[] = {
+      {R"({"destinationId":3,"part":16,"mode":"none"})",
+       "partRigs[1].part must be 0 to 15, or 255 for the destination default"},
+      {R"({"destinationId":3,"part":2,"mode":"bogus"})",
+       "partRigs[1].mode must be one of bank, none, chain"},
+      {R"({"destinationId":3,"part":4,"mode":"chain"})",
+       "partRigs[1].inserts must hold 1 to 8 entries for a chain rig"},
+      {R"({"destinationId":3,"part":5,"mode":"bank",)"
+       R"("inserts":[{"processor":"saturation.softClipper","params":{}}]})",
+       "partRigs[1].inserts must be empty unless mode is chain"},
+      {R"({"destinationId":3,"part":6,"mode":"chain","inserts":[1]})", "partRigs[1].inserts[0]"},
+      {R"({"destinationId":3,"part":6,"mode":"chain","inserts":[{"params":{}}]})",
+       "partRigs[1].inserts[0].processor"},
+      {R"({"destinationId":3,"part":6,"mode":"chain",)"
+       R"("inserts":[{"processor":"saturation.softClipper","params":"{}"}]})",
+       "partRigs[1].inserts[0].params"},
+      {R"({"destinationId":3,"part":6,"mode":"chain",)"
+       R"("inserts":[{"processor":"no.such.processor","params":{}}]})",
+       "partRigs[1].inserts[0].processor must name an insert processor"},
+      {R"({"destinationId":3,"part":6,"mode":"chain",)"
+       R"("inserts":[{"processor":"saturation.softClipper","params":{"drive":0.5}}]})",
+       "partRigs[1].inserts[0].params"},
+  };
+  for (const Row& row : rows) {
+    CAPTURE(row.entry);
+    const std::string document =
+        std::string(R"({"version":7,"partRigs":[{"destinationId":3,"part":1,"mode":"none"},)") +
+        row.entry + "]}";
+    const auto result = project_from_json(document);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE(result.diagnostics.size() == 1);
+    CHECK(result.diagnostics.front().code == "invalid_format");
+    CAPTURE(result.diagnostics.front().message);
+    CHECK(result.diagnostics.front().message.find(row.refusal) != std::string::npos);
+  }
+}
+
+TEST_CASE("part rig decode stops at the first malformed entry", "[serialize][part_rig]") {
   using sonare::serialize::project_from_json;
 
   std::string document = R"({"version":7,"partRigs":[)";
@@ -265,24 +306,10 @@ TEST_CASE("part rig decode bounds malformed-entry diagnostics", "[serialize][par
   document += "]}";
 
   const auto result = project_from_json(document);
-  REQUIRE(result.ok());
-  REQUIRE(result.project->part_rigs().empty());
-
-  std::size_t invalid_part_rig_count = 0;
-  std::size_t truncated_count = 0;
-  std::string truncated_message;
-  for (const auto& diagnostic : result.diagnostics) {
-    if (diagnostic.code == "invalid_part_rig") {
-      ++invalid_part_rig_count;
-    } else if (diagnostic.code == "decode_diagnostics_truncated") {
-      ++truncated_count;
-      truncated_message = diagnostic.message;
-    }
-  }
-  CHECK(invalid_part_rig_count == 128);
-  CHECK(truncated_count == 1);
-  CHECK(result.diagnostics.size() == 129);
-  CHECK(truncated_message == "2 additional decode diagnostics were suppressed");
+  REQUIRE_FALSE(result.ok());
+  REQUIRE(result.diagnostics.size() == 1);
+  CHECK(result.diagnostics.front().code == "invalid_format");
+  CHECK(result.diagnostics.front().message.find("partRigs[0].part") != std::string::npos);
 }
 
 TEST_CASE("Project part rig model keeps one entry per key in canonical order",
@@ -291,32 +318,73 @@ TEST_CASE("Project part rig model keeps one entry per key in canonical order",
   arr::Project project;
   PartRig none;
   none.mode = PartRigMode::kNone;
-  CHECK(project.set_part_rig({9, 3, none}));
-  CHECK(project.set_part_rig({2, 0xFF, none}));
-  CHECK(project.set_part_rig({2, 1, none}));
+  project.set_part_rig({9, 3, none});
+  project.set_part_rig({2, 0xFF, none});
+  project.set_part_rig({2, 1, none});
   PartRig chain;
   chain.mode = PartRigMode::kChain;
   chain.stages.push_back({"saturation.softClipper", "{}"});
-  CHECK(project.set_part_rig({2, 1, chain}));
+  project.set_part_rig({2, 1, chain});
   REQUIRE(project.part_rigs().size() == 3);
   CHECK(project.part_rigs()[0].part == 1);
   CHECK(project.part_rigs()[1].part == 0xFF);
   CHECK(project.part_rigs()[2].destination_id == 9);
   CHECK(project.find_part_rig(2, 1)->rig.mode == PartRigMode::kChain);
   CHECK(project.find_part_rig(2, 2) == nullptr);
-
-  // Shape violations are refused by the setter.
-  CHECK_FALSE(project.set_part_rig({1, 16, none}));
-  PartRig bad_chain;
-  bad_chain.mode = PartRigMode::kChain;
-  CHECK_FALSE(project.set_part_rig({1, 0, bad_chain}));
   CHECK(project.remove_part_rig(2, 1));
   CHECK_FALSE(project.remove_part_rig(2, 1));
 
   // Memory accounting covers the container and the command payload.
   const std::size_t base = sonare::arrangement::retained::dynamic_bytes(project);
-  CHECK(project.set_part_rig({4, 0, chain}));
+  project.set_part_rig({4, 0, chain});
   CHECK(sonare::arrangement::retained::dynamic_bytes(project) > base);
   arr::SetPartRig command(1, 0, chain);
   CHECK(command.retained_bytes() > sizeof(command));
+}
+
+TEST_CASE("Project part rig setter refuses what no instrument could build",
+          "[serialize][part_rig][arrangement]") {
+  namespace arr = sonare::arrangement;
+  using sonare::ErrorCode;
+  using sonare::SonareParameterRefusal;
+  auto chain_of = [](std::vector<PartRigStage> stages) {
+    PartRig rig;
+    rig.mode = PartRigMode::kChain;
+    rig.stages = std::move(stages);
+    return rig;
+  };
+  PartRig none;
+  none.mode = PartRigMode::kNone;
+  PartRig none_with_stage = none;
+  none_with_stage.stages.push_back({"saturation.softClipper", "{}"});
+  const std::vector<PartRigStage> nine(9, PartRigStage{"saturation.softClipper", "{}"});
+  struct Row {
+    arr::ProjectPartRig entry;
+    const char* refusal;
+  };
+  const Row rows[] = {
+      {{1, 16, none}, "part must be 0 to 15, or 255 for the destination default"},
+      {{1, 0, chain_of({})}, "inserts must hold 1 to 8 entries for a chain rig"},
+      {{1, 0, chain_of(nine)}, "inserts must hold 1 to 8 entries for a chain rig"},
+      {{1, 0, none_with_stage}, "inserts must be empty unless mode is chain"},
+      {{1, 0, chain_of({{"", "{}"}})}, "inserts[0].processor must not be empty"},
+      {{1, 0, chain_of({{"saturation.softClipper", "{}"}, {"no.such.processor", "{}"}})},
+       "inserts[1].processor must name an insert processor"},
+      {{1, 0, chain_of({{"saturation.softClipper", R"({"drive":0.5})"}})},
+       "inserts[0].params.drive"},
+      {{1, 0, chain_of({{"saturation.softClipper", R"({"mix":2})"}})}, "inserts[0].params.mix"},
+  };
+  for (const Row& row : rows) {
+    CAPTURE(row.refusal);
+    arr::Project project;
+    try {
+      project.set_part_rig(row.entry);
+      FAIL("the setter accepted the entry");
+    } catch (const SonareParameterRefusal& e) {
+      CAPTURE(e.what());
+      CHECK(e.code() == ErrorCode::InvalidParameter);
+      CHECK(std::string(e.what()).find(row.refusal) != std::string::npos);
+    }
+    CHECK(project.part_rigs().empty());
+  }
 }

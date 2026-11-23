@@ -7,7 +7,8 @@
 namespace sonare::arrangement {
 
 bool SetPartRig::apply(Project& project, MidiContentStore& /*store*/) {
-  return project.set_part_rig(entry_);
+  project.set_part_rig(entry_);
+  return true;
 }
 
 EditCommandPtr SetPartRig::invert(const Project& before,

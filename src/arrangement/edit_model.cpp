@@ -10,7 +10,13 @@
 #include <utility>
 
 #include "arrangement/edit_command_internal.h"
+#include "util/exception.h"
+#include "util/json_schema.h"
 #include "util/numeric_validation.h"
+
+#if defined(SONARE_WITH_MASTERING)
+#include "mastering/api/insert_factory.h"
+#endif
 
 namespace sonare::arrangement {
 
@@ -331,8 +337,47 @@ const ProjectPartRig* Project::find_part_rig(uint32_t destination_id, uint8_t pa
   return &*it;
 }
 
-bool Project::set_part_rig(ProjectPartRig entry) {
-  if (!midi::validate_part_rig(entry.part, entry.rig)) return false;
+namespace {
+
+[[noreturn]] void refuse_part_rig(const std::string& subject, const std::string& predicate,
+                                  ErrorCode code = ErrorCode::InvalidParameter) {
+  throw SonareParameterRefusal::predicate(code, subject, predicate).as_caller_spelled();
+}
+
+// The refusals midi::validate_part_rig answers with false, each naming its field.
+void refuse_malformed_part_rig(uint8_t part, const midi::PartRig& rig) {
+  namespace schema = util::json::schema;
+  if (part >= 16 && part != midi::kPartRigAllParts) {
+    refuse_part_rig("part", "must be 0 to 15, or 255 for the destination default");
+  }
+  if (rig.mode != midi::PartRigMode::kChain) {
+    if (!rig.stages.empty()) refuse_part_rig("inserts", "must be empty unless mode is chain");
+    return;
+  }
+  if (rig.stages.empty() || rig.stages.size() > midi::kMaxPartRigStages) {
+    refuse_part_rig("inserts", "must hold 1 to " + std::to_string(midi::kMaxPartRigStages) +
+                                   " entries for a chain rig");
+  }
+  for (std::size_t i = 0; i < rig.stages.size(); ++i) {
+    if (rig.stages[i].processor.empty()) {
+      refuse_part_rig(schema::child_path(schema::index_path("inserts", i), "processor"),
+                      "must not be empty");
+    }
+  }
+}
+
+}  // namespace
+
+void Project::set_part_rig(ProjectPartRig entry) {
+  refuse_malformed_part_rig(entry.part, entry.rig);
+  if (entry.rig.mode == midi::PartRigMode::kChain) {
+#if defined(SONARE_WITH_MASTERING)
+    mastering::api::validate_part_rig_chain(entry.rig.stages);
+#else
+    refuse_part_rig("mode", "must not be chain in a build without insert chains",
+                    ErrorCode::NotSupported);
+#endif
+  }
   auto it = part_rig_lower_bound(part_rigs_, entry.destination_id, entry.part);
   if (it != part_rigs_.end() && it->destination_id == entry.destination_id &&
       it->part == entry.part) {
@@ -340,7 +385,6 @@ bool Project::set_part_rig(ProjectPartRig entry) {
   } else {
     part_rigs_.insert(it, std::move(entry));
   }
-  return true;
 }
 
 bool Project::remove_part_rig(uint32_t destination_id, uint8_t part) {

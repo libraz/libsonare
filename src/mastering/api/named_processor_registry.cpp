@@ -13,6 +13,7 @@
 #include "rt/processor_base.h"
 #include "util/exception.h"
 #include "util/json.h"
+#include "util/json_schema.h"
 
 namespace sonare::mastering::api {
 
@@ -180,17 +181,61 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept {
   return "multichannel";
 }
 
-InsertTiming insert_timing(const std::string& name, const std::string& json_params,
-                           double sample_rate) {
+namespace {
+
+// make_insert() refusing a key the insert does not read; nullptr for an unknown @p name.
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert_reading_every_key(
+    const std::string& name, const std::string& json_params) {
   std::vector<std::string> unknown;
   std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(name, json_params, &unknown);
+  if (processor != nullptr) detail::refuse_unread_params(unknown, insert_param_names(name));
+  return processor;
+}
+
+[[noreturn]] void refuse_part_rig_stage(const std::string& subject, const std::string& predicate) {
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject, predicate)
+      .as_caller_spelled();
+}
+
+}  // namespace
+
+InsertTiming insert_timing(const std::string& name, const std::string& json_params,
+                           double sample_rate) {
+  std::unique_ptr<sonare::rt::ProcessorBase> processor =
+      make_insert_reading_every_key(name, json_params);
   if (processor == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown insert processor: " + name + retired_processor_note(name));
   }
-  detail::refuse_unread_params(unknown, insert_param_names(name));
   processor->prepare(sample_rate, kInsertProbeBlockSize);
   return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
+}
+
+void validate_part_rig_chain(const std::vector<midi::PartRigStage>& stages) {
+  namespace schema = sonare::util::json::schema;
+  for (std::size_t i = 0; i < stages.size(); ++i) {
+    const midi::PartRigStage& stage = stages[i];
+    const std::string at = schema::index_path("inserts", i);
+    std::unique_ptr<sonare::rt::ProcessorBase> insert;
+    try {
+      insert = make_insert_reading_every_key(stage.processor, stage.params_json);
+      if (insert) insert->prepare(kInsertProbeSampleRate, kInsertProbeBlockSize);
+    } catch (const SonareParameterRefusal& ex) {
+      throw schema::relabel_under(ex, schema::child_path(at, "params"), ErrorCode::InvalidParameter)
+          .as_caller_spelled();
+    } catch (const SonareException& ex) {
+      refuse_part_rig_stage(at, std::string("is refused: ") + ex.what());
+    }
+    if (!insert) {
+      refuse_part_rig_stage(
+          schema::child_path(at, "processor"),
+          "must name an insert processor" + retired_processor_note(stage.processor));
+    }
+    if (insert->latency_samples_q8() > (midi::kMaxPartRigLatencySamples << 8)) {
+      refuse_part_rig_stage(at, "must report a latency of at most " +
+                                    std::to_string(midi::kMaxPartRigLatencySamples) + " samples");
+    }
+  }
 }
 
 namespace {

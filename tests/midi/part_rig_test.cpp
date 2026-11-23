@@ -29,6 +29,7 @@
 #include "rt/processor_base.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -494,6 +495,8 @@ TEST_CASE("sf2: an invalid entry is refused and changes nothing", "[midi][rig][p
   PartRig stray = mode(PartRigMode::kNone);
   stray.stages.push_back(kClipper);
   REQUIRE_FALSE(player.set_part_rig(0, stray));
+  // A stage the factory declines to build.
+  REQUIRE_FALSE(player.set_part_rig(0, chain({kClipper, {"no.such.processor", "{}"}})));
   settle(player);
   REQUIRE(player.part_rig_stage_names(0) == bank_names(29));
 }
@@ -653,6 +656,18 @@ TEST_CASE("native: without GM programs kBank binds nothing and a chain still app
   REQUIRE(synth.part_rig_stage_names(2).empty());
 }
 
+TEST_CASE("sf2: a configured rig the player cannot build refuses the player", "[midi][rig][part]") {
+  Sf2PlayerConfig cfg = with_factory();
+  cfg.part_rigs[3] = chain({kClipper, {"no.such.processor", "{}"}});
+  try {
+    Sf2Player player(cfg);
+    FAIL("the player was built");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(e.what()).find("part_rigs[3]") != std::string::npos);
+  }
+}
+
 TEST_CASE("native: an invalid entry is refused and changes nothing", "[midi][rig][part]") {
   NativeSynth synth(native_with_factory());
   synth.prepare(kOutRate, 256);
@@ -662,6 +677,8 @@ TEST_CASE("native: an invalid entry is refused and changes nothing", "[midi][rig
   PartRig stray = mode(PartRigMode::kNone);
   stray.stages.push_back(kClipper);
   REQUIRE_FALSE(synth.set_part_rig(0, stray));
+  // A stage the factory declines to build.
+  REQUIRE_FALSE(synth.set_part_rig(0, chain({kClipper, {"no.such.processor", "{}"}})));
   settle(synth);
   REQUIRE(synth.part_rig_stage_names(0) == bank_names(29));
 }

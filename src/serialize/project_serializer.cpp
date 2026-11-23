@@ -65,28 +65,38 @@ Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
   return o;
 }
 
-// Returns nullopt for a value no part rig can take (part or mode out of range).
-// Whether the stages fit the mode is left to Project::set_part_rig.
-std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v,
-                                                              const std::string& path) {
+// Reads one partRigs entry at @p path, refusing a part or mode no rig can take. Whether the
+// stages fit the mode, and whether a chain can be built, is Project::set_part_rig's to refuse.
+arrangement::ProjectPartRig part_rig_from_json(const Value& v, const std::string& path) {
   arrangement::ProjectPartRig entry;
   entry.destination_id = uint_or(v, path, "destinationId", 0);
   uint8_t part = 0;
-  if (!numeric::checked_integral_cast(num_or(v, path, "part", 0.0), &part)) return std::nullopt;
+  if (!numeric::checked_integral_cast(num_or(v, path, "part", 0.0), &part)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          schema::refusal(schema::child_path(path, "part"),
+                                          "must be 0 to 15, or 255 for the destination default"));
+  }
   entry.part = part;
   const std::string mode = str_or(v, path, "mode", "");
   const auto* found = std::find(std::begin(kPartRigModeNames), std::end(kPartRigModeNames), mode);
-  if (found == std::end(kPartRigModeNames)) return std::nullopt;
+  if (found == std::end(kPartRigModeNames)) {
+    throw SonareException(
+        ErrorCode::InvalidFormat,
+        schema::refusal(schema::child_path(path, "mode"), "must be one of bank, none, chain"));
+  }
   entry.rig.mode = static_cast<midi::PartRigMode>(found - std::begin(kPartRigModeNames));
   if (const auto* inserts = array_at(v, path, "inserts")) {
     const std::string inserts_path = schema::child_path(path, "inserts");
     std::size_t index = 0;
     for (const auto& sv : *inserts) {
       const std::string insert_path = schema::index_path(inserts_path, index++);
-      if (!sv.is_object()) return std::nullopt;
-      const Value* params = sv.find("params");
-      if (params != nullptr && !params->is_object()) return std::nullopt;
-      entry.rig.stages.push_back({str_or(sv, insert_path, "processor", ""),
+      const Value& stage = object_element(sv, insert_path);
+      if (stage.find("processor") == nullptr) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              schema::missing_key(schema::child_path(insert_path, "processor")));
+      }
+      const Value* params = object_value_at(stage, insert_path, "params");
+      entry.rig.stages.push_back({str_or(stage, insert_path, "processor", ""),
                                   params != nullptr ? json::dump(*params) : std::string("{}")});
     }
   }
@@ -768,17 +778,18 @@ DeserializeResult project_from_json(const std::string& json_text) {
       }
     }
 
-    // Part rigs (plain project metadata). An entry that fails the shared shape
-    // check is dropped with a warning.
+    // Part rigs: an entry the setter would refuse is refused under its document path, never
+    // dropped; a chain in a build without insert chains stays NotSupported.
     if (const auto* arr = array_at(root, "", "partRigs")) {
       std::size_t index = 0;
       for (const auto& rv : *arr) {
         const std::string at = schema::index_path("partRigs", index++);
-        const auto entry = part_rig_from_json(object_element(rv, at), at);
-        if (!entry || !project.set_part_rig(*entry)) {
-          decode_diagnostics.warn("invalid_part_rig",
-                                  "a part rig entry has an invalid part, mode or inserts "
-                                  "and was dropped");
+        try {
+          project.set_part_rig(part_rig_from_json(object_element(rv, at), at));
+        } catch (const SonareParameterRefusal& e) {
+          schema::rethrow_under(e, at,
+                                e.code() == ErrorCode::NotSupported ? ErrorCode::NotSupported
+                                                                    : ErrorCode::InvalidFormat);
         }
       }
     }
