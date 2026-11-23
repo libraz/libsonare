@@ -156,6 +156,80 @@ TEST_CASE("MatchEq bands follow reference minus source difference", "[mastering]
   REQUIRE(bands[2].gain_db < 0.0f);
 }
 
+TEST_CASE("MatchEq decides a band with no energy on either side before smoothing",
+          "[mastering][match]") {
+  constexpr float kNone = -std::numeric_limits<float>::infinity();
+  const std::vector<float> grid{100.0f, 200.0f, 400.0f, 800.0f, 1600.0f};
+  const MatchEqConfig unsmoothed{4, 12.0f, 100.0f, 1600.0f, 1.0f, 0};
+  const auto curve_of = [&](const std::vector<float>& source_db,
+                            const std::vector<float>& reference_db, const MatchEqConfig& config) {
+    return match_eq_curve({grid, source_db, 48000}, {grid, reference_db, 48000}, config);
+  };
+
+  // Source empty: nothing to shape. Reference empty: the full cut. Both empty: nothing.
+  const auto curve = curve_of({-20.0f, kNone, -20.0f, kNone, -20.0f},
+                              {-20.0f, -10.0f, kNone, kNone, -20.0f}, unsmoothed);
+  REQUIRE(curve.gain_db.size() == grid.size());
+  CHECK(curve.gain_db[1] == 0.0f);
+  CHECK(curve.gain_db[2] == -12.0f);
+  CHECK(curve.gain_db[3] == 0.0f);
+
+  // The reference-empty cut is the limit of a vanishing reference level.
+  const auto tiny = curve_of({-20.0f, -20.0f, -20.0f, -20.0f, -20.0f},
+                             {-20.0f, -20.0f, -600.0f, -20.0f, -20.0f}, unsmoothed);
+  const auto zero = curve_of({-20.0f, -20.0f, -20.0f, -20.0f, -20.0f},
+                             {-20.0f, -20.0f, kNone, -20.0f, -20.0f}, unsmoothed);
+  CHECK(tiny.gain_db[2] == zero.gain_db[2]);
+
+  // Smoothing spreads no NaN or infinity from those bands into their neighbours.
+  const auto smoothed =
+      curve_of({-20.0f, kNone, -20.0f, kNone, -20.0f}, {-20.0f, -10.0f, kNone, kNone, -20.0f},
+               {4, 12.0f, 100.0f, 1600.0f, 1.0f, 2});
+  for (const float gain : smoothed.gain_db) {
+    CHECK(std::isfinite(gain));
+    CHECK(std::abs(gain) <= 12.0f);
+  }
+}
+
+TEST_CASE("MatchEq interpolates a reference bin with no energy without a NaN",
+          "[mastering][match]") {
+  constexpr float kNone = -std::numeric_limits<float>::infinity();
+  // The source grid falls between the reference's bins, so the reference is interpolated
+  // across an empty bin at 200 Hz on both sides of it.
+  const ReferenceSpectrum source{
+      {100.0f, 150.0f, 300.0f, 400.0f}, {-20.0f, -20.0f, -20.0f, -20.0f}, 48000};
+  const ReferenceSpectrum reference{{100.0f, 200.0f, 400.0f}, {-20.0f, kNone, -20.0f}, 48000};
+  const auto curve = match_eq_curve(source, reference, {4, 12.0f, 100.0f, 400.0f, 1.0f, 0});
+  REQUIRE(curve.gain_db.size() == 4);
+  CHECK(curve.gain_db[0] == 0.0f);
+  CHECK(curve.gain_db[1] == -12.0f);
+  CHECK(curve.gain_db[2] == -12.0f);
+  CHECK(curve.gain_db[3] == 0.0f);
+}
+
+TEST_CASE("MatchEq refuses a side with no measurable level on every entry", "[mastering][match]") {
+  constexpr float kNone = -std::numeric_limits<float>::infinity();
+  const ReferenceSpectrum sounding{{100.0f, 1000.0f}, {-20.0f, -20.0f}, 48000};
+  const ReferenceSpectrum silent{{100.0f, 1000.0f}, {kNone, kNone}, 48000};
+  REQUIRE_THROWS_WITH(match_eq_curve(silent, sounding), "source has no measurable level");
+  REQUIRE_THROWS_WITH(match_eq_curve(sounding, silent), "reference has no measurable level");
+  REQUIRE_THROWS_WITH(match_eq_bands(silent, sounding), "source has no measurable level");
+  sonare::mastering::eq::EqualizerProcessor eq({1});
+  eq.prepare(48000.0, 512);
+  REQUIRE_THROWS_WITH(configure_equalizer_from_match(eq, sounding, silent),
+                      "reference has no measurable level");
+
+  const Audio tone =
+      Audio::from_vector(sonare::test::generate_sine_samples(440.0f, 48000, 4800, 0.5f), 48000);
+  const Audio quiet = Audio::from_vector(std::vector<float>(4800, 0.0f), 48000);
+  REQUIRE_THROWS_WITH(configure_equalizer_from_audio(eq, quiet, tone),
+                      "source has no measurable level");
+  REQUIRE_THROWS_WITH(configure_equalizer_from_audio(eq, tone, quiet),
+                      "reference has no measurable level");
+  REQUIRE_THROWS_WITH(apply_match_eq(tone, reference_spectrum(tone), reference_spectrum(quiet)),
+                      "reference has no measurable level");
+}
+
 TEST_CASE("MatchEq live bands are placed at curve extrema and can configure EqualizerProcessor",
           "[mastering][match]") {
   ReferenceSpectrum source{{100.0f, 250.0f, 1000.0f, 4000.0f, 12000.0f},

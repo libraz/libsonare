@@ -15,6 +15,8 @@ namespace sonare::mastering::match {
 
 struct MatchEqConfig {
   size_t max_bands = 8;
+  /// Bound on each curve gain. A band where the source has no energy gets 0 dB, one where only
+  /// the reference has none gets -max_gain_db, and the decision precedes smoothing.
   float max_gain_db = 12.0f;
   float min_frequency_hz = 40.0f;
   float max_frequency_hz = 18000.0f;
@@ -46,6 +48,8 @@ struct MatchEqFirConfig {
 void validate_config(const MatchEqConfig& config);
 void validate_config(const MatchEqFirConfig& config);
 
+/// @brief The per-frequency gain taking @p source toward @p reference.
+/// @throw SonareParameterRefusal when either side has no measurable level in any bin.
 MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpectrum& reference,
                             const MatchEqConfig& config = {});
 std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rate,

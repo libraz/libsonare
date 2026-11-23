@@ -18,6 +18,8 @@
 #include "util/insertion_sort.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare::mastering::match {
 namespace {
@@ -55,6 +57,9 @@ float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
     t = static_cast<float>(std::log(static_cast<double>(frequency_hz) / f0) /
                            std::log(static_cast<double>(f1) / f0));
   }
+  if (t == 0.0f) return spectrum.db[index - 1];
+  // A bracketing bin with no energy is the limit the interpolation tends to: no energy either.
+  if (spectrum.db[index - 1] == kNoLevelDb || spectrum.db[index] == kNoLevelDb) return kNoLevelDb;
   return spectrum.db[index - 1] + (spectrum.db[index] - spectrum.db[index - 1]) * t;
 }
 
@@ -498,6 +503,16 @@ MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpec
     throw SonareException(ErrorCode::InvalidParameter, "invalid source spectrum");
   }
 
+  const auto loudest = [](const ReferenceSpectrum& spectrum) {
+    float level = kNoLevelDb;
+    for (const float db : spectrum.db) level = std::max(level, db);
+    return level;
+  };
+  util::check::measurable_level(loudest(source), "source",
+                                util::refusal::kNoMeasurableLevelPredicate);
+  util::check::measurable_level(loudest(reference), "reference",
+                                util::refusal::kNoMeasurableLevelPredicate);
+
   MatchEqCurve curve;
   curve.sample_rate = source.sample_rate;
   curve.frequencies.reserve(source.frequencies.size());
@@ -505,9 +520,18 @@ MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpec
   for (float frequency : source.frequencies) {
     if (frequency < config.min_frequency_hz || frequency > config.max_frequency_hz) continue;
     curve.frequencies.push_back(frequency);
-    curve.gain_db.push_back(
-        std::clamp(interpolate_db(reference, frequency) - interpolate_db(source, frequency),
-                   -config.max_gain_db, config.max_gain_db));
+    const float source_db = interpolate_db(source, frequency);
+    const float reference_db = interpolate_db(reference, frequency);
+    // Decided before smoothing so a boost into an empty band cannot bleed into its neighbours.
+    float gain_db = 0.0f;
+    if (source_db == kNoLevelDb) {
+      gain_db = 0.0f;
+    } else if (reference_db == kNoLevelDb) {
+      gain_db = -config.max_gain_db;
+    } else {
+      gain_db = std::clamp(reference_db - source_db, -config.max_gain_db, config.max_gain_db);
+    }
+    curve.gain_db.push_back(gain_db);
   }
 
   curve.gain_db = smooth_log_frequency(curve.frequencies, curve.gain_db, config.smoothing_bins);
