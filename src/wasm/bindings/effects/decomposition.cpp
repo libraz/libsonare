@@ -180,7 +180,7 @@ val js_remix(val samples, val intervals, const val& sample_rate, const val& alig
   // slice. Read the Int32Array straight into int32 storage instead.
   std::vector<int32_t> interval_ints = int32ArrayToVector(intervals, "intervals");
   if (interval_ints.size() % 2 != 0) {
-    throw WasmRangeError("remix intervals must be (start, end) pairs");
+    throw WasmRangeError("intervals must be (start, end) pairs");
   }
   std::vector<std::pair<int, int>> pairs;
   pairs.reserve(interval_ints.size() / 2);
@@ -202,7 +202,7 @@ val js_remix_aligned_intervals(val samples, val intervals, const val& sample_rat
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
   std::vector<int32_t> interval_ints = int32ArrayToVector(intervals, "intervals");
   if (interval_ints.size() % 2 != 0) {
-    throw WasmRangeError("remix intervals must be (start, end) pairs");
+    throw WasmRangeError("intervals must be (start, end) pairs");
   }
   std::vector<std::pair<int, int>> pairs;
   pairs.reserve(interval_ints.size() / 2);

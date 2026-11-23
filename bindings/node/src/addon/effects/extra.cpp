@@ -73,7 +73,7 @@ SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, st
 std::vector<int> ReadRemixIntervals(Napi::Env env, const Napi::Value& value) {
   std::vector<int> intervals = IntVectorFromValue(value, "intervals");
   if (intervals.size() % 2 != 0) {
-    throw Napi::RangeError::New(env, "remix intervals must be (start, end) pairs");
+    throw Napi::RangeError::New(env, "intervals must be (start, end) pairs");
   }
   return intervals;
 }

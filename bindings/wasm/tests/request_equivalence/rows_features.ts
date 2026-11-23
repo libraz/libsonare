@@ -149,7 +149,7 @@ export const ROWS: Row[] = [
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
     oneOf: [
-      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be an integer' },
+      { fields: ['targetSize'], error: 'TypeError: padCenter: targetSize must be a number' },
       { fields: ['values'], error: 'TypeError: padCenter: values must be a Float32Array' },
     ],
   },
@@ -161,7 +161,7 @@ export const ROWS: Row[] = [
     values: { values: SMALL, targetSize: 100, padValue: 0.5 },
     invalid: { targetSize: -1 },
     oneOf: [
-      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be an integer' },
+      { fields: ['targetSize'], error: 'TypeError: fixLength: targetSize must be a number' },
       { fields: ['values'], error: 'TypeError: fixLength: values must be a Float32Array' },
     ],
   },
