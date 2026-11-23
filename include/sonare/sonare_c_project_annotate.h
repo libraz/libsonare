@@ -447,13 +447,6 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
 ///   @p out_mode is NULL.
 SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode);
 
-// ============================================================================
-// Memory management (heap byte buffers)
-// ============================================================================
-
-/// @brief Frees a heap byte buffer returned by @ref sonare_project_export_smf.
-void sonare_free_bytes(uint8_t* ptr);
-
 #ifdef __cplusplus
 }
 #endif

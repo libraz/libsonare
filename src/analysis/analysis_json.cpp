@@ -357,6 +357,7 @@ const std::vector<std::string>& meter_result_schema_paths() {
       "candidates[].numerator",
       "candidates[].denominator",
       "candidates[].confidence",
+      "unobservedBeats",
   };
   return paths;
 }
@@ -387,6 +388,13 @@ std::string meter_result_to_json(const MeterResult& result) {
     candidates.push_back(time_signature_to_value(candidate));
   }
   root["candidates"] = Value(std::move(candidates));
+
+  Array unobserved_beats;
+  unobserved_beats.reserve(result.unobserved_beats.size());
+  for (int beat : result.unobserved_beats) {
+    unobserved_beats.push_back(Value(beat));
+  }
+  root["unobservedBeats"] = Value(std::move(unobserved_beats));
 
   return sonare::util::json::dump(Value(std::move(root)));
 }

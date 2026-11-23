@@ -12,15 +12,26 @@
       "rmsDb"
     ],
     "DynamicsProcessorResult": ["latencySamples", "samples"],
+    "MeterEstimate": [
+      "candidateScores",
+      "candidates",
+      "downbeatPhase",
+      "grouping",
+      "searched",
+      "timeSignature",
+      "unobservedBeats"
+    ],
     "CapabilityCatalog": [
       "abi",
       "chain",
+      "encode",
       "masteringPresets",
       "presets",
       "processors",
       "version"
     ],
     "CapabilityCatalogChain": ["lists", "params", "stages"],
+    "AudioFormatCapabilities": ["builtin", "ffmpeg"],
     "CapabilityCatalogChainList": [
       "form",
       "key",
@@ -76,6 +87,7 @@
       "category",
       "causal",
       "channelPolicy",
+      "description",
       "forms",
       "id",
       "kind",

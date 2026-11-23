@@ -40,7 +40,8 @@ const std::vector<std::pair<std::string, std::string>>& analysis_result_null_mea
 ///     "searched": bool,
 ///     "grouping": [number],
 ///     "candidateScores": [number],
-///     "candidates": [{numerator, denominator, confidence}]
+///     "candidates": [{numerator, denominator, confidence}],
+///     "unobservedBeats": [integer]
 ///   }
 /// candidateScores is parallel to the requested candidate numerators, while
 /// candidates is ordered by descending support, so the two do not index alike.
@@ -51,6 +52,8 @@ const std::vector<std::pair<std::string, std::string>>& analysis_result_null_mea
 /// grouping holds the beats per accent group within one bar and always sums to
 /// timeSignature.numerator; a single entry means no internal division was
 /// resolved.
+/// unobservedBeats lists zero-based masked beat indices in ascending order.
+/// It is an empty array when no per-beat energy was supplied.
 /// searched is false when the beat series was too short to score any candidate,
 /// in which case every other field carries the fixed fallback rather than a
 /// measurement, timeSignature.confidence included, which is 0.

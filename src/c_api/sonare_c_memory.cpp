@@ -197,6 +197,8 @@ void sonare_free_ints(int* ptr) { delete[] ptr; }
 
 void sonare_free_string(char* ptr) { delete[] ptr; }
 
+void sonare_free_bytes(uint8_t* ptr) { delete[] ptr; }
+
 void sonare_free_key_candidates(SonareKeyCandidate* ptr) { delete[] ptr; }
 
 const char* sonare_error_message(SonareError error) {

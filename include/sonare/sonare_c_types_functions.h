@@ -527,6 +527,8 @@ void sonare_meter_beats_init(SonareMeterBeats* beats);
 ///   The JSON includes the grouping and a searched flag. For too few beats to score a candidate,
 ///   searched is false and the fallback has zero confidence. The timeSignature confidence is the
 ///   margin over the runner-up. Each candidate's confidence is its share of the summed support.
+///   unobservedBeats lists zero-based masked beat indices in ascending order. It is an empty
+///   array when no per-beat energy was supplied.
 /// @param options Required scoring options, initialized by sonare_meter_options_init.
 /// @param[out] out_json Receives JSON on success or NULL on error. Free with sonare_free_string.
 SonareError sonare_estimate_meter_json(const SonareMeterBeats* beats,
@@ -538,6 +540,9 @@ void sonare_free_floats(float* ptr);
 void sonare_free_ints(int* ptr);
 /// @brief Releases a string the library handed to the caller; NULL is ignored.
 void sonare_free_string(char* ptr);
+/// @brief Releases a byte buffer the library allocated (an encoded file, an exported SMF);
+///        NULL is ignored.
+void sonare_free_bytes(uint8_t* ptr);
 /// @brief Releases a key-candidate array; NULL is ignored.
 void sonare_free_key_candidates(SonareKeyCandidate* ptr);
 

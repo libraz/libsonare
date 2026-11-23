@@ -103,6 +103,28 @@ TEST_CASE("sonare_estimate_meter_json reads the supplied beat evidence", "[c_api
   const double attacked_confidence = all_attacks_result["timeSignature"]["confidence"].as_number();
   CAPTURE(masked_confidence, attacked_confidence);
   CHECK(masked_confidence > attacked_confidence + 0.05);
+
+  REQUIRE(masked_result["unobservedBeats"].is_array());
+  const auto& masked_beats = masked_result["unobservedBeats"].as_array();
+  REQUIRE(masked_beats.size() == 1);
+  CHECK(masked_beats[0].as_int() == 0);
+  REQUIRE(all_attacks_result["unobservedBeats"].is_array());
+  CHECK(all_attacks_result["unobservedBeats"].as_array().empty());
+  REQUIRE(unmeasured["unobservedBeats"].is_array());
+  CHECK(unmeasured["unobservedBeats"].as_array().empty());
+
+  const float two_peaks[] = {16.0f, 1.0f, 1.0f, 1.0f, 18.0f, 1.0f, 1.0f, 1.0f};
+  const uint8_t two_missing_attacks[] = {0, 1, 1, 1, 0, 1, 1, 1};
+  const auto two_masked = initialized_meter_beats(masked_accent, 8, two_missing_attacks, two_peaks);
+  json = nullptr;
+  REQUIRE(sonare_estimate_meter_json(&two_masked, &options, &json) == SONARE_OK);
+  const auto ordered_result = sonare::util::json::parse(json);
+  sonare_free_string(json);
+  REQUIRE(ordered_result["unobservedBeats"].is_array());
+  const auto& ordered = ordered_result["unobservedBeats"].as_array();
+  REQUIRE(ordered.size() == 2);
+  CHECK(ordered[0].as_int() == 0);
+  CHECK(ordered[1].as_int() == 4);
 }
 
 TEST_CASE("sonare_estimate_meter_json reproduces the meter in analysis JSON",

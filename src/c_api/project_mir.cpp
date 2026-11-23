@@ -824,9 +824,3 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 }
 
 void sonare_free_project_warp_anchors(SonareProjectWarpAnchor* anchors) { delete[] anchors; }
-
-// ============================================================================
-// Memory management
-// ============================================================================
-
-void sonare_free_bytes(uint8_t* ptr) { delete[] ptr; }

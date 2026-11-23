@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://libsonare.local/schemas/meter-estimate.schema.json",
+  "title": "libsonare Meter Estimate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "timeSignature",
+    "downbeatPhase",
+    "searched",
+    "grouping",
+    "candidateScores",
+    "candidates",
+    "unobservedBeats"
+  ],
+  "properties": {
+    "timeSignature": { "$ref": "#/$defs/timeSignature" },
+    "downbeatPhase": { "type": "integer" },
+    "searched": { "type": "boolean" },
+    "grouping": { "type": "array", "items": { "type": "integer" } },
+    "candidateScores": { "type": "array", "items": { "type": "number" } },
+    "candidates": { "type": "array", "items": { "$ref": "#/$defs/timeSignature" } },
+    "unobservedBeats": {
+      "description": "Zero-based masked beat indices in ascending order. Empty when per-beat energy was omitted.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 0 }
+    }
+  },
+  "$defs": {
+    "timeSignature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator", "confidence"],
+      "properties": {
+        "numerator": { "type": "integer" },
+        "denominator": { "type": "integer" },
+        "confidence": { "type": "number" }
+      }
+    }
+  }
+}
