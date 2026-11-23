@@ -678,19 +678,32 @@ TEST_CASE("the mixer meter never publishes a non-finite reading for a non-finite
 
   const auto poisoned = run(std::numeric_limits<float>::quiet_NaN(), true);
 
-  int last_non_finite = -1;
-  int non_finite_blocks = 0;
+  // A reading is finite, -inf (silence) or NaN (a window not yet filled), never +inf; the
+  // poison may move none of the three readings into another state.
+  enum class Reading { kNotMeasured, kFinite, kSilent, kPositiveInfinity };
+  const auto state = [](float lufs) {
+    if (std::isnan(lufs)) return Reading::kNotMeasured;
+    if (std::isfinite(lufs)) return Reading::kFinite;
+    return lufs < 0.0f ? Reading::kSilent : Reading::kPositiveInfinity;
+  };
+  REQUIRE(state(control.front().short_term_lufs) == Reading::kNotMeasured);
+  int last_moved = -1;
+  int moved_blocks = 0;
   for (size_t k = 0; k < poisoned.size(); ++k) {
-    const MeterSnapshot& s = poisoned[k];
-    if (!std::isfinite(s.momentary_lufs) || !std::isfinite(s.short_term_lufs) ||
-        !std::isfinite(s.integrated_lufs)) {
-      last_non_finite = static_cast<int>(k);
-      ++non_finite_blocks;
+    bool moved = false;
+    for (const auto field : {&MeterSnapshot::momentary_lufs, &MeterSnapshot::short_term_lufs,
+                             &MeterSnapshot::integrated_lufs}) {
+      const Reading reading = state(poisoned[k].*field);
+      moved = moved || reading != state(control[k].*field) || reading == Reading::kPositiveInfinity;
+    }
+    if (moved) {
+      last_moved = static_cast<int>(k);
+      ++moved_blocks;
     }
   }
-  INFO("non-finite snapshots " << non_finite_blocks << ", last at " << last_non_finite);
-  // The meter counts a non-finite sample as silence, so no snapshot is ever non-finite.
-  REQUIRE(non_finite_blocks == 0);
+  INFO("snapshots the poison moved " << moved_blocks << ", last at " << last_moved);
+  // The meter counts a non-finite sample as silence, so the poison changes no reading's state.
+  REQUIRE(moved_blocks == 0);
 
   const MeterSnapshot& recovered = poisoned.back();
   REQUIRE(std::abs(recovered.momentary_lufs - settled.momentary_lufs) < 1.0e-3f);

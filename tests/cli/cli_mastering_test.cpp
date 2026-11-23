@@ -1373,10 +1373,13 @@ TEST_CASE("CLI repair --stages runs exactly the named stages", "[cli][mastering]
   create_clipped_wav(input);
 
   SECTION("--stages declip writes what the declip processor writes on a fixture with no overs") {
+    // Runs short enough to reconstruct, and a reconstruction that stays inside full scale.
+    const std::string repairable = unique_temp_path("_stages_under_full_scale.wav");
+    create_clipped_under_full_scale_wav(repairable);
     const std::string via_stages = unique_temp_path("_stages_declip.wav");
     const std::string via_processor = unique_temp_path("_processor_declip.wav");
-    auto [code, output] =
-        exec_command(CLI + " repair " + input + " --stages declip -o " + via_stages + " --json -q");
+    auto [code, output] = exec_command(CLI + " repair " + repairable + " --stages declip -o " +
+                                       via_stages + " --json -q");
     REQUIRE(code == 0);
     const auto payload = sonare::util::json::parse_strict(output);
     REQUIRE(payload["mode"].as_string() == "stages");
@@ -1385,16 +1388,17 @@ TEST_CASE("CLI repair --stages runs exactly the named stages", "[cli][mastering]
     REQUIRE(payload["output_gain_db"].as_number() == 0.0);
 
     auto [processor_code, processor_output] =
-        exec_command(CLI + " mastering-processor " + input + " --processor repair.declip -o " +
+        exec_command(CLI + " mastering-processor " + repairable + " --processor repair.declip -o " +
                      via_processor + " --json -q");
     REQUIRE(processor_code == 0);
     auto [stages_samples, stages_rate, stages_channels] = load_audio_interleaved(via_stages);
     auto [processor_samples, processor_rate, processor_channels] =
         load_audio_interleaved(via_processor);
-    auto [source_samples, source_rate, source_channels] = load_audio_interleaved(input);
+    auto [source_samples, source_rate, source_channels] = load_audio_interleaved(repairable);
     // The control: the repair changed the file, so equality is not two copies.
     CHECK(stages_samples != source_samples);
     CHECK(stages_samples == processor_samples);
+    std::remove(repairable.c_str());
     std::remove(via_stages.c_str());
     std::remove(via_processor.c_str());
   }

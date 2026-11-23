@@ -430,6 +430,21 @@ inline void create_overdriven_wav(const std::string& path, int sample_rate = 220
   save_wav(path, samples, sample_rate);
 }
 
+/// @brief Creates a WAV of a tone clipped just under full scale.
+/// @details The flat tops sit at 0.983, inside the declip threshold, and the tone they cut
+///   peaks at 0.99, so a repair changes the clipped samples and still writes no overs: the
+///   integer writer's clamp cannot discard it.
+inline void create_clipped_under_full_scale_wav(const std::string& path, int sample_rate = 22050) {
+  const size_t n_samples = static_cast<size_t>(sample_rate / 2);
+  std::vector<float> samples(n_samples);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / sample_rate;
+    samples[i] = std::clamp(0.99f * std::sin(two_pi * 220.0f * t), -0.983f, 0.983f);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
 /// @brief Creates a WAV whose noise floor sits close under its programme.
 /// @details The assistant selects repair from measurement, so a clean tone
 ///   selects nothing and cannot show whether a flag reached the suggester. The
