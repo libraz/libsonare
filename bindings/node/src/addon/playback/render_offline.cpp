@@ -19,7 +19,7 @@ Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
   }
   int in_channels = 0;
   int sample_rate = 0;
-  if (!RequiredIntArg(env, info, 1, "inChannels", &in_channels) ||
+  if (!RequiredIntArg(env, info, 1, "numChannels", &in_channels) ||
       !RequiredIntArg(env, info, 2, "sampleRate", &sample_rate)) {
     return env.Undefined();
   }

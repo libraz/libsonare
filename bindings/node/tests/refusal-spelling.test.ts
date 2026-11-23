@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   alignTakeToReference,
+  analyzePolyphonic,
   chordFunctions,
   createVocalEditSession,
   decomposeNotePitch,
@@ -18,6 +19,8 @@ import {
   detectKeyCandidates,
   downmix,
   estimateMeter,
+  lufsMultichannel,
+  lufsSeriesMultichannel,
   Mixer,
   masteringAbMatchLoudness,
   masteringAbMatchLoudnessStereo,
@@ -42,6 +45,7 @@ import {
   realtimeVoiceChangerRender,
   renderNotes,
   renderPercussiveEvents,
+  renderPlayback,
   roomMorph,
   roomMorphStereo,
   SampleBank,
@@ -163,6 +167,8 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   mastering_apply_pair_processor: [EMPTY],
   mastering_apply_pair_processor_stereo: [EMPTY],
   merge_notes: [EMPTY, []],
+  playback_render_interleaved: [EMPTY, NON_FINITE],
+  polyphonic_set_note_edit: [Float32Array.of(-1)],
   midi_cc_learn: [[]],
   midi_route_events: [[]],
   pitch_correct_timevarying: [EMPTY],
@@ -574,6 +580,25 @@ const DRIVERS: Record<string, (spelling: string, value: unknown) => unknown> = {
     ),
   waveform_peak_pyramid: (s, v) => waveformPeakPyramid(given({}, s, v) as never),
   waveform_peaks: (s, v) => waveformPeaks(given({}, s, v) as never),
+  engine_set_record_offset_samples: (s, v) =>
+    withEngine((engine) => engine.configureCapture(given({ capacityFrames: 1024 }, s, v) as never)),
+  lufs_interleaved: (s, v) =>
+    lufsMultichannel(given({ channels: [TONE, TONE], sampleRate: SR }, s, v) as never),
+  lufs_series_interleaved: (s, v) =>
+    lufsSeriesMultichannel(given({ channels: [TONE, TONE], sampleRate: SR }, s, v) as never),
+  mixer_strip_at: (_s, v) =>
+    withMixer((mixer) => {
+      mixer.addStrip('a');
+      return mixer.setFaderDb(v as never, 0);
+    }),
+  playback_render_interleaved: (s, v) =>
+    renderPlayback(
+      given({ samples: TONE, sampleRate: SR, numChannels: 1, config: {} }, s, v) as never,
+    ),
+  polyphonic_set_note_edit: (_s, v) =>
+    withHandle(analyzePolyphonic({ samples: TONE, sampleRate: SR }), (analysis) =>
+      analysis.setNoteEdit(0, { amplitudeEnvelope: v } as never),
+    ),
 };
 
 const UNDRIVEN_REASONS = [

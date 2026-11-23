@@ -13,6 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   Audio,
   alignTakeToReference,
+  analyzePolyphonic,
   chordFunctions,
   createVocalEditSession,
   decomposeNotePitch,
@@ -21,6 +22,8 @@ import {
   downmix,
   estimateMeter,
   init,
+  lufsMultichannel,
+  lufsSeriesMultichannel,
   Mixer,
   masteringAbMatchLoudness,
   masteringAbMatchLoudnessStereo,
@@ -44,6 +47,7 @@ import {
   realtimeVoiceChangerRender,
   renderNotes,
   renderPercussiveEvents,
+  renderPlayback,
   roomMorph,
   roomMorphStereo,
   SampleBank,
@@ -511,6 +515,35 @@ const DRIVERS: Record<string, Driver> = {
     ),
   waveform_peak_pyramid: (spelling, value) => waveformPeakPyramid({ [spelling]: value } as never),
   waveform_peaks: (spelling, value) => waveformPeaks({ [spelling]: value } as never),
+  engine_set_record_offset_samples: (spelling, value) =>
+    withEngine((engine) =>
+      engine.configureCapture({ capacityFrames: 1024, [spelling]: value } as never),
+    ),
+  lufs_interleaved: (spelling, value) =>
+    lufsMultichannel({ channels: [TONE, TONE], sampleRate: RATE, [spelling]: value } as never),
+  lufs_series_interleaved: (spelling, value) =>
+    lufsSeriesMultichannel({
+      channels: [TONE, TONE],
+      sampleRate: RATE,
+      [spelling]: value,
+    } as never),
+  mixer_strip_at: (_spelling, value) =>
+    withMixer((mixer) => {
+      mixer.addStrip('a');
+      return mixer.setFaderDb(value as never, 0);
+    }),
+  playback_render_interleaved: (spelling, value) =>
+    renderPlayback({
+      samples: TONE,
+      sampleRate: RATE,
+      numChannels: 1,
+      config: {},
+      [spelling]: value,
+    } as never),
+  polyphonic_set_note_edit: (_spelling, value) =>
+    using(analyzePolyphonic({ samples: TONE, sampleRate: RATE }), (analysis) =>
+      analysis.setNoteEdit(0, { amplitudeEnvelope: value } as never),
+    ),
 };
 
 /** Values outside any domain: numbers, a string, empty and malformed buffers, wrong-shaped planes. */
@@ -535,6 +568,8 @@ const OUTSIDE: unknown[] = [
 /** Extra values for an entry whose count is refused only by a list longer than the budget. */
 const EXTRA_OUTSIDE: Record<string, unknown[]> = {
   chord_functions: [new Array(64 * 1024 * 1024 + 1)],
+  playback_render_interleaved: [Float32Array.of(Number.NaN, 0)],
+  polyphonic_set_note_edit: [Float32Array.of(-1)],
 };
 
 /**

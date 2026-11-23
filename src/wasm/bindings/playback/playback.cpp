@@ -64,9 +64,10 @@ std::vector<Audio> loadPlaybackChannelSet(const val& planes, int sample_rate) {
 
 // Structural sibling of the channel loader above, for the offline (interleaved) render
 // path: no emptiness or finiteness policy, matching processInterleaved's.
-std::vector<float> loadPlaybackInterleaved(val samples, int channels, std::size_t* out_frames) {
+std::vector<float> loadPlaybackInterleaved(val samples, int channels, const char* channels_name,
+                                           std::size_t* out_frames) {
   if (channels <= 0) {
-    throw WasmRangeError("channels must be an integer in [1, 2147483647]");
+    throw WasmRangeError(std::string(channels_name) + " must be an integer in [1, 2147483647]");
   }
   wasmFloat32ArrayLength(samples, "samples");
   std::vector<float> data = float32ArrayToVector(samples, "samples");
@@ -182,7 +183,8 @@ class PlaybackRendererWasm {
   val renderOffline(const val& samples, const val& in_channels_val) {
     const int in_channels = checkedIntFromVal(in_channels_val, "inChannels");
     std::size_t frames = 0;
-    const std::vector<float> input = loadPlaybackInterleaved(samples, in_channels, &frames);
+    const std::vector<float> input =
+        loadPlaybackInterleaved(samples, in_channels, "inChannels", &frames);
     float* rendered = nullptr;
     std::size_t out_frames = 0;
     int out_channels = 0;
@@ -364,10 +366,11 @@ PlaybackLoudnessMeterWasm* createPlaybackLoudnessMeter(val channels, val sample_
 
 val renderPlayback(val samples, val channels_val, val sample_rate_val,
                    const std::string& config_json, val hrtf) {
-  const int channels = checkedIntFromVal(channels_val, "channels");
+  const int channels = checkedIntFromVal(channels_val, "numChannels");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   size_t frames = 0;
-  const std::vector<float> input = loadPlaybackInterleaved(samples, channels, &frames);
+  const std::vector<float> input =
+      loadPlaybackInterleaved(samples, channels, "numChannels", &frames);
   float* rendered = nullptr;
   size_t out_frames = 0;
   int out_channels = 0;
