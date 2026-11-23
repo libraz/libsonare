@@ -583,7 +583,10 @@ class DynamicsResult:
     """Dynamics and loudness analysis primitives."""
 
     dynamic_range_db: float | None
-    """Dynamic range, in dB; None when not measured."""
+    """Dynamic range, in dB; +inf when the low percentile window is silent.
+
+    None when not measured.
+    """
     peak_db: float
     """Peak level, in dB; -inf for silence."""
     rms_db: float

@@ -217,7 +217,8 @@ typedef struct {
 
 /// @brief Dynamics summary; free with sonare_free_dynamics_result.
 typedef struct {
-  float dynamic_range_db;   ///< Dynamic range, in dB.
+  float dynamic_range_db;   ///< Dynamic range, in dB. +inf when the low percentile window is
+                            ///< silent; NaN (not measured) when the high one is silent too.
   float peak_db;            ///< Peak level, in dB.
   float rms_db;             ///< RMS level, in dB.
   float crest_factor;       ///< Ratio of peak to RMS level.
