@@ -15,6 +15,7 @@
 #include "feature/rhythm.h"
 #include "support/drum_groove.h"
 #include "support/rate_material.h"
+#include "support/tempo_synth.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -74,7 +75,7 @@ Audio create_steady_sine(float freq = 440.0f, int sr = 22050, float duration = 4
 
 }  // namespace
 
-TEST_CASE("BpmAnalyzer basic", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer basic", "[analysis][bpm]") {
   Audio audio = create_click_track(120.0f);
 
   BpmConfig config;
@@ -90,7 +91,7 @@ TEST_CASE("BpmAnalyzer basic", "[bpm_analyzer]") {
   REQUIRE(analyzer.confidence() <= 1.0f);
 }
 
-TEST_CASE("BpmAnalyzer 120 BPM detection", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer 120 BPM detection", "[analysis][bpm]") {
   Audio audio = create_click_track(120.0f, 22050, 5.0f);
 
   BpmConfig config;
@@ -104,7 +105,7 @@ TEST_CASE("BpmAnalyzer 120 BPM detection", "[bpm_analyzer]") {
   REQUIRE_THAT(analyzer.bpm(), WithinRel(120.0f, 0.1f));
 }
 
-TEST_CASE("BpmAnalyzer 90 BPM detection", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer 90 BPM detection", "[analysis][bpm]") {
   Audio audio = create_click_track(90.0f, 22050, 5.0f);
 
   BpmConfig config;
@@ -126,7 +127,7 @@ TEST_CASE("BpmAnalyzer 90 BPM detection", "[bpm_analyzer]") {
   REQUIRE((close_to_90 || close_to_180 || close_to_45));
 }
 
-TEST_CASE("BpmAnalyzer candidates", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer candidates", "[analysis][bpm]") {
   Audio audio = create_click_track(120.0f);
 
   BpmConfig config;
@@ -146,7 +147,7 @@ TEST_CASE("BpmAnalyzer candidates", "[bpm_analyzer]") {
 }
 
 TEST_CASE("BpmAnalyzer lists the chosen tempo first even when a sub-octave out-votes it",
-          "[bpm_analyzer]") {
+          "[analysis][bpm]") {
   // On a 120 BPM click the 60 BPM bin carries the largest vote share while the
   // chosen tempo stays near 120; the list must still open with the chosen tempo.
   // A 30-300 search keeps the sub-octave inside the range; the default stops at 60.
@@ -164,7 +165,7 @@ TEST_CASE("BpmAnalyzer lists the chosen tempo first even when a sub-octave out-v
   }
 }
 
-TEST_CASE("BpmAnalyzer 3-peak octave correction prefers middle octave", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer 3-peak octave correction prefers middle octave", "[analysis][bpm]") {
   std::vector<BpmCandidate> candidates = {
       {60.0f, 1.0f},
       {120.0f, 0.9f},
@@ -174,7 +175,7 @@ TEST_CASE("BpmAnalyzer 3-peak octave correction prefers middle octave", "[bpm_an
   REQUIRE_THAT(three_peak_octave_correction(candidates, 30.0f, 300.0f), WithinAbs(120.0f, 0.1f));
 }
 
-TEST_CASE("BpmAnalyzer smart choice keeps strongest common-tempo evidence", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer smart choice keeps strongest common-tempo evidence", "[analysis][bpm]") {
   HarmonicClusterMap clusters;
   clusters[127.0f] = {
       {127.0f, 10},
@@ -188,7 +189,7 @@ TEST_CASE("BpmAnalyzer smart choice keeps strongest common-tempo evidence", "[bp
 }
 
 TEST_CASE("BpmAnalyzer smart choice resists octave-down evidence below common tempo range",
-          "[bpm_analyzer]") {
+          "[analysis][bpm]") {
   HarmonicClusterMap clusters;
   clusters[42.0f] = {
       {42.0f, 81},  {31.5f, 78}, {63.0f, 78}, {33.5f, 73}, {125.5f, 73},
@@ -201,7 +202,7 @@ TEST_CASE("BpmAnalyzer smart choice resists octave-down evidence below common te
   REQUIRE(confidence > 0.0f);
 }
 
-TEST_CASE("BpmAnalyzer smart choice does not prefer unrelated higher clusters", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer smart choice does not prefer unrelated higher clusters", "[analysis][bpm]") {
   HarmonicClusterMap clusters;
   clusters[63.0f] = {
       {63.0f, 78},
@@ -220,7 +221,7 @@ TEST_CASE("BpmAnalyzer smart choice does not prefer unrelated higher clusters", 
 }
 
 TEST_CASE("BpmAnalyzer keeps supported upper octave over middle-octave correction",
-          "[bpm_analyzer]") {
+          "[analysis][bpm]") {
   const int sr = 22050;
   const int hop = 512;
   const int n_frames = 600;
@@ -243,7 +244,7 @@ TEST_CASE("BpmAnalyzer keeps supported upper octave over middle-octave correctio
   REQUIRE_THAT(analyzer.bpm(), WithinRel(bpm, 0.04f));
 }
 
-TEST_CASE("BpmAnalyzer autocorrelation", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer autocorrelation", "[analysis][bpm]") {
   Audio audio = create_click_track(120.0f);
 
   BpmAnalyzer analyzer(audio);
@@ -260,7 +261,7 @@ TEST_CASE("BpmAnalyzer autocorrelation", "[bpm_analyzer]") {
   }
 }
 
-TEST_CASE("BpmAnalyzer exposes Fourier tempogram local BPM curve", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer exposes Fourier tempogram local BPM curve", "[analysis][bpm]") {
   const int sr = 22050;
   const int hop = 441;
   const float bpm = 120.0f;
@@ -283,7 +284,7 @@ TEST_CASE("BpmAnalyzer exposes Fourier tempogram local BPM curve", "[bpm_analyze
   REQUIRE_THAT(analyzer.bpm(), WithinRel(bpm, 0.05f));
 }
 
-TEST_CASE("BpmAnalyzer degrades gracefully on degenerate onset envelopes", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer degrades gracefully on degenerate onset envelopes", "[analysis][bpm]") {
   const int sr = 22050;
   const int hop = 512;
 
@@ -304,7 +305,7 @@ TEST_CASE("BpmAnalyzer degrades gracefully on degenerate onset envelopes", "[bpm
 }
 
 TEST_CASE("BpmAnalyzer builds weighted tempo histograms without expanding candidate votes",
-          "[bpm_analyzer]") {
+          "[analysis][bpm]") {
   const int sr = 22050;
   const int hop = 128;
   const int n_frames = 4096;
@@ -324,7 +325,7 @@ TEST_CASE("BpmAnalyzer builds weighted tempo histograms without expanding candid
   REQUIRE_FALSE(analyzer.candidates(5).empty());
 }
 
-TEST_CASE("BpmAnalyzer detects a tempo at the bpm_max boundary", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer detects a tempo at the bpm_max boundary", "[analysis][bpm]") {
   const int sr = 22050;
   const int hop = 512;
   const int n_frames = 800;
@@ -358,7 +359,7 @@ TEST_CASE("BpmAnalyzer detects a tempo at the bpm_max boundary", "[bpm_analyzer]
   REQUIRE(detected <= config.bpm_max + 1.0f);
 }
 
-TEST_CASE("BpmAnalyzer does not double an unrelated slow tempo", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer does not double an unrelated slow tempo", "[analysis][bpm]") {
   // A genuine slow tempo (< 80 BPM) must not be reported as an unrelated value in
   // the 80-180 common range. The <80 octave-preference override now only adopts
   // the strongest common-range bin when it is octave/harmonic related to the
@@ -385,7 +386,7 @@ TEST_CASE("BpmAnalyzer does not double an unrelated slow tempo", "[bpm_analyzer]
   REQUIRE(octave_related);
 }
 
-TEST_CASE("detect_bpm quick function", "[bpm_analyzer]") {
+TEST_CASE("detect_bpm quick function", "[analysis][bpm]") {
   Audio audio = create_click_track(120.0f);
 
   float bpm = detect_bpm(audio);
@@ -394,7 +395,7 @@ TEST_CASE("detect_bpm quick function", "[bpm_analyzer]") {
   REQUIRE(bpm <= 200.0f);
 }
 
-TEST_CASE("BpmAnalyzer modulated signal", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer modulated signal", "[analysis][bpm]") {
   Audio audio = create_modulated_sine(100.0f, 22050, 5.0f);
 
   BpmConfig config;
@@ -407,7 +408,7 @@ TEST_CASE("BpmAnalyzer modulated signal", "[bpm_analyzer]") {
   REQUIRE(analyzer.bpm() <= 200.0f);
 }
 
-TEST_CASE("BpmAnalyzer keeps confidence in range without onset structure", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer keeps confidence in range without onset structure", "[analysis][bpm]") {
   // A steady tone produces an onset autocorrelation that can be wholly negative.
   // Local maxima inside that negative region must not become tempo candidates:
   // the correlation value doubles as a candidate's confidence, so admitting them
@@ -439,7 +440,8 @@ TEST_CASE("BPM of the same content agrees across input sample rates",
   }
 }
 
-TEST_CASE("build_bpm_histogram reports the tempos in a bin, not its lower edge", "[bpm_analyzer]") {
+TEST_CASE("build_bpm_histogram reports the tempos in a bin, not its lower edge",
+          "[analysis][bpm]") {
   const auto histogram = build_bpm_histogram({62.3f, 62.4f, 69.7f}, 60.0f, 200.0f, 0.5f);
   REQUIRE(histogram.size() == 2u);
   CHECK(histogram[0].votes == 2);
@@ -447,7 +449,7 @@ TEST_CASE("build_bpm_histogram reports the tempos in a bin, not its lower edge",
   CHECK_THAT(histogram[1].bpm_center, WithinAbs(69.7f, 1e-4f));
 }
 
-TEST_CASE("BpmAnalyzer does not snap slow tempos to the histogram grid", "[bpm_analyzer]") {
+TEST_CASE("BpmAnalyzer does not snap slow tempos to the histogram grid", "[analysis][bpm]") {
   // 62.3 and 69.7 sit 0.3 and 0.2 BPM above a 0.5 BPM bin edge, so an edge read back as the tempo
   // misses it by more than the refined lag estimate does.
   for (float tempo : {62.3f, 69.7f, 77.1f}) {
@@ -496,7 +498,7 @@ TEST_CASE("MusicAnalyzer publishes the beat tempo and grid of an eighth-note-hat
 }
 
 TEST_CASE("smart_choice keeps the beat over a two-thirds relative with more votes",
-          "[bpm_analyzer]") {
+          "[analysis][bpm]") {
   // The histogram of a 120 BPM groove with eighth-note hats: the dotted quarter (80.2) out-votes
   // the beat (119.8), but the beat's family also holds the half note (60) and the eighth (238.3).
   HarmonicClusterMap clusters;
@@ -544,4 +546,49 @@ TEST_CASE("An inverted tempo band is refused, not reordered", "[analysis][bpm]")
   rhythm.bpm_min = 200.0f;
   rhythm.bpm_max = 60.0f;
   CHECK_THROWS_AS(validate_rhythm_config(rhythm), SonareException);
+}
+
+namespace {
+
+float detect_in(const Audio& audio, float bpm_min, float bpm_max) {
+  BpmConfig config;
+  config.bpm_min = bpm_min;
+  config.bpm_max = bpm_max;
+  return detect_bpm(audio, config);
+}
+
+}  // namespace
+
+TEST_CASE("A constrained tempo search prefers its own range, not the common band",
+          "[analysis][bpm]") {
+  // Eighth hats put a peak at the dotted quarter (80 for 120); the common 80-180 band used to
+  // admit only that peak from a 50-100 range, past the half-tempo beat with twice its support.
+  for (int sr : {22050, 44100}) {
+    const Audio groove = test::make_kick_hat_groove(120.0f, sr, 30.0f);
+    CAPTURE(sr);
+    CHECK_THAT(detect_in(groove, 50.0f, 100.0f), WithinRel(60.0f, 0.03f));
+    CHECK_THAT(detect_in(groove, 45.0f, 90.0f), WithinRel(60.0f, 0.03f));
+  }
+}
+
+TEST_CASE("A constrained tempo search reads a 6/8 groove at its dotted quarter",
+          "[analysis][bpm]") {
+  // The default search reads these at the quarter level (3/2 of the dotted quarter), outside the
+  // ranges below, so each range is searched as given.
+  CHECK_THAT(detect_in(test::make_compound_groove(60.0f, 22050, 20.0f), 40.0f, 70.0f),
+             WithinRel(60.0f, 0.03f));
+  const Audio seventy = test::make_compound_groove(70.0f, 22050, 20.0f);
+  CHECK_THAT(detect_in(seventy, 50.0f, 100.0f), WithinRel(70.0f, 0.03f));
+  CHECK_THAT(detect_in(seventy, 45.0f, 90.0f), WithinRel(70.0f, 0.03f));
+}
+
+TEST_CASE("A constrained tempo search returns the unconstrained estimate inside its range",
+          "[analysis][bpm]") {
+  const Audio groove = test::make_kick_hat_groove(120.0f, 22050, 30.0f);
+  const float unconstrained = detect_bpm(groove);
+  REQUIRE_THAT(unconstrained, WithinRel(120.0f, 0.03f));
+  CHECK(detect_in(groove, 110.0f, 240.0f) == unconstrained);
+  CHECK(detect_in(groove, 90.0f, 180.0f) == unconstrained);
+  // The default range spelled out is the default search, not a constraint.
+  CHECK(detect_in(groove, 60.0f, 200.0f) == unconstrained);
 }

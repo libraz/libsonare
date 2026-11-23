@@ -91,16 +91,26 @@ constexpr int kTopBins = 10;
 /// quadruple.
 constexpr std::array<float, 9> kHarmonicRatios = {0.5f, 2.0f / 3.0f, 0.75f, 1.0f, 4.0f / 3.0f,
                                                   1.5f, 2.0f,        3.0f,  4.0f};
+
+/// @brief Common musical range a default search prefers when choosing between octaves.
+constexpr float kCommonBpmMin = 80.0f;
+constexpr float kCommonBpmMax = 180.0f;
+
+/// @brief The default search range; any other range is the caller's constraint.
+constexpr float kDefaultBpmMin = 60.0f;
+constexpr float kDefaultBpmMax = 200.0f;
 }  // namespace bpm_constants
 
 /// @brief Configuration for BPM analysis.
 /// @details The default 60-200 BPM search is the one every public tempo entry uses.
 struct BpmConfig {
-  float bpm_min = 60.0f;     ///< Minimum BPM to consider (inclusive)
-  float bpm_max = 200.0f;    ///< Maximum BPM to consider (inclusive)
-  float start_bpm = 120.0f;  ///< Initial BPM estimate (used as fallback)
-  int n_fft = 2048;          ///< Window length in samples at 22050 Hz, rescaled to the input rate
-  int hop_length = 512;      ///< Hop length in samples of the input buffer
+  /// A range other than the default is searched as given, and the unconstrained estimate is
+  /// preferred when it lies inside it.
+  float bpm_min = bpm_constants::kDefaultBpmMin;  ///< Minimum BPM to consider (inclusive)
+  float bpm_max = bpm_constants::kDefaultBpmMax;  ///< Maximum BPM to consider (inclusive)
+  float start_bpm = 120.0f;                       ///< Initial BPM estimate (used as fallback)
+  int n_fft = 2048;      ///< Window length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 512;  ///< Hop length in samples of the input buffer
 };
 
 /// @brief Domain of the tempo search hop_length; n_fft takes @ref kStftNFftDomain.
@@ -183,8 +193,12 @@ struct BeatTempoChoice {
 ///          @p evidence, then picks the strongest supported member of the winner's octave family
 ///          (tempi a power of two apart). A 2/3 or 3/2 relative is chosen only as the better
 ///          supported beat, never for out-voting the beat at its own tempo alone.
+/// @param preferred_min,preferred_max The band candidates are preferred from: the common musical
+///        range for a default search, the caller's range for a constrained one.
 BeatTempoChoice choose_beat_tempo(const BpmHistogramBin* candidates, size_t n_candidates,
-                                  const BpmHistogramBin* evidence, size_t n_evidence);
+                                  const BpmHistogramBin* evidence, size_t n_evidence,
+                                  float preferred_min = bpm_constants::kCommonBpmMin,
+                                  float preferred_max = bpm_constants::kCommonBpmMax);
 
 /// @brief Selects best BPM from harmonic clusters using smart selection.
 /// @details @ref choose_beat_tempo over every cluster member and @p octave_evidence.
@@ -194,8 +208,11 @@ BeatTempoChoice choose_beat_tempo(const BpmHistogramBin* candidates, size_t n_ca
 ///        chosen
 /// @return Pair of (best_bpm, confidence_percentage), the confidence being the vote share of the
 ///         cluster holding the winning family
+/// @param preferred_min,preferred_max See @ref choose_beat_tempo.
 std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int total_votes,
-                                     const std::vector<BpmHistogramBin>& octave_evidence = {});
+                                     const std::vector<BpmHistogramBin>& octave_evidence = {},
+                                     float preferred_min = bpm_constants::kCommonBpmMin,
+                                     float preferred_max = bpm_constants::kCommonBpmMax);
 
 /// @brief Applies 3-peak octave correction to tempo candidates.
 /// @details If a half/double-related pair exists among the strongest candidates,
@@ -249,6 +266,11 @@ class BpmAnalyzer {
 
  private:
   void analyze(const std::vector<float>& onset_strength, int sr, int hop_length);
+  // Whether the configured range differs from the default search.
+  bool is_constrained() const noexcept;
+  // A constrained search returns the unconstrained estimate when it lies inside the range.
+  void prefer_unconstrained_estimate(const std::vector<float>& onset_strength, int sr,
+                                     int hop_length);
 
   float bpm_;
   float confidence_;

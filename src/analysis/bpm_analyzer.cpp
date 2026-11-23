@@ -11,14 +11,6 @@
 
 namespace sonare {
 
-namespace {
-
-/// Tempo range treated as the common musical range when choosing between octaves.
-constexpr float kCommonBpmMin = 80.0f;
-constexpr float kCommonBpmMax = 180.0f;
-
-}  // namespace
-
 std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candidates,
                                                  float bpm_min, float bpm_max, float bin_width) {
   if (candidates.empty() || bpm_min >= bpm_max || bin_width <= 0.0f) {
@@ -92,13 +84,14 @@ HarmonicClusterMap harmonic_cluster(const std::vector<BpmHistogramBin>& top_bins
 }
 
 BeatTempoChoice choose_beat_tempo(const BpmHistogramBin* candidates, size_t n_candidates,
-                                  const BpmHistogramBin* evidence, size_t n_evidence) {
-  /// @details Musical tempo preference: prefer BPMs in common range (80-180) over extremes.
+                                  const BpmHistogramBin* evidence, size_t n_evidence,
+                                  float preferred_min, float preferred_max) {
+  /// @details Musical tempo preference: prefer BPMs in the preferred band over extremes.
   /// This helps avoid octave errors (e.g., detecting 60 instead of 120).
-  constexpr float kAcceptableBpmMin = 60.0f;
-  constexpr float kAcceptableBpmMax = 200.0f;
+  constexpr float kAcceptableBpmMin = bpm_constants::kDefaultBpmMin;
+  constexpr float kAcceptableBpmMax = bpm_constants::kDefaultBpmMax;
   const auto in_common_range = [&](float bpm) {
-    return bpm >= kCommonBpmMin && bpm <= kCommonBpmMax;
+    return bpm >= preferred_min && bpm <= preferred_max;
   };
   const auto in_acceptable_range = [&](float bpm) {
     return bpm >= kAcceptableBpmMin && bpm <= kAcceptableBpmMax;
@@ -175,7 +168,7 @@ BeatTempoChoice choose_beat_tempo(const BpmHistogramBin* candidates, size_t n_ca
     return best;
   };
 
-  /// First priority: candidates in common range (80-180) with >= 30% of max votes
+  /// First priority: candidates in the preferred band with >= 30% of max votes
   BpmHistogramBin chosen = choose_strongest_preferred(in_common_range, 0.3f);
   /// Second priority: candidates in acceptable range (60-200) with >= 50% of max votes
   if (chosen.bpm_center == 0.0f) {
@@ -192,7 +185,8 @@ BeatTempoChoice choose_beat_tempo(const BpmHistogramBin* candidates, size_t n_ca
 }
 
 std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int total_votes,
-                                     const std::vector<BpmHistogramBin>& octave_evidence) {
+                                     const std::vector<BpmHistogramBin>& octave_evidence,
+                                     float preferred_min, float preferred_max) {
   /// Handle edge cases
   if (clusters.empty()) {
     return {120.0f, 0.0f};  ///< Default BPM with zero confidence
@@ -206,8 +200,9 @@ std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int tot
     (void)base;
     for (const auto& [bpm, v] : cluster) members.push_back({bpm, v});
   }
-  const BeatTempoChoice choice = choose_beat_tempo(members.data(), members.size(),
-                                                   octave_evidence.data(), octave_evidence.size());
+  const BeatTempoChoice choice =
+      choose_beat_tempo(members.data(), members.size(), octave_evidence.data(),
+                        octave_evidence.size(), preferred_min, preferred_max);
   if (choice.bpm <= 0.0f) {
     return {120.0f, 0.0f};
   }
@@ -277,8 +272,9 @@ float three_peak_octave_correction(const std::vector<BpmCandidate>& candidates, 
       if (low <= 0.0f) continue;
       const float ratio = high / low;
       if (std::abs(ratio - 2.0f) / 2.0f <= tolerance) {
-        if (high >= kCommonBpmMin && high <= kCommonBpmMax) return high;
-        if (low >= kCommonBpmMin && low <= kCommonBpmMax) return low;
+        if (high >= bpm_constants::kCommonBpmMin && high <= bpm_constants::kCommonBpmMax)
+          return high;
+        if (low >= bpm_constants::kCommonBpmMin && low <= bpm_constants::kCommonBpmMax) return low;
         return std::clamp(high, bpm_min, bpm_max);
       }
     }
@@ -468,6 +464,24 @@ BpmAnalyzer::BpmAnalyzer(const std::vector<float>& onset_strength, int sr, int h
   analyze(onset_strength, sr, hop_length);
 }
 
+bool BpmAnalyzer::is_constrained() const noexcept {
+  return config_.bpm_min != bpm_constants::kDefaultBpmMin ||
+         config_.bpm_max != bpm_constants::kDefaultBpmMax;
+}
+
+void BpmAnalyzer::prefer_unconstrained_estimate(const std::vector<float>& onset_strength, int sr,
+                                                int hop_length) {
+  if (!is_constrained()) return;
+  BpmConfig unconstrained = config_;
+  unconstrained.bpm_min = bpm_constants::kDefaultBpmMin;
+  unconstrained.bpm_max = bpm_constants::kDefaultBpmMax;
+  const BpmAnalyzer reference(onset_strength, sr, hop_length, unconstrained);
+  if (reference.confidence() > 0.0f && reference.bpm() >= config_.bpm_min &&
+      reference.bpm() <= config_.bpm_max) {
+    bpm_ = reference.bpm();
+  }
+}
+
 void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int hop_length) {
   if (onset_strength.empty()) {
     bpm_ = config_.start_bpm;
@@ -505,6 +519,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     const float local_median = median_bpm(local_bpm_curve_);
     bpm_ = local_median > 0.0f ? local_median : config_.start_bpm;
     confidence_ = local_median > 0.0f ? 0.25f : 0.0f;
+    prefer_unconstrained_estimate(onset_strength, sr, hop_length);
     if (tempogram_.empty()) tempogram_ = autocorr_;
     return;
   }
@@ -550,6 +565,9 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     /// Fall back to highest confidence candidate
     bpm_ = candidates_[0].bpm;
     confidence_ = candidates_[0].confidence;
+    prefer_unconstrained_estimate(onset_strength, sr, hop_length);
+    // The chosen tempo leads the candidate list.
+    if (bpm_ != candidates_[0].bpm) candidates_.insert(candidates_.begin(), {bpm_, confidence_});
   } else {
     /// Take top bins for clustering
     std::vector<BpmHistogramBin> top_bins;
@@ -565,8 +583,12 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
       total_votes += bin.votes;
     }
 
-    /// Smart choice selection
-    auto [rep_bpm, conf_percent] = smart_choice(clusters, total_votes, octave_evidence);
+    /// Smart choice selection: a constrained search prefers its own range over the common one.
+    const bool constrained = is_constrained();
+    auto [rep_bpm, conf_percent] =
+        smart_choice(clusters, total_votes, octave_evidence,
+                     constrained ? config_.bpm_min : bpm_constants::kCommonBpmMin,
+                     constrained ? config_.bpm_max : bpm_constants::kCommonBpmMax);
 
     const float corrected =
         three_peak_octave_correction(candidates_, config_.bpm_min, config_.bpm_max);
@@ -574,12 +596,14 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     const bool octave_related = std::abs(correction_ratio - 0.5f) <= 0.04f ||
                                 std::abs(correction_ratio - 1.0f) <= 0.04f ||
                                 std::abs(correction_ratio - 2.0f) <= 0.08f;
-    const bool corrected_common = corrected >= kCommonBpmMin && corrected <= kCommonBpmMax;
+    const bool corrected_common =
+        corrected >= bpm_constants::kCommonBpmMin && corrected <= bpm_constants::kCommonBpmMax;
     const bool correction_downshifts_common = corrected_common && correction_ratio < 0.75f &&
-                                              rep_bpm >= kCommonBpmMin && rep_bpm <= kCommonBpmMax;
+                                              rep_bpm >= bpm_constants::kCommonBpmMin &&
+                                              rep_bpm <= bpm_constants::kCommonBpmMax;
     bpm_ =
         (corrected_common && octave_related && !correction_downshifts_common) ? corrected : rep_bpm;
-    if (bpm_ < kCommonBpmMin && bpm_ > 0.0f && !top_bins.empty()) {
+    if (bpm_ < bpm_constants::kCommonBpmMin && bpm_ > 0.0f && !top_bins.empty()) {
       const float strongest_peak = top_bins.front().bpm_center;
       // Only promote the strongest common-range bin when it is octave/harmonic
       // related to the detected tempo, matching the relationship gate used by the
@@ -590,12 +614,13 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
       const bool peak_octave_related = std::abs(peak_ratio - 0.5f) <= 0.04f ||
                                        std::abs(peak_ratio - 1.0f) <= 0.04f ||
                                        std::abs(peak_ratio - 2.0f) <= 0.08f;
-      if (strongest_peak >= kCommonBpmMin && strongest_peak <= kCommonBpmMax &&
-          peak_octave_related) {
+      if (strongest_peak >= bpm_constants::kCommonBpmMin &&
+          strongest_peak <= bpm_constants::kCommonBpmMax && peak_octave_related) {
         bpm_ = strongest_peak;
       }
     }
     confidence_ = conf_percent / 100.0f;  ///< Convert percentage to [0, 1]
+    prefer_unconstrained_estimate(onset_strength, sr, hop_length);
 
     /// Chosen tempo first with its own bin's vote share, then the other top bins by vote share.
     auto vote_share = [total_votes](int votes) {
