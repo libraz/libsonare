@@ -487,6 +487,8 @@ lint-static:
 	python3 tools/parity/gen_c_entry_names.py --check
 	python3 tools/api/gen_field_spelling.py --check
 	python3 tools/api/gen_integer_domains.py --check
+# UPGRADING.md renders from the migration ledgers alone; a ledger edit owes it in the same commit.
+	$(MAKE) upgrade-notes-check
 
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) clang-format --dry-run --Werror
@@ -788,7 +790,6 @@ surface-coverage-check:
 surface-check:
 	python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
 	python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
-	python3 tools/api/upgrade_notes.py --check
 
 # Fails only on a surface_allowlist.toml entry that excused nothing, or a validation problem.
 surface-allowlist-audit:

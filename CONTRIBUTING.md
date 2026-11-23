@@ -185,7 +185,7 @@ Before merging, the maintainer brings a change here to the following:
 - A refusal names the real parameter (`options.<member>`, `config.<member>`) and is raised as `TypeError`/`RangeError` (`SonareValueError` in Python) or a coded `SonareError` by cause.
 - `make surface-check` returns rc=0 on a change that touches a public name, token, default or flag; CI runs it too.
 - A renamed, removed or reshaped public name has its row in the surface's ledger under `tools/api/migration/`, rendered by `make upgrade-notes`.
-- `UPGRADING.md` is generated from the ledgers, and `make surface-check` fails while the tracked file differs from the render. A row that quotes the member's new signature (`arm(id, state?)`) matches its declaration on Node, WASM and Python.
+- `UPGRADING.md` is generated from the ledgers, and `make lint` (through `make lint-static`, which CI runs) fails while the tracked file differs from the render, so a ledger edit and `make upgrade-notes` land in one commit. A row that quotes the member's new signature (`arm(id, state?)`) matches its declaration on Node, WASM and Python.
 - A shipped struct, signature, constant or enumerator that changes bumps its owning ABI counter, measured against the last release tag with `python3 tools/abi/check_abi_bumps.py --tag <last release tag>`.
 - A breaking change ships only in a major release, with its ledger row and the regenerated `UPGRADING.md`.
 - A capability-catalog field change has run the `[catalog]` C++ cases, `make capability-catalog` and `python3 tests/conformance/check_result_schema_surfaces.py`.
