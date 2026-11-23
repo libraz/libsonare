@@ -760,7 +760,6 @@ describe('RealtimeEngine capture', () => {
         numChannels: 2,
         source: 'input',
         recordOffsetSamples: -16,
-        inputMonitor: { enabled: true, gain: 0.5 },
         punch: { startSample: 48000, endSec: 1.01 },
       });
       const status = engine.captureStatus();
@@ -776,7 +775,6 @@ describe('RealtimeEngine capture', () => {
         'setCapturePunch',
         'setCaptureSource',
         'setRecordOffsetSamples',
-        'setInputMonitor',
       ]) {
         expect(anyEngine(engine)[name], name).toBeUndefined();
       }

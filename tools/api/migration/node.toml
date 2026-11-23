@@ -8336,7 +8336,7 @@ test = "bindings/node/tests/surface/engine.test.ts::keys a sidechain by strip an
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setCaptureBuffer"
-removed = "Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset, monitor and punch."
+removed = "Call configureCapture({ capacityFrames, numChannels? }); it sets the buffer together with source, offset and punch."
 domain = "engine"
 rule = "engine-vocabulary"
 
@@ -8364,7 +8364,8 @@ rule = "engine-vocabulary"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setInputMonitor"
-removed = "Call configureCapture({ capacityFrames, inputMonitor: { enabled, gain? } }); the call states the whole capture setup."
+changed = "takes one EngineInputMonitorInput { enabled, gain? } instead of two positional arguments; inputMonitor() reads the EngineInputMonitor back"
+test = "bindings/node/tests/engine-input-track.test.ts::round-trips the reader through the setter"
 domain = "engine"
 rule = "engine-vocabulary"
 

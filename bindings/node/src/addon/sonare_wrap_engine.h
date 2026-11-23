@@ -56,6 +56,9 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetTrackLanes(const Napi::CallbackInfo& info);
   Napi::Value SetTrackSends(const Napi::CallbackInfo& info);
   Napi::Value SetTrackOutputBus(const Napi::CallbackInfo& info);
+  Napi::Value SetInputTrack(const Napi::CallbackInfo& info);
+  Napi::Value ClearInputTrack(const Napi::CallbackInfo& info);
+  Napi::Value InputTrack(const Napi::CallbackInfo& info);
   Napi::Value SetLaneSidechain(const Napi::CallbackInfo& info);
   Napi::Value ApplyProjectTimeline(const Napi::CallbackInfo& info);
   Napi::Value SetTrackBuses(const Napi::CallbackInfo& info);
@@ -120,6 +123,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetRecordOffsetSamples(const Napi::CallbackInfo& info);
   Napi::Value SetCaptureTiming(const Napi::CallbackInfo& info);
   Napi::Value SetInputMonitor(const Napi::CallbackInfo& info);
+  Napi::Value InputMonitor(const Napi::CallbackInfo& info);
   Napi::Value ResetCapture(const Napi::CallbackInfo& info);
   Napi::Value CaptureStatus(const Napi::CallbackInfo& info);
   Napi::Value CapturedAudio(const Napi::CallbackInfo& info);

@@ -401,7 +401,8 @@ describe('RealtimeEngine native binding', () => {
     expect(engine.captureStatus().source).toBe('output');
     expect(engine.capturedAudio()[1][0]).toBeCloseTo(-0.25, 4);
 
-    engine.configureCapture({ ...capture, inputMonitor: { enabled: false } });
+    engine.setInputMonitor({ enabled: false });
+    engine.configureCapture(capture);
     engine.resetCapture();
     engine.armCapture({ armed: true });
     engine.seekMarker(11);
@@ -413,7 +414,7 @@ describe('RealtimeEngine native binding', () => {
     expect(monitored[1][0]).toBeCloseTo(-0.25, 4);
     expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
 
-    engine.configureCapture({ ...capture, inputMonitor: { enabled: true, gain: 0.5 } });
+    engine.setInputMonitor({ enabled: true, gain: 0.5 });
     engine.seekMarker(11);
     monitored = engine.process([
       new Float32Array(128).fill(0.25),
@@ -423,7 +424,7 @@ describe('RealtimeEngine native binding', () => {
     expect(monitored[1][0]).toBeCloseTo(-0.5, 4);
     let badMonitorGainError: unknown;
     try {
-      engine.configureCapture({ ...capture, inputMonitor: { enabled: true, gain: Number.NaN } });
+      engine.setInputMonitor({ enabled: true, gain: Number.NaN });
     } catch (error) {
       badMonitorGainError = error;
     }

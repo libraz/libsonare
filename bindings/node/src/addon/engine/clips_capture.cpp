@@ -377,6 +377,44 @@ Napi::Value RealtimeEngineWrap::SetTrackOutputBus(const Napi::CallbackInfo& info
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::SetInputTrack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
+  uint32_t track_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id)) return env.Undefined();
+  const SonareError err = sonare_engine_set_input_track(engine_, track_id);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowLastSonareError(env, "", err);
+  }
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ClearInputTrack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
+  ThrowIfError(env, sonare_engine_clear_input_track(engine_));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::InputTrack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
+  uint32_t track_id = 0;
+  int has_track = 0;
+  if (const SonareError err = sonare_engine_input_track(engine_, &track_id, &has_track);
+      err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  return has_track != 0 ? Napi::Number::New(env, track_id) : env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -827,6 +865,24 @@ Napi::Value RealtimeEngineWrap::SetInputMonitor(const Napi::CallbackInfo& info) 
   }
   ThrowIfError(env, sonare_engine_set_input_monitor(engine_, enabled ? 1 : 0, gain));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::InputMonitor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
+  int enabled = 0;
+  float gain = 0.0f;
+  if (const SonareError err = sonare_engine_input_monitor(engine_, &enabled, &gain);
+      err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("enabled", Napi::Boolean::New(env, enabled != 0));
+  out.Set("gain", Napi::Number::New(env, gain));
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

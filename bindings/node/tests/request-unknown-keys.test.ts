@@ -85,6 +85,7 @@ const methodShapes = [
   'setGraph',
   'setLoop',
   'setMarker',
+  'setInputMonitor',
   'setMetronome',
   'setParameter',
   'setPartRig',
@@ -195,8 +196,11 @@ describe('a class-method request refuses nested keys through an engine instance'
         engine.configureCapture({ capacityFrames: 128, punch: { notAnOption: 1 } } as never),
       ).toThrow(unknownKeyText('configureCapture: unknown key punch.notAnOption'));
       expect(() =>
-        engine.configureCapture({ capacityFrames: 128, inputMonitor: { notAnOption: 1 } } as never),
-      ).toThrow(unknownKeyText('configureCapture: unknown key inputMonitor.notAnOption'));
+        engine.configureCapture({ capacityFrames: 128, inputMonitor: { enabled: false } } as never),
+      ).toThrow(unknownKeyText('configureCapture: unknown key inputMonitor'));
+      expect(() => engine.setInputMonitor({ enabled: true, notAnOption: 1 } as never)).toThrow(
+        unknownKeyText('setInputMonitor: unknown key notAnOption'),
+      );
     } finally {
       engine.destroy();
     }

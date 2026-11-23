@@ -57,6 +57,8 @@ import type {
   EngineFreezeOptions,
   EngineFreezeResult,
   EngineGraphSpec,
+  EngineInputMonitor,
+  EngineInputMonitorInput,
   EngineLoop,
   EngineMarker,
   EngineMarkerInput,
@@ -799,6 +801,26 @@ export class RealtimeEngine {
   }
 
   /**
+   * Sets the dry input monitor: the live input passed straight to the output
+   * ahead of the master, switched in one step. Independent of the input track
+   * ({@link setInputTrack}); with both on, dry and wet sound together. A
+   * non-finite `gain` is a `RangeError`.
+   */
+  setInputMonitor(monitor: EngineInputMonitorInput): void {
+    const request = requestObject('setInputMonitor', monitor, 'monitor', true);
+    const enabled = requireBoolean(request.enabled, 'enabled');
+    const gain = isAbsent(request.gain) ? 1 : request.gain;
+    assertFloatValue(gain, 'gain');
+    this.native.setInputMonitor(enabled, gain);
+  }
+
+  /** The dry input monitor, both fields as one write left them. */
+  inputMonitor(): EngineInputMonitor {
+    const { enabled, gain } = this.native.inputMonitor() as EngineInputMonitor;
+    return { enabled, gain };
+  }
+
+  /**
    * Sample at which a count-in of `bars` bars from `startSample` ends. Counting starts at the
    * beginning of the bar containing `startSample` (a mid-bar start gets a short first bar), and
    * every counted bar has the length of the time signature in effect at `startSample`.
@@ -897,6 +919,30 @@ export class RealtimeEngine {
    */
   setTrackOutputBus(trackId: number, busId: number | null): void {
     this.native.setTrackOutputBus(trackId, optionalId('busId', busId, MASTER_MIX_HINT) ?? 0);
+  }
+
+  /**
+   * Routes the live input into the lane of `trackId`, ahead of its strip, sends
+   * and fader, ramping over 5 ms; moving it crossfades the two lanes. An id no
+   * lane carries is a `RangeError` and leaves the routing as it was. The first
+   * two input channels feed the lane; the dry monitor ({@link setInputMonitor})
+   * is not touched. May be set before `prepare` and survives it.
+   */
+  setInputTrack(trackId: number): void {
+    this.native.setInputTrack(trackId);
+  }
+
+  /** Stops routing the live input into a lane, ramping out over 5 ms. */
+  clearInputTrack(): void {
+    this.native.clearInputTrack();
+  }
+
+  /**
+   * The track the live input is routed into, or `undefined`. A
+   * {@link setTrackLanes} call dropping that track's lane clears it.
+   */
+  get inputTrack(): number | undefined {
+    return this.native.inputTrack();
   }
 
   /**
@@ -1452,10 +1498,10 @@ export class RealtimeEngine {
 
   /**
    * Configures capture as one declarative setup: the buffer, the source, the
-   * record offset, the input monitor and the punch window. Absent fields take
-   * their defaults (`numChannels` 2, `source` `'output'`, `recordOffsetSamples`
-   * 0, input monitor enabled at gain 1, no punch), so a call describes the whole setup rather
-   * than a change to it.
+   * record offset and the punch window. Absent fields take their defaults
+   * (`numChannels` 2, `source` `'output'`, `recordOffsetSamples` 0, no punch), so
+   * a call describes the whole setup rather than a change to it. The input
+   * monitor ({@link setInputMonitor}) is left alone.
    *
    * The buffer is reallocated only when `numChannels` or `capacityFrames`
    * differs from the previous call; reallocating while armed is an
@@ -1483,19 +1529,6 @@ export class RealtimeEngine {
     const offset = isAbsent(request.recordOffsetSamples)
       ? 0
       : requireFiniteInteger(request.recordOffsetSamples, 'recordOffsetSamples');
-    let monitor = { enabled: true, gain: 1 };
-    if (!isAbsent(request.inputMonitor)) {
-      const inputMonitor = request.inputMonitor;
-      if (!isPlainRecord(inputMonitor)) {
-        throw refuseType(`inputMonitor must be an object`);
-      }
-      const gain = isAbsent(inputMonitor.gain) ? 1 : inputMonitor.gain;
-      assertFloatValue(gain, 'inputMonitor.gain');
-      monitor = {
-        enabled: requireBoolean(inputMonitor.enabled, 'inputMonitor.enabled'),
-        gain,
-      };
-    }
     const punch = isAbsent(request.punch) ? undefined : this.resolvePunch(request.punch);
 
     const shape = this.captureShape;
@@ -1516,7 +1549,6 @@ export class RealtimeEngine {
       this.captureShape = { numChannels, capacityFrames };
     }
     this.native.setCaptureSource(source);
-    this.native.setInputMonitor(monitor.enabled, monitor.gain);
   }
 
   private resolvePunch(punch: CapturePunch): {

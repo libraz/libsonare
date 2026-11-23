@@ -497,19 +497,29 @@ export interface CapturePunch {
 }
 
 /**
- * Input-monitor setting of {@link CaptureOptions}.
+ * The dry input monitor as {@link RealtimeEngine.inputMonitor} reads it: the live
+ * input passed straight to the output ahead of the master, independent of the
+ * input track.
  */
-export interface CaptureInputMonitor {
+export interface EngineInputMonitor {
+  /** Whether the live input is monitored through the engine output. */
+  readonly enabled: boolean;
+  /** Linear monitor gain; a negative gain inverts the polarity. */
+  readonly gain: number;
+}
+
+/** The dry input monitor as {@link RealtimeEngine.setInputMonitor} takes it. */
+export interface EngineInputMonitorInput {
   /** Whether the live input is monitored through the engine output. */
   enabled: boolean;
-  /** Linear monitor gain. Default `1`. */
+  /** Linear monitor gain, finite. Default `1`. */
   gain?: number;
 }
 
 /**
  * Capture setup for {@link RealtimeEngine.configureCapture}. The set is applied
  * as a whole: an absent `source` is `'output'`, an absent `recordOffsetSamples`
- * is `0`, an absent `inputMonitor` is enabled at gain `1` (the engine default) and an absent `punch` is no punch.
+ * is `0` and an absent `punch` is no punch.
  */
 export interface CaptureOptions {
   /** Capture length in frames per channel. Required, positive. */
@@ -520,8 +530,6 @@ export interface CaptureOptions {
   source?: EngineCaptureSource;
   /** Delay of the capture relative to the punch window, in samples. Default `0`. */
   recordOffsetSamples?: number;
-  /** Input monitoring. Omitted: enabled at gain `1`. */
-  inputMonitor?: CaptureInputMonitor;
   /** Punch-in window. Omitted: no punch window, capture is not gated. */
   punch?: CapturePunch;
 }

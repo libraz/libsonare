@@ -16,7 +16,7 @@ describe('engine meter input peaks and constructed insert values', () => {
     const block = 1024;
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: block });
     try {
-      engine.configureCapture({ capacityFrames: block, inputMonitor: { enabled: true } });
+      engine.configureCapture({ capacityFrames: block });
       engine.play();
       const tone = new Float32Array(block);
       for (let i = 0; i < block; i += 1) {

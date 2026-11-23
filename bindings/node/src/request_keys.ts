@@ -1257,10 +1257,8 @@ const CONFIGURE_CAPTURE_REQUEST_KEYS = keySet(
   'numChannels',
   'source',
   'recordOffsetSamples',
-  'inputMonitor',
   'punch',
 );
-const CAPTURE_INPUT_MONITOR_KEYS = keySet('enabled', 'gain');
 const ENGINE_GRAPH_NODE_KEYS = keySet('id', 'type', 'gainDb', 'numPorts');
 const ENGINE_GRAPH_CONNECTION_KEYS = keySet(
   'sourceNode',
@@ -1287,6 +1285,7 @@ const SET_METRONOME_REQUEST_KEYS = keySet(
   'clickSamples',
   'clickSec',
 );
+const SET_INPUT_MONITOR_REQUEST_KEYS = keySet('enabled', 'gain');
 const SET_TRACK_SOLO_MUTE_REQUEST_KEYS = keySet('solo', 'mute');
 const MIDI_BANK_REQUEST_KEYS = keySet('msb', 'lsb');
 const MIXER_CONFIG_REQUEST_KEYS = keySet('scene', 'sampleRate', 'maxBlockSize');
@@ -1451,6 +1450,7 @@ export const REQUEST_KEYS = {
   setLoop: SET_LOOP_REQUEST_KEYS,
   setParameter: keySet('smoothed'),
   setMetronome: SET_METRONOME_REQUEST_KEYS,
+  setInputMonitor: SET_INPUT_MONITOR_REQUEST_KEYS,
   setTrackSoloMute: SET_TRACK_SOLO_MUTE_REQUEST_KEYS,
   pushMidiProgram: MIDI_BANK_REQUEST_KEYS,
   pushMidiInputProgram: MIDI_BANK_REQUEST_KEYS,
@@ -1907,7 +1907,7 @@ export const NESTED_REQUEST_KEYS = {
   setProgram: { bank: keySet('msb', 'lsb') },
   midi2Program: { bank: keySet('msb', 'lsb') },
   midiBankProgram: { bank: keySet('msb', 'lsb') },
-  configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },
+  configureCapture: { punch: CAPTURE_PUNCH_KEYS },
   setGraph: {
     nodes: ENGINE_GRAPH_NODE_KEYS,
     connections: ENGINE_GRAPH_CONNECTION_KEYS,
