@@ -81,6 +81,13 @@ void ParametricEq::prepare_channels(int num_channels) {
   }
 }
 
+bool ParametricEq::passes_through() const noexcept {
+  for (size_t band_index = 0; band_index < kMaxBands; ++band_index) {
+    if (bands_[band_index].enabled || band_gates_[band_index].active()) return false;
+  }
+  return true;
+}
+
 void ParametricEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared();

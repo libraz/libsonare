@@ -807,17 +807,21 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // A freeze bakes the source layer only; master, monitor, graph and capture stay live.
     if (source_layer_render_) return;
 #if defined(SONARE_WITH_MIXING)
-    // The input meter remains available even when no master strip is bound.
+    // The input meter reads the master's input, ahead of the master strip.
     capture_input_peak_db(sub_channels.data(), channels, num_frames, master_input_peak_db);
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs
     // sample-accurately at the sub-block's timeline position when enabled.
     if (mixing_enabled_.load(std::memory_order_relaxed)) {
-      // Master insert keys the track mixer aligned to the master input this block.
-      if (owned_master_strip_ != nullptr && mixing_runtime_.strip() == owned_master_strip_.get()) {
+      if (mixing_runtime_.strip() == owned_master_strip_.get()) {
+        // Master insert keys the track mixer aligned to the master input this block.
         track_mixer_runtime_.deliver_master_sidechains(owned_master_strip_.get(), num_frames);
+        // Nothing reads the owned strip's taps or goniometer, so a block at rest skips it.
+        owned_master_strip_->process_at_skipping_rest(sub_channels.data(), channels, num_frames,
+                                                      transport_.sample_position());
+      } else {
+        mixing_runtime_.process_at(sub_channels.data(), channels, num_frames,
+                                   transport_.sample_position());
       }
-      mixing_runtime_.process_at(sub_channels.data(), channels, num_frames,
-                                 transport_.sample_position());
       if (const auto* strip = mixing_runtime_.strip()) {
         master_gain_reduction_db = strip->last_gain_reduction_db();
         master_insert_gr_board_.publish(*strip);

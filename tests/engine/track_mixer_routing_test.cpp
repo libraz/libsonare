@@ -1501,7 +1501,7 @@ TEST_CASE("RealtimeEngine refuses reprepare when a master key exceeds the PDC ca
   CHECK(engine.graph_latency_samples_q8() == 0);
 }
 
-TEST_CASE("RealtimeEngine clears reported latency when the master is unbound",
+TEST_CASE("RealtimeEngine clears reported latency when an external master is unbound",
           "[engine][track_mixer_routing][pdc]") {
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kSampleRate, kBlock);
@@ -1510,6 +1510,7 @@ TEST_CASE("RealtimeEngine clears reported latency when the master is unbound",
   master.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(8));
   REQUIRE(engine.bind_mixing_strip(&master));
   REQUIRE(engine.graph_latency_samples_q8() == (8 << 8));
-  CHECK_FALSE(engine.bind_mixing_strip(nullptr));
+  // Unbinding returns to the engine's own master strip, which has no latency.
+  CHECK(engine.bind_mixing_strip(nullptr));
   CHECK(engine.graph_latency_samples_q8() == 0);
 }

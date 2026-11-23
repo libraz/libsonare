@@ -206,6 +206,44 @@ void ChannelStrip::process(float* const* channels, int num_channels, int num_sam
   process_at(channels, num_channels, num_samples, 0);
 }
 
+bool ChannelStrip::passes_through(int num_channels) const noexcept {
+  if (!pre_inserts_.empty() || !post_inserts_.empty() || !sends_.empty() || pre_meter_ ||
+      post_meter_ || insert_automation_size_.load(std::memory_order_acquire) != 0 ||
+      !fader_automation_.empty() || !pan_automation_.empty() || !width_automation_.empty() ||
+      effectively_muted()) {
+    return false;
+  }
+  if (polarity_left_.load(std::memory_order_relaxed) != 1.0f ||
+      polarity_right_.load(std::memory_order_relaxed) != 1.0f ||
+      alignment_delay_.delay_samples_q8() != 0 || !input_trim_.at_unity() || !fader_.at_unity()) {
+    return false;
+  }
+  // Each EQ gate must already sit where this block would leave it.
+  const bool eq_enabled = eq_enabled_.load(std::memory_order_relaxed);
+  const EqPosition eq_at = eq_position_.load(std::memory_order_relaxed);
+  if (eq_pre_gate_.active() != (eq_enabled && eq_at == EqPosition::PreFader) ||
+      eq_post_gate_.active() != (eq_enabled && eq_at == EqPosition::PostFader) ||
+      (eq_enabled && !eq_.passes_through())) {
+    return false;
+  }
+  // A mono plane takes the pan law, which is unity at rest only relative to the centre.
+  if (num_channels == 1) return panner_.at_rest_identity() && panner_.mono_pan_centre_unity();
+  if (num_channels == 2) {
+    return panner_.at_rest_identity() && width_.width() == 1.0f && width_.current_width() == 1.0f;
+  }
+  return true;
+}
+
+void ChannelStrip::process_at_skipping_rest(float* const* channels, int num_channels,
+                                            int num_samples, int64_t block_start) {
+  if (!passes_through(num_channels)) {
+    process_at(channels, num_channels, num_samples, block_start);
+    return;
+  }
+  insert_gain_reduction_count_ = 0;
+  last_gain_reduction_db_ = 0.0f;
+}
+
 int ChannelStrip::automation_chunk_samples(int64_t range_start, int num_samples,
                                            size_t insert_lanes) noexcept {
   const auto fits = [&](int chunk) {

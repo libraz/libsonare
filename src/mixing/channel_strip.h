@@ -107,6 +107,14 @@ class ChannelStrip : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void process_at(float* const* channels, int num_channels, int num_samples, int64_t block_start);
+  /// @brief process_at() that leaves a block untouched when processing it would
+  ///        change nothing: no inserts, sends, meters or pending automation, EQ
+  ///        out of the path, unmuted, polarity and delay at rest, trim and fader
+  ///        settled at unity, and pan and width at rest for this channel count.
+  /// @details Such a block feeds neither the taps nor the goniometer, so only an
+  ///          owner that reads neither may call it.
+  void process_at_skipping_rest(float* const* channels, int num_channels, int num_samples,
+                                int64_t block_start);
   void reset() override;
   /// Returns the processing state (inserts, EQ, delay lines, sends, gain
   /// reduction) to its prepared state and snaps the gain-stage and pan/width
@@ -238,6 +246,8 @@ class ChannelStrip : public rt::ProcessorBase {
   void set_muted(bool muted) noexcept;
   bool muted() const noexcept;
   bool effectively_muted() const noexcept;
+  /// True when a block of @p num_channels would leave every plane and every piece of state as is.
+  bool passes_through(int num_channels) const noexcept;
 
   void set_soloed(bool soloed) noexcept;
   bool soloed() const noexcept;

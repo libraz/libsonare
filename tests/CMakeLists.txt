@@ -509,6 +509,7 @@ if(BUILD_MIXING)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
   target_sources(sonare_tests PRIVATE
     engine/sidechain_check_test.cpp
+    engine/master_strip_default_test.cpp
     engine/lane_gate_test.cpp
   )
   # The plate reverb and the stereo delay these drive are FX inserts.

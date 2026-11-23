@@ -161,13 +161,12 @@ bool RealtimeEngine::reset_master_meter_integrated(int64_t render_frame) noexcep
 }
 
 bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
-  if (strip != nullptr && monitor_runtime_.contains(strip)) {
-    return false;
-  }
-  const bool owned = strip != nullptr && strip == owned_master_strip_.get();
+  if (strip == nullptr) strip = owned_master_strip_.get();
+  if (monitor_runtime_.contains(strip)) return false;
+  const bool owned = strip == owned_master_strip_.get();
   const size_t insert_count = owned ? master_strip_spec_.inserts.size() : 0;
   try {
-    if (strip != nullptr && max_block_size_ > 0) {
+    if (max_block_size_ > 0) {
       // Prepare before changing the raw pointer visible to the audio thread.
       strip->prepare(sample_rate_, max_block_size_);
     }
@@ -179,13 +178,11 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
                                                         &update)) {
     return false;
   }
-  const bool bound = mixing_runtime_.bind(strip);
-  if (strip != nullptr && !bound) return false;
-  // bind(nullptr) reports false yet still clears the pointer, so always commit.
+  mixing_runtime_.bind(strip);
   track_mixer_runtime_.commit_master_strip_update(owned ? strip : nullptr, update);
   sync_insert_automation_targets();
   update_reported_graph_latency();
-  return bound;
+  return true;
 }
 
 bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
@@ -202,7 +199,7 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   // In-place: an unchanged insert chain keeps the bound strip, and with it the
   // insert state (tails, envelopes), the insert automation and the EQ filter
   // state of every band the new spec leaves alone.
-  if (owned_master_strip_ != nullptr && mixing_runtime_.strip() == owned_master_strip_.get() &&
+  if (master_strip_specified_ && mixing_runtime_.strip() == owned_master_strip_.get() &&
       strip_inserts_equal(master_strip_spec_.inserts, strip_spec.inserts)) {
     // The delay is clamped to its ceiling, so it refuses only when its bank cannot allocate.
     if (!owned_master_strip_->try_set_channel_delay_samples(strip_spec.channel_delay_samples)) {
@@ -242,6 +239,7 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   clear_master_insert_automations();
   owned_master_strip_ = std::move(strip);
   std::swap(master_strip_spec_, next_spec);
+  master_strip_specified_ = true;
   track_mixer_runtime_.commit_master_strip_update(owned_master_strip_.get(), update);
   sync_insert_automation_targets();
   set_mixing_enabled(true);

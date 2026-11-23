@@ -8,6 +8,7 @@
 
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
+#include "engine/strip_spec.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -17,6 +18,16 @@
 namespace sonare::engine {
 
 using constants::kDefaultDawSampleRate;
+
+RealtimeEngine::RealtimeEngine() {
+#if defined(SONARE_WITH_MIXING)
+  owned_master_strip_ = make_channel_strip_from_spec(master_strip_spec_, sample_rate_);
+  mixing_runtime_.bind(owned_master_strip_.get());
+  TrackMixerRuntime::PreparedMasterStripUpdate update;
+  track_mixer_runtime_.prepare_master_strip_update(owned_master_strip_.get(), 0, &update);
+  track_mixer_runtime_.commit_master_strip_update(owned_master_strip_.get(), update);
+#endif
+}
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
                              size_t telemetry_capacity, int max_channels) {

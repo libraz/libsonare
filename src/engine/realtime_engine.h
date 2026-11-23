@@ -217,6 +217,10 @@ class RealtimeEngine : private ClipPageRequestSink {
  public:
   static constexpr size_t kMaxCommandsPerBlock = 64;
   static constexpr size_t kMaxPendingCommands = 64;
+  /// @brief Builds an unprepared engine. With mixing compiled in it owns a
+  /// default master strip from here on, bound and enabled, so a master fader,
+  /// pan or width edit always has a strip to reach.
+  RealtimeEngine();
   /// @brief Upper bound @ref prepare clamps @p command_capacity to.
   static constexpr size_t kMaxCommandCapacity = 65536;
   /// @brief Upper bound @ref prepare clamps @p telemetry_capacity to.
@@ -859,7 +863,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   const automation::AutomationEngine& automation() const noexcept { return automation_; }
 
   // Mixing channel-strip insert stage. bind_mixing_strip binds a control-thread
-  // ChannelStrip whose process_at runs per sub-block when mixing is enabled.
+  // ChannelStrip whose process_at runs per sub-block when mixing is enabled;
+  // nullptr rebinds the engine's own master strip.
   // A successful bind re-prepares the strip, which allocates on the control
   // thread, so this is intentionally NOT noexcept (a throwing allocation
   // propagates rather than terminating the process).
@@ -869,8 +874,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool mixing_enabled() const noexcept { return mixing_enabled_.load(std::memory_order_relaxed); }
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
   bool set_master_strip(const mixing::api::Strip& strip);
-  /// True when set_master_strip has built the engine-owned master strip that the
-  /// master EQ, insert-bypass, insert-parameter and sidechain setters address.
+  /// True while the engine owns its master strip, which it does from construction.
   bool has_master_strip() const noexcept { return owned_master_strip_ != nullptr; }
   /// Why the most recent mixer configuration call refused; see MixerEditStatus.
   MixerEditStatus last_mixer_edit_status() const noexcept {
@@ -1023,11 +1027,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// thread's manual-base fallback reads it too. Returns false for a null
   /// output, an unknown target, or a target whose processor no longer exists.
   bool insert_parameter_constructed_value(uint32_t target_id, float* out_value) const noexcept;
-  /// The value @p target_id's owner holds now -- a fader, pan or width, an insert parameter,
-  /// an instrument parameter or a bound processor parameter -- which is where a smoothed set
-  /// with no recorded base starts its ramp. Reads audio-side state without allocating: call it
-  /// on the audio thread or while process() is not running. False for an unknown target.
-  bool current_parameter_value(uint32_t target_id, float* out_value) const noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const mastering::eq::EqBand& band) noexcept;
   bool set_master_eq_band(size_t band_index, const mastering::eq::EqBand& band) noexcept;
@@ -1072,6 +1071,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   MonitorRuntime& monitor() noexcept { return monitor_runtime_; }
 #endif
 
+  /// The value @p target_id's owner holds now -- a fader, pan or width, an insert parameter,
+  /// an instrument parameter or a bound processor parameter -- which is where a smoothed set
+  /// with no recorded base starts its ramp. Reads audio-side state without allocating: call it
+  /// on the audio thread or while process() is not running. False for an unknown target.
+  bool current_parameter_value(uint32_t target_id, float* out_value) const noexcept;
   // Ramp time of kSetParamSmoothed on every target, reserved ones included, in ms; it retimes
   // running ramps, and 0 makes a smoothed set a step. kSetParam is a step on every target. A
   // mixer, insert or instrument target keeps its rt::kClickGuardMs glide under both.
@@ -1850,6 +1854,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Last spec passed to set_master_strip(), read by describe_reserved_parameter
   // while owned_master_strip_ is still the bound strip.
   mixing::api::Strip master_strip_spec_{};
+  // False until the first set_master_strip: that call builds a fresh strip, whose smoothers start
+  // on its values, as a track's first set_track_strip does; later calls edit it in place.
+  bool master_strip_specified_ = false;
   MonitorRuntime monitor_runtime_{};
   TrackMixerRuntime track_mixer_runtime_{};
   // Snapshot used only by the control-thread lane-transition fix-up above.
@@ -1968,7 +1975,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // with relaxed ordering: only the flag itself crosses the boundary, so a
   // single aligned load/store per access is sufficient (no companion state to
   // publish).
-  std::atomic<bool> mixing_enabled_{false};
+  std::atomic<bool> mixing_enabled_{true};
   std::atomic<bool> monitoring_enabled_{false};
 #endif
   std::atomic<float> param_smoothing_ms_{20.0f};

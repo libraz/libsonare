@@ -2312,8 +2312,9 @@ TEST_CASE("First master insert touch after a chain replacement ramps from the fr
   REQUIRE(output.back() > std::pow(10.0f, -6.0f / 20.0f));
 }
 
-TEST_CASE("Master insert edits without a master strip are unknown targets and hold no slot",
-          "[engine][realtime]") {
+TEST_CASE(
+    "Master insert edits on a master strip without inserts are unknown targets and hold no slot",
+    "[engine][realtime]") {
   constexpr int kFrames = 64;
   sonare::engine::RealtimeEngine engine;
   engine.prepare(48000.0, kFrames);

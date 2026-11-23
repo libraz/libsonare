@@ -94,6 +94,8 @@ class ParametricEq : public rt::ProcessorBase {
 
   const EqBand& band(size_t index) const;
   double sample_rate() const { return sample_rate_; }
+  /// True when every band is disabled and already out of the path, so a block is a no-op.
+  bool passes_through() const noexcept;
 
  private:
   using Coefficients = BiquadCoefficients;

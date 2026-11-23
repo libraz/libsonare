@@ -31,6 +31,8 @@ class GainProcessor : public rt::ProcessorBase {
 
   void set_gain_db(float gain_db) noexcept;
   float gain_db() const noexcept { return gain_db_.load(std::memory_order_relaxed); }
+  /// True when the target and the smoothed gain are both exactly unity, so a block is a no-op.
+  bool at_unity() const noexcept { return target_linear() == 1.0f && smoother_.current() == 1.0f; }
 
   // The applied VCA offset is the sum of two independent components:
   //   * a manual trim, set absolutely here (direct user/host control), and
