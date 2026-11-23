@@ -417,12 +417,18 @@ describe('Mixer argument validation', () => {
   });
 
   it('throws on out-of-range strip indices', () => {
-    expect(() => mixer.setSoloed(99, true)).toThrow(/out of range/i);
-    expect(() => mixer.stripMeter(99)).toThrow(/out of range/i);
+    expect(() => mixer.setSoloed(99, true)).toThrow(
+      new RangeError('Mixer.setSoloed: strip must be an integer in [0, 2]'),
+    );
+    expect(() => mixer.stripMeter(99)).toThrow(
+      new RangeError('Mixer.stripMeter: strip must be an integer in [0, 2]'),
+    );
   });
 
   it('throws on unknown strip id references', () => {
-    expect(() => mixer.setSoloed('not-a-strip', true)).toThrow(/not found/i);
+    expect(() => mixer.setSoloed('not-a-strip', true)).toThrow(
+      new RangeError("Mixer.setSoloed: no strip with id 'not-a-strip'"),
+    );
   });
 
   it('rejects non-finite live values and accepts later finite values', () => {

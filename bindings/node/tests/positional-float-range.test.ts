@@ -199,7 +199,7 @@ describe('renderNotes narrows every amplitudeEnvelope element', () => {
       const caught = capture(() => render([1, 1, value]));
       expect(caught, `element ${value}`).toBeInstanceOf(RangeError);
       expect((caught as RangeError).message).toBe(
-        `renderNotes: amplitudeEnvelope[2] ${RANGE_MESSAGE}`,
+        `renderNotes: notes[0].edit.amplitudeEnvelope[2] ${RANGE_MESSAGE}`,
       );
     }
   });
@@ -212,8 +212,8 @@ describe('renderNotes narrows every amplitudeEnvelope element', () => {
       envelope[index] = 1e300;
       return (capture(() => render(envelope)) as RangeError).message;
     };
-    expect(at(1)).toBe(`renderNotes: amplitudeEnvelope[1] ${RANGE_MESSAGE}`);
-    expect(at(5)).toBe(`renderNotes: amplitudeEnvelope[5] ${RANGE_MESSAGE}`);
+    expect(at(1)).toBe(`renderNotes: notes[0].edit.amplitudeEnvelope[1] ${RANGE_MESSAGE}`);
+    expect(at(5)).toBe(`renderNotes: notes[0].edit.amplitudeEnvelope[5] ${RANGE_MESSAGE}`);
   });
 
   it('refuses 1e300 in a plain array and not in a Float32Array', () => {
@@ -226,7 +226,7 @@ describe('renderNotes narrows every amplitudeEnvelope element', () => {
     const typed = capture(() => render(Float32Array.from([1, 1, 1e300])));
     expect(plain).toBeInstanceOf(RangeError);
     expect((plain as RangeError).message).toBe(
-      `renderNotes: amplitudeEnvelope[2] ${RANGE_MESSAGE}`,
+      `renderNotes: notes[0].edit.amplitudeEnvelope[2] ${RANGE_MESSAGE}`,
     );
     // Not refused by the reader: the typed element reaches the core as the
     // infinity it became, and is answered there exactly as a written one is.

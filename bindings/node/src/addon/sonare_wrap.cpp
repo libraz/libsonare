@@ -927,8 +927,8 @@ Napi::Value SonareWrap::EncodeAudio(const Napi::CallbackInfo& info) {
   uint8_t* encoded = nullptr;
   size_t encoded_size = 0;
   const SonareError err =
-      sonare_encode_audio(planar.data(), frames, static_cast<int>(channel_count), sample_rate,
-                          &options, &encoded, &encoded_size);
+      sonare_encode_audio(sonare_node::ElementData(planar), frames, static_cast<int>(channel_count),
+                          sample_rate, &options, &encoded, &encoded_size);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -936,7 +936,7 @@ Napi::Value SonareWrap::EncodeAudio(const Napi::CallbackInfo& info) {
   std::unique_ptr<uint8_t, decltype(&sonare_free_bytes)> guard(encoded, sonare_free_bytes);
 
   Napi::Uint8Array out = Napi::Uint8Array::New(env, encoded_size);
-  if (encoded_size != 0) std::memcpy(out.Data(), encoded, encoded_size);
+  if (encoded_size != 0) std::memcpy(sonare_node::ElementData(out), encoded, encoded_size);
   return out;
   SONARE_NODE_CATCH(env)
 }

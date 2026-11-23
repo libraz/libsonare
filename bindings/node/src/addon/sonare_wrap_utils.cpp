@@ -248,10 +248,6 @@ std::string UnknownErrorReasonMessage(const char* reason) {
   return "unknown error reason token: " + std::string(reason);
 }
 
-bool HasDriftedReason(const Napi::Object& error, const char* reason) {
-  return reason != nullptr && error.Has("code") && !error.Has("reason");
-}
-
 void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err,
                               const char* reason) {
   error.Set("name", Napi::String::New(env, "SonareError"));
@@ -259,7 +255,7 @@ void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err
   error.Set("codeName", Napi::String::New(env, ErrorCodeName(err)));
   if (reason != nullptr) {
     error.Set("reason", Napi::String::New(env, reason));
-  } else if (error.Has("reason")) {
+  } else {
     error.Delete("reason");
   }
 }
@@ -297,7 +293,7 @@ void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& mes
   Napi::Error error = MakeSonareError(env, err, message, LastRefusalIsShape(), reason);
   const Napi::Object value = error.Value().As<Napi::Object>();
   if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
-    if (!HasDriftedReason(value, reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
+    if (IsKnownErrorReason(reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
   }
   error.ThrowAsJavaScriptException();
 }
@@ -321,7 +317,7 @@ void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_ro
   const char* reason = sonare_last_error_reason();
   Napi::Error error = MakeSonareError(env, err, RefusalText(*shown), shown->shape_error(), reason);
   const Napi::Object value = error.Value().As<Napi::Object>();
-  if (!HasDriftedReason(value, reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
+  if (IsKnownErrorReason(reason)) AttachRefusal(env, value, *shown, LastRefusalEntry());
   error.ThrowAsJavaScriptException();
 }
 
@@ -418,21 +414,12 @@ void ThrowStdException(Napi::Env env, const std::exception& e) {
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal,
                          const std::optional<sonare::SonareParameterRefusal>& shown,
                          const std::string& c_entry, const char* reason) {
-  const std::string message = error.Get("message").As<Napi::String>().Utf8Value();
-  const Napi::Object translated =
-      MakeSonareError(env, err, message, shape_refusal, reason).Value().As<Napi::Object>();
-  if (translated.Has("code")) {
-    const bool drifted_reason = HasDriftedReason(translated, reason);
-    if (shown && !drifted_reason) AttachRefusal(env, error, *shown, c_entry);
-    error.Set("message", translated.Get("message"));
-    error.Set("name", translated.Get("name"));
-    error.Set("code", translated.Get("code"));
-    error.Set("codeName", translated.Get("codeName"));
-    if (translated.Has("reason")) {
-      error.Set("reason", translated.Get("reason"));
-    } else if (error.Has("reason")) {
-      error.Delete("reason");
+  if (!IsKnownErrorReason(reason)) {
+    const Napi::Object translated = MakeSonareError(env, err, "", shape_refusal, reason).Value();
+    for (const char* property : {"message", "name", "code", "codeName"}) {
+      error.Set(property, translated.Get(property));
     }
+    error.Delete("reason");
     return;
   }
   if (shown) AttachRefusal(env, error, *shown, c_entry);

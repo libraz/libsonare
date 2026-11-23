@@ -208,7 +208,7 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
       p.previewMidiFxCount({ clipId: 1, config: { chordIntervals: l } } as never),
     ),
   ),
-  row('Project.setDestinationInstrument', 'modRoutings', (api, l) =>
+  row('Project.setDestinationInstrument', 'instrument.patch.modRoutings', (api, l) =>
     withProject(api, (p) =>
       p.setDestinationInstrument(0, { kind: 'synth', patch: { modRoutings: l } } as never),
     ),

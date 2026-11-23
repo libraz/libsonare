@@ -8,6 +8,7 @@
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/synth_enum_names.h"
@@ -82,10 +83,12 @@ inline bool SynthEnumValue(Napi::Env env, const Napi::Value& value, const char* 
 // Reads an enum field through SynthEnumValue. An absent field leaves @p out at
 // whatever the caller seeded it with.
 inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char* key,
-                              const char* const* names, int count, const char* what, int* out) {
+                              const char* const* names, int count, const char* what, int* out,
+                              const std::string& root) {
   const Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return true;
-  return SynthEnumValue(env, value, names, count, what, out);
+  const std::string subject = root.empty() ? what : node_element_field(root, key);
+  return SynthEnumValue(env, value, names, count, subject.c_str(), out);
 }
 
 // Spells an enum ordinal as its canonical name, so a value read back out of the
@@ -112,20 +115,23 @@ inline bool SynthFieldPresent(const Napi::Object& obj, const char* key) {
 // reaches the core as an explicit zero rather than the "keep base" sentinel a bare zero would be.
 // Returns false with a pending JS exception on an unknown enum name or an empty or over-long preset
 // name; unknown PRESET names are validated downstream by the C ABI.
-inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
+inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch,
+                                 const std::string& root) {
   sonare_synth_patch_init(patch);
   if (desc.IsUndefined() || desc.IsNull()) return true;
 
   // An empty name is never the init patch (omission is), and a name is refused rather than cut.
-  auto set_preset = [env, patch](const std::string& name) {
+  const std::string preset_subject = node_element_field(root, "preset");
+  const std::string preset_label = root.empty() ? "synth patch preset" : preset_subject;
+  auto set_preset = [env, patch, &preset_label](const std::string& name) {
     const std::string bare = name.rfind("va:", 0) == 0 ? name.substr(3) : name;
     if (bare.empty()) {
-      Napi::RangeError::New(env, "synth patch preset must not be empty; omit it for the init patch")
+      Napi::RangeError::New(env, preset_label + " must not be empty; omit it for the init patch")
           .ThrowAsJavaScriptException();
       return false;
     }
     if (bare.size() >= SONARE_SYNTH_PRESET_NAME_MAX) {
-      Napi::RangeError::New(env, "synth patch preset must be at most " +
+      Napi::RangeError::New(env, preset_label + " must be at most " +
                                      std::to_string(SONARE_SYNTH_PRESET_NAME_MAX - 1) + " bytes")
           .ThrowAsJavaScriptException();
       return false;
@@ -134,11 +140,12 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
     return true;
   };
   if (desc.IsString()) {
-    const std::string name = node_narrow_string(env, desc, "preset");
+    const std::string name = node_narrow_string(env, desc, preset_subject);
     return !env.IsExceptionPending() && set_preset(name);
   }
   if (!desc.IsObject()) {
-    Napi::TypeError::New(env, "synth patch must be a preset-name string or an object")
+    const std::string patch_subject = root.empty() ? "synth patch" : root;
+    Napi::TypeError::New(env, patch_subject + " must be a preset-name string or an object")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -148,42 +155,53 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
     if (preset.IsUndefined() || preset.IsNull()) {
       // Treat explicit JS absence the same as an omitted preset key.
     } else if (!preset.IsString()) {
-      Napi::TypeError::New(env, "synth patch preset must be a string").ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, preset_label + " must be a string").ThrowAsJavaScriptException();
       return false;
     } else {
-      const std::string name = node_narrow_string(env, preset, "preset");
+      const std::string name = node_narrow_string(env, preset, preset_subject);
       if (env.IsExceptionPending() || !set_preset(name)) return false;
     }
   }
   if (!SynthEnumProperty(env, obj, "engineMode", kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
-                         "synth engine mode", &patch->engine_mode) ||
+                         "synth engine mode", &patch->engine_mode, root) ||
       !SynthEnumProperty(env, obj, "waveform", kSynthWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT,
-                         "oscillator waveform", &patch->waveform) ||
+                         "oscillator waveform", &patch->waveform, root) ||
       !SynthEnumProperty(env, obj, "filterModel", kSynthFilterModels,
-                         SONARE_SYNTH_FILTER_MODEL_COUNT, "filter model", &patch->filter_model) ||
+                         SONARE_SYNTH_FILTER_MODEL_COUNT, "filter model", &patch->filter_model,
+                         root) ||
       !SynthEnumProperty(env, obj, "filterOutput", kSynthFilterOutputs,
-                         SONARE_SYNTH_FILTER_OUTPUT_COUNT, "filter output",
-                         &patch->filter_output) ||
+                         SONARE_SYNTH_FILTER_OUTPUT_COUNT, "filter output", &patch->filter_output,
+                         root) ||
       !SynthEnumProperty(env, obj, "body", kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT,
-                         "body type", &patch->body) ||
+                         "body type", &patch->body, root) ||
       !SynthEnumProperty(env, obj, "retrigger", kSynthRetriggers, SONARE_SYNTH_RETRIGGER_COUNT,
-                         "retrigger mode", &patch->retrigger) ||
+                         "retrigger mode", &patch->retrigger, root) ||
       !SynthEnumProperty(env, obj, "lfoShape", kSynthLfoShapes, SONARE_SYNTH_LFO_SHAPE_COUNT,
-                         "LFO shape", &patch->lfo_shape) ||
+                         "LFO shape", &patch->lfo_shape, root) ||
       !SynthEnumProperty(env, obj, "sampleLoop", kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT,
-                         "sample loop mode", &patch->sample_loop) ||
+                         "sample loop mode", &patch->sample_loop, root) ||
       !SynthEnumProperty(env, obj, "sampleKeyTrack", kSampleKeyTracks,
                          SONARE_SAMPLE_KEY_TRACK_COUNT, "sample key track",
-                         &patch->sample_key_track)) {
+                         &patch->sample_key_track, root)) {
     return false;
   }
   auto read_float = [&](const char* key, uint32_t bit, float* out) {
-    *out = FloatProperty(obj, key, 0.0f);
+    *out = FloatProperty(obj, key, 0.0f, root);
     if (SynthFieldPresent(obj, key)) patch->present_fields |= bit;
   };
   auto read_int = [&](const char* key, uint32_t bit, int* out) {
-    *out = IntProperty(obj, key, kZeroIsSentinel);
-    if (SynthFieldPresent(obj, key)) patch->present_fields |= bit;
+    if (root.empty()) {
+      *out = IntProperty(obj, key, kZeroIsSentinel);
+      if (SynthFieldPresent(obj, key)) patch->present_fields |= bit;
+      return;
+    }
+    const Napi::Value value = obj.Get(key);
+    if (env.IsExceptionPending() || value.IsUndefined() || value.IsNull()) return;
+    const std::string subject = node_element_field(root, key);
+    node_require_property_type(env, value.IsNumber(), subject.c_str(), "a number");
+    node_refuse_fraction(env, value, subject.c_str());
+    *out = node_narrow_int(env, value, subject.c_str());
+    patch->present_fields |= bit;
   };
   read_int("unison", SONARE_SYNTH_FIELD_UNISON, &patch->unison);
   read_float("detuneCents", SONARE_SYNTH_FIELD_DETUNE_CENTS, &patch->detune_cents);
@@ -220,7 +238,7 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
 
   // Second presence word.
   auto read_float2 = [&](const char* key, uint32_t bit, float* out) {
-    *out = FloatProperty(obj, key, 0.0f);
+    *out = FloatProperty(obj, key, 0.0f, root);
     if (SynthFieldPresent(obj, key)) patch->present_fields2 |= bit;
   };
   read_float2("driftRateHz", SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ, &patch->drift_rate_hz);
@@ -228,24 +246,29 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
   read_float2("ampHoldMs", SONARE_SYNTH_FIELD2_AMP_HOLD_MS, &patch->amp_hold_ms);
   read_float2("filterDelayMs", SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, &patch->filter_delay_ms);
   read_float2("filterHoldMs", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, &patch->filter_hold_ms);
-  patch->one_shot = BoolProperty(obj, "oneShot", patch->one_shot != 0) ? 1 : 0;
+  patch->one_shot = BoolProperty(obj, "oneShot", patch->one_shot != 0, root) ? 1 : 0;
   if (SynthFieldPresent(obj, "oneShot")) patch->present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT;
 
   // Sample engine. No presence bits: only a sample patch
   // reads this block, which is what keeps keymap set 0 addressable as a plain
   // zero, and the other three keep the usual "0 => base".
-  patch->sample_set = IntProperty(obj, "sampleSet", patch->sample_set);
-  patch->sample_level = FloatProperty(obj, "sampleLevel", patch->sample_level);
-  patch->sample_start_offset = FloatProperty(obj, "sampleStartOffset", patch->sample_start_offset);
+  patch->sample_set = IntProperty(obj, "sampleSet", patch->sample_set, root);
+  patch->sample_level = FloatProperty(obj, "sampleLevel", patch->sample_level, root);
+  patch->sample_start_offset =
+      FloatProperty(obj, "sampleStartOffset", patch->sample_start_offset, root);
   if (env.IsExceptionPending()) return false;
 
   Napi::Value routings = obj.Get("modRoutings");
   if (routings.IsArray()) {
     Napi::Array arr = routings.As<Napi::Array>();
-    const uint32_t count = node_list_length(arr, "modRoutings");
+    const std::string subject = node_element_field(root, "modRoutings");
+    const uint32_t count = node_list_length(arr, subject);
     if (count > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
-      Napi::RangeError::New(env, "a synth patch supports at most 8 mod routings")
-          .ThrowAsJavaScriptException();
+      const std::string message =
+          root.empty() ? "a synth patch supports at most 8 mod routings"
+                       : subject + " must contain at most " +
+                             std::to_string(SONARE_SYNTH_PATCH_MOD_ROUTINGS) + " entries";
+      Napi::RangeError::New(env, message).ThrowAsJavaScriptException();
       return false;
     }
     patch->num_mod_routings = static_cast<int>(count);
@@ -255,13 +278,15 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
     for (uint32_t i = 0; i < count; ++i) {
       Napi::Object routing;
       std::string at;
-      if (!RequiredElementObject(env, arr, i, "modRoutings", &routing, &at)) return false;
+      if (!RequiredElementObject(env, arr, i, subject.c_str(), &routing, &at)) return false;
       SonareSynthModRouting& out = patch->mod_routings[i];
+      const std::string source = root.empty() ? "mod source" : at + ".source";
+      const std::string destination = root.empty() ? "mod destination" : at + ".destination";
       // An absent selector is refused as a wrong type is, not read as the enum's first member.
       if (!SynthEnumValue(env, routing.Get("source"), kSynthModSources,
-                          SONARE_SYNTH_MOD_SOURCE_COUNT, "mod source", &out.source) ||
+                          SONARE_SYNTH_MOD_SOURCE_COUNT, source.c_str(), &out.source) ||
           !SynthEnumValue(env, routing.Get("destination"), kSynthModDestinations,
-                          SONARE_SYNTH_MOD_DESTINATION_COUNT, "mod destination",
+                          SONARE_SYNTH_MOD_DESTINATION_COUNT, destination.c_str(),
                           &out.destination) ||
           !RequiredFloatValue(env, routing.Get("depth"), at + ".depth", &out.depth)) {
         return false;
@@ -288,15 +313,43 @@ struct SynthPatchStorage {
   SynthPatchStorage& operator=(SynthPatchStorage&&) noexcept = default;
 };
 
+inline std::vector<std::pair<std::string, double>> ReadSynthEngineParams(
+    Napi::Env env, const Napi::Value& value, const std::string& subject) {
+  if (env.IsExceptionPending() || value.IsUndefined() || value.IsNull()) return {};
+  node_require_property_type(env, value.IsObject() && !value.IsArray(), subject.c_str(),
+                             "an object of numbers");
+  const Napi::Object map = value.As<Napi::Object>();
+  const Napi::Array names = map.GetPropertyNames();
+  if (env.IsExceptionPending()) return {};
+  const uint32_t count = node_list_length(names, subject);
+  std::vector<std::pair<std::string, double>> entries;
+  entries.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    std::string key = node_narrow_string(env, names.Get(i), subject + " key");
+    const Napi::Value entry = map.Get(key);
+    if (env.IsExceptionPending()) return {};
+    const std::string label = subject + "." + key;
+    node_require_property_type(env, entry.IsNumber(), label.c_str(), "a number");
+    entries.emplace_back(std::move(key), entry.As<Napi::Number>().DoubleValue());
+  }
+  return entries;
+}
+
 // Parses a JS SynthPatch descriptor into @p storage, including the
 // `engineParams` map (key -> number) that sets the selected engine's own model
 // fields. A non-number value is refused by key; an unknown key or an
 // out-of-range value is refused by the C ABI when the patch is bound.
-inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SynthPatchStorage* storage) {
+inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SynthPatchStorage* storage,
+                           const std::string& root = {}) {
   *storage = SynthPatchStorage{};
-  if (!ReadSynthPatchFields(env, desc, &storage->patch)) return false;
+  if (!ReadSynthPatchFields(env, desc, &storage->patch, root)) return false;
   if (!desc.IsObject()) return true;
-  const auto entries = NumberMapProperty(desc.As<Napi::Object>(), "engineParams");
+  const Napi::Object obj = desc.As<Napi::Object>();
+  const auto entries = root.empty()
+                           ? NumberMapProperty(obj, "engineParams")
+                           : ReadSynthEngineParams(env, obj.Get("engineParams"),
+                                                   node_element_field(root, "engineParams"));
+  if (env.IsExceptionPending()) return false;
   if (entries.empty()) return true;
   storage->keys.reserve(entries.size());
   storage->params.reserve(entries.size());

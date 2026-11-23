@@ -192,8 +192,7 @@ bool ReadAutomationTargetKind(Napi::Env env, const Napi::Object& obj,
   return ParseAutomationTargetKind(env, value, out);
 }
 
-bool RejectAutomationIdentityField(Napi::Env env, const Napi::Object& obj, const char* field) {
-  const Napi::Value value = obj.Get(field);
+bool RejectAutomationIdentityField(Napi::Env env, const Napi::Value& value, const char* field) {
   if (env.IsExceptionPending()) return false;
   if (value.IsUndefined() || value.IsNull()) return true;
   Napi::RangeError::New(env, std::string(field) + " must be omitted for this targetKind")
@@ -205,12 +204,12 @@ bool CheckAutomationTargetIdentity(Napi::Env env, const Napi::Object& obj,
                                    SonareAutomationTargetKind kind, bool editing) {
   if (editing && kind == SONARE_AUTOMATION_TARGET_UNCHANGED) {
     for (const char* field : {"targetParamId", "sendId", "insertIndex", "processor", "paramName"}) {
-      if (!RejectAutomationIdentityField(env, obj, field)) return false;
+      if (!RejectAutomationIdentityField(env, obj.Get(field), field)) return false;
     }
     return true;
   }
   if (kind != SONARE_AUTOMATION_TARGET_OPAQUE &&
-      !RejectAutomationIdentityField(env, obj, "targetParamId")) {
+      !RejectAutomationIdentityField(env, obj.Get("targetParamId"), "targetParamId")) {
     return false;
   }
   return true;

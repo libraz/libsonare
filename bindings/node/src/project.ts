@@ -492,6 +492,7 @@ const withDestinationLayer = <T extends object>(instrument: T, destinationId: nu
   Object.assign(Object.create(instrument) as T, { destinationId });
 
 const PROJECT_INSTRUMENT_KINDS = ['synth', 'builtin', 'sf2'] as const;
+const MAX_SYNTH_MOD_ROUTINGS = 8;
 const NONPERSISTENT_INSTRUMENT_KINDS = ['sample', 'sampler', 'callback', 'external'] as const;
 const BUILTIN_INSTRUMENT_KEYS = [
   'waveform',
@@ -619,7 +620,7 @@ function normalizeDestinationInstrument(
       ...rows.map((r) => r.name),
     ];
     assertDeclaredKeys(patch, patchKeys, 'instrument.patch');
-    refuseSynthPatchOrdinals(patch);
+    refuseSynthPatchOrdinals(patch, 'instrument.patch');
     const nestedUseGmPrograms = isAbsent(patch.useGmPrograms)
       ? undefined
       : requireBoolean(patch.useGmPrograms, 'instrument.patch.useGmPrograms');
@@ -648,6 +649,11 @@ function normalizeDestinationInstrument(
     if (!isAbsent(patch.modRoutings)) {
       if (!Array.isArray(patch.modRoutings)) {
         throw refuseType('instrument.patch.modRoutings must be an array');
+      }
+      if (patch.modRoutings.length > MAX_SYNTH_MOD_ROUTINGS) {
+        throw refuse(
+          `instrument.patch.modRoutings must contain at most ${MAX_SYNTH_MOD_ROUTINGS} entries`,
+        );
       }
       patch.modRoutings.forEach((routing, index) => {
         const at = `instrument.patch.modRoutings[${index}]`;

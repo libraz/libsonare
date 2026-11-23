@@ -720,7 +720,7 @@ describe('resample refusals come from the core', () => {
 
   it.each(refused)('refuses $id', (item) => {
     const kind = errorClassFor[item.cause as Cause];
-    const text = literal(item.message as string);
+    const text = publicText(item.message as string);
     const samples = samplesFor(item);
     expectRefusal(() => resample(samples, item.src_sr, item.target_sr), kind, text);
     expectRefusal(() => addon.resample(samples, item.src_sr, item.target_sr), kind, text);

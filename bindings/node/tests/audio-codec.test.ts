@@ -53,10 +53,13 @@ describe('audio tags and in-memory encoding', () => {
     const decoded = decodeChannels(bytes);
     expect(decoded.sampleRate).toBe(sampleRate);
     expect(decoded.channels).toHaveLength(channels.length);
+    // The default PCM16 encoder adds up to one LSB of dither before rounding.
+    const pcm16Tolerance = 1.5 / 32768 + 2 ** -23;
     for (let channel = 0; channel < channels.length; channel += 1) {
       const actual = decoded.channels[channel];
+      expect(actual).toHaveLength(channels[channel].length);
       for (let i = 0; i < channels[channel].length; i += 1) {
-        expect(Math.abs(actual[i] - channels[channel][i])).toBeLessThan(1 / 32768 + 1e-6);
+        expect(Math.abs(actual[i] - channels[channel][i])).toBeLessThanOrEqual(pcm16Tolerance);
       }
     }
 

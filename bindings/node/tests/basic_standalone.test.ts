@@ -116,6 +116,7 @@ describe('standalone functions', () => {
       vocalEdit: expect.any(Boolean),
       voiceChanger: expect.any(Boolean),
       assist: expect.any(Boolean),
+      liveDevices: false,
     });
     expect(report.decode.builtin).toEqual(['wav', 'mp3']);
     expect(Array.isArray(report.decode.ffmpeg)).toBe(true);

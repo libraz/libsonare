@@ -92,6 +92,7 @@ import {
   synthesizeRir,
   transcribe,
 } from '../src/index.js';
+import { addon } from '../src/native.js';
 import { REQUEST_KEYS } from '../src/request_keys.js';
 import type { EngineMetronomeConfig } from '../src/types.js';
 import {
@@ -142,6 +143,10 @@ const facadeKeys = (
  * file-local copy of a shared reader, which is the thing the convention forbids.
  */
 const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
+  [
+    'project/midi_mir.cpp:RefuseUnknownAnnotationKeys',
+    'Checks the annotation row schema against its own enumerable keys. The array name labels the refusal.',
+  ],
   [
     'effects/mixing.cpp:OptionAt',
     'Per-strip scalar-or-array accessor: reads either one value or the index-th element of an array-valued key, a shape the scalar families do not model. Type-checks at each call site and is already named in OPTION_READER.',
@@ -947,6 +952,86 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   { jsName: 'addTrack', invoke: (o) => withProject((p) => p.addTrack({ ...o, kind: 'audio' })) },
   {
+    jsName: 'addAutomationLane',
+    invoke: (o) =>
+      withAddonProject((p) => {
+        const trackId = p.addTrack({ kind: 0 });
+        const laneId = p.addAutomationLane(trackId, {
+          ...o,
+          targetParamId: 7,
+          points: [{ ppq: 0, value: 0 }],
+        });
+        return [laneId, p.automationLanes()];
+      }),
+  },
+  {
+    jsName: 'editAutomationLane',
+    invoke: (o) =>
+      withAddonProject((p) => {
+        const trackId = p.addTrack({ kind: 0 });
+        const laneId = p.addAutomationLane(trackId, {
+          targetParamId: 7,
+          points: [{ ppq: 0, value: 0 }],
+        });
+        p.editAutomationLane(trackId, laneId, { ...o, points: [{ ppq: 480, value: 1 }] });
+        return p.automationLanes();
+      }),
+  },
+  {
+    jsName: 'encodeAudio',
+    invoke: (o) => addon.encodeAudio([sine(512)], SR, { ...o, format: 'wav' }),
+  },
+  {
+    jsName: 'setDestinationInstrument',
+    invoke: (o) =>
+      withAddonProject((p) => {
+        const instruments = [
+          {
+            kind: 'synth',
+            ...levelOf(o, ['useGmPrograms']),
+            patch: {
+              ...levelOf(o, [
+                'engineParams',
+                'oneShot',
+                'sampleLevel',
+                'sampleSet',
+                'sampleStartOffset',
+              ]),
+              preset: 'sine',
+            },
+          },
+          {
+            kind: 'builtin',
+            config: levelOf(o, [
+              'attackMs',
+              'decayMs',
+              'gain',
+              'polyphony',
+              'releaseMs',
+              'sustain',
+            ]),
+          },
+          {
+            kind: 'sf2',
+            config: levelOf(o, [
+              'clearBankRig',
+              'gain',
+              'gsEfxRealization',
+              'polyphony',
+              'preferModelForModeledFamilies',
+            ]),
+            soundFontUri: 'urn:bank:missing',
+          },
+        ];
+        for (const [destinationId, instrument] of instruments.entries()) {
+          const trackId = p.addTrack({ kind: 1 });
+          p.setTrackMidiDestination(trackId, destinationId);
+          p.setDestinationInstrument(destinationId, instrument);
+        }
+        return p.destinationInstruments();
+      }),
+  },
+  {
     jsName: 'setGraph',
     invoke: (o) =>
       withEngine((engine) => {
@@ -1237,6 +1322,15 @@ function withMixer<T>(body: (mixer: Mixer) => T): T {
 
 function withProject<T>(body: (project: Project) => T): T {
   const project = new Project();
+  try {
+    return body(project);
+  } finally {
+    project.destroy();
+  }
+}
+
+function withAddonProject<T>(body: (project: InstanceType<typeof addon.Project>) => T): T {
+  const project = new addon.Project();
   try {
     return body(project);
   } finally {

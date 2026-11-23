@@ -99,6 +99,7 @@ export const READER_FAMILIES: Readonly<
     IntInRangeOrAbsentProperty: 'refuse',
     MidiByteProperty: 'refuse',
     NamedSelectorProperty: 'refuse',
+    NumberMapProperty: 'refuse',
     StringProperty: 'refuse',
     SynthEnumProperty: 'refuse',
     Uint32Property: 'refuse',

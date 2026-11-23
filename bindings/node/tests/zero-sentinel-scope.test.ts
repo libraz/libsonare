@@ -128,6 +128,14 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'sonare_wrap_note_objects.h:timeOffsetSamples',
     'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
   ],
+  [
+    'effects/note_editing.cpp:onsetSample',
+    'RequireSpanKey rejects omission before the read. Zero is a sample position.',
+  ],
+  [
+    'effects/note_editing.cpp:offsetSample',
+    'RequireSpanKey rejects omission before the read. Zero is a sample position.',
+  ],
 ]);
 
 /**
@@ -430,6 +438,15 @@ describe('the zero-fallback scanner sees what it claims to', () => {
       },
     ];
     expect(zeroFallbackSites(midi)).toEqual([]);
+  });
+
+  it('finds a zero fallback before the field path', () => {
+    const sources: AddonSource[] = [
+      { file: 'fake.cpp', text: 'Int64Property(edit, "timeOffsetSamples", 0, at);' },
+    ];
+    expect(zeroFallbackSites(sources).map((site) => [site.key, site.tagged])).toEqual([
+      ['timeOffsetSamples', false],
+    ]);
   });
 
   it('does not read a fallback written in a comment', () => {

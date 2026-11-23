@@ -720,7 +720,7 @@ describe('automation target kind token', () => {
             points: [{ ppq: 0, value: 0 }],
           }),
         TypeError,
-        /^targetKind must be a string$/,
+        /^Project\.addAutomationLane: targetKind must be a string$/,
       );
     } finally {
       native.destroy();

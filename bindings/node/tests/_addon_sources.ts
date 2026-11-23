@@ -1501,7 +1501,7 @@ const ZERO_FALLBACK_READER = new RegExp(
   `\\b(${ZERO_FALLBACK_READER_NAMES.join('|')})\\s*\\(\\s*(?:[^,;()]+\\s*,\\s*){1,2}` +
     // `0u` is the same literal zero as `0`; matching only the bare spelling hid
     // a whole file's worth of reads behind a suffix.
-    '"([A-Za-z0-9_]+)"\\s*,\\s*(0[uUlL]*|kZeroIsSentinel)\\s*\\)',
+    '"([A-Za-z0-9_]+)"\\s*,\\s*(0[uUlL]*|kZeroIsSentinel)\\s*(?=[,)])',
   'g',
 );
 

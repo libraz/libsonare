@@ -820,7 +820,7 @@ describe('async entry points reject instead of throwing synchronously', () => {
     [
       'masterAudioAsync({})',
       () => masterAudioAsync({} as never),
-      /masterAudioAsync: sampleRate must be an integer/,
+      /^masterAudioAsync: samples must be a Float32Array$/,
     ],
     [
       'masterAudioAsync without samples',
@@ -832,7 +832,11 @@ describe('async entry points reject instead of throwing synchronously', () => {
       () => masterAudioStereoAsync(undefined as never),
       /request must be an object/,
     ],
-    ['masterAudioStereoAsync({})', () => masterAudioStereoAsync({} as never), /left must be/],
+    [
+      'masterAudioStereoAsync({})',
+      () => masterAudioStereoAsync({} as never),
+      /^masterAudioStereoAsync: give preset or overrides$/,
+    ],
     [
       'masterAudioAsync with a non-numeric override leaf',
       () =>

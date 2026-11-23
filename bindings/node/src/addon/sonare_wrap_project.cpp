@@ -86,7 +86,7 @@ bool ReadDestinationInstrument(Napi::Env env, const Napi::Object& object,
   if (!RequiredStringProperty(env, object, "kind", &kind)) return false;
   if (kind == "synth") {
     instrument->kind = SONARE_PROJECT_INSTRUMENT_SYNTH;
-    if (!ReadSynthPatch(env, object.Get("patch"), synth_storage)) return false;
+    if (!ReadSynthPatch(env, object.Get("patch"), synth_storage, "instrument.patch")) return false;
     instrument->synth = &synth_storage->patch;
     instrument->use_gm_programs = BoolProperty(object, "useGmPrograms", false) ? 1 : 0;
     return !env.IsExceptionPending();
@@ -565,10 +565,7 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   if (err != SONARE_OK) {
     sonare_project_destroy(handle);
     // The last error carries the diagnostics without their codes; the codes stay in diagnostics.
-    const char* message = sonare_last_error_message();
-    sonare_node::ThrowSonareErrorMessage(
-        env, err,
-        message != nullptr && *message != '\0' ? message : "failed to deserialize project JSON");
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   if (!with_diagnostics) return ProjectWrap::Wrap(info, handle);

@@ -55,9 +55,11 @@ bool RefuseUnknownAnnotationKeys(Napi::Env env, const Napi::Object& row, const c
                                                          napi_key_numbers_to_strings, &names_value);
   NAPI_THROW_IF_FAILED(env, status, false);
   const Napi::Array names(env, names_value);
-  const uint32_t count = names.Length();
+  const std::string row_subject = std::string(array) + "[" + std::to_string(index) + "]";
+  const uint32_t count = sonare_node::node_list_length(names, row_subject);
   for (uint32_t i = 0; i < count; ++i) {
-    const std::string key = names.Get(i).As<Napi::String>().Utf8Value();
+    const std::string key =
+        sonare_node::node_narrow_string(env, names.Get(i), row_subject + " key");
     const bool known = std::any_of(allowed.begin(), allowed.end(),
                                    [&](const char* candidate) { return key == candidate; });
     if (!known) {
@@ -66,7 +68,7 @@ bool RefuseUnknownAnnotationKeys(Napi::Env env, const Napi::Object& row, const c
         if (!expected.empty()) expected += ", ";
         expected += candidate;
       }
-      const std::string subject = std::string(array) + "[" + std::to_string(index) + "]." + key;
+      const std::string subject = row_subject + "." + key;
       throw sonare::SonareParameterRefusal::unknown(sonare::ErrorCode::InvalidParameter, subject,
                                                     "", expected)
           .as_caller_spelled();

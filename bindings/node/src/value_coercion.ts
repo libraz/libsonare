@@ -188,7 +188,7 @@ export function normalizeSynthInstrument(patch: SynthPatch): SynthPatch {
   if (!isNonArrayObject(patch)) {
     throw refuseType(`patch must be a SynthPatch object; a preset is named by its preset field`);
   }
-  refuseSynthPatchOrdinals(patch);
+  refuseSynthPatchOrdinals(patch, '');
   if (!(patch.sampleBank instanceof SampleBank)) {
     // An omitted bank passes through for the native layer to read as "no bank",
     // and a value that is not a bank at all for it to reject as a TypeError.
