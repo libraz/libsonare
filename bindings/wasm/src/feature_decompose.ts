@@ -4,7 +4,13 @@
  */
 
 import { refuse, withEntry } from './internal/entry.js';
-import { MEASURED_FLOORS, sampleNeed, stftBins, withHeapNeed } from './internal/memory_budget.js';
+import {
+  MAX_OFFLINE_AUDIO_SAMPLES,
+  MEASURED_FLOORS,
+  sampleNeed,
+  stftBins,
+  withHeapNeed,
+} from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -168,7 +174,8 @@ function stemsShape(r: {
     return undefined;
   }
   const bins = nFft >= 4 ? stftBins(nFft, 1) : undefined;
-  if (bins === undefined) {
+  // Component weights past the native limit are refused by name there, not as a memory need.
+  if (bins === undefined || bins * k > MAX_OFFLINE_AUDIO_SAMPLES) {
     return undefined;
   }
   if (!Number.isInteger(hopLength) || hopLength < 0 || hopLength > nFft / 2) {
@@ -179,6 +186,11 @@ function stemsShape(r: {
     bins,
     hop: hopLength !== 0 ? hopLength : Math.max(1, Math.floor(nFft / 4)),
   };
+}
+
+/** Whether the centred-STFT activation matrix stays within the native element limit. */
+function activationsFit(k: number, samples: number, hop: number): boolean {
+  return k * (1 + Math.floor(samples / hop)) <= MAX_OFFLINE_AUDIO_SAMPLES;
 }
 
 /** Samples the unsnapped slices of flat (start, end) pairs hold once clamped to `[0, length]`. */
@@ -329,6 +341,9 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
       return call();
     }
     const { k, bins, hop } = shape;
+    if (!activationsFit(k, samples.length, hop)) {
+      return call();
+    }
     const floor = MEASURED_FLOORS.decomposeStems(bins / hop, k);
     return withHeapNeed(
       {
@@ -411,6 +426,9 @@ export function decomposeStemsLinked(
       return call();
     }
     const { k, bins, hop } = shape;
+    if (!activationsFit(k, channels[0].length, hop)) {
+      return call();
+    }
     const count = channels.length;
     return withHeapNeed(
       sampleNeed(
