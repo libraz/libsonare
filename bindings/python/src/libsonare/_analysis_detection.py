@@ -16,7 +16,7 @@ from ._ffi_types_core import (
     SonareOnsetDetectConfig,
 )
 from ._narrowing import _narrow_double
-from ._result_records import _fill_null_ends, _optional_float
+from ._result_records import _fill_null_ends, _measured_float
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -577,19 +577,19 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     # Timbre, dynamics, rhythm and melody are always written; a value not measured is left out.
     timbre_d = data["timbre"]
     timbre = TimbreFrame(
-        brightness=_optional_float(timbre_d.get("brightness")),
-        warmth=_optional_float(timbre_d.get("warmth")),
-        density=_optional_float(timbre_d.get("density")),
-        roughness=_optional_float(timbre_d.get("roughness")),
-        complexity=_optional_float(timbre_d.get("complexity")),
+        brightness=_measured_float(timbre_d, "brightness"),
+        warmth=_measured_float(timbre_d, "warmth"),
+        density=_measured_float(timbre_d, "density"),
+        roughness=_measured_float(timbre_d, "roughness"),
+        complexity=_measured_float(timbre_d, "complexity"),
     )
     dyn_d = data["dynamics"]
     dynamics = AnalysisDynamics(
-        dynamic_range_db=_optional_float(dyn_d.get("dynamicRangeDb")),
+        dynamic_range_db=_measured_float(dyn_d, "dynamicRangeDb"),
         peak_db=float(dyn_d["peakDb"]),
         rms_db=float(dyn_d["rmsDb"]),
-        crest_factor=_optional_float(dyn_d.get("crestFactor")),
-        loudness_range_lu=_optional_float(dyn_d.get("loudnessRangeLu")),
+        crest_factor=_measured_float(dyn_d, "crestFactor"),
+        loudness_range_lu=_measured_float(dyn_d, "loudnessRangeLu"),
         is_compressed=bool(dyn_d["isCompressed"]),
     )
     rhy_d = data["rhythm"]
@@ -600,10 +600,10 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             denominator=int(rts_d["denominator"]),
             confidence=float(rts_d["confidence"]),
         ),
-        syncopation=_optional_float(rhy_d.get("syncopation")),
+        syncopation=_measured_float(rhy_d, "syncopation"),
         groove_type=str(rhy_d["grooveType"]),
-        pattern_regularity=_optional_float(rhy_d.get("patternRegularity")),
-        tempo_stability=_optional_float(rhy_d.get("tempoStability")),
+        pattern_regularity=_measured_float(rhy_d, "patternRegularity"),
+        tempo_stability=_measured_float(rhy_d, "tempoStability"),
     )
     mel_d = data["melody"]
     melody = MelodyResult(
@@ -616,14 +616,14 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             )
             for p in mel_d["pitches"]
         ],
-        pitch_range_octaves=_optional_float(mel_d.get("pitchRangeOctaves")),
-        pitch_stability=_optional_float(mel_d.get("pitchStability")),
-        mean_frequency_hz=_optional_float(mel_d.get("meanFrequencyHz")),
-        vibrato_rate_hz=_optional_float(mel_d.get("vibratoRateHz")),
+        pitch_range_octaves=_measured_float(mel_d, "pitchRangeOctaves"),
+        pitch_stability=_measured_float(mel_d, "pitchStability"),
+        mean_frequency_hz=_measured_float(mel_d, "meanFrequencyHz"),
+        vibrato_rate_hz=_measured_float(mel_d, "vibratoRateHz"),
     )
 
     return AnalysisResult(
-        bpm=_optional_float(data.get("bpm")),
+        bpm=_measured_float(data, "bpm"),
         bpm_confidence=float(data.get("bpmConfidence", 0.0)),
         key=key,
         time_signature=time_signature,

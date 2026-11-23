@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 import libsonare
+from libsonare import SonareError
 from libsonare._mastering_pair import _audio_profile_from_wire
 
 from ._helpers import LIB_AVAILABLE
@@ -138,5 +139,20 @@ def test_a_null_at_a_path_the_table_does_not_name_is_refused() -> None:
     }
     named = {**wire, "bpm": 120}
     assert _audio_profile_from_wire(dict(named)).spectral.air_rms_db == -math.inf
-    with pytest.raises(TypeError, match="NoneType"):
+    with pytest.raises(SonareError, match="bpm is null, which names no infinite end"):
         _audio_profile_from_wire(wire)
+
+
+def test_a_measurement_is_absent_or_present_and_a_left_null_is_refused() -> None:
+    from libsonare._mastering_pair import MasteringAudioProfileDynamics
+    from libsonare._result_records import _measured_float, _record
+
+    assert _measured_float({}, "width") is None
+    assert _measured_float({"width": 1}, "width") == 1.0
+    with pytest.raises(SonareError, match="width is null, which names no infinite end") as refused:
+        _measured_float({"width": None}, "width")
+    assert refused.value.code == int(libsonare.ErrorCode.INVALID_FORMAT)
+    fields = {"attackPerSecond": 0, "shortTermLufsStd": 0, "sustainRatio": 0}
+    assert _record(MasteringAudioProfileDynamics, fields).sustain_ratio == 0.0
+    with pytest.raises(SonareError, match="sustainRatio is null"):
+        _record(MasteringAudioProfileDynamics, {**fields, "sustainRatio": None})

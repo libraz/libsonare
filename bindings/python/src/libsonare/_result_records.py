@@ -15,6 +15,7 @@ from typing import Any
 
 import numpy as np
 
+from ._errors import ErrorCode, SonareError
 from ._null_means import NULL_MEANS
 
 
@@ -36,8 +37,11 @@ def _record(record_type: type, values: Mapping[str, Any]) -> Any:
 
     A measurement the core could not take is an absent key, so a field typed
     ``... | None`` that the wire leaves out is ``None``; any other missing field
-    is still an error.
+    is still an error, and so is a null the family's null-means pre-pass left.
     """
+    for key, value in values.items():
+        if value is None:
+            raise _unnamed_null(key)
     given = {
         key: float(value) if type(value) is int else value for key, value in _fields(values).items()
     }
@@ -47,9 +51,22 @@ def _record(record_type: type, values: Mapping[str, Any]) -> Any:
     return record_type(**given)
 
 
-def _optional_float(value: Any) -> float | None:
-    """A measurement that may not have been taken: ``None`` when its key is absent."""
-    return None if value is None else float(value)
+def _unnamed_null(key: str) -> SonareError:
+    return SonareError(int(ErrorCode.INVALID_FORMAT), f"{key} is null, which names no infinite end")
+
+
+def _measured_float(node: Mapping[str, Any], key: str) -> float | None:
+    """A measurement that may not have been taken: ``None`` when its key is absent.
+
+    Read after the family's null-means pre-pass, so a null still here names no infinite end
+    and is refused rather than read as not measured.
+    """
+    if key not in node:
+        return None
+    value = node[key]
+    if value is None:
+        raise _unnamed_null(key)
+    return float(value)
 
 
 def _fill_null_ends(document: Any, family: str) -> Any:
