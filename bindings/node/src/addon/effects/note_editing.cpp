@@ -503,11 +503,13 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto f0 = info[0].As<Napi::Float32Array>();
-  const float frame_rate = node_narrow_float(env, info[1], "frameRate");
-  const float median_hz = node_narrow_float(env, info[2], "medianHz");
-  // Type-only: the C ABI refuses NaN, infinities and negatives in its own words.
+  // Type-only: the C ABI refuses NaN, infinities and out-of-domain values in its own words.
+  float frame_rate = 0.0f;
+  float median_hz = 0.0f;
   float vibrato_cutoff_hz = 0.0f;
-  if (!RequiredDomainFloatArg(env, info, 3, "vibratoCutoffHz", &vibrato_cutoff_hz)) {
+  if (!RequiredDomainFloatArg(env, info, 1, "frameRate", &frame_rate) ||
+      !RequiredDomainFloatArg(env, info, 2, "medianHz", &median_hz) ||
+      !RequiredDomainFloatArg(env, info, 3, "vibratoCutoffHz", &vibrato_cutoff_hz)) {
     return env.Undefined();
   }
   Napi::Int32Array voiced;

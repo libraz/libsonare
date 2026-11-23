@@ -314,6 +314,8 @@ describe('a required facade scalar is consumed, then refused by name', () => {
       expect(() => decompose(bad)).toThrow(RangeError);
       expect(() => decompose(bad)).toThrow(/decomposeNotePitch: frameRate must be finite/);
     }
-    expect(() => decompose(PAST_FLT_MAX)).toThrow(NARROWING_REFUSAL);
+    expect(() => decompose(PAST_FLT_MAX)).toThrow(
+      'decomposeNotePitch: frameRate must be finite and greater than 0',
+    );
   });
 });

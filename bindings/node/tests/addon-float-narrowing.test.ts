@@ -1265,18 +1265,6 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
         ?.offsetSample,
   },
   {
-    name: 'decomposeNotePitch frameRate',
-    site: 'effects/note_editing.cpp DecomposeNotePitch frameRate',
-    control: [NOTE_RATE, NOTE_RATE * 2],
-    call: (v) => magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, v, 441, 3).vibratoCents),
-  },
-  {
-    name: 'decomposeNotePitch medianHz',
-    site: 'effects/note_editing.cpp DecomposeNotePitch medianHz',
-    control: [441, 220],
-    call: (v) => native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, v, 3).centerHz,
-  },
-  {
     name: 'splitNote frameRate',
     site: 'effects/note_editing.cpp SplitNote frameRate',
     control: [NOTE_RATE, NOTE_RATE * 2],
@@ -1417,14 +1405,35 @@ describe('a required float argument is refused rather than saturated', () => {
   );
 });
 
-describe('decomposeNotePitch vibratoCutoffHz meets the core domain', () => {
-  const decomposed = (v: number) =>
-    magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, 441, v).vibratoCents);
-  it('refuses a non-finite, a negative and a past-float value in the core words', () => {
+describe('decomposeNotePitch scalars meet the core domain', () => {
+  it('refuses a non-finite, out-of-domain or past-float vibratoCutoffHz in the core words', () => {
+    const decomposed = (v: number) =>
+      magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, 441, v).vibratoCents);
     expect(decomposed(3)).not.toBe(decomposed(0.5));
     for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE, -1]) {
       expect(() => decomposed(value), `vibratoCutoffHz ${value}`).toThrow(
         /vibratoCutoffHz must be finite and at least 0/,
+      );
+    }
+  });
+
+  it('refuses a non-finite, out-of-domain or past-float frameRate in the core words', () => {
+    const decomposed = (v: number) =>
+      magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, v, 441, 3).vibratoCents);
+    expect(decomposed(NOTE_RATE)).not.toBe(decomposed(NOTE_RATE * 2));
+    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE, 0]) {
+      expect(() => decomposed(value), `frameRate ${value}`).toThrow(
+        /frameRate must be finite and greater than 0/,
+      );
+    }
+  });
+
+  it('refuses a non-finite, out-of-domain or past-float medianHz in the core words', () => {
+    const centre = (v: number) => native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, v, 3).centerHz;
+    expect(centre(441)).not.toBe(centre(220));
+    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE, -1]) {
+      expect(() => centre(value), `medianHz ${value}`).toThrow(
+        /medianHz must be finite and at least 0/,
       );
     }
   });
