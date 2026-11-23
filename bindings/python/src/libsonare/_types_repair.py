@@ -630,6 +630,9 @@ class DeclipStage:
     """LPC order used for prediction."""
     iterations: int | None = None
     """Number of LPC reconstruction iterations."""
+    link_channels: bool | None = None
+    """Reconstruct the union of every channel's clipped runs in each channel; by default (False)
+    each channel repairs only its own."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

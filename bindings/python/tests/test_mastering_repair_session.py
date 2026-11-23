@@ -9,6 +9,8 @@ built from.
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
@@ -188,3 +190,38 @@ def test_a_declip_level_survives_the_round_trip_from_analysis_to_apply() -> None
     back = _stage_to_wire(stage)
     assert back["clipThresholdDb"] == wire["clipThresholdDb"]
     assert back["lpcOrder"] == 36
+
+
+def test_declip_link_channels_survives_the_round_trip() -> None:
+    from libsonare._effects_repair_session import _stage_from_wire, _stage_to_wire
+
+    wire = {"stage": "declip", "clipThresholdDb": -6.0, "linkChannels": True}
+    stage = _stage_from_wire(wire)
+    assert isinstance(stage, libsonare.DeclipStage)
+    assert stage.link_channels is True
+    assert _stage_to_wire(stage) == wire
+    assert "linkChannels" not in _stage_to_wire(libsonare.DeclipStage())
+
+
+def test_a_recommended_stereo_declip_applies_and_linking_is_opt_in() -> None:
+    # The same tone driven harder on the left: the right channel's runs sit inside the left's.
+    left = np.clip(_material(440.0, 1) * 8.0, -0.5, 0.5).astype(np.float32)
+    right = np.clip(_material(440.0, 1) * 4.0, -0.5, 0.5).astype(np.float32)
+    analysis = libsonare.mastering_repair_analyze([left, right], SR)
+    declip = [s for s in analysis.recommended if isinstance(s, libsonare.DeclipStage)]
+    assert declip
+    recommended = libsonare.mastering_repair_apply([left, right], SR, stages=declip)
+    own = libsonare.mastering_repair_apply(
+        [left, right], SR, stages=[dataclasses.replace(declip[0], link_channels=False)]
+    )
+    linked = libsonare.mastering_repair_apply(
+        [left, right], SR, stages=[dataclasses.replace(declip[0], link_channels=True)]
+    )
+    # Independent repair leaves every sample a channel did not clip as it was; linking widens
+    # the right channel's runs to the left's and re-estimates those samples too.
+    unclipped = np.abs(right) < 0.5
+    np.testing.assert_array_equal(own.channels[1][unclipped], right[unclipped])
+    assert not np.array_equal(linked.channels[1][unclipped], right[unclipped])
+    expected = linked if declip[0].link_channels else own
+    for channel in range(2):
+        np.testing.assert_array_equal(recommended.channels[channel], expected.channels[channel])
