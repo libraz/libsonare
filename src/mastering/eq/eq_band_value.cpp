@@ -18,8 +18,16 @@ using JsonValue = sonare::util::json::Value;
 
 namespace schema = sonare::util::json::schema;
 
-[[noreturn]] void invalid_band(const std::string& message) {
-  throw SonareException(ErrorCode::InvalidFormat, message);
+// Every refusal is structured so the caller that knows the argument's role can recode it.
+[[noreturn]] void wrong_type(const std::string& at, schema::Kind kind) {
+  throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, at,
+                                           std::string("must be ") + schema::kind_text(kind))
+      .as_caller_spelled();
+}
+
+[[noreturn]] void refuse_value(const std::string& at, const std::string& predicate) {
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, at, predicate)
+      .as_caller_spelled();
 }
 
 const JsonValue* find_json_value(const JsonValue& object, const char* key) {
@@ -31,7 +39,7 @@ double json_number(const JsonValue& object, const char* key, double fallback,
   const JsonValue* value = find_json_value(object, key);
   if (!value) return fallback;
   if (!value->is_number()) {
-    invalid_band(schema::must_be(schema::child_path(path, key), schema::Kind::Number));
+    wrong_type(schema::child_path(path, key), schema::Kind::Number);
   }
   return value->as_number();
 }
@@ -40,8 +48,11 @@ double json_number(const JsonValue& object, const char* key, double fallback,
 void refuse_earlier_key(const JsonValue& object, const char* earlier_key, const char* current_key,
                         const std::string& path) {
   if (find_json_value(object, earlier_key)) {
-    invalid_band(schema::child_path(path, earlier_key) + " is an earlier spelling; write " +
-                 schema::child_path(path, current_key));
+    throw SonareParameterRefusal::relation(
+        ErrorCode::InvalidFormat,
+        {schema::child_path(path, earlier_key), schema::child_path(path, current_key)},
+        "{0} is an earlier spelling; write {1}")
+        .as_caller_spelled();
   }
 }
 
@@ -59,7 +70,7 @@ float json_float(const JsonValue& object, const char* key, float fallback,
                  const std::string& path) {
   float converted = 0.0f;
   if (!sonare::numeric::checked_float_cast(json_number(object, key, fallback, path), &converted)) {
-    invalid_band(schema::refusal(schema::child_path(path, key), schema::kFloatRangePredicate));
+    refuse_value(schema::child_path(path, key), schema::kFloatRangePredicate);
   }
   return converted;
 }
@@ -69,7 +80,7 @@ float json_float_any(const JsonValue& object, const char* key, const char* earli
   float converted = 0.0f;
   if (!sonare::numeric::checked_float_cast(
           json_number_any(object, key, earlier_key, fallback, path), &converted)) {
-    invalid_band(schema::refusal(schema::child_path(path, key), schema::kFloatRangePredicate));
+    refuse_value(schema::child_path(path, key), schema::kFloatRangePredicate);
   }
   return converted;
 }
@@ -80,8 +91,7 @@ float json_gain_db_any(const JsonValue& object, const char* key, const char* ear
                        float fallback, const std::string& path) {
   const float value = json_float_any(object, key, earlier_key, fallback, path);
   if (!sonare::numeric::finite(db_to_linear(value))) {
-    invalid_band(schema::refusal(schema::child_path(path, key),
-                                 "must be small enough to realize as a filter gain"));
+    refuse_value(schema::child_path(path, key), "must be small enough to realize as a filter gain");
   }
   return value;
 }
@@ -91,9 +101,9 @@ int json_int_any(const JsonValue& object, const char* key, const char* earlier_k
   int converted = 0;
   if (!sonare::numeric::checked_integral_cast(
           std::round(json_number_any(object, key, earlier_key, fallback, path)), &converted)) {
-    invalid_band(schema::refusal(schema::child_path(path, key),
-                                 schema::integer_range_predicate(std::numeric_limits<int>::min(),
-                                                                 std::numeric_limits<int>::max())));
+    refuse_value(schema::child_path(path, key),
+                 schema::integer_range_predicate(std::numeric_limits<int>::min(),
+                                                 std::numeric_limits<int>::max()));
   }
   return converted;
 }
@@ -102,7 +112,7 @@ bool json_bool(const JsonValue& object, const char* key, bool fallback, const st
   const JsonValue* value = find_json_value(object, key);
   if (!value) return fallback;
   if (value->is_bool()) return value->as_bool();
-  invalid_band(schema::must_be(schema::child_path(path, key), schema::Kind::Boolean));
+  wrong_type(schema::child_path(path, key), schema::Kind::Boolean);
 }
 
 bool json_bool_any(const JsonValue& object, const char* key, const char* earlier_key, bool fallback,
@@ -116,7 +126,7 @@ std::string json_string(const JsonValue& object, const char* key, const std::str
   const JsonValue* value = find_json_value(object, key);
   if (!value) return fallback;
   if (!value->is_string()) {
-    invalid_band(schema::must_be(schema::child_path(path, key), schema::Kind::String));
+    wrong_type(schema::child_path(path, key), schema::Kind::String);
   }
   return value->as_string();
 }
@@ -129,7 +139,7 @@ std::string json_string_any(const JsonValue& object, const char* key, const char
 
 [[noreturn]] void unknown_token(const char* key, const std::string& tokens,
                                 const std::string& path) {
-  invalid_band(schema::refusal(schema::child_path(path, key), "must be one of " + tokens));
+  refuse_value(schema::child_path(path, key), "must be one of " + tokens);
 }
 
 EqBandType parse_band_type(const std::string& value, const std::string& path) {
@@ -159,7 +169,11 @@ PhaseMode parse_band_phase(const std::string& value, const std::string& path) {
 }  // namespace
 
 EqBand eq_band_from_value(const JsonValue& value, const std::string& path) {
-  if (!value.is_object()) invalid_band(schema::must_be(path, schema::Kind::Object));
+  if (!value.is_object()) {
+    if (path.empty())
+      throw SonareException(ErrorCode::InvalidFormat, schema::root_must_be_object());
+    wrong_type(path, schema::Kind::Object);
+  }
   EqBand band;
   band.type =
       parse_band_type(json_string(value, "type", band_type_to_string(band.type), path), path);

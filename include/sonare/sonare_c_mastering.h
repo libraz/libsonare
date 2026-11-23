@@ -914,19 +914,18 @@ void sonare_eq_destroy(SonareEq* eq);
 /// @c coeffMode (Rbj or Vicanek), @c slopeDbOct, @c placement (Stereo, Left,
 /// Right, Mid, or Side), @c phase (Inherit, ZeroLatency, NaturalPhase, or
 /// LinearPhase), @c soloed, @c bypassed, @c proportionalQ, and
-/// @c proportionalQStrength. Dynamic-band fields are @c dynamic / @c dynEnabled,
+/// @c proportionalQStrength. Dynamic-band fields are @c dynamic,
 /// @c thresholdDb, @c autoThreshold, @c ratio, @c rangeDb, @c attackMs,
 /// @c releaseMs, @c detectorDelayMs, @c sidechainFreqHz, @c sidechainQ, and
-/// @c externalSidechain. The corresponding snake_case spellings are also
-/// accepted where applicable. Omitted fields use the default @c EqBand values.
+/// @c externalSidechain. Omitted fields use the default @c EqBand values.
 /// @p band_json is the shape of @c $defs/eqBand in schemas/mixer-scene.schema.json.
 /// Every refusal of it, malformed JSON and any other key included, is
 /// @c SONARE_ERROR_INVALID_PARAMETER naming its path under @c band
 /// (`unknown key band.gain`); keys starting with @c $ or @c x- are ignored.
 /// @c detectorDelayMs delays the detector's view of the signal, so a larger
 /// value makes the band react later; it is not look-ahead and adds no latency
-/// to the audio path. Its earlier spelling @c lookaheadMs is refused as
-/// `band.lookaheadMs`, naming `band.detectorDelayMs`.
+/// to the audio path. An earlier spelling (@c lookaheadMs, @c dynEnabled, or a key's snake_case
+/// form) is refused naming the current key (`band.lookaheadMs`, naming `band.detectorDelayMs`).
 /// @c phase == NaturalPhase forces @c coeffMode = Vicanek for the band. Vicanek
 /// has no Q/S parameter, so @c q is ignored on LowShelf and HighShelf, though it
 /// is still stored and read back verbatim; Peak, pass and notch bands honour

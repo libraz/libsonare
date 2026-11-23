@@ -53,6 +53,12 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   sonare::mastering::eq::EqBand band;
   try {
     band = sonare::mastering::eq::eq_band_from_value(json, kRoot);
+  } catch (const sonare::SonareParameterRefusal& ex) {
+    if (ex.code() != sonare::ErrorCode::InvalidFormat) throw;
+    // Keep the refusal's form and subjects so each surface still picks the class from its kind.
+    throw ex.respelled(
+        sonare::ErrorCode::InvalidParameter, [](const std::string& subject) { return subject; },
+        false);
   } catch (const sonare::SonareException& ex) {
     if (ex.code() != sonare::ErrorCode::InvalidFormat) throw;
     refuse_band(ex.what());

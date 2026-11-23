@@ -172,6 +172,13 @@ TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engin
   CHECK(last_error().find('\n') == std::string::npos);
   CHECK(last_error().find("unknown key band.a\\x0ab") != std::string::npos);
 
+  // A wrongly typed value keeps its structured refusal, so the facades take the class from it.
+  const char* wrong_type = R"({"type":"peak","frequencyHz":1000,"gainDb":"loud"})";
+  REQUIRE(sonare_engine_set_master_strip_eq_band_json(f.engine, 0, wrong_type) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 1);
+  CHECK(std::string(sonare_last_refusal_subject(0)) == "band.gainDb");
+
   const char* annotated =
       R"({"$schema":"s","x-note":1,"type":"peak","frequencyHz":1000,"gainDb":3,"dynamic":false})";
   REQUIRE(sonare_engine_set_track_strip_json(f.engine, 10, R"({"id":"s","faderDb":0})") ==
