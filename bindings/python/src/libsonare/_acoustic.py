@@ -445,10 +445,7 @@ def room_geometry_from_estimate(
         band_count=bands_count,
     )
     config = SonareRirSynthConfig()
-    _check(
-        lib.sonare_room_geometry_from_estimate(ctypes.byref(c_estimate), ctypes.byref(config)),
-        flattened="config",
-    )
+    _check(lib.sonare_room_geometry_from_estimate(ctypes.byref(c_estimate), ctypes.byref(config)))
     geometry: RoomGeometry = {
         "length_m": _narrow_double(config.length_m, "config.length_m"),
         "width_m": _narrow_double(config.width_m, "config.width_m"),
