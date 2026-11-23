@@ -5,6 +5,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -116,7 +117,7 @@ TEST_CASE("Note segmentation follows voiced_flag across the whole register",
   REQUIRE(segment_count(low.f0, low.voiced_prob, 0.01f) > 0);
 }
 
-TEST_CASE("Time-varying pitch correction ignores voiced_prob", "[feature][pitch][pyin]") {
+TEST_CASE("Time-varying pitch correction never weights by voiced_prob", "[feature][pitch][pyin]") {
   const Pyin source = run_pyin(60.0f);  // C4
   const std::vector<float> samples = harmonic_tone(60.0f);
   std::vector<int32_t> voiced(source.voiced_flag.size());
@@ -124,22 +125,27 @@ TEST_CASE("Time-varying pitch correction ignores voiced_prob", "[feature][pitch]
     voiced[i] = source.voiced_flag[i] > 0.5f ? 1 : 0;
   }
 
-  const auto correct = [&](const float* prob) {
+  const auto correct = [&](const float* prob, const int32_t* flags) {
     float* out = nullptr;
     size_t out_length = 0;
     REQUIRE(sonare_pitch_correct_to_midi_timevarying(
-                samples.data(), samples.size(), kSampleRate, source.f0.data(), prob, voiced.data(),
+                samples.data(), samples.size(), kSampleRate, source.f0.data(), prob, flags,
                 voiced.size(), kHopLength, 69.0f, &out, &out_length) == SONARE_OK);
     std::vector<float> result(out, out + out_length);
     sonare_free_floats(out);
     return result;
   };
 
-  // Passing pYIN's voiced_prob straight through used to scale the correction by
-  // that value, so the result fell short of the target by an amount that
-  // depended on the source pitch. The two calls must now be identical.
-  const std::vector<float> omitted = correct(nullptr);
-  const std::vector<float> with_prob = correct(source.voiced_prob.data());
+  // A probability track used to scale the correction by its value. One that varies
+  // across [0.5, 1) on the voiced frames and stays below 0.5 elsewhere makes the same
+  // voicing decision as the flags, so the two calls must be identical.
+  std::vector<float> prob(voiced.size());
+  for (size_t i = 0; i < prob.size(); ++i) {
+    const float p = std::clamp(source.voiced_prob[i], 0.0f, 0.99f);
+    prob[i] = voiced[i] != 0 ? 0.5f + 0.5f * p : 0.25f * p;
+  }
+  const std::vector<float> omitted = correct(nullptr, voiced.data());
+  const std::vector<float> with_prob = correct(prob.data(), nullptr);
   REQUIRE(omitted.size() == with_prob.size());
   REQUIRE_FALSE(omitted.empty());
   for (size_t i = 0; i < omitted.size(); ++i) {
