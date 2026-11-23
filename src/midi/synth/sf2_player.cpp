@@ -9,7 +9,9 @@
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gm_fallback_tail_bounds.h"
 #include "midi/synth/mix_dc_blocker.h"
+#include "midi/synth/piano_resonance.h"
 #include "midi/ump.h"
 #include "rt/biquad_design.h"
 #include "rt/tail_budget.h"
@@ -234,6 +236,8 @@ void Sf2Player::sync_prepared_base() noexcept {
 void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
   // Sounding SF2 voices read the previous sample pool, which this assignment may free.
   pool_.reset();
+  offline_sf2_tail_samples_ = 0;
+  offline_sf2_next_age_ = pool_.next_age();
   soundfont_ = std::move(soundfont);
   // Longest release over reachable (preset zone, instrument zone) pairs, not independent maxima.
   max_release_timecents_ = kMinTimecents;
@@ -290,12 +294,20 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
 }
 
 bool Sf2Player::materialize_tail_probe() {
-  if (!prepared_ || !config_.realize_efx_inline || !part_fx_.enabled()) return true;
-  if (part_fx_.dirty()) realize_gs_efx();
-  part_fx_.settle_quiescent(*this);
-  // The overlay's own controls, in the order a block applies them.
-  sync_prepared_base();
-  apply_prepared_efx_controls();
+  if (!prepared_) return true;
+  if (config_.realize_efx_inline) {
+    if (gs_system_dirty_) {
+      gs_system_dirty_ = false;
+      apply_gs_system_state(sys_fx_, master_eq_, eq_part_bypassed_);
+    }
+    if (part_fx_.enabled()) {
+      if (part_fx_.dirty()) realize_gs_efx();
+      part_fx_.settle_quiescent(*this);
+      sync_prepared_base();
+      apply_prepared_efx_controls();
+    }
+  }
+  update_offline_tail();
   return true;
 }
 
@@ -355,6 +367,10 @@ int64_t Sf2Player::tail_bound() const noexcept {
     tail =
         numeric::saturating_add(tail, numeric::ceil_sample_count(kPianoBodyRingS * sample_rate_));
   }
+  return tail_bound_for_note(tail);
+}
+
+int64_t Sf2Player::tail_bound_for_note(int64_t tail) const noexcept {
 #if defined(SONARE_MIDI_WITH_FX)
   // The note tail rings first, the effect tail decays after it.
   if (effects_ != nullptr) {
@@ -374,6 +390,56 @@ int64_t Sf2Player::tail_bound() const noexcept {
   return tail;
 }
 
+int Sf2Player::offline_tail_samples() const noexcept {
+  const int64_t note_tail = std::max(offline_sf2_tail_samples_, offline_fallback_tail_samples_);
+  const int64_t bounded = std::clamp<int64_t>(
+      tail_bound_for_note(note_tail), 0, static_cast<int64_t>(std::numeric_limits<int>::max()));
+  const int part_fx_tail = std::max(std::max(part_fx_.tail_samples(), 0),
+                                    prepared_part_fx_tail_->load(std::memory_order_relaxed));
+  return numeric::saturating_add(static_cast<int>(bounded), part_fx_tail);
+}
+
+void Sf2Player::update_offline_tail() noexcept {
+  for (const Sf2Voice& voice : pool_) {
+    if (!voice.active || voice.age < offline_sf2_next_age_) continue;
+    offline_sf2_tail_samples_ = std::max(
+        offline_sf2_tail_samples_,
+        DahdsrEnvelope::release_tail_samples(sample_rate_, voice.params.volume_env.release_ms));
+  }
+  offline_sf2_next_age_ = pool_.next_age();
+
+  for (const NativeSynthVoice& voice : fallback_pool_) {
+    if (!voice.active || voice.age < offline_fallback_next_age_ || voice.patch == nullptr) continue;
+
+    const ChannelState& channel = channels_[voice.channel & 0x0Fu];
+    const uint16_t bank = effective_bank(voice.channel);
+    const GsToneMap map = gs_effective_tone_map(channel.bank_msb, channel.bank_lsb);
+    const EnvelopeTimeScales scales{voice.part_attack_scale, voice.part_decay_scale,
+                                    voice.part_release_scale};
+    int64_t note_tail = 0;
+    if (bank == kDrumBank) {
+      const GsUserDrumSource* source = user_drum_source(channel, true, voice.note);
+      const uint8_t program = source == nullptr ? channel.program : source->program;
+      const uint8_t kit = gm_fallback_drum_kit(program, map);
+      note_tail = gm_fallback_drum_note_tail_samples(*voice.patch, kit, voice.base_voiced_note,
+                                                     sample_rate_, scales);
+    } else {
+      note_tail = gm_fallback_program_tail_samples(*voice.patch, sample_rate_, scales);
+    }
+
+    FallbackBodyKind body_kind{};
+    if (fallback_body_kind(*voice.patch, &body_kind)) {
+      const double ring_seconds = body_kind == FallbackBodyKind::kPiano
+                                      ? kPianoBodyRingS
+                                      : PianoResonanceBank::kGuitarHaloRingT60S;
+      note_tail = numeric::saturating_add(note_tail,
+                                          numeric::ceil_sample_count(ring_seconds * sample_rate_));
+    }
+    offline_fallback_tail_samples_ = std::max(offline_fallback_tail_samples_, note_tail);
+  }
+  offline_fallback_next_age_ = fallback_pool_.next_age();
+}
+
 void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   ++prepared_domain_;
   release_prepared_nodes();
@@ -389,6 +455,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   for (SourceResidualSplitter& s : body_residual_splitters_) prepare_splitter(s);
   pool_.prepare(config_.polyphony);
   fallback_pool_.prepare(config_.synth_fallback ? config_.polyphony : 1);
+  offline_sf2_tail_samples_ = 0;
+  offline_fallback_tail_samples_ = 0;
+  offline_sf2_next_age_ = pool_.next_age();
+  offline_fallback_next_age_ = fallback_pool_.next_age();
   // Each fallback slot gets its delay slab, or nothing when the fallback is off.
   const auto assign_slab = [this](std::vector<float>& buffers, int slab_capacity) {
     buffers.assign(
@@ -468,6 +538,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
 void Sf2Player::reset() {
   pool_.reset();
   fallback_pool_.reset();
+  offline_sf2_tail_samples_ = 0;
+  offline_fallback_tail_samples_ = 0;
+  offline_sf2_next_age_ = pool_.next_age();
+  offline_fallback_next_age_ = fallback_pool_.next_age();
   fallback_per_note_.assign(fallback_per_note_.size(), Sf2PerNoteVoice{});
   per_note_pitch_.clear();
   per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);

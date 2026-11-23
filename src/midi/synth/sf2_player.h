@@ -180,6 +180,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
                                       prepared_part_fx_tail_->load(std::memory_order_relaxed));
     return numeric::saturating_add(base, part_fx_tail);
   }
+  int offline_tail_samples() const noexcept override;
   /// A received GS envelope-time edit raises the tail (raise_tail).
   bool tail_follows_events() const noexcept override { return true; }
   /// Offline: realises a pending EFX change and settles the units at the
@@ -733,6 +734,8 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   void recompute_tail() noexcept;
   /// That bound at the parts' current GS EG time edits, without allocation.
   int64_t tail_bound() const noexcept;
+  int64_t tail_bound_for_note(int64_t note_tail) const noexcept;
+  void update_offline_tail() noexcept;
   /// Raises tail_samples_ to tail_bound() and never lowers it: a voice struck
   /// under an edit since withdrawn may still be ringing.
   void raise_tail() noexcept;
@@ -747,6 +750,10 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// Written on the audio thread by a live raise and read by the host, so
   /// atomic; held by pointer so the player stays movable.
   std::unique_ptr<std::atomic<int64_t>> tail_samples_ = std::make_unique<std::atomic<int64_t>>(0);
+  int64_t offline_sf2_tail_samples_ = 0;
+  int64_t offline_fallback_tail_samples_ = 0;
+  uint64_t offline_sf2_next_age_ = 1;
+  uint64_t offline_fallback_next_age_ = 1;
   /// Highest prepared host-chain + unit tail applied by the audio runtime.
   /// Speculative prepare/build work never raises this value.
   std::unique_ptr<std::atomic<int>> prepared_part_fx_tail_ = std::make_unique<std::atomic<int>>(0);

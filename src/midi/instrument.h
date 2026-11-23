@@ -118,7 +118,7 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   /// CONTROL thread: materializes state changed by the preceding probe event
   /// without advancing audio or DSP time, controller modulation the event
   /// leaves on an effect included. Offline hosts call this after each
-  /// replayed event before reading tail_samples(); a prepared instrument may
+  /// replayed event before reading offline_tail_samples(); a prepared instrument may
   /// allocate here to publish the state that the next real render will adopt.
   /// The default instrument has no deferred state to materialize.
   virtual bool materialize_tail_probe() { return true; }
@@ -262,6 +262,10 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
     (void)out;
     return false;
   }
+
+  /// CONTROL thread: tail bound for an offline render after its events are replayed.
+  /// The default reports the instrument's live bound.
+  virtual int offline_tail_samples() const noexcept { return tail_samples(); }
 };
 
 }  // namespace sonare::midi

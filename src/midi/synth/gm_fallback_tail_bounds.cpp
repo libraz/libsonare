@@ -1,3 +1,5 @@
+#include "midi/synth/gm_fallback_tail_bounds.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -11,6 +13,7 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/harpsichord_voice.h"
+#include "midi/synth/native_synth_voice.h"
 #include "midi/synth/percussion_voice.h"
 #include "midi/synth/svf.h"
 #include "rt/tail_budget.h"
@@ -248,6 +251,19 @@ int64_t gm_drum_kit_max_tail_samples(double sample_rate, float attack_scale, flo
                                      float release_scale) noexcept {
   return tail_samples_for(drum_kit_tail_bounds(), sample_rate, attack_scale, decay_scale,
                           release_scale);
+}
+
+int64_t gm_fallback_program_tail_samples(const NativeSynthPatch& patch, double sample_rate,
+                                         const EnvelopeTimeScales& scales) noexcept {
+  return native_patch_tail_samples(patch, sample_rate, scales, nullptr);
+}
+
+int64_t gm_fallback_drum_note_tail_samples(const NativeSynthPatch& patch, uint8_t kit, uint8_t note,
+                                           double sample_rate,
+                                           const EnvelopeTimeScales& scales) noexcept {
+  NativeSynthPatch varied = patch;
+  apply_gs_drum_kit(varied.percussion, varied.amp_env, kit, note);
+  return native_patch_tail_samples(varied, sample_rate, scales, nullptr);
 }
 
 }  // namespace sonare::midi::synth
