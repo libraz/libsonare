@@ -26,7 +26,6 @@ from ._runtime import (
     _check_realtime,
     _from_c_float_array,
     _get_lib,
-    _guard_buffer,
     _max_block_size,
     _measured_level,
     _narrow_int,
@@ -416,7 +415,8 @@ class PlaybackRenderer:
         """
         handle = self._require_handle()
         ch = _narrow_int(num_input_channels, "num_input_channels", 1, _C_INT_MAX)
-        validated = _validate_samples(samples)
+        # An empty buffer is the library's to refuse, naming the frame count it derives.
+        validated = _validate_samples(samples, allow_empty=True)
         c_in, total = _to_c_float_array(validated)
         if total % ch != 0:
             raise _refuse("samples length must be a multiple of num_input_channels")
@@ -442,7 +442,6 @@ class PlaybackRenderer:
 
 
 @_entry("render_playback")
-@_guard_buffer("samples")
 def render_playback(
     samples: Sequence[float] | list[float] | np.ndarray,
     *,
@@ -466,7 +465,8 @@ def render_playback(
     frame count as ``samples`` / ``num_channels``.
     """
     ch = _narrow_int(num_channels, "num_channels", 1, _C_INT_MAX)
-    c_in, total = _to_c_float_array(samples)
+    # An empty buffer is the library's to refuse, naming the frame count it derives.
+    c_in, total = _to_c_float_array(_validate_samples(samples, allow_empty=True))
     if total % ch != 0:
         raise _refuse("interleaved samples length must be divisible by num_channels")
     frames = total // ch

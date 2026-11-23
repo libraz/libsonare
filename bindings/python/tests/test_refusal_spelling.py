@@ -315,3 +315,25 @@ def test_a_strip_document_refusal_is_a_refused_settings_argument(
             call(settings)
         assert str(refused.value).endswith(f": {cause}"), str(refused.value)
         assert refused.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+
+
+def test_an_empty_interleaved_render_names_the_array_over_its_channel_count() -> None:
+    from libsonare._field_spelling import QUOTIENTS
+
+    renderer = libsonare.PlaybackRenderer({}, sample_rate=48000, max_block_size=128)
+    empty = np.zeros(0, np.float32)
+    calls: dict[str, Callable[[], object]] = {
+        "playback_renderer_render_offline": lambda: renderer.render_offline(
+            empty, num_input_channels=2
+        ),
+        "playback_render_interleaved": lambda: libsonare.render_playback(
+            empty, num_channels=2, sample_rate=48000, config={}
+        ),
+    }
+    for entry, call in calls.items():
+        array, divisor = QUOTIENTS[(entry, "frames")]
+        with pytest.raises(SonareValueError) as refused:
+            call()
+        assert str(refused.value).endswith(
+            f": {array} length / {divisor} must be an integer of at least 1"
+        ), str(refused.value)
