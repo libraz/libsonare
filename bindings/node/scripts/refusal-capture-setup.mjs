@@ -45,6 +45,49 @@ function argFacts(args) {
   return { keys: [...keys], strings: [...strings] };
 }
 
+// The call's arguments as JSON the parity check can join on: a value JSON cannot hold keeps its
+// identity as a tagged string, and bulk data is summarized rather than written out.
+// FNV-1a over a view's bytes, so two buffers of one length but different content never join.
+function byteHash(view) {
+  const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  let h = 0x811c9dc5;
+  for (const b of bytes) h = Math.imul(h ^ b, 0x01000193) >>> 0;
+  return h.toString(16);
+}
+
+function argValues(args) {
+  const seen = new WeakSet();
+  const encode = (v, depth) => {
+    if (v === undefined) return '$undefined';
+    if (typeof v === 'number') return Number.isFinite(v) ? v : `$${v}`;
+    if (typeof v === 'bigint') return `$bigint:${v}`;
+    if (typeof v === 'function') return '$function';
+    if (typeof v === 'symbol') return '$symbol';
+    if (typeof v === 'string') return v.length < 200 ? v : `$string:${v.length}`;
+    if (v === null || typeof v !== 'object') return v;
+    if (types.isProxy(v)) return '$proxy';
+    if (ArrayBuffer.isView(v)) return `$${v.constructor.name}:${v.length ?? v.byteLength}:${byteHash(v)}`;
+    if (v instanceof ArrayBuffer) return `$ArrayBuffer:${v.byteLength}`;
+    if (depth > 4 || seen.has(v)) return '$deep';
+    seen.add(v);
+    if (Array.isArray(v)) {
+      if (v.length > 64) return `$Array:${v.length}`;
+      return Array.from({ length: v.length }, (_, i) => {
+        const d = Object.getOwnPropertyDescriptor(v, i);
+        return d === undefined ? '$hole' : 'value' in d ? encode(d.value, depth + 1) : '$accessor';
+      });
+    }
+    const proto = Object.getPrototypeOf(v);
+    if (proto !== Object.prototype && proto !== null) return `$${v.constructor?.name ?? 'object'}`;
+    const out = {};
+    for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(v))) {
+      if (d.enumerable) out[k] = 'value' in d ? encode(d.value, depth + 1) : '$accessor';
+    }
+    return out;
+  };
+  return args.map((a) => encode(a, 0));
+}
+
 // The core refusal a native translation point attached, in the caller's spelling.
 const REFUSAL = Symbol.for('libsonare.refusal');
 
@@ -54,15 +97,21 @@ function refusalFacts(error) {
   return { code: r.code, form: r.form, subjects: [...r.subjects], cEntry: r.cEntry ?? null };
 }
 
+// A coded error is classed by its brand: the Node addon raises it as a plain Error named SonareError.
+function isBranded(error) {
+  return error.name === 'SonareError' && typeof error.code === 'number';
+}
+
 function record(entry, error, args) {
   if (!(error instanceof Error)) return;
   const file = globalThis.__vitest_worker__?.filepath ?? '';
   const row = {
     entry,
-    errorClass: error.constructor?.name,
+    errorClass: isBranded(error) ? 'SonareError' : error.constructor?.name,
     message: error.message,
     refusal: refusalFacts(error),
     ...argFacts(args),
+    args: argValues(args),
     file: file.replace(/.*\/tests\//, 'tests/'),
   };
   appendFileSync(OUT, `${JSON.stringify(row)}\n`);

@@ -641,17 +641,23 @@ wasm-browser-smoke:
 # refusal_spelling_ratchet.json). Test failures are the test targets' business;
 # a capture holding no refusal fails the checker. `refusal-spelling-check` runs
 # against the builds already present, one surface per REFUSAL_SPELLING_SURFACES entry.
+# With both captures present, tools/api/refusal_parity.py then fails on any input the two
+# surfaces refuse with a different class or text (parked: tests/conformance/refusal_parity_parked.json).
 REFUSAL_SPELLING_SURFACES ?= node wasm
 
 refusal-spelling: build-node build-wasm-binding
 	$(MAKE) refusal-spelling-check
 
 refusal-spelling-check:
+	@python3 -m unittest -q tools/api/test_refusal_parity.py
 	@dir=$$(mktemp -d) && for surface in $(REFUSAL_SPELLING_SURFACES); do \
-	  (cd bindings/$$surface && SONARE_REFUSAL_CAPTURE=$$dir/$$surface.jsonl npx vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/$$surface.log 2>&1; true) && \
+	  (cd bindings/$$surface && SONARE_REFUSAL_CAPTURE=$$dir/$$surface.jsonl yarn vitest run -c scripts/vitest.refusal-capture.config.mjs --maxWorkers=4 >$$dir/$$surface.log 2>&1; true) && \
 	  touch $$dir/$$surface.jsonl && \
 	  python3 tools/api/refusal_spelling.py --surface $$surface $$dir/$$surface.jsonl || exit 1; \
-	done
+	done && \
+	if [ -s $$dir/node.jsonl ] && [ -s $$dir/wasm.jsonl ]; then \
+	  python3 tools/api/refusal_parity.py $$dir/node.jsonl $$dir/wasm.jsonl; \
+	fi
 
 # Focused security-hardening gates. Each test command writes its complete log
 # under the matching build directory, and --no-tests=error prevents a renamed

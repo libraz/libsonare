@@ -1,0 +1,4 @@
+{
+  "comment": "Node/WASM refusal pairs that differ for a reason recorded here. Each entry names its entry and subject, why, and when it expires; an entry that no longer excuses a differing pair fails tools/api/refusal_parity.py.",
+  "parked": []
+}
