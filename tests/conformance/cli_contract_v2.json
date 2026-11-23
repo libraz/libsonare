@@ -19951,6 +19951,24 @@
           "payload": "detect",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent_loudest_band_text",
+          "argv": [
+            "repair",
+            "{audio_silent}",
+            "--detect"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "(band 2)"
+          ],
+          "stdout_excludes": [
+            "nan"
+          ]
         }
       ],
       "artifacts": {}

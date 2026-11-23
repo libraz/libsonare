@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <iterator>
 #include <utility>
 
@@ -113,10 +114,19 @@ void print_defect_profile_text(const mastering::assistant::DefectProfile& defect
                  "resampling or a lossy codec erases a real one, so this is not proof of no "
                  "clipping)\n";
   }
-  const auto* band_floor = std::begin(defects.noise.band_floor_dbfs);
-  const auto* loudest_band = std::max_element(band_floor, std::end(defects.noise.band_floor_dbfs));
-  std::cout << "  Noise floor:     " << defects.noise.floor_dbfs << " dBFS, loudest band "
-            << *loudest_band << " dBFS (band " << (loudest_band - band_floor) << ")\n";
+  // The loudest band among the measured ones, named by its grid index as band_floor_band is.
+  const auto& band_floor = defects.noise.band_floor_dbfs;
+  int loudest_band = -1;
+  for (int band = 0; band < static_cast<int>(std::size(band_floor)); ++band) {
+    if (std::isnan(band_floor[band])) continue;
+    if (loudest_band < 0 || band_floor[band] > band_floor[loudest_band]) loudest_band = band;
+  }
+  std::cout << "  Noise floor:     " << defects.noise.floor_dbfs << " dBFS";
+  if (loudest_band >= 0) {
+    std::cout << ", loudest band " << band_floor[loudest_band] << " dBFS (band " << loudest_band
+              << ")";
+  }
+  std::cout << "\n";
   if (hum.fundamental_prominence > 1.0f) {
     const float loudest_harmonic =
         *std::max_element(std::begin(hum.harmonic_dbfs), std::end(hum.harmonic_dbfs));
