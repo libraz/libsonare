@@ -354,6 +354,17 @@ def test_engine_bus_and_master_sidechain_reject_invalid_source_kind() -> None:
         engine.close()
 
 
+def test_sidechain_refusal_names_the_source_field_the_caller_wrote() -> None:
+    engine = _make_keyed_rig()
+    try:
+        with pytest.raises(SonareValueError, match=r"source\.id must be the id of "):
+            engine.set_bus_sidechain(2, 0, SidechainSource("bus", 99))
+        with pytest.raises(SonareValueError, match=r"source\.id must be the id of "):
+            engine.set_strip_sidechain("master", 0, SidechainSource("track", 99))
+    finally:
+        engine.close()
+
+
 def test_sidechain_source_is_a_record_and_none_is_the_only_removal() -> None:
     engine = _make_keyed_rig()
     try:

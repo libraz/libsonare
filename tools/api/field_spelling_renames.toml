@@ -76,6 +76,9 @@ source_kind = "source.kind"
 offset_samples = "recordOffsetSamples"
 
 [python]
+source_id = "source.id"
+source_track_id = "source.id"
+source_kind = "source.kind"
 fmin_hz = "fmin"
 fmax_hz = "fmax"
 duration_sec = "duration"

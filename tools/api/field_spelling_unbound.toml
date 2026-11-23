@@ -9,16 +9,6 @@
 # until that lands it sits under [pending] with the change that retires it, and the
 # run fails once it binds.
 [pending]
-"engine_can_set_bus_sidechain.source_id" = "rename: node id, python id, wasm id"
-"engine_can_set_bus_sidechain.source_kind" = "rename: node kind, python kind, wasm kind"
-"engine_can_set_lane_sidechain.source_track_id" = "rename: node id, python id, wasm id"
-"engine_can_set_master_sidechain.source_id" = "rename: node id, python id, wasm id"
-"engine_can_set_master_sidechain.source_kind" = "rename: node kind, python kind, wasm kind"
-"engine_set_bus_sidechain.source_id" = "rename: node id, python id, wasm id"
-"engine_set_bus_sidechain.source_kind" = "rename: node kind, python kind, wasm kind"
-"engine_set_lane_sidechain.source_track_id" = "rename: node id, python id, wasm id"
-"engine_set_master_sidechain.source_id" = "rename: node id, python id, wasm id"
-"engine_set_master_sidechain.source_kind" = "rename: node kind, python kind, wasm kind"
 "playback_render_interleaved.document" = "document root: node config, python config, wasm config, once src/playback/config.cpp raises structured refusals"
 "playback_renderer_set_config_json.document" = "document root: node config, python config, wasm config, once src/playback/config.cpp raises structured refusals"
 "polyphonic_set_note_edit.envelope" = "rename: node amplitudeEnvelope, python amplitude_envelope, wasm amplitudeEnvelope"
