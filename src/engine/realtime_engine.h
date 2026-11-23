@@ -56,6 +56,21 @@
 
 namespace sonare::engine {
 
+/// Device callback that drives a realtime engine; the engine holds it without owning it.
+class LiveDriver {
+ public:
+  virtual ~LiveDriver() = default;
+  virtual void stop() noexcept = 0;
+};
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+/// One received channel-voice message placed on the musical timeline.
+struct CapturedMidiEvent {
+  midi::Ump ump{};
+  double ppq = 0.0;
+};
+#endif
+
 /// Result of resolving and enqueueing an insert-parameter change.
 ///
 /// An unknown strip/insert/key is a permanent caller error, while a full
@@ -242,6 +257,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   static constexpr size_t kDefaultCommandCapacity = 1024;
   static constexpr size_t kDefaultTelemetryCapacity = 1024;
   static constexpr int kDefaultMaxChannels = 64;
+  /// CONTROL thread, before a device starts; fails when another driver owns the slot.
+  bool try_attach_live_driver(LiveDriver* driver) noexcept;
+  /// CONTROL thread, after the device has stopped and joined; owner must match.
+  bool detach_live_driver(LiveDriver* driver) noexcept;
+  LiveDriver* live_driver() const noexcept { return live_driver_.load(std::memory_order_acquire); }
+  /// Throws while a live device owns the engine.
+  void require_quiescent() const;
   /// @brief Offline render, bounce and freeze block when a caller names none,
   /// capped at the prepared max block.
   static constexpr int kDefaultOfflineBlock = 128;
@@ -848,8 +870,20 @@ class RealtimeEngine : private ClipPageRequestSink {
   void reset_capture() noexcept;
   int64_t captured_frames() const noexcept { return capture_sink_.captured_frames(); }
   uint32_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
+  uint64_t capture_dropped_frames() const noexcept { return capture_sink_.dropped_frames(); }
   bool capture_armed() const noexcept { return capture_sink_.armed(); }
   bool capture_punch_enabled() const noexcept { return capture_sink_.punch_enabled(); }
+#if defined(SONARE_WITH_ARRANGEMENT)
+  /// CONTROL thread with producer and consumer stopped; reserves and enables the tap.
+  void start_midi_capture();
+  /// CONTROL thread between callbacks; preserves queued events and the drop count.
+  void stop_midi_capture() noexcept;
+  /// Single consumer thread; drains up to @p capacity captured events.
+  size_t drain_captured_midi(CapturedMidiEvent* out, size_t capacity) noexcept;
+  uint64_t dropped_midi_events() const noexcept {
+    return dropped_midi_events_.load(std::memory_order_relaxed);
+  }
+#endif
 #if defined(SONARE_WITH_MIXING)
   /// @brief Total insert-parameter automation slot-table overflows since prepare().
   /// Sums the master-strip table and the per-lane/bus tables. The same delta is
@@ -1682,6 +1716,15 @@ class RealtimeEngine : private ClipPageRequestSink {
   size_t live_midi_input_count_ = 0;
   // Next live input event dispatch_midi_span has not delivered this block.
   size_t live_midi_input_cursor_ = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  static constexpr size_t kCapturedMidiCapacity = 65536;
+  rt::SpscQueue<CapturedMidiEvent> captured_midi_events_{};
+  std::atomic<bool> midi_capture_enabled_{false};
+  std::atomic<uint64_t> dropped_midi_events_{0};
+  bool stopped_midi_anchor_valid_ = false;
+  int64_t stopped_midi_anchor_render_frame_ = 0;
+  int64_t stopped_midi_anchor_sample_ = 0;
+#endif
   // Bounded SysEx payload store for live (queued) SysEx commands. The control
   // thread (push_midi_sysex) prepares a token and copies bytes into a bounded
   // slot, then enqueues a kMidiSysExImmediate command carrying the slot index +
@@ -1835,6 +1878,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::OverflowCounter instrument_automation_overflow_count_{};
 #endif
   CaptureSink capture_sink_{};
+  std::atomic<LiveDriver*> live_driver_{nullptr};
   std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};
   std::atomic<int64_t> record_offset_samples_{0};
   // Audio-thread only: the last loop wrap, so input delayed by the record offset

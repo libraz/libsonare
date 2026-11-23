@@ -57,6 +57,9 @@ class CaptureSink {
     return captured_frames_.load(std::memory_order_acquire);
   }
   uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
+  uint64_t dropped_frames() const noexcept {
+    return dropped_frames_.load(std::memory_order_relaxed);
+  }
   bool armed() const noexcept { return snapshot().armed; }
   bool punch_enabled() const noexcept { return snapshot().punch_enabled; }
   int64_t punch_start_sample() const noexcept { return snapshot().punch_start_sample; }
@@ -106,6 +109,8 @@ class CaptureSink {
   // Atomic: process() (audio thread) bumps it while overflow_count() is polled
   // cross-thread (control thread, via RealtimeEngine::capture_overflow_count()).
   rt::OverflowCounter overflow_count_{};
+  static_assert(std::atomic<uint64_t>::is_always_lock_free);
+  std::atomic<uint64_t> dropped_frames_{0};
 };
 
 }  // namespace sonare::engine

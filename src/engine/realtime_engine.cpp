@@ -9,6 +9,7 @@
 #include "midi/midi_clip_envelope.h"
 #include "midi/ump.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
@@ -34,6 +35,51 @@ void add_into(float* out, const float* src, int frames) noexcept {
 void zero_fill(float* dst, int frames) noexcept { std::fill(dst, dst + frames, 0.0f); }
 
 }  // namespace
+
+bool RealtimeEngine::try_attach_live_driver(LiveDriver* driver) noexcept {
+  if (driver == nullptr) return false;
+  LiveDriver* expected = nullptr;
+  return live_driver_.compare_exchange_strong(expected, driver, std::memory_order_acq_rel,
+                                              std::memory_order_acquire);
+}
+
+bool RealtimeEngine::detach_live_driver(LiveDriver* driver) noexcept {
+  if (driver == nullptr) return false;
+  LiveDriver* expected = driver;
+  return live_driver_.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel,
+                                              std::memory_order_acquire);
+}
+
+void RealtimeEngine::require_quiescent() const {
+  if (live_driver() != nullptr) {
+    throw SonareParameterRefusal::predicate_with_reason(ErrorCode::InvalidState, "engine",
+                                                        "is driven by a live device",
+                                                        ErrorReason::EngineDeviceDriven);
+  }
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+void RealtimeEngine::start_midi_capture() {
+  midi_capture_enabled_.store(false, std::memory_order_release);
+  captured_midi_events_.reserve(kCapturedMidiCapacity);
+  dropped_midi_events_.store(0, std::memory_order_relaxed);
+  stopped_midi_anchor_valid_ = false;
+  stopped_midi_anchor_render_frame_ = 0;
+  stopped_midi_anchor_sample_ = 0;
+  midi_capture_enabled_.store(true, std::memory_order_release);
+}
+
+void RealtimeEngine::stop_midi_capture() noexcept {
+  midi_capture_enabled_.store(false, std::memory_order_release);
+}
+
+size_t RealtimeEngine::drain_captured_midi(CapturedMidiEvent* out, size_t capacity) noexcept {
+  if (out == nullptr || capacity == 0 || captured_midi_events_.capacity() == 0) return 0;
+  size_t count = 0;
+  while (count < capacity && captured_midi_events_.pop(out[count])) ++count;
+  return count;
+}
+#endif
 
 bool RealtimeEngine::is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept {
   if (words == nullptr || count == 0 || count > 4) return false;
@@ -119,6 +165,9 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // tempo map) wraps before anything reads it, not after the first sub-block.
   [[maybe_unused]] const bool wrapped_at_block_start = transport_.fold_into_loop();
   const auto state = transport_.snapshot();
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const bool capture_midi = midi_capture_enabled_.load(std::memory_order_acquire);
+#endif
   clip_page_underrun_reported_this_block_ = false;
 #if defined(SONARE_WITH_MIXING)
   meter_tap_.begin_block();
@@ -280,6 +329,16 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     }
     // Commands of this span must see its transport first.
     publish_instrument_transport();
+    if (capture_midi && stopped_midi_anchor_valid_) {
+      for (const rt::Command& command : pending_) {
+        if (command.sample_time > render_frame) continue;
+        if (command.type == rt::CommandType::kTransportPlay ||
+            command.type == rt::CommandType::kTransportStop) {
+          stopped_midi_anchor_valid_ = false;
+          break;
+        }
+      }
+    }
 #endif
     apply_due_commands(render_frame);
     int span = next_boundary < boundaries.size() ? boundaries[next_boundary].offset - offset
@@ -305,7 +364,38 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     const int64_t eval_sample = span_state.sample_position + eval_offset;
 #if defined(SONARE_WITH_ARRANGEMENT)
     publish_instrument_transport();
+    const size_t capture_cursor_start = live_midi_input_cursor_;
     span = dispatch_midi_span(render_frame, state.render_frame, span);
+    if (capture_midi) {
+      for (size_t index = capture_cursor_start; index < live_midi_input_cursor_; ++index) {
+        const midi::MidiEvent& event = live_midi_input_events_[index];
+        if (event.render_frame < state.render_frame || !midi::is_channel_voice(event.ump)) continue;
+
+        double ppq = 0.0;
+        if (span_state.playing) {
+          const int64_t event_offset = numeric::saturating_sub(event.render_frame, render_frame);
+          const int64_t event_sample =
+              numeric::saturating_add(span_state.sample_position, event_offset);
+          ppq = active_tempo_map_->sample_to_ppq(event_sample);
+        } else {
+          if (!stopped_midi_anchor_valid_) {
+            stopped_midi_anchor_valid_ = true;
+            stopped_midi_anchor_render_frame_ = event.render_frame;
+            stopped_midi_anchor_sample_ = span_state.sample_position;
+          }
+          const int64_t elapsed =
+              numeric::saturating_sub(event.render_frame, stopped_midi_anchor_render_frame_);
+          const int64_t virtual_sample =
+              numeric::saturating_add(stopped_midi_anchor_sample_, elapsed);
+          ppq = active_tempo_map_->sample_to_ppq(virtual_sample);
+        }
+
+        const CapturedMidiEvent captured{event.ump, ppq};
+        if (!captured_midi_events_.push(captured)) {
+          dropped_midi_events_.fetch_add(1, std::memory_order_relaxed);
+        }
+      }
+    }
 #endif
     // Advance engine-level smoothing ramps by this span and push the
     // interpolated values to their bound parameters at the same cadence.

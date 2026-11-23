@@ -27,6 +27,7 @@ void CaptureSink::set_punch(int64_t start_sample, int64_t end_sample, bool enabl
 void CaptureSink::reset() noexcept {
   captured_frames_.store(0, std::memory_order_release);
   overflow_count_.reset();
+  dropped_frames_.store(0, std::memory_order_relaxed);
 }
 
 void CaptureSink::process(const float* const* input, int num_channels, int num_frames,
@@ -42,6 +43,7 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
   }
 
   const int channels = std::min(num_channels, control.segment.num_channels);
+  uint64_t dropped_frames = 0;
   for (int i = 0; i < num_frames; ++i) {
     if (control.punch_enabled) {
       const int64_t sample = numeric::saturating_add(timeline_sample, static_cast<int64_t>(i));
@@ -50,6 +52,7 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
     const int64_t captured = captured_frames_.load(std::memory_order_relaxed);
     if (captured >= control.segment.capacity_frames) {
       overflow_count_.bump();
+      ++dropped_frames;
       continue;
     }
     for (int ch = 0; ch < channels; ++ch) {
@@ -57,6 +60,9 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
       control.segment.channels[ch][captured] = input[ch][i];
     }
     captured_frames_.store(captured + 1, std::memory_order_release);
+  }
+  if (dropped_frames != 0) {
+    dropped_frames_.fetch_add(dropped_frames, std::memory_order_relaxed);
   }
 }
 
