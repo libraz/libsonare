@@ -9,7 +9,6 @@
 #include "c_api/engine_config_domains.h"
 #include "core/channel_layout.h"
 #include "engine/realtime_engine.h"
-#include "mixing/alignment_delay.h"
 #include "sonare_c_internal.h"
 #include "util/constants.h"
 #include "util/parameter_checks.h"
@@ -17,6 +16,7 @@
 #if defined(SONARE_WITH_MIXING)
 #include <string>
 
+#include "c_api/engine_mixer_refusal.h"
 #include "c_api/eq_band_json.h"
 #include "c_api/mixing_internal.h"
 #include "engine/insert_automation_id.h"
@@ -114,13 +114,7 @@ SonareError refuse_out_of_memory(const std::string& text) {
 }
 
 SonareError refuse_automation_table_full() {
-  return refuse_state("the insert automation table is full (" +
-                      std::to_string(engine::InsertAutomationTargetTable::kCapacity) + " entries)");
-}
-
-SonareError refuse_alignment_ceiling(const char* what) {
-  return refuse_state(std::string(what) + " is past the alignment ceiling of " +
-                      std::to_string(mixing::kMaxAlignmentDelaySamples) + " samples");
+  return run_validation([] { refuse_insert_automation_table_full(); });
 }
 
 bool track_has_lane(engine::RealtimeEngine& engine, uint32_t track_id) {
@@ -129,8 +123,7 @@ bool track_has_lane(engine::RealtimeEngine& engine, uint32_t track_id) {
 }
 
 SonareError refuse_track_without_strip(engine::RealtimeEngine& engine, uint32_t track_id) {
-  if (!track_has_lane(engine, track_id)) return refuse_track_id();
-  return refuse_with("track_id", "must be the id of a track that has a channel strip");
+  return run_validation([&] { throw_track_without_strip(engine, track_id); });
 }
 
 SonareError refuse_bus_not_pannable(engine::RealtimeEngine& engine, uint32_t bus_id) {
@@ -270,242 +263,18 @@ SonareError insert_param_result_to_error(engine::InsertParamSetResult result, Di
   return refuse_out_of_memory("the realtime command queue is full");
 }
 
-// The call a refused mixer edit came from; it decides how its causes name the arguments.
-enum class EditScope : uint8_t {
-  kLanes,       // sonare_engine_set_track_lanes
-  kBuses,       // sonare_engine_set_track_buses
-  kTrackSends,  // sonare_engine_set_track_sends
-  kOutputBus,   // sonare_engine_set_track_output_bus
-  kStrip,       // the strip setters that take scene_json
-  kEqBand,      // the three EQ band setters
-};
-
-struct EditContext {
-  EditScope scope;
-  uint32_t track_id = 0;
-};
-
-// "<list>[i].<member>" for an entry of the call's lane or bus list, or the bare member for a call
-// that addresses one lane.
-std::string fault_owner_subject(const EditContext& context, const engine::MixerEditFault& fault,
-                                const char* member) {
-  if (context.scope == EditScope::kLanes) {
-    return util::check::indexed_subject("lanes", fault.index, member);
-  }
-  if (context.scope == EditScope::kBuses) {
-    return util::check::indexed_subject("buses", fault.index, member);
-  }
-  return member;
-}
-
-// The subject of a send of the faulted entry, or of the send list itself when no send is named.
-std::string fault_send_subject(const EditContext& context, const engine::MixerEditFault& fault,
-                               const char* member, const char* list_member) {
-  if (fault.send_index == engine::kNoFaultIndex)
-    return fault_owner_subject(context, fault, list_member);
-  const std::string owner = context.scope == EditScope::kLanes || context.scope == EditScope::kBuses
-                                ? fault_owner_subject(context, fault, "sends")
-                                : std::string("sends");
-  return owner + "[" + std::to_string(fault.send_index) + "]." + member;
-}
-
-SonareError refuse_id_zero(const std::string& subject) {
-  return run_validation(
-      [&] { util::check::integer_within(0, kEngineMixerIdDomain, subject.c_str()); });
-}
-
-SonareError refuse_unknown_bus_in(const std::string& subject, const char* owner) {
-  return run_validation([&] { util::check::refuse_unknown_id(subject.c_str(), "a bus", owner); });
-}
-
-SonareError refuse_bus_route(const EditContext& context, const engine::MixerEditFault& fault,
-                             engine::MixerEditCause cause) {
-  const bool from_send = fault.send_index != engine::kNoFaultIndex;
-  const std::string route = from_send ? fault_send_subject(context, fault, "bus_id", "sends")
-                                      : fault_owner_subject(context, fault, "output_bus_id");
-  if (cause == engine::MixerEditCause::kBusRouteUnknown) {
-    return refuse_with(route, "must be the id of a bus in buses");
-  }
-  return run_validation([&] {
-    util::check::refuse_relation({route, fault_owner_subject(context, fault, "bus_id")},
-                                 "{0} must not equal {1}");
-  });
-}
-
-SonareError eq_band_error(engine::MixerEditCause cause) {
-  if (cause == engine::MixerEditCause::kEqBandIndexInvalid) {
-    return refuse_with("band_index",
-                       util::refusal::integer_range_predicate(
-                           0, static_cast<double>(mastering::eq::ParametricEq::kMaxBands) - 1));
-  }
-  return refuse_with("band_json",
-                     "must describe a band the EQ stage accepts at the engine's sample rate");
-}
-
 // Maps a refused mixer configuration call to its C status by the cause the engine retained.
-SonareError mixer_edit_error(engine::RealtimeEngine& realtime, const EditContext& context) {
-  using Cause = engine::MixerEditCause;
-  const engine::MixerEditFault fault = realtime.last_mixer_edit_fault();
-  const auto count_limit = [](size_t limit) {
-    return util::refusal::integer_range_predicate(0, static_cast<double>(limit));
-  };
-  switch (fault.cause) {
-    case Cause::kTooManyLanes:
-      return refuse_with("lane_count", count_limit(engine::TrackMixerRuntime::kMaxTrackLanes));
-    case Cause::kLaneTrackIdZero:
-      return refuse_id_zero(fault_owner_subject(context, fault, "track_id"));
-    case Cause::kLaneLayoutNotStereo: {
-      const std::string text = fault_owner_subject(context, fault, "source_channel_layout") +
-                               " other than stereo is not supported";
-      set_last_error(SONARE_ERROR_NOT_SUPPORTED, text.c_str());
-      return SONARE_ERROR_NOT_SUPPORTED;
-    }
-    case Cause::kLaneOutputBusUnknown:
-      return refuse_unknown_bus_in(fault_owner_subject(context, fault, "output_bus_id"), "engine");
-    case Cause::kLaneTrackIdDuplicate:
-      return refuse_with(fault_owner_subject(context, fault, "track_id"),
-                         "must be unique among the lanes");
-    case Cause::kTooManySends:
-      return refuse_with(fault_send_subject(context, fault, "bus_id", "send_count"),
-                         count_limit(mixing::ChannelStrip::kMaxSends));
-    case Cause::kSendBusIdZero:
-      return refuse_id_zero(fault_send_subject(context, fault, "bus_id", "sends"));
-    case Cause::kSendLevelOutOfRange:
-      return refuse_with(fault_send_subject(context, fault, "level_db", "sends"),
-                         util::refusal::range_predicate(constants::kFloorDb,
-                                                        engine::TrackMixerRuntime::kMaxGainDb));
-    case Cause::kSendBusUnknown:
-      return refuse_unknown_bus_in(fault_send_subject(context, fault, "bus_id", "sends"), "engine");
-    case Cause::kSendBusDuplicate:
-      return refuse_with(fault_send_subject(context, fault, "bus_id", "sends"),
-                         "must not repeat an earlier send");
-    case Cause::kTooManyBuses:
-      return refuse_with("bus_count", count_limit(engine::TrackMixerRuntime::kMaxBusLanes));
-    case Cause::kBusIdZero:
-      return refuse_id_zero(fault_owner_subject(context, fault, "bus_id"));
-    case Cause::kBusGainOutOfRange:
-      return refuse_with(fault_owner_subject(context, fault, "gain_db"),
-                         util::refusal::range_predicate(constants::kFloorDb,
-                                                        engine::TrackMixerRuntime::kMaxGainDb));
-    case Cause::kBusIdDuplicate:
-      return refuse_with(fault_owner_subject(context, fault, "bus_id"),
-                         "must be unique among the buses");
-    case Cause::kBusRouteUnknown:
-    case Cause::kBusRouteToSelf:
-      return refuse_bus_route(context, fault, fault.cause);
-    case Cause::kBusRouteCycle:
-      return refuse_with("buses",
-                         "must not route a bus back into itself through outputs, sends "
-                         "or sidechain keys");
-    case Cause::kTrackIdZero:
-      return refuse_track_id();
-    case Cause::kTrackHasNoStrip:
-      return refuse_track_without_strip(realtime, context.track_id);
-    case Cause::kBusUnknown:
-      return refuse_bus_id();
-    case Cause::kStripEqInvalid:
-      return refuse_with("scene_json",
-                         "must describe a strip EQ whose bands are valid at the "
-                         "engine's sample rate");
-    case Cause::kStripInsertsRefused:
-      return refuse_with("scene_json", "must describe inserts the mixer can create");
-    case Cause::kBusPanNotFinite:
-      return refuse_with("scene_json", "must describe a bus whose pan values are finite");
-    case Cause::kBusImageOnWideLayout:
-      return refuse_with("scene_json",
-                         "must leave the pan and width of a bus wider than stereo "
-                         "at their defaults");
-    case Cause::kEqBandIndexInvalid:
-    case Cause::kEqBandRefused:
-      return eq_band_error(fault.cause);
-    case Cause::kInsertAutomationTableFull:
-      return refuse_automation_table_full();
-    case Cause::kOwnedStripTableFull:
-      return refuse_state("the owned strip table is full (" +
-                          std::to_string(engine::TrackMixerRuntime::kMaxTrackLanes) + " strips)");
-    case Cause::kLaneTableFull:
-      return refuse_state("the lane table is full (" +
-                          std::to_string(engine::TrackMixerRuntime::kMaxTrackLanes) + " lanes)");
-    case Cause::kRetainedDelayPastCeiling:
-      return refuse_alignment_ceiling("the clip delay the mixer retains, which forbids any lane,");
-    case Cause::kLatencyPastAlignmentCeiling:
-      return refuse_alignment_ceiling("the latency the mixer has to align");
-    case Cause::kBusImageBlocksWiderLayout:
-      return refuse_state(util::check::indexed_subject("buses", fault.index, "channel_layout") +
-                          " cannot be wider than stereo while the bus keeps a pan or width");
-    case Cause::kLaneRoutingBlocksBusRemoval:
-      return refuse_state("a lane output or send still routes to a bus the new bus list drops");
-    case Cause::kStagingFailed:
-      return refuse_state("the mixer failed while staging the change; nothing was applied");
-    case Cause::kOutOfMemory:
-      return refuse_out_of_memory(
-          "out of memory while staging the mixer change; nothing was "
-          "applied");
-    case Cause::kNone:
-      break;
-  }
-  return refuse_state("the mixer refused the change and retained no cause for it");
+SonareError mixer_edit_error(engine::RealtimeEngine& realtime, MixerEditScope scope,
+                             uint32_t track_id = 0) {
+  return run_validation([&] { throw_mixer_edit_refusal(realtime, scope, track_id); });
 }
 
-struct SidechainWording {
-  const char* target_subject;  // nullptr for the master strip, which has no id
-  const char* target_thing;
-  const char* insert_predicate;
-  const char* source_subject;
-  const char* source_thing;
-};
-
-// Table-full and alignment-ceiling refusals come from bindings and latency earlier
-// calls left; every other verdict refuses the call's own target or source. A setter refused
-// while its query answers kNone failed re-planning the delays, and the mixer kept why.
 SonareError sidechain_refusal_to_error(engine::RealtimeEngine& realtime,
                                        engine::SidechainRefusal refusal,
                                        const SidechainWording& wording, bool target_exists,
                                        int source_kind) {
-  const auto refuse_target = [&] {
-    return run_validation([&] {
-      util::check::refuse_unknown_id(wording.target_subject, wording.target_thing, "engine");
-    });
-  };
-  switch (refusal) {
-    case engine::SidechainRefusal::kTableFull:
-      return refuse_state("the sidechain binding table is full (" +
-                          std::to_string(engine::TrackMixerRuntime::kMaxSidechainBindings) +
-                          " entries)");
-    case engine::SidechainRefusal::kPlanRefused:
-      return refuse_alignment_ceiling("the latency the sidechain key would add to the mix");
-    case engine::SidechainRefusal::kInvalidTarget:
-      return refuse_target();
-    case engine::SidechainRefusal::kInsertOutOfRange:
-      if (!target_exists) return refuse_target();
-      return refuse_with("insert_index", wording.insert_predicate);
-    case engine::SidechainRefusal::kUndeclaredSource:
-      return run_validation([&] {
-        util::check::refuse_unknown_id(wording.source_subject, wording.source_thing, "engine");
-      });
-    case engine::SidechainRefusal::kInvalidSourceKind:
-      return refuse_source_kind(source_kind);
-    case engine::SidechainRefusal::kSelfKey:
-      if (wording.target_subject == nullptr) {
-        return refuse_with(wording.source_subject, "must not name the sidechain target itself");
-      }
-      return run_validation([&] {
-        util::check::refuse_relation({wording.source_subject, wording.target_subject},
-                                     "{0} must not equal {1}");
-      });
-    case engine::SidechainRefusal::kCycle:
-      return refuse_with(wording.source_subject, "must not make the sidechain keys form a cycle");
-    case engine::SidechainRefusal::kNone:
-      break;
-  }
-  const engine::MixerEditFault fault = realtime.track_mixer().last_fault();
-  if (fault.cause == engine::MixerEditCause::kOutOfMemory) {
-    return refuse_out_of_memory("out of memory while planning the sidechain delays");
-  }
-  if (fault.cause == engine::MixerEditCause::kLatencyPastAlignmentCeiling) {
-    return refuse_alignment_ceiling("the latency the sidechain key would add to the mix");
-  }
-  return refuse_state("the sidechain binding was refused and the mixer retained no cause for it");
+  return run_validation(
+      [&] { throw_sidechain_refusal(realtime, refusal, wording, target_exists, source_kind); });
 }
 
 }  // namespace
@@ -571,7 +340,7 @@ SonareError sonare_engine_set_track_lanes(SonareEngine* engine, const SonareEngi
   }
   return engine->engine.set_track_lanes(std::move(configs))
              ? SONARE_OK
-             : mixer_edit_error(engine->engine, {EditScope::kLanes});
+             : mixer_edit_error(engine->engine, MixerEditScope::kLanes);
   SONARE_C_CATCH
 #endif
 }
@@ -580,10 +349,9 @@ SonareError sonare_engine_set_track_lanes(SonareEngine* engine, const SonareEngi
 namespace {
 
 SonareError track_lane_edit_result_to_error(engine::RealtimeEngine& realtime,
-                                            engine::TrackLaneEditResult result, EditScope scope) {
-  if (result == engine::TrackLaneEditResult::kApplied) return SONARE_OK;
-  if (result == engine::TrackLaneEditResult::kUnknownTrack) return refuse_track_id();
-  return mixer_edit_error(realtime, {scope});
+                                            engine::TrackLaneEditResult result,
+                                            MixerEditScope scope) {
+  return run_validation([&] { require_track_lane_edit(realtime, result, scope); });
 }
 
 }  // namespace
@@ -612,7 +380,7 @@ SonareError sonare_engine_set_track_sends(SonareEngine* engine, uint32_t track_i
   }
   return track_lane_edit_result_to_error(
       engine->engine, engine->engine.set_track_sends(track_id, std::move(configs)),
-      EditScope::kTrackSends);
+      MixerEditScope::kTrackSends);
   SONARE_C_CATCH
 #endif
 }
@@ -627,7 +395,7 @@ SonareError sonare_engine_set_track_output_bus(SonareEngine* engine, uint32_t tr
   SONARE_C_TRY
   return track_lane_edit_result_to_error(
       engine->engine, engine->engine.set_track_output_bus(track_id, output_bus_id),
-      EditScope::kOutputBus);
+      MixerEditScope::kOutputBus);
   SONARE_C_CATCH
 #endif
 }
@@ -761,7 +529,7 @@ SonareError sonare_engine_set_track_buses(SonareEngine* engine, const SonareEngi
   }
   return engine->engine.set_track_buses(std::move(configs))
              ? SONARE_OK
-             : mixer_edit_error(engine->engine, {EditScope::kBuses});
+             : mixer_edit_error(engine->engine, MixerEditScope::kBuses);
   SONARE_C_CATCH
 #endif
 }
@@ -785,7 +553,7 @@ SonareError sonare_engine_set_bus_strip_json(SonareEngine* engine, uint32_t bus_
   }
   return engine->engine.set_bus_strip(bus_id, scene.buses.front())
              ? SONARE_OK
-             : mixer_edit_error(engine->engine, {EditScope::kStrip});
+             : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
   SONARE_C_CATCH
 #endif
 }
@@ -809,7 +577,7 @@ SonareError sonare_engine_set_track_strip_json(SonareEngine* engine, uint32_t tr
   }
   return engine->engine.set_track_strip(track_id, scene.strips.front())
              ? SONARE_OK
-             : mixer_edit_error(engine->engine, {EditScope::kStrip});
+             : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
   SONARE_C_CATCH
 #endif
 }
@@ -832,7 +600,7 @@ SonareError sonare_engine_set_track_strip_eq_band_json(SonareEngine* engine, uin
   }
   return engine->engine.set_track_eq_band(track_id, static_cast<size_t>(band_index), band)
              ? SONARE_OK
-             : mixer_edit_error(engine->engine, {EditScope::kEqBand, track_id});
+             : mixer_edit_error(engine->engine, MixerEditScope::kEqBand, track_id);
   SONARE_C_CATCH
 #endif
 }
@@ -879,7 +647,7 @@ SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char
   }
   return engine->engine.set_master_strip(scene.strips.front())
              ? SONARE_OK
-             : mixer_edit_error(engine->engine, {EditScope::kStrip});
+             : mixer_edit_error(engine->engine, MixerEditScope::kStrip);
   SONARE_C_CATCH
 #endif
 }
@@ -901,7 +669,7 @@ SonareError sonare_engine_set_master_strip_eq_band_json(SonareEngine* engine, in
   }
   return engine->engine.set_master_eq_band(static_cast<size_t>(band_index), band)
              ? SONARE_OK
-             : mixer_edit_error(engine->engine, {EditScope::kEqBand});
+             : mixer_edit_error(engine->engine, MixerEditScope::kEqBand);
   SONARE_C_CATCH
 #endif
 }
@@ -947,7 +715,7 @@ SonareError sonare_engine_set_bus_strip_eq_band_json(SonareEngine* engine, uint3
   if (engine->engine.set_bus_eq_band(bus_id, static_cast<size_t>(band_index), band)) {
     return SONARE_OK;
   }
-  return mixer_edit_error(engine->engine, {EditScope::kEqBand});
+  return mixer_edit_error(engine->engine, MixerEditScope::kEqBand);
   SONARE_C_CATCH
 #endif
 }
