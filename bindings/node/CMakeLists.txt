@@ -45,6 +45,8 @@ set(BUILD_VOICE_CHANGER ON CACHE BOOL "" FORCE)
 set(BUILD_ACOUSTIC_SIM ON CACHE BOOL "" FORCE)
 set(BUILD_ARRANGEMENT ON CACHE BOOL "" FORCE)
 set(BUILD_PLAYBACK ON CACHE BOOL "" FORCE)
+# The addon links no CoreAudio/CoreMIDI device backend.
+set(BUILD_LIVE_DEVICES OFF CACHE BOOL "" FORCE)
 
 # Optional: enable FFmpeg-backed decoding (M4A/AAC/FLAC/OGG/Opus/...). Forwarded
 # from the npm build via SONARE_FFMPEG (handled in scripts/build-native.mjs):
@@ -159,6 +161,9 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_midi.cpp
   ${SONARE_ROOT}/src/c_api/project_mir.cpp
   ${SONARE_ROOT}/src/c_api/project_part_rig.cpp
+  ${SONARE_ROOT}/src/c_api/project_tempo.cpp
+  ${SONARE_ROOT}/src/c_api/project_instruments.cpp
+  ${SONARE_ROOT}/src/c_api/project_automation_validate.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_transcribe.cpp
   ${SONARE_ROOT}/src/c_api/project_soundfont.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_sample_bank.cpp
