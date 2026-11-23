@@ -1,10 +1,15 @@
 /**
  * Wide meters through the live worklet engine: a 5.1 bus delivers every plane on
- * both the postMessage and the SharedArrayBuffer meter paths, a stereo engine
- * keeps its stereo-only snapshot, and the interval gate is kept per target.
+ * both the postMessage and SharedArrayBuffer meter paths, mono and stereo
+ * snapshots carry per-plane arrays, and the interval gate is per target.
  */
 
 import { type MixSceneStrip, RealtimeEngine } from '../dist/index.js';
+import {
+  SONARE_METER_RING_CHANNEL_COUNT_OFFSET,
+  SONARE_METER_RING_MAX_CHANNELS,
+  SONARE_METER_RING_PLANES_OFFSET,
+} from '../src/worklet/meter-rings';
 import type { WorkletMeterSnapshot } from '../src/worklet/protocol';
 import {
   createMeterRingBuffer,
@@ -82,28 +87,20 @@ function engineOf(processor: SonareRealtimeEngineWorkletProcessor): RealtimeEngi
   return (processor as unknown as { engine: RealtimeEngine }).engine;
 }
 
-/** A silent level is -Infinity and an unmeasured one NaN; anything else matches within a tolerance. */
-function expectLevel(actual: number | undefined, expected: number): void {
-  if (Number.isNaN(expected)) {
-    expect(actual).toBeNaN();
-  } else if (!Number.isFinite(expected)) {
+/** Silence is -Infinity and an unmeasured level is undefined. */
+function expectLevel(actual: number | undefined, expected: number | undefined): void {
+  expect(expected).not.toBeNaN();
+  if (expected === undefined || expected === Number.NEGATIVE_INFINITY) {
     expect(actual).toBe(expected);
   } else {
     expect(actual).toBeCloseTo(expected, 4);
   }
 }
 
-/** A scalar the snapshot carries only when measured: an unmeasured (NaN) reference is absent. */
-function expectScalarLevel(meter: object | undefined, key: string, expected: number): void {
-  const value = (meter as Record<string, number | undefined> | undefined)?.[key];
-  if (Number.isNaN(expected)) {
-    expect(meter && key in meter, key).toBe(false);
-  } else {
-    expectLevel(value, expected);
-  }
-}
-
-function expectPlanes(actual: number[] | undefined, expected: number[]): void {
+function expectPlanes(
+  actual: (number | undefined)[] | undefined,
+  expected: (number | undefined)[],
+): void {
   expect(actual).toHaveLength(expected.length);
   expected.forEach((value, index) => {
     expectLevel(actual?.[index], value);
@@ -132,8 +129,6 @@ describe('wide meters on the live worklet engine', () => {
       expectPlanes(bus?.rmsDb, reference.rmsDb);
       expectPlanes(bus?.truePeakDbtp, reference.truePeakDbtp);
       expectPlanes(bus?.inputPeakDb, reference.inputPeakDb);
-      expectScalarLevel(bus, 'peakDbL', reference.peakDb[0]);
-      expectScalarLevel(bus, 'peakDbR', reference.peakDb[1]);
       // Ls (plane 4) carries the panned lane, above the silent front-left plane.
       expect((bus?.peakDb?.[4] ?? 0) - (bus?.peakDb?.[0] ?? 0)).toBeGreaterThan(10);
     } finally {
@@ -162,14 +157,13 @@ describe('wide meters on the live worklet engine', () => {
       expectPlanes(bus?.rmsDb, reference.rmsDb);
       expectPlanes(bus?.truePeakDbtp, reference.truePeakDbtp);
       expectPlanes(bus?.inputPeakDb, reference.inputPeakDb);
-      expectScalarLevel(bus, 'peakDbL', reference.peakDb[0]);
     } finally {
       processor.destroy();
     }
   });
 
-  it('keeps a stereo engine snapshot stereo-only and identical across both paths', () => {
-    const reference = referenceBusMeter('mono', undefined, 2);
+  it('delivers both stereo planes across both paths', () => {
+    const reference = referenceBusMeter('stereo', undefined, 2);
     const posted: WorkletMeterSnapshot[] = [];
     const viaMessage = new SonareRealtimeEngineWorkletProcessor({
       sampleRate: SR,
@@ -188,23 +182,103 @@ describe('wide meters on the live worklet engine', () => {
       transport: { postMessage: () => undefined },
     });
     try {
-      seedBus(engineOf(viaMessage), 'mono');
-      seedBus(engineOf(viaRing), 'mono');
+      seedBus(engineOf(viaMessage), 'stereo');
+      seedBus(engineOf(viaRing), 'stereo');
       viaMessage.process([[]], [silent(2)]);
       viaRing.process([[]], [silent(2)]);
       const message = posted.find((m) => m.targetId === BUS_TARGET);
       const shared = readMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
       for (const meter of [message, shared]) {
         expect(meter).toBeDefined();
-        expect(meter?.numChannels).toBeUndefined();
-        expect(meter?.peakDb).toBeUndefined();
-        expectScalarLevel(meter, 'peakDbL', reference.peakDb[0]);
-        expectScalarLevel(meter, 'peakDbR', reference.peakDb[1]);
-        expectScalarLevel(meter, 'rmsDbL', reference.rmsDb[0]);
-        expectScalarLevel(meter, 'truePeakDbtpR', reference.truePeakDbtp[1]);
-        expectScalarLevel(meter, 'inputPeakDbL', reference.inputPeakDb[0]);
+        expect(meter?.numChannels).toBe(2);
+        expectPlanes(meter?.peakDb, reference.peakDb);
+        expectPlanes(meter?.rmsDb, reference.rmsDb);
+        expectPlanes(meter?.truePeakDbtp, reference.truePeakDbtp);
+        expectPlanes(meter?.inputPeakDb, reference.inputPeakDb);
       }
-      expect(message?.peakDbL).toBeCloseTo(shared?.peakDbL ?? Number.NaN, 5);
+      expect(message?.peakDb).toEqual(shared?.peakDb);
+      expect(message?.rmsDb).toEqual(shared?.rmsDb);
+      expect(message?.truePeakDbtp).toEqual(shared?.truePeakDbtp);
+      expect(message?.inputPeakDb).toEqual(shared?.inputPeakDb);
+    } finally {
+      viaMessage.destroy();
+      viaRing.destroy();
+    }
+  });
+
+  it('offers mono per-plane arrays and filters unmeasured ring values', () => {
+    const reference = referenceBusMeter('mono', undefined, 1);
+    const posted: WorkletMeterSnapshot[] = [];
+    const viaMessage = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 1,
+      meterIntervalFrames: BLOCK,
+      transport: { onMeter: (meter) => posted.push(meter) },
+    });
+    const ring = createMeterRingBuffer({ capacity: 64 });
+    const viaRing = new SonareRealtimeEngineWorkletProcessor({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 1,
+      meterIntervalFrames: BLOCK,
+      meterSharedBuffer: ring.sharedBuffer,
+      transport: { postMessage: () => undefined },
+    });
+    try {
+      seedBus(engineOf(viaMessage), 'mono');
+      seedBus(engineOf(viaRing), 'mono');
+      viaMessage.process([[]], [silent(1)]);
+      viaRing.process([[]], [silent(1)]);
+      const message = posted.find((meter) => meter.targetId === BUS_TARGET);
+      expect(message?.numChannels).toBe(1);
+      expectPlanes(message?.peakDb, reference.peakDb);
+      expectPlanes(message?.rmsDb, reference.rmsDb);
+      expectPlanes(message?.truePeakDbtp, reference.truePeakDbtp);
+      expectPlanes(message?.inputPeakDb, reference.inputPeakDb);
+      for (const key of ['peakDb', 'rmsDb', 'truePeakDbtp', 'inputPeakDb'] as const) {
+        const values = message?.[key];
+        expect(values).toHaveLength(1);
+        expect(values).not.toContain(-120);
+        expect(values?.some(Number.isNaN)).toBe(false);
+      }
+
+      const writeIndex = Atomics.load(ring.header, 0) >>> 0;
+      const firstReadable = Math.max(0, writeIndex - ring.capacity);
+      let recordOffset = -1;
+      for (let index = firstReadable; index < writeIndex; index++) {
+        const offset = (index % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+        if (ring.records[offset + 2] === BUS_TARGET) {
+          recordOffset = offset;
+          break;
+        }
+      }
+      if (recordOffset < 0) {
+        throw new Error('expected a mono bus meter in the shared ring');
+      }
+      ring.records[recordOffset + 3] = Number.NaN;
+      ring.records[recordOffset + 5] = Number.NaN;
+      ring.records[recordOffset + 8] = Number.NaN;
+      ring.records[recordOffset + 14] = Number.NaN;
+      for (const scalarOffset of [4, 6, 9, 15]) {
+        ring.records[recordOffset + scalarOffset] = -120;
+      }
+      for (let kind = 0; kind < 4; kind++) {
+        ring.records[
+          recordOffset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS + 1
+        ] = -120;
+      }
+      expect(ring.records[recordOffset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET]).toBe(1);
+      const shared = readMeterRingBuffer(ring).meters.find(
+        (meter) => meter.targetId === BUS_TARGET,
+      );
+      expect(shared?.numChannels).toBe(1);
+      for (const key of ['peakDb', 'rmsDb', 'truePeakDbtp', 'inputPeakDb'] as const) {
+        const values = shared?.[key];
+        expect(values).toEqual([undefined]);
+        expect(values).not.toContain(-120);
+        expect(values?.some(Number.isNaN)).toBe(false);
+      }
     } finally {
       viaMessage.destroy();
       viaRing.destroy();

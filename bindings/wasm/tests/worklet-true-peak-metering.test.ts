@@ -117,12 +117,12 @@ function runMixerWorklet(
 
 function dbFields(meter: WorkletMeterSnapshot): number[] {
   return [
-    present(meter.peakDbL, 'peakDbL'),
-    present(meter.peakDbR, 'peakDbR'),
-    present(meter.rmsDbL, 'rmsDbL'),
-    present(meter.rmsDbR, 'rmsDbR'),
-    present(meter.truePeakDbtpL, 'truePeakDbtpL'),
-    present(meter.truePeakDbtpR, 'truePeakDbtpR'),
+    present(meter.peakDb[0], 'peakDb[0]'),
+    present(meter.peakDb[1], 'peakDb[1]'),
+    present(meter.rmsDb[0], 'rmsDb[0]'),
+    present(meter.rmsDb[1], 'rmsDb[1]'),
+    present(meter.truePeakDbtp[0], 'truePeakDbtp[0]'),
+    present(meter.truePeakDbtp[1], 'truePeakDbtp[1]'),
   ];
 }
 
@@ -139,8 +139,12 @@ describe('mixer worklet true-peak metering', () => {
     // The construction puts the inter-sample peak 3.01 dB above the sample peak.
     // A sample-peak implementation reports the two as the same number, so this
     // margin cannot be met by relabelling one as the other.
-    expect(meter.truePeakDbtpL).toBeGreaterThan(present(meter.peakDbL, 'peakDbL') + 1.5);
-    expect(meter.truePeakDbtpR).toBeGreaterThan(present(meter.peakDbR, 'peakDbR') + 1.5);
+    expect(present(meter.truePeakDbtp[0], 'truePeakDbtp[0]')).toBeGreaterThan(
+      present(meter.peakDb[0], 'peakDb[0]') + 1.5,
+    );
+    expect(present(meter.truePeakDbtp[1], 'truePeakDbtp[1]')).toBeGreaterThan(
+      present(meter.peakDb[1], 'peakDb[1]') + 1.5,
+    );
   });
 
   it('agrees with the offline true-peak measurement of the same audio', () => {
@@ -154,7 +158,7 @@ describe('mixer worklet true-peak metering', () => {
     // same standard, which is what makes this a cross-check rather than a
     // restatement of the worklet's own arithmetic.
     const lastBlock = output.subarray((blocks - 1) * BLOCK, blocks * BLOCK);
-    expect(meter.truePeakDbtpL).toBeCloseTo(
+    expect(present(meter.truePeakDbtp[0], 'truePeakDbtp[0]')).toBeCloseTo(
       meteringTruePeakDbtp(lastBlock, SR, { oversampleFactor: 4 }),
       0,
     );
@@ -211,8 +215,7 @@ describe('mixer worklet true-peak metering', () => {
   });
 
   it('reads the same inter-sample peak as the engine on the same signal', () => {
-    // `truePeakDbtpL/R` names one quantity, so the two producers that publish it
-    // have to be reading the same thing. Two ways for that to break are visible
+    // Both producers must report the same per-plane quantity. Two ways for that to break are visible
     // here: a producer measuring the sample peak lands on peakDb, and one with
     // oversampling disabled lands on the floor. Both are ruled out by comparing
     // against the other producer *and* against the sample peak.
@@ -235,12 +238,22 @@ describe('mixer worklet true-peak metering', () => {
         throw new Error('expected the engine to publish meter telemetry');
       }
 
-      expect(mixerMeter.truePeakDbtpL).toBeCloseTo(engineMeter.truePeakDbtp[0], 3);
-      expect(mixerMeter.truePeakDbtpR).toBeCloseTo(engineMeter.truePeakDbtp[1], 3);
+      expect(present(mixerMeter.truePeakDbtp[0], 'mixer truePeakDbtp[0]')).toBeCloseTo(
+        present(engineMeter.truePeakDbtp[0], 'engine truePeakDbtp[0]'),
+        3,
+      );
+      expect(present(mixerMeter.truePeakDbtp[1], 'mixer truePeakDbtp[1]')).toBeCloseTo(
+        present(engineMeter.truePeakDbtp[1], 'engine truePeakDbtp[1]'),
+        3,
+      );
       // The construction places the inter-sample peak 3.01 dB above the sample
       // peak, so agreeing on the sample peak or on the floor cannot satisfy this.
-      expect(engineMeter.truePeakDbtp[0]).toBeGreaterThan(engineMeter.peakDb[0] + 1.5);
-      expect(engineMeter.truePeakDbtp[1]).toBeGreaterThan(engineMeter.peakDb[1] + 1.5);
+      expect(present(engineMeter.truePeakDbtp[0], 'truePeakDbtp[0]')).toBeGreaterThan(
+        present(engineMeter.peakDb[0], 'peakDb[0]') + 1.5,
+      );
+      expect(present(engineMeter.truePeakDbtp[1], 'truePeakDbtp[1]')).toBeGreaterThan(
+        present(engineMeter.peakDb[1], 'peakDb[1]') + 1.5,
+      );
     } finally {
       engine.destroy();
     }

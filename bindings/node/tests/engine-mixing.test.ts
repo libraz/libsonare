@@ -261,7 +261,12 @@ describe('RealtimeEngine native binding', () => {
     expect(busMeter.numChannels).toBe(6);
     expect(busMeter.peakDb).toHaveLength(6);
     // Ls (plane 4) carries the panned lane, well above the silent front-left.
-    expect(busMeter.peakDb[4]).toBeGreaterThan(busMeter.peakDb[0] + 10);
+    const rearLeftPeak = busMeter.peakDb[4];
+    const frontLeftPeak = busMeter.peakDb[0];
+    if (rearLeftPeak === undefined || frontLeftPeak === undefined) {
+      throw new Error('expected measured levels for the silent and panned planes');
+    }
+    expect(rearLeftPeak).toBeGreaterThan(frontLeftPeak + 10);
     engine.destroy();
   });
 

@@ -3140,12 +3140,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `master_audio_stereo(preset_name)` | `master_audio_stereo(preset)` |
 | `mastering_insert_param_info(name)` | `mastering_insert_param_info(insert)` |
 | `mastering_insert_timing(name)` | `mastering_insert_timing(insert)` |
-| `mastering_pair_analyze(analysis_name)` | `mastering_analyze_pair(analysis)` |
+| `mastering_pair_analyze(analysis_name)` | `mastering_analyze_pair(analysis)`: pass the analysis name with the analysis keyword |
 | `mastering_pair_process(processor_name)` | `mastering_apply_pair_processor(processor)` |
 | `mastering_pair_process_stereo(processor_name)` | `mastering_apply_pair_processor_stereo(processor)` |
 | `mastering_process(processor_name)` | `mastering_apply_processor(processor)` |
 | `mastering_process_stereo(processor_name)` | `mastering_apply_processor_stereo(processor)` |
-| `mastering_stereo_analyze(analysis_name)` | `mastering_analyze_stereo(analysis)` |
+| `mastering_stereo_analyze(analysis_name)` | `mastering_analyze_stereo(analysis)`: pass the analysis name with the analysis keyword |
 | `metering_dynamic_range(high_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `metering_dynamic_range(low_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `mixing_scene_preset_json(preset_name)` | `mixing_scene_preset(name)` |
@@ -3663,11 +3663,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.bounce(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.bounce(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.bounce(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.gm_drum_note_for_name` | an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError |
-| `Project.gm_family_first_program` | a family outside 0..15 raises SonareValueError (returned -1) |
-| `Project.gm_program_for_name` | an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError |
-| `Project.midi_cc_index_for_name` | an unknown name raises SonareValueError (returned -1); name is a str, None is TypeError |
-| `Project.midi_route_events(config)` | filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap; -1 and any other value outside 0..15 raise SonareValueError naming the key |
+| `Project.midi_route_events(config)` | `midi_route_events(config)`: filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap; -1 and any other value outside 0..15 raise SonareValueError naming the key |
 | `Project.move_clip(new_track_id)` | int \| None, default None: None keeps the clip on its track and an explicit 0 raises SonareValueError |
 | `Project.set_audio_source_metadata(content_hash)` | None clears the field; an empty string raises SonareValueError |
 | `Project.set_audio_source_metadata(external_stem_role)` | None clears the field; an empty string raises SonareValueError |
@@ -3762,16 +3758,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `MidiRouteResult.events` | a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples |
-| `Project.midi_bank_program` | returns a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples |
-| `Project.midi_cc_to_breakpoint` | returns an AutomationPoint record or None instead of a (ppq, value, curve_to_next) tuple |
-| `Project.midi_cc` | returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple |
-| `Project.midi_channel_pressure` | returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple |
-| `Project.midi_note_off` | returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple |
-| `Project.midi_note_on` | returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple |
-| `Project.midi_param_to_cc` | returns a ProjectMidiEvent record or None instead of a (ppq, data0, data1) tuple |
-| `Project.midi_pitch_bend` | returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple |
-| `Project.midi_poly_pressure` | returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple |
-| `Project.midi_program` | returns a frozen ProjectMidiEvent(ppq, word0, word1) instead of a (ppq, data0, data1) tuple |
 
 #### Python arrays are numpy arrays
 
@@ -3786,6 +3772,50 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Project.annotate_chords(chords)` | a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError. An unknown root_pc and a missing slash_bass_pc are absent or None (the 255 default is gone); 255 or any value outside 0..11 raises SonareValueError naming the field |
 | `Project.import_external_stems(stems)` | a stem mapping takes name, layout, planar_samples, role and start_frame only, any other key raising SonareValueError naming it; layout is a ProjectStemLayout token ('mono', 'stereo') and a channel count 1 or 2 is TypeError |
+
+#### MIDI message packers and GM lookups are module functions
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.gm2_drum_name` | removed: call the module function gm2_drum_name |
+| `Project.gm2_drum_set_name` | removed: call the module function gm2_drum_set_name |
+| `Project.gm2_instrument_name` | removed: call the module function gm2_instrument_name |
+| `Project.gm_drum_name` | removed: call the module function gm_drum_name |
+| `Project.gm_drum_note_for_name` | removed: call the module function gm_drum_note_for_name |
+| `Project.gm_family_first_program` | removed: call the module function gm_family_first_program |
+| `Project.gm_family_name` | removed: call the module function gm_family_name |
+| `Project.gm_instrument_name` | removed: call the module function gm_instrument_name |
+| `Project.gm_program_for_name` | removed: call the module function gm_program_for_name |
+| `Project.midi2_assignable_controller` | removed: call the module function midi2_assignable_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_assignable_per_note_controller` | removed: call the module function midi2_assignable_per_note_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_cc` | removed: call the module function midi2_cc, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_channel_pressure` | removed: call the module function midi2_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_note_off` | removed: call the module function midi2_note_off, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_note_on` | removed: call the module function midi2_note_on, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_per_note_management` | removed: call the module function midi2_per_note_management, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_per_note_pitch_bend` | removed: call the module function midi2_per_note_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_pitch_bend` | removed: call the module function midi2_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_poly_pressure` | removed: call the module function midi2_poly_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_program` | removed: call the module function midi2_program, which returns a frozen ProjectMidiEvent instead of a tuple and takes no bank_valid: pass bank_msb and bank_lsb together (each 0..127), or omit both to send no bank |
+| `Project.midi2_registered_controller` | removed: call the module function midi2_registered_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_registered_per_note_controller` | removed: call the module function midi2_registered_per_note_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_relative_assignable_controller` | removed: call the module function midi2_relative_assignable_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi2_relative_registered_controller` | removed: call the module function midi2_relative_registered_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_bank_program` | removed: call the module function midi_bank_program, which returns a list of frozen ProjectMidiEvent records instead of tuples |
+| `Project.midi_cc_index_for_name` | removed: call the module function midi_cc_index_for_name |
+| `Project.midi_cc_learn` | removed: call the module function midi_cc_learn |
+| `Project.midi_cc_name` | removed: call the module function midi_cc_name |
+| `Project.midi_cc_to_breakpoint` | removed: call the module function midi_cc_to_breakpoint, which returns an AutomationPoint record or None |
+| `Project.midi_cc` | removed: call the module function midi_cc, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_channel_pressure` | removed: call the module function midi_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_note_off` | removed: call the module function midi_note_off, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_note_on` | removed: call the module function midi_note_on, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_param_to_cc` | removed: call the module function midi_param_to_cc, which returns a ProjectMidiEvent record or None |
+| `Project.midi_pitch_bend` | removed: call the module function midi_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_poly_pressure` | removed: call the module function midi_poly_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_program` | removed: call the module function midi_program, which returns a frozen ProjectMidiEvent instead of a tuple |
+| `Project.midi_route_events` | removed: call the module function midi_route_events |
+| `Project.per_note_controller_name` | removed: call the module function per_note_controller_name |
 
 #### C counts are size_t and returned through an out parameter
 
@@ -3839,7 +3869,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.bounce_with_sf2_instrument` | removed: call Project.bounce(sf2_instruments=[(destination_id, config), ...]) |
 | `Project.bounce_with_synth_instrument` | removed: call Project.bounce(synth_instruments=[(destination_id, patch), ...]); where auto_select_gm was true, build the patch with use_gm_programs=True |
 | `Project.compile_timeline` | removed: call Project.compile(with_timeline=True) and read the result's timeline |
-| `Project.midi2_program(bank_valid)` | removed: pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank |
 | `Project.set_program(bank)` | removed: pass bank_msb and bank_lsb together (each 0..127); omit both to send no bank select |
 | `Project.set_program_on_channel` | removed: call Project.set_program(clip_id, program, bank_msb=..., bank_lsb=..., group=..., channel=...) |
 | `apply_project_vocal_edit` | removed: call the method Project.apply_vocal_edit(...) with the same keywords |
@@ -3883,11 +3912,11 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.annotate_keys(keys)` | each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'; an unknown tonic_pc is absent or None, and 255 or any value outside 0..11 raises SonareValueError naming the field |
 | `Project.bake_midi_fx(config_json)` | `Project.bake_midi_fx(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
 | `Project.edit_automation_lane(target_param_id)` | takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None keeps the lane's kind |
-| `Project.midi_cc_learn(events)` | each event is a ProjectMidiEvent record; a tuple or mapping is TypeError |
-| `Project.midi_cc_to_breakpoint(bindings)` | each binding is a MidiCcBinding record; a mapping is TypeError |
-| `Project.midi_cc_to_breakpoint(event)` | a ProjectMidiEvent record; a tuple or mapping is TypeError |
-| `Project.midi_param_to_cc(bindings)` | each binding is a MidiCcBinding record; a mapping is TypeError |
-| `Project.midi_route_events(events)` | each event is a ProjectMidiEvent record; a tuple or mapping is TypeError |
+| `Project.midi_cc_learn(events)` | `midi_cc_learn(events)`: each event is a ProjectMidiEvent record; a tuple or mapping is TypeError |
+| `Project.midi_cc_to_breakpoint(bindings)` | `midi_cc_to_breakpoint(bindings)`: each binding is a MidiCcBinding record; a mapping is TypeError |
+| `Project.midi_cc_to_breakpoint(event)` | `midi_cc_to_breakpoint(event)`: a ProjectMidiEvent record; a tuple or mapping is TypeError |
+| `Project.midi_param_to_cc(bindings)` | `midi_param_to_cc(bindings)`: each binding is a MidiCcBinding record; a mapping is TypeError |
+| `Project.midi_route_events(events)` | `midi_route_events(events)`: each event is a ProjectMidiEvent record; a tuple or mapping is TypeError |
 | `Project.preview_midi_fx_count(config_json)` | `Project.preview_midi_fx_count(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
 | `Project.set_assist_sidecar(module_id)` | takes module_id and payload positionally and schema_version, target_track_id, region_start_ppq and region_end_ppq as keywords; a descriptor mapping in place of module_id is TypeError |
 | `Project.set_clip_comp_segments(segments)` | each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError |
@@ -6508,8 +6537,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineMeterTelemetry.maxTruePeakDb` | `EngineMeterTelemetry.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetry.truePeakDbL` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbL -> truePeakDbtp[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.truePeakDbR` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbR -> truePeakDbtp[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.truePeakDbL` | removed: read truePeakDbtp[0] |
+| `EngineMeterTelemetry.truePeakDbR` | removed: read truePeakDbtp[1] |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -6967,12 +6996,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `ClipPageRequest` | `ClipPageSampleRequest` |
-| `EngineMeterTelemetry.inputPeakDbL` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbL -> inputPeakDb[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.inputPeakDbR` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbR -> inputPeakDb[1]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.peakDbL` | `EngineMeterTelemetry.peakDb`: peakDbL -> peakDb[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.peakDbR` | `EngineMeterTelemetry.peakDb`: peakDbR -> peakDb[1]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.rmsDbL` | `EngineMeterTelemetry.rmsDb`: rmsDbL -> rmsDb[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.rmsDbR` | `EngineMeterTelemetry.rmsDb`: rmsDbR -> rmsDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.inputPeakDbL` | removed: read inputPeakDb[0] |
+| `EngineMeterTelemetry.inputPeakDbR` | removed: read inputPeakDb[1] |
+| `EngineMeterTelemetry.peakDbL` | removed: read peakDb[0] |
+| `EngineMeterTelemetry.peakDbR` | removed: read peakDb[1] |
+| `EngineMeterTelemetry.rmsDbL` | removed: read rmsDb[0] |
+| `EngineMeterTelemetry.rmsDbR` | removed: read rmsDb[1] |
 | `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
 | `RealtimeEngine.drainMeterTelemetryWide` | removed: use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
@@ -10755,8 +10784,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixMeterSnapshot.truePeakDbR` | `MixMeterSnapshot.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
 | `MixMeterSnapshot.truePeakDb` (`./analysis`) | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `MixMeterSnapshot.truePeakDb` | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp |
-| `SonareWorkletMeterSnapshot.truePeakDbL` (`./worklet`) | `WorkletMeterSnapshot.truePeakDbtpL` |
-| `SonareWorkletMeterSnapshot.truePeakDbR` (`./worklet`) | `WorkletMeterSnapshot.truePeakDbtpR` |
+| `SonareWorkletMeterSnapshot.truePeakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.truePeakDbtp[0] |
+| `SonareWorkletMeterSnapshot.truePeakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.truePeakDbtp[1] |
 | `SonareWorkletMeterSnapshot.truePeakDb` (`./worklet`) | `WorkletMeterSnapshot.truePeakDbtp` |
 | `StreamingLoudnessGainResult.truePeakDb` (`./analysis`) | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `StreamingLoudnessGainResult.truePeakDb` | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
@@ -11297,7 +11326,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixAssistantTrackProfile.channelCount` | `MixAssistantTrackProfile.numChannels`: channelCount -> numChannels |
 | `MixMeterSnapshot.channelCount` (`./analysis`) | `MixMeterSnapshot.numChannels`: channelCount -> numChannels |
 | `MixMeterSnapshot.channelCount` | `MixMeterSnapshot.numChannels`: channelCount -> numChannels |
-| `SonareWorkletMeterSnapshot.channelCount` (`./worklet`) | `WorkletMeterSnapshot.numChannels`: channelCount -> numChannels |
+| `SonareWorkletMeterSnapshot.channelCount` (`./worklet`) | `WorkletMeterSnapshot.numChannels`: channelCount -> numChannels; counted snapshots carry all per-plane arrays, including mono and stereo |
 | `WaveformPeakPyramidRequest.samples` (`./analysis`) | `WaveformPeakPyramidRequest.channels`: samples -> channels (Float32Array[] (planar)) |
 | `WaveformPeakPyramidRequest.samples` | `WaveformPeakPyramidRequest.channels`: samples -> channels (Float32Array[] (planar)) |
 | `WaveformPeakPyramidRequest` (`./analysis`) | removes `samples`; `channels` is now `Float32Array[]` (was `number`) |
@@ -11580,6 +11609,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
 | `SoloProcessor` (`./analysis`) | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `SoloProcessor` | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
+| `SonareWorkletMeterSnapshot.inputPeakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.inputPeakDb[0] |
+| `SonareWorkletMeterSnapshot.inputPeakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.inputPeakDb[1] |
+| `SonareWorkletMeterSnapshot.peakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.peakDb[0] |
+| `SonareWorkletMeterSnapshot.peakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.peakDb[1] |
+| `SonareWorkletMeterSnapshot.rmsDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.rmsDb[0] |
+| `SonareWorkletMeterSnapshot.rmsDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.rmsDb[1] |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
 | `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./analysis`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./worklet`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
@@ -11658,8 +11693,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineMeterTelemetry.maxTruePeakDb` | `EngineMeterTelemetry.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetry.truePeakDbL` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbL -> truePeakDbtp[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.truePeakDbR` | `EngineMeterTelemetry.truePeakDbtp`: truePeakDbR -> truePeakDbtp[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.truePeakDbL` | removed: read truePeakDbtp[0] |
+| `EngineMeterTelemetry.truePeakDbR` | removed: read truePeakDbtp[1] |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -12431,12 +12466,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `CaptureOptions.bufferFrames` (`./worklet`) | `CaptureOptions.capacityFrames` |
 | `ClipPageRequest` | `ClipPageSampleRequest` |
-| `EngineMeterTelemetry.inputPeakDbL` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbL -> inputPeakDb[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.inputPeakDbR` | `EngineMeterTelemetry.inputPeakDb`: inputPeakDbR -> inputPeakDb[1]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.peakDbL` | `EngineMeterTelemetry.peakDb`: peakDbL -> peakDb[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.peakDbR` | `EngineMeterTelemetry.peakDb`: peakDbR -> peakDb[1]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.rmsDbL` | `EngineMeterTelemetry.rmsDb`: rmsDbL -> rmsDb[0]: one entry per plane, numChannels long |
-| `EngineMeterTelemetry.rmsDbR` | `EngineMeterTelemetry.rmsDb`: rmsDbR -> rmsDb[1]: one entry per plane, numChannels long |
+| `EngineMeterTelemetry.inputPeakDbL` | removed: read inputPeakDb[0] |
+| `EngineMeterTelemetry.inputPeakDbR` | removed: read inputPeakDb[1] |
+| `EngineMeterTelemetry.peakDbL` | removed: read peakDb[0] |
+| `EngineMeterTelemetry.peakDbR` | removed: read peakDb[1] |
+| `EngineMeterTelemetry.rmsDbL` | removed: read rmsDb[0] |
+| `EngineMeterTelemetry.rmsDbR` | removed: read rmsDb[1] |
 | `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
 | `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0. Returns number \| undefined: a value not measured (the correlation of silence) is undefined, not NaN |
 | `RealtimeEngine.clipPageRequestScratchClipId` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |

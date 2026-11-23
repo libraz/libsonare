@@ -216,14 +216,38 @@ export function telemetryFromNative(native: Record<string, unknown>): EngineTele
 }
 
 export function meterTelemetryFromNative(native: Record<string, unknown>): EngineMeterTelemetry {
-  const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = native;
+  const {
+    channelCount,
+    peakDb: nativePeakDb,
+    rmsDb: nativeRmsDb,
+    truePeakDb: nativeTruePeakDb,
+    inputPeakDb: nativeInputPeakDb,
+    maxTruePeakDb,
+    ...rest
+  } = native;
+  const numChannels = channelCount as number;
+  const peakDb = meterLevels(nativePeakDb, numChannels);
+  const rmsDb = meterLevels(nativeRmsDb, numChannels);
+  const truePeakDbtp = meterLevels(nativeTruePeakDb, numChannels);
+  const inputPeakDb = meterLevels(nativeInputPeakDb, numChannels);
   return {
     ...rest,
-    numChannels: channelCount,
-    truePeakDbtp: truePeakDb,
+    numChannels,
+    peakDb,
+    rmsDb,
+    truePeakDbtp,
+    inputPeakDb,
     // An absent native max stays absent.
     ...(maxTruePeakDb !== undefined ? { maxTruePeakDbtp: maxTruePeakDb } : {}),
   } as unknown as EngineMeterTelemetry;
+}
+
+function meterLevels(values: unknown, numChannels: number): Array<number | undefined> {
+  const levels = Array.isArray(values) ? values : [];
+  return Array.from({ length: numChannels }, (_, index) => {
+    const level = levels[index];
+    return typeof level === 'number' && !Number.isNaN(level) ? level : undefined;
+  });
 }
 
 export function graphToNative(spec: EngineGraphSpec): unknown {

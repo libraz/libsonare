@@ -495,7 +495,7 @@ describe('Sonare WASM Module', () => {
       const meters = engine.drainMeterTelemetry();
       expect(meters.length).toBeGreaterThan(0);
       expect(meters.at(-1)).toMatchObject({ targetId: 0 });
-      expect(meters.at(-1)?.peakDb[0]).toBeGreaterThan(-20);
+      expect(meters.at(-1)?.peakDb[0] ?? Number.NEGATIVE_INFINITY).toBeGreaterThan(-20);
       const bounced = engine.bounceOffline({
         totalFrames: 256,
         blockSize: 128,

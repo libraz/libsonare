@@ -55,17 +55,22 @@ describe('wide meter telemetry (WASM)', () => {
       expect(busMeter.numChannels).toBe(6);
       expect(busMeter.peakDb).toHaveLength(6);
       expect(busMeter.truePeakDbtp).toHaveLength(6);
-      // A group bus measures no true peak: every slot is unmeasured (NaN) and the max is absent.
-      expect(Array.from(busMeter.truePeakDbtp).every(Number.isNaN)).toBe(true);
+      // A group bus measures no true peak: every slot is undefined and the max is absent.
+      expect(busMeter.truePeakDbtp.every((value) => value === undefined)).toBe(true);
       expect('maxTruePeakDbtp' in busMeter).toBe(false);
       // The master measures it: the Ls plane reads, the silent planes are -Infinity.
       const masterMeter = wide.find((record) => record.targetId === 0);
       expect(masterMeter?.truePeakDbtp).toHaveLength(6);
       expect(masterMeter?.maxTruePeakDbtp).toBeLessThanOrEqual(0);
-      expect(masterMeter?.truePeakDbtp[4]).toBeGreaterThan(-12);
+      expect(masterMeter?.truePeakDbtp[4] ?? Number.NEGATIVE_INFINITY).toBeGreaterThan(-12);
       expect(masterMeter?.truePeakDbtp[0]).toBe(Number.NEGATIVE_INFINITY);
       // Ls (plane 4) carries the panned lane, above the silent front-left plane.
-      expect(busMeter.peakDb[4]).toBeGreaterThan(busMeter.peakDb[0] + 10);
+      const frontLeft = busMeter.peakDb[0];
+      const surroundLeft = busMeter.peakDb[4];
+      if (frontLeft === undefined || surroundLeft === undefined) {
+        throw new Error('expected front-left and surround-left bus peak measurements');
+      }
+      expect(surroundLeft).toBeGreaterThan(frontLeft + 10);
     } finally {
       engine.destroy();
     }

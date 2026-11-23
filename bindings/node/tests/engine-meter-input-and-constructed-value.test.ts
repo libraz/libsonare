@@ -87,7 +87,8 @@ describe('engine meter input peaks and constructed insert values', () => {
         if ('maxTruePeakDbtp' in busMeter) {
           expect(busMeter.maxTruePeakDbtp).toBeLessThanOrEqual(0);
         }
-        expect(Math.max(...busMeter.inputPeakDb)).toBeGreaterThan(-60);
+        const measured = busMeter.inputPeakDb.filter((level) => level !== undefined);
+        expect(Math.max(...measured)).toBeGreaterThan(-60);
       }
     } finally {
       engine.destroy();

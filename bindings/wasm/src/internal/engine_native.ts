@@ -16,6 +16,7 @@ import { nativeClipPageProviderOf } from './clip_page_native.js';
 import { ordinalToken } from './core_tokens.js';
 import { refuse } from './entry.js';
 import { requireListBudget } from './list_budget.js';
+import { measured } from './metering_native.js';
 import { MARKER_KINDS, tokenName, WARP_MODES } from './project_tokens.js';
 import { isAbsent } from './value_guards.js';
 
@@ -149,7 +150,10 @@ export function meterTelemetryFromNative(record: WasmEngineMeterTelemetry): Engi
   return {
     ...rest,
     numChannels: channelCount,
-    truePeakDbtp: truePeakDb,
+    peakDb: record.peakDb.slice(0, channelCount).map(measured),
+    rmsDb: record.rmsDb.slice(0, channelCount).map(measured),
+    truePeakDbtp: truePeakDb.slice(0, channelCount).map(measured),
+    inputPeakDb: record.inputPeakDb.slice(0, channelCount).map(measured),
     ...(maxTruePeakDb !== undefined && { maxTruePeakDbtp: maxTruePeakDb }),
   };
 }

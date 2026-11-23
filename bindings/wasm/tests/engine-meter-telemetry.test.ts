@@ -1,8 +1,31 @@
 import { beforeAll, expect, it } from 'vitest';
 import { init, RealtimeEngine } from '../dist/index.js';
+import { meterTelemetryFromNative } from '../src/internal/engine_native.js';
+import type { WasmEngineMeterTelemetry } from '../src/sonare.js';
 
 beforeAll(async () => {
   await init();
+});
+
+it('maps unmeasured plane values to undefined and trims mono padding', () => {
+  const record: WasmEngineMeterTelemetry = {
+    targetId: 1,
+    renderFrame: 0,
+    seq: 1,
+    channelCount: 1,
+    peakDb: [Number.NaN, -6],
+    rmsDb: [Number.NaN, -9],
+    truePeakDb: [Number.NaN, -5],
+    inputPeakDb: [Number.NaN, -3],
+    gainReductionDb: 0,
+    droppedRecords: 0,
+  };
+  const meter = meterTelemetryFromNative(record);
+  expect(meter.numChannels).toBe(1);
+  expect(meter.peakDb).toEqual([undefined]);
+  expect(meter.rmsDb).toEqual([undefined]);
+  expect(meter.truePeakDbtp).toEqual([undefined]);
+  expect(meter.inputPeakDb).toEqual([undefined]);
 });
 
 it.each(['lane', 'bus', 'master'] as const)(
@@ -54,10 +77,18 @@ it.each(['lane', 'bus', 'master'] as const)(
         last = engine.drainMeterTelemetry().find((record) => record.targetId === targetId) ?? last;
       }
       expect(last).toBeDefined();
-      expect(last?.inputPeakDb[0]).toBeGreaterThan(-10);
-      expect(last?.inputPeakDb[1] ?? Number.NEGATIVE_INFINITY).toBe(Number.NEGATIVE_INFINITY);
+      expect(last?.numChannels).toBe(1);
+      for (const plane of [last?.peakDb, last?.rmsDb, last?.truePeakDbtp, last?.inputPeakDb]) {
+        expect(plane).toHaveLength(1);
+        expect(plane?.some(Number.isNaN)).toBe(false);
+        expect(plane).not.toContain(-120);
+      }
+      const inputPeak = last?.inputPeakDb[0] ?? Number.NEGATIVE_INFINITY;
+      const peak = last?.peakDb[0] ?? Number.NEGATIVE_INFINITY;
+      expect(inputPeak).toBeGreaterThan(-10);
+      expect(last?.inputPeakDb[1]).toBeUndefined();
       expect(last?.gainReductionDb).toBeLessThan(-10);
-      expect(last?.peakDb[0]).toBeLessThan((last?.inputPeakDb[0] ?? Number.NEGATIVE_INFINITY) - 10);
+      expect(peak).toBeLessThan(inputPeak - 10);
     } finally {
       engine.destroy();
     }
@@ -91,7 +122,7 @@ it('resets master integrated loudness while retaining the other meter windows', 
     expect(after?.momentaryLufs).toBeGreaterThan(-40);
     expect(after?.shortTermLufs).toBeGreaterThan(-40);
     expect(after?.maxTruePeakDbtp).toBeGreaterThan(-12);
-    expect(after?.inputPeakDb[0]).toBeGreaterThan(-12);
+    expect(after?.inputPeakDb[0] ?? Number.NEGATIVE_INFINITY).toBeGreaterThan(-12);
   } finally {
     engine.destroy();
   }

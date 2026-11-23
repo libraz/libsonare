@@ -1,4 +1,9 @@
 import {
+  SONARE_METER_RING_CHANNEL_COUNT_OFFSET,
+  SONARE_METER_RING_MAX_CHANNELS,
+  SONARE_METER_RING_PLANES_OFFSET,
+} from '../src/worklet/meter-rings.js';
+import {
   clipPageRequestRingBufferByteLength,
   commitOverwriteWrite,
   commitSonareEngineTelemetryRingWrite,
@@ -604,15 +609,21 @@ describe('Sonare worklet ring buffers', () => {
           // frame is the cumulative processed-frame count; strictly increasing.
           expect(meter.frame).toBeGreaterThan(previousFrame);
           previousFrame = meter.frame;
-          // dB fields are finite or -Infinity for digital silence (the documented
-          // toDb() convention); correlation is always finite in [-1, 1].
-          for (const field of ['peakDbL', 'peakDbR', 'rmsDbL', 'rmsDbR'] as const) {
-            expect(meter[field] === Number.NEGATIVE_INFINITY || Number.isFinite(meter[field])).toBe(
-              true,
-            );
+          // Unmeasured values preserve their plane as undefined; silence is -Infinity.
+          for (const levels of [meter.peakDb, meter.rmsDb, meter.truePeakDbtp, meter.inputPeakDb]) {
+            expect(levels).toHaveLength(meter.numChannels);
+            expect(
+              levels.every(
+                (level) =>
+                  level === undefined ||
+                  level === Number.NEGATIVE_INFINITY ||
+                  Number.isFinite(level),
+              ),
+            ).toBe(true);
           }
           expect(Number.isFinite(meter.correlation)).toBe(true);
-          // The ring carries an unmeasured member as NaN and the reader drops it.
+          expect(meter.inputPeakDb).toEqual(new Array(meter.numChannels).fill(undefined));
+          // The ring carries an unmeasured scalar as NaN and the reader omits it.
           expect('momentaryLufs' in meter).toBe(false);
         }
         // First record corresponds to the first published block of frames.
@@ -670,9 +681,17 @@ describe('Sonare worklet ring buffers', () => {
           expect(meter.frame).toBeGreaterThan(previousFrame);
           previousFrame = meter.frame;
           // -Infinity is the documented dB value for digital silence.
-          expect(meter.peakDbL === Number.NEGATIVE_INFINITY || Number.isFinite(meter.peakDbL)).toBe(
-            true,
-          );
+          for (const levels of [meter.peakDb, meter.rmsDb, meter.truePeakDbtp, meter.inputPeakDb]) {
+            expect(levels).toHaveLength(meter.numChannels);
+            expect(
+              levels.every(
+                (level) =>
+                  level === undefined ||
+                  level === Number.NEGATIVE_INFINITY ||
+                  Number.isFinite(level),
+              ),
+            ).toBe(true);
+          }
           expect(Number.isFinite(meter.correlation)).toBe(true);
         }
         // Oldest readable record is (writeIndex - capacity).
@@ -704,39 +723,61 @@ describe('Sonare worklet ring buffers', () => {
       const writeRecord = (
         frame: number,
         targetId: number,
-        peakDbL: number,
-        peakDbR: number,
-        rmsDbL: number,
-        rmsDbR: number,
+        numChannels: number,
+        peakDb: Array<number | undefined>,
+        rmsDb: Array<number | undefined>,
+        truePeakDbtp: Array<number | undefined>,
         correlation: number,
-        inputPeakDbL: number,
-        inputPeakDbR: number,
+        inputPeakDb: Array<number | undefined>,
       ): void => {
         const writeIndex = header[0];
         const offset = (writeIndex % capacity) * SONARE_METER_RING_RECORD_FLOATS;
         records[offset] = frame;
         records[offset + 1] = 0;
         records[offset + 2] = targetId;
-        records[offset + 3] = peakDbL;
-        records[offset + 4] = peakDbR;
-        records[offset + 5] = rmsDbL;
-        records[offset + 6] = rmsDbR;
+        records[offset + 3] = peakDb[0] ?? Number.NaN;
+        records[offset + 4] = peakDb[1] ?? Number.NaN;
+        records[offset + 5] = rmsDb[0] ?? Number.NaN;
+        records[offset + 6] = rmsDb[1] ?? Number.NaN;
         records[offset + 7] = correlation;
-        records[offset + 8] = peakDbL + 0.5;
-        records[offset + 9] = peakDbR + 0.5;
+        records[offset + 8] = truePeakDbtp[0] ?? Number.NaN;
+        records[offset + 9] = truePeakDbtp[1] ?? Number.NaN;
         records[offset + 10] = -23;
         records[offset + 11] = -24;
         records[offset + 12] = -25;
         records[offset + 13] = -2;
-        records[offset + 14] = inputPeakDbL;
-        records[offset + 15] = inputPeakDbR;
+        records[offset + 14] = inputPeakDb[0] ?? Number.NaN;
+        records[offset + 15] = inputPeakDb[1] ?? Number.NaN;
+        records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = numChannels;
+        for (let channel = 0; channel < SONARE_METER_RING_MAX_CHANNELS; channel++) {
+          records[offset + SONARE_METER_RING_PLANES_OFFSET + channel] =
+            peakDb[channel] ?? Number.NaN;
+          records[
+            offset + SONARE_METER_RING_PLANES_OFFSET + SONARE_METER_RING_MAX_CHANNELS + channel
+          ] = rmsDb[channel] ?? Number.NaN;
+          records[
+            offset + SONARE_METER_RING_PLANES_OFFSET + SONARE_METER_RING_MAX_CHANNELS * 2 + channel
+          ] = truePeakDbtp[channel] ?? Number.NaN;
+          records[
+            offset + SONARE_METER_RING_PLANES_OFFSET + SONARE_METER_RING_MAX_CHANNELS * 3 + channel
+          ] = inputPeakDb[channel] ?? Number.NaN;
+        }
         header[0] = writeIndex + 1;
       };
 
       const ring = { sharedBuffer: sab, header, records, slotStates, capacity };
 
-      writeRecord(128, 0, -1, -2, -3, -4, 0.5, -9, -10);
-      writeRecord(256, 1, -5, -6, -7, -8, 0.25, -11, -12);
+      writeRecord(128, 0, 2, [-1, -2], [-3, -4], [-0.5, -1.5], 0.5, [-9, -120]);
+      writeRecord(
+        256,
+        1,
+        6,
+        [-5, -6, -7, -8, -9, -10],
+        [-7, -8, -9, -10, -11, -12],
+        [-6.5, -7.5, -8.5, -9.5, -10.5, -11.5],
+        0.25,
+        [-11, -12, -13, -14, undefined, -16],
+      );
 
       const first = readMeterRingBuffer(ring, 0);
       expect(first.meters).toHaveLength(2);
@@ -745,26 +786,28 @@ describe('Sonare worklet ring buffers', () => {
         type: 'meter',
         targetId: 0,
         frame: 128,
-        peakDbL: -1,
-        peakDbR: -2,
-        rmsDbL: -3,
-        rmsDbR: -4,
+        numChannels: 2,
+        peakDb: [-1, -2],
+        rmsDb: [-3, -4],
         correlation: 0.5,
-        truePeakDbtpL: -0.5,
-        truePeakDbtpR: -1.5,
+        truePeakDbtp: [-0.5, -1.5],
         momentaryLufs: -23,
         shortTermLufs: -24,
         integratedLufs: -25,
         gainReductionDb: -2,
-        inputPeakDbL: -9,
-        inputPeakDbR: -10,
+        inputPeakDb: [-9, -120],
       });
+      expect(first.meters[1].numChannels).toBe(6);
+      expect(first.meters[1].peakDb).toEqual([-5, -6, -7, -8, -9, -10]);
+      expect(first.meters[1].rmsDb).toEqual([-7, -8, -9, -10, -11, -12]);
+      expect(first.meters[1].truePeakDbtp).toEqual([-6.5, -7.5, -8.5, -9.5, -10.5, -11.5]);
+      expect(first.meters[1].inputPeakDb).toEqual([-11, -12, -13, -14, undefined, -16]);
 
       // Overflow the ring; only the most-recent `capacity` survive.
-      writeRecord(384, 0, -9, -10, -11, -12, 0, -13, -14);
-      writeRecord(512, 1, -13, -14, -15, -16, 0, -15, -16);
-      writeRecord(640, 33, -17, -18, -19, -20, 0, -17, -18);
-      writeRecord(768, 0xffff, -21, -22, -23, -24, 0, -19, -20);
+      writeRecord(384, 0, 2, [-9, -10], [-11, -12], [-9.5, -10.5], 0, [-13, -14]);
+      writeRecord(512, 1, 2, [-13, -14], [-15, -16], [-13.5, -14.5], 0, [-15, -16]);
+      writeRecord(640, 33, 2, [-17, -18], [-19, -20], [-17.5, -18.5], 0, [-17, -18]);
+      writeRecord(768, 0xffff, 2, [-21, -22], [-23, -24], [-21.5, -22.5], 0, [-19, -20]);
 
       const wrapped = readMeterRingBuffer(ring, first.nextReadIndex);
       expect(wrapped.meters.length).toBeLessThanOrEqual(capacity);
@@ -773,7 +816,8 @@ describe('Sonare worklet ring buffers', () => {
       expect(wrapped.meters.map((m) => m.frame)).toEqual([384, 512, 640, 768]);
       expect(wrapped.meters.map((m) => m.targetId)).toEqual([0, 1, 33, 0xffff]);
       for (const meter of wrapped.meters) {
-        expect(Number.isFinite(meter.peakDbL)).toBe(true);
+        expect(meter.peakDb).toHaveLength(meter.numChannels);
+        expect(Number.isFinite(meter.peakDb[0])).toBe(true);
         expect(Number.isFinite(meter.correlation)).toBe(true);
       }
     });

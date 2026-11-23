@@ -24586,11 +24586,11 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 kind = "field"
 old = "SonareWorkletMeterSnapshot.channelCount"
 to = "WorkletMeterSnapshot.numChannels"
-changed = "channelCount -> numChannels"
+changed = "channelCount -> numChannels; counted snapshots carry all per-plane arrays, including mono and stereo"
 domain = "mastering"
 rule = "num-channels"
 entry = "./worklet"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WorkletMeterSnapshot.channelCount"
+test = "bindings/wasm/tests/worklet-wide-meters.test.ts::delivers both stereo planes across both paths"
 
 [[entry]]
 kind = "field"
@@ -26453,20 +26453,16 @@ rule = "one-positional-form"
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbL"
-to = "EngineMeterTelemetry.truePeakDbtp"
-changed = "truePeakDbL -> truePeakDbtp[0]: one entry per plane, numChannels long"
+removed = "read truePeakDbtp[0]"
 domain = "engine"
 rule = "loudness-names"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtp[0]"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbR"
-to = "EngineMeterTelemetry.truePeakDbtp"
-changed = "truePeakDbR -> truePeakDbtp[1]: one entry per plane, numChannels long"
+removed = "read truePeakDbtp[1]"
 domain = "engine"
 rule = "loudness-names"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtp[1]"
 
 [[entry]]
 kind = "field"
@@ -26480,7 +26476,7 @@ test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::?.maxTruePeakDbtp"
 [[entry]]
 kind = "field"
 old = "SonareWorkletMeterSnapshot.truePeakDbL"
-new = "WorkletMeterSnapshot.truePeakDbtpL"
+removed = "read WorkletMeterSnapshot.truePeakDbtp[0]"
 domain = "mastering"
 rule = "loudness-names"
 entry = "./worklet"
@@ -26488,9 +26484,57 @@ entry = "./worklet"
 [[entry]]
 kind = "field"
 old = "SonareWorkletMeterSnapshot.truePeakDbR"
-new = "WorkletMeterSnapshot.truePeakDbtpR"
+removed = "read WorkletMeterSnapshot.truePeakDbtp[1]"
 domain = "mastering"
 rule = "loudness-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletMeterSnapshot.peakDbL"
+removed = "read WorkletMeterSnapshot.peakDb[0]"
+domain = "mastering"
+rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletMeterSnapshot.peakDbR"
+removed = "read WorkletMeterSnapshot.peakDb[1]"
+domain = "mastering"
+rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletMeterSnapshot.rmsDbL"
+removed = "read WorkletMeterSnapshot.rmsDb[0]"
+domain = "mastering"
+rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletMeterSnapshot.rmsDbR"
+removed = "read WorkletMeterSnapshot.rmsDb[1]"
+domain = "mastering"
+rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletMeterSnapshot.inputPeakDbL"
+removed = "read WorkletMeterSnapshot.inputPeakDb[0]"
+domain = "mastering"
+rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletMeterSnapshot.inputPeakDbR"
+removed = "read WorkletMeterSnapshot.inputPeakDb[1]"
+domain = "mastering"
+rule = "individual"
 entry = "./worklet"
 
 [[entry]]
@@ -35439,56 +35483,44 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.peakDbL"
-to = "EngineMeterTelemetry.peakDb"
-changed = "peakDbL -> peakDb[0]: one entry per plane, numChannels long"
+removed = "read peakDb[0]"
 domain = "engine"
 rule = "individual"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.peakDb[0]"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.peakDbR"
-to = "EngineMeterTelemetry.peakDb"
-changed = "peakDbR -> peakDb[1]: one entry per plane, numChannels long"
+removed = "read peakDb[1]"
 domain = "engine"
 rule = "individual"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.peakDb[1]"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.rmsDbL"
-to = "EngineMeterTelemetry.rmsDb"
-changed = "rmsDbL -> rmsDb[0]: one entry per plane, numChannels long"
+removed = "read rmsDb[0]"
 domain = "engine"
 rule = "individual"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.rmsDb[0]"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.rmsDbR"
-to = "EngineMeterTelemetry.rmsDb"
-changed = "rmsDbR -> rmsDb[1]: one entry per plane, numChannels long"
+removed = "read rmsDb[1]"
 domain = "engine"
 rule = "individual"
-test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.rmsDb[1]"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.inputPeakDbL"
-to = "EngineMeterTelemetry.inputPeakDb"
-changed = "inputPeakDbL -> inputPeakDb[0]: one entry per plane, numChannels long"
+removed = "read inputPeakDb[0]"
 domain = "engine"
 rule = "individual"
-test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::last?.inputPeakDb[0]"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.inputPeakDbR"
-to = "EngineMeterTelemetry.inputPeakDb"
-changed = "inputPeakDbR -> inputPeakDb[1]: one entry per plane, numChannels long"
+removed = "read inputPeakDb[1]"
 domain = "engine"
 rule = "individual"
-test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::last?.inputPeakDb[1]"
 
 [[entry]]
 kind = "type"

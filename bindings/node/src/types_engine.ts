@@ -80,8 +80,9 @@ export interface ExternalMidiEvent {
 /**
  * Per-plane meter telemetry record drained from
  * {@link RealtimeEngine.drainMeterTelemetry}; a stereo target's left and right are planes 0 and 1. The
- * `peakDb`/`rmsDb`/`truePeakDbtp` arrays carry `numChannels` planes in canonical
- * WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss Rss).
+ * `peakDb`/`rmsDb`/`truePeakDbtp`/`inputPeakDb` arrays carry `numChannels` planes
+ * in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss
+ * Rss). An unmeasured plane keeps its index with an `undefined` value.
  */
 export interface EngineMeterTelemetry {
   /**
@@ -99,20 +100,20 @@ export interface EngineMeterTelemetry {
   numChannels: number;
   /**
    * Per-plane peak level in dB (length `numChannels`). `-Infinity` for an all-zero
-   * plane, NaN in a plane that was not written.
+   * plane, `undefined` when the plane was not measured.
    */
-  peakDb: number[];
-  /** Per-plane RMS level in dB (length `numChannels`). `-Infinity` for silence, NaN in a plane that was not measured. */
-  rmsDb: number[];
+  peakDb: Array<number | undefined>;
+  /** Per-plane RMS level in dB (length `numChannels`). `-Infinity` for silence; undefined when not measured. */
+  rmsDb: Array<number | undefined>;
   /**
    * Per-plane inter-sample (true) peak in dB (length `numChannels`), from the
    * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement that
    * runs one reconstruction-filter group delay (a few samples) behind the block,
    * so the reading does not depend on the block size. `meteringTruePeakDbtp`
-   * measures a whole signal at once. `-Infinity` for silence, NaN in a plane that was
-   * not measured.
+   * measures a whole signal at once. `-Infinity` for silence, `undefined` when
+   * the plane was not measured.
    */
-  truePeakDbtp: number[];
+  truePeakDbtp: Array<number | undefined>;
   /**
    * Maximum inter-sample peak across channels in dB. See {@link truePeakDbtp}.
    * `-Infinity` for silence; absent when not measured.
@@ -138,8 +139,8 @@ export interface EngineMeterTelemetry {
   gainReductionDb: number;
   /** Number of records dropped before this snapshot. */
   droppedRecords: number;
-  /** Per-plane peak at the engine input tap, in dB. `-Infinity` for an all-zero plane, NaN in a plane that was not written. */
-  inputPeakDb: number[];
+  /** Per-plane peak at the engine input tap, in dB. `-Infinity` for silence; undefined when not measured. */
+  inputPeakDb: Array<number | undefined>;
 }
 
 /** Scope telemetry record drained from {@link RealtimeEngine.drainScopeTelemetry}. */

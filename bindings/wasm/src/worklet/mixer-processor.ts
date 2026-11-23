@@ -2,6 +2,7 @@ import { ErrorCode } from '../errors.js';
 import type { MeterScratchField, MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js';
+import { measured } from '../internal/metering_native.js';
 import { WorkletProcessorLifecycle } from '../internal/worklet_lifecycle.js';
 import type { SonareWorkletMessage, TypedWorkletTransport } from '../internal/worklet_messages.js';
 import type {
@@ -62,28 +63,25 @@ export class SonareWorkletProcessor {
   /**
    * Reused meter record, so a publish writes fields instead of allocating one.
    *
-   * `targetId` is always the master and the four LUFS / gain-reduction fields
-   * are always unavailable here — the mixer worklet does not run the
-   * K-weighting filters or the engine's pre-trim input tap — so finite floor
-   * values are set once rather than per interval.
+   * `targetId` is always the master. The four LUFS / gain-reduction fields and
+   * the input-peak planes are never measured here — the mixer worklet does not
+   * run the K-weighting filters or the engine's pre-trim input tap — so they are
+   * set absent once (NaN / undefined, dropped again by the ring reader).
    */
   private readonly meterScratch: WorkletMeterSnapshot = {
     type: 'meter',
     targetId: 0,
     frame: 0,
-    peakDbL: 0,
-    peakDbR: 0,
-    rmsDbL: 0,
-    rmsDbR: 0,
+    numChannels: 2,
+    peakDb: [0, 0],
+    rmsDb: [0, 0],
+    truePeakDbtp: [0, 0],
+    inputPeakDb: [undefined, undefined],
     correlation: 0,
-    truePeakDbtpL: 0,
-    truePeakDbtpR: 0,
     momentaryLufs: Number.NaN,
     shortTermLufs: Number.NaN,
     integratedLufs: Number.NaN,
     gainReductionDb: Number.NaN,
-    inputPeakDbL: Number.NaN,
-    inputPeakDbR: Number.NaN,
   };
   private spectrumRing?: SharedSpectrumRingWriter;
   private spectrumBands: Float32Array;
@@ -285,13 +283,13 @@ export class SonareWorkletProcessor {
       // postMessage path below.
       const meter = this.meterScratch;
       meter.frame = this.processedFrames;
-      meter.peakDbL = this.scratch(0);
-      meter.peakDbR = this.scratch(1);
-      meter.rmsDbL = this.scratch(2);
-      meter.rmsDbR = this.scratch(3);
+      meter.peakDb[0] = measured(this.scratch(0));
+      meter.peakDb[1] = measured(this.scratch(1));
+      meter.rmsDb[0] = measured(this.scratch(2));
+      meter.rmsDb[1] = measured(this.scratch(3));
       meter.correlation = this.scratch(4);
-      meter.truePeakDbtpL = this.scratch(5);
-      meter.truePeakDbtpR = this.scratch(6);
+      meter.truePeakDbtp[0] = measured(this.scratch(5));
+      meter.truePeakDbtp[1] = measured(this.scratch(6));
       this.writeMeterRing(meter);
       return;
     }
@@ -303,16 +301,16 @@ export class SonareWorkletProcessor {
       type: 'meter',
       targetId: 0,
       frame: this.processedFrames,
+      numChannels: 2,
+      // Read in scratch-field order 0..6, the order the ring path reads them.
+      peakDb: [measured(this.scratch(0)), measured(this.scratch(1))],
+      rmsDb: [measured(this.scratch(2)), measured(this.scratch(3))],
       ...omitNaN({
-        peakDbL: this.scratch(0),
-        peakDbR: this.scratch(1),
-        rmsDbL: this.scratch(2),
-        rmsDbR: this.scratch(3),
         correlation: this.scratch(4),
-        truePeakDbtpL: this.scratch(5),
-        truePeakDbtpR: this.scratch(6),
       }),
-      // LUFS, gain reduction and input peak are absent: the mixer worklet measures none of them.
+      truePeakDbtp: [measured(this.scratch(5)), measured(this.scratch(6))],
+      inputPeakDb: [undefined, undefined],
+      // The mixer worklet does not measure LUFS, gain reduction or input peak.
     };
     // Alternative channels for one record, not a broadcast pair: a transport
     // that supplies both (the engine registration resolves both to
@@ -341,20 +339,20 @@ export class SonareWorkletProcessor {
     const frameHi = encodeFrameHi(frame);
     const targetId = +meter.targetId;
     // An absent member travels as NaN, which the ring reader drops again.
-    const peakDbL = meter.peakDbL ?? Number.NaN;
-    const peakDbR = meter.peakDbR ?? Number.NaN;
-    const rmsDbL = meter.rmsDbL ?? Number.NaN;
-    const rmsDbR = meter.rmsDbR ?? Number.NaN;
-    const correlation = meter.correlation ?? Number.NaN;
-    const truePeakDbtpL = meter.truePeakDbtpL ?? Number.NaN;
-    const truePeakDbtpR = meter.truePeakDbtpR ?? Number.NaN;
-    const momentaryLufs = meter.momentaryLufs ?? Number.NaN;
-    const shortTermLufs = meter.shortTermLufs ?? Number.NaN;
-    const integratedLufs = meter.integratedLufs ?? Number.NaN;
-    const gainReductionDb = meter.gainReductionDb ?? Number.NaN;
-    const inputPeakDbL = meter.inputPeakDbL ?? Number.NaN;
-    const inputPeakDbR = meter.inputPeakDbR ?? Number.NaN;
-    const channelCount = 2;
+    const peakDbL = +(meter.peakDb[0] ?? Number.NaN);
+    const peakDbR = +(meter.peakDb[1] ?? Number.NaN);
+    const rmsDbL = +(meter.rmsDb[0] ?? Number.NaN);
+    const rmsDbR = +(meter.rmsDb[1] ?? Number.NaN);
+    const correlation = +(meter.correlation ?? Number.NaN);
+    const truePeakDbtpL = +(meter.truePeakDbtp[0] ?? Number.NaN);
+    const truePeakDbtpR = +(meter.truePeakDbtp[1] ?? Number.NaN);
+    const momentaryLufs = +(meter.momentaryLufs ?? Number.NaN);
+    const shortTermLufs = +(meter.shortTermLufs ?? Number.NaN);
+    const integratedLufs = +(meter.integratedLufs ?? Number.NaN);
+    const gainReductionDb = +(meter.gainReductionDb ?? Number.NaN);
+    const inputPeakDbL = +(meter.inputPeakDb[0] ?? Number.NaN);
+    const inputPeakDbR = +(meter.inputPeakDb[1] ?? Number.NaN);
+    const channelCount = +meter.numChannels;
     const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
     if (writeIndex === undefined) {
       return;

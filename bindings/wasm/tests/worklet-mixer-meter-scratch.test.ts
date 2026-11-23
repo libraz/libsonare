@@ -10,6 +10,7 @@ import {
   SONARE_METER_RING_PROTOCOL_VERSION,
   SonareWorkletProcessor,
   setupWorklet,
+  type WorkletMeterSnapshot,
 } from './_worklet_helpers';
 
 // The SAB meter ring exists so the audio render callback allocates nothing. The
@@ -123,47 +124,32 @@ describe('SonareWorkletProcessor meter scratch', () => {
       read.meters.forEach((meter, index) => {
         expect(meter.frame).toBe((index + 1) * blockSize);
         expect(meter.targetId).toBe(0);
-        // The seven values the accessors returned for this publish are the seven
-        // the ring carries, in the documented field order.
-        expect([
-          meter.peakDbL,
-          meter.peakDbR,
-          meter.rmsDbL,
-          meter.rmsDbR,
-          meter.correlation,
-          meter.truePeakDbtpL,
-          meter.truePeakDbtpR,
-        ]).toEqual(calls.valuesPerLatch[index]);
-        // The mixer worklet measures no LUFS, gain reduction or input peak, so
-        // those members stay absent across a reused record.
-        for (const key of [
-          'momentaryLufs',
-          'shortTermLufs',
-          'integratedLufs',
-          'gainReductionDb',
-          'inputPeakDbL',
-          'inputPeakDbR',
-        ]) {
+        // The seven scalar scratch readings are folded into per-plane arrays
+        // and the stereo correlation field.
+        expect([...meter.peakDb, ...meter.rmsDb, meter.correlation, ...meter.truePeakDbtp]).toEqual(
+          calls.valuesPerLatch[index],
+        );
+        expect(meter.numChannels).toBe(2);
+        expect(meter.inputPeakDb).toEqual([undefined, undefined]);
+        // The mixer worklet measures no LUFS or gain reduction.
+        for (const key of ['momentaryLufs', 'shortTermLufs', 'integratedLufs', 'gainReductionDb']) {
           expect(key in meter, key).toBe(false);
         }
       });
       // Reuse must not smear one publish over the next: the rising input makes
       // every block's peak distinct, so identical records would mean the fields
       // were read once and re-serialised.
-      expect(new Set(read.meters.map((meter) => meter.peakDbL)).size).toBe(publishes);
+      expect(new Set(read.meters.map((meter) => meter.peakDb[0])).size).toBe(publishes);
 
       // What the ring last received is what the mixer still holds, read here
       // through the object API now that the render cycles are over.
       calls.restore();
       const measured = (processor as unknown as { mixer: Mixer }).mixer.meterSnapshot();
       expect(read.meters[publishes - 1]).toMatchObject({
-        peakDbL: measured.peakDbL,
-        peakDbR: measured.peakDbR,
-        rmsDbL: measured.rmsDbL,
-        rmsDbR: measured.rmsDbR,
+        peakDb: [measured.peakDbL, measured.peakDbR],
+        rmsDb: [measured.rmsDbL, measured.rmsDbR],
         correlation: measured.correlation,
-        truePeakDbtpL: measured.truePeakDbtpL,
-        truePeakDbtpR: measured.truePeakDbtpR,
+        truePeakDbtp: [measured.truePeakDbtpL, measured.truePeakDbtpR],
       });
     } finally {
       calls.restore();
@@ -172,13 +158,13 @@ describe('SonareWorkletProcessor meter scratch', () => {
   });
 
   it('keeps meterSnapshot off the postMessage fallback path too', () => {
-    const meters: { peakDbL: number }[] = [];
+    const meters: WorkletMeterSnapshot[] = [];
     const processor = new SonareWorkletProcessor({
       sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate,
       maxBlockSize: blockSize,
       meterIntervalFrames: blockSize,
-      transport: { onMeter: (meter) => meters.push(meter as { peakDbL: number }) },
+      transport: { onMeter: (meter) => meters.push(meter) },
     });
     const calls = instrumentMeterAccessors(processor);
     try {
@@ -191,9 +177,10 @@ describe('SonareWorkletProcessor meter scratch', () => {
       expect(calls.snapshots).toBe(0);
       expect(calls.latches).toBe(2);
       // The posted object is unavoidable — a listener may retain it — but it is
-      // built from the latched scalars, so it is the only object per publish.
+      // built from the latched values, so it is the only object per publish.
       meters.forEach((meter, index) => {
-        expect(meter.peakDbL).toBe(calls.valuesPerLatch[index][0]);
+        expect(meter.peakDb[0]).toBe(calls.valuesPerLatch[index][0]);
+        expect(meter.peakDb[1]).toBe(calls.valuesPerLatch[index][1]);
       });
     } finally {
       calls.restore();

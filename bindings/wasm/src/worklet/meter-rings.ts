@@ -1,6 +1,7 @@
 import { ErrorCode } from '../errors.js';
 import type { EngineMeterTelemetry } from '../index.js';
 import { codedError, refuse, withEntry } from '../internal/entry.js';
+import { measured } from '../internal/metering_native.js';
 import { decodeFrame } from './engine-rings.js';
 import {
   attachProtocolVersion,
@@ -31,26 +32,8 @@ export interface WorkletMeterSnapshot {
   targetId: number;
   /** Sample-frame index of the reading. */
   frame: number;
-  /** Left-channel peak in dBFS. `-Infinity` for silence; absent when not measured. */
-  peakDbL?: number;
-  /** Right-channel peak in dBFS. `-Infinity` for silence; absent when not measured. */
-  peakDbR?: number;
-  /** Left-channel RMS level in dBFS. `-Infinity` for silence; absent when not measured. */
-  rmsDbL?: number;
-  /** Right-channel RMS level in dBFS. `-Infinity` for silence; absent when not measured. */
-  rmsDbR?: number;
   /** Inter-channel correlation in `[-1, 1]`. Absent when not measured (a channel has zero energy). */
   correlation?: number;
-  /**
-   * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4 polyphase reconstruction
-   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
-   * behind the block, so every value has its whole stencil and the reading does not depend on the
-   * block size. Use `meteringTruePeakDbtp` over the whole signal for an exact dBTP number.
-   * `-Infinity` for silence; absent when not measured.
-   */
-  truePeakDbtpL?: number;
-  /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
-  truePeakDbtpR?: number;
   /** Momentary loudness in LUFS. `-Infinity` for silence; absent until the window has filled or when not measured. */
   momentaryLufs?: number;
   /** Short-term loudness in LUFS. `-Infinity` for silence; absent until the window has filled or when not measured. */
@@ -59,10 +42,6 @@ export interface WorkletMeterSnapshot {
   integratedLufs?: number;
   /** Gain reduction in dB. Absent when not measured (the mixer worklet runs no dynamics metering). */
   gainReductionDb?: number;
-  /** Maximum pre-trim input peak for the left channel, in dBFS. `-Infinity` for silence; absent when not measured. */
-  inputPeakDbL?: number;
-  /** Maximum pre-trim input peak for the right channel, in dBFS. `-Infinity` for silence; absent when not measured. */
-  inputPeakDbR?: number;
   /**
    * Per-insert gain reduction in dB (each <= 0) of the target's strip, in combined
    * pre-to-post insert order, folded to the deepest value across the sub-blocks of the
@@ -74,19 +53,17 @@ export interface WorkletMeterSnapshot {
    */
   insertGainReductionDb?: number[];
   /**
-   * Number of metered planes of the target, present together with the per-channel
-   * arrays below only when it exceeds 2 (a 5.1 or 7.1 bus). The stereo fields
-   * above always hold planes 0 and 1.
+   * Number of metered planes in this snapshot, equal to the length of each per-plane array.
    */
-  numChannels?: number;
-  /** Per-plane peak in dBFS (length `numChannels`), canonical WAVE order. */
-  peakDb?: number[];
-  /** Per-plane RMS in dBFS (length `numChannels`). */
-  rmsDb?: number[];
-  /** Per-plane inter-sample (true) peak in dBTP (length `numChannels`). See {@link truePeakDbtpL}. */
-  truePeakDbtp?: number[];
-  /** Per-plane pre-trim input peak in dBFS (length `numChannels`). */
-  inputPeakDb?: number[];
+  numChannels: number;
+  /** Per-plane peak in dBFS (length `numChannels`); `undefined` when not measured. */
+  peakDb: (number | undefined)[];
+  /** Per-plane RMS in dBFS (length `numChannels`); `undefined` when not measured. */
+  rmsDb: (number | undefined)[];
+  /** Per-plane inter-sample (true) peak in dBTP (length `numChannels`); `undefined` when not measured. */
+  truePeakDbtp: (number | undefined)[];
+  /** Per-plane pre-trim input peak in dBFS (length `numChannels`); `undefined` when not measured. */
+  inputPeakDb: (number | undefined)[];
 }
 
 /** One spectrum reading delivered by the worklet. */
@@ -117,6 +94,7 @@ export const SONARE_METER_RING_PROTOCOL_VERSION = 3;
 export const SONARE_METER_RING_MAX_CHANNELS = 8;
 export const SONARE_METER_RING_CHANNEL_COUNT_OFFSET = 16;
 export const SONARE_METER_RING_PLANES_OFFSET = 17;
+const METER_SCALAR_PLANE_OFFSETS = [3, 5, 8, 14] as const;
 /** Number of Float32 values in one meter ring record. */
 export const SONARE_METER_RING_RECORD_FLOATS =
   SONARE_METER_RING_PLANES_OFFSET + 4 * SONARE_METER_RING_MAX_CHANNELS;
@@ -280,45 +258,49 @@ export function readMeterRingBuffer(ring: MeterRingBuffer, readIndex = 0): Meter
           continue;
         }
         const offset = sonareRingCursorSlot(cursor, capacity) * SONARE_METER_RING_RECORD_FLOATS;
+        const reportedChannels = records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET];
+        if (
+          !Number.isFinite(reportedChannels) ||
+          !Number.isInteger(reportedChannels) ||
+          reportedChannels < 0
+        ) {
+          throw codedError(
+            ErrorCode.InvalidFormat,
+            'meter ring record has an invalid channel count.',
+          );
+        }
+        const numChannels =
+          reportedChannels === 0 ? 2 : Math.min(reportedChannels, SONARE_METER_RING_MAX_CHANNELS);
+        const plane = (kind: 0 | 1 | 2 | 3): (number | undefined)[] =>
+          Array.from({ length: numChannels }, (_, channel) => {
+            const value =
+              numChannels > 2
+                ? records[
+                    offset +
+                      SONARE_METER_RING_PLANES_OFFSET +
+                      kind * SONARE_METER_RING_MAX_CHANNELS +
+                      channel
+                  ]
+                : records[offset + METER_SCALAR_PLANE_OFFSETS[kind] + channel];
+            return measured(value);
+          });
         const meter: WorkletMeterSnapshot = {
           type: 'meter',
           frame: decodeFrame(records[offset], records[offset + 1]),
           targetId: records[offset + 2],
+          numChannels,
+          peakDb: plane(0),
+          rmsDb: plane(1),
+          truePeakDbtp: plane(2),
+          inputPeakDb: plane(3),
           ...omitNaN({
-            peakDbL: records[offset + 3],
-            peakDbR: records[offset + 4],
-            rmsDbL: records[offset + 5],
-            rmsDbR: records[offset + 6],
             correlation: records[offset + 7],
-            truePeakDbtpL: records[offset + 8],
-            truePeakDbtpR: records[offset + 9],
             momentaryLufs: records[offset + 10],
             shortTermLufs: records[offset + 11],
             integratedLufs: records[offset + 12],
             gainReductionDb: records[offset + 13],
-            inputPeakDbL: records[offset + 14],
-            inputPeakDbR: records[offset + 15],
           }),
         };
-        const channelCount = records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET];
-        if (channelCount > 2) {
-          const planes = Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS);
-          const plane = (kind: number): number[] =>
-            Array.from(
-              records.subarray(
-                offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS,
-                offset +
-                  SONARE_METER_RING_PLANES_OFFSET +
-                  kind * SONARE_METER_RING_MAX_CHANNELS +
-                  planes,
-              ),
-            );
-          meter.numChannels = planes;
-          meter.peakDb = plane(0);
-          meter.rmsDb = plane(1);
-          meter.truePeakDbtp = plane(2);
-          meter.inputPeakDb = plane(3);
-        }
         meters.push(meter);
       } finally {
         releaseOverwriteRead(slotStates, capacity, cursor);
@@ -582,35 +564,25 @@ export function omitNaN<K extends string>(fields: Record<K, number>): Partial<Re
   return out;
 }
 
-// A plane the target does not have (the right side of a mono lane) is absent.
+// The arrays hold numChannels planes; an unmeasured plane is undefined.
 export function meterFromEngine(meter: EngineMeterTelemetry): WorkletMeterSnapshot {
   const snapshot: WorkletMeterSnapshot = {
     type: 'meter',
     targetId: meter.targetId,
     frame: meter.renderFrame,
     ...omitNaN({
-      peakDbL: meter.peakDb[0] ?? Number.NaN,
-      peakDbR: meter.peakDb[1] ?? Number.NaN,
-      rmsDbL: meter.rmsDb[0] ?? Number.NaN,
-      rmsDbR: meter.rmsDb[1] ?? Number.NaN,
-      truePeakDbtpL: meter.truePeakDbtp[0] ?? Number.NaN,
-      truePeakDbtpR: meter.truePeakDbtp[1] ?? Number.NaN,
       correlation: meter.correlation ?? Number.NaN,
       momentaryLufs: meter.momentaryLufs ?? Number.NaN,
       shortTermLufs: meter.shortTermLufs ?? Number.NaN,
       integratedLufs: meter.integratedLufs ?? Number.NaN,
-      inputPeakDbL: meter.inputPeakDb[0] ?? Number.NaN,
-      inputPeakDbR: meter.inputPeakDb[1] ?? Number.NaN,
     }),
     gainReductionDb: meter.gainReductionDb,
+    numChannels: meter.numChannels,
+    peakDb: meter.peakDb,
+    rmsDb: meter.rmsDb,
+    truePeakDbtp: meter.truePeakDbtp,
+    inputPeakDb: meter.inputPeakDb,
   };
-  if (meter.numChannels > 2) {
-    snapshot.numChannels = meter.numChannels;
-    snapshot.peakDb = meter.peakDb;
-    snapshot.rmsDb = meter.rmsDb;
-    snapshot.truePeakDbtp = meter.truePeakDbtp;
-    snapshot.inputPeakDb = meter.inputPeakDb;
-  }
   return snapshot;
 }
 

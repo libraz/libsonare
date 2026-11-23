@@ -2784,14 +2784,20 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const outR = new Float32Array(128);
         expect(processor.process([[inL, inR]], [[outL, outR]])).toBe(true);
         expect(delivered).toHaveLength(1);
-        const meter = delivered[0] as { targetId: number; peakDbL: number; peakDbR: number };
+        const meter = delivered[0] as {
+          targetId: number;
+          numChannels: number;
+          peakDb: (number | undefined)[];
+        };
         expect(delivered[0]).toMatchObject({
           type: 'meter',
           targetId: 0,
           frame: 0,
         });
-        expect(meter.peakDbL).toBeCloseTo(-6.0206, 2);
-        expect(meter.peakDbR).toBeCloseTo(-6.0206, 2);
+        expect(meter.numChannels).toBe(2);
+        expect(meter.peakDb).toHaveLength(2);
+        expect(meter.peakDb[0]).toBeCloseTo(-6.0206, 2);
+        expect(meter.peakDb[1]).toBeCloseTo(-6.0206, 2);
       } finally {
         processor.destroy();
       }

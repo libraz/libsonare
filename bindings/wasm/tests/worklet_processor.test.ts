@@ -339,19 +339,16 @@ describe('SonareWorkletProcessor', () => {
         type: 'meter' as const,
         targetId: 0,
         frame,
-        peakDbL: frame + 0.1,
-        peakDbR: frame + 0.2,
-        rmsDbL: frame + 0.3,
-        rmsDbR: frame + 0.4,
+        numChannels: 2,
+        peakDb: [frame + 0.1, frame + 0.2],
+        rmsDb: [frame + 0.3, frame + 0.4],
         correlation: frame + 0.5,
-        truePeakDbtpL: frame + 0.6,
-        truePeakDbtpR: frame + 0.7,
+        truePeakDbtp: [frame + 0.6, frame + 0.7],
         momentaryLufs: frame + 0.8,
         shortTermLufs: frame + 0.9,
         integratedLufs: frame + 1,
         gainReductionDb: frame + 1.1,
-        inputPeakDbL: frame + 1.2,
-        inputPeakDbR: frame + 1.3,
+        inputPeakDb: [frame + 1.2, frame + 1.3],
       });
 
       // Establish a real publication first. Without this precondition the
@@ -402,19 +399,16 @@ describe('SonareWorkletProcessor', () => {
         type: 'meter' as const,
         targetId: 0,
         frame: 7,
-        peakDbL: 1,
-        peakDbR: 2,
-        rmsDbL: 3,
-        rmsDbR: 4,
+        numChannels: 2,
+        peakDb: [1, 2],
+        rmsDb: [3, 4],
         correlation: 5,
-        truePeakDbtpL: 6,
-        truePeakDbtpR: 7,
+        truePeakDbtp: [6, 7],
         momentaryLufs: 8,
         shortTermLufs: 9,
         integratedLufs: 10,
         gainReductionDb: 11,
-        inputPeakDbL: 12,
-        inputPeakDbR: 13,
+        inputPeakDb: [12, 13],
       };
       write(baseline);
       expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
@@ -422,41 +416,59 @@ describe('SonareWorkletProcessor', () => {
         new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
       );
       const accesses: number[] = [];
+      let numberCoercionSlot = -1;
+      const observedLevels = (values: unknown[], throwsAt?: number): unknown[] => {
+        const levels = [...values];
+        for (let index = 0; index < levels.length; index++) {
+          const value = levels[index];
+          Object.defineProperty(levels, index, {
+            configurable: true,
+            get: () => {
+              accesses.push(Atomics.load(ring.slotStates, 0));
+              if (index === throwsAt) {
+                throw new Error('late mixer meter getter');
+              }
+              return value;
+            },
+          });
+        }
+        return levels;
+      };
       const source = {
-        frame: 8,
+        frame: {
+          [Symbol.toPrimitive]() {
+            numberCoercionSlot = Atomics.load(ring.slotStates, 0);
+            return '8';
+          },
+        },
         targetId: 0,
-        peakDbL: '21',
-        peakDbR: '22',
-        rmsDbL: '23',
-        rmsDbR: '24',
+        numChannels: 2,
+        peakDb: observedLevels([
+          {
+            [Symbol.toPrimitive]() {
+              numberCoercionSlot = Atomics.load(ring.slotStates, 0);
+              return '21';
+            },
+          },
+          '22',
+        ]),
+        rmsDb: observedLevels(['23', '24']),
         correlation: '25',
-        truePeakDbtpL: '26',
-        truePeakDbtpR: '27',
+        truePeakDbtp: observedLevels(['26', '27']),
         momentaryLufs: '28',
         shortTermLufs: '29',
         integratedLufs: '30',
         gainReductionDb: '31',
-        inputPeakDbL: '32',
-        get inputPeakDbR(): never {
-          accesses.push(Atomics.load(ring.slotStates, 0));
-          throw new Error('late mixer meter getter');
-        },
+        inputPeakDb: observedLevels(['32', '33'], 1),
       };
       for (const key of [
         'frame',
         'targetId',
-        'peakDbL',
-        'peakDbR',
-        'rmsDbL',
-        'rmsDbR',
         'correlation',
-        'truePeakDbtpL',
-        'truePeakDbtpR',
         'momentaryLufs',
         'shortTermLufs',
         'integratedLufs',
         'gainReductionDb',
-        'inputPeakDbL',
       ]) {
         const value = source[key as keyof typeof source];
         Object.defineProperty(source, key, {
@@ -471,6 +483,7 @@ describe('SonareWorkletProcessor', () => {
       // Every source access happened before the claim; the writer bit was never
       // visible to the throwing getter and the completed A record remains intact.
       expect(accesses).toEqual(new Array(15).fill(0));
+      expect(numberCoercionSlot).toBe(0);
       expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
       expect(Atomics.load(ring.slotStates, 0)).toBe(0);
       expect(

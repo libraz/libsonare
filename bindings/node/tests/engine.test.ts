@@ -10,6 +10,7 @@ import {
   RealtimeEngine,
   voiceChangerAbiVersion,
 } from '../src/index.js';
+import { meterTelemetryFromNative } from '../src/internal/engine_native.js';
 import { midi1Word, rms } from './_engine_signals.js';
 
 describe('RealtimeEngine native binding', () => {
@@ -22,6 +23,21 @@ describe('RealtimeEngine native binding', () => {
     }
     return worst;
   };
+
+  it('maps unmeasured meter planes to undefined without shifting their indices', () => {
+    const record = meterTelemetryFromNative({
+      channelCount: 2,
+      peakDb: [-120, Number.NaN],
+      rmsDb: [-12, Number.NaN],
+      truePeakDb: [-10, Number.NaN],
+      inputPeakDb: [-9, Number.NaN],
+    });
+
+    expect(record.peakDb).toEqual([-120, undefined]);
+    expect(record.rmsDb).toEqual([-12, undefined]);
+    expect(record.truePeakDbtp).toEqual([-10, undefined]);
+    expect(record.inputPeakDb).toEqual([-9, undefined]);
+  });
 
   it('exposes engine ABI version', () => {
     expect(engineAbiVersion()).toBeGreaterThan(0);
@@ -783,9 +799,14 @@ describe('RealtimeEngine native binding', () => {
 
     const meterRecords = engine.drainMeterTelemetry();
     expect(Array.isArray(meterRecords)).toBe(true);
+    const stereoMaster = meterRecords.find((record) => record.targetId === 0);
+    expect(stereoMaster).toBeDefined();
+    expect(stereoMaster?.numChannels).toBe(2);
     for (const record of meterRecords) {
       expect(record.peakDb).toHaveLength(record.numChannels);
       expect(record.rmsDb).toHaveLength(record.numChannels);
+      expect(record.truePeakDbtp).toHaveLength(record.numChannels);
+      expect(record.inputPeakDb).toHaveLength(record.numChannels);
       expect(typeof record.peakDb[0]).toBe('number');
       expect(typeof record.rmsDb[0]).toBe('number');
       // Absent before the first gating block, -Infinity while nothing passes the gate.
@@ -795,6 +816,53 @@ describe('RealtimeEngine native binding', () => {
       }
     }
     engine.destroy();
+  });
+
+  it('keeps mono meter telemetry at one measured plane', () => {
+    const blockSize = 128;
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: blockSize });
+    try {
+      const tone = Float32Array.from(
+        { length: blockSize },
+        (_, index) => 0.5 * Math.sin((2 * Math.PI * 1000 * index) / 48000),
+      );
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [tone],
+          startPpq: 0,
+          lengthSamples: blockSize,
+        },
+      ]);
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.play();
+      engine.process([new Float32Array(blockSize)]);
+
+      const record = engine.drainMeterTelemetry().find((item) => item.targetId === 0);
+      if (!record) {
+        throw new Error('expected a master meter record');
+      }
+      expect(record.numChannels).toBe(1);
+
+      const peak = record.peakDb[0];
+      const rms = record.rmsDb[0];
+      if (peak === undefined || rms === undefined) {
+        throw new Error('expected measured mono peak and RMS levels');
+      }
+      expect(Number.isFinite(peak)).toBe(true);
+      expect(peak).toBeGreaterThan(-60);
+      expect(Number.isFinite(rms)).toBe(true);
+      expect(rms).toBeGreaterThan(-60);
+
+      for (const levels of [record.peakDb, record.rmsDb, record.truePeakDbtp, record.inputPeakDb]) {
+        expect(levels).toHaveLength(1);
+        expect(levels.some(Number.isNaN)).toBe(false);
+        expect(levels).not.toContain(-120);
+      }
+    } finally {
+      engine.destroy();
+    }
   });
 
   it('setParameter takes smoothed as an option', () => {

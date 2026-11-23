@@ -23,6 +23,7 @@ import { PROCESSOR_OPTION_KEYS } from '../request_keys.js';
 import {
   type EngineTelemetryRecord,
   isRecord,
+  SONARE_METER_RING_MAX_CHANNELS,
   SONARE_SCOPE_DEFAULT_BANDS,
   SONARE_SCOPE_MAX_BANDS,
   SONARE_SCOPE_MAX_POINTS,
@@ -430,8 +431,12 @@ const isOptionalLevel = (value: unknown): boolean =>
 function hasMeterPlanes(value: Record<string, unknown>, numChannels: unknown): boolean {
   return (
     typeof numChannels === 'number' &&
+    Number.isInteger(numChannels) &&
+    numChannels >= 1 &&
+    numChannels <= SONARE_METER_RING_MAX_CHANNELS &&
     [value.peakDb, value.rmsDb, value.truePeakDbtp, value.inputPeakDb].every(
-      (plane) => Array.isArray(plane) && plane.length === numChannels,
+      (plane) =>
+        Array.isArray(plane) && plane.length === numChannels && plane.every(isOptionalLevel),
     )
   );
 }
@@ -441,14 +446,8 @@ export function isMeterSnapshot(value: unknown): value is WorkletMeterSnapshot {
     isRecord(value) &&
     value.type === 'meter' &&
     typeof value.frame === 'number' &&
-    isOptionalLevel(value.peakDbL) &&
-    isOptionalLevel(value.peakDbR) &&
-    isOptionalLevel(value.rmsDbL) &&
-    isOptionalLevel(value.rmsDbR) &&
     (value.correlation === undefined || Number.isFinite(value.correlation)) &&
-    isOptionalLevel(value.inputPeakDbL) &&
-    isOptionalLevel(value.inputPeakDbR) &&
-    (value.numChannels === undefined || hasMeterPlanes(value, value.numChannels)) &&
+    hasMeterPlanes(value, value.numChannels) &&
     (typeof value.targetId === 'number' || value.targetId === undefined)
   );
 }

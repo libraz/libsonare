@@ -546,12 +546,12 @@ export interface EngineMeterTelemetry {
   seq: number;
   /** Number of valid per-plane meters (1..8). */
   numChannels: number;
-  /** Per-plane peak level in dB (length `numChannels`). `-Infinity` for an all-zero plane, NaN for a plane that was not written. */
-  peakDb: number[];
-  /** Per-plane RMS level in dB (length `numChannels`). `-Infinity` for an all-zero plane, NaN for a plane that was not written. */
-  rmsDb: number[];
-  /** Per-plane inter-sample peak in dB (4x polyphase, one filter group delay behind the block). `-Infinity` for an all-zero plane, NaN for a plane that was not written. */
-  truePeakDbtp: number[];
+  /** Per-plane peak level in dB (length `numChannels`). `-Infinity` for an all-zero plane; `undefined` when not measured. */
+  peakDb: (number | undefined)[];
+  /** Per-plane RMS level in dB (length `numChannels`). `-Infinity` for an all-zero plane; `undefined` when not measured. */
+  rmsDb: (number | undefined)[];
+  /** Per-plane inter-sample peak in dB (4x polyphase, one filter group delay behind the block). `-Infinity` for an all-zero plane; `undefined` when not measured. */
+  truePeakDbtp: (number | undefined)[];
   /** Maximum inter-sample peak across channels in dB. `-Infinity` for silence; absent when not measured. */
   maxTruePeakDbtp?: number;
   /** Stereo correlation in `[-1, 1]` (front pair). Absent when not measured (a channel has zero energy). */
@@ -566,8 +566,8 @@ export interface EngineMeterTelemetry {
   integratedLufs?: number;
   /** Gain reduction in dB. */
   gainReductionDb: number;
-  /** Pre-trim input peak per valid plane, in dBFS. */
-  inputPeakDb: number[];
+  /** Pre-trim input peak per valid plane, in dBFS; `undefined` when not measured. */
+  inputPeakDb: (number | undefined)[];
   /** Number of records dropped before this snapshot. */
   droppedRecords: number;
 }
