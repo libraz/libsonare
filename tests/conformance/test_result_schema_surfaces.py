@@ -123,7 +123,7 @@ class RootAnchoring(unittest.TestCase):
         """The case a file-anchored walk accepts: the leaf exists elsewhere."""
         family = check.FAMILIES["analysis_result_schema_paths"]
         text = family["surfaces"]["node"].read_text()
-        self.assertGreater(len(re.findall(r"^\s*bpm\s*:", text, re.MULTILINE)), 1)
+        self.assertGreater(len(re.findall(r"^\s*bpm\s*\??\s*:", text, re.MULTILINE)), 1)
         missing, unreached, _ = check.scan(
             ["bpm"], _drop_property(text, family["root"], "bpm"), family["root"]
         )

@@ -356,7 +356,9 @@ class Scan:
             for child in ast.iter_child_nodes(node):
                 visit(child, checked)
 
-        visit(tree, frozenset())
+        # A module-level name bound to a numeric literal in this file is that literal,
+        # which the integer-literal shape already accepts when it is spelled inline.
+        visit(tree, _module_constants([tree]))
 
     def _attribute(
         self, path: Path, call: ast.Call, inline: set[int], checked: frozenset[str]

@@ -273,7 +273,7 @@ def writes(body: str, name: str) -> list[int]:
         # The shared definers: begin_string_output sets *out to NULL, a public
         # sonare_*_init fills the struct, and SONARE_C_ZERO_OUTS clears every out
         # it names, before anything can return.
-        rf"\bbegin_string_output\s*\(\s*{escaped}\s*\)",
+        rf"\bbegin_string_output\s*\(\s*{escaped}\s*[,)]",
         rf"\bsonare_\w+_init\s*\(\s*{escaped}\s*\)",
         rf"\bSONARE_C_ZERO_OUTS\s*\([^()]*?\b{escaped}\b",
     )

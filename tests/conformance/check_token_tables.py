@@ -208,11 +208,13 @@ ROWS: tuple[TokenSet, ...] = (
         name="bpm candidate relation",
         core=CoreTable("src/analysis/analysis_json.cpp", "BpmCandidateRelation", None, "bpm_candidate_relation_name"),
         sources=(
+            _src("node", "bindings/node/src/analysis.ts", "ts_array", "BPM_CANDIDATE_RELATIONS"),
             _src("node", "bindings/node/src/types_analysis.ts", "ts_union", "BpmCandidateRelation"),
             _src("node", "bindings/node/src/types_project.ts", "ts_field", "ProjectTempoCandidate.label", subset=True),
             _src("python", "bindings/python/src/libsonare/_types_analysis.py", "py_literal", "BpmCandidateRelation"),
             _src("wasm", "bindings/wasm/src/project_internal.ts", "ts_field", "NativeProjectTempoCandidate.label", subset=True),
             _src("wasm", "bindings/wasm/src/project_types.ts", "ts_field", "ProjectTempoCandidate.label", subset=True),
+            _src("wasm", "bindings/wasm/src/analysis_helpers.ts", "ts_array", "BPM_CANDIDATE_RELATIONS"),
             _src("wasm", "bindings/wasm/src/public_types_music.ts", "ts_union", "BpmCandidateRelation"),
         ),
     ),

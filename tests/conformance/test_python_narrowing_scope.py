@@ -268,6 +268,27 @@ class FailureClassTest(_SyntheticTree):
         lines = self.only(self.evaluate(root), "argtypes declares a narrowing C type")
         self.assertIn("sonare_set_track_gain(... argument 1: c_uint32) <- int(track_id)", lines[0])
 
+    def test_a_module_constant_from_this_file_reports_nothing(self) -> None:
+        """A name bound to a numeric literal at module level is that literal."""
+        root = self.tree(
+            "import ctypes\n\n_SPELLING = 1\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_flag.argtypes = [ctypes.c_void_p, ctypes.c_int32]\n\n\n"
+            "def f(lib, handle):\n"
+            "    lib.sonare_set_flag(handle, _SPELLING)\n"
+        )
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_a_module_constant_from_another_file_is_still_reported(self) -> None:
+        """Another file's constant name says nothing about a local of the same name."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_flag.argtypes = [ctypes.c_void_p, ctypes.c_int32]\n\n\n"
+            "def f(lib, handle, _SPELLING):\n"
+            "    lib.sonare_set_flag(handle, _SPELLING)\n"
+        )
+        lines = self.only(self.evaluate(root), "argtypes declares a narrowing C type")
+        self.assertIn("<- _SPELLING", lines[0])
+
     def test_an_argtype_argument_through_the_shared_reader_reports_nothing(self) -> None:
         root = self.tree(
             "import ctypes\n\n\ndef configure(lib):\n"

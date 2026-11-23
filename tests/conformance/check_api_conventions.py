@@ -1536,7 +1536,6 @@ _C_ERROR_PATH_PENDING: dict[str, int] = {
     "src/c_api/core_audio.cpp": 1,
     "src/c_api/mixing_graph.cpp": 1,
     "src/c_api/mixing_strip.cpp": 4,
-    "src/c_api/project_core.cpp": 2,
     "src/c_api/project_midi.cpp": 8,
     "src/c_api/project_soundfont.cpp": 1,
     "src/c_api/sonare_c_mastering_repair.cpp": 1,
