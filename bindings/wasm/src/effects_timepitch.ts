@@ -8,7 +8,9 @@ import { assertPitchTrackLengths, toVoicedFloat32 } from './internal/effects_com
 import { refuseType, withEntry } from './internal/entry.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import {
+  binsPerHop,
   MAX_OFFLINE_AUDIO_SAMPLES,
+  MEASURED_FLOORS,
   sampleNeed,
   withHeapNeed,
   withHeapNeedWhen,
@@ -115,12 +117,15 @@ export function timeStretch(...args: unknown[]): Float32Array {
     const { samples, sampleRate, speedRatio } = r;
     const outSamples = Math.floor(samples.length / speedRatio);
     // An output past the offline cap is the native rate check's refusal, not a memory one.
+    const { nFft, hopLength } = fftOptions;
+    const floor = MEASURED_FLOORS.timeStretch(binsPerHop(nFft, hopLength), 1 / speedRatio);
     return withHeapNeedWhen(
-      outSamples <= MAX_OFFLINE_AUDIO_SAMPLES,
+      outSamples <= MAX_OFFLINE_AUDIO_SAMPLES && hopLength <= nFft / 2,
       {
         subject: 'speedRatio',
         size: speedRatio,
-        bytes: () => 4 * samples.length + 4 * outSamples,
+        bytes: () => Math.max(4 * samples.length + 4 * outSamples, 4 * samples.length * floor),
+        measured: true,
       },
       () =>
         getSonareModule().timeStretch(
@@ -160,14 +165,18 @@ export function pitchShift(...args: unknown[]): Float32Array {
     assertFloatValue(r.pitchSemitones, 'pitchSemitones');
     const fftOptions = resolveEffectFftOptions(r.nFft, r.hopLength);
     const { samples, sampleRate, pitchSemitones } = r;
-    return withMonoHeap(samples, sampleRate, 2, () =>
-      getSonareModule().pitchShift(
-        samples,
-        sampleRate,
-        pitchSemitones,
-        fftOptions.nFft,
-        fftOptions.hopLength,
-      ),
+    const { nFft, hopLength } = fftOptions;
+    const floor = MEASURED_FLOORS.pitchShift(
+      binsPerHop(nFft, hopLength),
+      2 ** (pitchSemitones / 12),
+    );
+    return withHeapNeedWhen(
+      hopLength <= nFft / 2,
+      {
+        ...sampleNeed('samples', samples.length, sampleRate, (n) => 4 * n * Math.max(2, floor)),
+        measured: true,
+      },
+      () => getSonareModule().pitchShift(samples, sampleRate, pitchSemitones, nFft, hopLength),
     );
   });
 }

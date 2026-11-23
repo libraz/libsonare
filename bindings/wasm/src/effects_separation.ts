@@ -5,7 +5,13 @@
 
 import { withEntry } from './internal/entry.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
-import { withMonoHeap } from './internal/memory_budget.js';
+import {
+  binsPerHop,
+  MEASURED_FLOORS,
+  sampleNeed,
+  withHeapNeedWhen,
+  withMonoHeap,
+} from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -100,18 +106,32 @@ export function hpss(...args: unknown[]): HpssResult {
     const kernelHarmonic = r.kernelHarmonic ?? 31;
     const kernelPercussive = r.kernelPercussive ?? 31;
     assertHpssKernels(kernelHarmonic, kernelPercussive);
+    const { nFft, hopLength } = fftOptions;
     // The input copy and the two components, or the three of them with the residual.
-    return withMonoHeap(r.samples, r.sampleRate, withResidual ? 4 : 3, () =>
-      getSonareModule().hpss(
-        r.samples,
-        r.sampleRate,
-        kernelHarmonic,
-        kernelPercussive,
-        fftOptions.nFft,
-        fftOptions.hopLength,
-        hardMask,
-        withResidual,
-      ),
+    const buffers = withResidual ? 4 : 3;
+    const floor = MEASURED_FLOORS.hpss(binsPerHop(nFft, hopLength), withResidual);
+    return withHeapNeedWhen(
+      hopLength <= nFft / 2,
+      {
+        ...sampleNeed(
+          'samples',
+          r.samples.length,
+          r.sampleRate,
+          (n) => 4 * n * Math.max(buffers, floor),
+        ),
+        measured: true,
+      },
+      () =>
+        getSonareModule().hpss(
+          r.samples,
+          r.sampleRate,
+          kernelHarmonic,
+          kernelPercussive,
+          nFft,
+          hopLength,
+          hardMask,
+          withResidual,
+        ),
     );
   });
 }

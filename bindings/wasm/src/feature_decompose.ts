@@ -4,7 +4,7 @@
  */
 
 import { refuse, withEntry } from './internal/entry.js';
-import { sampleNeed, stftBins, withHeapNeed } from './internal/memory_budget.js';
+import { MEASURED_FLOORS, sampleNeed, stftBins, withHeapNeed } from './internal/memory_budget.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
 import type { OptionsOf } from './validation.js';
@@ -329,13 +329,14 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
       return call();
     }
     const { k, bins, hop } = shape;
+    const floor = MEASURED_FLOORS.decomposeStems(bins / hop, k);
     return withHeapNeed(
-      sampleNeed(
-        'samples',
-        samples.length,
-        r.sampleRate,
-        (n) => 4 * n * (1 + k) + 4 * bins * k + 4 * k * Math.floor(n / hop),
-      ),
+      {
+        ...sampleNeed('samples', samples.length, r.sampleRate, (n) =>
+          Math.max(4 * n * (1 + k) + 4 * bins * k + 4 * k * Math.floor(n / hop), 4 * n * floor),
+        ),
+        measured: true,
+      },
       call,
     );
   });
