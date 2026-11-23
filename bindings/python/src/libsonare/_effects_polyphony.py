@@ -592,7 +592,7 @@ class PolyphonicAnalysis:
             )
             return
 
-        # envelope_offset / envelope_count are inert on this door: the points are
+        # amplitude_envelope_offset / amplitude_envelope_count are inert on this door: the points are
         # the argument below and the analysis keeps its own copy.
         c_edit, curve, time_offset = _note_edit_to_c(edit, self._sample_rate, "edit", 0)
         envelope, envelope_count = _to_c_float_array(curve, arg_name="edit.amplitude_envelope")
@@ -699,7 +699,7 @@ class PolyphonicAnalysis:
         )
         if int(written.value) <= index:
             return 0
-        return int(rows[index].edit.envelope_count)
+        return int(rows[index].edit.amplitude_envelope_count)
 
     def _envelope_points(
         self, lib: ctypes.CDLL, handle: ctypes.c_void_p, index: int, capacity: int
@@ -725,7 +725,7 @@ class PolyphonicAnalysis:
     def _note_from_c(self, row: SonareNoteObject, index: int) -> NoteObject:
         """Build one :class:`libsonare.NoteObject` from a C row.
 
-        The row's ``envelope_count`` sizes the envelope read directly, so filling
+        The row's ``amplitude_envelope_count`` sizes the envelope read directly, so filling
         the edit's points costs one call per note and no second count query.
         """
         return NoteObject(
@@ -750,7 +750,7 @@ class PolyphonicAnalysis:
                     _get_lib(),
                     self._require_handle(),
                     index,
-                    int(row.edit.envelope_count),
+                    int(row.edit.amplitude_envelope_count),
                 ),
             ),
         )

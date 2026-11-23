@@ -894,8 +894,8 @@ TEST_CASE("an initialised SonareNoteEdit is the identity with the envelope and c
   REQUIRE(extracted.count >= 1);
   for (size_t i = 0; i < extracted.count; ++i) {
     sonare_note_edit_init(&extracted.notes[i].edit);
-    REQUIRE(extracted.notes[i].edit.envelope_offset == 0);
-    REQUIRE(extracted.notes[i].edit.envelope_count == 0);
+    REQUIRE(extracted.notes[i].edit.amplitude_envelope_offset == 0);
+    REQUIRE(extracted.notes[i].edit.amplitude_envelope_count == 0);
     REQUIRE(extracted.notes[i].edit.formant_semitones == 0.0f);
     REQUIRE(extracted.notes[i].edit.vibrato_depth_change == 0.0f);
     REQUIRE(extracted.notes[i].edit.drift_change == 0.0f);
@@ -931,7 +931,7 @@ TEST_CASE("an initialised SonareNoteEdit is the identity with the envelope and c
   REQUIRE(moves_the_output(nullptr, 0));
   extracted.notes[0].edit.drift_change = 1.0f;
   REQUIRE(moves_the_output(nullptr, 0));
-  extracted.notes[0].edit.envelope_count = pool.size();
+  extracted.notes[0].edit.amplitude_envelope_count = pool.size();
   REQUIRE(moves_the_output(pool.data(), pool.size()));
 
   sonare_free_note_objects_result(&extracted);
@@ -947,8 +947,8 @@ TEST_CASE("sonare_render_notes reads each note's envelope at its own offset in t
   // that must never be read.
   const std::vector<float> pool = {2.0f, 2.0f, 2.0f, 0.25f, 1.0f, 2.0f};
   SonareNoteObject notes[2] = {hand_note(0, 3200), hand_note(3200, 6400)};
-  notes[0].edit.envelope_offset = 3;
-  notes[0].edit.envelope_count = 2;
+  notes[0].edit.amplitude_envelope_offset = 3;
+  notes[0].edit.amplitude_envelope_count = 2;
   // A second note in the same call carrying no envelope. -6.0206 dB is exactly
   // half, flat across its whole span.
   notes[1].edit.gain_db = -6.0206f;
@@ -986,8 +986,8 @@ TEST_CASE("sonare_render_notes bounds-checks every note's slice of the envelope 
 
   auto note_with = [](int64_t envelope_offset, size_t envelope_count) {
     SonareNoteObject note = hand_note(1920, 6080);
-    note.edit.envelope_offset = envelope_offset;
-    note.edit.envelope_count = envelope_count;
+    note.edit.amplitude_envelope_offset = envelope_offset;
+    note.edit.amplitude_envelope_count = envelope_count;
     return note;
   };
 
@@ -1512,8 +1512,8 @@ TEST_CASE("sonare_render_notes validates workflow bounds, scalar edits and finit
 
   const float huge_envelope = 3.0e38f;
   SonareNoteObject huge_enveloped = hand_note(0, 6400);
-  huge_enveloped.edit.envelope_offset = 0;
-  huge_enveloped.edit.envelope_count = 1;
+  huge_enveloped.edit.amplitude_envelope_offset = 0;
+  huge_enveloped.edit.amplitude_envelope_count = 1;
   expect_invalid(loud_samples, &huge_enveloped, 1, &huge_envelope, 1);
 
   // Finite controls remain renderable and the result is finite throughout.
@@ -1528,8 +1528,8 @@ TEST_CASE("sonare_render_notes validates workflow bounds, scalar edits and finit
   sonare_free_floats(output);
 
   SonareNoteObject finite_enveloped = hand_note(0, 6400);
-  finite_enveloped.edit.envelope_offset = 0;
-  finite_enveloped.edit.envelope_count = 1;
+  finite_enveloped.edit.amplitude_envelope_offset = 0;
+  finite_enveloped.edit.amplitude_envelope_count = 1;
   const float unit_envelope = 1.0f;
   output = nullptr;
   output_length = 0;

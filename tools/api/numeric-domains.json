@@ -3346,7 +3346,7 @@
     },
     {
       "entry": "merge_notes",
-      "param": "notes[].edit.envelope_offset",
+      "param": "notes[].edit.amplitude_envelope_offset",
       "kind": "integer",
       "lo": 0,
       "hi": null,
@@ -6613,7 +6613,7 @@
     },
     {
       "entry": "render_notes",
-      "param": "notes[].edit.envelope_offset",
+      "param": "notes[].edit.amplitude_envelope_offset",
       "kind": "integer",
       "lo": 0,
       "hi": null,
@@ -7482,7 +7482,7 @@
     },
     {
       "entry": "split_note",
-      "param": "notes[].edit.envelope_offset",
+      "param": "notes[].edit.amplitude_envelope_offset",
       "kind": "integer",
       "lo": 0,
       "hi": null,

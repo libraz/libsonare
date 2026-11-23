@@ -245,8 +245,8 @@ TEST_CASE("assignment leaves every field it does not write", "[c_api][note_targe
   notes[0].median_cents = 123.0f;
   notes[0].f0_stability = 0.75f;
   notes[0].edit.time_offset_samples = 64;
-  notes[0].edit.envelope_offset = 2;
-  notes[0].edit.envelope_count = 5;
+  notes[0].edit.amplitude_envelope_offset = 2;
+  notes[0].edit.amplitude_envelope_count = 5;
   notes[0].edit.gain_db = -3.0f;
   notes[0].edit.time_stretch_ratio = 1.5f;
   notes[0].edit.formant_semitones = 2.0f;
@@ -270,8 +270,8 @@ TEST_CASE("assignment leaves every field it does not write", "[c_api][note_targe
   REQUIRE(notes[0].median_cents == before.median_cents);
   REQUIRE(notes[0].f0_stability == before.f0_stability);
   REQUIRE(notes[0].edit.time_offset_samples == before.edit.time_offset_samples);
-  REQUIRE(notes[0].edit.envelope_offset == before.edit.envelope_offset);
-  REQUIRE(notes[0].edit.envelope_count == before.edit.envelope_count);
+  REQUIRE(notes[0].edit.amplitude_envelope_offset == before.edit.amplitude_envelope_offset);
+  REQUIRE(notes[0].edit.amplitude_envelope_count == before.edit.amplitude_envelope_count);
   REQUIRE(notes[0].edit.gain_db == before.edit.gain_db);
   REQUIRE(notes[0].edit.time_stretch_ratio == before.edit.time_stretch_ratio);
   REQUIRE(notes[0].edit.formant_semitones == before.edit.formant_semitones);
@@ -289,8 +289,8 @@ TEST_CASE("assignment catches a target staging allocation failure before touchin
   note.median_cents = 123.0f;
   note.f0_stability = 0.75f;
   note.edit.time_offset_samples = 64;
-  note.edit.envelope_offset = 2;
-  note.edit.envelope_count = 5;
+  note.edit.amplitude_envelope_offset = 2;
+  note.edit.amplitude_envelope_count = 5;
   note.edit.pitch_semitones = -4.0f;
   note.edit.gain_db = -3.0f;
   note.edit.time_stretch_ratio = 1.5f;
@@ -322,8 +322,8 @@ TEST_CASE("assignment catches a target staging allocation failure before touchin
   CHECK(note.median_cents == before.median_cents);
   CHECK(note.f0_stability == before.f0_stability);
   CHECK(note.edit.time_offset_samples == before.edit.time_offset_samples);
-  CHECK(note.edit.envelope_offset == before.edit.envelope_offset);
-  CHECK(note.edit.envelope_count == before.edit.envelope_count);
+  CHECK(note.edit.amplitude_envelope_offset == before.edit.amplitude_envelope_offset);
+  CHECK(note.edit.amplitude_envelope_count == before.edit.amplitude_envelope_count);
   CHECK(note.edit.pitch_semitones == before.edit.pitch_semitones);
   CHECK(note.edit.gain_db == before.edit.gain_db);
   CHECK(note.edit.time_stretch_ratio == before.edit.time_stretch_ratio);

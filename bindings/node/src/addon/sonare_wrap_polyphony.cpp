@@ -254,7 +254,7 @@ Napi::Value PolyphonicAnalysisWrap::Notes(const Napi::CallbackInfo& info) {
     }
     // The note reports its own point count, and the points are indexed from 0
     // rather than over the span, so that count is the capacity they need.
-    envelope.assign(notes[i].edit.envelope_count, 0.0f);
+    envelope.assign(notes[i].edit.amplitude_envelope_count, 0.0f);
     size_t envelope_count = 0;
     err =
         sonare_polyphonic_note_envelope(analysis_, i, envelope.empty() ? nullptr : envelope.data(),
@@ -290,7 +290,7 @@ Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) 
     ReadNoteEditFields(edit_value.As<Napi::Object>(), &envelope, &edit);
   }
 
-  // The edit's envelope_offset and envelope_count address the by-value door's
+  // The edit's amplitude_envelope_offset and amplitude_envelope_count address the by-value door's
   // pool and are ignored here; the points travel as their own argument and the
   // handle copies them.
   const SonareError err = sonare_polyphonic_set_note_edit(
@@ -375,7 +375,7 @@ bool PolyphonicAnalysisWrap::ReadEnvelopeCount(Napi::Env env, size_t note, size_
     ThrowIfError(env, err);
     return false;
   }
-  if (note < written) *out = notes[note].edit.envelope_count;
+  if (note < written) *out = notes[note].edit.amplitude_envelope_count;
   return true;
 }
 

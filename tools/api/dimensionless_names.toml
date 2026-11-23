@@ -274,11 +274,11 @@ evidence = "src/mastering/saturation/hard_clipper.cpp:25: the linear sample boun
 
 [[name]]
 names = [
-  "SonareNoteEdit.envelope_offset",
+  "SonareNoteEdit.amplitude_envelope_offset",
 ]
 class = "index"
 range = [0, inf]
-evidence = "include/sonare/sonare_c_effects.h:410: the note's first entry in the envelopes array, [envelope_offset, envelope_offset + envelope_count)"
+evidence = "include/sonare/sonare_c_effects.h:314: the note's first entry in the envelopes array, [amplitude_envelope_offset, amplitude_envelope_offset + amplitude_envelope_count)"
 
 [[name]]
 names = [

@@ -11,7 +11,7 @@
 /// Two things the C ABI's fixed records cannot carry inline cross as arrays here,
 /// because nothing on this surface needs a pool to own them: a note's amplitude
 /// curve, and an edit's envelope points. The @c amplitude_offset and
-/// @c envelope_offset that index that pool therefore have no counterpart.
+/// @c amplitude_envelope_offset that index that pool therefore have no counterpart.
 
 #ifdef __EMSCRIPTEN__
 

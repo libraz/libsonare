@@ -128,8 +128,8 @@ void fill_note(const sonare::editing::note_model::NoteObject& from, SonareNoteOb
   to.f0_stability = from.f0_stability;
   sonare_note_edit_init(&to.edit);
   to.edit.time_offset_samples = from.edit.time_offset_samples;
-  to.edit.envelope_offset = 0;
-  to.edit.envelope_count = from.edit.amplitude_envelope.size();
+  to.edit.amplitude_envelope_offset = 0;
+  to.edit.amplitude_envelope_count = from.edit.amplitude_envelope.size();
   to.edit.pitch_semitones = from.edit.pitch_shift_semitones;
   to.edit.gain_db = from.edit.gain_db;
   to.edit.time_stretch_ratio = from.edit.time_stretch_ratio;

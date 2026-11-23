@@ -188,13 +188,13 @@ std::vector<float> amplitude_slice(const SonareNoteObjectsResult& result, size_t
 std::vector<float> envelope_slice(const SonareNoteObjectsResult& result, size_t index) {
   REQUIRE(index < result.count);
   const SonareNoteEdit& edit = result.notes[index].edit;
-  REQUIRE(edit.envelope_offset >= 0);
-  REQUIRE(edit.envelope_count > 0);
-  const size_t offset = static_cast<size_t>(edit.envelope_offset);
-  REQUIRE(offset + edit.envelope_count <= result.envelope_count);
+  REQUIRE(edit.amplitude_envelope_offset >= 0);
+  REQUIRE(edit.amplitude_envelope_count > 0);
+  const size_t offset = static_cast<size_t>(edit.amplitude_envelope_offset);
+  REQUIRE(offset + edit.amplitude_envelope_count <= result.envelope_count);
   REQUIRE(result.envelopes != nullptr);
   return std::vector<float>(result.envelopes + offset,
-                            result.envelopes + offset + edit.envelope_count);
+                            result.envelopes + offset + edit.amplitude_envelope_count);
 }
 
 /// @brief Bit-exact equality. Split and merge re-derive every note, the
@@ -752,7 +752,7 @@ TEST_CASE("sonare_split_note normalizes a time_stretch_ratio of 0 to 1",
     REQUIRE(split.notes[i].edit.time_stretch_ratio == 1.0f);
     REQUIRE(split.notes[i].edit.gain_db == 0.0f);
     REQUIRE(split.notes[i].edit.muted == 0);
-    REQUIRE(split.notes[i].edit.envelope_count == 0);
+    REQUIRE(split.notes[i].edit.amplitude_envelope_count == 0);
   }
   sonare_free_note_objects_result(&split);
   sonare_free_note_objects_result(&extracted);
@@ -866,8 +866,8 @@ TEST_CASE("sonare_split_note cuts the source note's envelope and returns its own
     // The note's points sit at offset 1; the 3.0 in front of them must not be
     // read, and cannot appear in the result's own pool either.
     const std::vector<float> pool = {3.0f, 0.25f, 1.0f};
-    extracted.notes[0].edit.envelope_offset = 1;
-    extracted.notes[0].edit.envelope_count = 2;
+    extracted.notes[0].edit.amplitude_envelope_offset = 1;
+    extracted.notes[0].edit.amplitude_envelope_count = 2;
 
     SonareNoteObjectsResult split{};
     REQUIRE(split_from(source, extracted.notes, extracted.count, pool.data(), pool.size(), 0, 20,
@@ -901,8 +901,8 @@ TEST_CASE("sonare_split_note cuts the source note's envelope and returns its own
 
   SECTION("a one-entry envelope is a constant, so both halves get it unchanged") {
     const std::vector<float> pool = {0.5f};
-    extracted.notes[0].edit.envelope_offset = 0;
-    extracted.notes[0].edit.envelope_count = 1;
+    extracted.notes[0].edit.amplitude_envelope_offset = 0;
+    extracted.notes[0].edit.amplitude_envelope_count = 1;
 
     SonareNoteObjectsResult split{};
     REQUIRE(split_from(source, extracted.notes, extracted.count, pool.data(), pool.size(), 0, 20,
@@ -928,7 +928,7 @@ TEST_CASE("sonare_free_note_objects_result releases the envelope pool a split re
   REQUIRE(extract_from(source, &extracted) == SONARE_OK);
   REQUIRE(extracted.count == 1);
   const std::vector<float> pool = {0.25f, 1.0f};
-  extracted.notes[0].edit.envelope_count = 2;
+  extracted.notes[0].edit.amplitude_envelope_count = 2;
 
   SonareNoteObjectsResult split{};
   REQUIRE(split_from(source, extracted.notes, extracted.count, pool.data(), pool.size(), 0, 20,

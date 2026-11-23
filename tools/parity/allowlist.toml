@@ -612,16 +612,16 @@ fields = [
 
   # --- category 1: the same fold, on the edit a caller writes ---
   # An amplitude envelope travels the same way: `SonareNoteEdit` names a slice of
-  # a pool shared by the note set, so it carries `envelope_offset` and
-  # `envelope_count`. The pool exists because the C field has to mean the same
+  # a pool shared by the note set, so it carries `amplitude_envelope_offset` and
+  # `amplitude_envelope_count`. The pool exists because the C field has to mean the same
   # thing in both directions — a caller owns the array it passes to
   # sonare_render_notes, the library owns the one sonare_split_note returns, and
   # a bare pointer would give one field two ownership rules. Neither JS facade
   # has that problem, so both hand each edit its own `amplitudeEnvelope` and the
   # offset has nothing left to index. The ctypes mirror keeps the C shape, so
   # Python is not affected.
-  "note_edit.envelope_offset",
-  "note_edit.envelope_count",
+  "note_edit.amplitude_envelope_offset",
+  "note_edit.amplitude_envelope_count",
   "note_edit.amplitude_envelope",
   # --- Derived display names (category 4) ---
   # The chord symbol is spelled from root and quality by the core naming

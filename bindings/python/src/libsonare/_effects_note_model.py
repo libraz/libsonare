@@ -550,8 +550,8 @@ def _note_from_c(row: SonareNoteObject, amplitude: np.ndarray, envelopes: np.nda
     """Build one :class:`NoteObject` from a C row and the two shared pools."""
     start = int(row.amplitude_offset)
     stop = start + int(row.frame_end) - int(row.frame_start)
-    envelope_start = int(row.edit.envelope_offset)
-    envelope_stop = envelope_start + int(row.edit.envelope_count)
+    envelope_start = int(row.edit.amplitude_envelope_offset)
+    envelope_stop = envelope_start + int(row.edit.amplitude_envelope_count)
     return NoteObject(
         onset_sample=int(row.onset_sample),
         offset_sample=int(row.offset_sample),
@@ -614,8 +614,8 @@ def _note_edit_to_c(
     )
     c_edit = SonareNoteEdit(
         time_offset_samples=time_offset.value,
-        envelope_offset=envelope_offset,
-        envelope_count=int(curve.size),
+        amplitude_envelope_offset=envelope_offset,
+        amplitude_envelope_count=int(curve.size),
         pitch_semitones=_narrow_double(edit.pitch_semitones, f"{subject}.pitch_semitones"),
         gain_db=_narrow_double(edit.gain_db, f"{subject}.gain_db"),
         time_stretch_ratio=_narrow_double(edit.time_stretch_ratio, f"{subject}.time_stretch_ratio"),

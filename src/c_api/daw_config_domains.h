@@ -25,7 +25,7 @@ inline constexpr sonare::util::check::NumericDomain kTimeVaryingFrameCountDomain
 /// @brief What the frame count of a pitch track's f0 curve accepts.
 inline constexpr sonare::util::check::NumericDomain kF0FrameCountDomain =
     sonare::util::check::integer_domain(1, std::numeric_limits<int>::max());
-/// @brief What a note edit's envelope_offset accepts.
+/// @brief What a note edit's amplitude_envelope_offset accepts.
 inline constexpr sonare::util::check::NumericDomain kEnvelopeOffsetDomain =
     sonare::util::check::integer_domain_of<int64_t>(0);
 /// @brief What a note object's frame_start accepts.

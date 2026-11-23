@@ -32,8 +32,8 @@ inline void ReadNoteEditFields(const Napi::Object& edit, std::vector<float>* env
   out->muted = BoolProperty(edit, "muted", false) ? 1 : 0;
 
   const std::vector<float> envelope = FloatArrayProperty(edit, "amplitudeEnvelope");
-  out->envelope_offset = static_cast<int64_t>(envelopes->size());
-  out->envelope_count = envelope.size();
+  out->amplitude_envelope_offset = static_cast<int64_t>(envelopes->size());
+  out->amplitude_envelope_count = envelope.size();
   envelopes->insert(envelopes->end(), envelope.begin(), envelope.end());
 }
 

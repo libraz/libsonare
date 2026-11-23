@@ -306,19 +306,19 @@ typedef struct {
   int64_t time_offset_samples;
   /// Index of this note's amplitude envelope in the envelope array that travels
   /// with the note set -- @c envelopes on a result, the @c envelopes argument
-  /// on @ref sonare_render_notes. Ignored when @c envelope_count is 0.
+  /// on @ref sonare_render_notes. Ignored when @c amplitude_envelope_count is 0.
   ///
   /// An offset rather than a pointer so that the field means the same thing on
   /// the way in and on the way out: the caller owns the array it passes, the
   /// library owns the one it returns, and neither ever frees the other's.
-  int64_t envelope_offset;
+  int64_t amplitude_envelope_offset;
   /// Number of envelope points, or 0 for no envelope.
   ///
   /// Per-frame linear gain over the note's span, on top of @c gain_db. It is a
   /// set of gain points rather than a signal: it is stretched over whatever
   /// length the note renders at, so it survives a time stretch and need not
   /// match the note's frame count. One entry is a constant gain.
-  size_t envelope_count;
+  size_t amplitude_envelope_count;
   /// Pitch shift of the note in semitones; 0 leaves the pitch alone.
   float pitch_semitones;
   /// Gain applied to the note in dB; 0 leaves the level alone.
@@ -397,7 +397,7 @@ typedef struct {
   float* amplitude;
   /// Number of entries in @c amplitude.
   size_t amplitude_count;
-  /// Amplitude envelopes the notes' edits index through @c envelope_offset.
+  /// Amplitude envelopes the notes' edits index through @c amplitude_envelope_offset.
   /// NULL unless an entry point carried envelopes in: extraction produces
   /// identity edits, so only @ref sonare_split_note and @ref sonare_merge_notes
   /// ever fill this.
@@ -456,8 +456,8 @@ void sonare_free_note_objects_result(SonareNoteObjectsResult* result);
 /// @param envelopes Amplitude envelope points the notes' edits index into, or
 ///        NULL when no note carries one. Caller-owned and only read here. Every
 ///        value must be finite and non-negative, and every note's
-///        @c [envelope_offset, envelope_offset + envelope_count) must lie
-///        inside @p envelope_count.
+///        @c [amplitude_envelope_offset, amplitude_envelope_offset + amplitude_envelope_count) must
+///        lie inside @p envelope_count.
 /// @param envelope_count Number of entries in @p envelopes.
 /// @param f0_hz The F0 track the notes were extracted from, or NULL. Required
 ///        only by @c vibrato_depth_change and @c drift_change, which act on the

@@ -351,28 +351,32 @@ editing::pitch_editor::F0Track make_track(const float* f0_hz, const float* voice
 SonareError read_envelope(const SonareNoteEdit& edit, const std::string& edit_subject,
                           const float* envelopes, size_t envelope_count, std::vector<float>& out) {
   out.clear();
-  if (edit.envelope_count == 0) return SONARE_OK;
+  if (edit.amplitude_envelope_count == 0) return SONARE_OK;
   if (const SonareError err = run_validation([&] {
-        util::check::non_null_when_count(envelopes, edit.envelope_count, "envelopes",
-                                         (edit_subject + "envelope_count").c_str());
-        util::check::integer_within(edit.envelope_offset, kEnvelopeOffsetDomain,
-                                    (edit_subject + "envelope_offset").c_str());
-        if (static_cast<uint64_t>(edit.envelope_offset) > static_cast<uint64_t>(envelope_count)) {
-          util::check::refuse_relation({edit_subject + "envelope_offset", "envelope_count"},
-                                       "{0} must not exceed {1}");
+        util::check::non_null_when_count(envelopes, edit.amplitude_envelope_count, "envelopes",
+                                         (edit_subject + "amplitude_envelope_count").c_str());
+        util::check::integer_within(edit.amplitude_envelope_offset, kEnvelopeOffsetDomain,
+                                    (edit_subject + "amplitude_envelope_offset").c_str());
+        if (static_cast<uint64_t>(edit.amplitude_envelope_offset) >
+            static_cast<uint64_t>(envelope_count)) {
+          util::check::refuse_relation(
+              {edit_subject + "amplitude_envelope_offset", "envelope_count"},
+              "{0} must not exceed {1}");
         }
         // Subtraction rather than offset + count, which would wrap.
-        if (edit.envelope_count > envelope_count - static_cast<size_t>(edit.envelope_offset)) {
+        if (edit.amplitude_envelope_count >
+            envelope_count - static_cast<size_t>(edit.amplitude_envelope_offset)) {
           util::check::refuse_relation(
-              {edit_subject + "envelope_offset", edit_subject + "envelope_count", "envelope_count"},
+              {edit_subject + "amplitude_envelope_offset",
+               edit_subject + "amplitude_envelope_count", "envelope_count"},
               "{0} + {1} must not exceed {2}");
         }
       });
       err != SONARE_OK) {
     return err;
   }
-  const size_t offset = static_cast<size_t>(edit.envelope_offset);
-  out.assign(envelopes + offset, envelopes + offset + edit.envelope_count);
+  const size_t offset = static_cast<size_t>(edit.amplitude_envelope_offset);
+  out.assign(envelopes + offset, envelopes + offset + edit.amplitude_envelope_count);
   return SONARE_OK;
 }
 
@@ -406,8 +410,8 @@ void from_core_edit(const editing::note_model::NoteEdit& edit, int64_t envelope_
                     SonareNoteEdit& out) {
   sonare_note_edit_init(&out);
   out.time_offset_samples = edit.time_offset_samples;
-  out.envelope_offset = envelope_offset;
-  out.envelope_count = edit.amplitude_envelope.size();
+  out.amplitude_envelope_offset = envelope_offset;
+  out.amplitude_envelope_count = edit.amplitude_envelope.size();
   out.pitch_semitones = edit.pitch_shift_semitones;
   out.gain_db = edit.gain_db;
   out.time_stretch_ratio = edit.time_stretch_ratio;

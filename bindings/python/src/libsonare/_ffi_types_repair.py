@@ -663,8 +663,8 @@ class SonareNoteEdit(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("time_offset_samples", ctypes.c_int64),
-        ("envelope_offset", ctypes.c_int64),
-        ("envelope_count", ctypes.c_size_t),
+        ("amplitude_envelope_offset", ctypes.c_int64),
+        ("amplitude_envelope_count", ctypes.c_size_t),
         ("pitch_semitones", ctypes.c_float),
         ("gain_db", ctypes.c_float),
         ("time_stretch_ratio", ctypes.c_float),

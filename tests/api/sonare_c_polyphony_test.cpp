@@ -228,11 +228,11 @@ TEST_CASE("the polyphonic handle reports what the chain found", "[c_api][polypho
       CHECK(note.edit.gain_db == 0.0f);
       CHECK(note.edit.time_offset_samples == 0);
       CHECK(note.edit.muted == 0);
-      CHECK(note.edit.envelope_count == 0);
+      CHECK(note.edit.amplitude_envelope_count == 0);
       // No pool to index through, which the header states rather than leaving to be
       // inferred from a zero that might have been an offset.
       CHECK(note.amplitude_offset == 0);
-      CHECK(note.edit.envelope_offset == 0);
+      CHECK(note.edit.amplitude_envelope_offset == 0);
     }
   }
 
@@ -453,7 +453,7 @@ TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
                                               envelope.size()) == SONARE_OK);
     }
     const std::vector<SonareNoteObject> notes = notes_of(handle.get());
-    CHECK(notes[1].edit.envelope_count == 3);
+    CHECK(notes[1].edit.amplitude_envelope_count == 3);
     // A count whose points cannot be fetched would be a field promising what it
     // cannot deliver, so the points come back and are compared to what went in.
     std::vector<float> back(5, -1.0f);

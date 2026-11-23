@@ -5746,13 +5746,13 @@
       },
       {
         "kind": "signed",
-        "name": "envelope_offset",
+        "name": "amplitude_envelope_offset",
         "offset": 16,
         "size": 8
       },
       {
         "kind": "unsigned",
-        "name": "envelope_count",
+        "name": "amplitude_envelope_count",
         "offset": 24,
         "size": 8
       },

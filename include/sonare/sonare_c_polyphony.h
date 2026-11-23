@@ -20,7 +20,7 @@
 ///
 /// @ref SonareNoteObject and @ref SonareNoteEdit are the monophonic door's, reused
 /// unchanged: an edit means the same thing whichever chain applies it. One field is
-/// inert here and saying so is the contract. @c envelope_offset indexes an array the
+/// inert here and saying so is the contract. @c amplitude_envelope_offset indexes an array the
 /// caller owns in the by-value door, because the field has to mean one thing in both
 /// directions; a handle has no such problem, so @ref sonare_polyphonic_set_note_edit
 /// takes the points and the note keeps its own copy.
@@ -232,8 +232,8 @@ SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analys
 /// @details Each note carries its sample span, its frame span, its median pitch, its
 ///          steadiness and its pending edit. Three fields of the by-value door have
 ///          no offset to report through a handle and are stated rather than left to
-///          be guessed at: @c amplitude_offset and the edit's @c envelope_offset are
-///          always 0, and the edit's @c envelope_count is how many points the note's
+///          be guessed at: @c amplitude_offset and the edit's @c amplitude_envelope_offset are
+///          always 0, and the edit's @c amplitude_envelope_count is how many points the note's
 ///          envelope holds. The curves themselves come from
 ///          @ref sonare_polyphonic_note_f0 and its three siblings, the envelope
 ///          included.
@@ -249,9 +249,9 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
 ///          and the order is the pairing with the claim sets, so neither is settable.
 /// @param note Index below @ref sonare_polyphonic_note_count.
 /// @param edit The new edit, or NULL for the identity edit; otherwise started from
-///        @ref sonare_note_edit_init. Its @c envelope_offset
-///        and @c envelope_count are ignored: the envelope is @p amplitude_envelope here, which
-///        the handle copies, so the caller's array need not outlive this call.
+///        @ref sonare_note_edit_init. Its @c amplitude_envelope_offset
+///        and @c amplitude_envelope_count are ignored: the envelope is @p amplitude_envelope here,
+///        which the handle copies, so the caller's array need not outlive this call.
 /// @param amplitude_envelope Per-frame linear gain points over the note's span, on top of
 ///        @c gain_db, or NULL for none. Stretched over whatever length the note
 ///        renders at, so it survives a time stretch and need not match the note's
@@ -302,7 +302,7 @@ SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* anal
 ///          per-frame signal. The only one of the four curves here that is not a
 ///          measurement -- these are the points a caller handed
 ///          @ref sonare_polyphonic_set_note_edit. Readable because a note reports its
-///          own @c envelope_count, and a count whose points cannot be fetched is a
+///          own @c amplitude_envelope_count, and a count whose points cannot be fetched is a
 ///          field promising what it cannot deliver.
 SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* analysis, size_t note,
                                             float* out, size_t capacity, size_t* out_count);

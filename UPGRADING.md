@@ -678,6 +678,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareClipDetection.sample_fraction` | `SonareClipDetection.clipped_ratio` |
 | `SonareDeclipReport.interpolated_runs` | `SonareDeclipReport.unreconstructed_runs`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs |
 | `SonareDeclipReport.linked_runs` | 0 unless config.link_channels is set on a multichannel entry point |
+| `SonareNoteEdit.envelope_count` | `SonareNoteEdit.amplitude_envelope_count` |
+| `SonareNoteEdit.envelope_offset` | `SonareNoteEdit.amplitude_envelope_offset` |
 | `SonareRirSynthConfig.absorption_band_count` | `SonareRirSynthConfig.band_absorption_count` |
 | `SonareRirSynthConfig.absorption_bands` | `SonareRirSynthConfig.band_absorption` |
 | `SonareRirSynthConfig.late_model` | `SonareRirSynthConfig.prefer_eyring` |

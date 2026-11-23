@@ -831,10 +831,10 @@ SonareError probe_render_notes(const std::string& param, double value) {
     n_frames = kTrackFrames;
     note_count = 1;
     note.frame_start = static_cast<int32_t>(value);
-  } else if (is_param(param, "notes[].edit.envelope_offset")) {
+  } else if (is_param(param, "notes[].edit.amplitude_envelope_offset")) {
     note_count = 1;
-    note.edit.envelope_count = 1;
-    note.edit.envelope_offset = as_i64(value);
+    note.edit.amplitude_envelope_count = 1;
+    note.edit.amplitude_envelope_offset = as_i64(value);
   }
   float* out = nullptr;
   size_t out_length = 0;
@@ -859,9 +859,9 @@ SonareError probe_split_note(const std::string& param, double value) {
   SonareNoteObject note = make_note(0, 4);
   size_t n_frames = kTrackFrames;
   if (is_param(param, "n_frames")) n_frames = as_size(value);
-  if (is_param(param, "notes[].edit.envelope_offset")) {
-    note.edit.envelope_count = 1;
-    note.edit.envelope_offset = as_i64(value);
+  if (is_param(param, "notes[].edit.amplitude_envelope_offset")) {
+    note.edit.amplitude_envelope_count = 1;
+    note.edit.amplitude_envelope_offset = as_i64(value);
   }
   SonareNoteObjectsResult out{};
   const SonareError err =
@@ -877,9 +877,9 @@ SonareError probe_merge_notes(const std::string& param, double value) {
   std::array<SonareNoteObject, 2> notes{make_note(0, 2), make_note(2, 4)};
   size_t n_frames = kTrackFrames;
   if (is_param(param, "n_frames")) n_frames = as_size(value);
-  if (is_param(param, "notes[].edit.envelope_offset")) {
-    notes[0].edit.envelope_count = 1;
-    notes[0].edit.envelope_offset = as_i64(value);
+  if (is_param(param, "notes[].edit.amplitude_envelope_offset")) {
+    notes[0].edit.amplitude_envelope_count = 1;
+    notes[0].edit.amplitude_envelope_offset = as_i64(value);
   }
   SonareNoteObjectsResult out{};
   const SonareError err = sonare_merge_notes(

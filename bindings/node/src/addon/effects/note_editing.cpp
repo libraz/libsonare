@@ -188,15 +188,15 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const SonareNoteObjectsResult& result
     const SonareNoteObject& note = result.notes[i];
     // Each note is given its own copy of both slices, so neither pool offset
     // ever reaches JS.
-    const size_t envelope_count = note.edit.envelope_count;
-    RequireSliceInRange("amplitudeEnvelope", note.edit.envelope_offset,
+    const size_t envelope_count = note.edit.amplitude_envelope_count;
+    RequireSliceInRange("amplitudeEnvelope", note.edit.amplitude_envelope_offset,
                         static_cast<int64_t>(envelope_count), result.envelope_count);
     const int64_t span = note.frame_end - note.frame_start;
     RequireSliceInRange("amplitude", note.amplitude_offset, span, result.amplitude_count);
     notes.Set(static_cast<uint32_t>(i),
-              NoteObjectToJs(env, note, result.amplitude + note.amplitude_offset,
-                             static_cast<size_t>(span),
-                             result.envelopes + note.edit.envelope_offset, envelope_count));
+              NoteObjectToJs(
+                  env, note, result.amplitude + note.amplitude_offset, static_cast<size_t>(span),
+                  result.envelopes + note.edit.amplitude_envelope_offset, envelope_count));
   }
   return notes;
 }

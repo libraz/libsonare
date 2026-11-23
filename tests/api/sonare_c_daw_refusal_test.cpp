@@ -507,19 +507,22 @@ TEST_CASE("split and merge refuse their indices, notes and edits by name",
 
   const float pool[2] = {1.0f, 1.0f};
   SonareNoteObject edited = note;
-  edited.edit.envelope_count = 2;
+  edited.edit.amplitude_envelope_count = 2;
   CHECK(split(&edited, 1, nullptr, 2, 0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "envelopes must not be NULL when notes[0].edit.envelope_count is not 0");
-  edited.edit.envelope_offset = -1;
-  CHECK(split(&edited, 1, pool, 2, 0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "notes[0].edit.envelope_offset must be an integer of at least 0");
-  edited.edit.envelope_offset = 3;
-  CHECK(split(&edited, 1, pool, 2, 0) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "notes[0].edit.envelope_offset must not exceed envelope_count");
-  edited.edit.envelope_offset = 1;
+  CHECK(last_message() ==
+        "envelopes must not be NULL when notes[0].edit.amplitude_envelope_count is not 0");
+  edited.edit.amplitude_envelope_offset = -1;
   CHECK(split(&edited, 1, pool, 2, 0) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
-        "notes[0].edit.envelope_offset + notes[0].edit.envelope_count must not exceed "
+        "notes[0].edit.amplitude_envelope_offset must be an integer of at least 0");
+  edited.edit.amplitude_envelope_offset = 3;
+  CHECK(split(&edited, 1, pool, 2, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "notes[0].edit.amplitude_envelope_offset must not exceed envelope_count");
+  edited.edit.amplitude_envelope_offset = 1;
+  CHECK(split(&edited, 1, pool, 2, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() ==
+        "notes[0].edit.amplitude_envelope_offset + notes[0].edit.amplitude_envelope_count must not "
+        "exceed "
         "envelope_count");
 
   SonareNoteObject invalid = note;
