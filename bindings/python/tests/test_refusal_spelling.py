@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import libsonare
-from libsonare import SonareError
+from libsonare import SonareError, SonareValueError
 from libsonare._field_spelling import DOCUMENT_ROOTS, OVERRIDES
 
 _SR = 22050
@@ -302,11 +302,16 @@ def _strip_document_call(entry: str) -> Callable[[dict[str, Any]], None]:
 
 
 @pytest.mark.parametrize(("entry", "prefix", "root"), DOCUMENT_ROOTS)
-def test_a_strip_document_refusal_names_the_settings_mapping(
+def test_a_strip_document_refusal_is_a_refused_settings_argument(
     entry: str, prefix: str, root: str
 ) -> None:
     call = _strip_document_call(entry)
-    with pytest.raises(SonareError, match=rf": unknown key {re.escape(root)}faderDB$"):
-        call({"id": "1", "faderDB": 0})
-    with pytest.raises(SonareError, match=rf": {re.escape(root)}pan must be a number$"):
-        call({"id": "1", "pan": "left"})
+    for settings, cause in (
+        ({"id": "1", "faderDB": 0}, f"unknown key {root}faderDB"),
+        ({"id": "1", "pan": "left"}, f"{root}pan must be a number"),
+        ({"id": "1", "pan": 2.0}, f"{root}pan must be finite and in [-1, 1]"),
+    ):
+        with pytest.raises(SonareValueError) as refused:
+            call(settings)
+        assert str(refused.value).endswith(f": {cause}"), str(refused.value)
+        assert refused.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)

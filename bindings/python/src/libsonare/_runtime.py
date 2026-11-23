@@ -29,7 +29,7 @@ from ._errors import ErrorCodeName as ErrorCodeName
 from ._errors import SonareError as SonareError
 from ._errors import SonareValueError as SonareValueError
 from ._ffi import *  # noqa: F403
-from ._field_spelling import surface_spelling
+from ._field_spelling import document_rooted, surface_spelling
 from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
 from ._narrowing import _INT64_MAX as _INT64_MAX
 from ._narrowing import _INT64_MIN as _INT64_MIN
@@ -107,18 +107,20 @@ def _strip_c_entry(message: str) -> str:
     return message[match.end() :]
 
 
-def _coded_error(code: int, message: str) -> SonareError:
+def _coded_error(code: int, message: str, *, argument: bool = False) -> SonareError:
     """Build the exception for a C-ABI failure, split by cause.
 
     InvalidParameter is always a refused caller argument, so it is a
-    :class:`SonareValueError` with the plain message; every other code is a coded
-    :class:`SonareError`. Either way the calling entry prefixes its name on the way out,
-    in place of a C entry name the text opened with.
+    :class:`SonareValueError` with the plain message, and so is a refusal ``argument``
+    marks: a document path inside the mapping the entry wrapped into the document it
+    handed the C ABI. Every other code is a coded :class:`SonareError`. Either way the
+    calling entry prefixes its name on the way out, in place of a C entry name the text
+    opened with.
     """
     message = _strip_c_entry(message)
     exc = (
         SonareValueError(message)
-        if code == int(ErrorCode.INVALID_PARAMETER)
+        if argument or code == int(ErrorCode.INVALID_PARAMETER)
         else SonareError(code, message)
     )
     setattr(exc, _BARE_TEXT, message)
@@ -131,14 +133,16 @@ _PRESENCE_SPELLING_PYTHON = 1
 
 def _render_as_given(
     lib: Any, root: str | None, respelled: Mapping[str, _Respelling] | None
-) -> str | None:
+) -> tuple[str, bool] | None:
     """Render the last parameter refusal under the names, units and None the caller wrote.
 
     ``root.`` is dropped from each subject under it. A subject ``respelled`` names is then
     replaced by the spelling the caller gave, with its domain in the caller's unit when the
     respelling carries a scale; any other subject takes the refused entry's Python spelling
-    from the generated table. A value left out or supplied reads as None / not None. None
-    when no parameter refusal is recorded, so the caller keeps the message it read.
+    from the generated table. A value left out or supplied reads as None / not None. The
+    flag is whether a subject lay in the slot of a document the entry built around the
+    caller's mapping. None when no parameter refusal is recorded, so the caller keeps the
+    message it read.
     """
     count = lib.sonare_last_refusal_subject_count()
     if count == 0:
@@ -146,6 +150,7 @@ def _render_as_given(
     entry = (lib.sonare_last_refusal_entry() or b"").decode("utf-8")
     subjects = []
     scales = []
+    in_argument = False
     for index in range(count):
         raw = lib.sonare_last_refusal_subject(_to_c_size_t(index, "index"))
         recorded = (raw or b"").decode("utf-8")
@@ -159,6 +164,9 @@ def _render_as_given(
         if given is not None:
             subject = given.name
             scale = 1.0 if given.scale is None else given.scale
+        elif (rooted := document_rooted(entry, subject)) is not None:
+            subject = rooted
+            in_argument = True
         else:
             subject = surface_spelling(entry, subject)
         subjects.append(_utf8_arg(subject, "subject"))
@@ -177,7 +185,7 @@ def _render_as_given(
     ):
         return None
     try:
-        return ctypes.string_at(out).decode("utf-8")
+        return ctypes.string_at(out).decode("utf-8"), in_argument
     finally:
         lib.sonare_free_string(out)
 
@@ -206,9 +214,11 @@ def _check(
         lib = _get_lib()
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
-        detail_str = _render_as_given(lib, flattened, respelled) or detail_str
+        rendered = _render_as_given(lib, flattened, respelled)
+        argument = rendered is not None and rendered[1]
+        detail_str = (rendered[0] if rendered is not None else "") or detail_str
         if detail_str:
-            raise _coded_error(rc, detail_str)
+            raise _coded_error(rc, detail_str, argument=argument)
         raise _generic_error(rc)
 
 
@@ -239,8 +249,13 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
     code = int(lib.sonare_last_error_code())
     raw = lib.sonare_last_error_message()
     detail = raw.decode("utf-8", errors="replace") if raw else ""
-    detail = _strip_c_entry(_render_as_given(lib, None, None) or detail)
-    return _coded_error(code if code != SONARE_OK else default_code, detail or fallback_message)
+    rendered = _render_as_given(lib, None, None)
+    detail = _strip_c_entry((rendered[0] if rendered is not None else "") or detail)
+    return _coded_error(
+        code if code != SONARE_OK else default_code,
+        detail or fallback_message,
+        argument=rendered is not None and rendered[1],
+    )
 
 
 def _last_diagnostics() -> list[tuple[str, str, int]]:

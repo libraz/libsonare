@@ -318,10 +318,10 @@ _STRIP = '{"version":1,"strips":[{"id":"track-10",%s}],"buses":[],"connections":
     ],
 )
 def test_strip_scene_refuses_earlier_spellings(strip_fields: str, current: str) -> None:
-    """Earlier spellings of a strip document are refused as an invalid document."""
+    """Earlier spellings inside the strip settings are refused as a refused argument."""
     with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
-        with raises_coded(int(ErrorCode.INVALID_FORMAT), match=current):
+        with raises_coded(int(ErrorCode.INVALID_PARAMETER), match=current):
             engine.set_strip(10, scene_strip(_STRIP % strip_fields))
 
 

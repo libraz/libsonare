@@ -32,10 +32,9 @@ def test_engine_strip_setters_refuse_an_unknown_key() -> None:
             lambda: engine.set_strip(10, scene_strip(_TYPO_STRIP)),
             lambda: engine.set_strip("master", scene_strip(_TYPO_STRIP)),
         ):
-            with pytest.raises(SonareError) as refused:
+            with pytest.raises(SonareValueError) as refused:
                 call()
-            assert not isinstance(refused.value, SonareValueError)
-            assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
+            assert refused.value.code == int(ErrorCode.INVALID_PARAMETER)
             assert "unknown key settings.faderDB" in str(refused.value)
         annotated = '{"$schema":"s","version":2,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}'
         engine.set_strip(10, scene_strip(annotated))

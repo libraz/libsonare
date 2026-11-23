@@ -195,8 +195,8 @@ DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def surface_spelling(entry: str, subject: str) -> str:
-    """The Python caller's spelling of ``subject`` on C entry ``entry`` (no sonare_ prefix)."""
+def document_rooted(entry: str, subject: str) -> str | None:
+    """``subject`` under the caller's root when it lies in entry ``entry``'s document slot."""
     for root_entry, prefix, root in DOCUMENT_ROOTS:
         if root_entry != entry:
             continue
@@ -204,6 +204,14 @@ def surface_spelling(entry: str, subject: str) -> str:
             return root + subject[len(prefix) :]
         if subject == prefix[:-1]:
             return root[:-1]
+    return None
+
+
+def surface_spelling(entry: str, subject: str) -> str:
+    """The Python caller's spelling of ``subject`` on C entry ``entry`` (no sonare_ prefix)."""
+    rooted = document_rooted(entry, subject)
+    if rooted is not None:
+        return rooted
     quotient = QUOTIENTS.get((entry, subject))
     if quotient is not None:
         return f"{quotient[0]} length / {quotient[1]}"
