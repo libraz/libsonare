@@ -100,8 +100,8 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
             "vibrato_threshold_cents",
             scale_reference_midi="reference_midi",
         ),
+        # The pYIN decision alone: the library refuses voiced flags and voiced_prob together.
         voiced=[int(value) for value in track.voiced_flag],
-        voiced_prob=track.voiced_prob,
     )
     return _emit_effect_result(args, [result], sr, label="Time-varying pitch correct")
 
