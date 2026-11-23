@@ -742,8 +742,9 @@ describe('SonareWorkletProcessor', () => {
       const outL = new Float32Array(blockSize);
       const outR = new Float32Array(blockSize);
       expect(instance.process([[vocalL, vocalR]], [[outL, outR]])).toBe(true);
-      expect(instance.port.posted).toHaveLength(1);
-      expect(instance.port.posted[0]).toMatchObject({ type: 'meter', frame: blockSize });
+      expect(instance.port.posted).toHaveLength(2);
+      expect(instance.port.posted[0]).toEqual({ type: 'ready', runtimeTarget: 'embind' });
+      expect(instance.port.posted[1]).toMatchObject({ type: 'meter', frame: blockSize });
       instance.port.onmessage?.({ data: { type: 'destroy' } });
     } finally {
       Object.assign(globalThis, {

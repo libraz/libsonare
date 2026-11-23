@@ -122,4 +122,28 @@ describe('init() in an AudioWorkletGlobalScope', () => {
     expect(posted.find((message) => message.type === 'error')).toBeUndefined();
     expect(worklet.isInitialized()).toBe(true);
   });
+
+  it('posts ready from a mixer processor constructed after another one initialised the realm', async () => {
+    // Runs after the case above, which left this realm's module initialised.
+    expect(worklet.isInitialized()).toBe(true);
+    const createModule = (await import('../dist/sonare.js')).default;
+    const posted: Posted[] = [];
+    type Ctor = new (options: unknown) => unknown;
+    const registered: { ctor?: Ctor } = {};
+    Object.assign(scope, {
+      AudioWorkletProcessor: class {
+        port = { postMessage: (message: Posted) => posted.push(message) };
+      },
+      registerProcessor: (_name: string, ctor: unknown) => {
+        registered.ctor = ctor as Ctor;
+      },
+    });
+    worklet.registerSonareWorkletProcessor('sonare-test-realm-second');
+    const sceneJson = (await createModule()).mixingScenePresetJson('vocalReverbSend');
+    new (registered.ctor as Ctor)({
+      processorOptions: { sceneJson, sampleRate: 48000, maxBlockSize: 128 },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(posted).toEqual([{ type: 'ready', runtimeTarget: 'embind' }]);
+  });
 });

@@ -508,6 +508,7 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
         };
         if (isEmbindReady()) {
           start();
+          port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
         } else {
           // The module is not initialized in this realm: build it the way the
           // realtime engine processor does, then construct the mixer.
