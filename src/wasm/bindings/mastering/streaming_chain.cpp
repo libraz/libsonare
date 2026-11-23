@@ -5,6 +5,7 @@
 
 #include <limits>
 
+#include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
 // ---------------------------------------------------------------------------
@@ -65,8 +66,9 @@ class StreamingMasteringChainWrapper {
 
   val processMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
-    validateBlockLength(length);
+    validateBlockLength(length, "samples");
     std::vector<float> block = float32ArrayToVector(samples, "samples");
+    validateFinite(block, "samples");
     if (!block.empty()) {
       float* channels[] = {block.data()};
       chain_.process_block(channels, 1, static_cast<int>(block.size()));
@@ -77,9 +79,11 @@ class StreamingMasteringChainWrapper {
   val processStereo(val left_samples, val right_samples) {
     validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
     const std::size_t length = wasmFloat32ArrayLength(left_samples, "left");
-    validateBlockLength(length);
+    validateBlockLength(length, "left");
     std::vector<float> left = float32ArrayToVector(left_samples, "left");
     std::vector<float> right = float32ArrayToVector(right_samples, "right");
+    validateFinite(left, "left");
+    validateFinite(right, "right");
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
       chain_.process_block(channels, 2, static_cast<int>(left.size()));
@@ -150,10 +154,18 @@ class StreamingMasteringChainWrapper {
     }
   }
 
-  void validateBlockLength(std::size_t length) const {
+  // Refuses a block longer than the prepared maximum by the caller's array, as the C ABI does.
+  void validateBlockLength(std::size_t length, const char* array) const {
     if (max_block_size_ > 0 && length > static_cast<std::size_t>(max_block_size_)) {
-      throw WasmRangeError("process block exceeds prepared maxBlockSize");
+      throw WasmRangeError(std::string(array) + ".length " +
+                           sonare::util::refusal::integer_range_predicate(
+                               0.0, static_cast<double>(max_block_size_)));
     }
+  }
+
+  // Refuses a block holding a non-finite sample by the caller's array, as the C ABI does.
+  static void validateFinite(const std::vector<float>& block, const char* array) {
+    sonare::validate_offline_audio_samples(array, block.data(), block.size(), 0);
   }
 
   mastering::api::StreamingMasteringChain chain_;

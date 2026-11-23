@@ -701,7 +701,9 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
     try {
       expect(() => retune.processMono(new Float32Array(64))).toThrow(/prepared/);
       retune.prepare(48000, 64);
-      expect(() => retune.processMono(new Float32Array(65))).toThrow(/maxBlockSize/);
+      expect(() => retune.processMono(new Float32Array(65))).toThrow(
+        new RangeError('StreamingRetune.processMono: samples.length must be an integer in [0, 64]'),
+      );
       expect(retune.processMono(new Float32Array(64))).toHaveLength(64);
     } finally {
       retune.destroy();

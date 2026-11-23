@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "c_api/mastering_input_domains.h"
+#include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
 // Included after common.h, which opens `using namespace sonare` for the
@@ -151,7 +152,7 @@ class EqualizerWrapper {
   // buffer so they remain valid until the next set/clear call.
   void setSidechainMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
-    validateBlockLength(length, "sidechain");
+    validateBlockLength(length, "samples");
     std::vector<float> staged_left = float32ArrayToVector(samples, "samples");
     if (staged_left.empty()) return clearSidechain();
     validateSidechainBuffer("samples", staged_left);
@@ -174,7 +175,7 @@ class EqualizerWrapper {
       throw WasmRangeError("left and right must have the same length");
     }
     if (left_length == 0) return clearSidechain();
-    validateBlockLength(left_length, "sidechain");
+    validateBlockLength(left_length, "left");
 
     std::vector<float> staged_left = float32ArrayToVector(left_samples, "left");
     std::vector<float> staged_right = float32ArrayToVector(right_samples, "right");
@@ -205,7 +206,7 @@ class EqualizerWrapper {
 
   val processMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "samples");
-    validateBlockLength(length, "process block");
+    validateBlockLength(length, "samples");
     std::vector<float> block = float32ArrayToVector(samples, "samples");
     if (!block.empty()) {
       float* channels[] = {block.data()};
@@ -221,7 +222,7 @@ class EqualizerWrapper {
     if (left_length != right_length) {
       throw WasmRangeError("left and right must have the same length");
     }
-    validateBlockLength(left_length, "process block");
+    validateBlockLength(left_length, "left");
     std::vector<float> left = float32ArrayToVector(left_samples, "left");
     std::vector<float> right = float32ArrayToVector(right_samples, "right");
     if (!left.empty()) {
@@ -297,9 +298,12 @@ class EqualizerWrapper {
   }
 
  private:
-  void validateBlockLength(std::size_t length, const char* subject) const {
+  // Refuses a block longer than the prepared maximum by the caller's array, as the C ABI does.
+  void validateBlockLength(std::size_t length, const char* array) const {
     if (length > static_cast<std::size_t>(max_block_size_)) {
-      throw WasmRangeError(std::string(subject) + " exceeds prepared maxBlockSize");
+      throw WasmRangeError(std::string(array) + ".length " +
+                           sonare::util::refusal::integer_range_predicate(
+                               0.0, static_cast<double>(max_block_size_)));
     }
   }
 

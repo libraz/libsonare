@@ -20,6 +20,7 @@
 #include "mastering/match/match_eq.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/refusal_predicates.h"
 
 namespace sonare_node {
 
@@ -106,6 +107,21 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.dyn.sidechain_freq_hz = FloatProperty(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz);
   band.dyn.sidechain_q = FloatProperty(object, "sidechainQ", band.dyn.sidechain_q);
   return band;
+}
+
+// Refuses a block longer than the prepared maximum by the caller's array, as the C ABI does.
+void RefuseBlockLength(Napi::Env env, const char* array, size_t length, int max_block_size) {
+  if (max_block_size > 0 && length > static_cast<size_t>(max_block_size)) {
+    throw Napi::RangeError::New(env, std::string(array) + ".length " +
+                                         sonare::util::refusal::integer_range_predicate(
+                                             0.0, static_cast<double>(max_block_size)));
+  }
+}
+
+// Refuses a block holding a non-finite sample by the caller's array, as the C ABI does.
+void RefuseNonFinite(const char* array, const Napi::Float32Array& samples) {
+  sonare::validate_offline_audio_samples(array, sonare_node::ElementData(samples),
+                                         samples.ElementLength(), 0);
 }
 
 }  // namespace
@@ -227,6 +243,8 @@ Napi::Value StreamingMasteringChainWrap::ProcessMono(const Napi::CallbackInfo& i
   SONARE_NODE_TRY
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
   size_t length = typed.ElementLength();
+  RefuseBlockLength(env, "samples", length, max_block_size_);
+  RefuseNonFinite("samples", typed);
   Napi::Float32Array out_arr = Napi::Float32Array::New(env, length);
   if (length > 0) {
     std::memcpy(sonare_node::ElementData(out_arr), sonare_node::ElementData(typed),
@@ -252,6 +270,9 @@ Napi::Value StreamingMasteringChainWrap::ProcessStereo(const Napi::CallbackInfo&
     return env.Undefined();
   }
   size_t length = left.ElementLength();
+  RefuseBlockLength(env, "left", length, max_block_size_);
+  RefuseNonFinite("left", left);
+  RefuseNonFinite("right", right);
   Napi::Float32Array left_out = Napi::Float32Array::New(env, length);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, length);
   if (length > 0) {
@@ -556,6 +577,7 @@ Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& i
   // every later process() call, and a JS ArrayBuffer can be detached or
   // transferred the moment this setter returns.
   Napi::Float32Array key = info[0].As<Napi::Float32Array>();
+  RefuseBlockLength(env, "samples", key.ElementLength(), eq_->max_block_size());
   std::vector<float> staged(sonare_node::ElementData(key),
                             sonare_node::ElementData(key) + key.ElementLength());
   if (staged.empty()) {
@@ -586,6 +608,7 @@ Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo&
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  RefuseBlockLength(env, "left", left.ElementLength(), eq_->max_block_size());
   // Copy both channels before the core is given any pointer, for the same
   // detach reason as the mono setter.
   std::vector<float> staged_left(sonare_node::ElementData(left),
@@ -664,6 +687,7 @@ Napi::Value StreamingEqualizerWrap::ProcessMono(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
   size_t length = typed.ElementLength();
+  RefuseBlockLength(env, "samples", length, eq_->max_block_size());
   Napi::Float32Array out_arr = Napi::Float32Array::New(env, length);
   if (length > 0) {
     std::memcpy(sonare_node::ElementData(out_arr), sonare_node::ElementData(typed),
@@ -689,6 +713,7 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   size_t length = left.ElementLength();
+  RefuseBlockLength(env, "left", length, eq_->max_block_size());
   Napi::Float32Array left_out = Napi::Float32Array::New(env, length);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, length);
   if (length > 0) {

@@ -6,6 +6,8 @@
 #include <cmath>
 #include <string>
 
+#include "util/numeric_validation.h"
+#include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
 
 // ---------------------------------------------------------------------------
@@ -93,14 +95,9 @@ class StreamingRetuneWrapper {
     ensurePrepared();
     validateBlockLength(length);
     std::vector<float> block = float32ArrayToVector(samples, "samples");
-    // Refuse a non-finite sample rather than zeroing it. Zeroing kept the grain
-    // history clean but told the caller nothing, so a block silently became a
-    // different block; the C ABI reports it, and a surface that quietly repairs
-    // its input is the asymmetry that keeps regrowing here.
-    for (std::size_t i = 0; i < block.size(); ++i) {
-      if (!std::isfinite(block[i])) {
-        throw WasmRangeError("samples contains a non-finite sample at index " + std::to_string(i));
-      }
+    // Refuse a non-finite sample rather than zeroing it, in the C ABI's words.
+    if (!sonare::numeric::all_finite(block.data(), block.size())) {
+      throw WasmRangeError("samples must contain only finite samples");
     }
     std::vector<float> out(block.size());
     retune_.process_block(block.data(), out.data(), static_cast<int>(block.size()));
@@ -120,7 +117,8 @@ class StreamingRetuneWrapper {
 
   void validateBlockLength(std::size_t length) const {
     if (length > static_cast<std::size_t>(max_block_size_)) {
-      throw WasmRangeError("process block exceeds prepared maxBlockSize");
+      throw WasmRangeError("samples.length " + sonare::util::refusal::integer_range_predicate(
+                                                   0.0, static_cast<double>(max_block_size_)));
     }
   }
 

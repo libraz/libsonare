@@ -4,7 +4,16 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePreset, Project, RealtimeEngine } from '../dist/index.js';
+import {
+  init,
+  Mixer,
+  mixingScenePreset,
+  Project,
+  RealtimeEngine,
+  StreamingEqualizer,
+  StreamingMasteringChain,
+  StreamingRetune,
+} from '../dist/index.js';
 import { type ArgumentRefusalClass, expectRefusalOf } from './_helpers';
 
 const SIZE_T_TEXT =
@@ -98,6 +107,86 @@ describe('runtime refusal parity (WASM)', () => {
       );
     } finally {
       mixer.destroy();
+    }
+  });
+  it('refuses a streaming block past the prepared maximum, and a non-finite chain block, in the C ABI words', () => {
+    const tooLong = new Float32Array(129);
+    const nonFinite = new Float32Array(64);
+    nonFinite[5] = Number.NaN;
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 128 });
+    const mono = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      numChannels: 1,
+    });
+    const stereo = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      numChannels: 2,
+    });
+    const retune = new StreamingRetune();
+    try {
+      const range = 'must be an integer in [0, 128]';
+      expectRefusal(
+        () => eq.processMono(tooLong),
+        RangeError,
+        exactly(`StreamingEqualizer.processMono: samples.length ${range}`),
+      );
+      expectRefusal(
+        () => eq.processStereo(tooLong, tooLong),
+        RangeError,
+        exactly(`StreamingEqualizer.processStereo: left.length ${range}`),
+      );
+      expectRefusal(
+        () => eq.setSidechainMono(tooLong),
+        RangeError,
+        exactly(`StreamingEqualizer.setSidechainMono: samples.length ${range}`),
+      );
+      expectRefusal(
+        () => eq.setSidechainStereo(tooLong, tooLong),
+        RangeError,
+        exactly(`StreamingEqualizer.setSidechainStereo: left.length ${range}`),
+      );
+      expectRefusal(
+        () => mono.processMono(tooLong),
+        RangeError,
+        exactly(`StreamingMasteringChain.processMono: samples.length ${range}`),
+      );
+      expectRefusal(
+        () => stereo.processStereo(tooLong, tooLong),
+        RangeError,
+        exactly(`StreamingMasteringChain.processStereo: left.length ${range}`),
+      );
+      expectRefusal(
+        () => mono.processMono(nonFinite),
+        RangeError,
+        exactly(
+          'StreamingMasteringChain.processMono: samples contains a non-finite sample at index 5',
+        ),
+      );
+      expectRefusal(
+        () => stereo.processStereo(new Float32Array(64), nonFinite),
+        RangeError,
+        exactly(
+          'StreamingMasteringChain.processStereo: right contains a non-finite sample at index 5',
+        ),
+      );
+      retune.prepare(48000, 128);
+      expectRefusal(
+        () => retune.processMono(tooLong),
+        RangeError,
+        exactly(`StreamingRetune.processMono: samples.length ${range}`),
+      );
+      expectRefusal(
+        () => retune.processMono(nonFinite),
+        RangeError,
+        exactly('StreamingRetune.processMono: samples must contain only finite samples'),
+      );
+    } finally {
+      retune.destroy();
+      stereo.destroy();
+      mono.destroy();
+      eq.destroy();
     }
   });
 });
