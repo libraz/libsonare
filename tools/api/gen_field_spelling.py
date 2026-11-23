@@ -294,11 +294,10 @@ inline constexpr std::array<Quotient, {len(quotients)}> kQuotients = {{{{{_cpp_q
 template <typename Row, std::size_t N>
 inline const Row* Find(const std::array<Row, N>& table, std::string_view entry,
                        std::string_view subject) {{
-  const auto it =
-      std::lower_bound(table.begin(), table.end(), entry,
-                       [subject](const Row& a, std::string_view key) {{
-                         return a.entry != key ? a.entry < key : a.subject < subject;
-                       }});
+  const auto it = std::lower_bound(table.begin(), table.end(), entry,
+                                   [subject](const Row& a, std::string_view key) {{
+                                     return a.entry != key ? a.entry < key : a.subject < subject;
+                                   }});
   return it != table.end() && it->entry == entry && it->subject == subject ? &*it : nullptr;
 }}
 
