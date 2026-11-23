@@ -621,13 +621,13 @@ SonareError sonare_engine_set_part_rig(SonareEngine* engine, uint32_t destinatio
   if (mode == kChainMode && inserts_json == nullptr) {
     return run_validation([&] {
       util::check::refuse_relation({"inserts_json", "mode"},
-                                   "{0} must not be NULL when {1} is chain");
+                                   "{0} {must_be_present} when {1} is chain");
     });
   }
   if (mode != kChainMode && inserts_json != nullptr) {
     return run_validation([&] {
       util::check::refuse_relation({"inserts_json", "mode"},
-                                   "{0} must be NULL unless {1} is chain");
+                                   "{0} {must_be_absent} unless {1} is chain");
     });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)

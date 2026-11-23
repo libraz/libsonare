@@ -93,20 +93,24 @@ TEST_CASE("a refused sample position renders its domain in the unit its caller g
           SONARE_ERROR_INVALID_PARAMETER);
   const char* seconds[] = {"target_onset_sec"};
   const double rate[] = {static_cast<double>(kRate)};
-  REQUIRE(sonare_last_refusal_render(seconds, rate, 1, &text) == SONARE_OK);
+  REQUIRE(sonare_last_refusal_render(seconds, rate, 1, SONARE_PRESENCE_SPELLING_C, &text) ==
+          SONARE_OK);
   CHECK(std::string(text) == "target_onset_sec must be finite and in [0, 0.09283]");
   sonare_free_string(text);
   const double exact[] = {2047.0};
-  REQUIRE(sonare_last_refusal_render(seconds, exact, 1, &text) == SONARE_OK);
+  REQUIRE(sonare_last_refusal_render(seconds, exact, 1, SONARE_PRESENCE_SPELLING_C, &text) ==
+          SONARE_OK);
   CHECK(std::string(text) == "target_onset_sec must be finite and in [0, 1]");
   sonare_free_string(text);
   const double unscaled[] = {1.0};
-  REQUIRE(sonare_last_refusal_render(seconds, unscaled, 1, &text) == SONARE_OK);
+  REQUIRE(sonare_last_refusal_render(seconds, unscaled, 1, SONARE_PRESENCE_SPELLING_C, &text) ==
+          SONARE_OK);
   CHECK(std::string(text) == "target_onset_sec must be an integer in [0, 2047]");
   sonare_free_string(text);
   for (const double bad : {0.0, -1.0, std::numeric_limits<double>::infinity()}) {
     const double scale[] = {bad};
-    CHECK(sonare_last_refusal_render(seconds, scale, 1, &text) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_refusal_render(seconds, scale, 1, SONARE_PRESENCE_SPELLING_C, &text) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK(text == nullptr);
   }
 
@@ -114,7 +118,8 @@ TEST_CASE("a refused sample position renders its domain in the unit its caller g
           SONARE_ERROR_INVALID_PARAMETER);
   const char* pair[] = {"offset_sec", "onset_sec"};
   const double rates[] = {static_cast<double>(kRate), static_cast<double>(kRate)};
-  REQUIRE(sonare_last_refusal_render(pair, rates, 2, &text) == SONARE_OK);
+  REQUIRE(sonare_last_refusal_render(pair, rates, 2, SONARE_PRESENCE_SPELLING_C, &text) ==
+          SONARE_OK);
   CHECK(std::string(text) == "offset_sec must be greater than onset_sec");
   sonare_free_string(text);
 }
@@ -576,6 +581,35 @@ TEST_CASE("the note-target entries refuse their arguments by name", "[c_api][eng
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_message() ==
         "targets[0].target_midi must be finite and in [-3.4028235e38, 3.4028235e38]");
+}
+
+TEST_CASE("a refusal of a value left out renders NULL, None or omitted by the spelling asked for",
+          "[c_api][engine_refusal]") {
+  const int32_t voiced[] = {1, 1};
+  SonarePitchDecompositionResult result{};
+  REQUIRE(sonare_decompose_note_pitch(nullptr, voiced, 2, 100.0f, 0.0f, 5.0f, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_message() == "f0_hz must not be NULL when voiced is not NULL");
+  const char* subjects[] = {"f0_hz", "voiced"};
+  const struct {
+    SonarePresenceSpelling spelling;
+    const char* text;
+  } kRows[] = {
+      {SONARE_PRESENCE_SPELLING_C, "f0_hz must not be NULL when voiced is not NULL"},
+      {SONARE_PRESENCE_SPELLING_PYTHON, "f0_hz must not be None when voiced is not None"},
+      {SONARE_PRESENCE_SPELLING_JS, "f0_hz must be given when voiced is given"},
+  };
+  for (const auto& row : kRows) {
+    char* text = nullptr;
+    REQUIRE(sonare_last_refusal_render(subjects, nullptr, 2, row.spelling, &text) == SONARE_OK);
+    CHECK(std::string(text) == row.text);
+    sonare_free_string(text);
+  }
+  char* text = reinterpret_cast<char*>(0x1);
+  CHECK(sonare_last_refusal_render(subjects, nullptr, 2, static_cast<SonarePresenceSpelling>(3),
+                                   &text) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(text == nullptr);
+  CHECK(last_message() == "f0_hz must not be NULL when voiced is not NULL");
 }
 
 #endif  // defined(SONARE_WITH_PITCH_EDITOR)

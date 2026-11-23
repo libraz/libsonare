@@ -124,6 +124,21 @@ def test_invalid_input_is_refused():
         assert project.part_rig(DESTINATION, 0) is None
 
 
+@pytest.mark.parametrize(
+    ("mode", "inserts", "predicate"),
+    [
+        ("chain", None, "must not be None when mode is chain"),
+        ("bank", CHAIN, "must be None unless mode is chain"),
+    ],
+)
+def test_inserts_presence_refusal_says_none(mode, inserts, predicate):
+    with _project() as project:
+        with pytest.raises(SonareValueError) as exc:
+            project.set_part_rig(DESTINATION, 0, mode=mode, inserts=inserts)
+        assert predicate in str(exc.value)
+        assert "NULL" not in str(exc.value)
+
+
 def test_engine_refuses_builtin_instrument():
     with RealtimeEngine(sample_rate=48000) as engine:
         engine.prepare(48000, 128, 16, 16)

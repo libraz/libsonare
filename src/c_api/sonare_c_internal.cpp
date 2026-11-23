@@ -213,13 +213,29 @@ sonare::SonareParameterRefusal respelled_refusal(const sonare::SonareParameterRe
 }
 
 SonareError render_last_refusal(const char* const* subjects, const double* scales,
-                                size_t subject_count, char** out_text) noexcept {
+                                size_t subject_count, SonarePresenceSpelling spelling,
+                                char** out_text) noexcept {
   if (out_text == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_text = nullptr;
   const sonare::SonareParameterRefusal* refusal = last_parameter_refusal();
   if (refusal == nullptr) return SONARE_ERROR_INVALID_STATE;
+  sonare::PresenceSpelling surface;
+  switch (spelling) {
+    case SONARE_PRESENCE_SPELLING_C:
+      surface = sonare::PresenceSpelling::kC;
+      break;
+    case SONARE_PRESENCE_SPELLING_PYTHON:
+      surface = sonare::PresenceSpelling::kPython;
+      break;
+    case SONARE_PRESENCE_SPELLING_JS:
+      surface = sonare::PresenceSpelling::kJs;
+      break;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
   try {
-    *out_text = copy_string(respelled_refusal(*refusal, subjects, scales, subject_count).what());
+    *out_text =
+        copy_string(respelled_refusal(*refusal, subjects, scales, subject_count).text(surface));
     return SONARE_OK;
   } catch (const sonare::SonareParameterRefusal&) {
     return SONARE_ERROR_INVALID_PARAMETER;

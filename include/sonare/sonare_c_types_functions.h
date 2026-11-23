@@ -606,15 +606,19 @@ const char* sonare_last_refusal_entry(void);
 ///   changes only its names. Each factor must be finite and greater than 0; 1 leaves a subject's
 ///   domain as it is.
 /// @param subject_count Must equal @ref sonare_last_refusal_subject_count.
+/// @param spelling How the message words a value being left out or supplied: NULL as the last
+///   error reads with SONARE_PRESENCE_SPELLING_C, None or omitted / given for a binding.
 /// @param[out] out_text Receives the message, released with @ref sonare_free_string; set to NULL
 ///   on failure.
 /// @return SONARE_ERROR_INVALID_STATE when no parameter refusal is recorded;
 ///   SONARE_ERROR_INVALID_PARAMETER when @p out_text is NULL, @p subject_count differs from the
-///   recorded count, a subject is NULL or a factor is not finite and greater than 0;
+///   recorded count, a subject is NULL, a factor is not finite and greater than 0 or
+///   @p spelling is not a SonarePresenceSpelling;
 ///   SONARE_ERROR_OUT_OF_MEMORY when the copy cannot be allocated. Like every sonare_last_*
 ///   accessor, it records no error, so the refusal being rendered survives the call.
 SonareError sonare_last_refusal_render(const char* const* subjects, const double* scales,
-                                       size_t subject_count, char** out_text);
+                                       size_t subject_count, SonarePresenceSpelling spelling,
+                                       char** out_text);
 
 // Version
 /// @brief Returns the library version string (e.g. "1.2.3").

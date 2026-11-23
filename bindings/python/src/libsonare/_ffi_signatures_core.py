@@ -799,6 +799,7 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_char_p),
         ctypes.POINTER(ctypes.c_double),
         ctypes.c_size_t,
+        ctypes.c_int32,
         ctypes.POINTER(ctypes.c_char_p),
     ]
 

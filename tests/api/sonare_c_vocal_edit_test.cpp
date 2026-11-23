@@ -230,7 +230,8 @@ TEST_CASE("a vocal render range outside the output is a structured refusal a bin
   const char* seconds[] = {"range.endSec"};
   const double per_second[] = {16000.0};
   char* text = nullptr;
-  REQUIRE(sonare_last_refusal_render(seconds, per_second, 1, &text) == SONARE_OK);
+  REQUIRE(sonare_last_refusal_render(seconds, per_second, 1, SONARE_PRESENCE_SPELLING_C, &text) ==
+          SONARE_OK);
   CHECK(std::string(text).rfind("range.endSec must be ", 0) == 0);
   CHECK(std::string(text).find("0.2") != std::string::npos);
   sonare_free_string(text);

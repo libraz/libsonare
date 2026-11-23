@@ -139,7 +139,8 @@ void throw_c_failure(SonareError err, const char* root) {
     }
     for (const std::string& subject : subjects) pointers.push_back(subject.c_str());
     char* rendered = nullptr;
-    if (sonare_last_refusal_render(pointers.data(), nullptr, count, &rendered) == SONARE_OK) {
+    if (sonare_last_refusal_render(pointers.data(), nullptr, count, SONARE_PRESENCE_SPELLING_C,
+                                   &rendered) == SONARE_OK) {
       message = rendered;
       sonare_free_string(rendered);
     }

@@ -116,7 +116,7 @@ void check_clip(const SonareEngineClip& clip, const std::string& prefix) {
   util::check::one_of(clip.warp_mode, std::array<int, 4>{0, 1, 2, 3}, subject("warp_mode").c_str());
   if (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
     util::check::refuse_relation({subject("warp_mode"), subject("page_provider")},
-                                 "{1} must be NULL when {0} is tempoSync");
+                                 "{1} {must_be_absent} when {0} is tempoSync");
   }
   if (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC && clip.loop != 0) {
     util::check::refuse_relation({subject("loop"), subject("warp_mode")},

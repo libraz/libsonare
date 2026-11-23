@@ -278,8 +278,9 @@ const char* sonare_last_refusal_subject(size_t index) { return last_refusal_subj
 const char* sonare_last_refusal_entry(void) { return last_refusal_entry(); }
 
 SonareError sonare_last_refusal_render(const char* const* subjects, const double* scales,
-                                       size_t subject_count, char** out_text) {
-  return render_last_refusal(subjects, scales, subject_count, out_text);
+                                       size_t subject_count, SonarePresenceSpelling spelling,
+                                       char** out_text) {
+  return render_last_refusal(subjects, scales, subject_count, spelling, out_text);
 }
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }

@@ -62,6 +62,14 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_DIAGNOSTIC_ERROR = 2
 } SonareDiagnosticSeverity;
 
+/// How sonare_last_refusal_render words a value being left out or supplied. Ordinals mirror
+/// sonare::PresenceSpelling; do not reorder.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_PRESENCE_SPELLING_C = 0,       ///< "must be NULL", "is not NULL", as the last error reads.
+  SONARE_PRESENCE_SPELLING_PYTHON = 1,  ///< "must be None", "is not None".
+  SONARE_PRESENCE_SPELLING_JS = 2       ///< "must be omitted", "is given".
+} SonarePresenceSpelling;
+
 /// Vector norm selector of sonare_vector_normalize; ordinals mirror sonare::NormType.
 typedef enum SONARE_ENUM_BASE {
   SONARE_NORM_MAX = 0,

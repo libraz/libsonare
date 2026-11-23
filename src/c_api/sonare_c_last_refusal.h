@@ -38,6 +38,7 @@ sonare::SonareParameterRefusal respelled_refusal(const sonare::SonareParameterRe
 
 /// @brief Backs sonare_last_refusal_render. Records no error.
 SonareError render_last_refusal(const char* const* subjects, const double* scales,
-                                size_t subject_count, char** out_text) noexcept;
+                                size_t subject_count, SonarePresenceSpelling spelling,
+                                char** out_text) noexcept;
 
 }  // namespace sonare_c_detail

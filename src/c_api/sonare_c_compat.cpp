@@ -347,7 +347,7 @@ SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sampl
   if (const SonareError err = run_validation([&] {
         check_matrix_size(n_bins, n_frames, "n_bins", "n_frames");
         if (n_bins != 0 && n_frames != 0 && values == nullptr) {
-          util::check::refuse("values", "must not be NULL when n_bins and n_frames are not 0");
+          util::check::refuse("values", "{must_be_present} when n_bins and n_frames are not 0");
         }
         refuse_invalid_buffer("values", "length", values,
                               static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), true);
@@ -378,7 +378,7 @@ SonareError sonare_tonnetz(const float* chromagram, int n_chroma, int n_frames, 
         check_matrix_size(n_chroma, n_frames, "n_chroma", "n_frames");
         if (n_chroma != 0 && n_frames != 0 && chromagram == nullptr) {
           util::check::refuse("chromagram",
-                              "must not be NULL when n_chroma and n_frames are not 0");
+                              "{must_be_present} when n_chroma and n_frames are not 0");
         }
         refuse_invalid_buffer("chromagram", "length", chromagram,
                               static_cast<size_t>(n_chroma) * static_cast<size_t>(n_frames), true);

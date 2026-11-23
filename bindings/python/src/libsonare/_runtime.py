@@ -125,16 +125,20 @@ def _coded_error(code: int, message: str) -> SonareError:
     return exc
 
 
+# SONARE_PRESENCE_SPELLING_PYTHON (sonare_c_types_enums.h): a value left out reads as None.
+_PRESENCE_SPELLING_PYTHON = 1
+
+
 def _render_as_given(
     lib: Any, root: str | None, respelled: Mapping[str, _Respelling] | None
 ) -> str | None:
-    """Render the last parameter refusal under the names and units the caller wrote.
+    """Render the last parameter refusal under the names, units and None the caller wrote.
 
     ``root.`` is dropped from each subject under it. A subject ``respelled`` names is then
     replaced by the spelling the caller gave, with its domain in the caller's unit when the
     respelling carries a scale; any other subject takes the refused entry's Python spelling
-    from the generated table. None when no parameter refusal is recorded or no subject
-    changed, so the caller keeps the message it read.
+    from the generated table. A value left out or supplied reads as None / not None. None
+    when no parameter refusal is recorded, so the caller keeps the message it read.
     """
     count = lib.sonare_last_refusal_subject_count()
     if count == 0:
@@ -142,7 +146,6 @@ def _render_as_given(
     entry = (lib.sonare_last_refusal_entry() or b"").decode("utf-8")
     subjects = []
     scales = []
-    changed = False
     for index in range(count):
         raw = lib.sonare_last_refusal_subject(_to_c_size_t(index, "index"))
         recorded = (raw or b"").decode("utf-8")
@@ -158,11 +161,8 @@ def _render_as_given(
             scale = 1.0 if given.scale is None else given.scale
         else:
             subject = surface_spelling(entry, subject)
-        changed = changed or subject != recorded or scale != 1.0
         subjects.append(_utf8_arg(subject, "subject"))
         scales.append(scale)
-    if not changed:
-        return None
     c_scales = (ctypes.c_double * count)(*scales) if any(s != 1.0 for s in scales) else None
     out = ctypes.c_char_p()
     if (
@@ -170,6 +170,7 @@ def _render_as_given(
             (ctypes.c_char_p * count)(*subjects),
             c_scales,
             _to_c_size_t(count, "count"),
+            _PRESENCE_SPELLING_PYTHON,
             ctypes.byref(out),
         )
         != SONARE_OK
@@ -237,7 +238,8 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
     lib = _get_lib()
     code = int(lib.sonare_last_error_code())
     raw = lib.sonare_last_error_message()
-    detail = _strip_c_entry(raw.decode("utf-8", errors="replace")) if raw else ""
+    detail = raw.decode("utf-8", errors="replace") if raw else ""
+    detail = _strip_c_entry(_render_as_given(lib, None, None) or detail)
     return _coded_error(code if code != SONARE_OK else default_code, detail or fallback_message)
 
 
