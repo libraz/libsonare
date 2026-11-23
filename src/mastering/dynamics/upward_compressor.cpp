@@ -33,9 +33,14 @@ bool valid_range_db(float v) noexcept {
 UpwardCompressor::UpwardCompressor(UpwardCompressorConfig config) : ConfigBase(std::move(config)) {}
 
 void UpwardCompressor::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void UpwardCompressor::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "UpwardCompressor");
 
   sample_rate_ = sample_rate;
+  max_channels_ = max_channels;
   prepared_ = true;
   active_ = config_;
   update_coefficients(active_);
@@ -58,7 +63,8 @@ void UpwardCompressor::process(float* const* channels, int num_channels, int num
   // changes its current() value inside acquire(), and we already called it.
   const UpwardCompressorConfig& cfg = *adopt_snapshot_for_block();
 
-  require_prepared_channels(num_channels, kRealtimePreparedChannels, "UpwardCompressor");
+  require_prepared_channels(num_channels, static_cast<std::size_t>(max_channels_),
+                            "UpwardCompressor");
 
   // Linked detection (mirrors Compressor): one detector envelope drives every channel.
   auto& follower = follower_;

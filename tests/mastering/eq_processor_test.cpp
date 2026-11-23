@@ -12,8 +12,8 @@ TEST_CASE("EqualizerProcessor matches ParametricEq for E0 stereo zero-latency ba
   reference.prepare(sample_rate, 1024);
   reference.set_band(0, band);
 
-  EqualizerProcessor eq({2});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 2);
   eq.set_band(0, band);
 
   auto ref_left = sine(1000.0f, sample_rate, 4096);
@@ -36,11 +36,11 @@ TEST_CASE("EqualizerProcessor realtime parameter updates preserve IIR history", 
   constexpr int block = 512;
   const EqBand band{EqBandType::Peak, 700.0f, 6.0f, 0.6f, true};
 
-  EqualizerProcessor reference({1});
-  reference.prepare(sample_rate, block);
+  EqualizerProcessor reference;
+  reference.prepare(sample_rate, block, 1);
   reference.set_band(0, band);
-  EqualizerProcessor updated({1});
-  updated.prepare(sample_rate, block);
+  EqualizerProcessor updated;
+  updated.prepare(sample_rate, block, 1);
   updated.set_band(0, band);
 
   auto ref = sine(143.0f, sample_rate, block * 4, 0.3f);
@@ -89,6 +89,31 @@ TEST_CASE("EqualizerProcessor rejects realtime-unsafe LinearPhase dynamic bands"
   REQUIRE_THROWS(eq.set_band(0, band));
 }
 
+TEST_CASE("EqualizerProcessor refuses a block wider than two channels only for a LinearPhase band",
+          "[mastering][eq]") {
+  constexpr int block_size = 256;
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, block_size, 3);
+  eq.set_band(0, EqBand{EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true});
+  std::vector<std::vector<float>> audio(3, sine(1000.0f, 48000, block_size));
+  float* channels[3] = {audio[0].data(), audio[1].data(), audio[2].data()};
+  REQUIRE_NOTHROW(eq.process(channels, 3, block_size));
+
+  EqBand linear_band{EqBandType::Peak, 2000.0f, 6.0f, 1.0f, true};
+  linear_band.phase = PhaseMode::LinearPhase;
+  eq.set_band(1, linear_band);
+  try {
+    eq.process(channels, 3, block_size);
+    FAIL("a three-channel block with a LinearPhase band was accepted");
+  } catch (const sonare::SonareException& e) {
+    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(e.what()).find("num_channels must be at most 2 when bands[1].phase makes a "
+                                     "left, right or stereo band linear-phase") !=
+          std::string::npos);
+  }
+  REQUIRE_NOTHROW(eq.process(channels, 2, block_size));
+}
+
 TEST_CASE("EqualizerProcessor routes stereo LinearPhase bands before IIR and reports latency",
           "[mastering][eq]") {
   constexpr int sample_rate = 48000;
@@ -106,8 +131,8 @@ TEST_CASE("EqualizerProcessor routes stereo LinearPhase bands before IIR and rep
   iir_reference.prepare(sample_rate, block_size);
   iir_reference.set_band(0, iir_band);
 
-  EqualizerProcessor eq({2});
-  eq.prepare(sample_rate, block_size);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, block_size, 2);
   eq.set_band(0, linear_band);
   eq.set_band(1, iir_band);
 
@@ -144,8 +169,8 @@ TEST_CASE("EqualizerProcessor routes Left and Right LinearPhase stages with matc
   right_reference.prepare(sample_rate, block_size);
   right_reference.prepare_channels(1);
 
-  EqualizerProcessor eq({2});
-  eq.prepare(sample_rate, block_size);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, block_size, 2);
   eq.set_band(0, left_band);
 
   auto ref_left = sine(1000.0f, sample_rate, block_size);
@@ -181,8 +206,8 @@ TEST_CASE("EqualizerProcessor routes Mid and Side LinearPhase stages with matche
   side_reference.prepare(sample_rate, block_size);
   side_reference.prepare_channels(1);
 
-  EqualizerProcessor eq({2});
-  eq.prepare(sample_rate, block_size);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, block_size, 2);
   eq.set_band(0, mid_band);
 
   auto left = sine(1000.0f, sample_rate, block_size);
@@ -212,8 +237,8 @@ TEST_CASE("EqualizerProcessor routes Mid and Side LinearPhase stages with matche
 
 TEST_CASE("EqualizerProcessor applies Left and Right placement independently", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  EqualizerProcessor eq({2});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 2);
 
   EqBand left_boost{EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true};
   left_boost.placement = StereoPlacement::Left;
@@ -239,8 +264,8 @@ TEST_CASE("EqualizerProcessor Mid and Side placement matches MidSideEq conventio
   EqBand side_band{EqBandType::Peak, 3000.0f, -4.0f, 1.0f, true};
   side_band.placement = StereoPlacement::Side;
 
-  EqualizerProcessor eq({2});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 2);
   eq.set_band(0, mid_band);
   eq.set_band(1, side_band);
 
@@ -264,8 +289,8 @@ TEST_CASE("EqualizerProcessor Mid and Side placement matches MidSideEq conventio
 }
 
 TEST_CASE("EqualizerProcessor rejects Mid and Side placement on mono input", "[mastering][eq]") {
-  EqualizerProcessor eq({2});
-  eq.prepare(48000.0, 512);
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, 512, 2);
   EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 1.0f, true};
   band.placement = StereoPlacement::Mid;
   eq.set_band(0, band);
@@ -277,8 +302,8 @@ TEST_CASE("EqualizerProcessor rejects Mid and Side placement on mono input", "[m
 
 TEST_CASE("EqualizerProcessor respects bypass and solo listen selection", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 1024);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 1024, 1);
 
   EqBand boost{EqBandType::Peak, 1000.0f, 12.0f, 1.0f, true};
   boost.bypassed = true;
@@ -316,8 +341,8 @@ TEST_CASE("EqualizerProcessor resolves inherited phase mode and enforces prepare
   constexpr int sample_rate = 48000;
   const EqBand inherited{EqBandType::Peak, 9000.0f, 9.0f, 0.7f, true};
 
-  EqualizerProcessor eq({2});
-  eq.prepare(sample_rate, 256);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 256, 2);
   eq.set_phase_mode(PhaseMode::NaturalPhase);
   eq.set_band(0, inherited);
 
@@ -354,8 +379,8 @@ TEST_CASE(
   EqBand requested{EqBandType::Peak, 12000.0f, 9.0f, 0.8f, true, BiquadCoeffMode::Rbj};
   requested.phase = PhaseMode::NaturalPhase;
 
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
   REQUIRE(eq.phase_mode() == PhaseMode::ZeroLatency);
   eq.set_band(0, requested);
   REQUIRE(eq.band(0).coeff_mode == BiquadCoeffMode::Rbj);
@@ -379,8 +404,8 @@ TEST_CASE(
 TEST_CASE("EqualizerProcessor dynamic band attenuates above threshold on any of 24 bands",
           "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
 
   EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
   band.dyn.enabled = true;
@@ -411,8 +436,8 @@ TEST_CASE("EqualizerProcessor dynamic band attenuates above threshold on any of 
 
 TEST_CASE("EqualizerProcessor dynamic band can use an external sidechain", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
 
   EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
   band.dyn.enabled = true;
@@ -443,8 +468,8 @@ TEST_CASE("EqualizerProcessor dynamic band can use an external sidechain", "[mas
 }
 
 TEST_CASE("EqualizerProcessor validates and clears external sidechain buffers", "[mastering][eq]") {
-  EqualizerProcessor eq({2});
-  eq.prepare(48000, 128);
+  EqualizerProcessor eq;
+  eq.prepare(48000, 128, 2);
 
   std::array<float, 128> left{};
   std::array<float, 128> right{};
@@ -475,8 +500,8 @@ TEST_CASE("EqualizerProcessor dynamic auto-threshold is input-gain relative", "[
   static constexpr int sample_rate = 48000;
 
   auto run = [](float amplitude) {
-    EqualizerProcessor eq({1});
-    eq.prepare(sample_rate, 4096);
+    EqualizerProcessor eq;
+    eq.prepare(sample_rate, 4096, 1);
     EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
     band.dyn.enabled = true;
     band.dyn.auto_threshold = true;
@@ -501,11 +526,11 @@ TEST_CASE("EqualizerProcessor auto-gain compensates block RMS changes", "[master
   constexpr int sample_rate = 48000;
   const EqBand boost{EqBandType::Peak, 1000.0f, 12.0f, 1.0f, true};
 
-  EqualizerProcessor plain({1});
-  plain.prepare(sample_rate, 4096);
+  EqualizerProcessor plain;
+  plain.prepare(sample_rate, 4096, 1);
   plain.set_band(0, boost);
-  EqualizerProcessor compensated({1});
-  compensated.prepare(sample_rate, 4096);
+  EqualizerProcessor compensated;
+  compensated.prepare(sample_rate, 4096, 1);
   compensated.set_band(0, boost);
   compensated.set_auto_gain_enabled(true);
 
@@ -524,8 +549,8 @@ TEST_CASE("EqualizerProcessor gain scale controls applied static and dynamic gai
           "[mastering][eq]") {
   constexpr int sample_rate = 48000;
 
-  EqualizerProcessor scaled({1});
-  scaled.prepare(sample_rate, 4096);
+  EqualizerProcessor scaled;
+  scaled.prepare(sample_rate, 4096, 1);
   scaled.set_gain_scale(0.5f);
   EqBand peak{EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true};
   scaled.set_band(0, peak);
@@ -541,8 +566,8 @@ TEST_CASE("EqualizerProcessor gain scale controls applied static and dynamic gai
   REQUIRE_THAT(rms_tail(scaled_audio, 1024), WithinAbs(rms_tail(reference_audio, 1024), 0.002f));
   REQUIRE_THAT(scaled.spectrum_snapshot().band_gain_db[0], WithinAbs(3.0f, 0.0001f));
 
-  EqualizerProcessor dynamic({1});
-  dynamic.prepare(sample_rate, 4096);
+  EqualizerProcessor dynamic;
+  dynamic.prepare(sample_rate, 4096, 1);
   dynamic.set_gain_scale(0.5f);
   EqBand dyn{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
   dyn.dyn.enabled = true;
@@ -561,8 +586,8 @@ TEST_CASE("EqualizerProcessor gain scale controls applied static and dynamic gai
 }
 
 TEST_CASE("EqualizerProcessor output gain and pan apply after EQ", "[mastering][eq]") {
-  EqualizerProcessor eq({2});
-  eq.prepare(48000, 128);
+  EqualizerProcessor eq;
+  eq.prepare(48000, 128, 2);
   eq.set_output_gain_db(6.0f);
   eq.set_output_pan(1.0f);
 
@@ -592,8 +617,8 @@ TEST_CASE("EqualizerProcessor soloed band listens through a bandpass region", "[
   EqBand solo{EqBandType::Peak, 1000.0f, 12.0f, 4.0f, true};
   solo.soloed = true;
 
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
   eq.set_band(0, solo);
 
   auto center = sine(1000.0f, sample_rate, 4096, 0.25f);
@@ -616,11 +641,11 @@ TEST_CASE("EqualizerProcessor proportional Q narrows bell gain without mutating 
   proportional.proportional_q = true;
   proportional.proportional_q_strength = 0.04f;
 
-  EqualizerProcessor wide({1});
-  wide.prepare(sample_rate, 4096);
+  EqualizerProcessor wide;
+  wide.prepare(sample_rate, 4096, 1);
   wide.set_band(0, regular);
-  EqualizerProcessor narrow({1});
-  narrow.prepare(sample_rate, 4096);
+  EqualizerProcessor narrow;
+  narrow.prepare(sample_rate, 4096, 1);
   narrow.set_band(0, proportional);
 
   auto wide_edge = sine(1800.0f, sample_rate, 4096, 0.2f);
@@ -635,8 +660,8 @@ TEST_CASE("EqualizerProcessor proportional Q narrows bell gain without mutating 
 TEST_CASE("EqualizerProcessor supports 30 kHz bands when sample rate allows it",
           "[mastering][eq]") {
   constexpr int sample_rate = 96000;
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
   eq.set_band(0, {EqBandType::Peak, 30000.0f, 9.0f, 2.0f, true, BiquadCoeffMode::Vicanek});
 
   auto center = sine(30000.0f, sample_rate, 4096, 0.2f);
@@ -653,8 +678,8 @@ TEST_CASE("EqualizerProcessor supports 30 kHz bands when sample rate allows it",
 
 TEST_CASE("EqualizerProcessor TiltShelf maps to opposite shelves", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
   eq.set_band(23, {EqBandType::TiltShelf, 1000.0f, 12.0f, 1.0f, true});
 
   auto low = sine(120.0f, sample_rate, 4096, 0.2f);
@@ -674,8 +699,8 @@ TEST_CASE("EqualizerProcessor FlatTilt tilts gently and differs from TiltShelf",
   constexpr int sample_rate = 48000;
 
   // Correct tilt direction: lows cut, highs boosted around the pivot.
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
   eq.set_band(0, {EqBandType::FlatTilt, 1000.0f, 12.0f, 1.0f, true});
   auto low = sine(120.0f, sample_rate, 4096, 0.2f);
   auto high = sine(8000.0f, sample_rate, 4096, 0.2f);
@@ -690,8 +715,8 @@ TEST_CASE("EqualizerProcessor FlatTilt tilts gently and differs from TiltShelf",
   // Near the pivot, FlatTilt's spread shelves cut less than TiltShelf's
   // Butterworth-Q shelf, proving the two band types are no longer identical.
   auto tilt_response = [&](EqBandType type, float frequency) {
-    EqualizerProcessor probe({1});
-    probe.prepare(sample_rate, 4096);
+    EqualizerProcessor probe;
+    probe.prepare(sample_rate, 4096, 1);
     probe.set_band(0, {type, 1000.0f, 12.0f, 1.0f, true});
     auto buffer = sine(frequency, sample_rate, 4096, 0.2f);
     process(probe, buffer);
@@ -704,8 +729,8 @@ TEST_CASE("EqualizerProcessor FlatTilt tilts gently and differs from TiltShelf",
 
 TEST_CASE("EqualizerProcessor rejects internal backend overflow without partial commit",
           "[mastering][eq]") {
-  EqualizerProcessor eq({1});
-  eq.prepare(48000.0, 512);
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, 512, 1);
 
   EqBand tilt{EqBandType::TiltShelf, 1000.0f, 6.0f, 1.0f, true};
   for (size_t i = 0; i < EqualizerProcessor::kMaxBands / 2; ++i) {
@@ -723,7 +748,7 @@ TEST_CASE("EqualizerProcessor rejects internal backend overflow without partial 
 
 TEST_CASE("EqualizerProcessor validates expanded backend capacity before prepare",
           "[mastering][eq]") {
-  EqualizerProcessor eq({1});
+  EqualizerProcessor eq;
 
   EqBand tilt{EqBandType::TiltShelf, 1000.0f, 6.0f, 1.0f, true};
   for (size_t i = 0; i < EqualizerProcessor::kMaxBands / 2; ++i) {
@@ -735,7 +760,7 @@ TEST_CASE("EqualizerProcessor validates expanded backend capacity before prepare
   REQUIRE_THROWS(eq.set_band(EqualizerProcessor::kMaxBands / 2, tilt));
   REQUIRE_FALSE(eq.band(EqualizerProcessor::kMaxBands / 2).enabled);
 
-  REQUIRE_NOTHROW(eq.prepare(48000.0, 512));
+  REQUIRE_NOTHROW(eq.prepare(48000.0, 512, 1));
 }
 
 namespace {
@@ -932,9 +957,9 @@ TEST_CASE("EqualizerProcessor treats every channel of a wide block alike or refu
   constexpr int kRate = 48000;
   constexpr int kBlock = 1024;
   for (const PhaseMode mode : {PhaseMode::ZeroLatency, PhaseMode::LinearPhase}) {
-    EqualizerProcessor eq({3});
+    EqualizerProcessor eq;
     eq.set_phase_mode(mode);
-    eq.prepare(kRate, kBlock);
+    eq.prepare(kRate, kBlock, 3);
     eq.set_band(0, {EqBandType::Peak, 1000.0f, 9.0f, 1.0f, true});
     std::vector<std::vector<float>> planes(3, sine(1000.0f, kRate, kBlock));
     float* channels[] = {planes[0].data(), planes[1].data(), planes[2].data()};
@@ -954,8 +979,8 @@ TEST_CASE("EqualizerProcessor treats every channel of a wide block alike or refu
 TEST_CASE("EqualizerProcessor exhausted external key stays bound and reads as silence",
           "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  EqualizerProcessor eq({1});
-  eq.prepare(sample_rate, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(sample_rate, 4096, 1);
   EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
   band.dyn.enabled = true;
   band.dyn.external_sidechain = true;
@@ -999,8 +1024,8 @@ TEST_CASE("EqualizerProcessor dynamic bands and auto-gain do not depend on the b
   constexpr int sample_rate = 48000;
   constexpr int total = 16384;
   const auto render = [&](int block) {
-    EqualizerProcessor eq({1});
-    eq.prepare(sample_rate, 4096);
+    EqualizerProcessor eq;
+    eq.prepare(sample_rate, 4096, 1);
     EqBand cut{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
     cut.dyn.enabled = true;
     cut.dyn.auto_threshold = true;

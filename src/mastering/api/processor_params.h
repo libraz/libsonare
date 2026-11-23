@@ -589,9 +589,8 @@ inline eq::LinearPhaseEqConfig linear_phase_config(const ParamMap& params) {
   return config;
 }
 
-inline eq::EqualizerProcessorConfig equalizer_config(const ParamMap& params, int max_channels) {
+inline eq::EqualizerProcessorConfig equalizer_config(const ParamMap& params) {
   eq::EqualizerProcessorConfig config;
-  config.max_channels = max_channels;
   config.linear_phase_config = linear_phase_config(params);
   return config;
 }

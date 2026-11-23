@@ -30,9 +30,14 @@ bool valid_range_db(float v) noexcept { return std::isfinite(v) && v <= 0.0f; }
 Expander::Expander(ExpanderConfig config) : ConfigBase(std::move(config)) {}
 
 void Expander::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void Expander::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Expander");
 
   sample_rate_ = sample_rate;
+  max_channels_ = max_channels;
   prepared_ = true;
   active_ = config_;
   update_coefficients(active_);
@@ -50,7 +55,7 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
     return;
   }
 
-  require_prepared_channels(num_channels, kRealtimePreparedChannels, "Expander");
+  require_prepared_channels(num_channels, static_cast<std::size_t>(max_channels_), "Expander");
 
   // Adopt the latest published configuration once per block. The returned
   // pointer is stable for the entire per-sample loop — RtPublisher only

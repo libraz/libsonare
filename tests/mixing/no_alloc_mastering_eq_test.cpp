@@ -418,8 +418,8 @@ TEST_CASE("MultibandSaturation process performs no heap allocation after prepare
 TEST_CASE("EqualizerProcessor process performs no heap allocation after prepare",
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
-  sonare::mastering::eq::EqualizerProcessor eq({2});
-  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, kBlock, 2);
   eq.set_band(0, {sonare::mastering::eq::EqBandType::Peak, 1000.0f, 3.0f, 1.0f, true});
   eq.set_band(1, {sonare::mastering::eq::EqBandType::HighShelf, 8000.0f, -2.0f, 0.8f, true});
 
@@ -448,8 +448,8 @@ TEST_CASE("EqualizerProcessor process performs no heap allocation after prepare"
 TEST_CASE("EqualizerProcessor Mid/Side placement performs no heap allocation after prepare",
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
-  sonare::mastering::eq::EqualizerProcessor eq({2});
-  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, kBlock, 2);
   sonare::mastering::eq::EqBand mid{sonare::mastering::eq::EqBandType::Peak, 1000.0f, 3.0f, 1.0f,
                                     true};
   mid.placement = sonare::mastering::eq::StereoPlacement::Mid;
@@ -478,8 +478,8 @@ TEST_CASE("EqualizerProcessor Mid/Side placement performs no heap allocation aft
 TEST_CASE("EqualizerProcessor dynamic bands perform no heap allocation after prepare",
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
-  sonare::mastering::eq::EqualizerProcessor eq({2});
-  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, kBlock, 2);
   sonare::mastering::eq::EqBand band{sonare::mastering::eq::EqBandType::Peak, 1000.0f, 0.0f, 2.0f,
                                      true};
   band.dyn.enabled = true;
@@ -509,8 +509,8 @@ TEST_CASE("EqualizerProcessor dynamic bands perform no heap allocation after pre
 TEST_CASE("EqualizerProcessor external sidechain performs no heap allocation after prepare",
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
-  sonare::mastering::eq::EqualizerProcessor eq({2});
-  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, kBlock, 2);
   sonare::mastering::eq::EqBand band{sonare::mastering::eq::EqBandType::Peak, 1000.0f, 0.0f, 2.0f,
                                      true};
   band.dyn.enabled = true;
@@ -546,8 +546,8 @@ TEST_CASE("EqualizerProcessor external sidechain performs no heap allocation aft
 TEST_CASE("EqualizerProcessor LinearPhase bands perform no heap allocation after prepare",
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
-  sonare::mastering::eq::EqualizerProcessor eq({2});
-  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, kBlock, 2);
   sonare::mastering::eq::EqBand linear{sonare::mastering::eq::EqBandType::Peak, 1000.0f, 4.0f, 1.0f,
                                        true};
   linear.phase = sonare::mastering::eq::PhaseMode::LinearPhase;
@@ -573,8 +573,8 @@ TEST_CASE("EqualizerProcessor LinearPhase bands perform no heap allocation after
 TEST_CASE("EqualizerProcessor E6 features perform no heap allocation after prepare",
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
-  sonare::mastering::eq::EqualizerProcessor eq({2});
-  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, kBlock, 2);
   eq.set_auto_gain_enabled(true);
   sonare::mastering::eq::EqBand tilt{sonare::mastering::eq::EqBandType::TiltShelf, 1000.0f, 6.0f,
                                      1.0f, true};
@@ -641,8 +641,10 @@ TEST_CASE("EqualizerProcessor spectrum publishing performs no heap allocation af
   auto& registry = sonare::mastering::eq::SpectrumRegistry::instance();
   registry.reset();
 
-  sonare::mastering::eq::EqualizerProcessor eq({2, 7007});
-  eq.prepare(48000.0, kBlock);
+  sonare::mastering::eq::EqualizerProcessorConfig eq_config;
+  eq_config.spectrum_instance_id = 7007;
+  sonare::mastering::eq::EqualizerProcessor eq(eq_config);
+  eq.prepare(48000.0, kBlock, 2);
   eq.set_band(0, {sonare::mastering::eq::EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true});
 
   std::array<float, kBlock> left{};
@@ -669,7 +671,7 @@ TEST_CASE("EqualizerProcessor spectrum publishing performs no heap allocation af
 TEST_CASE("CutFilter process performs no heap allocation after prepare", "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
   sonare::mastering::eq::CutFilter eq;
-  eq.prepare(48000.0, kBlock);
+  eq.prepare(48000.0, kBlock, 2);
   eq.set_high_pass(1000.0f, sonare::constants::kButterworthQ,
                    sonare::mastering::eq::CutFilterSlope::Db96PerOct);
   eq.set_low_pass(12000.0f, sonare::constants::kButterworthQ,
@@ -695,7 +697,7 @@ TEST_CASE("CutFilter brickwall process performs no heap allocation after prepare
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
   sonare::mastering::eq::CutFilter eq;
-  eq.prepare(48000.0, kBlock);
+  eq.prepare(48000.0, kBlock, 2);
   eq.set_high_pass(1000.0f, sonare::constants::kButterworthQ,
                    sonare::mastering::eq::CutFilterSlope::Brickwall);
   eq.set_low_pass(12000.0f, sonare::constants::kButterworthQ,
@@ -745,7 +747,7 @@ TEST_CASE("CutFilter IIR corner and Q automation is realtime-safe and allocation
   using sonare::mastering::eq::CutFilterSlope;
   constexpr int kBlock = 256;
   CutFilter eq;
-  eq.prepare(48000.0, kBlock);
+  eq.prepare(48000.0, kBlock, 2);
   eq.set_high_pass(1000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Db12PerOct);
   eq.set_low_pass(12000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Db24PerOct);
   for (unsigned int id = 0; id < 4; ++id) {
@@ -784,7 +786,7 @@ TEST_CASE("CutFilter brickwall corner reports not realtime-safe and still applie
   using sonare::mastering::eq::CutFilterSlope;
   constexpr int kBlock = 256;
   CutFilter eq;
-  eq.prepare(48000.0, kBlock);
+  eq.prepare(48000.0, kBlock, 2);
   eq.set_high_pass(1000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Brickwall);
   eq.set_low_pass(12000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Db12PerOct);
 

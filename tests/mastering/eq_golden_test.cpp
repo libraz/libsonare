@@ -183,8 +183,8 @@ TEST_CASE("EqualizerProcessor golden regression stays stable", "[mastering][eq][
 
   for (const auto& c : cases) {
     CAPTURE(c.name);
-    EqualizerProcessor eq({2});
-    eq.prepare(kSampleRate, kSamples);
+    EqualizerProcessor eq;
+    eq.prepare(kSampleRate, kSamples, 2);
     for (size_t i = 0; i < c.bands.size(); ++i) {
       if (c.bands[i].enabled) eq.set_band(i, c.bands[i]);
     }

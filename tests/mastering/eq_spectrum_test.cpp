@@ -139,8 +139,10 @@ TEST_CASE("EqualizerProcessor exposes pre/post spectrum snapshots and publishes 
   constexpr int sample_rate = 48000;
   SpectrumRegistry::instance().reset();
   {
-    EqualizerProcessor eq({2, 303});
-    eq.prepare(sample_rate, 1024);
+    EqualizerProcessorConfig eq_config;
+    eq_config.spectrum_instance_id = 303;
+    EqualizerProcessor eq(eq_config);
+    eq.prepare(sample_rate, 1024, 2);
     EqBand boost{EqBandType::Peak, 1000.0f, 9.0f, 1.0f, true};
     eq.set_band(0, boost);
 
@@ -179,12 +181,12 @@ TEST_CASE("EqualizerProcessor profile_db is a magnitude spectrum that follows th
 
   // No band is configured: with a flat EQ the profile must still describe the
   // spectral content of the signal rather than its broadband level.
-  EqualizerProcessor low_eq({2, 0});
-  low_eq.prepare(sample_rate, block_size);
+  EqualizerProcessor low_eq;
+  low_eq.prepare(sample_rate, block_size, 2);
   const auto low_profile = profile_for_tone(low_eq, 250.0f, sample_rate, block_size, blocks);
 
-  EqualizerProcessor high_eq({2, 0});
-  high_eq.prepare(sample_rate, block_size);
+  EqualizerProcessor high_eq;
+  high_eq.prepare(sample_rate, block_size, 2);
   const auto high_profile = profile_for_tone(high_eq, 1000.0f, sample_rate, block_size, blocks);
 
   const size_t low_peak = peak_profile_band(low_profile);

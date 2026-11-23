@@ -31,9 +31,9 @@ void MultibandDynamicEq::prepare(double sample_rate, int max_block_size) {
 void MultibandDynamicEq::prepare(double sample_rate, int max_block_size, int max_channels) {
   prepare_multiband("MultibandDynamicEq", crossover_, scratch_, sample_rate, max_block_size,
                     max_channels, sample_rate_, max_block_size_, max_working_channels_, prepared_,
-                    [this](double rate, int block, int /*channels*/) {
+                    [this](double rate, int block, int channels) {
                       for (size_t band = 0; band < processors_.size(); ++band) {
-                        processors_[band].prepare(rate, block);
+                        processors_[band].prepare(rate, block, channels);
                         configure_processor(band);
                       }
                     });
@@ -110,7 +110,7 @@ void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
         rebuild_processors();
         if (prepared_) {
           for (size_t band = 0; band < processors_.size(); ++band) {
-            processors_[band].prepare(sample_rate_, max_block_size_);
+            processors_[band].prepare(sample_rate_, max_block_size_, max_working_channels_);
             configure_processor(band);
           }
         }

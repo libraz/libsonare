@@ -93,14 +93,14 @@ int main(int argc, char** argv) {
   source[0] = make_signal(kBlockSamples, 1.0f, 0.0f);
   source[1] = make_signal(kBlockSamples, 0.85f, 37.0f);
 
-  EqualizerProcessor static_eq({kChannels, 0});
-  static_eq.prepare(kSampleRate, kBlockSamples);
+  EqualizerProcessor static_eq;
+  static_eq.prepare(kSampleRate, kBlockSamples, kChannels);
   for (size_t i = 0; i < EqualizerProcessor::kMaxBands; ++i) {
     static_eq.set_band(i, make_peak(i));
   }
 
-  EqualizerProcessor dynamic_eq({kChannels, 0});
-  dynamic_eq.prepare(kSampleRate, kBlockSamples);
+  EqualizerProcessor dynamic_eq;
+  dynamic_eq.prepare(kSampleRate, kBlockSamples, kChannels);
   for (size_t i = 0; i < 8; ++i) {
     EqBand band = make_peak(i);
     band.dyn.enabled = true;
@@ -112,8 +112,8 @@ int main(int argc, char** argv) {
     dynamic_eq.set_band(i, band);
   }
 
-  EqualizerProcessor linear_eq({kChannels, 0});
-  linear_eq.prepare(kSampleRate, kBlockSamples);
+  EqualizerProcessor linear_eq;
+  linear_eq.prepare(kSampleRate, kBlockSamples, kChannels);
   linear_eq.set_phase_mode(PhaseMode::LinearPhase);
   for (size_t i = 0; i < 4; ++i) {
     EqBand band{EqBandType::Peak, 240.0f * std::pow(2.0f, static_cast<float>(i)), 2.0f, 1.0f, true};

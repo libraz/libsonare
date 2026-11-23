@@ -4,6 +4,7 @@
 
 #include "mastering/common/parameter_domain.h"
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -23,11 +24,15 @@ bool valid_time_ms(float ms) noexcept { return std::isfinite(ms) && ms >= 0.0f; 
 Maximizer::Maximizer(MaximizerConfig config) : config_(config) { validate_config(config_); }
 
 void Maximizer::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void Maximizer::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Maximizer");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
-  limiter_.prepare(sample_rate_, max_block_size_);
+  limiter_.prepare(sample_rate_, max_block_size_, max_channels);
   prepared_ = true;
 }
 

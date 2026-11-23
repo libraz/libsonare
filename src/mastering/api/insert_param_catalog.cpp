@@ -458,7 +458,7 @@ bool insert_accepts_at_rate(const std::string& name, const std::string& key, dou
       if (measuring_offline_form) return read_offline_config(name, probe);
       auto processor = build_insert(name, probe, nullptr, sample_rate);
       if (processor == nullptr) return read_offline_config(name, probe);
-      processor->prepare(sample_rate, kInsertProbeBlockSize);
+      processor->prepare(sample_rate, kInsertProbeBlockSize, 1);
       return true;
     } catch (const SonareParameterRefusal& e) {
       return accepted_despite(e);

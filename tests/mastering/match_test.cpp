@@ -214,8 +214,8 @@ TEST_CASE("MatchEq refuses a side with no measurable level on every entry", "[ma
   REQUIRE_THROWS_WITH(match_eq_curve(silent, sounding), "source has no measurable level");
   REQUIRE_THROWS_WITH(match_eq_curve(sounding, silent), "reference has no measurable level");
   REQUIRE_THROWS_WITH(match_eq_bands(silent, sounding), "source has no measurable level");
-  sonare::mastering::eq::EqualizerProcessor eq({1});
-  eq.prepare(48000.0, 512);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, 512, 1);
   REQUIRE_THROWS_WITH(configure_equalizer_from_match(eq, sounding, silent),
                       "reference has no measurable level");
 
@@ -247,8 +247,8 @@ TEST_CASE("MatchEq live bands are placed at curve extrema and can configure Equa
   REQUIRE_THAT(bands[1].frequency_hz, WithinAbs(4000.0f, 0.001f));
   REQUIRE(bands[1].gain_db < -9.0f);
 
-  sonare::mastering::eq::EqualizerProcessor eq({1});
-  eq.prepare(48000.0, 512);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(48000.0, 512, 1);
   configure_equalizer_from_match(eq, source, reference, {2, 12.0f, 100.0f, 12000.0f, 1.4f, 0});
 
   REQUIRE(eq.band(0).enabled);
@@ -790,8 +790,8 @@ TEST_CASE("MatchEq never places a band at or above the curve's Nyquist", "[maste
     REQUIRE(band.frequency_hz < kRate * 0.5f);
   }
 
-  sonare::mastering::eq::EqualizerProcessor eq({1});
-  eq.prepare(kRate, 512);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(kRate, 512, 1);
   REQUIRE_NOTHROW(configure_equalizer_from_match(eq, source, reference, config));
   REQUIRE(eq.band(0).enabled);
 }
@@ -801,8 +801,8 @@ TEST_CASE("a match the equalizer refuses leaves its bands in place", "[mastering
   // the match places is one the equalizer cannot carry.
   ReferenceSpectrum source{{100.0f, 1000.0f, 12000.0f}, {-20.0f, -20.0f, -20.0f}, 48000};
   ReferenceSpectrum reference{{100.0f, 1000.0f, 12000.0f}, {-20.0f, -20.0f, -8.0f}, 48000};
-  sonare::mastering::eq::EqualizerProcessor eq({1});
-  eq.prepare(8000.0, 512);
+  sonare::mastering::eq::EqualizerProcessor eq;
+  eq.prepare(8000.0, 512, 1);
   const sonare::mastering::eq::EqBand held{sonare::mastering::eq::EqBandType::Peak, 500.0f, 4.0f,
                                            1.0f, true};
   eq.set_band(3, held);

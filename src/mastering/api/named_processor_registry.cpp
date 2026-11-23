@@ -207,7 +207,7 @@ InsertTiming insert_timing(const std::string& name, const std::string& json_para
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown insert processor: " + name + retired_processor_note(name));
   }
-  processor->prepare(sample_rate, kInsertProbeBlockSize);
+  processor->prepare(sample_rate, kInsertProbeBlockSize, 1);
   return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
 }
 
@@ -219,7 +219,7 @@ void validate_part_rig_chain(const std::vector<midi::PartRigStage>& stages) {
     std::unique_ptr<sonare::rt::ProcessorBase> insert;
     try {
       insert = make_insert_reading_every_key(stage.processor, stage.params_json);
-      if (insert) insert->prepare(kInsertProbeSampleRate, kInsertProbeBlockSize);
+      if (insert) insert->prepare(kInsertProbeSampleRate, kInsertProbeBlockSize, 1);
     } catch (const SonareParameterRefusal& ex) {
       throw schema::relabel_under(ex, schema::child_path(at, "params"), ErrorCode::InvalidParameter)
           .as_caller_spelled();

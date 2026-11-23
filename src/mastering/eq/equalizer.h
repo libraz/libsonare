@@ -21,9 +21,6 @@
 namespace sonare::mastering::eq {
 
 struct EqualizerProcessorConfig {
-  /// Widest block process() accepts. Linear-phase bands process at most two
-  /// channels, so with any of them a wider block is refused.
-  int max_channels = 2;
   uint64_t spectrum_instance_id = 0;
   LinearPhaseEqConfig linear_phase_config{};
 };
@@ -38,6 +35,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
   ~EqualizerProcessor() override;
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override;
@@ -191,6 +189,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
   PhaseMode phase_mode_ = PhaseMode::ZeroLatency;
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
+  int max_channels_ = 0;
   // Detector-delay ring capacity (samples) preallocated in prepare().
   int max_detector_delay_samples_ = 0;
   bool prepared_ = false;

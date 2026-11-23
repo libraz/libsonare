@@ -463,10 +463,8 @@ StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
     max_block_size = IntProperty(config, "maxBlockSize", max_block_size);
   }
 
-  sonare::mastering::eq::EqualizerProcessorConfig eq_config;
-  eq_config.max_channels = 2;
-  eq_ = std::make_unique<sonare::mastering::eq::EqualizerProcessor>(eq_config);
-  eq_->prepare(sample_rate, max_block_size);
+  eq_ = std::make_unique<sonare::mastering::eq::EqualizerProcessor>();
+  eq_->prepare(sample_rate, max_block_size, 2);
   sample_rate_ = sample_rate;
   SONARE_NODE_CATCH_VOID(env)
 }

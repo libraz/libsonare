@@ -27,8 +27,8 @@ void MultibandExpander::prepare(double sample_rate, int max_block_size) {
 void MultibandExpander::prepare(double sample_rate, int max_block_size, int max_channels) {
   prepare_multiband("MultibandExpander", crossover_, scratch_, sample_rate, max_block_size,
                     max_channels, sample_rate_, max_block_size_, max_working_channels_, prepared_,
-                    [this](double rate, int block, int /*channels*/) {
-                      for (auto& expander : expanders_) expander.prepare(rate, block);
+                    [this](double rate, int block, int channels) {
+                      for (auto& expander : expanders_) expander.prepare(rate, block, channels);
                     });
   reset();
 }
@@ -92,7 +92,8 @@ void MultibandExpander::set_config(const MultibandExpanderConfig& config) {
         }
         rebuild_processors();
         if (prepared_) {
-          for (auto& expander : expanders_) expander.prepare(sample_rate_, max_block_size_);
+          for (auto& expander : expanders_)
+            expander.prepare(sample_rate_, max_block_size_, max_working_channels_);
         }
       });
 }

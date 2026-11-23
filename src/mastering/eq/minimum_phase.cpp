@@ -2,10 +2,15 @@
 
 #include <cstdint>
 
+#include "mastering/dynamics/channel_limits.h"
 namespace sonare::mastering::eq {
 
 void MinimumPhaseEq::prepare(double sample_rate, int max_block_size) {
-  eq_.prepare(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void MinimumPhaseEq::prepare(double sample_rate, int max_block_size, int max_channels) {
+  eq_.prepare(sample_rate, max_block_size, max_channels);
 }
 
 void MinimumPhaseEq::process(float* const* channels, int num_channels, int num_samples) {

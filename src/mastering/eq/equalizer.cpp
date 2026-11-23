@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/eq/band_frequency.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_registry.h"
@@ -83,12 +84,7 @@ EqualizerProcessor::EqualizerProcessor(EqualizerProcessorConfig config)
       left_channel_fir_(config_.linear_phase_config),
       right_channel_fir_(config_.linear_phase_config),
       mid_fir_(config_.linear_phase_config),
-      side_fir_(config_.linear_phase_config) {
-  if (config_.max_channels < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor max_channels must be non-negative");
-  }
-}
+      side_fir_(config_.linear_phase_config) {}
 
 EqualizerProcessor::~EqualizerProcessor() {
   if (config_.spectrum_instance_id != 0) {
@@ -97,6 +93,10 @@ EqualizerProcessor::~EqualizerProcessor() {
 }
 
 void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void EqualizerProcessor::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!is_valid_realtime_block_size(max_block_size)) {
     throw SonareException(
         ErrorCode::InvalidParameter,
@@ -108,6 +108,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
                               std::to_string(kMinAudioSampleRate) + ", " +
                               std::to_string(kMaxAudioSampleRate) + "]");
   }
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "EqualizerProcessor");
   // Bands stored before any rate was known meet it here and are refused as
   // set_band() refuses them; once prepared, a later rate designs them at its ceiling.
   if (!prepared_) {
@@ -119,27 +120,17 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  stereo_iir_.prepare(sample_rate, max_block_size);
-  left_iir_.prepare(sample_rate, max_block_size);
-  right_iir_.prepare(sample_rate, max_block_size);
-  mid_iir_.prepare(sample_rate, max_block_size);
-  side_iir_.prepare(sample_rate, max_block_size);
-  // Each linear-phase backend is fed one mono stream. Use the bounded prepare
-  // overload so EqualizerProcessor does not reserve the raw FIR's 64-channel
-  // realtime capacity four times for these inherently single-channel paths.
+  max_channels_ = max_channels;
+  stereo_iir_.prepare(sample_rate, max_block_size, max_channels);
+  // Every other backend is fed one mono stream: a left, right, mid or side.
+  left_iir_.prepare(sample_rate, max_block_size, 1);
+  right_iir_.prepare(sample_rate, max_block_size, 1);
+  mid_iir_.prepare(sample_rate, max_block_size, 1);
+  side_iir_.prepare(sample_rate, max_block_size, 1);
   left_channel_fir_.prepare(sample_rate, max_block_size, 1);
   right_channel_fir_.prepare(sample_rate, max_block_size, 1);
   mid_fir_.prepare(sample_rate, max_block_size, 1);
   side_fir_.prepare(sample_rate, max_block_size, 1);
-  stereo_iir_.prepare_channels(config_.max_channels);
-  left_iir_.prepare_channels(1);
-  right_iir_.prepare_channels(1);
-  mid_iir_.prepare_channels(1);
-  side_iir_.prepare_channels(1);
-  left_channel_fir_.prepare_channels(1);
-  right_channel_fir_.prepare_channels(1);
-  mid_fir_.prepare_channels(1);
-  side_fir_.prepare_channels(1);
   mid_buffer_.assign(static_cast<size_t>(std::max(max_block_size, 0)), 0.0f);
   side_buffer_.assign(static_cast<size_t>(std::max(max_block_size, 0)), 0.0f);
   spectrum_analyzer_.prepare(sample_rate);
@@ -153,8 +144,8 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   auto_gain_linear_ = 1.0f;
   dynamic_reading_seen_.fill(false);
   clear_control_accumulators();
-  chunk_channels_.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), nullptr);
-  chunk_sidechain_.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), nullptr);
+  chunk_channels_.assign(static_cast<size_t>(max_channels_), nullptr);
+  chunk_sidechain_.assign(static_cast<size_t>(max_channels_), nullptr);
   // Preallocate persistent detector state per band so the audio-thread detector
   // never resizes. Sized to the IIR backend's prepared channel capacity, with
   // each channel's detector-delay ring preallocated to the maximum supported
@@ -162,7 +153,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   max_detector_delay_samples_ =
       static_cast<int>(std::round(sample_rate_ * kMaxDetectorDelayMs * 0.001));
   for (auto& states : detector_states_) {
-    states.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), BandDetectorChannel{});
+    states.assign(static_cast<size_t>(max_channels_), BandDetectorChannel{});
     for (auto& state : states) state.prepare(max_detector_delay_samples_);
   }
   validate_backend_capacity(bands_, phase_mode_);
@@ -172,7 +163,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
 void EqualizerProcessor::process(float* const* channels, int num_channels, int num_samples) {
   ensure_prepared(prepared_, "EqualizerProcessor");
   validate_process_buffers(channels, num_channels, num_samples);
-  if (num_channels > config_.max_channels) {
+  if (num_channels > max_channels_) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "EqualizerProcessor num_channels exceeds prepared max_channels");
   }
@@ -577,10 +568,10 @@ void EqualizerProcessor::set_sidechain(const float* const* channels, int num_cha
   if (channels == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "sidechain channels must not be null");
   }
-  // Detector state is preallocated to config_.max_channels in prepare(); reject a
+  // Detector state is preallocated to the prepared channel count in prepare(); reject a
   // wider sidechain on the control thread so the audio-thread detector path can
   // never reallocate detector_states_.
-  if (num_channels > config_.max_channels) {
+  if (num_channels > max_channels_) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "sidechain channel count exceeds the prepared max_channels");
   }

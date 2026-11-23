@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "mastering/dynamics/channel_limits.h"
 namespace sonare::mastering::eq {
 namespace {
 
@@ -22,7 +23,11 @@ constexpr std::array<float, 13> kGainSteps = {-12.0f, -10.0f, -8.0f, -6.0f, -4.0
 }  // namespace
 
 void SteppedProportionalQEq::prepare(double sample_rate, int max_block_size) {
-  eq_.prepare(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void SteppedProportionalQEq::prepare(double sample_rate, int max_block_size, int max_channels) {
+  eq_.prepare(sample_rate, max_block_size, max_channels);
   // The bands set before keep their settings; only their coefficients follow
   // the new rate.
   for (const Band band : {Band::Low, Band::LowMid, Band::HighMid, Band::High}) {

@@ -14,8 +14,9 @@ void MidSideEq::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
-  mid_eq_.prepare(sample_rate, max_block_size);
-  side_eq_.prepare(sample_rate, max_block_size);
+  // Each child filters one mono stream, the mid or the side.
+  mid_eq_.prepare(sample_rate, max_block_size, 1);
+  side_eq_.prepare(sample_rate, max_block_size, 1);
   max_block_size_ = max_block_size;
   if (max_block_size > 0) {
     mid_buffer_.assign(static_cast<size_t>(max_block_size), 0.0f);

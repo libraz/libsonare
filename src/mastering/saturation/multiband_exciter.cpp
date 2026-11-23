@@ -33,7 +33,8 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size, int max_c
                                max_block_size, max_channels, sample_rate_, max_block_size_,
                                max_working_channels_, prepared_,
                                [this](double rate, int block, int channels) {
-                                 for (auto& exciter : exciters_) exciter.prepare(rate, block);
+                                 for (auto& exciter : exciters_)
+                                   exciter.prepare(rate, block, channels);
                                  rebuild_band_compensation(channels);
                                });
   reset();
@@ -94,7 +95,8 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
         } else {
           rebuild_processors();
           if (prepared_) {
-            for (auto& exciter : exciters_) exciter.prepare(sample_rate_, max_block_size_);
+            for (auto& exciter : exciters_)
+              exciter.prepare(sample_rate_, max_block_size_, max_working_channels_);
           }
         }
         // Unchanged latencies keep their compensation lines.

@@ -193,7 +193,7 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_ch
   lookahead_samples_ = lookahead_samples;
   update_time_constants();
   limiter_.set_config({config_.ceiling_dbtp, config_.lookahead_ms, config_.release_ms});
-  limiter_.prepare(sample_rate_, max_block_size_);
+  limiter_.prepare(sample_rate_, max_block_size_, max_channels);
   oversampler_.set_factor(config_.oversample_factor);
   oversampled_peak_window_.prepare(
       static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * oversampler_.factor()));

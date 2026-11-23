@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -19,12 +20,16 @@ bool valid_pivot_hz(float pivot_hz) noexcept { return pivot_hz > 0.0f; }
 }  // namespace
 
 void TiltEq::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void TiltEq::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "TiltEq");
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
-  eq_.prepare(sample_rate_, max_block_size_);
+  eq_.prepare(sample_rate_, max_block_size_, max_channels);
   update_bands();
 }
 

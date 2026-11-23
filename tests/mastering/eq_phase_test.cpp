@@ -208,10 +208,9 @@ TEST_CASE("EqualizerProcessor forwards LinearPhase resolution config to FIR stag
   linear_config.partition_size = 512;
 
   EqualizerProcessorConfig eq_config;
-  eq_config.max_channels = 2;
   eq_config.linear_phase_config = linear_config;
   EqualizerProcessor eq(eq_config);
-  eq.prepare(48000.0, 512);
+  eq.prepare(48000.0, 512, 2);
   eq.set_phase_mode(PhaseMode::LinearPhase);
   eq.set_band(0, {EqBandType::Peak, 1000.0f, 3.0f, 1.0f, true});
 
@@ -226,8 +225,8 @@ TEST_CASE("EqualizerProcessor high-pass slope controls attenuation depth", "[mas
 
   float previous_stop_gain = 1.0f;
   for (int slope : slopes) {
-    EqualizerProcessor eq({1});
-    eq.prepare(sample_rate, samples);
+    EqualizerProcessor eq;
+    eq.prepare(sample_rate, samples, 1);
     EqBand band{EqBandType::HighPass, 1000.0f, 0.0f, sonare::constants::kButterworthQ, true};
     band.slope_db_oct = slope;
     eq.set_band(0, band);
@@ -253,14 +252,14 @@ TEST_CASE("EqualizerProcessor applies cut resonance consistently in cascades", "
 
   EqBand flat_band{EqBandType::HighPass, 1000.0f, 0.0f, sonare::constants::kButterworthQ, true};
   flat_band.slope_db_oct = 48;
-  EqualizerProcessor flat({1});
-  flat.prepare(sample_rate, sample_rate);
+  EqualizerProcessor flat;
+  flat.prepare(sample_rate, sample_rate, 1);
   flat.set_band(0, flat_band);
 
   EqBand resonant_band = flat_band;
   resonant_band.q = 2.0f;
-  EqualizerProcessor resonant({1});
-  resonant.prepare(sample_rate, sample_rate);
+  EqualizerProcessor resonant;
+  resonant.prepare(sample_rate, sample_rate, 1);
   resonant.set_band(0, resonant_band);
 
   auto flat_cutoff = sine(1000.0f, sample_rate, sample_rate);
@@ -277,11 +276,10 @@ TEST_CASE("EqualizerProcessor brickwall cuts route through FIR latency and rejec
   constexpr int sample_rate = 48000;
 
   EqualizerProcessorConfig config;
-  config.max_channels = 1;
   config.linear_phase_config.resolution = LinearPhaseEqConfig::Resolution::Low;
   config.linear_phase_config.partition_size = 512;
   EqualizerProcessor eq(config);
-  eq.prepare(sample_rate, sample_rate);
+  eq.prepare(sample_rate, sample_rate, 1);
 
   EqBand high_pass{EqBandType::HighPass, 1000.0f, 0.0f, sonare::constants::kButterworthQ, true};
   high_pass.slope_db_oct = 0;

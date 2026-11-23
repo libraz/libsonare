@@ -31,6 +31,7 @@ class BrickwallLimiter : public rt::RtConfigLifecycle<BrickwallLimiter, Brickwal
   explicit BrickwallLimiter(BrickwallLimiterConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
@@ -111,6 +112,7 @@ class BrickwallLimiter : public rt::RtConfigLifecycle<BrickwallLimiter, Brickwal
   bool prepared_ = false;
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
+  int max_channels_ = 0;
   float last_gain_reduction_db_ = 0.0f;
   int hard_clip_count_ = 0;
   rt::OverflowCounter non_finite_substitution_count_{};

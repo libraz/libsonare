@@ -2,10 +2,15 @@
 
 #include <cstdint>
 
+#include "mastering/dynamics/channel_limits.h"
 namespace sonare::mastering::eq {
 
 void ShelvingEq::prepare(double sample_rate, int max_block_size) {
-  eq_.prepare(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void ShelvingEq::prepare(double sample_rate, int max_block_size, int max_channels) {
+  eq_.prepare(sample_rate, max_block_size, max_channels);
 }
 
 void ShelvingEq::process(float* const* channels, int num_channels, int num_samples) {

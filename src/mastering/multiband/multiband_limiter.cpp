@@ -31,7 +31,7 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size, int max_c
   prepare_multiband("MultibandLimiter", crossover_, scratch_, sample_rate, max_block_size,
                     max_channels, sample_rate_, max_block_size_, max_working_channels_, prepared_,
                     [this](double rate, int block, int channels) {
-                      for (auto& limiter : limiters_) limiter.prepare(rate, block);
+                      for (auto& limiter : limiters_) limiter.prepare(rate, block, channels);
                       rebuild_band_compensation(channels);
                     });
   reset();
@@ -113,12 +113,14 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
             }
             // Only a lookahead change resizes the band's buffers.
             limiters_[band] = rt::ChildProcessor<dynamics::Limiter>(next);
-            if (prepared_) limiters_[band].prepare(sample_rate_, max_block_size_);
+            if (prepared_)
+              limiters_[band].prepare(sample_rate_, max_block_size_, max_working_channels_);
           }
         } else {
           rebuild_processors();
           if (prepared_) {
-            for (auto& limiter : limiters_) limiter.prepare(sample_rate_, max_block_size_);
+            for (auto& limiter : limiters_)
+              limiter.prepare(sample_rate_, max_block_size_, max_working_channels_);
           }
         }
         rebuild_band_compensation(max_working_channels_);

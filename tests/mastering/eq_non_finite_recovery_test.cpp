@@ -193,8 +193,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the equalizer's b
     eq.set_band(1, low_shelf_band());
   };
 
-  EqualizerProcessor control_eq({1});
-  control_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor control_eq;
+  control_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(control_eq);
   const auto control = run_stream(control_eq, kBiquadRecoveryBlocks + kHorizonSlack, 0.0f, false);
 
@@ -206,8 +206,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the equalizer's b
                                            -std::numeric_limits<float>::infinity()};
   for (const float poison_value : poison_values) {
     INFO("poison value " << poison_value);
-    EqualizerProcessor poisoned_eq({1});
-    poisoned_eq.prepare(kSampleRate, kBlockSize);
+    EqualizerProcessor poisoned_eq;
+    poisoned_eq.prepare(kSampleRate, kBlockSize, 1);
     configure(poisoned_eq);
     const auto poisoned =
         run_stream(poisoned_eq, kBiquadRecoveryBlocks + kHorizonSlack, poison_value, true);
@@ -219,8 +219,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the dynamic-band 
           "[mastering][eq]") {
   const auto configure = [](EqualizerProcessor& eq) { eq.set_band(0, dynamic_peak_band(false)); };
 
-  EqualizerProcessor control_eq({1});
-  control_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor control_eq;
+  control_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(control_eq);
   const auto control = run_stream(control_eq, kDetectorRecoveryBlocks + kHorizonSlack, 0.0f, false);
   const float control_gain_db = control_eq.last_applied_gain_db(0);
@@ -230,8 +230,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the dynamic-band 
   // not under test.
   REQUIRE(control_gain_db != peak_band().gain_db);
 
-  EqualizerProcessor poisoned_eq({1});
-  poisoned_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor poisoned_eq;
+  poisoned_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(poisoned_eq);
   const auto poisoned = run_stream(poisoned_eq, kDetectorRecoveryBlocks + kHorizonSlack,
                                    std::numeric_limits<float>::quiet_NaN(), true);
@@ -247,8 +247,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the auto-threshol
   // it looks like it reseeds itself.
   const auto configure = [](EqualizerProcessor& eq) { eq.set_band(0, dynamic_peak_band(true)); };
 
-  EqualizerProcessor control_eq({1});
-  control_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor control_eq;
+  control_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(control_eq);
   const auto control =
       run_stream(control_eq, kAutoThresholdRecoveryBlocks + kHorizonSlack, 0.0f, false);
@@ -257,8 +257,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the auto-threshol
   REQUIRE(control_effect(control) > 0.0f);
   REQUIRE(control_gain_db != peak_band().gain_db);
 
-  EqualizerProcessor poisoned_eq({1});
-  poisoned_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor poisoned_eq;
+  poisoned_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(poisoned_eq);
   const auto poisoned = run_stream(poisoned_eq, kAutoThresholdRecoveryBlocks + kHorizonSlack,
                                    std::numeric_limits<float>::quiet_NaN(), true);
@@ -275,8 +275,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the auto-gain smo
     eq.set_auto_gain_enabled(true);
   };
 
-  EqualizerProcessor control_eq({1});
-  control_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor control_eq;
+  control_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(control_eq);
   const auto control = run_stream(control_eq, kAutoGainRecoveryBlocks + kHorizonSlack, 0.0f, false);
   const float control_auto_gain_db = control_eq.last_auto_gain_db();
@@ -285,8 +285,8 @@ TEST_CASE("one non-finite sample does not outlive its block in the auto-gain smo
   // Auto-gain has to be compensating something, or its smoother is not under test.
   REQUIRE(control_auto_gain_db != 0.0f);
 
-  EqualizerProcessor poisoned_eq({1});
-  poisoned_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor poisoned_eq;
+  poisoned_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(poisoned_eq);
   const auto poisoned = run_stream(poisoned_eq, kAutoGainRecoveryBlocks + kHorizonSlack,
                                    std::numeric_limits<float>::quiet_NaN(), true);
@@ -306,8 +306,8 @@ TEST_CASE("a linear-phase equalizer stream rejoins its control after a non-finit
     eq.set_band(1, low_shelf_band());
   };
 
-  EqualizerProcessor control_eq({1});
-  control_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor control_eq;
+  control_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(control_eq);
   const auto control = run_stream(control_eq, kDetectorRecoveryBlocks + kHorizonSlack, 0.0f, false);
   // One block for the window the sample lands in, plus the blocks its latency
@@ -317,8 +317,8 @@ TEST_CASE("a linear-phase equalizer stream rejoins its control after a non-finit
 
   REQUIRE(control_effect(control) > 0.0f);
 
-  EqualizerProcessor poisoned_eq({1});
-  poisoned_eq.prepare(kSampleRate, kBlockSize);
+  EqualizerProcessor poisoned_eq;
+  poisoned_eq.prepare(kSampleRate, kBlockSize, 1);
   configure(poisoned_eq);
   const auto poisoned = run_stream(poisoned_eq, kDetectorRecoveryBlocks + kHorizonSlack,
                                    std::numeric_limits<float>::quiet_NaN(), true);
@@ -478,8 +478,8 @@ TEST_CASE("the equalizer counts the block a non-finite sample reached, once and 
                                            -std::numeric_limits<float>::infinity()};
   for (const float poison_value : poison_values) {
     INFO("poison value " << poison_value);
-    EqualizerProcessor eq({2});
-    eq.prepare(kSampleRate, kBlockSize);
+    EqualizerProcessor eq;
+    eq.prepare(kSampleRate, kBlockSize, 2);
     configure(eq);
 
     std::vector<float> clean_left = stream_block(0);

@@ -33,9 +33,14 @@ bool valid_range_db(float v) noexcept {
 UpwardExpander::UpwardExpander(UpwardExpanderConfig config) : ConfigBase(std::move(config)) {}
 
 void UpwardExpander::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void UpwardExpander::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "UpwardExpander");
 
   sample_rate_ = sample_rate;
+  max_channels_ = max_channels;
   prepared_ = true;
   active_ = config_;
   update_coefficients(active_);
@@ -58,7 +63,8 @@ void UpwardExpander::process(float* const* channels, int num_channels, int num_s
   // changes its current() value inside acquire(), and we already called it.
   const UpwardExpanderConfig& cfg = *adopt_snapshot_for_block();
 
-  require_prepared_channels(num_channels, kRealtimePreparedChannels, "UpwardExpander");
+  require_prepared_channels(num_channels, static_cast<std::size_t>(max_channels_),
+                            "UpwardExpander");
 
   // Linked detection (mirrors UpwardCompressor): one detector envelope drives every channel.
   auto& follower = follower_;

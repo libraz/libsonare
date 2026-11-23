@@ -367,7 +367,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
     return p;
   }
   if (name == "eq.equalizer") {
-    auto p = std::make_unique<eq::EqualizerProcessor>(detail::equalizer_config(params, 2));
+    auto p = std::make_unique<eq::EqualizerProcessor>(detail::equalizer_config(params));
     detail::configure_equalizer(*p, params);
     return p;
   }
@@ -1391,7 +1391,8 @@ std::unique_ptr<Processor> finish_insert(std::unique_ptr<Processor> processor,
 }  // namespace
 
 void prepare_for_build_rate(sonare::rt::ProcessorBase& processor, double sample_rate) {
-  if (sample_rate > 0.0) processor.prepare(sample_rate, kInsertProbeBlockSize);
+  // One channel: the host prepares again for its own width before any block runs.
+  if (sample_rate > 0.0) processor.prepare(sample_rate, kInsertProbeBlockSize, 1);
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(

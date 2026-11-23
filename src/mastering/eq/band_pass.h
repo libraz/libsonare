@@ -14,6 +14,7 @@ namespace sonare::mastering::eq {
 class BandPassEq : public rt::ProcessorBase {
  public:
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int tail_samples() const noexcept override {

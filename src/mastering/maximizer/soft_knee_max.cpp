@@ -5,6 +5,7 @@
 
 #include "mastering/common/parameter_domain.h"
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -30,11 +31,15 @@ MaximizerConfig inner_config(const SoftKneeMaxConfig& config) noexcept {
 SoftKneeMax::SoftKneeMax(SoftKneeMaxConfig config) : config_(config) { validate_config(config_); }
 
 void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void SoftKneeMax::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "SoftKneeMax");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   maximizer_.set_config(inner_config(config_));
-  maximizer_.prepare(sample_rate_, max_block_size_);
+  maximizer_.prepare(sample_rate_, max_block_size_, max_channels);
   non_finite_substitution_count_.reset();
   prepared_ = true;
 }

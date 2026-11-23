@@ -508,8 +508,8 @@ TEST_CASE("Dynamic EQ detectors leave the excluded plane out", "[mastering][eq]"
   dynamic.dyn.ratio = 4.0f;
   dynamic.dyn.range_db = -12.0f;
   CHECK(sonare::test::excluded_plane_influence([&] {
-          auto eq = std::make_unique<EqualizerProcessor>(EqualizerProcessorConfig{6});
-          eq->prepare(48000.0, 256);
+          auto eq = std::make_unique<EqualizerProcessor>();
+          eq->prepare(48000.0, 256, 6);
           eq->set_band(0, dynamic);
           return eq;
         }) == 0.0f);
@@ -701,8 +701,8 @@ TEST_CASE("EqualizerProcessor unrelated edits leave an in-flight gain transition
   for (const int block : {128, 256, 512}) {
     CAPTURE(block);
     const auto make = [&] {
-      auto eq = std::make_unique<EqualizerProcessor>(EqualizerProcessorConfig{1});
-      eq->prepare(kReconfigRate, block);
+      auto eq = std::make_unique<EqualizerProcessor>();
+      eq->prepare(kReconfigRate, block, 1);
       eq->set_band(0, reconfig_streaming_band());
       return eq;
     };
@@ -734,8 +734,8 @@ TEST_CASE("EqualizerProcessor edited band keeps smoothing from its current gain"
   for (const int block : {128, 256, 512}) {
     CAPTURE(block);
     const auto make = [&] {
-      auto eq = std::make_unique<EqualizerProcessor>(EqualizerProcessorConfig{1});
-      eq->prepare(kReconfigRate, block);
+      auto eq = std::make_unique<EqualizerProcessor>();
+      eq->prepare(kReconfigRate, block, 1);
       eq->set_band(0, reconfig_streaming_band());
       return eq;
     };

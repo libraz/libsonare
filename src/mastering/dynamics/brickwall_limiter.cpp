@@ -9,6 +9,7 @@
 
 #include "mastering/common/parameter_domain.h"
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -32,17 +33,22 @@ bool valid_time_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
 BrickwallLimiter::BrickwallLimiter(BrickwallLimiterConfig config) : ConfigBase(std::move(config)) {}
 
 void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void BrickwallLimiter::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "BrickwallLimiter");
 
   (void)checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  max_channels_ = max_channels;
   // Inner limiter owns the lookahead buffer sizing. lookahead_ms changes
   // require buffer resize and are routed through prepare() (the non-RT-safe
   // control-thread path); the RT-safe snapshot path only forwards ceiling and
   // release updates via update_coefficients().
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
-  limiter_.prepare(sample_rate_, max_block_size_);
+  limiter_.prepare(sample_rate_, max_block_size_, max_channels);
   // Seed the audio thread's live working config from the prepared baseline; the
   // hard-clip stage reads active_.ceiling_db, not config_.
   active_ = config_;
@@ -133,7 +139,7 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
                             // A lookahead change resizes the inner limiter's ring buffers, which is
                             // not RT-safe and MUST NOT race with process(). prepare() publishes the
                             // snapshot itself.
-                            prepare(sample_rate_, max_block_size_);
+                            prepare(sample_rate_, max_block_size_, max_channels_);
                             return;
                           }
                           // Ceiling and release reach the audio thread through the snapshot, whose

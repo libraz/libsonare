@@ -211,8 +211,8 @@ TEST_CASE("Property: zero-gain mid-side EQ preserves stereo", "[mastering][prope
 TEST_CASE("Property: EqualizerProcessor stereo placement preserves side energy symmetry",
           "[mastering][property]") {
   using namespace sonare::mastering::eq;
-  EqualizerProcessor eq({2});
-  eq.prepare(48000.0, 4096);
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, 4096, 2);
   EqBand side_band{EqBandType::Peak, 2000.0f, 6.0f, 1.0f, true};
   side_band.placement = StereoPlacement::Side;
   eq.set_band(0, side_band);
@@ -230,8 +230,8 @@ TEST_CASE("Property: EqualizerProcessor stereo placement preserves side energy s
 TEST_CASE("Property: EqualizerProcessor auto-gain trends boosted RMS toward unity",
           "[mastering][property]") {
   using namespace sonare::mastering::eq;
-  EqualizerProcessor eq({1});
-  eq.prepare(48000.0, 48000);
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, 48000, 1);
   eq.set_auto_gain_enabled(true);
   eq.set_band(0, {EqBandType::Peak, 1000.0f, 9.0f, 1.0f, true});
 

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 #include "util/parameter_checks.h"
@@ -14,11 +15,15 @@ DuckingProcessor::DuckingProcessor(DuckingConfig config)
     : config_(config), router_(to_router_config(config)) {}
 
 void DuckingProcessor::prepare(double sample_rate, int max_block_size) {
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void DuckingProcessor::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   sample_rate_ = sample_rate;
-  router_.prepare(sample_rate_, max_block_size);
+  router_.prepare(sample_rate_, max_block_size, max_channels);
 }
 
 void DuckingProcessor::process(float* const* channels, int num_channels, int num_samples) {

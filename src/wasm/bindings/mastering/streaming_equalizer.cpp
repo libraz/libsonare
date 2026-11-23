@@ -111,11 +111,11 @@ mastering::eq::EqBand eqBandFromVal(val band) {
 
 class EqualizerWrapper {
  public:
-  explicit EqualizerWrapper(val config) : processor_(makeConfig()) {
+  explicit EqualizerWrapper(val config) {
     const double sample_rate = floatProperty(config, "sampleRate", 48000.0f);
     const int max_block_size =
         intProperty(config, "maxBlockSize", mastering::eq::EqualizerProcessor::kDefaultMaxBlock);
-    processor_.prepare(sample_rate, max_block_size);
+    processor_.prepare(sample_rate, max_block_size, 2);
     sample_rate_ = sample_rate;
     max_block_size_ = max_block_size;
   }
@@ -310,12 +310,6 @@ class EqualizerWrapper {
   void validateSidechainBuffer(const char* name, const std::vector<float>& samples) const {
     validate_offline_audio_input(name, samples.data(), samples.size(),
                                  static_cast<int>(std::lround(sample_rate_)));
-  }
-
-  static mastering::eq::EqualizerProcessorConfig makeConfig() {
-    mastering::eq::EqualizerProcessorConfig config;
-    config.max_channels = 2;
-    return config;
   }
 
   mastering::eq::EqualizerProcessor processor_;

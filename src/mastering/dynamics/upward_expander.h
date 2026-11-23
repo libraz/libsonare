@@ -32,6 +32,7 @@ class UpwardExpander : public rt::RtConfigLifecycle<UpwardExpander, UpwardExpand
   explicit UpwardExpander(UpwardExpanderConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
@@ -70,6 +71,7 @@ class UpwardExpander : public rt::RtConfigLifecycle<UpwardExpander, UpwardExpand
 
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
+  int max_channels_ = 0;
   sonare::rt::EnvelopeFollower follower_;
   float last_gain_db_ = 0.0f;
 };

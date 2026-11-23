@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -33,8 +34,12 @@ bool valid_q(float q) { return std::isfinite(q) && q >= 0.0f; }
 }  // namespace
 
 void GraphicEq::prepare(double sample_rate, int max_block_size) {
-  low_eq_.prepare(sample_rate, max_block_size);
-  high_eq_.prepare(sample_rate, max_block_size);
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void GraphicEq::prepare(double sample_rate, int max_block_size, int max_channels) {
+  low_eq_.prepare(sample_rate, max_block_size, max_channels);
+  high_eq_.prepare(sample_rate, max_block_size, max_channels);
   rebuild_bands();
 }
 

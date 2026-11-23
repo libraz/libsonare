@@ -402,9 +402,7 @@ bool try_configure_processor_in_member_spelling(const std::string& name, const P
     detail::configure_eq_bands(p, params, "band");
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.equalizer") {
-    // The only config that has to know the channel count up front; take it from
-    // the set being processed rather than assuming mono.
-    eq::EqualizerProcessor p(detail::equalizer_config(params, channels.count()));
+    eq::EqualizerProcessor p(detail::equalizer_config(params));
     detail::configure_equalizer(p, params);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.minimumPhase") {
