@@ -9,6 +9,7 @@ import {
   detectAcoustic,
   estimateRoom,
   init,
+  masteringRepairDereverbConfigForRoom,
   roomGeometryFromEstimate,
   synthesizeRir,
 } from '../src/index';
@@ -89,5 +90,40 @@ describe('acoustic values that were not measured', () => {
     const estimate = estimateRoom(samples, 48000);
     expect('drrDb' in estimate).toBe(true);
     expect(estimate.drrDb).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('a room and reverberation time that were not measured', () => {
+  it('omits the reverberation time of a silent recording', () => {
+    const result = detectAcoustic({ samples: new Float32Array(48000), sampleRate: 48000 });
+    expect('rt60' in result).toBe(false);
+    for (const key of ['rt60Bands'] as const) {
+      if (key in result) {
+        expect(result[key]).toHaveLength(6);
+      }
+    }
+  });
+
+  it('keeps the volume and dimensions of a measured estimate as numbers', () => {
+    const rir = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
+    const estimate = estimateRoom(rir.rir, 48000);
+    for (const key of ['volume', 'lengthM', 'widthM', 'heightM'] as const) {
+      if (key in estimate) {
+        expect(Number.isFinite(estimate[key]), key).toBe(true);
+      }
+    }
+  });
+
+  it('accepts an estimate with an absent volume and leaves the dereverb delay as given', () => {
+    const estimate = estimateRoom(new Float32Array(48000), 48000);
+    expect('volume' in estimate).toBe(false);
+    const config = masteringRepairDereverbConfigForRoom({ estimate, lateDelayMs: 33 });
+    expect(config.lateDelayMs).toBeCloseTo(33, 5);
   });
 });

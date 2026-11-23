@@ -2,6 +2,7 @@
 /// @brief Node bindings for the dereverb repair.
 
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -184,8 +185,9 @@ Napi::Value SonareWrap::MasteringRepairDereverbConfigForRoom(const Napi::Callbac
   // rather than a zero reverberation time.
   const std::vector<float> rt60_bands = FloatArrayProperty(estimate, "rt60Bands");
   // Mirrors RoomEstimateResult.volume, NaN when the estimate could not measure it.
-  sonare::mastering::repair::apply_room_measurement(config, sonare::mid_frequency_rt60(rt60_bands),
-                                                    FloatDataProperty(estimate, "volume", 0.0f));
+  sonare::mastering::repair::apply_room_measurement(
+      config, sonare::mid_frequency_rt60(rt60_bands),
+      FloatDataProperty(estimate, "volume", std::numeric_limits<float>::quiet_NaN()));
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("threshold", Napi::Number::New(env, config.threshold));

@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <limits>
 
 #include "c_api/mastering_input_domains.h"
 #include "mastering/assistant/repair_session.h"
@@ -744,8 +745,9 @@ val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
   // apply_room_measurement takes a non-positive or non-finite volume as "no
   // measurement" and leaves lateDelayMs at the caller's value, which is also
   // what the C ABI does with the same field.
-  mastering::repair::apply_room_measurement(cfg, mid_frequency_rt60(rt60_bands),
-                                            floatOption(estimate, "volume", 0.0f));
+  mastering::repair::apply_room_measurement(
+      cfg, mid_frequency_rt60(rt60_bands),
+      floatOption(estimate, "volume", std::numeric_limits<float>::quiet_NaN()));
 
   val out = val::object();
   out.set("threshold", cfg.threshold);
