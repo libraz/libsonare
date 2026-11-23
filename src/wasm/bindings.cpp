@@ -340,7 +340,11 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(base)) {
       const sonare::SonareParameterRefusal shown = sonare::util::check::camel_spelled(*refusal);
       message = shown.what();
-      info.set("refusal", refusal_object(shown));
+      val record = refusal_object(shown);
+      const auto* from_c = dynamic_cast<const CEntryRefusal*>(refusal);
+      record.set("cEntry", from_c != nullptr && !from_c->c_entry().empty() ? val(from_c->c_entry())
+                                                                           : val::null());
+      info.set("refusal", record);
       // An unknown key or a wrong type refuses the request's shape: a TypeError, not a RangeError.
       if (refusal->shape_error() && refusal->code() == sonare::ErrorCode::InvalidParameter) {
         info.set("kind", std::string("TypeError"));

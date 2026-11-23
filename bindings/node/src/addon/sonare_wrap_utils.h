@@ -35,10 +35,15 @@ bool IsShapeRefusal(const std::exception& e);
 /// @brief The last C-ABI parameter refusal as the caller reads it (in request keys), or none.
 std::optional<sonare::SonareParameterRefusal> ShownLastRefusal();
 
+/// @brief The entry key of the C-ABI call that recorded the last refusal, or empty when none did.
+std::string LastRefusalEntry();
+
 /// @brief Carries @p shown, the refusal whose text @p error's message ends with, on @p error as
 ///        plain parts under Symbol.for('libsonare.refusal'), so a facade that converted an
-///        argument can re-render it under the name and unit its caller wrote.
-void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown);
+///        argument can re-render it under the name and unit its caller wrote. @p c_entry names the
+///        C-ABI entry that refused (`cEntry`, null when empty: a direct core call refused).
+void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown,
+                   const std::string& c_entry);
 
 /// @brief `renderRefusal(refusal, subjects, scales)`: the attached refusal with its subjects
 ///        replaced and its domain divided by `scales[0]`, as `{ message, refusal }`.
@@ -121,9 +126,11 @@ void MarkPendingForeign(Napi::Env env);
 /// re-class it as a RangeError for INVALID_PARAMETER (see MakeSonareError).
 /// Used by AsyncWorker completion handlers before rejecting their Promise.
 /// A shape refusal (@p shape_refusal) is re-classed as a TypeError instead, and a refusal the
-/// worker captured (@p shown) is attached as @ref AttachRefusal does on the synchronous path.
+/// worker captured (@p shown, refused by @p c_entry) is attached as @ref AttachRefusal does on the
+/// synchronous path.
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal,
-                         const std::optional<sonare::SonareParameterRefusal>& shown);
+                         const std::optional<sonare::SonareParameterRefusal>& shown,
+                         const std::string& c_entry);
 
 /// @brief Whether the calling thread's last C-ABI failure was a shape refusal; an async worker
 ///        records it on its own thread beside the code.

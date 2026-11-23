@@ -63,6 +63,11 @@ std::optional<sonare::SonareParameterRefusal> ShownLastRefusal() {
   return sonare_field_spelling::node::SpelledLastRefusal();
 }
 
+std::string LastRefusalEntry() {
+  const char* entry = sonare_last_refusal_entry();
+  return entry != nullptr ? entry : "";
+}
+
 namespace {
 
 Napi::Object RefusalObject(Napi::Env env, const sonare::SonareParameterRefusal& refusal) {
@@ -131,9 +136,12 @@ bool RefusalFromObject(Napi::Env env, const Napi::Object& object,
 
 }  // namespace
 
-void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown) {
-  error.DefineProperty(Napi::PropertyDescriptor::Value(
-      Napi::Symbol::For(env, "libsonare.refusal"), RefusalObject(env, shown), napi_configurable));
+void AttachRefusal(Napi::Env env, Napi::Object error, const sonare::SonareParameterRefusal& shown,
+                   const std::string& c_entry) {
+  Napi::Object record = RefusalObject(env, shown);
+  record.Set("cEntry", c_entry.empty() ? env.Null() : Napi::String::New(env, c_entry));
+  error.DefineProperty(Napi::PropertyDescriptor::Value(Napi::Symbol::For(env, "libsonare.refusal"),
+                                                       record, napi_configurable));
 }
 
 Napi::Value RenderRefusal(const Napi::CallbackInfo& info) {
@@ -246,7 +254,7 @@ namespace {
 void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& message) {
   Napi::Error error = MakeSonareError(env, err, message, LastRefusalIsShape());
   if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
-    AttachRefusal(env, error.Value(), *shown);
+    AttachRefusal(env, error.Value(), *shown, LastRefusalEntry());
   }
   error.ThrowAsJavaScriptException();
 }
@@ -267,7 +275,7 @@ void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_ro
     return;
   }
   Napi::Error error = MakeSonareError(env, err, shown->what(), shown->shape_error());
-  AttachRefusal(env, error.Value(), *shown);
+  AttachRefusal(env, error.Value(), *shown, LastRefusalEntry());
   error.ThrowAsJavaScriptException();
 }
 
@@ -350,7 +358,7 @@ void ThrowStdException(Napi::Env env, const std::exception& e) {
     Napi::Error error =
         MakeSonareError(env, CErrorFromException(*coded), ExceptionMessage(e), IsShapeRefusal(e));
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e)) {
-      AttachRefusal(env, error.Value(), sonare::util::check::camel_spelled(*refusal));
+      AttachRefusal(env, error.Value(), sonare::util::check::camel_spelled(*refusal), "");
     }
     error.ThrowAsJavaScriptException();
     return;
@@ -360,8 +368,9 @@ void ThrowStdException(Napi::Env env, const std::exception& e) {
 }
 
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err, bool shape_refusal,
-                         const std::optional<sonare::SonareParameterRefusal>& shown) {
-  if (shown) AttachRefusal(env, error, *shown);
+                         const std::optional<sonare::SonareParameterRefusal>& shown,
+                         const std::string& c_entry) {
+  if (shown) AttachRefusal(env, error, *shown, c_entry);
   if (err == SONARE_ERROR_INVALID_PARAMETER) {
     // The async worker built a plain Error; re-class it as the TypeError or RangeError the
     // synchronous path throws, so both report a refused argument alike.

@@ -652,7 +652,8 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
 
   void OnError(const Napi::Error& error) override {
     Napi::HandleScope scope(Env());
-    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_, refusal_);
+    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_, refusal_,
+                                     "");
     deferred_.Reject(error.Value());
   }
 
@@ -712,7 +713,8 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
 
   void OnError(const Napi::Error& error) override {
     Napi::HandleScope scope(Env());
-    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_, refusal_);
+    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_, shape_refusal_, refusal_,
+                                     "");
     deferred_.Reject(error.Value());
   }
 

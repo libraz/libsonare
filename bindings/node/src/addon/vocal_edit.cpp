@@ -117,7 +117,8 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     Napi::HandleScope scope(Env());
     DetachSignal();
     Napi::Object value = error.Value();
-    sonare_node::DecorateSonareError(Env(), value, error_code_, shape_refusal_, refusal_);
+    sonare_node::DecorateSonareError(Env(), value, error_code_, shape_refusal_, refusal_,
+                                     refusal_entry_);
     value.Set("reason", detail_.reason);
     value.Set("field", detail_.field);
     value.Set("expected", detail_.expected_text[0] == '\0' ? Uint64String(detail_.expected)
@@ -146,6 +147,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     error_code_ = error;
     shape_refusal_ = sonare_node::LastRefusalIsShape();
     refusal_ = sonare_node::ShownLastRefusal();
+    refusal_entry_ = sonare_node::LastRefusalEntry();
     sonare_vocal_error_detail_init(&detail_);
     sonare_vocal_last_error_detail(&detail_);
     // Runs on the render worker thread, whose thread-local holds the refusal's detail.
@@ -182,6 +184,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
   bool shape_refusal_ = false;
   std::optional<sonare::SonareParameterRefusal> refusal_;
+  std::string refusal_entry_;
   SonareVocalErrorDetail detail_{};
 };
 

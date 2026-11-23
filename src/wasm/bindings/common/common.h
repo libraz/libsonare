@@ -237,12 +237,30 @@ inline std::string cErrorMessage(SonareError err) {
   return detail != nullptr && detail[0] != '\0' ? detail : fallback;
 }
 
+/// @brief A refusal a C-ABI call recorded, carrying the entry key of the call that refused
+///        (`cEntry` on the JS refusal record; a direct core refusal has none).
+class CEntryRefusal : public sonare::SonareParameterRefusal {
+ public:
+  CEntryRefusal(const sonare::SonareParameterRefusal& refusal, std::string c_entry)
+      : sonare::SonareParameterRefusal(refusal), c_entry_(std::move(c_entry)) {}
+  const std::string& c_entry() const noexcept { return c_entry_; }
+
+ private:
+  std::string c_entry_;
+};
+
+/// @brief Throws @p shown as the refusal the last C-ABI call recorded.
+[[noreturn]] inline void throwCEntryRefusal(const sonare::SonareParameterRefusal& shown) {
+  const char* entry = sonare_last_refusal_entry();
+  throw CEntryRefusal(shown, entry != nullptr ? entry : "");
+}
+
 /// @brief Rethrows the parameter refusal the last C-ABI call recorded, spelled under the refused
 ///        entry's request keys, for the JS translation point to classify; returns when none was.
 inline void rethrowLastCRefusal() {
   if (std::optional<sonare::SonareParameterRefusal> shown =
           sonare_field_spelling::wasm::SpelledLastRefusal()) {
-    throw *shown;
+    throwCEntryRefusal(*shown);
   }
 }
 
@@ -258,7 +276,7 @@ inline void rethrowLastCRefusal() {
 [[noreturn]] inline void throwCodedCErrorFlattening(SonareError err, const char* c_root) {
   if (std::optional<sonare::SonareParameterRefusal> shown =
           sonare_field_spelling::wasm::SpelledLastRefusal(c_root)) {
-    throw *shown;
+    throwCEntryRefusal(*shown);
   }
   throwCodedCError(err);
 }

@@ -611,7 +611,7 @@ Napi::Error MakeVocalError(Napi::Env env, SonareError error,
       env, error, sonare_node::ErrorMessageForCode(error), sonare_node::LastRefusalIsShape());
   Napi::Object object = js_error.Value();
   if (const auto shown = sonare_node::ShownLastRefusal()) {
-    sonare_node::AttachRefusal(env, object, *shown);
+    sonare_node::AttachRefusal(env, object, *shown, sonare_node::LastRefusalEntry());
   }
   object.Set("reason", detail == nullptr ? 0u : detail->reason);
   object.Set("field", detail == nullptr ? "" : detail->field);

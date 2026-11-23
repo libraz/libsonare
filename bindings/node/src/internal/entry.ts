@@ -83,6 +83,8 @@ export interface RefusalRecord {
   readonly callerSpelled: boolean;
   /** The text the caller read, without the entry prefix. */
   readonly text: string;
+  /** The entry key of the C-ABI call that refused; null or absent when a direct core call did. */
+  readonly cEntry?: string | null;
   readonly domain?: {
     readonly lo?: number;
     readonly hi?: number;
@@ -138,7 +140,7 @@ export function retextRefusal(error: Error, refusal: RefusalRecord, text: string
   if (unprefixed !== undefined) {
     mark(named, swap(unprefixed));
   }
-  attachRefusal(error, refusal);
+  attachRefusal(error, { ...refusal, cEntry: refusalOf(error)?.cEntry ?? null });
 }
 
 export function refuse(text: string): RangeError {
