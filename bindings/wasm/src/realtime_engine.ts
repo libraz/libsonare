@@ -103,6 +103,8 @@ import type {
   EngineFreezeOptions,
   EngineFreezeResult,
   EngineGraphSpec,
+  EngineInputMonitor,
+  EngineInputMonitorInput,
   EngineLoop,
   EngineMarker,
   EngineMarkerInput,
@@ -170,6 +172,8 @@ export type {
   EngineGraphNodeType,
   EngineGraphParameterBinding,
   EngineGraphSpec,
+  EngineInputMonitor,
+  EngineInputMonitorInput,
   EngineLoop,
   EngineMarker,
   EngineMarkerInput,
@@ -1785,6 +1789,26 @@ export class RealtimeEngine {
   }
 
   /**
+   * Sets the dry input monitor: the live input passed straight to the output
+   * ahead of the master, switched in one step. Independent of the input track
+   * ({@link setInputTrack}); with both on, dry and wet sound together. A
+   * non-finite `gain` is a `RangeError`.
+   */
+  setInputMonitor(monitor: EngineInputMonitorInput): void {
+    requestObject('setInputMonitor', monitor, 'monitor', true);
+    const enabled = requireBoolean(monitor.enabled, 'enabled');
+    const gain = monitor.gain ?? 1;
+    assertFloatValue(gain, 'gain');
+    this.native.setInputMonitor(enabled, gain);
+  }
+
+  /** The dry input monitor, both fields as one write left them. */
+  inputMonitor(): EngineInputMonitor {
+    const { enabled, gain } = this.native.inputMonitor();
+    return { enabled, gain };
+  }
+
+  /**
    * Sample at which a count-in of `bars` bars from `startSample` ends. Counting starts at the
    * beginning of the bar containing `startSample` (a mid-bar start gets a short first bar), and
    * every counted bar has the length of the time signature in effect at `startSample`.
@@ -1968,6 +1992,30 @@ export class RealtimeEngine {
    */
   setTrackOutputBus(trackId: number, busId: number | null): void {
     this.native.setTrackOutputBus(trackId, optionalBusId('busId', busId));
+  }
+
+  /**
+   * Routes the live input into the lane of `trackId`, ahead of its strip, sends
+   * and fader, ramping over 5 ms; moving it crossfades the two lanes. An id no
+   * lane carries is a `RangeError` and leaves the routing as it was. The first
+   * two input channels feed the lane; the dry monitor ({@link setInputMonitor})
+   * is not touched. May be set before `prepare` and survives it.
+   */
+  setInputTrack(trackId: number): void {
+    this.native.setInputTrack(trackId);
+  }
+
+  /** Stops routing the live input into a lane, ramping out over 5 ms. */
+  clearInputTrack(): void {
+    this.native.clearInputTrack();
+  }
+
+  /**
+   * The track the live input is routed into, or `undefined`. A
+   * {@link setTrackLanes} call dropping that track's lane clears it.
+   */
+  get inputTrack(): number | undefined {
+    return this.native.inputTrack();
   }
 
   /**
@@ -2489,8 +2537,8 @@ export class RealtimeEngine {
   }
 
   /**
-   * Sets up capture in one call: buffer, source, record offset, input monitor
-   * and punch window. The call states the whole setup, so an omitted field
+   * Sets up capture in one call: buffer, source, record offset and punch
+   * window. It leaves the input monitor ({@link setInputMonitor}) alone. The call states the whole setup, so an omitted field
    * returns to its default and an omitted `punch` clears the punch window. The
    * buffer is reallocated only when `numChannels` or `capacityFrames` changes,
    * and doing that while capture is armed is a `SonareError` with
@@ -2506,16 +2554,6 @@ export class RealtimeEngine {
     const offset = options.recordOffsetSamples ?? 0;
     if (typeof offset !== 'number') {
       throw refuseType('recordOffsetSamples must be an integer');
-    }
-    let monitor = { enabled: true, gain: 1 };
-    if (!isAbsent(options.inputMonitor)) {
-      requireObject('inputMonitor', options.inputMonitor);
-      const gain = options.inputMonitor.gain ?? 1;
-      assertFloatValue(gain, 'inputMonitor.gain');
-      monitor = {
-        enabled: requireBoolean(options.inputMonitor.enabled, 'inputMonitor.enabled'),
-        gain,
-      };
     }
     let punch: { start: number; end: number; respelled: Respelled } | undefined;
     if (!isAbsent(options.punch)) {
@@ -2561,7 +2599,6 @@ export class RealtimeEngine {
       this.captureBuffer = { numChannels, capacityFrames: options.capacityFrames };
     }
     native.setCaptureSource(source === CAPTURE_SOURCES.input ? 'input' : 'output');
-    native.setInputMonitor(monitor.enabled, monitor.gain);
   }
 
   /** Arms or disarms capture. */

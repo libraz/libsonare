@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "c_api/eq_band_json.h"
@@ -200,6 +201,37 @@ void RealtimeEngineWasm::setTrackOutputBus(const val& track_id_val, const val& b
 #else
   (void)track_id;
   (void)bus_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
+                                "mixing support is not compiled in");
+#endif
+}
+
+/// Routes the live input into @p track_id_val's lane. Matches sonare_engine_set_input_track.
+void RealtimeEngineWasm::setInputTrack(const val& track_id_val) {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+#if defined(SONARE_WITH_MIXING)
+  withCEntryRefusal("engine_set_input_track", [&] { engine_.set_input_track(track_id); });
+#else
+  (void)track_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::clearInputTrack() {
+#if defined(SONARE_WITH_MIXING)
+  engine_.clear_input_track();
+#else
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
+                                "mixing support is not compiled in");
+#endif
+}
+
+val RealtimeEngineWasm::inputTrack() const {
+#if defined(SONARE_WITH_MIXING)
+  const std::optional<uint32_t> track_id = engine_.input_track();
+  return track_id.has_value() ? val(*track_id) : val::undefined();
+#else
   throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif
@@ -1083,6 +1115,9 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
   cls.function("setTrackLanes", &RealtimeEngineWasm::setTrackLanes)
       .function("setTrackSends", &RealtimeEngineWasm::setTrackSends)
       .function("setTrackOutputBus", &RealtimeEngineWasm::setTrackOutputBus)
+      .function("setInputTrack", &RealtimeEngineWasm::setInputTrack)
+      .function("clearInputTrack", &RealtimeEngineWasm::clearInputTrack)
+      .function("inputTrack", &RealtimeEngineWasm::inputTrack)
       .function("insertParameterConstructedValue",
                 &RealtimeEngineWasm::insertParameterConstructedValue)
       .function("setLaneSidechain", &RealtimeEngineWasm::setLaneSidechain)

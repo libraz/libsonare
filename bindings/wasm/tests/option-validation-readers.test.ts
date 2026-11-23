@@ -90,9 +90,7 @@ describe('boolean options', () => {
         TypeError,
       );
       expect(() => engine.armCapture({ armed: 'yes' as never })).toThrow(TypeError);
-      expect(() =>
-        engine.configureCapture({ capacityFrames: 8, inputMonitor: { enabled: 'yes' as never } }),
-      ).toThrow(TypeError);
+      expect(() => engine.setInputMonitor({ enabled: 'yes' as never })).toThrow(TypeError);
       expect(() =>
         engine.configureCapture({
           capacityFrames: 8,

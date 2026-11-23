@@ -1172,6 +1172,8 @@ export type {
   EngineGraphNodeType,
   EngineGraphParameterBinding,
   EngineGraphSpec,
+  EngineInputMonitor,
+  EngineInputMonitorInput,
   EngineLoop,
   EngineMarker,
   EngineMarkerInput,

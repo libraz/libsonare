@@ -466,11 +466,8 @@ describe('Sonare WASM Module', () => {
         RangeError,
       );
 
-      engine.configureCapture({
-        ...capture,
-        source: 'input',
-        inputMonitor: { enabled: false },
-      });
+      engine.setInputMonitor({ enabled: false });
+      engine.configureCapture({ ...capture, source: 'input' });
       engine.resetCapture();
       engine.armCapture({ armed: true });
       engine.seekMarker(11);
@@ -482,11 +479,7 @@ describe('Sonare WASM Module', () => {
       expect(monitored[1][0]).toBeCloseTo(-0.25, 4);
       expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
 
-      engine.configureCapture({
-        ...capture,
-        source: 'input',
-        inputMonitor: { enabled: true, gain: 0.5 },
-      });
+      engine.setInputMonitor({ enabled: true, gain: 0.5 });
       engine.seekMarker(11);
       monitored = engine.process([
         new Float32Array(128).fill(0.25),
@@ -494,15 +487,10 @@ describe('Sonare WASM Module', () => {
       ]);
       expect(monitored[0][0]).toBeCloseTo(0.5, 4);
       expect(monitored[1][0]).toBeCloseTo(-0.5, 4);
+      expect(() => engine.setInputMonitor({ enabled: true, gain: Number.NaN })).toThrow(RangeError);
       expect(() =>
-        engine.configureCapture({ ...capture, inputMonitor: { enabled: true, gain: Number.NaN } }),
-      ).toThrow();
-      expect(() =>
-        engine.configureCapture({
-          ...capture,
-          inputMonitor: { enabled: true, gain: Number.POSITIVE_INFINITY },
-        }),
-      ).toThrow();
+        engine.setInputMonitor({ enabled: true, gain: Number.POSITIVE_INFINITY }),
+      ).toThrow(RangeError);
 
       const meters = engine.drainMeterTelemetry();
       expect(meters.length).toBeGreaterThan(0);

@@ -11,12 +11,7 @@ import { assignMarkerIds } from '../internal/marker_ids.js';
 import { isAbsent, isNonArrayObject } from '../internal/value_guards.js';
 import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
-import {
-  assertFloatValue,
-  requestObject,
-  requireBoolean,
-  secondsToSampleCount,
-} from '../validation.js';
+import { requestObject, secondsToSampleCount } from '../validation.js';
 import { commitCommand, type EngineCommitContext, requireQueued } from './engine-commit.js';
 import { requireInteger, requireIntegerOption } from './guards.js';
 import { SonareEngineCommandType } from './protocol.js';
@@ -46,8 +41,7 @@ export function requireObject(what: string, value: unknown): asserts value is ob
  * @param sampleAtPpq Converts a quarter-note position to a timeline sample.
  * @returns The wire config and the same setup spelled for the offline mirror.
  * @throws TypeError for an unknown key; RangeError if a frame count, plane count or offset is
- *   not an integer, the source is not `'output'` or `'input'`, the monitor gain is not a
- *   finite 32-bit float, or a punch bound is missing, doubly spelled or negative.
+ *   not an integer, the source is not `'output'` or `'input'`, or a punch bound is missing, doubly spelled or negative.
  */
 export function buildCaptureConfig(
   options: CaptureOptions,
@@ -64,16 +58,6 @@ export function buildCaptureConfig(
     throw refuse("capture source must be 'output' or 'input'");
   }
   const source = rawSource;
-  let monitor = { enabled: true, gain: 1 };
-  if (!isAbsent(options.inputMonitor)) {
-    requireObject('inputMonitor', options.inputMonitor);
-    const gain = options.inputMonitor.gain ?? 1;
-    assertFloatValue(gain, 'inputMonitor.gain');
-    monitor = {
-      enabled: requireBoolean(options.inputMonitor.enabled, 'inputMonitor.enabled'),
-      gain,
-    };
-  }
   let punch: { startSample: number; endSample: number } | undefined;
   if (!isAbsent(options.punch)) {
     requireObject('punch', options.punch);
@@ -103,7 +87,6 @@ export function buildCaptureConfig(
     channels: requireIntegerOption(options.numChannels, defaultNumChannels, 'numChannels', 1),
     source,
     recordOffsetSamples: requireInteger(options.recordOffsetSamples, 0, 'recordOffsetSamples'),
-    inputMonitor: monitor,
     ...(punch === undefined ? {} : { punch }),
   };
   return {
@@ -113,7 +96,6 @@ export function buildCaptureConfig(
       numChannels: config.channels,
       source,
       recordOffsetSamples: config.recordOffsetSamples,
-      inputMonitor: monitor,
       ...(punch === undefined ? {} : { punch }),
     },
   };

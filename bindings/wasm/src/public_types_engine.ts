@@ -229,6 +229,26 @@ export interface EngineMetronomeConfig {
   clickSec?: number;
 }
 
+/**
+ * The dry input monitor as {@link RealtimeEngine.inputMonitor} reads it: the live
+ * input passed straight to the output ahead of the master, independent of the
+ * input track.
+ */
+export interface EngineInputMonitor {
+  /** Whether the live input is monitored through the engine output. */
+  readonly enabled: boolean;
+  /** Linear monitor gain; a negative gain inverts the polarity. */
+  readonly gain: number;
+}
+
+/** The dry input monitor as {@link RealtimeEngine.setInputMonitor} takes it. */
+export interface EngineInputMonitorInput {
+  /** Whether the live input is monitored through the engine output. */
+  enabled: boolean;
+  /** Linear monitor gain, finite. Default `1`. */
+  gain?: number;
+}
+
 /** A node of an {@link EngineGraphSpec}. */
 export interface EngineGraphNode {
   /** Node name, unique within the graph (at most 63 characters). */
@@ -313,13 +333,6 @@ export interface CaptureOptions {
    * before it. Default `0`.
    */
   recordOffsetSamples?: number;
-  /** Input monitoring; `gain` defaults to `1`. An absent `inputMonitor` is enabled at gain `1`, the engine default. */
-  inputMonitor?: {
-    /** Whether the live input is monitored through the engine output. */
-    enabled: boolean;
-    /** Linear monitor gain. Default `1`. */
-    gain?: number;
-  };
   /** Punch-in window. Omitted: no punch window, capture is not gated. */
   punch?: CapturePunch;
 }

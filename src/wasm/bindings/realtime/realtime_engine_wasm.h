@@ -226,6 +226,11 @@ class RealtimeEngineWasm {
   /// list unchanged. Match sonare_engine_set_track_sends / _set_track_output_bus.
   void setTrackSends(const emscripten::val& track_id_val, const emscripten::val& sends_val);
   void setTrackOutputBus(const emscripten::val& track_id_val, const emscripten::val& bus_id_val);
+  /// Routes the live input into a lane, stops routing it, and reads which lane it feeds
+  /// (undefined for none). Match sonare_engine_set_input_track / _clear_ / _input_track.
+  void setInputTrack(const emscripten::val& track_id_val);
+  void clearInputTrack();
+  emscripten::val inputTrack() const;
 #if defined(SONARE_WITH_ARRANGEMENT)
   /// Installs the compiled timeline registered under @p timeline_id (a
   /// ProjectTimeline handle's id) into the stopped engine, all or nothing.
@@ -375,6 +380,8 @@ class RealtimeEngineWasm {
   void setCaptureTiming(int64_t record_offset_samples, int64_t punch_start_sample,
                         int64_t punch_end_sample, bool punch_enabled);
   void setInputMonitor(bool enabled, const emscripten::val& gain_val);
+  /// The dry input monitor as one write left it: `{ enabled, gain }`.
+  emscripten::val inputMonitor() const;
   void resetCapture();
   emscripten::val captureStatus() const;
   emscripten::val capturedAudio() const;

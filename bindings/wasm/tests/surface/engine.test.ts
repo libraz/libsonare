@@ -722,7 +722,6 @@ describe('capture', () => {
         capacityFrames: 128,
         numChannels: 2,
         recordOffsetSamples: -4,
-        inputMonitor: { enabled: true, gain: 0.5 },
         punch: { startSample: 100, endSec: 1 },
       });
       const status = engine.captureStatus();
@@ -746,7 +745,6 @@ describe('capture', () => {
         'setCapturePunch',
         'setCaptureSource',
         'setRecordOffsetSamples',
-        'setInputMonitor',
       ]) {
         expect(name in engine, name).toBe(false);
       }

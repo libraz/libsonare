@@ -1473,6 +1473,9 @@ export interface WasmRealtimeEngine {
   setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
   setTrackSends: (trackId: number, sends: WasmEngineTrackSend[]) => void;
   setTrackOutputBus: (trackId: number, busId: number) => void;
+  setInputTrack: (trackId: number) => void;
+  clearInputTrack: () => void;
+  inputTrack: () => number | undefined;
   setLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => void;
   canSetLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => number;
   canSetBusSidechain: (
@@ -1607,6 +1610,7 @@ export interface WasmRealtimeEngine {
     punchEnabled: boolean,
   ) => void;
   setInputMonitor: (enabled: boolean, gain: number) => void;
+  inputMonitor: () => { enabled: boolean; gain: number };
   resetCapture: () => void;
   captureStatus: () => WasmEngineCaptureStatus;
   capturedAudio: () => Float32Array[];

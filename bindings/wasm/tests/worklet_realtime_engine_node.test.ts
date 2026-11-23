@@ -381,6 +381,46 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('owns the input monitor and the input track apart from the capture setup', async () => {
+      const { engine, posted } = await recordingEngine();
+      try {
+        expect(engine.inputMonitor()).toEqual({ enabled: true, gain: 1 });
+        engine.setInputMonitor({ enabled: false });
+        expect(engine.inputMonitor()).toEqual({ enabled: false, gain: 1 });
+        expect(posted.at(-1)).toMatchObject({
+          type: 'syncInputMonitor',
+          monitor: { enabled: false, gain: 1 },
+        });
+        engine.setInputMonitor(engine.inputMonitor());
+        expect(engine.inputMonitor()).toEqual({ enabled: false, gain: 1 });
+
+        engine.configureCapture({ capacityFrames: 256, source: 'input' });
+        expect(engine.inputMonitor()).toEqual({ enabled: false, gain: 1 });
+        expect(posted.at(-1)).not.toHaveProperty('inputMonitor');
+
+        const before = posted.length;
+        expect(() => engine.setInputMonitor({ enabled: true, gain: Number.NaN })).toThrow(
+          RangeError,
+        );
+        expect(engine.inputMonitor()).toEqual({ enabled: false, gain: 1 });
+        expect(posted.length).toBe(before);
+
+        engine.setTrackLanes([{ trackId: 3 }, { trackId: 4 }]);
+        expect(engine.inputTrack).toBeUndefined();
+        const lanesPosted = posted.length;
+        expect(() => engine.setInputTrack(9)).toThrow(RangeError);
+        expect(posted.length).toBe(lanesPosted);
+        engine.setInputTrack(3);
+        expect(engine.inputTrack).toBe(3);
+        expect(posted.at(-1)).toMatchObject({ type: 'syncInputTrack', trackId: 3 });
+        engine.clearInputTrack();
+        expect(engine.inputTrack).toBeUndefined();
+        expect(posted.at(-1)).toMatchObject({ type: 'syncInputTrack', trackId: null });
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('keeps the recording when a capture configuration is refused', async () => {
       const { engine, offline, postedTypes } = await recordingEngine();
       try {
@@ -399,12 +439,11 @@ describe('SonareRealtimeEngineNode', () => {
         expect(frames).toBeGreaterThan(0);
         const audio = capture.capturedAudio();
         const posted = postedTypes().length;
-        for (const bad of [
-          { capacityFrames: 512, inputMonitor: { enabled: true, gain: Number.NaN } },
-          { capacityFrames: 512, inputMonitor: { enabled: true, gain: 1e39 } },
-          { capacityFrames: 512, source: 'sideways' as never },
-        ]) {
-          expect(() => engine.configureCapture(bad)).toThrow(RangeError);
+        expect(() =>
+          engine.configureCapture({ capacityFrames: 512, source: 'sideways' as never }),
+        ).toThrow(RangeError);
+        for (const gain of [Number.NaN, 1e39]) {
+          expect(() => engine.setInputMonitor({ enabled: true, gain })).toThrow(RangeError);
         }
         expect(capture.captureStatus().capturedFrames).toBe(frames);
         expect(capture.captureStatus().source).toBe('input');
@@ -1296,8 +1335,8 @@ describe('SonareRealtimeEngineNode', () => {
           numChannels: 2,
           source: 'input',
           recordOffsetSamples: -32,
-          inputMonitor: { enabled: true, gain: 0.5 },
         });
+        engine.setInputMonitor({ enabled: true, gain: 0.5 });
         engine.setTempo(60);
         expect(engine.countInEndSample(0, 2)).toBe(384000);
         expect(engine.armCapture({ armed: true })).toBeUndefined();
@@ -1306,7 +1345,6 @@ describe('SonareRealtimeEngineNode', () => {
           numChannels: 2,
           source: 'input',
           recordOffsetSamples: -32,
-          inputMonitor: { enabled: true, gain: 0.5 },
           punch: { startPpq: 1, endPpq: 1.5 },
         });
         engine.setMetronome({ enabled: true, clickSamples: 16 });
@@ -1472,7 +1510,6 @@ describe('SonareRealtimeEngineNode', () => {
               channels: 2,
               source: 'input',
               recordOffsetSamples: -32,
-              inputMonitor: { enabled: true, gain: 0.5 },
             }),
             expect.objectContaining({ type: 'syncMidiNoteOn', destinationId: 3, note: 64 }),
             expect.objectContaining({ type: 'syncMidiNoteOff', destinationId: 3, note: 64 }),

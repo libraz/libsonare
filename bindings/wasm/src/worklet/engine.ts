@@ -15,6 +15,8 @@ import type {
   EngineClip,
   EngineFreezeOptions,
   EngineFreezeResult,
+  EngineInputMonitor,
+  EngineInputMonitorInput,
   EngineMarker,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
@@ -1687,8 +1689,9 @@ export class SonareEngine {
   }
 
   /**
-   * Sets up capture in one call: buffer, source, record offset, input monitor
-   * and punch window, on both engines. The call states the whole setup, so an
+   * Sets up capture in one call: buffer, source, record offset and punch
+   * window, on both engines. It leaves the input monitor
+   * ({@link setInputMonitor}) alone. The call states the whole setup, so an
    * omitted field returns to its default and an omitted `punch` clears the
    * punch window. `numChannels` defaults to the offline plane count.
    */
@@ -1727,6 +1730,55 @@ export class SonareEngine {
       (offline) => offline.setMetronome(opts),
       () => this.postSync({ type: 'syncMetronome', config: opts }),
     );
+  }
+
+  /**
+   * Sets the dry input monitor on both engines: the live input passed straight
+   * to the output ahead of the master. Independent of the input track; a
+   * non-finite `gain` is a `RangeError` and changes neither engine.
+   */
+  setInputMonitor(monitor: EngineInputMonitorInput): void {
+    commitSync(
+      this.commitContext,
+      (offline) => offline.setInputMonitor(monitor),
+      () =>
+        this.postSync({
+          type: 'syncInputMonitor',
+          monitor: { enabled: monitor.enabled, gain: monitor.gain ?? 1 },
+        }),
+    );
+  }
+
+  /** The dry input monitor, read from the offline mirror. */
+  inputMonitor(): EngineInputMonitor {
+    return this.offlineEngine.inputMonitor();
+  }
+
+  /**
+   * Routes the live input into the lane of `trackId` on both engines, ramping
+   * over 5 ms. An id no lane carries is a `RangeError` and changes neither
+   * engine; the dry monitor is not touched.
+   */
+  setInputTrack(trackId: number): void {
+    commitSync(
+      this.commitContext,
+      (offline) => offline.setInputTrack(trackId),
+      () => this.postSync({ type: 'syncInputTrack', trackId }),
+    );
+  }
+
+  /** Stops routing the live input into a lane on both engines. */
+  clearInputTrack(): void {
+    commitSync(
+      this.commitContext,
+      (offline) => offline.clearInputTrack(),
+      () => this.postSync({ type: 'syncInputTrack', trackId: null }),
+    );
+  }
+
+  /** The track the live input is routed into, or `undefined`, read from the offline mirror. */
+  get inputTrack(): number | undefined {
+    return this.offlineEngine.inputTrack;
   }
 
   /**

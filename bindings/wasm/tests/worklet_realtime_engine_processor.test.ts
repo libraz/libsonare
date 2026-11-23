@@ -2514,7 +2514,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           channels: 2,
           source: 'input',
           recordOffsetSamples: -12,
-          inputMonitor: { enabled: true, gain: 0.5 },
+        });
+        processor.receiveMessage({
+          type: 'syncInputMonitor',
+          monitor: { enabled: true, gain: 0.5 },
         });
         processor.receiveMessage({
           type: SonareEngineCommandType.ArmRecord,
@@ -2565,7 +2568,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           channels: 1,
           source: 'input',
           recordOffsetSamples: 0,
-          inputMonitor: { enabled: false, gain: 1 },
+        });
+        processor.receiveMessage({
+          type: 'syncInputMonitor',
+          monitor: { enabled: false, gain: 1 },
         });
         processor.receiveMessage({
           type: SonareEngineCommandType.ArmRecord,
@@ -2918,7 +2924,6 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         channels: 2,
         source: 'input',
         recordOffsetSamples: -12,
-        inputMonitor: { enabled: true, gain: 0.5 },
       },
       syncClearMidiFx: { type: 'syncClearMidiFx', destinationId: 4 },
       syncClearMidiInputSource: { type: 'syncClearMidiInputSource' },
@@ -2943,6 +2948,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       syncClipsDelta: { type: 'syncClipsDelta', upserts: [], removeIds: [] },
       syncExternalMidiClock: { type: 'syncExternalMidiClock', enabled: true },
       syncLoadSoundFont: { type: 'syncLoadSoundFont', data: new Uint8Array(0) },
+      syncInputMonitor: { type: 'syncInputMonitor', monitor: { enabled: true, gain: 0.5 } },
+      syncInputTrack: { type: 'syncInputTrack', trackId: null },
       syncMarkers: { type: 'syncMarkers', markers: [] },
       syncMasterStripEqBand: {
         type: 'syncMasterStripEqBand',
@@ -3440,7 +3447,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           channels: 2,
           source: 'input',
           recordOffsetSamples: 0,
-          inputMonitor: { enabled: false, gain: 1 },
+        });
+        processor.receiveMessage({
+          type: 'syncInputMonitor',
+          monitor: { enabled: false, gain: 1 },
         });
         processor.receiveMessage({
           type: SonareEngineCommandType.ArmRecord,

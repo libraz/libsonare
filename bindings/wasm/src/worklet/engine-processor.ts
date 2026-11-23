@@ -725,6 +725,16 @@ export class SonareRealtimeEngineWorkletProcessor {
           this.metronomeConfig = config;
         }
         break;
+      case 'syncInputMonitor':
+        this.engine.setInputMonitor(message.monitor);
+        break;
+      case 'syncInputTrack':
+        if (message.trackId === null) {
+          this.engine.clearInputTrack();
+        } else {
+          this.engine.setInputTrack(message.trackId);
+        }
+        break;
       case 'syncAutomation':
         this.engine.setAutomationLane(message.paramId, message.points);
         break;
@@ -867,7 +877,6 @@ export class SonareRealtimeEngineWorkletProcessor {
             numChannels: message.channels,
             source: message.source,
             recordOffsetSamples: message.recordOffsetSamples,
-            inputMonitor: message.inputMonitor,
           },
           message.channels,
           this.sampleRate,

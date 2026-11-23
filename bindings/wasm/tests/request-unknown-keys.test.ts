@@ -97,6 +97,7 @@ const METHOD_SHAPES = [
   'setBusInsertParam',
   'setBusSidechain',
   'setLoop',
+  'setInputMonitor',
   'setMetronome',
   'setParameter',
   'setPartRig',
@@ -178,15 +179,18 @@ describe('a class-method request refuses its keys through an instance', () => {
     await api.init();
   });
 
-  it('configureCapture refuses an unknown punch or input-monitor key by name', () => {
+  it('configureCapture refuses an unknown punch key and the input monitor by name', () => {
     const engine = new api.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() =>
         engine.configureCapture({ capacityFrames: 128, punch: { notAnOption: 1 } } as never),
       ).toThrow(unknownKeyText('configureCapture: unknown key punch.notAnOption'));
       expect(() =>
-        engine.configureCapture({ capacityFrames: 128, inputMonitor: { notAnOption: 1 } } as never),
-      ).toThrow(unknownKeyText('configureCapture: unknown key inputMonitor.notAnOption'));
+        engine.configureCapture({ capacityFrames: 128, inputMonitor: { enabled: false } } as never),
+      ).toThrow(unknownKeyText('configureCapture: unknown key inputMonitor'));
+      expect(() => engine.setInputMonitor({ enabled: true, notAnOption: 1 } as never)).toThrow(
+        unknownKeyText('setInputMonitor: unknown key notAnOption'),
+      );
     } finally {
       engine.destroy();
     }

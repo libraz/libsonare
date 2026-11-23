@@ -242,6 +242,7 @@ import type {
   EngineGraphNode,
   EngineGraphParameterBinding,
   EngineGraphSpec,
+  EngineInputMonitorInput,
   EngineLoop,
   EngineMetronomeConfig,
   EngineProcessOptions,
@@ -2303,12 +2304,7 @@ const ConfigureCaptureRequestKeys = keysOf<CaptureOptions>()([
   'numChannels',
   'source',
   'recordOffsetSamples',
-  'inputMonitor',
   'punch',
-]);
-const CaptureInputMonitorKeys = keysOf<NonNullable<CaptureOptions['inputMonitor']>>()([
-  'enabled',
-  'gain',
 ]);
 const CapturePunchKeys = keysOf<CapturePunch>()([
   'startPpq',
@@ -2362,6 +2358,7 @@ const SetMetronomeRequestKeys = keysOf<EngineMetronomeConfig>()([
   'clickSamples',
   'clickSec',
 ]);
+const SetInputMonitorRequestKeys = keysOf<EngineInputMonitorInput>()(['enabled', 'gain']);
 const SetTrackSoloMuteRequestKeys = keysOf<{ solo: boolean; mute: boolean }>()(['solo', 'mute']);
 const MidiBankRequestKeys = keysOf<{ msb: number; lsb: number }>()(['msb', 'lsb']);
 const MixerConfigRequestKeys = keysOf<MixerConfig>()(['scene', 'sampleRate', 'maxBlockSize']);
@@ -2782,7 +2779,7 @@ export const REQUEST_SHAPES = {
   restoreBusInsertParam: { keys: InsertParamRequestKeys },
   configureCapture: {
     keys: ConfigureCaptureRequestKeys,
-    nested: { inputMonitor: CaptureInputMonitorKeys, punch: CapturePunchKeys },
+    nested: { punch: CapturePunchKeys },
   },
   armCapture: { keys: ArmCaptureRequestKeys },
   process: { keys: EngineProcessRequestKeys },
@@ -2812,6 +2809,7 @@ export const REQUEST_SHAPES = {
   setParameter: { keys: SetParameterRequestKeys },
   setLoop: { keys: SetLoopRequestKeys },
   setMetronome: { keys: SetMetronomeRequestKeys },
+  setInputMonitor: { keys: SetInputMonitorRequestKeys },
   setTrackSoloMute: { keys: SetTrackSoloMuteRequestKeys },
   pushMidiProgram: { keys: MidiBankRequestKeys },
   pushMidiInputProgram: { keys: MidiBankRequestKeys },

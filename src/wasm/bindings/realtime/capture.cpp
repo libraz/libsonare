@@ -83,6 +83,13 @@ void RealtimeEngineWasm::setInputMonitor(bool enabled, const val& gain_val) {
   const float gain = checkedFloatFromVal(gain_val, "gain");
   engine_.set_input_monitor(enabled, gain);
 }
+val RealtimeEngineWasm::inputMonitor() const {
+  const auto monitor = engine_.input_monitor();
+  val out = val::object();
+  out.set("enabled", monitor.enabled);
+  out.set("gain", monitor.gain);
+  return out;
+}
 void RealtimeEngineWasm::resetCapture() { engine_.reset_capture(); }
 
 val RealtimeEngineWasm::captureStatus() const {
@@ -117,6 +124,7 @@ void registerRealtimeEngineCapture(class_<RealtimeEngineWasm>& cls) {
       .function("setRecordOffsetSamples", &RealtimeEngineWasm::setRecordOffsetSamples)
       .function("setCaptureTiming", &RealtimeEngineWasm::setCaptureTiming)
       .function("setInputMonitor", &RealtimeEngineWasm::setInputMonitor)
+      .function("inputMonitor", &RealtimeEngineWasm::inputMonitor)
       .function("resetCapture", &RealtimeEngineWasm::resetCapture)
       .function("captureStatus", &RealtimeEngineWasm::captureStatus)
       .function("capturedAudio", &RealtimeEngineWasm::capturedAudio);

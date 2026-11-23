@@ -330,6 +330,18 @@ export interface SonareEngineSyncMetronomeMessage {
   config: EngineMetronomeConfig;
 }
 
+/** Sets the dry input monitor; the gain is already validated. */
+export interface SonareEngineSyncInputMonitorMessage {
+  type: 'syncInputMonitor';
+  monitor: { enabled: boolean; gain: number };
+}
+
+/** Routes the live input into a lane, or (`trackId` null) stops routing it. */
+export interface SonareEngineSyncInputTrackMessage {
+  type: 'syncInputTrack';
+  trackId: number | null;
+}
+
 export interface SonareEngineSyncAutomationMessage {
   type: 'syncAutomation';
   paramId: number;
@@ -409,7 +421,6 @@ export interface SonareEngineSyncCaptureMessage {
   channels: number;
   source: EngineCaptureStatus['source'];
   recordOffsetSamples: number;
-  inputMonitor: { enabled: boolean; gain: number };
   /** Punch window in timeline samples; absent means no punch window. */
   punch?: { startSample: number; endSample: number };
 }
@@ -720,6 +731,8 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiClipsMessage
   | SonareEngineSyncMarkersMessage
   | SonareEngineSyncMetronomeMessage
+  | SonareEngineSyncInputMonitorMessage
+  | SonareEngineSyncInputTrackMessage
   | SonareEngineSyncAutomationMessage
   | SonareEngineSyncParametersMessage
   | SonareEngineSyncTempoMessage
