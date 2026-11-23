@@ -149,6 +149,7 @@ Before merging, the maintainer brings a change here to the following:
 Before merging, the maintainer brings a change here to the following:
 
 - The error class follows the cause, not the layer that refused. A refused argument is a `TypeError` when its shape is wrong (a wrong type, or a key the request object or parameter bag does not declare) and a `RangeError` when a value is outside its domain; Python raises `SonareValueError` for both.
+- An argument object a facade wraps into a document slot (the strip setters' `settings`) is still an argument: a key or value refused inside it is named from the caller's argument and raised as `TypeError`/`RangeError` (`SonareValueError` in Python). JSON text the caller hands over is a document, and its refusal stays `InvalidFormat`.
 - That holds whether the binding or the library refused the argument, so every C-ABI `INVALID_PARAMETER` surfaces that way. Any other failure (object state, unsupported feature, allocation, decoding) is a `SonareError` carrying the C-ABI code.
 - A loader refusing the content of a document it was handed (a form the library writes or ships a schema for, such as a project, scene or chain config, or HRTF bytes) reports `INVALID_FORMAT`.
 - JSON that is only one call's arguments (insert `params`, `overrides`, a part rig's `inserts`, a MIDI-FX `config`) is an argument, so even malformed text there is `INVALID_PARAMETER`; a reader shared by both takes its code from the caller.
