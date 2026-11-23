@@ -25,6 +25,7 @@ class PresenceEnhancer : public rt::ProcessorBase {
  public:
   explicit PresenceEnhancer(PresenceEnhancerConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   void set_config(const PresenceEnhancerConfig& config);

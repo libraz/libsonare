@@ -457,7 +457,8 @@ if(BUILD_MASTERING)
 endif()
 
 if(BUILD_MASTERING AND BUILD_MIXING)
-  target_sources(sonare_tests PRIVATE mastering/multiband_saturation_config_alloc_test.cpp)
+  target_sources(sonare_tests PRIVATE mastering/multiband_saturation_config_alloc_test.cpp
+                                      mastering/memory_bound_test.cpp)
 endif()
 
 if(BUILD_MIXING)

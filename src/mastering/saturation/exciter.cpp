@@ -43,7 +43,13 @@ Exciter::Exciter(ExciterConfig config) : config_(config) {
 }
 
 void Exciter::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument API and may switch between any supported channel
+  // count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void Exciter::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Exciter");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
@@ -53,10 +59,10 @@ void Exciter::prepare(double sample_rate, int max_block_size) {
       even_dc_coefficient_for_rate(sample_rate_ * static_cast<double>(kHarmonicOversampleFactor));
   // Preallocate per-channel filter state so process() never resizes on the
   // audio thread (matches Tube/AmpSim).
-  bandpass_.assign(dynamics::kRealtimePreparedChannels, bandpass_coeffs_);
-  allpass_.assign(dynamics::kRealtimePreparedChannels, allpass_coeffs_);
-  even_dc_.assign(dynamics::kRealtimePreparedChannels, 0.0f);
-  plane_gates_.assign(dynamics::kRealtimePreparedChannels, rt::StageGate{});
+  bandpass_.assign(static_cast<size_t>(max_channels), bandpass_coeffs_);
+  allpass_.assign(static_cast<size_t>(max_channels), allpass_coeffs_);
+  even_dc_.assign(static_cast<size_t>(max_channels), 0.0f);
+  plane_gates_.assign(static_cast<size_t>(max_channels), rt::StageGate{});
   // Preallocate the Oversample4x scratch, per-channel streaming state, and the
   // dry/aligned delays so the audio-thread process() path never allocates.
   band_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
@@ -64,11 +70,11 @@ void Exciter::prepare(double sample_rate, int max_block_size) {
   oversampled_scratch_.assign(
       static_cast<size_t>(max_block_size_) * static_cast<size_t>(kHarmonicOversampleFactor), 0.0f);
   harmonic_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
-  harmonic_oversampler_states_.resize(dynamics::kRealtimePreparedChannels);
+  harmonic_oversampler_states_.resize(static_cast<size_t>(max_channels));
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
-  paths_.ensure_channels(dynamics::kRealtimePreparedChannels);
+  paths_.ensure_channels(static_cast<size_t>(max_channels));
   reset();
 }
 

@@ -37,27 +37,33 @@ PresenceEnhancer::PresenceEnhancer(PresenceEnhancerConfig config) : config_(conf
 }
 
 void PresenceEnhancer::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument API and may switch between any supported channel
+  // count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void PresenceEnhancer::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "PresenceEnhancer");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
   // Preallocate per-channel filter state so process() never resizes on the
   // audio thread (matches Tube/AmpSim).
-  bandpass_.assign(dynamics::kRealtimePreparedChannels,
+  bandpass_.assign(static_cast<size_t>(max_channels),
                    make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q));
   // Preallocate the Oversample4x scratch, per-channel streaming state, and
   // the dry-path delay so the audio-thread process() path never allocates.
-  harmonic_adaa_.assign(dynamics::kRealtimePreparedChannels,
+  harmonic_adaa_.assign(static_cast<size_t>(max_channels),
                         sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>{});
   band_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
   oversampled_scratch_.assign(
       static_cast<size_t>(max_block_size_) * static_cast<size_t>(kHarmonicOversampleFactor), 0.0f);
   harmonic_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
-  harmonic_oversampler_states_.resize(dynamics::kRealtimePreparedChannels);
+  harmonic_oversampler_states_.resize(static_cast<size_t>(max_channels));
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
-  paths_.ensure_channels(dynamics::kRealtimePreparedChannels);
+  paths_.ensure_channels(static_cast<size_t>(max_channels));
   reset();
 }
 

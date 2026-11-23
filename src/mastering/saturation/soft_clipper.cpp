@@ -52,24 +52,30 @@ SoftClipper::SoftClipper(SoftClipperConfig config) : config_(config) {
 }
 
 void SoftClipper::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument API and may switch between any supported channel
+  // count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void SoftClipper::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "SoftClipper");
   max_block_size_ = max_block_size;
   prepared_ = true;
   // Preallocate per-channel ADAA state so process() never resizes on the audio
   // thread (matches Tube/AmpSim).
   tanh_adaa_.clear();
-  tanh_adaa_.resize(dynamics::kRealtimePreparedChannels);
+  tanh_adaa_.resize(static_cast<size_t>(max_channels));
   // Preallocate the Oversample4x scratch, per-channel streaming state, and the
   // dry-path delay so the audio-thread process() path never allocates.
   const size_t scratch =
       static_cast<size_t>(max_block_size_) * static_cast<size_t>(kOversampleFactor);
   up_scratch_.assign(scratch, 0.0f);
   down_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
-  oversampler_states_.resize(dynamics::kRealtimePreparedChannels);
+  oversampler_states_.resize(static_cast<size_t>(max_channels));
   for (auto& state : oversampler_states_) {
     oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
-  paths_.ensure_channels(dynamics::kRealtimePreparedChannels);
+  paths_.ensure_channels(static_cast<size_t>(max_channels));
   reset();
 }
 

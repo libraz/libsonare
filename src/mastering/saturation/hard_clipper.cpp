@@ -35,17 +35,23 @@ bool valid_ceiling(float v) noexcept { return v > 0.0f; }
 HardClipper::HardClipper(HardClipperConfig config) : config_(config) { validate_config(config_); }
 
 void HardClipper::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument API and may switch between any supported channel
+  // count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void HardClipper::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "HardClipper");
   max_block_size_ = max_block_size;
   non_finite_substitution_count_.reset();
   prepared_ = true;
   // Preallocate per-channel ADAA state so process() never resizes on the audio
   // thread (matches Tube/AmpSim).
   hard_clip_adaa_.clear();
-  hard_clip_adaa_.reserve(dynamics::kRealtimePreparedChannels);
+  hard_clip_adaa_.reserve(static_cast<size_t>(max_channels));
   hard_clip_adaa2_.clear();
-  hard_clip_adaa2_.reserve(dynamics::kRealtimePreparedChannels);
-  for (size_t i = 0; i < dynamics::kRealtimePreparedChannels; ++i) {
+  hard_clip_adaa2_.reserve(static_cast<size_t>(max_channels));
+  for (size_t i = 0; i < static_cast<size_t>(max_channels); ++i) {
     hard_clip_adaa_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
     hard_clip_adaa2_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
   }
@@ -55,7 +61,7 @@ void HardClipper::prepare(double sample_rate, int max_block_size) {
       static_cast<size_t>(max_block_size_) * static_cast<size_t>(kOversampleFactor);
   up_scratch_.assign(scratch, 0.0f);
   down_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
-  oversampler_states_.resize(dynamics::kRealtimePreparedChannels);
+  oversampler_states_.resize(static_cast<size_t>(max_channels));
   for (auto& state : oversampler_states_) {
     oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
