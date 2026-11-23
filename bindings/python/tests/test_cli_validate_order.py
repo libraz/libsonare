@@ -21,7 +21,7 @@ _CHANNELS = (
     [
         (
             ["key", _UNREADABLE, "--hpss", "--hop-length", "8"],
-            "--hop-length must be at least 16 with --hpss (got 8)",
+            "--hop-length must be at least 16 with --hpss",
         ),
         (
             ["rhythm", _UNREADABLE, "--bpm-min", "250"],

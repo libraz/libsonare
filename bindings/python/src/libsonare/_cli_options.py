@@ -622,10 +622,7 @@ def _validate_key_namespace(args: argparse.Namespace, parser: argparse.ArgumentP
     if not getattr(args, "hpss", False) or hop_length is None:
         return
     if hop_length < _MIN_KEY_HPSS_HOP_LENGTH:
-        parser.error(
-            f"--hop-length must be at least {_MIN_KEY_HPSS_HOP_LENGTH} with --hpss "
-            f"(got {hop_length})"
-        )
+        parser.error(f"--hop-length must be at least {_MIN_KEY_HPSS_HOP_LENGTH} with --hpss")
 
 
 def _validate_chords_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:

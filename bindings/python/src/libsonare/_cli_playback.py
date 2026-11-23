@@ -211,9 +211,7 @@ def cmd_playback(args: argparse.Namespace) -> int:
     planes, sample_rate = _load_audio_channels(args.file)
     channels = len(planes)
     if channels not in (1, 2, 6, 8):
-        raise SonareValueError(
-            f"sonare playback accepts a 1, 2, 6, or 8 channel input file (got {channels} channels)"
-        )
+        raise SonareValueError("input file must have 1, 2, 6, or 8 channels")
     interleaved = _interleave_planes(planes)
 
     config = _playback_config_document(args)
