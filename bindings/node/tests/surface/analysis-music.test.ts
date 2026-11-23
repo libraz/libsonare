@@ -704,11 +704,13 @@ describe('tempo range on detectBpm and detectBeats', () => {
   const samples = slowPulse();
 
   it('detectBpm honours bpmMin and bpmMax', () => {
-    const wide = detectBpm(samples, sampleRate, { bpmMin: 30, bpmMax: 300 });
+    // The 60-200 estimate lies above 59 BPM; a 30-59 search must answer inside its own range.
     const narrow = detectBpm(samples, sampleRate, { bpmMin: 60, bpmMax: 200 });
-    expect(narrow).toBeGreaterThanOrEqual(60);
+    const below = detectBpm(samples, sampleRate, { bpmMin: 30, bpmMax: 59 });
+    expect(narrow).toBeGreaterThan(59);
     expect(narrow).toBeLessThanOrEqual(200);
-    expect(wide).not.toBe(narrow);
+    expect(below).toBeGreaterThanOrEqual(30);
+    expect(below).toBeLessThanOrEqual(59);
   });
 
   it('detectBpm defaults to 60-200 BPM', () => {
@@ -731,7 +733,14 @@ describe('tempo range on detectBpm and detectBeats', () => {
     const audio = Audio.fromBuffer(samples, sampleRate);
     const range = { bpmMin: 60, bpmMax: 200 };
     expect(audio.detectBpm()).toBe(detectBpm(samples, sampleRate, range));
-    expect(audio.detectBpm()).not.toBe(detectBpm(samples, sampleRate, { bpmMin: 30, bpmMax: 300 }));
+    // The default estimate lies above 59 BPM, so a 30-59 search answers inside that range only
+    // if the bounds reach the core.
+    const below = { bpmMin: 30, bpmMax: 59 };
+    const constrained = detectBpm(samples, sampleRate, below);
+    expect(audio.detectBpm()).toBeGreaterThan(below.bpmMax);
+    expect(constrained).toBeGreaterThanOrEqual(below.bpmMin);
+    expect(constrained).toBeLessThanOrEqual(below.bpmMax);
+    expect(audio.detectBpm(below)).toBe(constrained);
     expect(audio.detectBeats()).toEqual(detectBeats({ samples, sampleRate, ...range }));
     expect(audio.analyzeBpm().bpm).toBe(analyzeBpm({ samples, sampleRate, ...range }).bpm);
     expect(audio.detectDownbeats()).toEqual(detectDownbeats(samples, sampleRate));
