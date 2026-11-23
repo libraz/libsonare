@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "../../bindings/node/src/addon/field_spelling.h"
+#include "util/constants.h"
 #include "wasm/field_spelling.h"
 
 namespace {
@@ -592,6 +593,21 @@ TEST_CASE("the second-set entries name the first refused argument in header orde
   CHECK(last_message() == "analyzer must not be NULL");
 }
 
+TEST_CASE("pitch shift names the refused semitone argument",
+          "[c_api][effects][c_refusal_subjects]") {
+  const float samples[] = {0.25f, -0.25f};
+  for (float semitones : {std::numeric_limits<float>::infinity(), 1200.0f}) {
+    CAPTURE(semitones);
+    float* out = nullptr;
+    size_t length = 0;
+    REQUIRE(sonare_pitch_shift(samples, 2, 48000, semitones, nullptr, &out, &length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_message(), Catch::Matchers::StartsWith("pitch_semitones must "));
+    CHECK(out == nullptr);
+    CHECK(length == 0);
+  }
+}
+
 TEST_CASE("the effects and metering entries refuse their own members", "[c_api][effects]") {
   const std::vector<float> samples(22050, 0.1f);
   float* out = nullptr;
@@ -760,6 +776,20 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
       {"engine_set_external_midi_clock_enabled.enabled", {nullptr}},
       // A flag: every int is accepted.
       {"engine_set_midi_destination_external.external", {nullptr}},
+      {"engine_set_record_offset_samples.offset_samples", {[] {
+         const EnginePtr engine = prepared_engine();
+         REQUIRE(sonare_engine_set_loop(engine.get(), 0.0, 1.0, 1) == SONARE_OK);
+         float samples[256] = {};
+         float* channels[] = {samples};
+         const SonareEngineCaptureBuffer buffer{channels, 1, 256};
+         REQUIRE(sonare_engine_set_capture_buffer(engine.get(), &buffer) == SONARE_OK);
+         REQUIRE(sonare_engine_set_capture_punch(engine.get(), 0, 256, 1) == SONARE_OK);
+         REQUIRE(sonare_engine_arm_capture(engine.get(), 1) == SONARE_OK);
+         REQUIRE(sonare_engine_set_record_offset_samples(engine.get(),
+                                                         std::numeric_limits<int64_t>::max()) ==
+                 SONARE_ERROR_INVALID_PARAMETER);
+         CHECK_THAT(last_message(), Catch::Matchers::StartsWith("offset_samples must "));
+       }}},
       {"engine_apply_track_strip_insert_param_by_name_now.track_id", {[] {
          const EnginePtr engine = prepared_engine();
          int applied = 0;
@@ -941,6 +971,20 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          REQUIRE(sonare_engine_set_track_lanes(engine.get(), lane, 1) == SONARE_OK);
          sonare_engine_set_track_output_bus(engine.get(), 1, 99);
        }}},
+      {"lufs_interleaved.num_channels", {[] {
+         const float samples[2] = {0.1f, 0.1f};
+         SonareLufsResult result{};
+         sonare_lufs_interleaved(samples, 1, 0, 48000, &result);
+       }}},
+      {"lufs_series_interleaved.num_channels", {[] {
+         const float samples[2] = {0.1f, 0.1f};
+         float* momentary = nullptr;
+         size_t momentary_length = 0;
+         float* short_term = nullptr;
+         size_t short_term_length = 0;
+         sonare_lufs_series_interleaved(samples, 1, 0, 48000, &momentary, &momentary_length,
+                                        &short_term, &short_term_length);
+       }}},
       {"mel_to_audio.mel", {[] {
          float* out = nullptr;
          size_t out_length = 0;
@@ -964,6 +1008,11 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          const float* plane = nullptr;
          sonare_mixer_process_stereo(mixer.get(), &plane, nullptr, 1, nullptr, nullptr, 1);
        }}},
+      {"mixer_strip_at.index", {[] {
+         // An empty mixer has no strip at index 0.
+         const MixerPtr mixer = new_mixer();
+         sonare_mixer_strip_at(mixer.get(), 0);
+       }}},
       {"mixing_scene_preset_json.preset_name", {[] {
          char* json = nullptr;
          sonare_mixing_scene_preset_json(nullptr, &json);
@@ -978,12 +1027,39 @@ const std::map<std::string, SpellingDriver>& spelling_row_drivers() {
          const MeterPtr meter(raw, sonare_playback_loudness_meter_destroy);
          sonare_playback_loudness_meter_push_interleaved(meter.get(), nullptr, 1);
        }}},
+      // A bad input is refused as plain text with no subject.
+      {"playback_render_interleaved.in", {nullptr}},
+      {"playback_render_interleaved.in_channels", {[] {
+         const float sample = 0.0f;
+         float* out = nullptr;
+         size_t out_frames = 0;
+         int out_channels = 0;
+         sonare_playback_render_interleaved(&sample, 1, 0, 48000, "{}", nullptr, &out, &out_frames,
+                                            &out_channels);
+       }}},
       // A realtime entry refuses a bad input without recording a subject.
       {"playback_renderer_process_interleaved.in", {nullptr}},
       // A realtime entry refuses a bad input without recording a subject.
       {"playback_renderer_process_planar.in", {nullptr}},
       // A bad input is refused as plain text with no subject.
       {"playback_renderer_render_offline.in", {nullptr}},
+      {"polyphonic_set_note_edit.amplitude_envelope", {[] {
+         std::vector<float> tone(22050);
+         for (size_t i = 0; i < tone.size(); ++i) {
+           tone[i] = 0.5f * std::sin(sonare::constants::kTwoPi * 440.0f * static_cast<float>(i) /
+                                     22050.0f);
+         }
+         SonarePolyphonicAnalysis* raw = nullptr;
+         REQUIRE(sonare_polyphonic_analyze(tone.data(), tone.size(), 22050, nullptr, &raw) ==
+                 SONARE_OK);
+         const std::unique_ptr<SonarePolyphonicAnalysis,
+                               decltype(&sonare_polyphonic_analysis_destroy)>
+             analysis(raw, sonare_polyphonic_analysis_destroy);
+         size_t note_count = 0;
+         REQUIRE(sonare_polyphonic_note_count(analysis.get(), &note_count) == SONARE_OK);
+         REQUIRE(note_count > 0);
+         sonare_polyphonic_set_note_edit(analysis.get(), 0, nullptr, nullptr, 2);
+       }}},
       {"project_apply_vocal_edit.sve1",
        {[] {
           const ProjectPtr project = new_project();
@@ -1103,6 +1179,17 @@ void check_spelling_rows(const Overrides& rows, const Spell& spelled_last_refusa
 }
 
 }  // namespace
+
+TEST_CASE("offline freeze names the refused frame count", "[c_api][c_refusal_subjects]") {
+  const EnginePtr engine = prepared_engine();
+  SonareEngineFreezeOptions options{};
+  sonare_engine_freeze_options_init(&options);
+  options.total_frames = -1;
+  SonareEngineFreezeResult out{};
+  REQUIRE(sonare_engine_freeze_offline(engine.get(), &options, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(last_refusal_subjects() == std::vector<std::string>{"options.total_frames"});
+}
 
 TEST_CASE("every renamed refusal subject reaches the caller under the facade's spelling",
           "[c_api][field_spelling]") {

@@ -225,7 +225,8 @@ SonareError sonare_engine_set_record_offset_samples(SonareEngine* engine, int64_
   SONARE_C_API_ENTRY;
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_TRY
-  engine->engine.set_record_offset_samples(offset_samples);
+  constexpr std::array<CName, 1> names{{{"record_offset_samples", "offset_samples"}}};
+  with_c_names(names, [&] { engine->engine.set_record_offset_samples(offset_samples); });
   return SONARE_OK;
   SONARE_C_CATCH
 }

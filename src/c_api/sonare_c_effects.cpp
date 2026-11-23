@@ -297,6 +297,12 @@ SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_r
 
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(length, sample_rate, pitch_semitones, &plan)) {
+    if (const SonareError err = run_validation(
+            [&] { sonare::util::check::finite_float(pitch_semitones, "pitch_semitones"); });
+        err != SONARE_OK) {
+      return err;
+    }
+    // Keep plan refusals allocation-free before the caller's audio is copied.
     set_last_error_static(SONARE_ERROR_INVALID_PARAMETER, kPitchShiftPlanError);
     return SONARE_ERROR_INVALID_PARAMETER;
   }

@@ -439,10 +439,13 @@ SonareError sonare_engine_freeze_offline(SonareEngine* engine,
   // lane at its settled values, so the frozen clip does not carry a fade-in that
   // the live lane never had.
   engine->engine.prime_offline_parameters(options->num_channels, block_size);
-  out->clip_id = engine->engine
-                     .freeze_offline(options->num_channels, options->total_frames, block_size,
-                                     options->clip_id, options->start_ppq, options->gain)
-                     .id;
+  constexpr std::array<CName, 1> names{{{"total_frames", "options.total_frames"}}};
+  out->clip_id = with_c_names(names, [&] {
+    return engine->engine
+        .freeze_offline(options->num_channels, options->total_frames, block_size, options->clip_id,
+                        options->start_ppq, options->gain)
+        .id;
+  });
   out->frames = options->total_frames;
   out->num_channels = options->num_channels;
   return SONARE_OK;

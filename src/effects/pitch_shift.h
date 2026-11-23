@@ -26,11 +26,11 @@ struct PitchShiftPlan {
   std::size_t stretched_samples = 0;
 };
 
-/// Refusal message for a failed plan, shared by every caller that reports one.
+/// Refusal message for a failed semitone plan, the text pitch_shift() refuses it with, held
+/// whole so a caller can report it without allocating.
 inline constexpr const char* kPitchShiftPlanError =
-    "pitch shift needs non-empty input, a finite positive ratio, a shifted rate "
-    "sample_rate * ratio from 1000 Hz to INT_MAX, and a stretched intermediate within the "
-    "audio buffer limit";
+    "pitch_semitones must produce a finite positive ratio and a resampler-compatible shifted "
+    "sample rate, with a stretched intermediate within the audio buffer limit";
 
 /// @brief Validates a pitch shift by @p ratio without allocating.
 /// @details Refuses empty or oversized input, a non-finite or non-positive ratio, a
