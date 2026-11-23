@@ -35,6 +35,16 @@ def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
         output.writeframes(bytes(samples))
 
 
+def _write_impulse_wav(path: Path, fixture: dict[str, Any]) -> None:
+    """Write one full-scale sample followed by silence, at the tone's rate and length."""
+    frames = int(fixture["frames"])
+    with wave.open(str(path), "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(int(fixture["sample_rate"]))
+        output.writeframes(struct.pack("<h", 32767) + bytes(2 * (frames - 1)))
+
+
 def _write_float_wav(path: Path, fixture: dict[str, Any]) -> None:
     """Write the tone as 32-bit IEEE float, the one PCM image that holds a sample past full scale."""
     sample_rate = int(fixture["sample_rate"])
@@ -142,8 +152,19 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     # The tone past full scale, for the writers that lower a whole output set by one
     # gain instead of clipping it; a 16-bit fixture cannot carry such a sample.
     hot_path = directory / "contract-hot.wav"
-    _write_float_wav(hot_path, {**fixtures["audio"], "amplitude": fixtures["audio"]["hot_amplitude"]})
+    _write_float_wav(
+        hot_path, {**fixtures["audio"], "amplitude": fixtures["audio"]["hot_amplitude"]}
+    )
     paths["audio_hot"] = str(hot_path)
+    # Silence and a lone impulse at the tone's rate and length: the inputs on which
+    # a measurement is not taken (absent) or reaches its infinite end (null), so the
+    # two front-ends are compared on exactly the values a text printer can get wrong.
+    silent_path = directory / "contract-silent.wav"
+    _write_wav(silent_path, {**fixtures["audio"], "amplitude": 0.0})
+    paths["audio_silent"] = str(silent_path)
+    impulse_path = directory / "contract-impulse.wav"
+    _write_impulse_wav(impulse_path, fixtures["audio"])
+    paths["audio_impulse"] = str(impulse_path)
     for name, text in fixtures["projects"].items():
         project_path = directory / f"project_{name}.json"
         project_path.write_text(text, encoding="utf-8")

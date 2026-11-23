@@ -10064,7 +10064,7 @@
               "keys": {
                 "dynamic_range_db": "measured:+inf",
                 "loudness_range_lu": "measured",
-                "crest_factor": "number",
+                "crest_factor": "measured",
                 "is_compressed": "boolean"
               }
             },
@@ -10204,6 +10204,30 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "analyze",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "impulse",
+          "argv": [
+            "analyze",
+            "{audio_impulse}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -12421,6 +12445,18 @@
           "stderr_contains": [
             "bpm-min"
           ]
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "rhythm",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -12612,6 +12648,18 @@
           ],
           "exit": 0,
           "payload": "frames",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "pitch",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
           "artifact": "none",
           "stdout": "json"
         }
@@ -15121,6 +15169,18 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "bpm",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -15991,19 +16051,19 @@
       "payloads": {
         "success": {
           "keys": {
-            "peak_db": "number",
-            "rms_db": "number",
+            "peak_db": "measured:-inf",
+            "rms_db": "measured:-inf",
             "dynamic_range_db": "measured:+inf",
-            "crest_factor": "number",
+            "crest_factor": "measured",
             "loudness_range_lu": "measured",
             "is_compressed": "boolean",
             "loudness": {
               "keys": {
                 "count": "integer",
-                "mean": "number",
-                "std": "number",
-                "min": "number",
-                "max": "number"
+                "mean": "measured:-inf",
+                "std": "measured",
+                "min": "measured:-inf",
+                "max": "measured:-inf"
               }
             }
           }
@@ -16015,6 +16075,30 @@
           "argv": [
             "dynamics",
             "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "dynamics",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "impulse",
+          "argv": [
+            "dynamics",
+            "{audio_impulse}",
             "--json"
           ],
           "exit": 0,
@@ -16130,6 +16214,18 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "timbre",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -16170,16 +16266,16 @@
       "payloads": {
         "success": {
           "keys": {
-            "integrated_lufs": "number",
-            "momentary_lufs": "number",
+            "integrated_lufs": "measured:-inf",
+            "momentary_lufs": "measured:-inf",
             "short_term_lufs": "measured:-inf",
             "loudness_range_lu": "measured"
           }
         },
         "series": {
           "keys": {
-            "integrated_lufs": "number",
-            "momentary_lufs": "number",
+            "integrated_lufs": "measured:-inf",
+            "momentary_lufs": "measured:-inf",
             "short_term_lufs": "measured:-inf",
             "loudness_range_lu": "measured",
             "momentary_series": {
@@ -16216,6 +16312,30 @@
           ],
           "exit": 0,
           "payload": "series",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "lufs",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "impulse",
+          "argv": [
+            "lufs",
+            "{audio_impulse}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
           "artifact": "none",
           "stdout": "json"
         }
@@ -16306,6 +16426,18 @@
           "argv": [
             "acoustic",
             "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "acoustic",
+            "{audio_silent}",
             "--json"
           ],
           "exit": 0,
@@ -17364,9 +17496,9 @@
       "payloads": {
         "reference_loudness": {
           "keys": {
-            "gain_to_match_db": "number",
-            "reference_lufs": "number",
-            "source_lufs": "number"
+            "gain_to_match_db": "measured",
+            "reference_lufs": "measured:-inf",
+            "source_lufs": "measured:-inf"
           }
         },
         "tonal_balance": {
@@ -17513,6 +17645,86 @@
           ],
           "exit": 0,
           "payload": "reference_loudness",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_loudness_silent",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio_silent}",
+            "--reference",
+            "{audio_silent}",
+            "--analysis",
+            "match.referenceLoudness",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "reference_loudness",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_loudness_impulse",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio_impulse}",
+            "--reference",
+            "{audio_impulse}",
+            "--analysis",
+            "match.referenceLoudness",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "reference_loudness",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "tonal_balance_silent",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio_silent}",
+            "--reference",
+            "{audio_silent}",
+            "--analysis",
+            "match.tonalBalance",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "tonal_balance",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "tonal_balance_log_bands_silent",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio_silent}",
+            "--reference",
+            "{audio_silent}",
+            "--analysis",
+            "match.tonalBalanceLogBands",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "tonal_balance_log_bands",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_delay_silent",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio_silent}",
+            "--reference",
+            "{audio_silent}",
+            "--analysis",
+            "match.estimateReferenceDelaySamples",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "reference_delay",
           "artifact": "none",
           "stdout": "json"
         }
@@ -18985,6 +19197,30 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "estimate-room",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "impulse",
+          "argv": [
+            "estimate-room",
+            "{audio_impulse}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -19498,10 +19734,11 @@
                 },
                 "noise": {
                   "keys": {
-                    "floor_dbfs": "number",
+                    "floor_dbfs": "measured:-inf",
                     "band_floor_dbfs": {
                       "type": "measured_pairs",
-                      "index": "band_floor_band"
+                      "index": "band_floor_band",
+                      "items": "measured:-inf"
                     }
                   }
                 },
@@ -19512,7 +19749,7 @@
                     "harmonics": "integer",
                     "harmonic_dbfs": {
                       "type": "array",
-                      "items": "number"
+                      "items": "measured:-inf"
                     }
                   }
                 },
@@ -19562,10 +19799,11 @@
                 },
                 "noise": {
                   "keys": {
-                    "floor_dbfs": "number",
+                    "floor_dbfs": "measured:-inf",
                     "band_floor_dbfs": {
                       "type": "measured_pairs",
-                      "index": "band_floor_band"
+                      "index": "band_floor_band",
+                      "items": "measured:-inf"
                     }
                   }
                 },
@@ -19576,7 +19814,7 @@
                     "harmonics": "integer",
                     "harmonic_dbfs": {
                       "type": "array",
-                      "items": "number"
+                      "items": "measured:-inf"
                     }
                   }
                 },
@@ -19625,10 +19863,11 @@
                 },
                 "noise": {
                   "keys": {
-                    "floor_dbfs": "number",
+                    "floor_dbfs": "measured:-inf",
                     "band_floor_dbfs": {
                       "type": "measured_pairs",
-                      "index": "band_floor_band"
+                      "index": "band_floor_band",
+                      "items": "measured:-inf"
                     }
                   }
                 },
@@ -19639,7 +19878,7 @@
                     "harmonics": "integer",
                     "harmonic_dbfs": {
                       "type": "array",
-                      "items": "number"
+                      "items": "measured:-inf"
                     }
                   }
                 },
@@ -19697,6 +19936,19 @@
           ],
           "exit": 0,
           "payload": "stages",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "repair",
+            "{audio_silent}",
+            "--detect",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "detect",
           "artifact": "none",
           "stdout": "json"
         }
@@ -19819,6 +20071,18 @@
           "stderr_contains": [
             "(expected detectDefects, hopLength, nFft, truePeakOversample)"
           ]
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "mastering-profile",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -21427,14 +21691,14 @@
                 "attack_per_second": "number",
                 "bpm": "measured",
                 "bpm_confidence": "number",
-                "crest_factor_db": "number",
+                "crest_factor_db": "measured",
                 "duration_sec": "number",
-                "integrated_lufs": "number",
+                "integrated_lufs": "measured:-inf",
                 "loudness_range_lu": "measured",
                 "spectral_centroid_hz": "number",
                 "spectral_flatness": "number",
                 "sustain_ratio": "number",
-                "true_peak_dbtp": "number"
+                "true_peak_dbtp": "measured:-inf"
               }
             },
             "chain_config": {
@@ -21619,6 +21883,18 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "mastering-suggest",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -26818,6 +27094,18 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "melody",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -27522,6 +27810,34 @@
           "stderr_contains": [
             "--reference is required"
           ]
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "stereo",
+            "{audio_silent}",
+            "--reference",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "impulse",
+          "argv": [
+            "stereo",
+            "{audio_impulse}",
+            "--reference",
+            "{audio_impulse}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -27598,6 +27914,20 @@
           "stderr_contains": [
             "--reference is required"
           ]
+        },
+        {
+          "id": "silent",
+          "argv": [
+            "phase",
+            "{audio_silent}",
+            "--reference",
+            "{audio_silent}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
