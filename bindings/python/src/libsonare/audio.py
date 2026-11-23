@@ -554,7 +554,9 @@ class Audio:
 
         Args:
             bpm_min: Lower bound of the tempo search in BPM (default 60).
-            bpm_max: Upper bound of the tempo search in BPM (default 200).
+            bpm_max: Upper bound of the tempo search in BPM (default 200). A
+                range other than the default is searched as given, and the
+                unconstrained estimate is preferred when it lies inside it.
 
         Returns:
             Estimated tempo in beats per minute. For confidence and time

@@ -550,7 +550,8 @@ def analyze_bpm(
     the input sample rate; ``hop_length`` is in samples of the input buffer.
     The tempo search spans ``bpm_min``-``bpm_max``, 60-200 BPM by default like
     every other tempo entry point; widen it to list half-tempo candidates or
-    very slow material.
+    very slow material. A range other than the default is searched as given,
+    and the unconstrained estimate is preferred when it lies inside it.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

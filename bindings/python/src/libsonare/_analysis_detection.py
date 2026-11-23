@@ -90,7 +90,9 @@ def detect_bpm(
             1D array of dtype ``float32``.
         sample_rate: Sample rate in Hz.
         bpm_min: Lower bound of the tempo search in BPM (default 60).
-        bpm_max: Upper bound of the tempo search in BPM (default 200).
+        bpm_max: Upper bound of the tempo search in BPM (default 200). A range
+            other than the default is searched as given, and the unconstrained
+            estimate is preferred when it lies inside it.
 
     Returns:
         Detected BPM as a ``float``. For confidence, use :func:`analyze`.

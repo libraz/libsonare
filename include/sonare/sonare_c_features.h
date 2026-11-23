@@ -20,7 +20,8 @@ extern "C" {
 ///          synthesized click trains, this entry is the closer of the two at
 ///          rates above the analysis rate. @p n_fft is the analysis window
 ///          length in samples at 22050 Hz, rescaled to @p sample_rate;
-///          @p hop_length is in samples of the caller's buffer.
+///          @p hop_length is in samples of the caller's buffer. A range other than 60-200 BPM
+///          is searched as given, and the 60-200 estimate is kept when it lies inside it.
 /// @param out Receives heap-owned arrays; free with sonare_free_bpm_analysis_result.
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, size_t hop_length,
