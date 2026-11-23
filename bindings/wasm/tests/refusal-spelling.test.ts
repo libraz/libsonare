@@ -2,7 +2,7 @@
  * Every row of the generated spelling table reaches a refusal that names the caller's
  * spelling and never the C-ABI subject.
  *
- * The rows are parsed from `src/wasm/field_spelling.h` (`kOverrides` and `kLengths`) at run time, so a row the
+ * The rows are parsed from `src/wasm/field_spelling.h` (`kOverrides`, `kLengths` and `kQuotients`) at run time, so a row the
  * generator adds is swept without a pin: it needs a driver below or an `UNDRIVEN` entry, and
  * the sweep fails until it has one. Each driver makes a fresh valid call of the facade that
  * reaches the C entry, with the one argument the caller spells `spelling` set to a value.
@@ -68,9 +68,10 @@ interface Row {
 
 /**
  * The rows of one generated table in table order: `kOverrides` renames a subject, `kLengths`
- * names a count by the array whose length it is.
+ * names a count by the array whose length it is, and `kQuotients` (`{..., "<array>", "<divisor>"}`)
+ * by that length over another argument.
  */
-function parseRows(table: 'kOverrides' | 'kLengths'): Row[] {
+function parseRows(table: 'kOverrides' | 'kLengths' | 'kQuotients'): Row[] {
   const text = readFileSync(SOURCE, 'utf8');
   const start = text.indexOf(`${table} = `);
   const end = text.indexOf('}};', start);
@@ -78,9 +79,11 @@ function parseRows(table: 'kOverrides' | 'kLengths'): Row[] {
     throw new Error(`no ${table} block found in ${SOURCE}`);
   }
   const rows: Row[] = [];
-  const row = /\{"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_.]+)"\}/g;
+  const row =
+    /\{"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_.]+)"(?:,\s*"([A-Za-z0-9_.]+)")?\}/g;
   for (const m of text.slice(start, end).matchAll(row)) {
-    rows.push({ entry: m[1], subject: m[2], spelling: m[3] });
+    const spelling = m[4] === undefined ? m[3] : `${m[3]}.length / ${m[4]}`;
+    rows.push({ entry: m[1], subject: m[2], spelling });
   }
   return rows;
 }
@@ -538,7 +541,12 @@ const EXTRA_OUTSIDE: Record<string, unknown[]> = {
  * Rows no value can make refuse as a parameter, or that need live state the harness cannot
  * build. Keyed `"entry.subject"`; the reason is one of the three fixed phrases.
  */
-const UNDRIVEN: Record<string, string> = {};
+const UNDRIVEN: Record<string, string> = {
+  // The realtime path records no refusal text, so nothing can name the quotient.
+  'playback_renderer_process_interleaved.frames': 'no value refuses it',
+  // An empty render is refused by its message, which names no argument.
+  'playback_renderer_render_offline.frames': 'content refusal carries no subject',
+};
 
 const REASONS = ['no value refuses it', 'needs live state', 'content refusal carries no subject'];
 
@@ -564,7 +572,7 @@ function refusals(driver: Driver, spelling: string, extra: unknown[]): string[] 
 }
 
 describe('refusal spelling', () => {
-  const rows = [...parseRows('kOverrides'), ...parseRows('kLengths')];
+  const rows = [...parseRows('kOverrides'), ...parseRows('kLengths'), ...parseRows('kQuotients')];
   let driven = 0;
   let undriven = 0;
 

@@ -65,9 +65,10 @@ interface Row {
 
 /**
  * The rows of one generated table, `{"<entry>", "<subject>", "<spelling>"}`: `kOverrides` renames
- * a subject, `kLengths` names a count by the array whose length it is.
+ * a subject, `kLengths` names a count by the array whose length it is, and `kQuotients`
+ * (`{..., "<array>", "<divisor>"}`) by that length over another argument.
  */
-function parseRows(table: 'kOverrides' | 'kLengths'): Row[] {
+function parseRows(table: 'kOverrides' | 'kLengths' | 'kQuotients'): Row[] {
   const text = readFileSync(TABLE_PATH, 'utf8');
   const start = text.indexOf(`${table} = `);
   const open = text.indexOf('{{', start);
@@ -77,13 +78,15 @@ function parseRows(table: 'kOverrides' | 'kLengths'): Row[] {
   }
   const block = text.slice(open + 2, close);
   const rows: Row[] = [];
-  for (const m of block.matchAll(/\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\}/g)) {
-    rows.push({ entry: m[1], subject: m[2], spelling: m[3] });
+  const row = /\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*(?:,\s*"([^"]+)"\s*)?\}/g;
+  for (const m of block.matchAll(row)) {
+    const spelling = m[4] === undefined ? m[3] : `${m[3]}.length / ${m[4]}`;
+    rows.push({ entry: m[1], subject: m[2], spelling });
   }
   return rows;
 }
 
-const ROWS = [...parseRows('kOverrides'), ...parseRows('kLengths')];
+const ROWS = [...parseRows('kOverrides'), ...parseRows('kLengths'), ...parseRows('kQuotients')];
 
 const SR = 22050;
 const TONE = Float32Array.from({ length: SR / 2 }, (_, i) =>
@@ -580,7 +583,12 @@ const UNDRIVEN_REASONS = [
 ];
 
 /** Rows no value can make refuse as a parameter, keyed `"<entry>.<subject>"`. */
-const UNDRIVEN: Record<string, string> = {};
+const UNDRIVEN: Record<string, string> = {
+  // The realtime path records no refusal text, so nothing can name the quotient.
+  'playback_renderer_process_interleaved.frames': 'no value refuses it',
+  // An empty render is refused by its message, which names no argument.
+  'playback_renderer_render_offline.frames': 'content refusal carries no subject',
+};
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -619,9 +627,11 @@ describe('refusal spelling sweep', () => {
       const undrivenReason = UNDRIVEN[key(row)];
       if (undrivenReason !== undefined) {
         expect(UNDRIVEN_REASONS).toContain(undrivenReason);
-        expect(DRIVERS[row.entry], `${key(row)} is undriven and must not also have a driver`).toBe(
-          undefined,
-        );
+        if (ROWS.filter((r) => r.entry === row.entry).every((r) => key(r) in UNDRIVEN)) {
+          expect(DRIVERS[row.entry], `${row.entry} drives no row and must not have a driver`).toBe(
+            undefined,
+          );
+        }
         counts.undriven += 1;
         return;
       }
