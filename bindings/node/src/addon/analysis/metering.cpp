@@ -638,7 +638,7 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   out.Set("radius", radius);
   out.Set("angleRad", angle);
   SetMeasured(out, "correlation", result.correlation);
-  out.Set("averageAbsAngleRad", Napi::Number::New(env, result.average_abs_angle_rad));
+  SetMeasured(out, "averageAbsAngleRad", result.average_abs_angle_rad);
   out.Set("maxRadius", Napi::Number::New(env, result.max_radius));
   return out;
   SONARE_NODE_CATCH(env)

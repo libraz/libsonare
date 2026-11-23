@@ -60,7 +60,7 @@ export interface ClippingRegion {
 export interface ClippingReport {
   /** Samples at or past the threshold. */
   clippedSamples: number;
-  /** `clippedSamples` divided by the input length. */
+  /** `clippedSamples` divided by the input length. Always a number: empty input is refused first. */
   clippedRatio: number;
   /** Largest absolute sample value over all reported regions (linear). */
   maxClippedPeak: number;
@@ -208,7 +208,7 @@ export function meteringRmsDb(...args: unknown[]): number {
   });
 }
 
-/** Fraction of frames below `thresholdDb`. */
+/** Fraction of frames below `thresholdDb`; `1` for silence. Always a number: empty input is refused first. */
 export function meteringSilenceRatio(request: MeteringSilenceRatioRequest): number;
 export function meteringSilenceRatio(
   samples: Float32Array,
@@ -406,12 +406,12 @@ export interface PhaseScopeReport {
   side: Float32Array;
   /** Distance of each point from the origin. */
   radius: Float32Array;
-  /** Angle of each point, `atan2(side, mid)`, in radians. */
+  /** Angle of each point, `atan2(side, mid)`, in radians; `NaN` at a silent point, which has no angle, so the array keeps one element per point. */
   angleRad: Float32Array;
   /** Stereo correlation over the full-resolution signal. Absent when either channel has zero energy. */
   correlation?: number;
-  /** Mean absolute point angle over the full-resolution signal, in radians. */
-  averageAbsAngleRad: number;
+  /** Mean absolute point angle over the full-resolution signal, in radians; silent points add nothing. Absent when every point is silent. */
+  averageAbsAngleRad?: number;
   /** Largest point radius over the full-resolution signal. */
   maxRadius: number;
 }

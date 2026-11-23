@@ -2219,7 +2219,7 @@ export interface SonareModule {
     radius: Float32Array;
     angleRad: Float32Array;
     correlation?: number;
-    averageAbsAngleRad: number;
+    averageAbsAngleRad?: number;
     maxRadius: number;
   };
   meteringSpectrum: (

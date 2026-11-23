@@ -5731,6 +5731,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MeteringDynamicRangeOptions.hopSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
+| `PhaseScopeReport.angleRad` | NaN at a silent point, which has no angle (was 0); the array keeps one element per point |
+| `PhaseScopeReport.averageAbsAngleRad` | optional; absent when every point is silent (was 0) |
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.nFft` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
@@ -10457,6 +10459,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MeteringDynamicRangeOptions.windowSec` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MeteringDynamicRangeOptions.windowSec` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `MixAssistantOptions.tempoBpm` | `MixingAssistantSuggestRequest.tempoBpm`: 0, a negative or a non-finite tempo is refused with RangeError; omit tempoBpm for the transport fallback tempo (0 used to select it) |
+| `PhaseScopeReport.angleRad` | NaN at a silent point, which has no angle (was 0); the array keeps one element per point |
+| `PhaseScopeReport.averageAbsAngleRad` | optional; absent when every point is silent (was 0) |
 | `SpectrumOptions.dbAmin` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbAmin` | absent = library default; explicit 0 -> RangeError ("omit for the default") |
 | `SpectrumOptions.dbRef` (`./analysis`) | absent = library default; explicit 0 -> RangeError ("omit for the default") |

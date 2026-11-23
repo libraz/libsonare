@@ -257,7 +257,7 @@ val phaseScopeToVal(const metering::PhaseScopeResult& result) {
   out.set("radius", vectorToFloat32Array(radius));
   out.set("angleRad", vectorToFloat32Array(angle));
   setMeasured(out, "correlation", result.correlation);
-  out.set("averageAbsAngleRad", result.average_abs_angle_rad);
+  setMeasured(out, "averageAbsAngleRad", result.average_abs_angle_rad);
   out.set("maxRadius", result.max_radius);
   return out;
 }
