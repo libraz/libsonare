@@ -1735,3 +1735,111 @@ describe('Sonare WASM Project', () => {
     });
   });
 });
+
+describe('Sonare WASM Project meter plumbing', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  /** Click track at 120 BPM: a quiet click every beat, an accented one on every fourth beat from `downbeatIndex`. */
+  function accentedClicks(
+    sampleRate: number,
+    firstBeatSec: number,
+    downbeatIndex: number,
+    seconds: number,
+  ): Float32Array {
+    const audio = new Float32Array(Math.round(sampleRate * seconds));
+    const beatSec = 0.5;
+    for (let k = 0; firstBeatSec + k * beatSec < seconds - 0.2; k++) {
+      const at = Math.round((firstBeatSec + k * beatSec) * sampleRate);
+      const accented = k >= downbeatIndex && (k - downbeatIndex) % 4 === 0;
+      const amp = accented ? 1 : 0.35;
+      const freq = accented ? 1500 : 900;
+      for (let i = 0; i < 256 && at + i < audio.length; i++) {
+        audio[at + i] += amp * Math.exp(-i / 40) * Math.sin((2 * Math.PI * freq * i) / sampleRate);
+      }
+    }
+    return audio;
+  }
+
+  /** Format-0 SMF at 480 PPQN: 120 BPM, a Time Signature (denominator 4) at each `[tick, numerator]`, one note. */
+  function smfWithSignatures(sigs: Array<[number, number]>): Uint8Array {
+    const vlq = (value: number): number[] => {
+      const out = [value & 0x7f];
+      for (let rest = value >>> 7; rest > 0; rest >>>= 7) out.unshift((rest & 0x7f) | 0x80);
+      return out;
+    };
+    const body: number[] = [0x00, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20];
+    let tick = 0;
+    for (const [at, numerator] of sigs) {
+      body.push(...vlq(at - tick), 0xff, 0x58, 0x04, numerator, 0x02, 0x18, 0x08);
+      tick = at;
+    }
+    body.push(0x00, 0x90, 0x3c, 0x64, ...vlq(480), 0x80, 0x3c, 0x00, 0x00, 0xff, 0x2f, 0x00);
+    const head = [0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0];
+    const track = [0x4d, 0x54, 0x72, 0x6b, 0, 0, (body.length >> 8) & 0xff, body.length & 0xff];
+    return new Uint8Array([...head, ...track, ...body]);
+  }
+
+  it('autoTempo applies a first time signature on the first downbeat bar phase', () => {
+    // The first downbeat is click 9 at 5 s = ppq 10; the lead-in is 2.5 bars, so the signature
+    // starts at ppq 10 mod 4 = 2 and the bar lines run 2, 6, 10. The tracker places beats to one
+    // chroma hop (512 / 22050 s = 23.2 ms = 0.046 beats at 120 BPM), so 0.05 ppq.
+    const tolerance = 0.05;
+    const project = new Project();
+    try {
+      project.autoTempo(accentedClicks(22050, 0.5, 9, 16), 22050, { applyTimeSignatures: true });
+      const signatures = project.timeSignatures();
+      expect(signatures[0].numerator).toBe(4);
+      expect(signatures[0].denominator).toBe(4);
+      expect(Math.abs(signatures[0].startPpq - 2)).toBeLessThan(tolerance);
+      expect(Math.abs(project.snapToGrid(10.2, 1.0, 0) - 10)).toBeLessThan(tolerance);
+      expect(Math.abs(project.snapToGrid(6.2, 1.0, 0) - 6)).toBeLessThan(tolerance);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('imports a late first SMF time signature with the format 4/4 stored at ppq 0', () => {
+    const project = new Project();
+    try {
+      project.importSmf(smfWithSignatures([[1920, 3]]));
+      expect(project.timeSignatures()).toEqual([
+        { startPpq: 0, numerator: 4, denominator: 4 },
+        { startPpq: 4, numerator: 3, denominator: 4 },
+      ]);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('folds an SMF tick-0 time signature that the next one repeats unchanged', () => {
+    const project = new Project();
+    try {
+      project.importSmf(
+        smfWithSignatures([
+          [0, 3],
+          [2880, 3],
+        ]),
+      );
+      expect(project.timeSignatures()).toEqual([{ startPpq: 6, numerator: 3, denominator: 4 }]);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('keeps a late first time signature through SMF export then import', () => {
+    const stored = [{ startPpq: 2, numerator: 3, denominator: 4 }];
+    const source = new Project();
+    const target = new Project();
+    try {
+      source.importSmf(smfWithSignatures([[960, 3]]));
+      source.setTimeSignatures(stored);
+      target.importSmf(source.exportSmf());
+      expect(target.timeSignatures()).toEqual(stored);
+    } finally {
+      source.destroy();
+      target.destroy();
+    }
+  });
+});
