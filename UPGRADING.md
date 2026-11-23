@@ -5323,6 +5323,12 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `StreamAnalyzerConfig.magnitudeDownsample` | removed: the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config |
 | `StreamAnalyzerConfig.outputFormat` | removed: it never took effect, so drop it from the config and read frames with readFrames |
 
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `AnalyzeMelodyRequest.hopLength` | a hopLength that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hopLength must keep the observation matrix within 500000000 elements') |
+
 #### Other individual changes
 
 | 1.x | 2.0.0 |
@@ -5760,6 +5766,14 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is a TypeError (masteringRepairApply: unknown key stages[0].clipThreshold), and a value out of its domain is a RangeError naming stages[<i>].<key>; declip takes clipThresholdDb in dBFS |
+
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `DecomposeStemsLinkedRequest.nComponents` | an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements') |
+| `DecomposeStemsRequest.nComponents` | an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements') |
+| `NoteStretchRequest.stretchRatio` | a stretchRatio that would make the stretched note longer than 2147483647 samples is refused by name instead of exhausting memory ('stretchRatio must keep the stretched note within 2147483647 elements') |
 
 #### Other individual changes
 
@@ -9768,6 +9782,13 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareStreamAnalyzerRecycleMessage` (`./worklet`) | removed: a worklet wire-protocol type, no longer exported; drive the analyzer through SonareStreamAnalyzerNode |
 | `SonareStreamAnalyzerWorkletProcessor.receiveMessage(message)` (`./worklet`) | parameter typed unknown (message types are internal) |
 
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `AnalyzeMelodyRequest.hopLength` (`./analysis`) | a hopLength that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hopLength must keep the observation matrix within 500000000 elements') |
+| `AnalyzeMelodyRequest.hopLength` | a hopLength that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hopLength must keep the observation matrix within 500000000 elements') |
+
 #### Other individual changes
 
 | 1.x | 2.0.0 |
@@ -10462,6 +10483,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is a TypeError (masteringRepairApply: unknown key stages[0].clipThreshold), and a value out of its domain is a RangeError naming stages[<i>].<key>; declip takes clipThresholdDb in dBFS |
+
+#### An argument that would size a result past the library's limit is refused by name
+
+| 1.x | 2.0.0 |
+|---|---|
+| `DecomposeStemsLinkedRequest.nComponents` (`./analysis`) | an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements') |
+| `DecomposeStemsLinkedRequest.nComponents` | an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements') |
+| `DecomposeStemsRequest.nComponents` (`./analysis`) | an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements') |
+| `DecomposeStemsRequest.nComponents` | an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements') |
+| `NoteStretchRequest.stretchRatio` | a stretchRatio that would make the stretched note longer than 2147483647 samples is refused by name instead of exhausting memory ('stretchRatio must keep the stretched note within 2147483647 elements') |
 
 #### Other individual changes
 

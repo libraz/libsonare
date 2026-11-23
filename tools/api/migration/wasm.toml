@@ -36931,3 +36931,62 @@ domain = "effects"
 rule = "absent-not-sentinel"
 entry = "./analysis"
 test = "bindings/wasm/tests/not-measured-analysis.test.ts::keeps percussiveRatio a finite number"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeMelodyRequest.hopLength"
+changed = "a hopLength that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hopLength must keep the observation matrix within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+test = "bindings/wasm/tests/work-size-limit.test.ts::analyzeMelody refuses hopLength by name"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeMelodyRequest.hopLength"
+changed = "a hopLength that would make the observation matrix larger than 500000000 elements is refused by name instead of exhausting memory ('hopLength must keep the observation matrix within 500000000 elements')"
+domain = "analysis"
+rule = "work-size-limit"
+entry = "./analysis"
+test = "bindings/wasm/tests/work-size-limit.test.ts::analyzeMelody refuses hopLength by name"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsRequest.nComponents"
+changed = "an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "bindings/wasm/tests/work-size-limit.test.ts::decomposeStems refuses nComponents by name"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsRequest.nComponents"
+changed = "an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+entry = "./analysis"
+test = "bindings/wasm/tests/work-size-limit.test.ts::decomposeStems refuses nComponents by name"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsLinkedRequest.nComponents"
+changed = "an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "bindings/wasm/tests/work-size-limit.test.ts::decomposeStemsLinked refuses nComponents by name"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsLinkedRequest.nComponents"
+changed = "an nComponents that would make the component weights or activations larger than 500000000 elements is refused by name instead of exhausting memory ('nComponents must keep the component weights within 500000000 elements', 'nComponents must keep the component activations within 500000000 elements')"
+domain = "effects"
+rule = "work-size-limit"
+entry = "./analysis"
+test = "bindings/wasm/tests/work-size-limit.test.ts::decomposeStemsLinked refuses nComponents by name"
+
+[[entry]]
+kind = "field"
+old = "NoteStretchRequest.stretchRatio"
+changed = "a stretchRatio that would make the stretched note longer than 2147483647 samples is refused by name instead of exhausting memory ('stretchRatio must keep the stretched note within 2147483647 elements')"
+domain = "effects"
+rule = "work-size-limit"
+test = "bindings/wasm/tests/work-size-limit.test.ts::noteStretch refuses stretchRatio by name"
