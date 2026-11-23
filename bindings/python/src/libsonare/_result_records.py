@@ -90,9 +90,15 @@ def _fill_null_ends(document: Any, family: str) -> Any:
 
 
 def _fill_at(node: Any, segments: list[str], end: float) -> None:
+    head, *rest = segments
+    # A family whose document is an array spells its element as a leading bare ``[]``.
+    if head == "[]":
+        if isinstance(node, list):
+            for item in node:
+                _fill_at(item, rest, end)
+        return
     if not isinstance(node, dict):
         return
-    head, *rest = segments
     element = head.endswith("[]")
     key = head[:-2] if element else head
     if key not in node:

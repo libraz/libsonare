@@ -181,6 +181,28 @@ def _statement_end(text: str, index: int) -> int:
     return len(text)
 
 
+def _tuple_elements(text: str, start: int) -> tuple[list[str], int] | None:
+    """The element types of the tuple at `start` and the index past its `]`, labels dropped."""
+    depth = 0
+    elements: list[str] = []
+    begin = start + 1
+    for index in range(start, len(text)):
+        char = text[index]
+        if char in "[{(<":
+            depth += 1
+        elif char in "]})>" and not (char == ">" and text[index - 1] == "="):
+            depth -= 1
+            if depth == 0:
+                elements.append(text[begin:index])
+                labelled = (re.sub(r"^\s*(?:\.\.\.)?\s*(?:[A-Za-z_]\w*\s*\??\s*:)?", "", e)
+                            for e in elements)
+                return [e for e in labelled if e.strip()], index + 1
+        elif char == "," and depth == 1:
+            elements.append(text[begin:index])
+            begin = index + 1
+    return None
+
+
 def _array_suffix_end(text: str, index: int) -> int:
     """Index past any `[]` suffixes at `index`: an element type names the same body."""
     while text.startswith("[]", index):
@@ -215,6 +237,14 @@ def expression_bodies(
             else:
                 bodies.append(body)
             index = skip_trivia(text, _index_access(text, index + len(body))[1])
+            continue
+        if text[index] == "[":
+            tuple_ = _tuple_elements(text, index)
+            if tuple_ is None:
+                break
+            for element in tuple_[0]:
+                bodies += expression_bodies(whole, element, 0, depth)
+            index = skip_trivia(text, _array_suffix_end(text, tuple_[1]))
             continue
         if text[index] == "(":
             close = _closing_paren(text, index)

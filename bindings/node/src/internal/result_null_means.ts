@@ -53,6 +53,12 @@ export const NULL_MEANS: Readonly<Record<string, Readonly<Record<string, number>
     'defects.noise.floorDbfs': Number.NEGATIVE_INFINITY,
     integratedLufs: Number.NEGATIVE_INFINITY,
   },
+  repair_apply: {
+    '[].changes[].changeLevelDb': Number.NEGATIVE_INFINITY,
+    '[].reports[].detected.bandFloorDbfs[]': Number.NEGATIVE_INFINITY,
+    '[].reports[].detected.floorDbfs': Number.NEGATIVE_INFINITY,
+    '[].reports[].detected.harmonicDbfs[]': Number.NEGATIVE_INFINITY,
+  },
   stereo_mono_compat: {
     width: Number.POSITIVE_INFINITY,
   },

@@ -129,6 +129,14 @@ FAMILIES = {
             "wasm": WASM / "repair_session.ts",
         },
     },
+    "repair_apply_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/assistant/repair_session.cpp",
+        "root": "MasteringRepairStageReports",
+        "surfaces": {
+            "node": NODE / "repair_session.ts",
+            "wasm": WASM / "repair_session.ts",
+        },
+    },
     "assistant_result_schema_paths": {
         "source": REPO_ROOT / "src/mastering/assistant/suggester.cpp",
         "root": "MasteringAssistantResult",

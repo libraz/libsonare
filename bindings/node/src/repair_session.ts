@@ -97,8 +97,22 @@ export interface MasteringRepairAnalysis {
   explanation: string[];
 }
 
-/** One applied stage's reports: one per channel, or one for a linked stage's whole set. */
-export type MasteringRepairStageReports =
+/** How much one stage changed one channel. */
+export interface MasteringRepairChannelChange {
+  /** Samples whose value the stage changed. */
+  changedSamples: number;
+  /** Level in dBFS of the difference the stage made, as an RMS over the channel; `-Infinity` when nothing changed. */
+  changeLevelDb: number;
+}
+
+/**
+ * One applied stage's reports: one per channel, or one for a linked stage's whole set, and what
+ * the stage changed in each channel.
+ */
+export type MasteringRepairStageReports = {
+  /** One entry per input channel, in input order, whatever the stage's `scope`. */
+  changes: MasteringRepairChannelChange[];
+} & (
   | {
       /** Stage applied. */
       stage: 'declip';
@@ -146,7 +160,8 @@ export type MasteringRepairStageReports =
       scope: 'linked';
       /** The stage's reports. */
       reports: [DereverbReport];
-    };
+    }
+);
 
 /** Result of {@link masteringRepairApply}. */
 export interface MasteringRepairApplyResult {
@@ -272,9 +287,10 @@ export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyRe
     ) as { channels: Float32Array[]; reportsJson: string };
     return {
       channels: result.channels,
-      reports: (JSON.parse(result.reportsJson) as MasteringRepairStageReports[]).map(
-        typeStageReports,
-      ),
+      reports: parseRecordJson<MasteringRepairStageReports[]>(
+        result.reportsJson,
+        'repair_apply',
+      ).map(typeStageReports),
     };
   });
 }

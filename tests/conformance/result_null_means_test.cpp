@@ -130,6 +130,19 @@ TEST_CASE("every null a result writes sits at a path declaring its infinite end"
       return assistant::repair_analyze_json(planes, 2, kLength, kSampleRate, "");
     };
   };
+  const auto repair_apply = [&](const std::vector<float>& left) {
+    return [&] {
+      const float* planes[] = {left.data(), silence.data()};
+      std::vector<float> out_left(kLength), out_right(kLength);
+      float* outs[] = {out_left.data(), out_right.data()};
+      std::string reports;
+      assistant::repair_apply_json(planes, 2, kLength, kSampleRate,
+                                   R"([{"stage":"declip"},{"stage":"declick"},{"stage":"decrackle"},
+                                       {"stage":"dehum"},{"stage":"denoise"},{"stage":"dereverb"}])",
+                                   outs, &reports);
+      return reports;
+    };
+  };
   mixing::TrackInput silent_track;
   silent_track.id = "silent";
   silent_track.left = silence.data();
@@ -195,6 +208,10 @@ TEST_CASE("every null a result writes sits at a path declaring its infinite end"
        assistant::repair_analysis_null_means(),
        assistant::repair_analysis_schema_paths(),
        {repair(silence), repair(music)}},
+      {"repair_apply",
+       assistant::repair_apply_null_means(),
+       assistant::repair_apply_schema_paths(),
+       {repair_apply(silence), repair_apply(music)}},
       {"analysis_result",
        sonare::analysis_result_null_means(),
        sonare::analysis_result_schema_paths(),

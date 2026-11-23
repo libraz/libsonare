@@ -33,6 +33,8 @@ export interface Root {
   occupancy: Occupancy;
   bag: OpenBag;
   items: Inner[];
+  single: [Other];
+  pair: [first: Inner, Derived];
 }
 """
 
@@ -76,6 +78,13 @@ class NamedTypes(unittest.TestCase):
     def test_an_array_property_resolves_to_its_element_type(self):
         bodies = walk.property_bodies(_root(), "items", SURFACE)
         self.assertTrue(any(walk.declares_leaf(body, "value") for body in bodies))
+
+    def test_a_tuple_property_resolves_to_each_element_type(self):
+        single = walk.property_bodies(_root(), "single", SURFACE)
+        self.assertTrue(any(walk.declares_leaf(body, "mode") for body in single))
+        pair = walk.property_bodies(_root(), "pair", SURFACE)
+        self.assertTrue(any(walk.declares_leaf(body, "value") for body in pair))
+        self.assertTrue(any(walk.declares_leaf(body, "extra") for body in pair))
 
 
 class IndexedPaths(unittest.TestCase):

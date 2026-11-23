@@ -22,6 +22,7 @@
 #include "mastering/repair/dehum.h"
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"
@@ -325,6 +326,31 @@ StagePlan parse_stages(const std::string& stages_json) {
 
 double count(std::size_t value) { return static_cast<double>(value); }
 
+json::Array changes_of(const std::vector<Audio>& input, const std::vector<Audio>& output) {
+  json::Array changes;
+  changes.reserve(input.size());
+  for (std::size_t channel = 0; channel < input.size(); ++channel) {
+    std::size_t changed_samples = 0;
+    double squared_difference_sum = 0.0;
+    const float* const before_samples = input[channel].data();
+    const float* const after_samples = output[channel].data();
+    const std::size_t length = input[channel].size();
+    for (std::size_t sample = 0; sample < length; ++sample) {
+      const float before = before_samples[sample];
+      const float after = after_samples[sample];
+      if (before != after) ++changed_samples;
+      const double difference = static_cast<double>(after) - static_cast<double>(before);
+      squared_difference_sum += difference * difference;
+    }
+    const double mean_squared_difference = squared_difference_sum / static_cast<double>(length);
+    json::Object change;
+    json::put(change, "changedSamples", count(changed_samples));
+    json::put(change, "changeLevelDb", sonare::power_to_level_db(mean_squared_difference));
+    changes.emplace_back(std::move(change));
+  }
+  return changes;
+}
+
 json::Object report_of(const repair::DeclipReport& report) {
   json::Object out;
   json::put(out, "detected", detection_to_json(report.detected));
@@ -432,6 +458,7 @@ json::Value run_stage(Stage stage, const StagePlan& plan, std::vector<Audio>& wo
                                  inputs.data(), inputs.size(), &out, *plan.dereverb)});
       break;
   }
+  json::put(entry.as_object(), "changes", changes_of(working, out));
   working = std::move(out);
   return entry;
 }
@@ -681,6 +708,69 @@ const std::vector<std::pair<std::string, std::string>>& repair_analysis_null_mea
       {"defects.noise.bandFloorDbfs[]", "-Infinity"},
       {"defects.noise.floorDbfs", "-Infinity"},
       {"integratedLufs", "-Infinity"},
+  };
+  return means;
+}
+
+const std::vector<std::string>& repair_apply_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "[].changes",
+      "[].changes[].changeLevelDb",
+      "[].changes[].changedSamples",
+      "[].reports",
+      "[].reports[].detected",
+      "[].reports[].detected.bandFloorBand",
+      "[].reports[].detected.bandFloorDbfs",
+      "[].reports[].detected.clippedRatio",
+      "[].reports[].detected.clippedSamples",
+      "[].reports[].detected.count",
+      "[].reports[].detected.flatLevel",
+      "[].reports[].detected.flatRunCount",
+      "[].reports[].detected.flatSampleCount",
+      "[].reports[].detected.fundamentalHz",
+      "[].reports[].detected.fundamentalProminence",
+      "[].reports[].detected.harmonicDbfs",
+      "[].reports[].detected.harmonics",
+      "[].reports[].detected.lateDecayRatioDb",
+      "[].reports[].detected.latePredictability",
+      "[].reports[].detected.longestFlatRunSamples",
+      "[].reports[].detected.longestRunSamples",
+      "[].reports[].detected.perSecond",
+      "[].reports[].detected.rejected",
+      "[].reports[].detected.runCount",
+      "[].reports[].detected.sampleCount",
+      "[].reports[].detected.sampleFraction",
+      "[].reports[].detected.floorDbfs",
+      "[].reports[].appliedFundamentalHz",
+      "[].reports[].detailCoefficients",
+      "[].reports[].floorLimitedFraction",
+      "[].reports[].fundamentalDriftHz",
+      "[].reports[].linkedRuns",
+      "[].reports[].lpcModelUsed",
+      "[].reports[].lpcReconstructedRuns",
+      "[].reports[].meanReductionDb",
+      "[].reports[].maxReductionDb",
+      "[].reports[].noiseSigma",
+      "[].reports[].notchedHarmonics",
+      "[].reports[].repairedRuns",
+      "[].reports[].repairedSamples",
+      "[].reports[].replacedSamples",
+      "[].reports[].shrunkCoefficients",
+      "[].reports[].suppressedFraction",
+      "[].reports[].unreconstructedRuns",
+      "[].reports[].wpePredictorNorm",
+      "[].scope",
+      "[].stage",
+  };
+  return paths;
+}
+
+const std::vector<std::pair<std::string, std::string>>& repair_apply_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {
+      {"[].changes[].changeLevelDb", "-Infinity"},
+      {"[].reports[].detected.bandFloorDbfs[]", "-Infinity"},
+      {"[].reports[].detected.floorDbfs", "-Infinity"},
+      {"[].reports[].detected.harmonicDbfs[]", "-Infinity"},
   };
   return means;
 }

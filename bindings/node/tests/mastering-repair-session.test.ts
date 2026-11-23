@@ -163,6 +163,31 @@ describe('masteringRepairApply', () => {
     ]);
   });
 
+  it('reports what each stage changed in each channel', () => {
+    const channels = [clicked(material(440, 1), 2000, 3500), new Float32Array(LENGTH)];
+    const { channels: out, reports } = masteringRepairApply({
+      channels,
+      sampleRate: SR,
+      stages: [{ stage: 'declick' }],
+    });
+    const [touched, untouched] = reports[0]?.changes ?? [];
+    const before = channels[0] as Float32Array;
+    const after = out[0] as Float32Array;
+    let differing = 0;
+    let squared = 0;
+    for (let i = 0; i < before.length; i += 1) {
+      if (after[i] !== before[i]) {
+        differing += 1;
+      }
+      squared += ((after[i] as number) - (before[i] as number)) ** 2;
+    }
+    expect(touched?.changedSamples).toBe(differing);
+    expect(differing).toBeGreaterThan(0);
+    expect(touched?.changeLevelDb).toBeCloseTo(10 * Math.log10(squared / before.length), 6);
+    // An unchanged channel's null level is the minus-infinity end, not a missing value.
+    expect(untouched).toEqual({ changedSamples: 0, changeLevelDb: Number.NEGATIVE_INFINITY });
+  });
+
   it('refuses a repeated stage, an unknown stage and an unknown setting', () => {
     const channels = [material(440, 12)];
     // The session's own refusals, worded by the core; a reader-side refusal

@@ -76,6 +76,15 @@
         "integratedLufs": "-Infinity"
       }
     },
+    "repair_apply": {
+      "root": "MasteringRepairStageReports",
+      "nullMeans": {
+        "[].changes[].changeLevelDb": "-Infinity",
+        "[].reports[].detected.bandFloorDbfs[]": "-Infinity",
+        "[].reports[].detected.floorDbfs": "-Infinity",
+        "[].reports[].detected.harmonicDbfs[]": "-Infinity"
+      }
+    },
     "stereo_mono_compat": {
       "root": "StereoMonoCompatCheckResult",
       "nullMeans": {

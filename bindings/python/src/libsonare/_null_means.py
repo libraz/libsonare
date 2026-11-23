@@ -53,6 +53,12 @@ NULL_MEANS: dict[str, dict[str, float]] = {
         "defects.noise.floorDbfs": -math.inf,
         "integratedLufs": -math.inf,
     },
+    "repair_apply": {
+        "[].changes[].changeLevelDb": -math.inf,
+        "[].reports[].detected.bandFloorDbfs[]": -math.inf,
+        "[].reports[].detected.floorDbfs": -math.inf,
+        "[].reports[].detected.harmonicDbfs[]": -math.inf,
+    },
     "stereo_mono_compat": {
         "width": math.inf,
     },

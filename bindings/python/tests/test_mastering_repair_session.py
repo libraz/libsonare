@@ -124,6 +124,21 @@ class TestApply:
         ]
         assert isinstance(result.reports[0].reports[0], libsonare.DehumReport)
 
+    def test_reports_what_each_stage_changed_in_each_channel(self) -> None:
+        silent = np.zeros(LENGTH, dtype=np.float32)
+        channels = [_clicked(_material(440.0, 1), 2000, 3500), silent]
+        result = libsonare.mastering_repair_apply(channels, SR, stages=[libsonare.DeclickStage()])
+        changes = result.reports[0].changes
+        assert changes[0].changed_samples == int(
+            np.count_nonzero(result.channels[0] != channels[0])
+        )
+        assert changes[0].changed_samples > 0
+        difference = result.channels[0].astype(np.float64) - channels[0]
+        expected_db = 10.0 * np.log10(np.mean(difference * difference))
+        assert changes[0].change_level_db == pytest.approx(expected_db, abs=1e-6)
+        # An unchanged channel's null level is the minus-infinity end, not a missing value.
+        assert (changes[1].changed_samples, changes[1].change_level_db) == (0, float("-inf"))
+
     @pytest.mark.parametrize(
         "stages",
         [

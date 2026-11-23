@@ -48,8 +48,10 @@ std::string repair_analyze_json(const float* const* channels, std::size_t channe
 ///        stage or an unknown setting is refused.
 /// @param out_channels @p channel_count caller-owned planes of @p length samples; written only
 ///        when the call completes, so they may alias @p channels.
-/// @param reports_json Receives `[{ stage, scope, reports }]` in application order: `scope` is
-///        `"channel"` with one report per channel, or `"linked"` with exactly one for the set.
+/// @param reports_json Receives `[{ stage, scope, reports, changes }]` in application order:
+///        `scope` is `"channel"` with one report per channel, or `"linked"` with exactly one for
+///        the set. `changes` has one `{ changedSamples, changeLevelDb }` item per input channel;
+///        the level is the RMS delta in dBFS and is JSON null when the channel is unchanged.
 /// @return false when @p cancel stopped the application; nothing was written then.
 /// @throws SonareException(InvalidParameter) for a bad channel set, and (InvalidFormat) for a
 ///         stage list the analysis could not have written as `recommended`.
@@ -63,5 +65,10 @@ bool repair_apply_json(const float* const* channels, std::size_t channel_count, 
 const std::vector<std::string>& repair_analysis_schema_paths();
 /// @brief The infinite end a null at each listed path of the same result stands for.
 const std::vector<std::pair<std::string, std::string>>& repair_analysis_null_means();
+
+/// @brief Every dotted field path @ref repair_apply_json emits in its reports array.
+const std::vector<std::string>& repair_apply_schema_paths();
+/// @brief The infinite end a null at each listed path of the same result stands for.
+const std::vector<std::pair<std::string, std::string>>& repair_apply_null_means();
 
 }  // namespace sonare::mastering::assistant

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -159,9 +160,20 @@ void fill_linear(std::vector<float>& output, const std::vector<float>& samples, 
   const size_t length = end - start;
   const float left = output[start - 1];
   const float right = samples[end];
+  constexpr double kMaxSample = std::numeric_limits<float>::max();
   for (size_t j = start; j < end; ++j) {
     const float t = static_cast<float>(j - start + 1) / static_cast<float>(length + 1);
-    output[j] = left + (right - left) * t;
+    // Preserve float rounding when the interpolation fits.
+    const float sample = left + (right - left) * t;
+    if (std::isfinite(sample)) {
+      output[j] = sample;
+    } else {
+      const double wide_t = static_cast<double>(j - start + 1) / static_cast<double>(length + 1);
+      const double wide_sample = left + (static_cast<double>(right) - left) * wide_t;
+      output[j] = std::isfinite(wide_sample)
+                      ? static_cast<float>(std::clamp(wide_sample, -kMaxSample, kMaxSample))
+                      : left;
+    }
   }
 }
 

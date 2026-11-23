@@ -28,6 +28,7 @@ from ._runtime import (
     _to_c_size_t,
     _utf8_arg,
 )
+from ._types_repair import RepairChannelChange
 from .types import (
     AudioDefects,
     ClickDetection,
@@ -137,7 +138,16 @@ def _stage_reports(entry: Mapping[str, Any]) -> RepairStageReports:
         fields = _fields(report)
         fields["detected"] = _detection(detection_type, report["detected"])
         reports.append(report_type(**fields))
-    return RepairStageReports(stage=entry["stage"], scope=entry["scope"], reports=reports)
+    changes = [
+        RepairChannelChange(
+            changed_samples=int(change["changedSamples"]),
+            change_level_db=float(change["changeLevelDb"]),
+        )
+        for change in entry["changes"]
+    ]
+    return RepairStageReports(
+        stage=entry["stage"], scope=entry["scope"], reports=reports, changes=changes
+    )
 
 
 def _progress_trampoline(
@@ -298,7 +308,7 @@ def mastering_repair_apply(
     )
     raise_callback_error(state, rc, lambda: _take_string(lib, reports_ptr))
     _check(rc)
-    entries = json.loads(_take_string(lib, reports_ptr))
+    entries = _fill_null_ends(json.loads(_take_string(lib, reports_ptr)), "repair_apply")
     return RepairApplyResult(
         channels=out_buffers, reports=[_stage_reports(entry) for entry in entries]
     )

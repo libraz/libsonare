@@ -556,6 +556,17 @@ class DereverbLinkedResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RepairChannelChange:
+    """How much one repair stage changed one channel."""
+
+    changed_samples: int
+    """Samples whose value the stage changed."""
+    change_level_db: float
+    """Level in dBFS of the difference the stage made, as an RMS over the channel; ``-inf`` when
+    nothing changed."""
+
+
+@dataclass(frozen=True, slots=True)
 class RepairStageReports:
     """One stage a repair application ran and what it reported.
 
@@ -578,6 +589,8 @@ class RepairStageReports:
     ]
     """Per-channel reports in input order for ``"channel"`` scope, or exactly one report for
     ``"linked"`` scope."""
+    changes: list[RepairChannelChange]
+    """One entry per input channel, in input order, whatever the ``scope``."""
 
 
 @dataclass(frozen=True, slots=True)
