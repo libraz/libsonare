@@ -4,12 +4,14 @@
 /// @brief Rhythm analysis including time signature and groove detection.
 
 #include <array>
+#include <cstddef>
 #include <string>
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
 #include "analysis/bpm_analyzer.h"
 #include "core/audio.h"
+#include "util/db.h"
 
 namespace sonare {
 
@@ -30,15 +32,18 @@ constexpr float kShuffleThreshold = 0.55f;
 
 /// @brief Threshold for detecting swing groove (swing_ratio > 0.6).
 constexpr float kSwingThreshold = 0.6f;
+
+/// @brief Fewest tracked beats syncopation is read from, one bar of the default meter.
+constexpr size_t kMinSyncopationBeats = 4;
 }  // namespace rhythm_constants
 
 /// @brief Rhythm characteristics extracted from audio.
 struct RhythmFeatures {
   TimeSignature time_signature;  ///< Detected time signature
-  float syncopation;             ///< Syncopation level [0, 1]; NaN with no beats or silent accents
+  float syncopation;             ///< Syncopation level [0, 1]; see RhythmAnalyzer::syncopation()
   std::string groove_type;       ///< Groove type (straight, shuffle, swing)
-  float pattern_regularity;      ///< Rhythm regularity [0, 1]; NaN with no beat interval
-  float tempo_stability;         ///< Tempo stability [0, 1]; NaN with no beat interval, 0 with one
+  float pattern_regularity;      ///< Rhythm regularity [0, 1]; NaN below two beat intervals
+  float tempo_stability;         ///< Tempo stability [0, 1]; NaN below two positive beat intervals
 };
 
 /// @brief Configuration for rhythm analysis.
@@ -66,13 +71,15 @@ inline void validate_rhythm_config(const RhythmConfig& config) {
 
 /// @brief Regularity measures derived from a run of beat intervals.
 struct RhythmRegularity {
-  float pattern_regularity = 0.0f;  ///< 1 - 2 * interval CV, clamped at 0; 0 with no interval
-  float tempo_stability = 0.0f;     ///< 1 - 5 * local-tempo CV, clamped at 0; 0 below two intervals
+  /// 1 - 2 * interval CV, clamped at 0; needs at least two intervals with a positive mean.
+  float pattern_regularity = kNotMeasured;
+  /// 1 - 5 * local-tempo CV, clamped at 0; needs at least two positive intervals.
+  float tempo_stability = kNotMeasured;
 };
 
 /// @brief Computes @ref RhythmRegularity from beat intervals in seconds.
-/// @details Both fields stay 0 when the intervals carry no evidence (none, or a non-positive
-///          mean), so silence never reads as a perfectly regular rhythm.
+/// @details A field whose requirement does not hold is not measured (NaN), so neither a single
+///          interval nor silence reads as a perfectly regular or perfectly irregular rhythm.
 RhythmRegularity rhythm_regularity(const std::vector<float>& intervals);
 
 /// @brief Rhythm analyzer for detecting musical rhythm characteristics.
@@ -98,6 +105,8 @@ class RhythmAnalyzer {
   TimeSignature time_signature() const { return features_.time_signature; }
 
   /// @brief Returns syncopation level [0, 1].
+  /// @details Not measured (NaN) unless at least four beats were tracked, the accents are audible,
+  ///          and both a strong- and a weak-position beat were observed with audible strong beats.
   float syncopation() const { return features_.syncopation; }
 
   /// @brief Returns groove type ("straight", "shuffle", "swing").

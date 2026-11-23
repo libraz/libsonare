@@ -439,9 +439,11 @@ AssistantTrack decode_assistant_track(const std::string& entry, bool keep_mono_f
 /// listed first keeps which file was read visible in the command line. It is
 /// measured on the mono fold at the file's own rate rather than at
 /// --sample-rate, because resampling first would measure a different signal.
-/// The decoded entry is returned through @p first_track for the track list.
-double resolve_assistant_tempo(const std::string& raw, const std::string& first_entry,
-                               std::optional<AssistantTrack>* first_track) {
+/// The decoded entry is returned through @p first_track for the track list; no tempo
+/// found returns nothing.
+std::optional<double> resolve_assistant_tempo(const std::string& raw,
+                                              const std::string& first_entry,
+                                              std::optional<AssistantTrack>* first_track) {
   const std::string lowered = lowercase_cli_value(raw);
   if (lowered != "auto") {
     std::istringstream stream(raw);
@@ -464,8 +466,9 @@ double resolve_assistant_tempo(const std::string& raw, const std::string& first_
   const double bpm =
       static_cast<double>(quick::detect_bpm(mono.data(), mono.size(), track.sample_rate));
   std::vector<float>().swap(first_track->value().mono_fold);
-  // No tempo found is the transport-fallback sentinel (0), not a tempo.
-  return std::isfinite(bpm) && bpm > 0 ? bpm : 0.0;
+  // No tempo found leaves the tempo unset, so the assistant takes its transport fallback.
+  if (!(std::isfinite(bpm) && bpm > 0)) return std::nullopt;
+  return bpm;
 }
 
 // The assistant's document re-keyed for stdout, as `mastering-suggest` does with
@@ -516,8 +519,9 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   std::optional<AssistantTrack> first_track;
   if (args.has("tempo-bpm")) {
     const std::string tempo_text = args.get_string("tempo-bpm");
-    params.push_back(
-        {"tempoBpm", resolve_assistant_tempo(tempo_text, entries.front(), &first_track)});
+    if (const auto tempo = resolve_assistant_tempo(tempo_text, entries.front(), &first_track)) {
+      params.push_back({"tempoBpm", *tempo});
+    }
   }
   const auto config =
       mixing::assistant::mix_assistant_config_from_params(params.data(), params.size());

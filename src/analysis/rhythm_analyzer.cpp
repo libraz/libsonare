@@ -212,13 +212,9 @@ void RhythmAnalyzer::detect_groove_type() {
 }
 
 void RhythmAnalyzer::compute_syncopation() {
-  features_.syncopation = 0.0f;
-
-  if (beats_.empty()) {
-    features_.syncopation = kNotMeasured;
-    return;
-  }
-  if (beats_.size() < 4) {
+  // Not measured unless every requirement below holds.
+  features_.syncopation = kNotMeasured;
+  if (beats_.size() < rhythm_constants::kMinSyncopationBeats) {
     return;
   }
 
@@ -235,9 +231,7 @@ void RhythmAnalyzer::compute_syncopation() {
   for (size_t i = 0; i < beats_.size(); ++i) {
     accent_max = std::max(accent_max, accent_of(i));
   }
-  // Silent accents carry no syncopation reading.
   if (accent_max <= kEpsilon) {
-    features_.syncopation = kNotMeasured;
     return;
   }
 
@@ -325,7 +319,8 @@ float std_dev_of(const std::vector<float>& values, float mean) {
 
 RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
   RhythmRegularity out;
-  if (intervals.empty()) {
+  // One interval has no spread to measure.
+  if (intervals.size() < 2) {
     return out;
   }
 
@@ -340,7 +335,7 @@ RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
   const float cv = std_dev / mean_interval;
   out.pattern_regularity = std::max(0.0f, 1.0f - cv * 2.0f);
 
-  // Tempo stability: spread of the local tempos, measurable from two intervals on.
+  // Tempo stability: spread of the local tempos, measurable from two positive intervals on.
   std::vector<float> local_tempos;
   local_tempos.reserve(intervals.size());
   for (float interval : intervals) {
@@ -361,9 +356,8 @@ RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
 
 void RhythmAnalyzer::compute_regularity() {
   const RhythmRegularity regularity = rhythm_regularity(beat_intervals_);
-  const bool measured = !beat_intervals_.empty();
-  features_.pattern_regularity = measured ? regularity.pattern_regularity : kNotMeasured;
-  features_.tempo_stability = measured ? regularity.tempo_stability : kNotMeasured;
+  features_.pattern_regularity = regularity.pattern_regularity;
+  features_.tempo_stability = regularity.tempo_stability;
 }
 
 }  // namespace sonare

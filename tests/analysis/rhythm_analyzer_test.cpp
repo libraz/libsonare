@@ -652,14 +652,46 @@ TEST_CASE("RhythmAnalyzer reports nothing measured for silence", "[rhythm_analyz
   CHECK(std::isnan(analyzer.tempo_stability()));
 }
 
+TEST_CASE("RhythmAnalyzer reads syncopation and regularity only from enough beats",
+          "[rhythm_analyzer][evidence]") {
+  bool saw_too_few_beats = false;
+  bool saw_enough_beats = false;
+  for (int impulses : {2, 3, 4, 6, 8}) {
+    // Audible impulses at 60 BPM on a 100 Hz onset envelope with hop 10.
+    std::vector<float> onset(static_cast<size_t>(impulses * 10 + 5), 0.0f);
+    for (int i = 0; i < impulses; ++i) onset[static_cast<size_t>(i * 10)] = 1.0f;
+    BeatConfig config;
+    config.start_bpm = 60.0f;
+    config.bpm_min = 50.0f;
+    config.bpm_max = 70.0f;
+    config.trim = false;
+    const BeatAnalyzer beats(onset, 100, 10, config);
+    const RhythmAnalyzer rhythm(beats);
+    const size_t beat_count = beats.beats().size();
+    const size_t interval_count = rhythm.beat_intervals().size();
+    CAPTURE(impulses, beat_count, interval_count);
+    if (beat_count < rhythm_constants::kMinSyncopationBeats) {
+      saw_too_few_beats = true;
+      CHECK(std::isnan(rhythm.syncopation()));
+    } else {
+      saw_enough_beats = true;
+    }
+    CHECK(std::isnan(rhythm.pattern_regularity()) == (interval_count < 2));
+    CHECK(std::isnan(rhythm.tempo_stability()) == (interval_count < 2));
+  }
+  CHECK(saw_too_few_beats);
+  CHECK(saw_enough_beats);
+}
+
 TEST_CASE("rhythm_regularity derives both measures from the intervals it is given",
           "[rhythm_analyzer][evidence]") {
   const RhythmRegularity none = rhythm_regularity({});
-  CHECK(none.pattern_regularity == 0.0f);
-  CHECK(none.tempo_stability == 0.0f);
-
-  // One interval has no spread to measure a tempo change from.
-  CHECK(rhythm_regularity({0.5f}).tempo_stability == 0.0f);
+  CHECK(std::isnan(none.pattern_regularity));
+  CHECK(std::isnan(none.tempo_stability));
+  // One interval has no spread, so neither measure can be read from it.
+  const RhythmRegularity single = rhythm_regularity({0.5f});
+  CHECK(std::isnan(single.pattern_regularity));
+  CHECK(std::isnan(single.tempo_stability));
 
   const RhythmRegularity steady = rhythm_regularity({0.5f, 0.5f, 0.5f});
   CHECK_THAT(steady.pattern_regularity, WithinAbs(1.0f, 1e-6f));

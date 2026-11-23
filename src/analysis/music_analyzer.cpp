@@ -404,15 +404,17 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
         {result.bpm, result.bpm_confidence, BpmCandidateRelation::Primary});
   }
   for (const BpmCandidate& candidate : bpm_analyzer().candidates()) {
-    const float distance = std::abs(candidate.bpm - result.bpm);
-    const float primary_scale = std::max(1.0f, std::abs(result.bpm));
-    if (distance <= primary_scale * 0.01f) continue;
-
+    // Without a primary tempo a candidate relates to nothing, so it is listed as Other.
     BpmCandidateRelation relation = BpmCandidateRelation::Other;
-    if (std::abs(candidate.bpm * 2.0f - result.bpm) <= primary_scale * 0.03f) {
-      relation = BpmCandidateRelation::Half;
-    } else if (std::abs(candidate.bpm - result.bpm * 2.0f) <= primary_scale * 0.06f) {
-      relation = BpmCandidateRelation::Double;
+    if (!std::isnan(result.bpm)) {
+      const float distance = std::abs(candidate.bpm - result.bpm);
+      const float primary_scale = std::max(1.0f, std::abs(result.bpm));
+      if (distance <= primary_scale * 0.01f) continue;
+      if (std::abs(candidate.bpm * 2.0f - result.bpm) <= primary_scale * 0.03f) {
+        relation = BpmCandidateRelation::Half;
+      } else if (std::abs(candidate.bpm - result.bpm * 2.0f) <= primary_scale * 0.06f) {
+        relation = BpmCandidateRelation::Double;
+      }
     }
     result.bpm_candidates.push_back({candidate.bpm, candidate.confidence, relation});
   }
