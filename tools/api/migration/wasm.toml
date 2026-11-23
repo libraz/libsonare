@@ -35495,7 +35495,7 @@ test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments ref
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTempoSegments"
-changed = "a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError"
+changed = "a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError)"
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/new-apis.test.ts::refuses a missing segment list instead of clearing the map"
@@ -35503,10 +35503,82 @@ test = "bindings/wasm/tests/new-apis.test.ts::refuses a missing segment list ins
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTimeSignatureSegments"
-changed = "a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError"
+changed = "a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError)"
 domain = "engine"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/new-apis.test.ts::refuses a missing segment list instead of clearing the map"
+
+[[entry]]
+kind = "method"
+old = "Project.setTempoSegments"
+changed = "a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::a non-object element"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoSegment.startPpq"
+changed = "required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent start"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoSegment.bpm"
+changed = "an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError)"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent tempo"
+
+[[entry]]
+kind = "field"
+old = "ProjectTimeSignatureSegment.startPpq"
+changed = "required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent start"
+
+[[entry]]
+kind = "field"
+old = "EngineTempoSegment.startPpq"
+changed = "required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent start"
+
+[[entry]]
+kind = "field"
+old = "EngineTempoSegment.bpm"
+changed = "an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError)"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent tempo"
+
+[[entry]]
+kind = "field"
+old = "EngineTimeSignatureSegment.startPpq"
+changed = "required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent start"
+
+[[entry]]
+kind = "field"
+old = "EngineTimeSignatureSegment.numerator"
+changed = "an absent numerator is refused with TypeError naming segments[i].numerator (1.x read it as 0 and refused it with RangeError)"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent numerator"
+
+[[entry]]
+kind = "field"
+old = "EngineTimeSignatureSegment.denominator"
+changed = "an absent denominator is refused with TypeError naming segments[i].denominator (1.x read it as 0 and refused it with RangeError)"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/segment-list-readers.test.ts::an absent denominator"
 
 [[entry]]
 kind = "method"

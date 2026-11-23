@@ -123,13 +123,14 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
   const std::size_t count = wasmArrayLength(segments, "segments");
   parsed.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
-    val entry = segments[i];
+    const val entry = requiredElementObject(segments, i, "segments");
+    const std::string at = elementAt("segments", i);
     sonare::transport::TempoSegment segment{};
-    segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-    segment.bpm = doubleProperty(entry, "bpm", 0.0);
-    segment.end_bpm = doubleProperty(entry, "endBpm", segment.end_bpm);
+    segment.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
+    segment.bpm = requiredDomainDoubleProperty(entry, "bpm", at);
+    segment.end_bpm = optionalDomainDoubleProperty(entry, "endBpm", segment.end_bpm, at);
     // Checked as the C-ABI setter checks it, one field at a time, under the request's names.
-    const std::string prefix = "segments[" + std::to_string(i) + "].";
+    const std::string prefix = at + ".";
     sonare::util::check::within(segment.start_ppq, sonare_c_detail::kPublicPpqDomain,
                                 (prefix + "startPpq").c_str());
     sonare::util::check::in_interval(segment.bpm, 0.0, false, sonare::transport::kMaxPublicTempoBpm,
@@ -158,20 +159,18 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
   const std::size_t count = wasmArrayLength(segments, "segments");
   parsed.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
-    val entry = segments[i];
+    const val entry = requiredElementObject(segments, i, "segments");
+    const std::string at = elementAt("segments", i);
     sonare::transport::TimeSignatureSegment segment{};
-    segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-    segment.time_sig.numerator = intProperty(entry, "numerator", 0);
-    segment.time_sig.denominator = intProperty(entry, "denominator", 0);
-    const std::string prefix = "segments[" + std::to_string(i) + "].";
+    segment.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
     sonare::util::check::within(segment.start_ppq, sonare_c_detail::kPublicPpqDomain,
-                                (prefix + "startPpq").c_str());
-    sonare::util::check::integer_within(segment.time_sig.numerator,
-                                        sonare_c_detail::kEngineTimeSignatureNumeratorDomain,
-                                        (prefix + "numerator").c_str());
-    sonare::util::check::integer_within(segment.time_sig.denominator,
-                                        sonare_c_detail::kEngineTimeSignatureDenominatorDomain,
-                                        (prefix + "denominator").c_str());
+                                (at + ".startPpq").c_str());
+    segment.time_sig.numerator =
+        domainNumberFromVal<int>(objectProperty(entry, "numerator"), (at + ".numerator").c_str(),
+                                 sonare_c_detail::kEngineTimeSignatureNumeratorDomain);
+    segment.time_sig.denominator = domainNumberFromVal<int>(
+        objectProperty(entry, "denominator"), (at + ".denominator").c_str(),
+        sonare_c_detail::kEngineTimeSignatureDenominatorDomain);
     parsed.push_back(segment);
   }
   engine_.set_time_signature_segments(std::move(parsed));

@@ -1166,12 +1166,12 @@ describe('Sonare WASM wrong-typed domain fields', () => {
         [
           'numerator',
           () => project.setTimeSignatures([{ startPpq: 0, numerator: bad, denominator: 4 }]),
-          /Project\.setTimeSignatures: numerator must be an integer/,
+          /Project\.setTimeSignatures: segments\[0\]\.numerator must be an integer/,
         ],
         [
           'denominator',
           () => project.setTimeSignatures([{ startPpq: 0, numerator: 4, denominator: bad }]),
-          /Project\.setTimeSignatures: denominator must be an integer/,
+          /Project\.setTimeSignatures: segments\[0\]\.denominator must be an integer/,
         ],
         [
           'targetParamId',

@@ -1438,7 +1438,7 @@ describe('v1.2 feature additions (WASM)', () => {
           () => engine.setTempoSegments([{ startPpq: 0, bpm: Number.NaN }]),
           RangeError,
         ).message,
-      ).toBe('RealtimeEngine.setTempoSegments: bpm must be a finite number');
+      ).toBe('RealtimeEngine.setTempoSegments: segments[0].bpm must be finite and in (0, 100000]');
       expect(engine.sampleAtPpq(1)).toBe(48000);
       engine.destroy();
     });

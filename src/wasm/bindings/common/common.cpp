@@ -714,6 +714,26 @@ double checkedDoubleFromVal(const val& value, const char* key) {
   return number;
 }
 
+val requiredElementObject(const val& list, std::size_t index, const char* list_name) {
+  val element = list[index];
+  if (element.isNull() || element.typeOf().as<std::string>() != "object") {
+    throw WasmTypeError(elementAt(list_name, index) + " must be an object");
+  }
+  return element;
+}
+
+double requiredDomainDoubleProperty(const val& object, const char* key, const std::string& at) {
+  const val value = objectProperty(object, key);
+  if (!value.isNumber()) throw WasmTypeError(elementField(at, key) + " must be a number");
+  return value.as<double>();
+}
+
+double optionalDomainDoubleProperty(const val& object, const char* key, double fallback,
+                                    const std::string& at) {
+  return objectProperty(object, key).isUndefined() ? fallback
+                                                   : requiredDomainDoubleProperty(object, key, at);
+}
+
 double doubleProperty(val object, const char* key, double default_value) {
   val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedDoubleFromVal(value, key);

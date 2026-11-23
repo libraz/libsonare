@@ -11342,6 +11342,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `EngineMetronomeConfig.clickSamples` | clickSamples and clickSec are both optional: omit both for the click length derived from the click duration; an explicit 0 on either is a RangeError (clickSamples in [1, 384000], clickSec in (0, 1]), and giving both is a RangeError |
 | `EngineMidiClipSchedule.lengthSamples` | omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended) |
 | `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1' |
+| `EngineTempoSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
+| `EngineTimeSignatureSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
 | `EngineTrackLane.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
 | `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
@@ -11359,9 +11361,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `EngineBounceOptions.targetLufs` | absent means -14; any finite value, 0 included, is a literal target; a non-finite value is refused |
 | `Mixer.processStereoInto` | an input list that is not array-like is refused with TypeError naming leftInputs and rightInputs (it used to read as no inputs and mix nothing), and a non-array input channel is a TypeError naming the element instead of a channel-length RangeError |
-| `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError |
+| `RealtimeEngine.setTempoSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `RealtimeEngine.setTempo` | a NaN, infinite or out-of-range bpm is refused with RangeError naming it (1.x passed it through) |
-| `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError |
+| `RealtimeEngine.setTimeSignatureSegments` | a missing (undefined or null) or non-array-like segment list is refused with TypeError, so pass [] to clear the map (a missing list used to clear it silently); a non-integer, negative or wrapped length is refused by name, and a list over the input budget with RangeError; a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
 | `SonareEngine.setTempo` (`./worklet`) | a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through) |
 | `SonareEngineTransportFacade.setTempo` (`./worklet`) | a NaN, infinite or out-of-range bpm is refused with RangeError naming it before anything is posted to the processor (1.x passed it through) |
 
@@ -11589,6 +11591,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |
+| `EngineTimeSignatureSegment.denominator` | an absent denominator is refused with TypeError naming segments[i].denominator (1.x read it as 0 and refused it with RangeError) |
+| `EngineTimeSignatureSegment.numerator` | an absent numerator is refused with TypeError naming segments[i].numerator (1.x read it as 0 and refused it with RangeError) |
 | `Mixer.stripById` | returns number; an unknown id is a RangeError instead of null |
 | `SonareEngineSyncErrorMessage.failure` (`./worklet`) | `EngineSyncErrorMessage.failure`: typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload |
 | `SonareRealtimeEngineNode.onSyncError` (`./worklet`) | the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload, and its text names the public entry whose call posted the sync (SonareEngine.setTempo: ...), not the audio thread's inner RealtimeEngine name |
@@ -12188,7 +12193,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectMidiRouteConfig.filterChannel` | filterChannel is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.filterGroup` | filterGroup is typed number, not number \| null; a null at runtime still reads as absent |
 | `ProjectMidiRouteConfig.remapChannel` | remapChannel is typed number, not number \| null; a null at runtime still reads as absent |
+| `ProjectTempoSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
 | `ProjectTempoSegment.startSample` | removed: Drop it; give the segment startPpq only, since sample positions are derived when the project is compiled. |
+| `ProjectTimeSignatureSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
 | `ProjectVocalEditApplyRequest.renderedStartSample` | removed: Omit it; the field was required to be 0, and the rendered range now always starts at sample 0. |
 | `ProjectVocalEditApplyRequest.takeId` | absent selects the base source; an explicit 0 is a RangeError |
 | `ProjectVocalEditApplyResult.takeId` | absent when the base source was edited (was 0) |
@@ -12396,6 +12403,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Project.setTempoSegments` | a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
+| `ProjectTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |
 | `VocalEditWorkerClient` | constructor without a Worker throws SonareError NotSupported instead of Error; a draft or session misuse inside the Worker (no open draft, a second draft, undo/redo/export with a draft open, an unknown or reused session id) rejects with SonareError InvalidState instead of Unknown |
 | `VocalEditWorkerStaleResultError` | removed: Catch a SonareError and test isSonareError(e) && e.code === ErrorCode.StaleResult. |
 

@@ -599,7 +599,7 @@ describe('the double reader refuses a non-finite number at the read', () => {
         refusalFor(() => engine.setTempoSegments([{ startPpq: 0, bpm: value }])),
       );
       expect(error.message).toMatch(
-        /^RealtimeEngine\.setTempoSegments: bpm must be a finite number/,
+        /^RealtimeEngine\.setTempoSegments: segments\[0\]\.bpm must be finite and in \(0, 100000\]$/,
       );
     }
   });

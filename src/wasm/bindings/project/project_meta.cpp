@@ -389,11 +389,13 @@ void ProjectWasm::setTempoSegments(val segments) {
     const unsigned count = static_cast<unsigned>(wasmArrayLength(segments, "segments"));
     segs.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
-      val entry = segments[i];
+      // Presence and type here, each domain in the C entry's text under the same index.
+      const val entry = requiredElementObject(segments, i, "segments");
+      const std::string at = elementAt("segments", i);
       SonareProjectTempoSegment seg{};
-      seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-      seg.bpm = doubleProperty(entry, "bpm", 0.0);
-      seg.end_bpm = doubleProperty(entry, "endBpm", 0.0);
+      seg.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
+      seg.bpm = requiredDomainDoubleProperty(entry, "bpm", at);
+      seg.end_bpm = optionalDomainDoubleProperty(entry, "endBpm", seg.end_bpm, at);
       segs.push_back(seg);
     }
   }
@@ -410,12 +412,15 @@ void ProjectWasm::setTimeSignatures(val segments) {
     const unsigned count = static_cast<unsigned>(wasmArrayLength(segments, "segments"));
     segs.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
-      val entry = segments[i];
+      const val entry = requiredElementObject(segments, i, "segments");
+      const std::string at = elementAt("segments", i);
       SonareProjectTimeSignatureSegment seg{};
-      seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
-      seg.numerator = domainNumberFromVal<int>(entry["numerator"], "numerator",
-                                               sonare_c_detail::kTimeSignatureNumeratorDomain);
-      seg.denominator = domainNumberFromVal<int>(entry["denominator"], "denominator",
+      seg.start_ppq = requiredDomainDoubleProperty(entry, "startPpq", at);
+      seg.numerator =
+          domainNumberFromVal<int>(objectProperty(entry, "numerator"), (at + ".numerator").c_str(),
+                                   sonare_c_detail::kTimeSignatureNumeratorDomain);
+      seg.denominator = domainNumberFromVal<int>(objectProperty(entry, "denominator"),
+                                                 (at + ".denominator").c_str(),
                                                  sonare_c_detail::kTimeSignatureDenominatorDomain);
       segs.push_back(seg);
     }

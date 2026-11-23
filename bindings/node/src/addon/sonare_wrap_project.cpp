@@ -504,17 +504,16 @@ Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
     const uint32_t input_count = sonare_node::node_list_length(input, "segments");
     segments.reserve(input_count);
     for (uint32_t i = 0; i < input_count; ++i) {
-      Napi::Value entry = input.Get(i);
-      if (!entry.IsObject()) {
-        Napi::TypeError::New(env, "tempo segment must be an object").ThrowAsJavaScriptException();
+      Napi::Object obj;
+      std::string at;
+      SonareProjectTempoSegment seg{};
+      // Presence and type here, each domain in the C entry's text under the same index.
+      if (!RequiredElementObject(env, input, i, "segments", &obj, &at) ||
+          !RequiredDomainDoubleValue(env, obj.Get("startPpq"), at + ".startPpq", &seg.start_ppq) ||
+          !RequiredDomainDoubleValue(env, obj.Get("bpm"), at + ".bpm", &seg.bpm)) {
         return env.Undefined();
       }
-      Napi::Object obj = entry.As<Napi::Object>();
-      SonareProjectTempoSegment seg{};
-      if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq)) return env.Undefined();
-      if (!RequiredDoubleProperty(env, obj, "bpm", &seg.bpm)) return env.Undefined();
-      seg.end_bpm = DoubleProperty(obj, "endBpm", 0.0);
-      if (env.IsExceptionPending()) return env.Undefined();
+      seg.end_bpm = DomainDoubleProperty(obj, "endBpm", seg.end_bpm, at);
       segments.push_back(seg);
     }
   } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
@@ -537,20 +536,14 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
     const uint32_t input_count = sonare_node::node_list_length(input, "segments");
     segments.reserve(input_count);
     for (uint32_t i = 0; i < input_count; ++i) {
-      Napi::Value entry = input.Get(i);
-      if (!entry.IsObject()) {
-        Napi::TypeError::New(env, "time-signature segment must be an object")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object obj = entry.As<Napi::Object>();
+      Napi::Object obj;
+      std::string at;
       SonareProjectTimeSignatureSegment seg{};
-      if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq)) return env.Undefined();
-      const Napi::Value numerator = obj.Get("numerator");
-      const Napi::Value denominator = obj.Get("denominator");
-      if (!RequiredDomainValue(env, numerator, "numerator",
+      if (!RequiredElementObject(env, input, i, "segments", &obj, &at) ||
+          !RequiredDomainDoubleValue(env, obj.Get("startPpq"), at + ".startPpq", &seg.start_ppq) ||
+          !RequiredDomainValue(env, obj.Get("numerator"), (at + ".numerator").c_str(),
                                sonare_c_detail::kTimeSignatureNumeratorDomain, &seg.numerator) ||
-          !RequiredDomainValue(env, denominator, "denominator",
+          !RequiredDomainValue(env, obj.Get("denominator"), (at + ".denominator").c_str(),
                                sonare_c_detail::kTimeSignatureDenominatorDomain,
                                &seg.denominator)) {
         return env.Undefined();

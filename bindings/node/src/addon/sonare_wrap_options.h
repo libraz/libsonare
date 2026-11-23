@@ -563,6 +563,22 @@ inline float DomainFloatProperty(const Napi::Object& obj, const char* key, float
   return sonare::util::check::saturated_float(value.As<Napi::Number>().DoubleValue());
 }
 
+/// @brief Type-only double read, for a value whose receiving check states its domain: undefined
+///        or null returns @p fallback, a wrong type is refused by @p name, and NaN and the
+///        infinities pass so that check refuses them in its own text.
+inline double DomainDoubleValue(Napi::Env env, const Napi::Value& value, const std::string& name,
+                                double fallback) {
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(env, value.IsNumber(), name.c_str(), "a number");
+  return value.As<Napi::Number>().DoubleValue();
+}
+
+/// @brief @ref DomainDoubleValue over the property @p key, named by it under @p at.
+inline double DomainDoubleProperty(const Napi::Object& obj, const char* key, double fallback,
+                                   const std::string& at = std::string()) {
+  return DomainDoubleValue(obj.Env(), obj.Get(key), node_element_field(at, key), fallback);
+}
+
 /// @brief What a wrong-type value is refused as for @p domain: an integer domain asks for an
 ///        integer, a real domain for a number.
 inline const char* node_domain_type_text(const sonare::util::check::NumericDomain& domain) {
@@ -928,6 +944,30 @@ inline bool RequiredDomainFloatValue(Napi::Env env, const Napi::Value& value,
                                      const std::string& label, float* out) {
   if (!RequireNumberValue(env, value, label)) return false;
   *out = sonare::util::check::saturated_float(value.As<Napi::Number>().DoubleValue());
+  return true;
+}
+
+/// @brief Read a required double whose domain the receiving check states: any number passes, so
+///        NaN and the infinities reach that check and are refused in its own text.
+inline bool RequiredDomainDoubleValue(Napi::Env env, const Napi::Value& value,
+                                      const std::string& label, double* out) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  *out = value.As<Napi::Number>().DoubleValue();
+  return true;
+}
+
+/// @brief The element at @p index of the list @p list_name, which must be an object; @p at
+///        receives its name, "<list_name>[<index>]", for the element's own field refusals.
+inline bool RequiredElementObject(Napi::Env env, const Napi::Array& list, uint32_t index,
+                                  const char* list_name, Napi::Object* out, std::string* at) {
+  if (env.IsExceptionPending()) return false;
+  *at = std::string(list_name) + "[" + std::to_string(index) + "]";
+  const Napi::Value value = list.Get(index);
+  if (!value.IsObject()) {
+    Napi::TypeError::New(env, *at + " must be an object").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Object>();
   return true;
 }
 

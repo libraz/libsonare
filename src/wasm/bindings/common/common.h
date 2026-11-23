@@ -495,6 +495,24 @@ inline std::string elementField(const std::string& at, const char* key) {
   return at.empty() ? std::string(key) : at + "." + key;
 }
 
+/// @brief The element at @p index of the list @p list_name, which must be an object:
+///        "<list_name>[<index>] must be an object" otherwise. Name its fields with
+///        @ref elementAt.
+/// @throws WasmTypeError naming the element.
+val requiredElementObject(const val& list, std::size_t index, const char* list_name);
+/// @brief The name a list element is refused by: "<list_name>[<index>]".
+inline std::string elementAt(const char* list_name, std::size_t index) {
+  return std::string(list_name) + "[" + std::to_string(index) + "]";
+}
+/// @brief A required number field of an object, checked for type only so the owning check
+///        states the domain: absent, null or not a number is a WasmTypeError
+///        "<at>.<key> must be a number"; NaN and the infinities pass to that check.
+double requiredDomainDoubleProperty(const val& object, const char* key, const std::string& at);
+/// @brief Optional sibling of @ref requiredDomainDoubleProperty: absent or null takes
+///        @p fallback.
+double optionalDomainDoubleProperty(const val& object, const char* key, double fallback,
+                                    const std::string& at);
+
 /// @brief Presence- AND type-checked float reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number validated by @ref checkedFloatFromVal.

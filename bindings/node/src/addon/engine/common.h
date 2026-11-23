@@ -219,6 +219,7 @@ inline ChannelBlock ReadChannels(const Napi::CallbackInfo& info, size_t index) {
 // copy is how that contract went missing.
 using sonare_node::AbsentIsSentinel;
 using sonare_node::BoolProperty;
+using sonare_node::DomainDoubleProperty;
 using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
@@ -247,8 +248,11 @@ using sonare_node::RequiredArrayValue;
 using sonare_node::RequiredBoolArg;
 using sonare_node::RequiredBytesArg;
 using sonare_node::RequiredDomainArg;
+using sonare_node::RequiredDomainDoubleValue;
+using sonare_node::RequiredDomainValue;
 using sonare_node::RequiredDoubleArg;
 using sonare_node::RequiredDoubleProperty;
+using sonare_node::RequiredElementObject;
 using sonare_node::RequiredFloatArg;
 using sonare_node::RequiredInt64Arg;
 using sonare_node::RequiredIntArg;
