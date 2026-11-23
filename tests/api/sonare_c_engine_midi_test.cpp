@@ -1772,6 +1772,16 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
     patch.mod_routings[0].destination = destination;
     refused(patch);
   }
+  // A none source or destination is refused in token terms, not as an ordinal range.
+  for (const char* end : {"source", "destination"}) {
+    CAPTURE(end);
+    SonareSynthPatch patch = base();
+    (std::string(end) == "source" ? patch.mod_routings[0].source
+                                  : patch.mod_routings[0].destination) = 0;
+    refused(patch);
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string("patch.mod_routings[0].") + end + " must not be none");
+  }
   for (float depth : {nan, inf, -inf, 9601.0f, -9601.0f}) {
     CAPTURE(depth);
     SonareSynthPatch patch = base();

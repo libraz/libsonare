@@ -479,10 +479,12 @@ inline sonare::midi::synth::NativeSynthConfig synth_config_from_patch_c(
       auto& route = p.mod_matrix.routes[static_cast<size_t>(i)];
       const std::string at = field("mod_routings[") + std::to_string(i) + "]";
       // None is refused like ControllerBinding's axis none: a caller mistake, not an empty slot.
-      check::integer_in_range(r.source, 1, SONARE_SYNTH_MOD_SOURCE_COUNT - 1,
+      check::integer_in_range(r.source, 0, SONARE_SYNTH_MOD_SOURCE_COUNT - 1,
                               (at + ".source").c_str());
-      check::integer_in_range(r.destination, 1, SONARE_SYNTH_MOD_DESTINATION_COUNT - 1,
+      if (r.source == 0) check::refuse((at + ".source").c_str(), "must not be none");
+      check::integer_in_range(r.destination, 0, SONARE_SYNTH_MOD_DESTINATION_COUNT - 1,
                               (at + ".destination").c_str());
+      if (r.destination == 0) check::refuse((at + ".destination").c_str(), "must not be none");
       route.source = admitted_ordinal_to_enum<sonare::midi::synth::ModSource>(r.source);
       route.destination =
           admitted_ordinal_to_enum<sonare::midi::synth::ModDestination>(r.destination);
