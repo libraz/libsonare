@@ -417,18 +417,21 @@ endef
 export GS_EFX_COVERAGE_LINE_LINT_PY
 
 check-js-types:
-	cd bindings/node && yarn test:types
-	cd bindings/wasm && SONARE_ALLOW_STALE_DIST=1 yarn check:dist-freshness
-	cd bindings/wasm && yarn test:types
+	$(CHECK_BEGIN)
+	$(CHECK) sh -c 'cd bindings/node && yarn test:types'
+	$(CHECK) sh -c 'cd bindings/wasm && SONARE_ALLOW_STALE_DIST=1 yarn check:dist-freshness'
+	$(CHECK) sh -c 'cd bindings/wasm && yarn test:types'
+	$(CHECK_REPORT)
 
 lint:
-	cd bindings/wasm && yarn lint
-	cd bindings/node && yarn lint
-	$(MAKE) check-js-types
-	cd tools/audition/web && yarn lint
-	cd tools/audition/web && yarn typecheck
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) sync --locked --project bindings/python
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check .
+	$(CHECK_BEGIN)
+	$(CHECK) sh -c 'cd bindings/wasm && yarn lint'
+	$(CHECK) sh -c 'cd bindings/node && yarn lint'
+	$(CHECK) $(MAKE) check-js-types
+	$(CHECK) sh -c 'cd tools/audition/web && yarn lint'
+	$(CHECK) sh -c 'cd tools/audition/web && yarn typecheck'
+	$(CHECK) env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff check .
 # The Python half of the type check that `yarn test:types` above already does for
 # Node. CI has run it all along and nothing local did, so a stub that stopped
 # describing its module -- invisible to ruff, to every test, and to the runtime
@@ -436,19 +439,47 @@ lint:
 # happened yet. Second invocation is the non-vacuity guard, as in CI: a file that
 # must NOT type-check, so a configuration that silently checks nothing fails here
 # instead of certifying everything.
-	cd bindings/python && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run --locked \
-		mypy --strict src/libsonare ../../tests/typing/python_smoke.py
-	@cd bindings/python && if UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run --locked \
+	$(CHECK) sh -c 'cd bindings/python && UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run --locked \
+		mypy --strict src/libsonare ../../tests/typing/python_smoke.py'
+	$(CHECK) sh -c 'cd bindings/python && if UV_CACHE_DIR=$(UV_CACHE_DIR) $(UV) run --locked \
 		mypy --strict ../../tests/typing/python_catalog_invalid.py; then \
-		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; \
-	fi
-	$(MAKE) lint-static
+		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; fi'
+	$(CHECK) $(MAKE) lint-static
+	$(CHECK_REPORT)
+
+.PHONY: lint-gs-efx-sr-coefficient lint-mastering-enum-cast lint-gs-efx-convert-test-scope \
+	lint-gs-efx-skeleton-constants lint-gs-efx-coverage-line format-check-cxx format-check-python
 
 # The static and drift gates that read committed sources alone. `make lint` and
 # CI's drift-gate step both run it, so a push is gated on the list a local lint runs.
 lint-static:
+	$(CHECK_BEGIN)
+	$(CHECK) $(MAKE) lint-gs-efx-sr-coefficient
+	$(CHECK) $(MAKE) lint-mastering-enum-cast
+	$(CHECK) $(MAKE) lint-gs-efx-convert-test-scope
+	$(CHECK) $(MAKE) lint-gs-efx-skeleton-constants
+	$(CHECK) $(MAKE) lint-gs-efx-coverage-line
+# Both headers are rendered from committed inputs alone, so a clone can re-run
+# them and a drifted one is a static fact rather than something a build reports.
+	$(CHECK) $(MAKE) gs-efx-bindings-check
+	$(CHECK) $(MAKE) gs-efx-join-check
+	$(CHECK) $(MAKE) gs-classic-overlays-check
+	$(CHECK) $(MAKE) numeric-domains-check
+# The refusal translation points read these generated tables; both render from
+# committed declarations alone, so drift is a static fact.
+	$(CHECK) python3 tools/parity/gen_c_entry_names.py --check
+	$(CHECK) python3 tools/api/gen_field_spelling.py --check
+	$(CHECK) python3 tools/api/gen_integer_domains.py --check
+# UPGRADING.md renders from the migration ledgers alone; a ledger edit owes it in the same commit.
+	$(CHECK) $(MAKE) upgrade-notes-check
+	$(CHECK_REPORT)
+
+lint-gs-efx-sr-coefficient:
 	python3 -c "$$GS_EFX_SR_COEFFICIENT_LINT_PY"
+
+lint-mastering-enum-cast:
 	python3 -c "$$MASTERING_ENUM_CAST_LINT_PY"
+
 # The test-independence rule, stated in CONTRIBUTING.md: the byte-to-physical-unit
 # conversion functions are tested against the archive's raw measured
 # readings, hand-transcribed, never against gs_efx_tables.h -- the table the
@@ -458,6 +489,7 @@ lint-static:
 # positive (a comment mentioning the header, say) is visible immediately
 # rather than needing a second run to see what matched; a bare mention
 # outside an #include is deliberately not this rule's concern.
+lint-gs-efx-convert-test-scope:
 	@test -f tests/midi/gs_efx_convert_test.cpp || { \
 		echo "lint: tests/midi/gs_efx_convert_test.cpp is missing -- the include-scope check has nothing to read" >&2; \
 		exit 1; }
@@ -466,6 +498,8 @@ lint-static:
 		echo "would come from the same derivation that built the table it is meant to check"; \
 		exit 1; \
 	fi
+
+lint-gs-efx-skeleton-constants:
 	@found=$$(grep -cE '$(GS_EFX_SKELETON_CONSTANT_RE)' src/midi/synth/gs_layer.cpp); \
 	if [ "$$found" != "$(GS_EFX_SKELETON_CONSTANTS)" ]; then \
 		echo "gs_layer.cpp holds $$found hand-placed EFX constants, pinned at $(GS_EFX_SKELETON_CONSTANTS):" >&2; \
@@ -475,24 +509,21 @@ lint-static:
 		exit 1; \
 	fi; \
 	echo "gs_layer.cpp hand-placed EFX constants: $$found (pinned)"
+
+lint-gs-efx-coverage-line:
 	python3 -c "$$GS_EFX_COVERAGE_LINE_LINT_PY"
-# Both headers are rendered from committed inputs alone, so a clone can re-run
-# them and a drifted one is a static fact rather than something a build reports.
-	$(MAKE) gs-efx-bindings-check
-	$(MAKE) gs-efx-join-check
-	$(MAKE) gs-classic-overlays-check
-	$(MAKE) numeric-domains-check
-# The refusal translation points read these generated tables; both render from
-# committed declarations alone, so drift is a static fact.
-	python3 tools/parity/gen_c_entry_names.py --check
-	python3 tools/api/gen_field_spelling.py --check
-	python3 tools/api/gen_integer_domains.py --check
-# UPGRADING.md renders from the migration ledgers alone; a ledger edit owes it in the same commit.
-	$(MAKE) upgrade-notes-check
 
 format-check:
+	$(CHECK_BEGIN)
+	$(CHECK) $(MAKE) format-check-cxx
+	$(CHECK) $(MAKE) lint
+	$(CHECK) $(MAKE) format-check-python
+	$(CHECK_REPORT)
+
+format-check-cxx:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) clang-format --dry-run --Werror
-	$(MAKE) lint
+
+format-check-python:
 	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(PY_RUN) ruff format --check
 
 # Binding targets
@@ -758,15 +789,17 @@ build-feature-matrix:
 	fi; \
 	exit $$rc
 
-# `conformance` and `parity` run every check to the end and fail once, at the
-# summary, so a failing check never hides the report of a later one. The list is
-# named by this make's pid (the parent of `$(shell)`), so concurrent runs keep apart.
-CHECK_FAILURES := $(BUILD_DIR)/.check-failures-$(shell echo $$PPID)
-CHECK = @run() { echo "$$*"; "$$@" || echo "$$*" >> "$(CHECK_FAILURES)"; }; run
-CHECK_REPORT = @if test -s "$(CHECK_FAILURES)"; then \
-	  echo; echo "checks that failed:"; sed 's/^/  /' "$(CHECK_FAILURES)"; \
-	  rm -f "$(CHECK_FAILURES)"; exit 1; \
-	fi; rm -f "$(CHECK_FAILURES)"
+# Aggregate gates run every check to the end, list each as PASS or FAIL and fail once,
+# at the summary, so a failing check never hides a later one. The list is named by this
+# make's pid (the parent of `$(shell)`), so concurrent and recursive runs keep apart.
+CHECK_RESULTS := $(BUILD_DIR)/.check-results-$(shell echo $$PPID)
+CHECK_BEGIN = @mkdir -p $(dir $(CHECK_RESULTS)) && : > $(CHECK_RESULTS)
+CHECK = @run() { echo "$$*"; if "$$@"; then echo "PASS $$*" >> "$(CHECK_RESULTS)"; \
+	else echo "FAIL $$*" >> "$(CHECK_RESULTS)"; fi; }; run
+CHECK_REPORT = @test -f "$(CHECK_RESULTS)" || { echo "no check recorded a result" >&2; exit 1; }; \
+	echo; echo "check results:"; sed 's/^/  /' "$(CHECK_RESULTS)"; \
+	passed=$$(grep -c '^PASS ' "$(CHECK_RESULTS)"); failed=$$(grep -c '^FAIL ' "$(CHECK_RESULTS)"); \
+	rm -f "$(CHECK_RESULTS)"; echo "$$passed passed, $$failed failed"; test "$$failed" = 0
 
 # Cross-binding parity gate (C API is canonical). Stdlib-only, no build needed:
 # it reads the binding sources directly and exits non-zero on active drift.
@@ -788,8 +821,10 @@ surface-coverage-check:
 # that is red by design must not sit upstream of a gate that has to pass.
 # Narrow it with SURFACE_CHECK_ARGS, e.g. "--surface python --domain core".
 surface-check:
-	python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
-	python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
+	$(CHECK_BEGIN)
+	$(CHECK) python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
+	$(CHECK) python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
+	$(CHECK_REPORT)
 
 # Fails only on a surface_allowlist.toml entry that excused nothing, or a validation problem.
 surface-allowlist-audit:
@@ -985,7 +1020,7 @@ conformance: conformance-checks
 	$(CHECK_REPORT)
 
 conformance-checks:
-	@mkdir -p $(dir $(CHECK_FAILURES)) && : > $(CHECK_FAILURES)
+	$(CHECK_BEGIN)
 	$(CHECK) python3 -m unittest tests/conformance/test_measure_accuracy_matching.py tests/conformance/test_size_and_report_tolerances.py
 	$(CHECK) python3 tools/conformance/check_public_contracts.py
 	$(CHECK) python3 -m unittest tools/api/test_check_request_object_coverage.py
@@ -1090,12 +1125,13 @@ conformance-checks:
 		python3 tools/conformance/check_cli_contract.py \
 			--native "$(BUILD_DIR)/bin/sonare-cli" \
 			--python "bindings/python/.venv/bin/python" \
-			|| echo "python3 tools/conformance/check_cli_contract.py --native --python" >> $(CHECK_FAILURES); \
+			&& echo "PASS live CLI contract (check_cli_contract.py --native --python)" >> $(CHECK_RESULTS) \
+			|| echo "FAIL live CLI contract (check_cli_contract.py --native --python)" >> $(CHECK_RESULTS); \
 	elif test "$$SONARE_CONFORMANCE_REPORT_ONLY" = 1; then \
 		echo "conformance: live CLI check not compared ($(BUILD_DIR)/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable; SONARE_CONFORMANCE_REPORT_ONLY=1)"; \
 	else \
 		echo "conformance: live CLI check not compared: $(BUILD_DIR)/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable; build with: cmake --build $(BUILD_DIR) --target sonare && uv sync --locked --project bindings/python (or set SONARE_CONFORMANCE_REPORT_ONLY=1 to report it)"; \
-		echo "live CLI check: not compared" >> $(CHECK_FAILURES); \
+		echo "FAIL live CLI contract: not compared" >> $(CHECK_RESULTS); \
 	fi
 
 # C-ABI contract scans, kept as named targets for running one on its own;
@@ -1484,15 +1520,17 @@ voice-gate:
 # checks first, then the compiler-backed layout snapshot check (needs a C++
 # compiler, not a full build).
 ci-local:
-	$(MAKE) format-check
-	$(MAKE) parity
-	$(MAKE) processor-types-check
-	$(MAKE) check-abi-version
-	$(MAKE) check-abi-bumps
-	$(MAKE) abi-layout-check
-	$(MAKE) analysis-link-check
-	$(MAKE) surface-check
-	$(MAKE) wasm-browser-smoke
+	$(CHECK_BEGIN)
+	$(CHECK) $(MAKE) format-check
+	$(CHECK) $(MAKE) parity
+	$(CHECK) $(MAKE) processor-types-check
+	$(CHECK) $(MAKE) check-abi-version
+	$(CHECK) $(MAKE) check-abi-bumps
+	$(CHECK) $(MAKE) abi-layout-check
+	$(CHECK) $(MAKE) analysis-link-check
+	$(CHECK) $(MAKE) surface-check
+	$(CHECK) $(MAKE) wasm-browser-smoke
+	$(CHECK_REPORT)
 
 # Coverage targets
 coverage-build:
