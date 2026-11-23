@@ -456,6 +456,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SONARE_REVERB_MODEL_DEFAULT` | removed: start the config from sonare_rir_synth_config_init or sonare_room_morph_config_init, which sets prefer_eyring to 1 (the Eyring model); write 0 for Sabine |
 | `SONARE_REVERB_MODEL_EYRING` | removed: set prefer_eyring to a non-zero value on SonareRirSynthConfig or SonareRoomMorphConfig |
 | `SONARE_REVERB_MODEL_SABINE` | removed: set prefer_eyring to 0 on SonareRirSynthConfig or SonareRoomMorphConfig |
+| `SonareDenoiseReport` | embeds the packed SonareNoiseDetection, so detected grows and every later field moves; recompile against the 2.0 header |
+| `SonareNoiseDetection` | the band levels are packed: band_count (size_t) follows floor_dbfs, band_floor_dbfs holds the measured bands low to high and band_floor_band the index of each, so read [0, band_count) of both arrays instead of skipping NaN across all 32 slots; a band no analysis bin reaches is left out rather than NaN |
 | `SonareRirSynthConfig` | leads with uint32_t struct_size; prepare it with sonare_rir_synth_config_init, after which every field is read literally (seed 0, crossfade_ms 0, a 0 degC / 0 % climate are values, not defaults); source and listener stay all-NaN until set ("Spell an optional C float that has no _init default as NaN, seeded by _init") and then resolve to the default placement scaled to the room, so set all three components to place one, since a position only partly NaN is refused by component |
 | `SonareRoomMorphConfig` | leads with uint32_t struct_size; prepare it with sonare_room_morph_config_init, after which every field is read literally (receiver_spacing_m 0 is refused rather than read as 0.5); source and listener stay all-NaN until set and then resolve to the default placement scaled to the target room, so set all three components to place one, since a position only partly NaN is refused by component |
 | `SonareVoiceChangeConfig` | leads with uint32_t struct_size; prepare it with sonare_voice_change_config_init (pitch_semitones 0, formant_factor 1, formant_mode SONARE_FORMANT_MODE_RELATIVE), after which every field is read literally; a struct whose struct_size was not set is refused |
@@ -600,6 +602,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareClipDetection.sample_fraction` | `SonareClipDetection.clipped_ratio` |
 | `SonareDeclipReport.interpolated_runs` | `SonareDeclipReport.unreconstructed_runs`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs |
+| `SonareDeclipReport.linked_runs` | 0 unless config.link_channels is set on a multichannel entry point |
 | `SonareRirSynthConfig.absorption_band_count` | `SonareRirSynthConfig.band_absorption_count` |
 | `SonareRirSynthConfig.absorption_bands` | `SonareRirSynthConfig.band_absorption` |
 | `SonareRirSynthConfig.late_model` | `SonareRirSynthConfig.prefer_eyring` |
@@ -623,6 +626,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareRoomMorphConfig.source_x` | removed: read and write the config.source.x; source and listener are SonareRoomPlacement members {x, y, z} |
 | `SonareRoomMorphConfig.source_y` | removed: read and write the config.source.y; source and listener are SonareRoomPlacement members {x, y, z} |
 | `SonareRoomMorphConfig.source_z` | removed: read and write the config.source.z; source and listener are SonareRoomPlacement members {x, y, z} |
+| `sonare_mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); config.link_channels = 1 restores the union |
 | `sonare_scale_correction_semitones(reference_midi)` | `sonare_scale_correction_semitones(scale_reference_midi)` |
 | `sonare_scale_quantize_midi(reference_midi)` | `sonare_scale_quantize_midi(scale_reference_midi)` |
 
@@ -661,11 +665,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
-| `SonareDenoiseReport` | embeds the packed SonareNoiseDetection, so detected grows and every later field moves; recompile against the 2.0 header |
 | `SonareDenoiseStereoResult` | embeds SonareDenoiseReport, whose packed noise detection grew; recompile against the 2.0 header |
 | `SonareMasteringChainResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
 | `SonareMasteringChainStereoResult` | gains loudness_gain_db at the tail and embeds a SonareMasteringReport that gained it too, so non_finite_substitution_count moves; NaN in either means the loudness stage was off or the input too quiet to measure; recompile against the 2.0 header |
-| `SonareNoiseDetection` | the band levels are packed: band_count (size_t) follows floor_dbfs, band_floor_dbfs holds the measured bands low to high and band_floor_band the index of each, so read [0, band_count) of both arrays instead of skipping NaN across all 32 slots; a band no analysis bin reaches is left out rather than NaN |
 
 #### Silence is an infinite level; a measurement that was not taken is absent
 
@@ -797,10 +799,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareDeclipConfig.lpc_blend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `SonareDeclipConfig` | gains int32_t link_channels at the tail, 0 by default; values other than 0 and 1 are refused on every entry and 1 on the mono entry point; recompile against the 2.0 header |
-| `SonareDeclipReport.linked_runs` | 0 unless config.link_channels is set on a multichannel entry point |
 | `SonareSurroundPan.distance` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
 | `SonareSurroundPan.elevation` | removed: had no effect: the surround panner reads only azimuth, divergence and lfe |
-| `sonare_mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); config.link_channels = 1 restores the union |
 
 ### C: Realtime engine, synthesis, MIDI and playback
 
@@ -2467,6 +2467,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `DeclipReport.interpolated_runs` | `DeclipReport.unreconstructed_runs`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repaired_samples counts only the reconstructed runs |
+| `DeclipReport.linked_runs` | 0 unless link_channels=True is passed to a multichannel entry point |
 | `PitchDecomposition.centre_hz` | `PitchDecompositionResult.center_hz`: None for a note with no usable pitch (was 0.0) |
 | `RealtimeVoiceChangerConfig.from_pod` | removed: the C struct mirror is internal; build the record by keyword, or read RealtimeVoiceChanger.config |
 | `RealtimeVoiceChangerConfig.to_pod` | removed: the C struct mirror is internal; pass the record itself as RealtimeVoiceChanger(config=...) |
@@ -2474,6 +2475,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `auto_tune(strength)` | `auto_tune(retune_amount)` |
 | `mastering_repair_declip(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `mastering_repair_declip_stereo(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
+| `mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); the new keyword link_channels=True restores the union |
 | `mastering_repair_detect_clipping(lpc_blend)` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted as unreconstructed |
 | `pitch_correct_timevarying(mode)` | `pitch_correct_timevarying(target_mode)`: renamed to target_mode (PitchTargetMode = 'midi' \| 'scale'); a non-string is a TypeError and an unknown name a SonareValueError |
 | `pitch_correct_timevarying(reference_midi)` | `pitch_correct_timevarying(scale_reference_midi)` |
@@ -2584,6 +2586,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `DynamicRangeReport.dynamic_range_db` | float \| None: `inf` when the low percentile lands on a silent window, None when the high percentile is silent too or the input is empty |
+| `DynamicRangeReport.high_percentile_db` | float \| None: `-inf` on a silent window, None for empty input |
+| `DynamicRangeReport.low_percentile_db` | float \| None: `-inf` on a silent window, None for empty input |
 | `LoudnessMatch.reference_lufs` | `LoudnessMatchResult.reference_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness |
 | `LoudnessMatch.source_lufs` | `LoudnessMatchResult.source_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness |
 | `MasteringAssistantProfile.crestFactorDb` | `MasteringAssistantProfile.crest_factor_db`: crestFactorDb -> crest_factor_db, float \| None: None for a silent take |
@@ -2921,7 +2926,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `DeclipReport.linked_runs` | 0 unless link_channels=True is passed to a multichannel entry point |
 | `MixMeterSnapshot.channel_count` | `MixMeterSnapshot.num_channels` |
 | `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)` |
 | `master_audio(preset_name)` | `master_audio(preset)` |
@@ -2933,7 +2937,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `mastering_pair_process_stereo(processor_name)` | `mastering_apply_pair_processor_stereo(processor)` |
 | `mastering_process(processor_name)` | `mastering_apply_processor(processor)` |
 | `mastering_process_stereo(processor_name)` | `mastering_apply_processor_stereo(processor)` |
-| `mastering_repair_declip_stereo` | each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); the new keyword link_channels=True restores the union |
 | `mastering_stereo_analyze(analysis_name)` | `mastering_analyze_stereo(analysis)` |
 | `metering_dynamic_range(high_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `metering_dynamic_range(low_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
@@ -4271,6 +4274,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `AnalysisDynamics.peakDb` | optional: `-Infinity` for silence, absent when not measured |
 | `AnalysisDynamics.rmsDb` | optional: `-Infinity` for silence, absent when not measured |
+| `SilenceCommonReport.silenceCeilingDb` | optional: a signal with no peak constrains nothing (was 0 for the whole report); Infinity when every signal that has a level holds an exactly zero frame (was 120); absent when every signal is silent |
 
 #### Every call scans its input for non-finite values
 
@@ -7881,6 +7885,12 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MelToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` (`./analysis`) | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
 | `MfccToAudioRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down and at least 1 (was a fixed 512), so a call with nFft above 2048 and no hopLength changes output with no error: pass hopLength: 512 for the 1.x result; nFft below 1024 no longer fails for want of a hop |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SilenceCommonReport.silenceCeilingDb` | optional: a signal with no peak constrains nothing (was 0 for the whole report); Infinity when every signal that has a level holds an exactly zero frame (was 120); absent when every signal is silent |
 
 #### Every call scans its input for non-finite values
 

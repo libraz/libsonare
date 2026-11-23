@@ -14126,7 +14126,7 @@ test = "bindings/python/tests/test_normalize_stereo.py::test_a_silent_pair_is_re
 kind = "function"
 old = "mastering_repair_declip_stereo"
 changed = "each channel repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of both channels' runs); the new keyword link_channels=True restores the union"
-domain = "mastering"
+domain = "effects"
 rule = "individual"
 test = "bindings/python/tests/test_mastering_repair_declip_stereo.py::test_unlinked_by_default_each_channel_matches_the_mono_pass"
 
@@ -14134,6 +14134,30 @@ test = "bindings/python/tests/test_mastering_repair_declip_stereo.py::test_unlin
 kind = "field"
 old = "DeclipReport.linked_runs"
 changed = "0 unless link_channels=True is passed to a multichannel entry point"
-domain = "mastering"
+domain = "effects"
 rule = "individual"
 test = "bindings/python/tests/test_mastering_repair_declip_stereo.py::test_unlinked_by_default_each_channel_matches_the_mono_pass"
+
+[[entry]]
+kind = "field"
+old = "DynamicRangeReport.dynamic_range_db"
+changed = "float | None: `inf` when the low percentile lands on a silent window, None when the high percentile is silent too or the input is empty"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_metering_dynamic_range_reads_a_silent_low_end_as_infinite_and_silence_as_none"
+
+[[entry]]
+kind = "field"
+old = "DynamicRangeReport.low_percentile_db"
+changed = "float | None: `-inf` on a silent window, None for empty input"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_metering_dynamic_range_reads_a_silent_low_end_as_infinite_and_silence_as_none"
+
+[[entry]]
+kind = "field"
+old = "DynamicRangeReport.high_percentile_db"
+changed = "float | None: `-inf` on a silent window, None for empty input"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_metering_dynamic_range_reads_a_silent_low_end_as_infinite_and_silence_as_none"
