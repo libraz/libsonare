@@ -147,7 +147,7 @@ TEST_CASE("Stretch and shift refuse a saturated ratio", "[conformance][wasm]") {
 TEST_CASE("Normalization refuses a saturated target", "[conformance][wasm]") {
   const Audio audio = test_tone();
   REQUIRE(refuses([&] { normalize(audio, kSaturated); }));
-  REQUIRE(refuses([&] { normalize_rms(audio, kSaturated, true); }));
+  REQUIRE(refuses([&] { normalize_rms(audio, kSaturated); }));
 
   // Two legitimate targets produce two different peaks, so the argument is read.
   const Audio quiet = normalize(audio, -20.0f);

@@ -343,7 +343,7 @@ SonareError sonare_normalize_rms(const float* samples, size_t length, int sample
   SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_prevalidated(
       samples, length, sample_rate, out, out_length, [target_db](const Audio& a) {
-        return with_c_names(kNormalizeNames, [&] { return normalize_rms(a, target_db, true); });
+        return with_c_names(kNormalizeNames, [&] { return normalize_rms(a, target_db); });
       });
 }
 
@@ -524,7 +524,7 @@ SonareError sonare_normalize_rms_stereo(const float* left, const float* right, s
   SONARE_C_API_ENTRY;
   return run_normalize_stereo("left", "right", left, right, length, sample_rate, out_left,
                               out_right, out_length, [target_db](const Audio& l, const Audio& r) {
-                                return normalize_rms_stereo(l, r, target_db, true);
+                                return normalize_rms_stereo(l, r, target_db);
                               });
 }
 

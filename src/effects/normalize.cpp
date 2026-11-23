@@ -48,24 +48,19 @@ float pair_rms_db(const Audio& left, const Audio& right) {
 
 /// @brief The argument refusals the two stereo entries share with their mono
 ///        counterparts, before either channel is measured.
-void check_normalize_target(float target_db, bool clip) {
-  util::check::finite_float(target_db, "target_db");
-  if (clip && target_db > 0.0f) {
-    util::check::refuse_relation({"target_db", "clip"}, "{0} must be at most 0 when {1} is set");
-  }
-}
+void check_normalize_target(float target_db) { util::check::finite_float(target_db, "target_db"); }
 
 /// @brief Moves a validated pair by one gain, given the level it sits at now.
 NormalizeStereoResult gain_pair_to(const Audio& left, const Audio& right, float current_db,
-                                   float target_db, bool clip) {
+                                   float target_db) {
   util::check::measurable_level(current_db, "audio", util::refusal::kNoMeasurableLevelPredicate);
   const float gain = target_db - current_db;
-  return {apply_gain(left, gain, clip), apply_gain(right, gain, clip), gain};
+  return {apply_gain(left, gain), apply_gain(right, gain), gain};
 }
 
 }  // namespace
 
-Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
+Audio apply_gain(const Audio& audio, float gain_db) {
   util::check::finite_float(gain_db, "gain_db");
   if (audio.empty()) return audio;
 
@@ -79,55 +74,41 @@ Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
   std::vector<float> samples(audio.size());
   const float* data = audio.data();
 
-  for (size_t i = 0; i < audio.size(); ++i) {
-    samples[i] = data[i] * gain_linear;
-    if (clip) {
-      // Hard-clip to [-1, 1] (opt-out via the clip flag). std::clamp rather than
-      // a nested min/max: a comparison against NaN is false, so std::min(1.0f,
-      // NaN) returns 1.0f and launders the NaN into a peak this function meant
-      // to produce. clamp returns NaN unchanged and the caller is the
-      // downstream, so the NaN reports itself (SampleDestination::kCallerReturn).
-      // An infinity is not substituted here either -- it takes the clip's own
-      // bound, which is this transfer function rather than a replacement value.
-      samples[i] = std::clamp(samples[i], -1.0f, 1.0f);
-    }
-  }
+  for (size_t i = 0; i < audio.size(); ++i) samples[i] = data[i] * gain_linear;
 
   return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 
-Audio normalize(const Audio& audio, float target_db, bool clip) {
-  check_normalize_target(target_db, clip);
+Audio normalize(const Audio& audio, float target_db) {
+  check_normalize_target(target_db);
   if (audio.empty()) return audio;
 
   const float current_peak = audio_peak_db(audio);
   util::check::measurable_level(current_peak, "audio", util::refusal::kNoMeasurableLevelPredicate);
   const float gain = target_db - current_peak;
-  return apply_gain(audio, gain, clip);
+  return apply_gain(audio, gain);
 }
 
-Audio normalize_rms(const Audio& audio, float target_db, bool clip) {
-  check_normalize_target(target_db, clip);
+Audio normalize_rms(const Audio& audio, float target_db) {
+  check_normalize_target(target_db);
   if (audio.empty()) return audio;
 
   const float current_rms = audio_rms_db(audio);
   util::check::measurable_level(current_rms, "audio", util::refusal::kNoMeasurableLevelPredicate);
   const float gain = target_db - current_rms;
-  return apply_gain(audio, gain, clip);
+  return apply_gain(audio, gain);
 }
 
-NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right, float target_db,
-                                       bool clip) {
-  check_normalize_target(target_db, clip);
+NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right, float target_db) {
+  check_normalize_target(target_db);
   require_stereo_pair(left, right);
-  return gain_pair_to(left, right, pair_peak_db(left, right), target_db, clip);
+  return gain_pair_to(left, right, pair_peak_db(left, right), target_db);
 }
 
-NormalizeStereoResult normalize_rms_stereo(const Audio& left, const Audio& right, float target_db,
-                                           bool clip) {
-  check_normalize_target(target_db, clip);
+NormalizeStereoResult normalize_rms_stereo(const Audio& left, const Audio& right, float target_db) {
+  check_normalize_target(target_db);
   require_stereo_pair(left, right);
-  return gain_pair_to(left, right, pair_rms_db(left, right), target_db, clip);
+  return gain_pair_to(left, right, pair_rms_db(left, right), target_db);
 }
 
 std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float threshold_db,

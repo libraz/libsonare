@@ -8,9 +8,6 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
   const float target_db =
       args.get_float("target-db", rms ? sonare::kDefaultRmsTargetDb : sonare::kDefaultPeakTargetDb);
 
-  // The library's clip is off: a level past full scale reaches the writer's fit, which lowers the
-  // whole file instead of flattening the peaks the target pushed over.
-  constexpr bool kClip = false;
   size_t length = 0;
   double duration = 0.0;
   OutputFit fit;
@@ -24,16 +21,16 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
     const Audio right = Audio::from_vector(std::move(planes.right), sample_rate);
     // One gain for the pair: a per-channel gain would raise the quieter side
     // further and collapse the image toward centre.
-    const NormalizeStereoResult result = rms ? normalize_rms_stereo(left, right, target_db, kClip)
-                                             : normalize_stereo(left, right, target_db, kClip);
+    const NormalizeStereoResult result = rms ? normalize_rms_stereo(left, right, target_db)
+                                             : normalize_stereo(left, right, target_db);
     fit.include(result.left).include(result.right);
     write_stereo_wav(args.output_file, result.left, result.right, result.left.sample_rate(), 16,
                      fit);
     length = result.left.size();
     duration = result.left.duration();
   } else {
-    const Audio result =
-        rms ? normalize_rms(audio, target_db, kClip) : normalize(audio, target_db, kClip);
+    // A level past full scale reaches the writer's fit, which lowers the whole file.
+    const Audio result = rms ? normalize_rms(audio, target_db) : normalize(audio, target_db);
     fit.include(result);
     write_wav(args.output_file, result, 16, fit);
     length = result.size();

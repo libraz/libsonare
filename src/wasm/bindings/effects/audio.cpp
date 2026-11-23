@@ -427,8 +427,7 @@ val js_normalize(val samples, const val& sample_rate, const val& target_db_val,
   const float target_db = checkedFloatFromVal(target_db_val, "targetDb");
   Audio audio =
       loadValidatedAudio("samples", samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  Audio result =
-      mode == "rms" ? normalize_rms(audio, target_db, true) : normalize(audio, target_db);
+  Audio result = mode == "rms" ? normalize_rms(audio, target_db) : normalize(audio, target_db);
   return vectorToFloat32Array(result.data(), result.size());
 }
 
@@ -449,7 +448,7 @@ val js_normalize_stereo(val left_samples, val right_samples, const val& sample_r
   // The core measures the pair as one signal it calls `audio`; the caller passed left and right.
   const std::array<sonare_c_detail::CPairName, 1> pair{{{"audio", "left", "right"}}};
   const NormalizeStereoResult result = sonare_c_detail::with_c_pair_names(pair, [&] {
-    return mode == "rms" ? normalize_rms_stereo(left, right, target_db, true)
+    return mode == "rms" ? normalize_rms_stereo(left, right, target_db)
                          : normalize_stereo(left, right, target_db);
   });
   val out = val::object();

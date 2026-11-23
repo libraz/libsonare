@@ -318,17 +318,20 @@ TEST_CASE("each C effect options struct refuses a wrong struct_size by name", "[
   CHECK(std::string(sonare_last_error_message()).find("options") != std::string::npos);
 }
 
-TEST_CASE("sonare_normalize_rms clips and sonare_trim uses custom framing", "[c_api][effects]") {
-  SECTION("RMS normalization clips overshoots") {
-    const std::vector<float> samples = {0.8f, -0.8f, 0.8f, -0.8f};
+TEST_CASE("sonare_normalize_rms reaches its target unclipped and sonare_trim uses custom framing",
+          "[c_api][effects]") {
+  SECTION("RMS normalization lands on target and leaves the crest above full scale") {
+    const std::vector<float> samples = {0.8f, -0.8f, 0.2f, -0.2f};
     float* out = nullptr;
     size_t out_length = 0;
     REQUIRE(sonare_normalize_rms(samples.data(), samples.size(), 22050, 0.0f, &out, &out_length) ==
             SONARE_OK);
     REQUIRE(out_length == samples.size());
-    REQUIRE(out[0] == 1.0f);
-    REQUIRE(out[1] == -1.0f);
-    for (size_t i = 0; i < out_length; ++i) REQUIRE(std::abs(out[i]) <= 1.0f);
+    double energy = 0.0;
+    for (size_t i = 0; i < out_length; ++i) energy += static_cast<double>(out[i]) * out[i];
+    CHECK(std::abs(std::sqrt(energy / static_cast<double>(out_length)) - 1.0) < 1e-5);
+    CHECK(out[0] > 1.0f);
+    CHECK(out[1] == -out[0]);
     sonare_free_floats(out);
   }
 
@@ -1643,10 +1646,11 @@ TEST_CASE("the stereo normalize outputs are cleared before validation", "[c_api]
                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 22050, -1.0f,
                                   nullptr, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  // A positive target with the entry's implicit clipping is the core's refusal,
-  // reached through the boundary rather than short-circuited by it.
-  REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 22050, 1.0f,
-                                  &out_left, &out_right, &out_length) != SONARE_OK);
+  // A non-finite target is the core's refusal, reached through the boundary rather than
+  // short-circuited by it.
+  REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 22050,
+                                  std::numeric_limits<float>::infinity(), &out_left, &out_right,
+                                  &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 
   // Control: the same call with none of those faults succeeds, so the refusals
   // are about the arguments rather than about the entry point.

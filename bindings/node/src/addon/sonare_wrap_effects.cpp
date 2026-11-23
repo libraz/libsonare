@@ -717,8 +717,8 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input("samples", data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::Audio result = mode == "rms" ? sonare::normalize_rms(audio, target_db, true)
-                                       : sonare::normalize(audio, target_db);
+  sonare::Audio result =
+      mode == "rms" ? sonare::normalize_rms(audio, target_db) : sonare::normalize(audio, target_db);
   return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }
@@ -761,7 +761,7 @@ Napi::Value SonareWrap::NormalizeStereo(const Napi::CallbackInfo& info) {
   // The core measures the pair as one signal it calls `audio`; the caller passed left and right.
   const std::array<sonare_c_detail::CPairName, 1> pair{{{"audio", "left", "right"}}};
   sonare::NormalizeStereoResult result = sonare_c_detail::with_c_pair_names(pair, [&] {
-    return mode == "rms" ? sonare::normalize_rms_stereo(left, right, target_db, true)
+    return mode == "rms" ? sonare::normalize_rms_stereo(left, right, target_db)
                          : sonare::normalize_stereo(left, right, target_db);
   });
   std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());

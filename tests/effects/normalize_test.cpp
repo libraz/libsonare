@@ -125,7 +125,6 @@ TEST_CASE("normalize refusals read as core member names", "[normalize]") {
   REQUIRE_THROWS_WITH(apply_gain(audio, nan), std::string("gain_db") + finite);
   REQUIRE_THROWS_WITH(apply_gain(audio, 800.0f), "gain_db must produce a finite linear gain");
   REQUIRE_THROWS_WITH(normalize(audio, nan), std::string("target_db") + finite);
-  REQUIRE_THROWS_WITH(normalize(audio, 3.0f, true), "target_db must be at most 0 when clip is set");
   REQUIRE_THROWS_WITH(fade_in(audio, -0.5f), "duration_sec must be finite and at least 0");
   REQUIRE_THROWS_WITH(detect_silence_boundaries(audio, nan, 2048, 512),
                       std::string("threshold_db") + finite);
@@ -165,12 +164,29 @@ TEST_CASE("normalize to -6 dB", "[normalize]") {
   REQUIRE_THAT(normalized_peak, WithinAbs(-6.0f, 0.5f));
 }
 
-TEST_CASE("normalize rejects a positive clipped target", "[normalize]") {
-  Audio audio = create_audio_with_amplitude(0.25f);
-  REQUIRE_THROWS_AS(normalize(audio, 3.0f), SonareException);
+TEST_CASE("normalize reaches a positive target, leaving the peak above full scale", "[normalize]") {
+  const Audio audio = create_audio_with_amplitude(0.25f);
+  REQUIRE_THAT(peak_db(normalize(audio, 3.0f)), WithinAbs(3.0f, 0.05f));
+  REQUIRE_THAT(rms_db(normalize_rms(audio, 2.0f)), WithinAbs(2.0f, 1e-3f));
+  REQUIRE_THAT(peak_db(normalize_stereo(audio, audio, 3.0f).left), WithinAbs(3.0f, 0.05f));
+  REQUIRE_THAT(rms_db(normalize_rms_stereo(audio, audio, 2.0f).left), WithinAbs(2.0f, 1e-3f));
+}
 
-  const Audio unclipped = normalize(audio, 3.0f, false);
-  REQUIRE(peak_db(unclipped) > 0.0f);
+TEST_CASE("an RMS target lands exactly on a high-crest input whose peaks pass full scale",
+          "[normalize]") {
+  // A quiet bed with sparse spikes: about 24 dB of crest, so an RMS of -6 dBFS needs peaks near
+  // +18 dBFS. A clip at full scale would cut the spikes and leave the RMS well under the target.
+  std::vector<float> samples(22050, 0.01f);
+  for (size_t i = 0; i < samples.size(); i += 441) samples[i] = 0.5f;
+  const Audio audio = Audio::from_vector(std::move(samples), 22050);
+
+  const Audio mono = normalize_rms(audio, -6.0f);
+  REQUIRE_THAT(rms_db(mono), WithinAbs(-6.0f, 1e-3f));
+  REQUIRE(peak_db(mono) > 6.0f);
+
+  const auto pair = normalize_rms_stereo(audio, audio, -6.0f);
+  REQUIRE_THAT(rms_db(pair.left), WithinAbs(-6.0f, 1e-3f));
+  REQUIRE(peak_db(pair.right) > 6.0f);
 }
 
 TEST_CASE("normalize_rms", "[normalize]") {
@@ -309,38 +325,19 @@ TEST_CASE("detect_silence_boundaries with sound only at end", "[normalize]") {
   REQUIRE(end > start);
 }
 
-// ===================================================================
-// The clip path must not turn a non-finite sample into a peak. Every
-// assertion below is on the value the sample takes, because a check
-// that the output is finite passes whether or not that happened.
-// ===================================================================
-TEST_CASE("apply_gain clipping does not launder a non-finite sample", "[normalize]") {
+// Every assertion is on the value a sample takes: a finiteness check passes whether or not a
+// value was bounded or laundered on the way.
+TEST_CASE("apply_gain leaves every sample its gained value", "[normalize]") {
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
   std::vector<float> samples = {0.5f, nan, 2.0f, inf, -2.0f, -inf};
-  Audio audio = Audio::from_vector(std::move(samples), 22050);
-
-  const Audio clipped = apply_gain(audio, 0.0f, /*clip=*/true);
-  // apply_gain returns to its caller, which is the downstream, so the NaN
-  // propagates and is itself the report. A nested std::max(-1, std::min(1, x))
-  // sent it to +1.0f instead, indistinguishable from a peak this function meant
-  // to produce.
-  REQUIRE(std::isnan(clipped.data()[1]));
-  // The clip's own bounds still apply to everything else, infinities included:
-  // folding one onto the bound is the limit of the transfer function rather
-  // than a substituted value.
-  REQUIRE(clipped.data()[0] == 0.5f);
-  REQUIRE(clipped.data()[2] == 1.0f);
-  REQUIRE(clipped.data()[3] == 1.0f);
-  REQUIRE(clipped.data()[4] == -1.0f);
-  REQUIRE(clipped.data()[5] == -1.0f);
-
-  // Control: with clipping off nothing is bounded, so the assertions above are
-  // about the clip path rather than about apply_gain's arithmetic.
-  const Audio unclipped = apply_gain(audio, 0.0f, /*clip=*/false);
-  REQUIRE(unclipped.data()[2] == 2.0f);
-  REQUIRE(unclipped.data()[3] == inf);
-  REQUIRE(std::isnan(unclipped.data()[1]));
+  const Audio gained = apply_gain(Audio::from_vector(std::move(samples), 22050), 0.0f);
+  REQUIRE(gained.data()[0] == 0.5f);
+  REQUIRE(std::isnan(gained.data()[1]));
+  REQUIRE(gained.data()[2] == 2.0f);
+  REQUIRE(gained.data()[3] == inf);
+  REQUIRE(gained.data()[4] == -2.0f);
+  REQUIRE(gained.data()[5] == -inf);
 }
 
 TEST_CASE("normalize_stereo moves both channels by a single gain", "[effects][normalize]") {
@@ -429,14 +426,12 @@ TEST_CASE("normalizing digital silence is refused, however quiet a signal may be
 
 TEST_CASE("apply_gain refuses a finite dB value with no finite multiplier", "[normalize]") {
   const Audio silent = Audio::from_vector(std::vector<float>(64, 0.0f), 48000);
-  for (const bool clip : {true, false}) {
-    REQUIRE_THROWS_AS(apply_gain(silent, 800.0f, clip), SonareException);
-  }
-  // A large but representable gain still applies, and the clip keeps it in range.
+  REQUIRE_THROWS_AS(apply_gain(silent, 800.0f), SonareException);
+  // A large but representable gain still applies: 1e-30 raised by 700 dB is 1e5.
   const Audio quiet = Audio::from_vector(std::vector<float>(64, 1.0e-30f), 48000);
-  const Audio gained = apply_gain(quiet, 700.0f, true);
+  const Audio gained = apply_gain(quiet, 700.0f);
   for (size_t i = 0; i < gained.size(); ++i) {
     REQUIRE(std::isfinite(gained[i]));
-    REQUIRE(std::abs(gained[i]) <= 1.0f);
+    REQUIRE_THAT(gained[i], WithinRel(1.0e5f, 1e-3f));
   }
 }

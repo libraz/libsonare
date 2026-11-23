@@ -17,33 +17,25 @@ inline constexpr float kDefaultRmsTargetDb = -20.0f;
 inline constexpr float kDefaultAbsoluteSilenceDb = -60.0f;
 
 /// @brief Normalizes audio to a target peak level.
-/// @details Internally applies a gain via @ref apply_gain. With the default
-///          target of 0 dB this is at full scale. Positive targets are rejected
-///          when @p clip is true; pass @p clip = false only when downstream
-///          headroom management is intentional.
+/// @details One gain via @ref apply_gain. The result is not clipped; a caller writing to an
+///          integer format fits or limits it. A target above 0 dB leaves the peak above full scale.
 /// @param audio Input audio
-/// @param target_db Target peak level in dB (default 0 dB = full scale)
-/// @param clip If true (default), the output is hard-clipped to [-1, 1]; pass
-///        false to leave the signal unclipped.
+/// @param target_db Target peak level in dB, finite (default 0 dB = full scale)
 /// @return Normalized audio; an empty input comes back empty.
 /// @throws SonareException with ErrorCode::InvalidParameter when the audio is digital silence:
 ///         it has no measurable level to scale from.
-Audio normalize(const Audio& audio, float target_db = kDefaultPeakTargetDb, bool clip = true);
+Audio normalize(const Audio& audio, float target_db = kDefaultPeakTargetDb);
 
 /// @brief Normalizes audio using RMS level.
-/// @details Applies a uniform gain to bring the signal RMS to @p target_db. Note
-///          that because peaks sit well above the RMS level, RMS normalisation
-///          to a loud target routinely drives samples past full scale. With the
-///          default @p clip = true those overshoots are hard-clipped to [-1, 1]
-///          (introducing audible distortion); pass @p clip = false to preserve
-///          the unclipped (possibly >1) signal and manage headroom downstream.
+/// @details One gain brings the signal RMS exactly to @p target_db. The result is not clipped;
+///          a caller writing to an integer format fits or limits it. An RMS target can leave
+///          peaks above full scale.
 /// @param audio Input audio
-/// @param target_db Target RMS level in dB
-/// @param clip If true (default), hard-clip the output to [-1, 1]
+/// @param target_db Target RMS level in dB, finite
 /// @return Normalized audio; an empty input comes back empty.
 /// @throws SonareException with ErrorCode::InvalidParameter for digital silence, as
 ///         @ref normalize does.
-Audio normalize_rms(const Audio& audio, float target_db = kDefaultRmsTargetDb, bool clip = true);
+Audio normalize_rms(const Audio& audio, float target_db = kDefaultRmsTargetDb);
 
 /// @brief A normalized channel pair and the gain that produced it.
 struct NormalizeStereoResult {
@@ -65,7 +57,7 @@ struct NormalizeStereoResult {
 ///   not processable together (see @ref require_stereo_pair), and for the
 ///   arguments and the silent input @ref normalize rejects.
 NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right,
-                                       float target_db = kDefaultPeakTargetDb, bool clip = true);
+                                       float target_db = kDefaultPeakTargetDb);
 
 /// @brief Two-channel @ref normalize_rms.
 /// @details The RMS is taken over both channels together — the root mean square
@@ -73,7 +65,7 @@ NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right,
 ///   goes to both, for the same reason @ref normalize_stereo shares its gain.
 /// @throws SonareException as @ref normalize_stereo does.
 NormalizeStereoResult normalize_rms_stereo(const Audio& left, const Audio& right,
-                                           float target_db = kDefaultRmsTargetDb, bool clip = true);
+                                           float target_db = kDefaultRmsTargetDb);
 
 /// @brief Trims silence from the beginning and end of audio using an ABSOLUTE
 ///        RMS threshold.
@@ -105,20 +97,13 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio,
                                                     int hop_length = kDefaultSilenceHopLength);
 
 /// @brief Applies gain to audio.
-///
-/// When @p clip is true (the default, preserving historical behavior) output
-/// samples are hard-clipped to the [-1, 1] range after gain is applied, so the
-/// result is silently saturated when the gain would exceed full scale. Pass
-/// @p clip = false to leave the gained signal unclipped (e.g. when the caller
-/// applies its own limiter/headroom management downstream).
-///
+/// @details The result is not clipped; a gain past full scale leaves samples above 1.
 /// @param audio Input audio
 /// @param gain_db Gain in dB (positive = louder, negative = quieter)
-/// @param clip If true, hard-clip the output to [-1, 1]; if false, no clipping
-/// @return Audio with applied gain (clipped to [-1, 1] when @p clip is true)
+/// @return Audio with applied gain
 /// @throws SonareException(InvalidParameter) when @p gain_db is not finite or has
 ///         no finite linear multiplier.
-Audio apply_gain(const Audio& audio, float gain_db, bool clip = true);
+Audio apply_gain(const Audio& audio, float gain_db);
 
 /// @brief Applies fade in to audio.
 /// @param audio Input audio
