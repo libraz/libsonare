@@ -156,6 +156,11 @@ export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
 
 /** Request form of `masteringRepairDeclipStereo`. */
 export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
+  /**
+   * Reconstruct both channels over the union of their clipped runs. Default `false`:
+   * linked, the channels' repair errors agree, at the cost of re-estimating unclipped samples in the quieter channel; use it on near-mono material. Off, each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical.
+   */
+  linkChannels?: boolean;
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -165,18 +170,16 @@ export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
 }
 
 /**
- * Offline LPC-based declipper for a stereo pair, reconstructing the union of
- * both channels' clipped runs.
+ * Offline LPC-based declipper for a stereo pair.
  *
- * Each channel reconstructs the whole of every union run it has at least one
- * clipped sample in; a channel with no clipped sample in a run is left
- * untouched there, since reconstructing unclipped audio to match the other
- * side would replace real samples with an estimate. `linkedRuns` on either
- * report counts the runs whose reconstruction reached past this channel's own
- * clipped samples because the other channel's run was wider -- a clipped
- * plateau in only one channel produces no linking at all, and it is always 0
- * from {@link masteringRepairDeclip}. See {@link masteringRepairDeclip} for
- * the 512-sample LPC-vs-interpolation cap, which applies per channel here.
+ * By default each channel repairs its own clipped runs and leaves every sample
+ * it did not clip bit-identical. With `linkChannels`, the union of both
+ * channels' runs is the region set: each channel reconstructs the whole of
+ * every union run it has at least one clipped sample in, and a channel with
+ * none is left untouched there. `linkedRuns` is non-zero only then, where both
+ * channels are clipped in the same region with different extents. See
+ * {@link masteringRepairDeclip} for the 512-sample LPC-vs-interpolation cap,
+ * which applies per channel here.
  */
 export function masteringRepairDeclipStereo(
   request: MasteringRepairDeclipStereoRequest,

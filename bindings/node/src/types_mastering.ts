@@ -12472,6 +12472,8 @@ export interface MasteringProcessorParamMap {
     clipThresholdDb?: number;
     /** Unit: count. Range: [1, 8]. Default: 2. */
     iterations?: number;
+    /** Default: false. */
+    linkChannels?: boolean;
     /** Unit: count. Range: [0, 2048]. Default: 36. */
     lpcOrder?: number;
   };
@@ -13724,6 +13726,11 @@ export interface MasteringChainConfig {
       lpcOrder?: number;
       /** Outer reconstruction rounds, each re-estimating the model (1 to 8). Default 2. */
       iterations?: number;
+      /**
+       * Reconstruct every channel over the union of all channels' clipped runs. Default false:
+       * linked, the channels' repair errors agree, at the cost of re-estimating unclipped samples in the quieter channel; use it on near-mono material. Off, each channel repairs its own clipped runs and leaves every sample it did not clip bit-identical.
+       */
+      linkChannels?: boolean;
     };
     /** Removal of dense small impulses such as vinyl crackle. */
     decrackle?: {

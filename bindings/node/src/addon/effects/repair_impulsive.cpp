@@ -323,7 +323,9 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
   // any options key overrides a field.
   SonareDeclipConfig config = DefaultDeclipConfig();
   if (info.Length() >= 4 && info[3].IsObject()) {
-    config = read_declip_config_c(info[3].As<Napi::Object>(), config);
+    Napi::Object options = info[3].As<Napi::Object>();
+    config = read_declip_config_c(options, config);
+    config.link_channels = BoolProperty(options, "linkChannels", config.link_channels != 0) ? 1 : 0;
   }
   SonareDeclipStereoResult result{};
   SonareError err = sonare_mastering_repair_declip_stereo(

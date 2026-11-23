@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { masteringRepairDeclip, masteringRepairDeclipStereo } from '../src/index.js';
+import {
+  masterAudioStereo,
+  masteringRepairDeclip,
+  masteringRepairDeclipStereo,
+} from '../src/index.js';
 
 const SR = 22050;
+const LINKED = { linkChannels: true };
 
 // An isolated run clipped in the left channel only: the union run here equals
 // left's own detected extent exactly (right never clips nearby), so
@@ -57,9 +62,40 @@ function fixture(): { left: Float32Array; right: Float32Array } {
 }
 
 describe('masteringRepairDeclipStereo', () => {
-  it('reconstructs the union of both channels runs and links the narrower side', () => {
+  it('repairs each channel on its own by default, leaving every unclipped sample bit-identical', () => {
     const { left, right } = fixture();
     const result = masteringRepairDeclipStereo({ left, right, sampleRate: SR });
+    const clipped = (plane: Float32Array) =>
+      new Set(Array.from(plane).flatMap((value, i) => (value === 1.0 ? [i] : [])));
+    const untouchedOutside = (input: Float32Array, output: Float32Array) => {
+      const own = clipped(input);
+      return input.every((value, i) => own.has(i) || output[i] === value);
+    };
+    expect(untouchedOutside(left, result.channels[0])).toBe(true);
+    expect(untouchedOutside(right, result.channels[1])).toBe(true);
+    expect(result.reports[0].linkedRuns).toBe(0);
+    expect(result.reports[1].linkedRuns).toBe(0);
+    // Two independent passes: each channel is the mono declip of itself.
+    expect(result.channels[0]).toEqual(masteringRepairDeclip(left, SR).samples);
+    expect(result.channels[1]).toEqual(masteringRepairDeclip(right, SR).samples);
+    expect(
+      masteringRepairDeclipStereo({ left, right, sampleRate: SR, linkChannels: false }),
+    ).toEqual(result);
+  });
+
+  it('refuses a linkChannels that is not a boolean, and on the mono entry point', () => {
+    const { left, right } = fixture();
+    expect(() =>
+      masteringRepairDeclipStereo({ left, right, sampleRate: SR, linkChannels: 1 as never }),
+    ).toThrow(TypeError);
+    expect(() =>
+      masteringRepairDeclip({ samples: left, sampleRate: SR, linkChannels: true } as never),
+    ).toThrow(TypeError);
+  });
+
+  it('with linkChannels, reconstructs the union of both channels runs and links the narrower side', () => {
+    const { left, right } = fixture();
+    const result = masteringRepairDeclipStereo({ left, right, sampleRate: SR, ...LINKED });
 
     expect(result.channels[0]).toHaveLength(left.length);
     expect(result.channels[1]).toHaveLength(right.length);
@@ -93,10 +129,10 @@ describe('masteringRepairDeclipStereo', () => {
     expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
   });
 
-  it('leaves a channel with no clipped sample in a run untouched there', () => {
+  it('with linkChannels, leaves a channel with no clipped sample in a run untouched there', () => {
     const { left, right } = fixture();
     const original = fixture();
-    const result = masteringRepairDeclipStereo({ left, right, sampleRate: SR });
+    const result = masteringRepairDeclipStereo({ left, right, sampleRate: SR, ...LINKED });
 
     // The right channel never clips near the isolated left-only run, so
     // reconstructing unclipped audio to match the left side never happens --
@@ -108,9 +144,9 @@ describe('masteringRepairDeclipStereo', () => {
     }
   });
 
-  it('matches the mono facade on a run only one channel ever clips, diverges where linked', () => {
+  it('with linkChannels, matches the mono facade on a run only one channel ever clips, diverges where linked', () => {
     const { left, right } = fixture();
-    const stereo = masteringRepairDeclipStereo({ left, right, sampleRate: SR });
+    const stereo = masteringRepairDeclipStereo({ left, right, sampleRate: SR, ...LINKED });
     const mono = masteringRepairDeclip(left, SR).samples;
 
     // The isolated run's union bound equals left's own detected extent
@@ -173,5 +209,25 @@ describe('masteringRepairDeclipStereo', () => {
       }),
     ).toThrow();
     expect(() => masteringRepairDeclipStereo({ left, right, sampleRate: Number.NaN })).toThrow();
+  });
+
+  it('chain repair.declip follows linkChannels the way the stereo entry does', () => {
+    const { left, right } = fixture();
+    const chain = (declip: Record<string, unknown>) =>
+      masterAudioStereo({
+        left,
+        right,
+        sampleRate: SR,
+        overrides: { repair: { declip: { enabled: true, ...declip } } },
+      });
+    const own = masteringRepairDeclipStereo({ left, right, sampleRate: SR });
+    const linked = masteringRepairDeclipStereo({ left, right, sampleRate: SR, ...LINKED });
+    const ownChain = chain({});
+    const linkedChain = chain(LINKED);
+    expect(ownChain.left).toEqual(own.channels[0]);
+    expect(ownChain.right).toEqual(own.channels[1]);
+    expect(linkedChain.left).toEqual(linked.channels[0]);
+    expect(linkedChain.right).toEqual(linked.channels[1]);
+    expect(linkedChain.left).not.toEqual(ownChain.left);
   });
 });

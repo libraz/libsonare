@@ -123,7 +123,8 @@ export interface DeclipReport {
   repairedSamples: number;
   /**
    * Of the repaired runs, those reaching past this channel's own clipped
-   * samples because the other channel's run was wider.
+   * samples because the other channel's run was wider. Always 0 without
+   * `linkChannels`, and from the mono `masteringRepairDeclip`.
    */
   linkedRuns: number;
 }
@@ -142,9 +143,11 @@ export interface DeclipResult {
  * A declipped stereo pair and what each channel's pass did, from
  * {@link masteringRepairDeclipStereo}.
  *
- * Each channel reconstructs the whole of every union run it has at least one
- * clipped sample in; a channel with no clipped sample in a run is left
- * untouched there, so `reports[0]` and `reports[1]` can genuinely differ.
+ * By default each channel repairs its own clipped runs. With `linkChannels`,
+ * each channel reconstructs the whole of every union run it has at least one
+ * clipped sample in, and a channel with none is left untouched there.
+ * `linkedRuns` is non-zero only then, where both channels are clipped in the
+ * same region with different extents.
  */
 export interface MasteringRepairDeclipResult {
   /** Output planes in input order: `[left, right]` for a stereo pair. */

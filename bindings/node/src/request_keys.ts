@@ -748,6 +748,7 @@ const MASTERING_REPAIR_DECLIP_STEREO_REQUEST_KEYS = keySet(
   'clipThresholdDb',
   'lpcOrder',
   'iterations',
+  'linkChannels',
 );
 const MASTERING_REPAIR_DECRACKLE_REQUEST_KEYS = keySet(
   'samples',

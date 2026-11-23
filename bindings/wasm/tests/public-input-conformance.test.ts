@@ -19,6 +19,8 @@ import {
   masteringApplyProcessor,
   masteringApplyProcessorStereo,
   masteringInsertTiming,
+  masteringRepairDeclip,
+  masteringRepairDeclipStereo,
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
   masteringRepairTrimSilence,
@@ -890,5 +892,46 @@ describe('the mixer bus role answers the shared corpus', () => {
     } finally {
       mixer[Symbol.dispose]();
     }
+  });
+});
+
+type DeclipLinkSection = {
+  sample_rate: number;
+  samples: number;
+  error: Record<string, string>;
+  cases: { id: string; entry: string; link_channels: unknown; accepted: boolean }[];
+};
+
+describe('the declip linkChannels flag answers the shared corpus', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const section = (corpus as unknown as { declip_link_channels: DeclipLinkSection })
+    .declip_link_channels;
+  const signal = Float32Array.from(
+    { length: section.samples },
+    (_, i) => 0.5 * Math.sin((2 * Math.PI * 440 * i) / section.sample_rate),
+  );
+  it.each(section.cases)('$id', ({ entry, link_channels, accepted }) => {
+    const call = () =>
+      entry === 'mastering_repair_declip'
+        ? masteringRepairDeclip({
+            samples: signal,
+            sampleRate: section.sample_rate,
+            linkChannels: link_channels,
+          } as never)
+        : masteringRepairDeclipStereo({
+            left: signal,
+            right: signal,
+            sampleRate: section.sample_rate,
+            linkChannels: link_channels,
+          } as never);
+    if (accepted) {
+      expect(call).not.toThrow();
+      return;
+    }
+    expect(section.error[SURFACE]).toBe('TypeError');
+    expect(call).toThrow(TypeError);
   });
 });
