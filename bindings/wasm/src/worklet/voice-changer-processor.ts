@@ -4,8 +4,8 @@ import { codedError, refuse, refuseType, withEntry } from '../internal/entry.js'
 import { errorText, failurePayload } from '../internal/failure_payload.js';
 import type {
   SonareRealtimeVoiceChangerErrorMessage,
+  SonareRealtimeVoiceChangerNodeStatusReplyMessage,
   SonareRealtimeVoiceChangerReadyMessage,
-  SonareRealtimeVoiceChangerStatusReplyMessage,
 } from '../internal/voice_changer_messages.js';
 import type { WorkletPort } from '../internal/worklet_messages.js';
 import type {
@@ -47,7 +47,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   private readonly monoPlane: Float32Array[] = [new Float32Array(0)];
   private destroyed = false;
   /** Where a status request is answered; the registered processor points it at its port. */
-  reply?: (message: SonareRealtimeVoiceChangerStatusReplyMessage) => void;
+  reply?: (message: SonareRealtimeVoiceChangerNodeStatusReplyMessage) => void;
 
   constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions) {
     assertKnownProcessorOptions('voiceChangerProcessor', options);

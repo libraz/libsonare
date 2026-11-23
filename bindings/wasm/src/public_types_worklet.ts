@@ -251,7 +251,7 @@ export interface SonareRealtimeVoiceChangerNodeStatus {
 }
 
 /** Answers one status request, in the order the requests arrived. */
-export interface SonareRealtimeVoiceChangerStatusReplyMessage {
+export interface SonareRealtimeVoiceChangerNodeStatusReplyMessage {
   /** Always `'status'`. */
   type: 'status';
   /** The processor's status when the request was answered. */

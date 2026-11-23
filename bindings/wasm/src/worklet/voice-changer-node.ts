@@ -5,8 +5,8 @@ import { releasedHandleError } from '../internal/handle_guard.js';
 import type {
   SonareRealtimeVoiceChangerErrorMessage,
   SonareRealtimeVoiceChangerMessage,
+  SonareRealtimeVoiceChangerNodeStatusReplyMessage,
   SonareRealtimeVoiceChangerReadyMessage,
-  SonareRealtimeVoiceChangerStatusReplyMessage,
 } from '../internal/voice_changer_messages.js';
 import type { RealtimeVoiceChangerConfig } from '../public_types.js';
 import type {
@@ -81,7 +81,7 @@ export class SonareRealtimeVoiceChangerNode {
         this.readyLatencySamples = ready.latencySamples;
         this.resolveReady();
       } else if (event.data.type === 'status') {
-        const reply = event.data as unknown as SonareRealtimeVoiceChangerStatusReplyMessage;
+        const reply = event.data as unknown as SonareRealtimeVoiceChangerNodeStatusReplyMessage;
         this.pendingStatus.shift()?.resolve(reply.status);
       } else if (event.data.type === 'error') {
         this.refused(event.data as unknown as SonareRealtimeVoiceChangerErrorMessage);

@@ -1,6 +1,6 @@
 /** Wire protocol between the voice-changer AudioWorklet processor and its node. */
 import type { RealtimeVoiceChangerConfig } from '../public_types.js';
-import type { SonareRealtimeVoiceChangerStatusReplyMessage } from '../public_types_worklet.js';
+import type { SonareRealtimeVoiceChangerNodeStatusReplyMessage } from '../public_types_worklet.js';
 import type { SonareFailurePayload } from './failure_payload.js';
 
 export interface SonareRealtimeVoiceChangerSetConfigMessage {
@@ -33,7 +33,7 @@ export interface SonareRealtimeVoiceChangerAllNotesOffMessage {
   type: 'allNotesOff';
 }
 
-/** Asks for a {@link SonareRealtimeVoiceChangerStatusReplyMessage}. */
+/** Asks for a {@link SonareRealtimeVoiceChangerNodeStatusReplyMessage}. */
 export interface SonareRealtimeVoiceChangerStatusMessage {
   type: 'status';
 }
@@ -62,4 +62,4 @@ export interface SonareRealtimeVoiceChangerErrorMessage {
   failure: SonareFailurePayload;
 }
 
-export type { SonareRealtimeVoiceChangerStatusReplyMessage };
+export type { SonareRealtimeVoiceChangerNodeStatusReplyMessage };
