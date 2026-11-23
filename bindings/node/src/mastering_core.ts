@@ -2,7 +2,6 @@ import { refuse, withEntry } from './internal/entry.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveProcessorParams } from './internal/processor_params.js';
 import { parseRecordJson, type ResultFamily } from './internal/record_json.js';
-import { withRespelled } from './internal/respell.js';
 import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
@@ -485,11 +484,7 @@ export function masteringAbMatchLoudness(
   return withEntry('masteringAbMatchLoudness', () => {
     const r = requestOnly<MasteringAbMatchLoudnessRequest>('masteringAbMatchLoudness', [request]);
     const referenceRate = assertPairAudio(r, ['source', r.source], ['reference', r.reference]);
-    // The core names the two takes `a` (reference) and `b` (source).
-    return withRespelled(
-      { a: { name: 'reference', scale: 1 }, b: { name: 'source', scale: 1 } },
-      () => addon.masteringAbMatchLoudness(r.source, r.reference, r.sampleRate, referenceRate),
-    );
+    return addon.masteringAbMatchLoudness(r.source, r.reference, r.sampleRate, referenceRate);
   });
 }
 

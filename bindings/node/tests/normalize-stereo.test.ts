@@ -153,7 +153,7 @@ describe('normalize and normalizeStereo silence', () => {
   it('refuses a silent pair', () => {
     const call = () => normalizeStereo({ left: silence, right: silence, sampleRate: SR });
     expect(call).toThrow(RangeError);
-    expect(call).toThrow(/^normalizeStereo: audio has no measurable level$/);
+    expect(call).toThrow(/^normalizeStereo: left and right have no measurable level$/);
   });
 
   it('accepts a quiet but measurable take, so the refusal is about silence', () => {

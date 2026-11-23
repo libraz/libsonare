@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { lufs, masteringAbMatchLoudness, meteringTruePeakDbtp } from '../src/index.js';
+import {
+  lufs,
+  masteringAbMatchLoudness,
+  masteringAbMatchLoudnessStereo,
+  meteringTruePeakDbtp,
+} from '../src/index.js';
 
 const SR = 44100;
 
@@ -79,6 +84,28 @@ describe('masteringAbMatchLoudness', () => {
     expect(call).toThrow(RangeError);
     expect(call).toThrow(
       new RegExp(`^masteringAbMatchLoudness: ${silentRole} has no measurable loudness$`),
+    );
+  });
+
+  it.each([
+    ['source', 'reference'],
+    ['reference', 'source'],
+  ] as const)('refuses a silent stereo %s, naming both its channels', (silentRole, otherRole) => {
+    const silent = new Float32Array(SR);
+    const take = TAKES[otherRole];
+    const request = {
+      [`${silentRole}Left`]: silent,
+      [`${silentRole}Right`]: silent,
+      [`${otherRole}Left`]: take,
+      [`${otherRole}Right`]: take,
+      sampleRate: SR,
+    } as unknown as Parameters<typeof masteringAbMatchLoudnessStereo>[0];
+    const call = () => masteringAbMatchLoudnessStereo(request);
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(
+      new RegExp(
+        `^masteringAbMatchLoudnessStereo: ${silentRole}Left and ${silentRole}Right have no measurable loudness$`,
+      ),
     );
   });
 

@@ -100,7 +100,7 @@ describe('normalizeStereo', () => {
     const silence = new Float32Array(1024);
     const call = () => normalizeStereo({ left: silence, right: silence, sampleRate, targetDb: -1 });
     expect(call).toThrow(RangeError);
-    expect(call).toThrow(/^normalizeStereo: audio has no measurable level$/);
+    expect(call).toThrow(/^normalizeStereo: left and right have no measurable level$/);
 
     // Control: a quiet-but-not-silent pair does move, so the refusal is about silence.
     const quiet = sine(0.01);

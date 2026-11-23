@@ -4,11 +4,13 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
 #include "analysis/key_profiles.h"
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_internal.h"
 #include "editing/pitch_editor/auto_tune.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/note_editor.h"
@@ -444,9 +446,12 @@ val js_normalize_stereo(val left_samples, val right_samples, const val& sample_r
   validateWasmFloat32ArrayPair(left_samples, "left", right_samples, "right", true);
   Audio left = loadValidatedAudio("left", left_samples, sample_rate);
   Audio right = loadValidatedAudio("right", right_samples, sample_rate);
-  const NormalizeStereoResult result = mode == "rms"
-                                           ? normalize_rms_stereo(left, right, target_db, true)
-                                           : normalize_stereo(left, right, target_db);
+  // The core measures the pair as one signal it calls `audio`; the caller passed left and right.
+  const std::array<sonare_c_detail::CPairName, 1> pair{{{"audio", "left", "right"}}};
+  const NormalizeStereoResult result = sonare_c_detail::with_c_pair_names(pair, [&] {
+    return mode == "rms" ? normalize_rms_stereo(left, right, target_db, true)
+                         : normalize_stereo(left, right, target_db);
+  });
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
   out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));

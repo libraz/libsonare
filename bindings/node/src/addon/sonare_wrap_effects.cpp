@@ -1,8 +1,10 @@
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
 
+#include "c_api/sonare_c_internal.h"
 #include "core/audio.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
@@ -756,9 +758,12 @@ Napi::Value SonareWrap::NormalizeStereo(const Napi::CallbackInfo& info) {
       sonare::Audio::from_buffer(left_typed.Data(), left_typed.ElementLength(), sr);
   sonare::Audio right =
       sonare::Audio::from_buffer(right_typed.Data(), right_typed.ElementLength(), sr);
-  sonare::NormalizeStereoResult result =
-      mode == "rms" ? sonare::normalize_rms_stereo(left, right, target_db, true)
-                    : sonare::normalize_stereo(left, right, target_db);
+  // The core measures the pair as one signal it calls `audio`; the caller passed left and right.
+  const std::array<sonare_c_detail::CPairName, 1> pair{{{"audio", "left", "right"}}};
+  sonare::NormalizeStereoResult result = sonare_c_detail::with_c_pair_names(pair, [&] {
+    return mode == "rms" ? sonare::normalize_rms_stereo(left, right, target_db, true)
+                         : sonare::normalize_stereo(left, right, target_db);
+  });
   std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
   std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
   Napi::Object out = Napi::Object::New(env);

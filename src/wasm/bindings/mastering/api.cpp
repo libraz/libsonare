@@ -4,6 +4,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <array>
+
+#include "c_api/sonare_c_internal.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
@@ -484,7 +487,11 @@ val js_mastering_ab_match_loudness_stereo(val source_left_samples, val source_ri
       loadValidatedAudio("referenceRight", reference_right_samples, reference_sample_rate);
   const mastering::match::StereoAudioPair source{source_left, source_right};
   const mastering::match::StereoAudioPair reference{reference_left, reference_right};
-  const auto matched = mastering::match::ab_match_loudness_stereo(reference, source);
+  // A silent take is refused under the core's side name; the caller passed it as two channels.
+  const std::array<sonare_c_detail::CPairName, 2> pairs{
+      {{"reference", "referenceLeft", "referenceRight"}, {"source", "sourceLeft", "sourceRight"}}};
+  const auto matched = sonare_c_detail::with_c_pair_names(
+      pairs, [&] { return mastering::match::ab_match_loudness_stereo(reference, source); });
 
   val out = val::object();
   out.set("left", vectorToFloat32Array(matched.b.left.data(), matched.b.left.size()));
