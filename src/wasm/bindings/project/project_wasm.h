@@ -369,7 +369,8 @@ val js_midi_bank_program(const val& ppq, const val& group, const val& channel, c
                          const val& bank_lsb, const val& program);
 SonareMidiEventPod js_midi_event_from_val(val event);
 val js_midi_event_to_val(const SonareMidiEventPod& event);
-SonareMidiCcBinding js_cc_binding_from_val(val object);
+/// @param at The binding's place in a list (`bindings[2]`), or empty for one passed alone.
+SonareMidiCcBinding js_cc_binding_from_val(val object, const std::string& at);
 val js_cc_binding_to_val(const SonareMidiCcBinding& binding);
 std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings);
 val js_midi_cc_learn(val events, const val& param_id, const val& min_value, const val& max_value,

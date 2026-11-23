@@ -302,7 +302,9 @@ bool CcBindingsFromArray(Napi::Env env, Napi::Array array, std::vector<SonareMid
       Napi::TypeError::New(env, "MIDI CC bindings must be objects").ThrowAsJavaScriptException();
       return false;
     }
-    if (!sonare_node::CcBindingFromObject(env, item.As<Napi::Object>(), &(*out)[i])) return false;
+    if (!sonare_node::CcBindingFromObject(env, item.As<Napi::Object>(), &(*out)[i],
+                                          "bindings[" + std::to_string(i) + "]"))
+      return false;
   }
   return true;
 }

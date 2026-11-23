@@ -423,6 +423,13 @@ std::vector<int32_t> int32ArrayToVector(val arr, const char* subject);
 std::vector<uint8_t> uint8ArrayToVector(val arr, const char* subject);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
+
+/// @brief The name a field of a list element is refused by: @p key under @p at (`bindings[2]`),
+///        or @p key alone when @p at is empty. The property readers taking @p at name by it.
+inline std::string elementField(const std::string& at, const char* key) {
+  return at.empty() ? std::string(key) : at + "." + key;
+}
+
 /// @brief Presence- AND type-checked float reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number validated by @ref checkedFloatFromVal.
@@ -435,7 +442,7 @@ val objectProperty(val object, const char* key);
 ///          "non-finite means unspecified". Every property reader below shares
 ///          this contract: absent is the only way to ask for the default.
 /// @throws WasmArgumentError naming @p key.
-float floatProperty(val object, const char* key, float default_value);
+float floatProperty(val object, const char* key, float default_value, const std::string& at = {});
 
 /// @brief Type-only sibling of @ref floatProperty, for a field whose core check states its domain.
 /// @details NaN and the infinities pass, and a finite value past the float range saturates to an
@@ -510,7 +517,8 @@ int intProperty(val object, const char* key, int default_value);
 /// @brief Integer in [@p lo, @p hi] whose absence the C ABI spells as @p absent: absent or
 ///        null returns @p absent, and any other value outside the range, @p absent
 ///        included, is a WasmRangeError naming @p key.
-int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent);
+int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent,
+                               const std::string& at = {});
 /// @brief Unsigned sibling of @ref checkedIntFromVal.
 /// @details val::as<uint32_t>() saturates at the top and clamps a negative to 0,
 ///          so -1 -- the sentinel several fields here spell "none" with -- lands
@@ -535,7 +543,8 @@ uint32_t wordProperty(val object, const char* key, uint32_t default_value);
 ///          wildcard.
 /// @throws WasmArgumentError naming @p key.
 uint8_t checkedByteFromVal(const val& value, const char* key);
-uint8_t byteProperty(val object, const char* key, uint8_t default_value);
+uint8_t byteProperty(val object, const char* key, uint8_t default_value,
+                     const std::string& at = {});
 /// @brief 16-bit sibling of @ref checkedByteFromVal: 65536 would wrap to 0, inside the type.
 /// @throws WasmArgumentError naming @p key.
 uint16_t checkedUint16FromVal(const val& value, const char* key);

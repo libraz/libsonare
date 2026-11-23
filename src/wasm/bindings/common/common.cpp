@@ -431,13 +431,18 @@ namespace {
 
 // The property readers' shared half: undefined or null reads as absent (returned
 // as undefined), and any JS type other than @p type is refused by name.
-val typedPropertyValue(const val& object, const char* key, const char* type) {
+val typedPropertyValue(const val& object, const char* key, const char* type,
+                       const std::string& name) {
   val value = objectProperty(object, key);
   if (value.isUndefined() || value.isNull()) return val::undefined();
   if (value.typeOf().as<std::string>() != type) {
-    throw WasmTypeError(std::string(key) + " must be a " + type);
+    throw WasmTypeError(name + " must be a " + type);
   }
   return value;
+}
+
+val typedPropertyValue(const val& object, const char* key, const char* type) {
+  return typedPropertyValue(object, key, type, key);
 }
 
 }  // namespace
@@ -450,9 +455,10 @@ double numberFromVal(const val& value, const char* key) {
   return value.as<double>();
 }
 
-float floatProperty(val object, const char* key, float default_value) {
-  val value = typedPropertyValue(object, key, "number");
-  return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
+float floatProperty(val object, const char* key, float default_value, const std::string& at) {
+  const std::string name = elementField(at, key);
+  val value = typedPropertyValue(object, key, "number", name);
+  return value.isUndefined() ? default_value : checkedFloatFromVal(value, name.c_str());
 }
 
 float domainFloatFromVal(const val& value, const char* key) {
@@ -580,12 +586,14 @@ int intProperty(val object, const char* key, int default_value) {
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
 
-int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent) {
-  val value = typedPropertyValue(object, key, "number");
+int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent,
+                               const std::string& at) {
+  const std::string name = elementField(at, key);
+  val value = typedPropertyValue(object, key, "number", name);
   if (value.isUndefined()) return absent;
   const double number = value.as<double>();
   if (!(number >= lo) || number > hi || std::floor(number) != number) {
-    throw WasmRangeError(std::string(key) + " must be an integer in [" + std::to_string(lo) + ", " +
+    throw WasmRangeError(name + " must be an integer in [" + std::to_string(lo) + ", " +
                          std::to_string(hi) + "], or omitted");
   }
   return static_cast<int>(number);
@@ -628,9 +636,10 @@ uint16_t checkedUint16FromVal(const val& value, const char* key) {
       checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint16_t>::max())));
 }
 
-uint8_t byteProperty(val object, const char* key, uint8_t default_value) {
-  val value = typedPropertyValue(object, key, "number");
-  return value.isUndefined() ? default_value : checkedByteFromVal(value, key);
+uint8_t byteProperty(val object, const char* key, uint8_t default_value, const std::string& at) {
+  const std::string name = elementField(at, key);
+  val value = typedPropertyValue(object, key, "number", name);
+  return value.isUndefined() ? default_value : checkedByteFromVal(value, name.c_str());
 }
 
 int64_t checkedInt64FromVal(const val& value, const char* key) {

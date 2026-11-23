@@ -77,7 +77,7 @@ Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SonareMidiCcBinding binding{};
-  if (!sonare_node::CcBindingFromObject(env, info[0].As<Napi::Object>(), &binding)) {
+  if (!sonare_node::CcBindingFromObject(env, info[0].As<Napi::Object>(), &binding, "")) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, &binding));

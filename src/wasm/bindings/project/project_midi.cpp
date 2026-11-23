@@ -394,20 +394,21 @@ val js_midi_event_to_val(const SonareMidiEventPod& event) {
   return out;
 }
 
-SonareMidiCcBinding js_cc_binding_from_val(val object) {
+SonareMidiCcBinding js_cc_binding_from_val(val object, const std::string& at) {
   SonareMidiCcBinding out{};
   // The 14-bit kind's narrower [0, 31] is refused by the C ABI, which sees the kind.
-  out.cc_number = domainNumberFromVal<uint8_t>(object["ccNumber"], "ccNumber",
-                                               sonare_c_detail::kMidiDataByteDomain);
+  out.cc_number =
+      domainNumberFromVal<uint8_t>(object["ccNumber"], elementField(at, "ccNumber").c_str(),
+                                   sonare_c_detail::kMidiDataByteDomain);
   out.channel = static_cast<uint8_t>(
-      intInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL));
-  out.kind = static_cast<uint8_t>(ccBindingKindProperty(object));
-  out.cc_lsb_number = byteProperty(object, "ccLsbNumber", 0u);
-  out.selector_msb = byteProperty(object, "selectorMsb", 0u);
-  out.selector_lsb = byteProperty(object, "selectorLsb", 0u);
-  out.param_id = checkedUintFromVal(object["paramId"], "paramId");
-  out.min_value = floatProperty(object, "minValue", 0.0f);
-  out.max_value = floatProperty(object, "maxValue", 1.0f);
+      intInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL, at));
+  out.kind = static_cast<uint8_t>(ccBindingKindProperty(object, at));
+  out.cc_lsb_number = byteProperty(object, "ccLsbNumber", 0u, at);
+  out.selector_msb = byteProperty(object, "selectorMsb", 0u, at);
+  out.selector_lsb = byteProperty(object, "selectorLsb", 0u, at);
+  out.param_id = checkedUintFromVal(object["paramId"], elementField(at, "paramId").c_str());
+  out.min_value = floatProperty(object, "minValue", 0.0f, at);
+  out.max_value = floatProperty(object, "maxValue", 1.0f, at);
   return out;
 }
 
@@ -431,7 +432,7 @@ std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
   const size_t count = wasmArrayLength(bindings, "bindings");
   std::vector<SonareMidiCcBinding> out(count);
   for (size_t i = 0; i < count; ++i) {
-    out[i] = js_cc_binding_from_val(bindings[i]);
+    out[i] = js_cc_binding_from_val(bindings[i], "bindings[" + std::to_string(i) + "]");
   }
   return out;
 }

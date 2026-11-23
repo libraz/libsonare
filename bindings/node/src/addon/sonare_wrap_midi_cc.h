@@ -9,6 +9,7 @@
 #include <sonare/sonare_c.h>
 
 #include <array>
+#include <string>
 
 #include "c_api/midi_input_domains.h"
 #include "midi/cc_map.h"
@@ -26,11 +27,20 @@ inline std::array<const char*, 4> CcBindingKindNames() {
 }
 
 /// @brief Read a binding descriptor; throws (and returns false) naming the offending field.
-inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding* out) {
+/// @param at The binding's place in a list (`bindings[2]`), prefixed to every field name, or
+///   empty for a binding passed on its own.
+inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding* out,
+                                const std::string& at) {
   const Napi::Value cc_number = object.Get("ccNumber");
   const Napi::Value param_id = object.Get("paramId");
-  if (!cc_number.IsNumber() || !param_id.IsNumber()) {
-    Napi::TypeError::New(env, "MIDI CC binding requires numeric ccNumber and paramId")
+  if (!cc_number.IsNumber()) {
+    Napi::TypeError::New(env, node_element_field(at, "ccNumber") + " must be " +
+                                  node_domain_type_text(sonare_c_detail::kMidiDataByteDomain))
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  if (!param_id.IsNumber()) {
+    Napi::TypeError::New(env, node_element_field(at, "paramId") + " must be a number")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -38,22 +48,24 @@ inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCc
   // The 14-bit kind's narrower [0, 31] is refused by the C ABI, which sees the kind.
   try {
     out->cc_number =
-        node_domain_number<uint8_t>(cc_number, "ccNumber", sonare_c_detail::kMidiDataByteDomain);
+        node_domain_number<uint8_t>(cc_number, node_element_field(at, "ccNumber").c_str(),
+                                    sonare_c_detail::kMidiDataByteDomain);
   } catch (...) {
     ThrowCurrentException(env);
     return false;
   }
   // An omitted channel matches any channel; 255, the C ABI's spelling of that, is refused.
   out->channel = static_cast<uint8_t>(
-      IntInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL));
-  out->kind = static_cast<uint8_t>(NamedSelectorProperty(object, "kind", CcBindingKindNames(), 0));
-  out->cc_lsb_number = MidiByteProperty(env, object, "ccLsbNumber", 0u);
-  out->selector_msb = MidiByteProperty(env, object, "selectorMsb", 0u);
-  out->selector_lsb = MidiByteProperty(env, object, "selectorLsb", 0u);
+      IntInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL, at));
+  out->kind =
+      static_cast<uint8_t>(NamedSelectorProperty(object, "kind", CcBindingKindNames(), 0, at));
+  out->cc_lsb_number = MidiByteProperty(env, object, "ccLsbNumber", 0u, at);
+  out->selector_msb = MidiByteProperty(env, object, "selectorMsb", 0u, at);
+  out->selector_lsb = MidiByteProperty(env, object, "selectorLsb", 0u, at);
   if (env.IsExceptionPending()) return false;
-  out->param_id = node_narrow_uint32(env, param_id, "paramId");
-  out->min_value = FloatProperty(object, "minValue", 0.0f);
-  out->max_value = FloatProperty(object, "maxValue", 1.0f);
+  out->param_id = node_narrow_uint32(env, param_id, node_element_field(at, "paramId").c_str());
+  out->min_value = FloatProperty(object, "minValue", 0.0f, at);
+  out->max_value = FloatProperty(object, "maxValue", 1.0f, at);
   return !env.IsExceptionPending();
 }
 

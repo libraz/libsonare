@@ -316,6 +316,12 @@ inline std::string node_narrow_string(Napi::Env env, const Napi::Value& value,
 // default, and any other value of the wrong type is refused by name. They report
 // by throwing, which SONARE_NODE_CATCH turns back into a JS error.
 
+/// @brief The name a field of a list element is refused by: @p key under @p at (`bindings[2]`),
+///        or @p key alone when @p at is empty.
+inline std::string node_element_field(const std::string& at, const char* key) {
+  return at.empty() ? std::string(key) : at + "." + key;
+}
+
 /// @brief Refuses a present value the reader cannot read, naming @p key.
 /// @details The typed N-API accessors report a mismatch by leaving a pending JS
 ///   exception and returning a dummy, and the entry point then runs to
@@ -402,37 +408,47 @@ inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, ZeroIsS
 ///          type-checked like the rest of the *Property family (undefined/null
 ///          takes @p fallback, any other wrong-typed value is refused by name
 ///          via @ref node_require_property_type), then throws a JS RangeError
-///          naming @p key for a non-integer or out-of-[0,255] value. The finer
+///          naming @p name for a non-integer or out-of-[0,255] value. The finer
 ///          MIDI range (group < 16, note < 128, ...) stays the C ABI's to
 ///          enforce, so this only closes the wrap.
-/// @throws Napi::TypeError or Napi::RangeError naming @p key.
-inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const char* key,
-                                uint8_t fallback) {
-  Napi::Value value = obj.Get(key);
+/// @throws Napi::TypeError or Napi::RangeError naming @p name.
+inline uint8_t MidiByteValue(Napi::Env env, const Napi::Value& value, const std::string& name,
+                             uint8_t fallback) {
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(env, value.IsNumber(), key, "a number");
+  node_require_property_type(env, value.IsNumber(), name.c_str(), "a number");
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!(number >= 0.0) || number > 255.0 || std::floor(number) != number) {
-    throw Napi::RangeError::New(env, std::string(key) + " must be an integer in [0, 255]");
+    throw Napi::RangeError::New(env, name + " must be an integer in [0, 255]");
   }
   return static_cast<uint8_t>(number);
+}
+
+/// @brief @ref MidiByteValue over the property @p key, named by it under @p at.
+inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const char* key,
+                                uint8_t fallback, const std::string& at = {}) {
+  return MidiByteValue(env, obj.Get(key), node_element_field(at, key), fallback);
 }
 
 /// @brief Read an integer in [@p lo, @p hi] whose absence the C ABI spells as @p absent.
 /// @details undefined/null returns @p absent; any number outside the range, @p absent itself
 ///   included, is a RangeError naming @p key, so the C-side marker is never typed by a caller.
-inline int IntInRangeOrAbsentProperty(const Napi::Object& obj, const char* key, int lo, int hi,
-                                      int absent) {
-  Napi::Value value = obj.Get(key);
+inline int IntInRangeOrAbsentValue(Napi::Env env, const Napi::Value& value, const std::string& name,
+                                   int lo, int hi, int absent) {
   if (value.IsUndefined() || value.IsNull()) return absent;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_require_property_type(env, value.IsNumber(), name.c_str(), "a number");
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!(number >= lo) || number > hi || std::floor(number) != number) {
-    throw Napi::RangeError::New(obj.Env(), std::string(key) + " must be an integer in [" +
-                                               std::to_string(lo) + ", " + std::to_string(hi) +
-                                               "], or omitted");
+    throw Napi::RangeError::New(env, name + " must be an integer in [" + std::to_string(lo) + ", " +
+                                         std::to_string(hi) + "], or omitted");
   }
   return static_cast<int>(number);
+}
+
+/// @brief @ref IntInRangeOrAbsentValue over the property @p key, named by it under @p at.
+inline int IntInRangeOrAbsentProperty(const Napi::Object& obj, const char* key, int lo, int hi,
+                                      int absent, const std::string& at = {}) {
+  return IntInRangeOrAbsentValue(obj.Env(), obj.Get(key), node_element_field(at, key), lo, hi,
+                                 absent);
 }
 
 /// @brief Read a property destined for an int8_t C-ABI field: undefined/null
@@ -490,11 +506,17 @@ inline uint64_t Uint64Property(const Napi::Object& obj, const char* key, uint64_
 ///        non-number is refused by name.
 /// @details Narrows through @ref node_narrow_float, so a NaN, an infinity and a
 ///   finite value no 32-bit float can hold are refused by name.
-inline float FloatProperty(const Napi::Object& obj, const char* key, float fallback) {
-  Napi::Value value = obj.Get(key);
+inline float FloatValue(Napi::Env env, const Napi::Value& value, const std::string& name,
+                        float fallback) {
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
-  return node_narrow_float(obj.Env(), value, key);
+  node_require_property_type(env, value.IsNumber(), name.c_str(), "a number");
+  return node_narrow_float(env, value, name.c_str());
+}
+
+/// @brief @ref FloatValue over the property @p key, named by it under @p at.
+inline float FloatProperty(const Napi::Object& obj, const char* key, float fallback,
+                           const std::string& at = {}) {
+  return FloatValue(obj.Env(), obj.Get(key), node_element_field(at, key), fallback);
 }
 
 /// @brief Read a float property that is data rather than a setting, where NaN and the
@@ -684,24 +706,30 @@ inline int GsEfxRealizationProperty(const Napi::Object& obj, const char* key) {
 ///   the selector values, and a name outside it is a RangeError listing the valid set; any other
 ///   type, an integer included, is a TypeError naming the valid set.
 template <std::size_t N>
-inline int NamedSelectorProperty(const Napi::Object& obj, const char* key,
-                                 const std::array<const char*, N>& names, int fallback) {
-  Napi::Value value = obj.Get(key);
+inline int NamedSelectorValue(Napi::Env env, const Napi::Value& value, const std::string& subject,
+                              const std::array<const char*, N>& names, int fallback) {
   if (value.IsUndefined() || value.IsNull()) return fallback;
   std::string valid;
   for (std::size_t i = 0; i < N; ++i) {
     valid += (i == 0 ? "'" : ", '") + std::string(names[i]) + "'";
   }
   if (!value.IsString()) {
-    throw Napi::TypeError::New(
-        obj.Env(), std::string(key) + " must be one of " + valid + " (a name, not a number)");
+    throw Napi::TypeError::New(env,
+                               subject + " must be one of " + valid + " (a name, not a number)");
   }
-  const std::string name = node_narrow_string(obj.Env(), value, key);
+  const std::string name = node_narrow_string(env, value, subject);
   for (std::size_t i = 0; i < N; ++i) {
     if (name == names[i]) return static_cast<int>(i);
   }
-  throw Napi::RangeError::New(
-      obj.Env(), std::string(key) + " must be one of " + valid + ", got '" + name + "'");
+  throw Napi::RangeError::New(env, subject + " must be one of " + valid + ", got '" + name + "'");
+}
+
+/// @brief @ref NamedSelectorValue over the property @p key, named by it under @p at.
+template <std::size_t N>
+inline int NamedSelectorProperty(const Napi::Object& obj, const char* key,
+                                 const std::array<const char*, N>& names, int fallback,
+                                 const std::string& at = {}) {
+  return NamedSelectorValue(obj.Env(), obj.Get(key), node_element_field(at, key), names, fallback);
 }
 
 /// @brief One accepted spelling of an enum-string option and the value it selects.
