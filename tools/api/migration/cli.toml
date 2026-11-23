@@ -185,7 +185,7 @@ test = "tests/cli/cli_analysis_test.cpp::silence omits every measure read off vo
 [[entry]]
 kind = "command"
 old = "acoustic"
-changed = "the JSON no longer carries is_blind: a blind estimate omits edt, c50, c80, d50 and their band arrays, so test for edt instead"
+changed = "the JSON no longer carries is_blind: a blind estimate omits edt, c50, c80, d50 and their band arrays, so test for edt instead; a band list leaves out a band nothing measured and carries the measured bands' indices beside it in rt60_band, edt_band, c50_band and c80_band, and rt60 is absent when not measured"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_cli_absent_keys.py::test_acoustic_omits_what_only_an_impulse_response_measures"
@@ -745,7 +745,7 @@ test = "tests/cli/cli_effects_test.cpp::leaves an omitted band count to the libr
 [[entry]]
 kind = "command"
 old = "mastering"
-changed = "a chain is required: --preset or --chain-config, or --assistant (which may take --preset as its base); with none the command is refused as a usage error (exit 2) before the input is read, instead of normalising loudness, which is now mastering-normalize-loudness with the same options and output; --chain-config alongside --preset or --assistant is refused the same way; --target-lufs, --ceiling-dbtp, --enable-repair, --explain, --target-platform, --no-streaming-safe and --speech-mono-amount reach only the assistant and are refused without --assistant (exit 2, before the input is read); the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; the before and after summaries of --report name the loudness range loudness_range_lu rather than loudness_range"
+changed = "a chain is required: --preset or --chain-config, or --assistant (which may take --preset as its base); with none the command is refused as a usage error (exit 2) before the input is read, instead of normalising loudness, which is now mastering-normalize-loudness with the same options and output; --chain-config alongside --preset or --assistant is refused the same way; --target-lufs, --ceiling-dbtp, --enable-repair, --explain, --target-platform, --no-streaming-safe and --speech-mono-amount reach only the assistant and are refused without --assistant (exit 2, before the input is read); the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; the before and after summaries of --report name the loudness range loudness_range_lu rather than loudness_range; the --report summaries leave out a level nothing measured, band_energy_delta_db lists the measured bands beside their indices in band_energy_delta_band, and the report adds loudness_gain_db"
 domain = "mastering"
 rule = "mastering-names"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering needs a chain and leaves loudness-only work to its own command"
@@ -805,7 +805,7 @@ frontend = "python"
 [[entry]]
 kind = "command"
 old = "repair"
-changed = "a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as \"--explain cannot be combined with <option>\""
+changed = "a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as \"--explain cannot be combined with <option>\"; the JSON noise floor lists band_floor_dbfs for the measured bands beside their indices in band_floor_band, and the hum harmonic_dbfs ends at the last measured harmonic"
 domain = "mastering"
 rule = "stereo-pair"
 test = "tests/cli/cli_mastering_test.cpp::CLI repair carries a stereo input through as a stereo pair"
@@ -1051,7 +1051,7 @@ test = "tests/cli/cli_effects_test.cpp::CLI vqt reports the gamma its bandwidths
 [[entry]]
 kind = "command"
 old = "dynamics"
-changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range_db"
+changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range_db; a level nothing measured is absent rather than null, and a dynamic range over a silent low percentile window is null, its +inf end"
 domain = "analysis"
 rule = "unit-in-name"
 test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU unit"
@@ -1059,7 +1059,7 @@ test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU un
 [[entry]]
 kind = "command"
 old = "analyze"
-changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range_db"
+changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range_db; a dynamics level nothing measured is absent rather than null, and a dynamic range over a silent low percentile window is null, its +inf end"
 domain = "analysis"
 rule = "unit-in-name"
 test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU unit"
@@ -1067,7 +1067,7 @@ test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU un
 [[entry]]
 kind = "command"
 old = "lufs"
-changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range"
+changed = "the --json result names the loudness range loudness_range_lu rather than loudness_range; a loudness nothing measured (short-term loudness of input shorter than its 3 s window, a loudness range of too little input) is absent rather than null, and silence is null, its -inf end"
 domain = "mastering"
 rule = "unit-in-name"
 test = "tests/cli/cli_contract_test.cpp::CLI loudness range keys carry the LU unit"
@@ -2020,7 +2020,7 @@ test = "tests/cli/cli_effects_test.cpp::CLI filter takes the library's four resp
 [[entry]]
 kind = "command"
 old = "filter"
-changed = "the frequencies --type reads are required and one it does not read is refused, as usage errors (exit 2) before the input is read rather than exit 1; a corner or centre at or above the input's Nyquist frequency is refused (exit 3) rather than written as a non-finite signal; the JSON names cutoff_hz, center_hz and bandwidth_hz, null where the type does not read one, and adds order and zero_phase"
+changed = "the frequencies --type reads are required and one it does not read is refused, as usage errors (exit 2) before the input is read rather than exit 1; a corner or centre at or above the input's Nyquist frequency is refused (exit 3) rather than written as a non-finite signal; the JSON names cutoff_hz, center_hz and bandwidth_hz, each present only where the type reads it, and adds order and zero_phase"
 frontend = "native"
 domain = "effects"
 rule = "cli-front-end-parity"
@@ -2175,7 +2175,7 @@ test = "tests/cli/cli_contract_test.cpp::CLI utility commands refuse what the co
 [[entry]]
 kind = "command"
 old = "dynamic-range"
-changed = "a --window-sec or --hop-sec at or below 0, a percentile outside [0, 1] and a --low-percentile above --high-percentile are refused as usage errors (exit 2) before the input is read, rather than exit 3"
+changed = "a --window-sec or --hop-sec at or below 0, a percentile outside [0, 1] and a --low-percentile above --high-percentile are refused as usage errors (exit 2) before the input is read, rather than exit 3; a level nothing measured is absent rather than null"
 frontend = "native"
 domain = "analysis"
 rule = "cli-front-end-parity"
@@ -2461,7 +2461,7 @@ test = "tests/cli/cli_project_test.cpp::CLI project commands refuse synth, audio
 [[entry]]
 kind = "command"
 old = "estimate-room"
-changed = "the JSON absorption_bands key is band_absorption, as the library names it"
+changed = "the JSON absorption_bands key is band_absorption, as the library names it; a room dimension it could not estimate is absent rather than null, and rt60_bands and band_absorption list only the measured bands, beside their indices in rt60_band and band_absorption_band"
 domain = "analysis"
 rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_option_effects_v2.py::test_estimate_room_json_names_the_band_absorption_as_the_library_does"
@@ -2474,3 +2474,11 @@ changed = "the JSON carries form, the section letters the native command already
 domain = "analysis"
 rule = "cli-front-end-parity"
 test = "bindings/python/tests/test_cli_sections_stems_transcribe_mix.py::test_sections_reports_the_boundaries_it_found"
+
+[[entry]]
+kind = "command"
+old = "pitch"
+changed = "--frames lists f0 for the voiced frames only, beside their frame indices in f0_frame, rather than one value per frame with null for an unvoiced frame; voiced_ratio, median_f0 and mean_f0 are absent rather than null when nothing was measured"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_cli_note_edit.py::test_pitch_frames_cli_lists_voiced_f0_beside_their_frame_indices"

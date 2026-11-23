@@ -12606,16 +12606,16 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `analyze` | the --json result names the loudness range loudness_range_lu rather than loudness_range_db |
+| `analyze` | the --json result names the loudness range loudness_range_lu rather than loudness_range_db; a dynamics level nothing measured is absent rather than null, and a dynamic range over a silent low percentile window is null, its +inf end |
 | `clipping --threshold` (native CLI only) | `clipping --threshold-db`: the detection level is given in dBFS as --threshold-db, in [-120, 0]; a linear threshold t becomes 20*log10(t), and a level outside the range is refused as a usage error (exit 2) |
-| `dynamics` | the --json result names the loudness range loudness_range_lu rather than loudness_range_db |
+| `dynamics` | the --json result names the loudness range loudness_range_lu rather than loudness_range_db; a level nothing measured is absent rather than null, and a dynamic range over a silent low percentile window is null, its +inf end |
 | `meter --clip-threshold` (native CLI only) | `meter --clip-threshold-db`: the clipping level is given in dBFS as --clip-threshold-db, in [-120, 0]; a linear threshold t becomes 20*log10(t), and a level outside the range is refused as a usage error (exit 2) |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
 | 1.x | 2.0.0 |
 |---|---|
-| `acoustic` | the JSON no longer carries is_blind: a blind estimate omits edt, c50, c80, d50 and their band arrays, so test for edt instead |
+| `acoustic` | the JSON no longer carries is_blind: a blind estimate omits edt, c50, c80, d50 and their band arrays, so test for edt instead; a band list leaves out a band nothing measured and carries the measured bands' indices beside it in rt60_band, edt_band, c50_band and c80_band, and rt60 is absent when not measured |
 | `estimate-room --n-octave-bands` | omitted, the library chooses the band count; an explicit 0 or a negative value is refused as a usage error (exit 2) rather than read as the default, and the refusal states the upper bound the field holds ("must be an integer in [N, 2147483647]") |
 | `melody` (native CLI only) | the JSON drops has_melody, mean_frequency becomes mean_frequency_hz and vibrato_rate becomes vibrato_rate_hz; with no voiced frame pitch_range_octaves, mean_frequency_hz, pitch_stability and vibrato_rate_hz are absent rather than 0, so test for mean_frequency_hz |
 | `vocal-notes` | the JSON note record no longer carries has_pitch: the pitch keys (median_hz, center_midi, f0_stability, note_name, cents) are absent on an unpitched note, so test for center_midi instead |
@@ -12632,6 +12632,12 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `melody --hop-length` (native CLI only) | omitted, the library hop of 256 samples applies rather than 512; pass --hop-length 512 to keep 1.x output; a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3), and the refusal states the upper bound the field holds ("must be an integer in [N, 2147483647]") |
 | `mfcc-to-audio --n-mfcc` (native CLI only) | omitted, 20 coefficients are kept, the library's MFCC default, rather than 13; pass --n-mfcc 13 to keep the 1.x result |
 | `vqt --gamma` (native CLI only) | omitted, the library derives the bandwidth offset from the ERB bandwidths rather than using 0 (a constant-Q transform); pass --gamma 0 to keep 1.x output; a negative value is refused as a usage error (exit 2) rather than read as the derived offset |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `pitch` | --frames lists f0 for the voiced frames only, beside their frame indices in f0_frame, rather than one value per frame with null for an unvoiced frame; voiced_ratio, median_f0 and mean_f0 are absent rather than null when nothing was measured |
 
 #### String values are lowerCamelCase tokens
 
@@ -12719,10 +12725,10 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `clipping` (native CLI only) | a negative --min-region is refused as a usage error (exit 2) rather than exit 3, and 0 lists every run as 1 does |
 | `cqt --hop-length` (native CLI only) | a value outside [1, 65536] is refused as a usage error (exit 2) before the input is read; the library bounds the constant-Q hop so its longest filter stays finite |
 | `cqt --n-bins` (native CLI only) | an --n-bins or --bins-per-octave below 1 is refused as a usage error (exit 2) before the input is read, rather than exit 3 |
-| `dynamic-range` (native CLI only) | a --window-sec or --hop-sec at or below 0, a percentile outside [0, 1] and a --low-percentile above --high-percentile are refused as usage errors (exit 2) before the input is read, rather than exit 3 |
+| `dynamic-range` (native CLI only) | a --window-sec or --hop-sec at or below 0, a percentile outside [0, 1] and a --low-percentile above --high-percentile are refused as usage errors (exit 2) before the input is read, rather than exit 3; a level nothing measured is absent rather than null |
 | `dynamics --hop-length` | a value below 1 is refused as a usage error (exit 2) naming --hop-length before the input is read, with one text on both front-ends |
 | `dynamics --window-sec` | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `estimate-room` | the JSON absorption_bands key is band_absorption, as the library names it |
+| `estimate-room` | the JSON absorption_bands key is band_absorption, as the library names it; a room dimension it could not estimate is absent rather than null, and rt60_bands and band_absorption list only the measured bands, beside their indices in rt60_band and band_absorption_band |
 | `key --hop-length` | a value below 16 with --hpss is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `key --n-fft` | a value below 1 is refused as a usage error (exit 2) naming --n-fft before the input is read, with one text on both front-ends |
 | `mel-to-audio --output` (native CLI only) | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
@@ -12833,7 +12839,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | `fade` (native CLI only) | a fade with neither --fade-in-sec nor --fade-out-sec, or with a negative length, is refused as a usage error (exit 2) before the input is read rather than exit 1; the JSON names the lengths fade_in_sec and fade_out_sec, where it named them fade_in and fade_out |
 | `filter --order` (native CLI only) | a value outside the accepted set is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `filter --output` (native CLI only) | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
-| `filter` (native CLI only) | the frequencies --type reads are required and one it does not read is refused, as usage errors (exit 2) before the input is read rather than exit 1; a corner or centre at or above the input's Nyquist frequency is refused (exit 3) rather than written as a non-finite signal; the JSON names cutoff_hz, center_hz and bandwidth_hz, null where the type does not read one, and adds order and zero_phase |
+| `filter` (native CLI only) | the frequencies --type reads are required and one it does not read is refused, as usage errors (exit 2) before the input is read rather than exit 1; a corner or centre at or above the input's Nyquist frequency is refused (exit 3) rather than written as a non-finite signal; the JSON names cutoff_hz, center_hz and bandwidth_hz, each present only where the type reads it, and adds order and zero_phase |
 | `gain --output` (native CLI only) | leaving it out is refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) |
 | `gain` (native CLI only) | runs the library's utility.gain processor, which writes the same file (the WAV writer clamps to full scale where the command used to); leaving out --gain-db is refused as a usage error (exit 2) before the input is read rather than exit 1; the command needs a build with mastering |
 | `hpss --harmonic-only` | giving more than one output mode is refused as a usage error (exit 2) before the input is read, with one text on both front-ends |
@@ -12882,7 +12888,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `lufs` | the --json result names the loudness range loudness_range_lu rather than loudness_range |
+| `lufs` | the --json result names the loudness range loudness_range_lu rather than loudness_range; a loudness nothing measured (short-term loudness of input shorter than its 3 s window, a loudness range of too little input) is absent rather than null, and silence is null, its -inf end |
 
 #### Loudness quantities use one name per measurement
 
@@ -12921,13 +12927,13 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 | 1.x | 2.0.0 |
 |---|---|
 | `mastering --true-peak-oversample` | removed: use mastering-normalize-loudness --true-peak-oversample, or --params loudness.truePeakOversample=N on a mastering chain |
-| `mastering` | a chain is required: --preset or --chain-config, or --assistant (which may take --preset as its base); with none the command is refused as a usage error (exit 2) before the input is read, instead of normalising loudness, which is now mastering-normalize-loudness with the same options and output; --chain-config alongside --preset or --assistant is refused the same way; --target-lufs, --ceiling-dbtp, --enable-repair, --explain, --target-platform, --no-streaming-safe and --speech-mono-amount reach only the assistant and are refused without --assistant (exit 2, before the input is read); the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; the before and after summaries of --report name the loudness range loudness_range_lu rather than loudness_range |
+| `mastering` | a chain is required: --preset or --chain-config, or --assistant (which may take --preset as its base); with none the command is refused as a usage error (exit 2) before the input is read, instead of normalising loudness, which is now mastering-normalize-loudness with the same options and output; --chain-config alongside --preset or --assistant is refused the same way; --target-lufs, --ceiling-dbtp, --enable-repair, --explain, --target-platform, --no-streaming-safe and --speech-mono-amount reach only the assistant and are refused without --assistant (exit 2, before the input is read); the JSON mode for a chain read from --chain-config is chainConfig rather than config, naming the option that chose the chain; the before and after summaries of --report name the loudness range loudness_range_lu rather than loudness_range; the --report summaries leave out a level nothing measured, band_energy_delta_db lists the measured bands beside their indices in band_energy_delta_band, and the report adds loudness_gain_db |
 
 #### Stereo-only algorithms take left and right
 
 | 1.x | 2.0.0 |
 |---|---|
-| `repair` | a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as "--explain cannot be combined with <option>" |
+| `repair` | a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as "--explain cannot be combined with <option>"; the JSON noise floor lists band_floor_dbfs for the measured bands beside their indices in band_floor_band, and the hum harmonic_dbfs ends at the last measured harmonic |
 
 #### Historical aliases are removed
 
