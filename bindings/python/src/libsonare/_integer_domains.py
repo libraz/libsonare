@@ -50,6 +50,7 @@ DOMAINS: dict[tuple[str, str], tuple[int, int | None, str | None]] = {
     ("Project.edit_automation_lane", "target_param_id"): (1, 4294967295, None),
     ("Project.import_external_stems", "sample_rate"): (1, 2147483647, None),
     ("Project.import_external_stems", "stems[].start_frame"): (0, None, None),
+    ("Project.load_sound_font", "size"): (1, None, None),
     ("Project.midi2_assignable_controller", "bank"): (0, 127, None),
     ("Project.midi2_assignable_controller", "channel"): (0, 15, None),
     ("Project.midi2_assignable_controller", "group"): (0, 15, None),

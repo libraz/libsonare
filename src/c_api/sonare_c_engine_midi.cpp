@@ -438,8 +438,7 @@ SonareError sonare_engine_load_soundfont(SonareEngine* engine, const uint8_t* da
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(data);
   if (size == 0) {
-    return run_validation(
-        [&] { util::check::integer_within(size, kEngineSoundFontSizeDomain, "size"); });
+    return run_validation([&] { util::check::integer_within(size, kSoundFontSizeDomain, "size"); });
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return refuse_not_compiled_in(Feature::kArrangement);

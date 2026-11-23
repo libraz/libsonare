@@ -4,6 +4,7 @@
 /// @brief Numeric-domain rows of the project, editing, MIDI, mixing and vocal-edit C entries.
 
 #include "c_api/editing_input_domains.h"
+#include "c_api/instrument_config_domains.h"
 #include "c_api/midi_input_domains.h"
 #include "c_api/mixing_input_domains.h"
 #include "c_api/numeric_domain_row.h"
@@ -192,6 +193,7 @@ inline const NumericDomainRow kProjectDomainRows[] = {
      nullptr},
     {"project_import_external_stems", "request.stems[].start_frame", kExternalStemStartFrameDomain,
      nullptr},
+    {"project_load_soundfont", "size", kSoundFontSizeDomain, nullptr},
     {"project_move_clip", "new_start_ppq", kPublicPpqDomain, nullptr},
     {"project_rehydrate_vocal_edits", "originals[].sample_count", kVocalSourceSampleCountDomain,
      nullptr},

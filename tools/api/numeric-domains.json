@@ -5908,6 +5908,17 @@
       "sentinel": null
     },
     {
+      "entry": "project_load_soundfont",
+      "param": "size",
+      "kind": "integer",
+      "lo": 1,
+      "hi": null,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "project_move_clip",
       "param": "new_start_ppq",
       "kind": "real",

@@ -6,6 +6,7 @@
 #include "c_api/daw_config_domains.h"
 #include "c_api/effects_config_domains.h"
 #include "c_api/engine_config_domains.h"
+#include "c_api/instrument_config_domains.h"
 #include "c_api/numeric_domain_row.h"
 #include "c_api/ppq_domains.h"
 #include "core/spectrum.h"
@@ -51,7 +52,7 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_freeze_offline", "options.num_channels", kEngineRenderChannelsDomain, nullptr},
     {"engine_freeze_offline", "options.start_ppq", kPublicPpqDomain, nullptr},
     {"engine_freeze_offline", "options.total_frames", kEngineBounceFramesDomain, nullptr},
-    {"engine_load_soundfont", "size", kEngineSoundFontSizeDomain, nullptr},
+    {"engine_load_soundfont", "size", kSoundFontSizeDomain, nullptr},
     {"engine_prepare", "command_capacity", kEngineCommandCapacityDomain, nullptr},
     {"engine_prepare", "max_block_size", kEngineMaxBlockSizeDomain, nullptr},
     {"engine_prepare", "max_channels", kEngineMaxChannelsDomain, nullptr},

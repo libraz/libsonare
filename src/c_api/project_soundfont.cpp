@@ -7,6 +7,7 @@
 #include <memory>
 #include <tuple>
 
+#include "c_api/instrument_config_domains.h"
 #include "c_api/project_bounce_internal.h"
 #include "midi/channel_voice_decode.h"
 #include "midi/synth/sf2_player.h"
@@ -119,8 +120,9 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_REQUIRE_NONNULL(project);
   SONARE_C_REQUIRE_NONNULL(data);
-  if (const SonareError err = sonare_c_detail::run_validation(
-          [&] { sonare::util::check::integer_at_least<size_t>(size, 1, "size"); });
+  if (const SonareError err = sonare_c_detail::run_validation([&] {
+        sonare::util::check::integer_within(size, sonare_c_detail::kSoundFontSizeDomain, "size");
+      });
       err != SONARE_OK) {
     return err;
   }

@@ -22,6 +22,9 @@ inline constexpr sonare::util::check::NumericDomain kBuiltinSynthSustainDomain =
 /// @brief What the built-in synth's and the SF2 player's polyphony accept.
 inline constexpr sonare::util::check::NumericDomain kSynthPolyphonyDomain =
     sonare::util::check::integer_domain(1, sonare::midi::kMaxSynthVoices);
+/// @brief What the byte size of a SoundFont image accepts, on the engine and the project loader.
+inline constexpr sonare::util::check::NumericDomain kSoundFontSizeDomain =
+    sonare::util::check::integer_domain_of<size_t>(1);
 /// @brief What the SF2 player's gain accepts.
 inline constexpr sonare::util::check::NumericDomain kSf2PlayerGainDomain =
     sonare::util::check::real_domain(0.0, sonare::midi::kMaxSynthGain);

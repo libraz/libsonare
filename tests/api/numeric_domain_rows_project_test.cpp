@@ -634,6 +634,12 @@ SonareError probe_trim_clip(const std::string& param, double value) {
   return sonare_project_trim_clip(project.handle, clip, start, length);
 }
 
+SonareError probe_load_soundfont(const std::string&, double value) {
+  Project project;
+  const std::vector<uint8_t> data(4, 0);
+  return sonare_project_load_soundfont(project.handle, data.data(), to_count(value));
+}
+
 SonareError probe_move_clip(const std::string&, double value) {
   Project project;
   const uint32_t clip = project.add_midi_clip();
@@ -925,6 +931,7 @@ const std::map<std::string, Probe>& probes() {
       {"project_duplicate_clip", probe_duplicate_clip},
       {"project_edit_automation_lane", probe_edit_automation_lane},
       {"project_import_external_stems", probe_import_external_stems},
+      {"project_load_soundfont", probe_load_soundfont},
       {"project_move_clip", probe_move_clip},
       {"project_set_assist_sidecar", probe_set_assist_sidecar},
       {"project_set_clip_comp_segments", probe_set_clip_comp_segments},

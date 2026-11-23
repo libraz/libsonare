@@ -92,9 +92,6 @@ inline constexpr sonare::util::check::NumericDomain kEngineMidiClipLoopDomain =
 /// @brief What a MIDI clip's loop_length_samples accepts when it loops.
 inline constexpr sonare::util::check::NumericDomain kEngineMidiClipLoopLengthDomain =
     sonare::util::check::integer_domain_of<int64_t>(1);
-/// @brief What the size of a SoundFont image accepts.
-inline constexpr sonare::util::check::NumericDomain kEngineSoundFontSizeDomain =
-    sonare::util::check::integer_domain_of<size_t>(1);
 /// @brief What the payload size of a pushed SysEx message accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineSysExSizeDomain =
     sonare::util::check::integer_domain(
