@@ -425,12 +425,14 @@ export const TYPE_GATE_HELPERS: Readonly<Record<'node' | 'wasm', readonly string
     'node_narrow_choice',
     'Int32Value',
     'SynthEnumValue',
+    'FloatVectorFromValue',
   ],
   wasm: ['typedPropertyValue', 'numberFromVal', 'enumFromVal', 'stringFromVal'],
 };
 
+// A list reader's type test is the array test that refuses anything else.
 const DIRECT_TYPE_TEST =
-  /\.\s*typeOf\s*\(|\.\s*Is(?:Number|String|Boolean)\s*\(|\.\s*is(?:Number|String)\s*\(/;
+  /\.\s*typeOf\s*\(|\.\s*Is(?:Number|String|Boolean|Array)\s*\(|\.\s*is(?:Number|String)\s*\(/;
 
 /** Comment-free text, so prose quoting a call does not read as one. */
 function codeOf(text: string): string {

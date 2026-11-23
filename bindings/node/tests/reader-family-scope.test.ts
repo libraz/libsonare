@@ -266,6 +266,29 @@ describe('the scanner sees what it claims to', () => {
     ).toEqual([]);
   });
 
+  it('accepts a list reader whose gate refuses anything but an array', () => {
+    const list = (gate: string) => [
+      {
+        file: 'fake.cpp',
+        text: [
+          'inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const char* name) {',
+          `  if (${gate}) return {};`,
+          '  throw 1;',
+          '}',
+          'inline std::vector<float> listProperty(const Napi::Object& obj, const char* key) {',
+          '  return FloatVectorFromValue(obj.Get(key), key);',
+          '}',
+        ].join('\n'),
+      },
+    ];
+    expect(ungatedRefusers('node', list('value.IsArray()'), { listProperty: 'refuse' })).toEqual(
+      [],
+    );
+    expect(ungatedTypeGates('node', list('value.IsArray()'))).not.toContain('FloatVectorFromValue');
+    // The control: a gate that tests nothing leaves the reader reported.
+    expect(ungatedTypeGates('node', list('true'))).toContain('FloatVectorFromValue');
+  });
+
   it('reports a refusing reader with no definition, so a stale entry cannot pass by absence', () => {
     expect(ungatedRefusers('wasm', [], { goneProperty: 'refuse' })).toEqual([
       'goneProperty: no definition found',
