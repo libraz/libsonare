@@ -13,6 +13,8 @@ The families are the result schema surface check's own table. Each list is read
 textually and must be a literal initializer: one that computes an entry is refused
 rather than read partially. A listed path must be one the family's path list names
 (an array element is spelled `<array>[]`), and an end is `-Infinity` or `Infinity`.
+A family whose list is empty is published with no paths, so a reader names it and a
+null in its result is refused; a family with no list at all is not published.
 A `*_null_means()` definition outside the table is refused too, since nothing would
 publish it. `--check` exits 1 when the file is not what this script would write.
 """
@@ -48,10 +50,10 @@ _DEFINITION = re.compile(r"&\s*(\w+)_null_means\(\)\s*\{")
 
 
 def null_means(source: str, family: str) -> list[tuple[str, str]] | None:
-    """The pairs `<family>_null_means()` lists, [] when it has none, None when unreadable."""
+    """The pairs `<family>_null_means()` lists, None when unreadable or not defined."""
     match = re.search(r"\b" + re.escape(family) + _DECLARATION, source)
     if match is None:
-        return [] if not re.search(r"\b" + re.escape(family) + r"_null_means\(\)", source) else None
+        return None
     body = walk.brace_body(source, match.end() - 1)
     if body is None:
         return None
@@ -69,11 +71,11 @@ def collect() -> tuple[dict, list[str]]:
         family = label.removesuffix("_schema_paths")
         known.add(family)
         source = entry["source"].read_text(encoding="utf-8")
+        if not re.search(r"\b" + re.escape(family) + r"_null_means\(\)", source):
+            continue
         pairs = null_means(source, family)
         if pairs is None:
             problems.append(f"{family}_null_means() is not a literal list of pairs")
-            continue
-        if not pairs:
             continue
         listed = set(surfaces.schema_paths(source, label) or [])
         means: dict[str, str] = {}
@@ -119,6 +121,9 @@ def render_python(families: dict) -> str:
         "NULL_MEANS: dict[str, dict[str, float]] = {",
     ]
     for family, entry in sorted(families.items()):
+        if not entry["nullMeans"]:
+            lines.append(f'    "{family}": {{}},')
+            continue
         lines.append(f'    "{family}": {{')
         for path, end in entry["nullMeans"].items():
             value = "math.inf" if end == "Infinity" else "-math.inf"
@@ -140,6 +145,9 @@ def render_typescript(families: dict) -> str:
         "export const NULL_MEANS: Readonly<Record<string, Readonly<Record<string, number>>>> = {",
     ]
     for family, entry in sorted(families.items()):
+        if not entry["nullMeans"]:
+            lines.append(f"  {family}: {{}},")
+            continue
         lines.append(f"  {family}: {{")
         for path, end in entry["nullMeans"].items():
             value = "Number.POSITIVE_INFINITY" if end == "Infinity" else "Number.NEGATIVE_INFINITY"

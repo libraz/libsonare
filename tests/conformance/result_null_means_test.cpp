@@ -83,11 +83,6 @@ struct Family {
   std::vector<std::function<std::string()>> renders;
 };
 
-const NullMeans& no_null_means() {
-  static const NullMeans none;
-  return none;
-}
-
 }  // namespace
 
 TEST_CASE("every null a result writes sits at a path declaring its infinite end",
@@ -164,7 +159,7 @@ TEST_CASE("every null a result writes sits at a path declaring its infinite end"
       // A silent side is refused, and a band empty on either side is decided as a finite
       // gain, so the curve writes no null from any pair it accepts.
       {"match_eq_curve",
-       no_null_means(),
+       api::match_eq_curve_null_means(),
        api::match_eq_curve_schema_paths(),
        {[&] {
           return api::analyze_named_pair("match.matchEqCurve", music.data(), inverted.data(),
@@ -176,7 +171,10 @@ TEST_CASE("every null a result writes sits at a path declaring its infinite end"
         }}},
       {"stereo_mono_compat", api::stereo_mono_compat_null_means(),
        api::stereo_mono_compat_schema_paths(), stereo_renders("stereo.monoCompatCheck", {})},
-      {"stereo_mono_compat_log_bands", no_null_means(),
+      {"match_reference_delay", api::match_reference_delay_null_means(),
+       api::match_reference_delay_schema_paths(),
+       pair_renders("match.estimateReferenceDelaySamples")},
+      {"stereo_mono_compat_log_bands", api::stereo_mono_compat_log_bands_null_means(),
        api::stereo_mono_compat_log_bands_schema_paths(),
        stereo_renders("stereo.monoCompatCheckLogBands", {{"highHz", 10000.0}})},
       {"audio_profile",

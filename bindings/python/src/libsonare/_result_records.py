@@ -55,6 +55,14 @@ def _unnamed_null(key: str) -> SonareError:
     return SonareError(int(ErrorCode.INVALID_FORMAT), f"{key} is null, which names no infinite end")
 
 
+def _float_array(node: Mapping[str, Any], key: str) -> np.ndarray:
+    """A float32 array every element of which the core measured; a null element is refused."""
+    values = node[key]
+    if any(value is None for value in values):
+        raise _unnamed_null(f"{key}[]")
+    return np.asarray(values, dtype=np.float32)
+
+
 def _measured_float(node: Mapping[str, Any], key: str) -> float | None:
     """A measurement that may not have been taken: ``None`` when its key is absent.
 

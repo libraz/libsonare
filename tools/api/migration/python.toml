@@ -9158,6 +9158,14 @@ new = "StereoMonoCompatBand.side_rms"
 domain = "mastering"
 rule = "typed-results"
 
+[[entry]]
+kind = "field"
+old = "StereoMonoCompatBand.correlation"
+changed = "float | None; None when the band is silent in either channel"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_a_silent_band_has_no_correlation"
+
 # The mixing assistant's track input takes the JS record's name and fields.
 
 [[entry]]

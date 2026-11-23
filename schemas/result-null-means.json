@@ -33,6 +33,14 @@
         "spectral.subRmsDb": "-Infinity"
       }
     },
+    "match_eq_curve": {
+      "root": "MatchEqCurveResult",
+      "nullMeans": {}
+    },
+    "match_reference_delay": {
+      "root": "MatchEstimateReferenceDelaySamplesResult",
+      "nullMeans": {}
+    },
     "match_reference_loudness": {
       "root": "MatchReferenceLoudnessResult",
       "nullMeans": {
@@ -73,6 +81,10 @@
       "nullMeans": {
         "width": "Infinity"
       }
+    },
+    "stereo_mono_compat_log_bands": {
+      "root": "StereoMonoCompatCheckLogBandsResult",
+      "nullMeans": {}
     },
     "streaming_preview": {
       "root": "MasteringStreamingPreviewResult",

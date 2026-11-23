@@ -1250,11 +1250,21 @@ const std::vector<std::string>& match_eq_curve_schema_paths() {
   return paths;
 }
 
+const std::vector<std::pair<std::string, std::string>>& match_eq_curve_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {};
+  return means;
+}
+
 const std::vector<std::string>& match_reference_delay_schema_paths() {
   static const std::vector<std::string> paths = {
       "delaySamples",
   };
   return paths;
+}
+
+const std::vector<std::pair<std::string, std::string>>& match_reference_delay_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {};
+  return means;
 }
 
 const std::vector<std::string>& stereo_mono_compat_schema_paths() {
@@ -1276,6 +1286,11 @@ const std::vector<std::string>& stereo_mono_compat_log_bands_schema_paths() {
       "bands", "bands[].correlation", "bands[].highHz", "bands[].lowHz", "bands[].sideRms",
   };
   return paths;
+}
+
+const std::vector<std::pair<std::string, std::string>>& stereo_mono_compat_log_bands_null_means() {
+  static const std::vector<std::pair<std::string, std::string>> means = {};
+  return means;
 }
 
 }  // namespace sonare::mastering::api

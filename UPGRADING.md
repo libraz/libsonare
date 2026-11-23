@@ -2818,6 +2818,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MatchTonalBalanceBand` | a frozen dataclass with snake_case attributes instead of a TypedDict |
 | `MatchTonalBalanceLogBandsResult` | removed: read match.tonalBalanceLogBands as MatchTonalBalanceResult; the shape is the same |
 | `MatchTonalBalanceResult` | a frozen dataclass with snake_case attributes instead of a TypedDict |
+| `StereoMonoCompatBand.correlation` | float \| None; None when the band is silent in either channel |
 | `StereoMonoCompatBand.highHz` | `StereoMonoCompatBand.high_hz` |
 | `StereoMonoCompatBand.lowHz` | `StereoMonoCompatBand.low_hz` |
 | `StereoMonoCompatBand.sideRms` | `StereoMonoCompatBand.side_rms` |

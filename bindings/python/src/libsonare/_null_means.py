@@ -28,6 +28,8 @@ NULL_MEANS: dict[str, dict[str, float]] = {
         "spectral.midRmsDb": -math.inf,
         "spectral.subRmsDb": -math.inf,
     },
+    "match_eq_curve": {},
+    "match_reference_delay": {},
     "match_reference_loudness": {
         "referenceLufs": -math.inf,
         "sourceLufs": -math.inf,
@@ -54,6 +56,7 @@ NULL_MEANS: dict[str, dict[str, float]] = {
     "stereo_mono_compat": {
         "width": math.inf,
     },
+    "stereo_mono_compat_log_bands": {},
     "streaming_preview": {
         "platforms[].integratedLufs": -math.inf,
         "platforms[].truePeakDbtp": -math.inf,

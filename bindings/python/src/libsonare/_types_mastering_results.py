@@ -289,8 +289,8 @@ class StereoMonoCompatBand:
     """Lower band edge in Hz."""
     high_hz: float
     """Upper band edge in Hz."""
-    correlation: float
-    """Inter-channel correlation in ``[-1, 1]``."""
+    correlation: float | None
+    """Inter-channel correlation in ``[-1, 1]``; None when the band is silent in either channel."""
     side_rms: float
     """RMS of the band's share of side signal 0.5 * (L - R), as a linear full-scale amplitude."""
 

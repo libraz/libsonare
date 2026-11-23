@@ -189,6 +189,24 @@ def test_stereo_analysis_results(monkeypatch: pytest.MonkeyPatch, name: str, typ
     assert _result_to_json_dict(result) == _without_nulls(_cli_view(wire))
 
 
+def test_a_silent_band_has_no_correlation() -> None:
+    silent = np.zeros_like(SOURCE)
+    result = libsonare.mastering_analyze_stereo(
+        "stereo.monoCompatCheckLogBands", SOURCE, silent, SR, {"highHz": 10000.0}
+    )
+    assert isinstance(result, libsonare.StereoMonoCompatCheckLogBandsResult)
+    assert result.bands
+    assert all(band.correlation is None for band in result.bands)
+
+
+def test_a_null_curve_element_is_refused_rather_than_read_as_nan() -> None:
+    from libsonare._mastering_pair import _pair_analysis_from_wire
+
+    wire = {"frequencies": [100.0, 200.0], "gainDb": [0.5, None]}
+    with pytest.raises(libsonare.SonareError, match=r"gainDb\[\] is null, which names no"):
+        _pair_analysis_from_wire("match.matchEqCurve", wire)
+
+
 def test_an_out_of_phase_pair_is_infinitely_wide() -> None:
     result = libsonare.mastering_analyze_stereo("stereo.monoCompatCheck", SOURCE, -SOURCE, SR)
     assert isinstance(result, libsonare.StereoMonoCompatCheckResult)

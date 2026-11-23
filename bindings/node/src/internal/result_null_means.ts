@@ -28,6 +28,8 @@ export const NULL_MEANS: Readonly<Record<string, Readonly<Record<string, number>
     'spectral.midRmsDb': Number.NEGATIVE_INFINITY,
     'spectral.subRmsDb': Number.NEGATIVE_INFINITY,
   },
+  match_eq_curve: {},
+  match_reference_delay: {},
   match_reference_loudness: {
     referenceLufs: Number.NEGATIVE_INFINITY,
     sourceLufs: Number.NEGATIVE_INFINITY,
@@ -54,6 +56,7 @@ export const NULL_MEANS: Readonly<Record<string, Readonly<Record<string, number>
   stereo_mono_compat: {
     width: Number.POSITIVE_INFINITY,
   },
+  stereo_mono_compat_log_bands: {},
   streaming_preview: {
     'platforms[].integratedLufs': Number.NEGATIVE_INFINITY,
     'platforms[].truePeakDbtp': Number.NEGATIVE_INFINITY,

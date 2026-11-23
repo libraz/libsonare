@@ -23,7 +23,7 @@ from ._mastering_offline import (
     _stage_counts,
 )
 from ._narrowing import _narrow_double
-from ._result_records import _fill_null_ends, _measured_float, _record
+from ._result_records import _fill_null_ends, _float_array, _measured_float, _record
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -522,10 +522,12 @@ def _pair_analysis_from_wire(
             ]
         )
     if name == "match.matchEqCurve":
+        _fill_null_ends(wire, "match_eq_curve")
         return MatchEqCurveResult(
-            frequencies=np.asarray(wire["frequencies"], dtype=np.float32),
-            gain_db=np.asarray(wire["gainDb"], dtype=np.float32),
+            frequencies=_float_array(wire, "frequencies"),
+            gain_db=_float_array(wire, "gainDb"),
         )
+    _fill_null_ends(wire, "match_reference_delay")
     return MatchEstimateReferenceDelaySamplesResult(delay_samples=int(wire["delaySamples"]))
 
 
@@ -541,12 +543,13 @@ def _stereo_analysis_from_wire(
             side_rms=float(wire["sideRms"]),
             likely_mono_compatible=bool(wire["likelyMonoCompatible"]),
         )
+    _fill_null_ends(wire, "stereo_mono_compat_log_bands")
     return StereoMonoCompatCheckLogBandsResult(
         bands=[
             StereoMonoCompatBand(
                 low_hz=float(band["lowHz"]),
                 high_hz=float(band["highHz"]),
-                correlation=float(band["correlation"]),
+                correlation=_measured_float(band, "correlation"),
                 side_rms=float(band["sideRms"]),
             )
             for band in wire["bands"]
