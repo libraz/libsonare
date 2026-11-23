@@ -2,6 +2,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -9,6 +10,7 @@
 #include "sonare_cli.h"
 #include "sonare_cli_registry.h"
 #include "util/json.h"
+#include "util/json_schema.h"
 
 // What the mastering and repair commands decide from the command line alone, so the
 // registry's validators and the handlers read one implementation.
@@ -216,15 +218,13 @@ float streaming_platform_number(const sonare::util::json::Value& entry, const st
 // The texts are the library's own platform-record refusals, keyed by the record's path.
 void check_streaming_platform_keys(const sonare::util::json::Value& entry,
                                    const std::string& where) {
-  for (const auto& [key, unused] : entry.as_object()) {
-    (void)unused;
-    bool known = false;
-    std::string expected_list;
-    for (const char* expected : kStreamingPlatformKeys) {
-      known = known || key == expected;
-      expected_list += (expected_list.empty() ? "" : ", ") + std::string(expected);
-    }
-    if (!known) {
+  for (const auto& item : entry.as_object()) {
+    const auto& key = item.first;
+    if (std::find(std::begin(kStreamingPlatformKeys), std::end(kStreamingPlatformKeys), key) ==
+        std::end(kStreamingPlatformKeys)) {
+      const std::string expected_list =
+          sonare::util::json::schema::expected_keys(std::vector<std::string>(
+              std::begin(kStreamingPlatformKeys), std::end(kStreamingPlatformKeys)));
       throw std::invalid_argument("unknown key " + where + "." + key + " (expected " +
                                   expected_list + ")");
     }

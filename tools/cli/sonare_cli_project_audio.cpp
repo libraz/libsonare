@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <climits>
 #include <cstdint>
 #include <map>
@@ -6,6 +7,7 @@
 #include <vector>
 
 #include "arrangement/edit_source.h"
+#include "c_api/metronome_c.h"
 #include "sonare_cli_project.h"
 #include "util/refusal_predicates.h"
 
@@ -330,6 +332,16 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   options.num_channels = args.get_int("channels", options.num_channels);
   options.instrument_latency_samples =
       args.get_int("instrument-latency-samples", options.instrument_latency_samples);
+  SonareEngineMetronomeConfig metronome{};
+  if (binds_source_audio) {
+    options.count_in_bars = args.get_int("count-in-bars", options.count_in_bars);
+    if (args.has("metronome")) {
+      sonare::engine::MetronomeConfig defaults;
+      defaults.enabled = true;
+      metronome = sonare_c_detail::metronome_to_c(defaults);
+      options.metronome = &metronome;
+    }
+  }
   // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
   // actually used, or the file plays back at the wrong pitch. Default to the
   // project's own rate (queried above via sonare_project_get_sample_rate) rather
@@ -370,6 +382,18 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   const size_t total = frames * static_cast<size_t>(channels);
   std::vector<float> rendered(interleaved, interleaved + total);
   sonare_free_floats(interleaved);
+  size_t prefix_frames = 0;
+  if (args.json_output && binds_source_audio && options.count_in_bars > 0) {
+    int64_t full_prefix = 0;
+    const SonareError prefix_err = sonare_project_count_in_frames(
+        handle.ptr, options.count_in_bars, SONARE_PROJECT_SAMPLE_RATE_PROJECT, &full_prefix);
+    if (prefix_err != SONARE_OK) {
+      project_report_error("read count-in length", prefix_err);
+      return project_exit_code(prefix_err);
+    }
+    prefix_frames =
+        static_cast<size_t>(std::min<uint64_t>(static_cast<uint64_t>(full_prefix), frames));
+  }
   // The WAV writer requires the count and the layout to agree, so the layout is
   // derived from the count through the shared mapping rather than by a local
   // mono-or-stereo rule that would label any other width stereo. The count is
@@ -383,16 +407,16 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   note_output_fit(args, fit);
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("output", args.output_file)
         .kv("output_gain_db", fit.gain_db())
         .kv("frames", frames)
         .kv("channels", channels)
         .kv("sample_rate", sample_rate)
-        .kv("synth", use_synth)
-        .end_object()
-        .print();
+        .kv("synth", use_synth);
+    if (binds_source_audio) json.kv("count_in_frames", prefix_frames);
+    json.end_object().print();
   } else if (!args.quiet) {
     std::cout << color::green << "Bounced " << frames << " frames (" << channels << " ch @ "
               << sample_rate << " Hz" << (use_synth ? ", NativeSynth" : "") << ") to "

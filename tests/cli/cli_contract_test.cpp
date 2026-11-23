@@ -969,6 +969,43 @@ TEST_CASE("CLI option domains are declared once and enforced before dispatch",
     REQUIRE(validate_cli_arguments(framed, false).empty());
   }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SECTION("project bounce count-in bars has an inclusive 0 to 16 domain") {
+    for (const char* value : {"0", "16"}) {
+      CAPTURE(value);
+      const CliArgs args = parse_words({"sonare-cli", "project", "bounce", "project.json", "-o",
+                                        "out.wav", "--count-in-bars", value, "--metronome"});
+      REQUIRE(validate_cli_arguments(args, false).empty());
+    }
+
+    for (const char* value : {"-1", "17"}) {
+      CAPTURE(value);
+      const CliArgs args = parse_words({"sonare-cli", "project", "bounce", "project.json", "-o",
+                                        "out.wav", "--count-in-bars", value});
+      const CliValidationError error = validate_cli_arguments(args, false);
+      REQUIRE_FALSE(error.empty());
+      REQUIRE(error.message.find("argument --count-in-bars") != std::string::npos);
+    }
+
+    const CliArgs fractional = parse_words({"sonare-cli", "project", "bounce", "project.json", "-o",
+                                            "out.wav", "--count-in-bars", "1.5"});
+    REQUIRE_THAT(validate_cli_arguments(fractional, false).message,
+                 ContainsSubstring("argument --count-in-bars"));
+    const CliArgs metronome_on = parse_words(
+        {"sonare-cli", "project", "bounce", "project.json", "-o", "out.wav", "--metronome=on"});
+    REQUIRE(validate_cli_arguments(metronome_on, false).empty());
+    const CliArgs metronome_off = parse_words(
+        {"sonare-cli", "project", "bounce", "project.json", "-o", "out.wav", "--metronome=off"});
+    REQUIRE(validate_cli_arguments(metronome_off, false).empty());
+  }
+#endif  // SONARE_WITH_ARRANGEMENT
+
+  SECTION("key HPSS hop refusal states the accepted predicate") {
+    const CliArgs args = parse({"sonare-cli", "key", "input.wav", "--hpss", "--hop-length", "8"});
+    REQUIRE(validate_cli_arguments(args, true).message ==
+            "--hop-length must be at least 16 with --hpss");
+  }
+
   SECTION("an option the library takes without a default is required, never filled in") {
     REQUIRE(
         reject({"sonare-cli", "frame-signal", "--values", "1,2,3,4", "--frame-length", "2"}, false)
@@ -2167,6 +2204,7 @@ StatedDefaultTables build_stated_default_tables(const StatedDefaultPaths& p) {
       // Bounce does not read the option today, so nothing it prints or writes can differ.
       {"project bounce", p.project_json + " --frames 128" + to_out, "instrument-latency-samples",
        ""},
+      {"project bounce", p.project_json + " --frames 128" + to_out, "count-in-bars", "1"},
       {"midi-render", p.project_json + " --frames 128" + to_out, "instrument-latency-samples", ""},
       // The channel shows only in the written .mid status bytes.
       {"transcribe", p.tone_wav + to_out, "channel", "5"},

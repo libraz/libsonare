@@ -677,7 +677,7 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
     CHECK(refused.exit_code == 2);
     CHECK_THAT(refused.err,
                ContainsSubstring("argument --platforms: unknown key platforms[0]." + old_key +
-                                 " (expected name, target_lufs, ceiling_dbtp)"));
+                                 " (expected ceiling_dbtp, name, target_lufs)"));
   }
 
   const SplitResult missing = run(R"([{"name":"custom","target_lufs":-14}])");
@@ -695,7 +695,7 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
   CHECK(unknown.exit_code == 2);
   CHECK_THAT(
       unknown.err,
-      ContainsSubstring("unknown key platforms[0].x (expected name, target_lufs, ceiling_dbtp)"));
+      ContainsSubstring("unknown key platforms[0].x (expected ceiling_dbtp, name, target_lufs)"));
 
   // A file is read with the input, so the same document is refused after it, by its source.
   const std::string document = unique_temp_path("_platforms.json");

@@ -713,8 +713,7 @@ CliValidationError validate_key_arguments(const CliArgs& args) {
   if (!args.has("hpss")) return {};
   if (args.hop_length >= sonare::kMinKeyHpssHopLength) return {};
   std::ostringstream message;
-  message << "--hop-length must be at least " << sonare::kMinKeyHpssHopLength
-          << " with --hpss (got " << args.hop_length << ")";
+  message << "--hop-length must be at least " << sonare::kMinKeyHpssHopLength << " with --hpss";
   return {message.str()};
 }
 
@@ -1729,6 +1728,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         "project.bounce",
         {required_output(), int_value("sample-rate"),
          project_length(int64_width(int_value("frames"))), master_width(int_value("channels")),
+         described(
+             library_default(with_domain(int_value("count-in-bars"), between(0.0, 16.0)), "0"),
+             "Silent or clicked pre-roll bars to render"),
+         described(flag("metronome"),
+                   "Render metronome clicks with the default metronome configuration"),
          library_default(int_value("instrument-latency-samples"), "0"), optional_string("synth"),
          string_value("audio", false, true), flag("resolve-audio")},
         &validate_project_bounce_arguments, kProjectJsonPositional);

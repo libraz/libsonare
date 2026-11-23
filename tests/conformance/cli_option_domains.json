@@ -157,6 +157,15 @@
       "exclusive_maximum": false
     },
     {
+      "command": "project.bounce",
+      "option": "count-in-bars",
+      "choices": [],
+      "minimum": 0,
+      "exclusive_minimum": false,
+      "maximum": 16,
+      "exclusive_maximum": false
+    },
+    {
       "command": "midi-render",
       "option": "frames",
       "choices": [],

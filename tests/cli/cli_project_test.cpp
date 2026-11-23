@@ -711,6 +711,120 @@ TEST_CASE("CLI project command group", "[cli]") {
 }
 #endif  // SONARE_WITH_ARRANGEMENT
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("CLI project bounce renders and reports count-in bars", "[cli][count-in]") {
+  const std::string project = unique_temp_path("_count_in_project.json");
+  const std::string default_wav = unique_temp_path("_count_in_default.wav");
+  const std::string zero_wav = unique_temp_path("_count_in_zero.wav");
+  const std::string silent_wav = unique_temp_path("_count_in_silent.wav");
+  const std::string off_wav = unique_temp_path("_count_in_off.wav");
+  const std::string click_wav = unique_temp_path("_count_in_click.wav");
+  const std::string on_wav = unique_temp_path("_count_in_on.wav");
+  const std::string no_prefix_click_wav = unique_temp_path("_count_in_no_prefix_click.wav");
+  const std::string full_prefix_wav = unique_temp_path("_count_in_full_prefix.wav");
+  const std::string missing_project = unique_temp_path("_count_in_missing_project.json");
+  const std::string refused_wav = unique_temp_path("_count_in_refused.wav");
+
+  auto [new_code, new_output] = exec_command(CLI + " project new -o " + project);
+  REQUIRE(new_code == 0);
+
+  const auto bounce = [&](const std::string& wav, const std::string& options) {
+    return exec_command(CLI + " project bounce " + project + " -o " + wav + " " + options +
+                        " --json");
+  };
+  const auto require_reported_frames = [](const std::string& output, size_t frames,
+                                          size_t count_in_frames) {
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["frames"].as_number() == static_cast<double>(frames));
+    REQUIRE(payload["count_in_frames"].as_number() == static_cast<double>(count_in_frames));
+  };
+  const auto read_pcm = [](const std::string& path) {
+    const auto [samples, sample_rate, channels] = load_audio_interleaved(path);
+    REQUIRE(sample_rate == 48000);
+    REQUIRE(channels == 2);
+    return samples;
+  };
+
+  SECTION("omitted and explicit zero count-in write the requested length") {
+    auto [default_code, default_output] = bounce(default_wav, "--frames 10000");
+    REQUIRE(default_code == 0);
+    require_reported_frames(default_output, 10000, 0);
+    const std::vector<float> default_samples = read_pcm(default_wav);
+    REQUIRE(default_samples.size() == 20000);
+    CHECK(std::all_of(default_samples.begin(), default_samples.end(),
+                      [](float sample) { return sample == 0.0f; }));
+
+    auto [zero_code, zero_output] = bounce(zero_wav, "--frames 10000 --count-in-bars 0");
+    REQUIRE(zero_code == 0);
+    require_reported_frames(zero_output, 10000, 0);
+    CHECK(read_pcm(zero_wav) == default_samples);
+  }
+
+  SECTION("a short explicit render reports only the pre-roll frames it writes") {
+    auto [silent_code, silent_output] = bounce(silent_wav, "--frames 10000 --count-in-bars 1");
+    REQUIRE(silent_code == 0);
+    require_reported_frames(silent_output, 10000, 10000);
+    const std::vector<float> silent_samples = read_pcm(silent_wav);
+    REQUIRE(silent_samples.size() == 20000);
+    CHECK(std::all_of(silent_samples.begin(), silent_samples.end(),
+                      [](float sample) { return sample == 0.0f; }));
+
+    auto [off_code, off_output] =
+        bounce(off_wav, "--frames 10000 --count-in-bars 1 --metronome=off");
+    REQUIRE(off_code == 0);
+    require_reported_frames(off_output, 10000, 10000);
+    CHECK(read_pcm(off_wav) == silent_samples);
+
+    auto [click_code, click_output] =
+        bounce(click_wav, "--frames 10000 --count-in-bars 1 --metronome");
+    REQUIRE(click_code == 0);
+    require_reported_frames(click_output, 10000, 10000);
+    const std::vector<float> click_samples = read_pcm(click_wav);
+    REQUIRE(click_samples.size() == 20000);
+    CHECK(std::any_of(click_samples.begin(), click_samples.end(),
+                      [](float sample) { return sample != 0.0f; }));
+
+    auto [on_code, on_output] = bounce(on_wav, "--frames 10000 --count-in-bars 1 --metronome=on");
+    REQUIRE(on_code == 0);
+    require_reported_frames(on_output, 10000, 10000);
+    CHECK(read_pcm(on_wav) == click_samples);
+
+    auto [no_prefix_code, no_prefix_output] =
+        bounce(no_prefix_click_wav, "--frames 10000 --count-in-bars 0 --metronome");
+    REQUIRE(no_prefix_code == 0);
+    require_reported_frames(no_prefix_output, 10000, 0);
+    const std::vector<float> no_prefix_samples = read_pcm(no_prefix_click_wav);
+    CHECK(std::any_of(no_prefix_samples.begin(), no_prefix_samples.end(),
+                      [](float sample) { return sample != 0.0f; }));
+  }
+
+  SECTION("an arrangement-length render writes and reports the full bar") {
+    auto [code, output] = bounce(full_prefix_wav, "--count-in-bars 1");
+    REQUIRE(code == 0);
+    require_reported_frames(output, 96000, 96000);
+    const std::vector<float> samples = read_pcm(full_prefix_wav);
+    CHECK(samples.size() == 192000);
+  }
+
+  SECTION("count-in domains are refused before the project is opened") {
+    std::remove(missing_project.c_str());
+    for (const char* value : {"-1", "17", "1.5"}) {
+      CAPTURE(value);
+      auto [code, output] = exec_command(CLI + " project bounce " + missing_project + " -o " +
+                                         refused_wav + " --count-in-bars " + value + " --json");
+      CHECK(code == 2);
+      CHECK_THAT(output, ContainsSubstring("argument --count-in-bars"));
+      CHECK_FALSE(std::ifstream(refused_wav).good());
+    }
+  }
+
+  for (const auto& path : {project, default_wav, zero_wav, silent_wav, off_wav, click_wav, on_wav,
+                           no_prefix_click_wav, full_prefix_wav, refused_wav}) {
+    std::remove(path.c_str());
+  }
+}
+#endif  // SONARE_WITH_ARRANGEMENT
+
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 // `tune-to-midi` needs both subsystems -- the SMF reader and the assignment rule
 // -- so a build missing either does not register it and these cases are absent

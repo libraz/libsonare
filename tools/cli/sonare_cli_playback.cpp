@@ -153,8 +153,7 @@ int cmd_playback(const CliArgs& args, const Audio&) {
   // a CliCommandValidator (which sees only CliArgs).
   const int probed_channels = args.source_channels;
   if (probed_channels != 1 && probed_channels != 2 && !is_surround_channel_count(probed_channels)) {
-    throw std::invalid_argument("sonare playback accepts a 1, 2, 6, or 8 channel input file (got " +
-                                std::to_string(probed_channels) + " channels)");
+    throw std::invalid_argument("input file must have 1, 2, 6, or 8 channels");
   }
 
   const auto& interleaved = cached_interleaved_audio(args);
