@@ -99,16 +99,21 @@ SonareError resolve_percussive_separation(int32_t n_fft, size_t hop_length, int3
 }
 
 // The core's percussive config member names, as the C config structs spell them.
-const std::array<CName, 6> kPercussiveEventNames{
+const std::array<CName, 8> kPercussiveEventNames{
     {{"n_fft", "config.n_fft"},
      {"hop_length", "config.hop_length"},
+     {"kernel_size_harmonic", "config.hpss_kernel_harmonic"},
+     {"kernel_size_percussive", "config.hpss_kernel_percussive"},
      {"onset_wait", "config.onset_wait"},
      {"onset_delta", "config.onset_delta"},
      {"max_event_ms", "config.max_event_ms"},
      {"min_percussive_ratio", "config.min_percussive_ratio"}}};
-const std::array<CName, 3> kPercussiveRenderNames{{{"n_fft", "config.n_fft"},
-                                                   {"hop_length", "config.hop_length"},
-                                                   {"fade_ms", "config.fade_ms"}}};
+const std::array<CName, 5> kPercussiveRenderNames{
+    {{"n_fft", "config.n_fft"},
+     {"hop_length", "config.hop_length"},
+     {"kernel_size_harmonic", "config.hpss_kernel_harmonic"},
+     {"kernel_size_percussive", "config.hpss_kernel_percussive"},
+     {"fade_ms", "config.fade_ms"}}};
 
 SonareError fill_percussive_events_result(
     const std::vector<editing::event_model::PercussiveEvent>& events,

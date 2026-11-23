@@ -41,6 +41,11 @@ const std::array<CName, 1> kNormalizeNames{{{"audio", "samples"}}};
 // The core spells the STFT framing bare; at a folded entry they are members of `options`.
 const std::array<CName, 2> kStftOptionNames{
     {{"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
+// The HPSS entry also takes the two median kernels, which the core names after its config members.
+const std::array<CName, 4> kHpssNames{{{"n_fft", "options.n_fft"},
+                                       {"hop_length", "options.hop_length"},
+                                       {"kernel_size_harmonic", "kernel_harmonic"},
+                                       {"kernel_size_percussive", "kernel_percussive"}}};
 const std::array<CName, 3> kTimeStretchNames{
     {{"rate", "speed_ratio"}, {"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
 
@@ -160,7 +165,7 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 
         if (!with_residual) {
           HpssAudioResult result =
-              with_c_names(kStftOptionNames, [&] { return hpss(audio, config, stft_config); });
+              with_c_names(kHpssNames, [&] { return hpss(audio, config, stft_config); });
           const size_t n = result.harmonic.size();
           std::unique_ptr<float[]> harmonic(new float[n]);
           std::unique_ptr<float[]> percussive(new float[n]);
@@ -175,7 +180,7 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
         }
 
         HpssAudioResultWithResidual result = with_c_names(
-            kStftOptionNames, [&] { return hpss_with_residual(audio, config, stft_config); });
+            kHpssNames, [&] { return hpss_with_residual(audio, config, stft_config); });
         const size_t n = result.harmonic.size();
         std::unique_ptr<float[]> harmonic(new float[n]);
         std::unique_ptr<float[]> percussive(new float[n]);
