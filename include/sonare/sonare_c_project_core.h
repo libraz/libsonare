@@ -318,8 +318,11 @@ SonareError sonare_project_position_at_ppq(const SonareProject* project, double 
 SonareError sonare_project_bar_start_ppq(const SonareProject* project, int64_t bar_index,
                                          double* out_ppq);
 
-/// @brief Reads the end in PPQ of the last audible audio or MIDI clip.
-/// @details Returns zero for an arrangement with no audible clips. Render tails are excluded.
+/// @brief Reads the end in PPQ of the last clip on an audible track.
+/// @details A track is audible when it is not muted and, while any track is soloed, is soloed
+///          itself. A clip with a valid source and range counts whatever it holds, so an
+///          event-less MIDI clip counts as a silent audio clip does. Returns zero when no
+///          audible track holds a clip. Render tails are excluded.
 SonareError sonare_project_end_ppq(const SonareProject* project, double* out_end_ppq);
 
 /// @brief Reads a project tempo segment by index (0-based, in stored order).

@@ -57,11 +57,17 @@ TEST_CASE("project end PPQ includes audible clips only", "[c_api][project][effec
           SONARE_OK);
   CHECK(end_ppq(project.value) == 0.0);
 
-  add_midi_clip(project.value, 8.0, 4.0);
+  const uint32_t short_track = add_midi_clip(project.value, 8.0, 4.0);
   add_midi_clip(project.value, 2.0, 20.0);
   const uint32_t muted_track = add_midi_clip(project.value, 100.0, 50.0);
   REQUIRE(sonare_project_set_track_mute(project.value, muted_track, 1) == SONARE_OK);
 
+  CHECK(end_ppq(project.value) == 22.0);
+
+  // A soloed track silences every other one, so only its clips count.
+  REQUIRE(sonare_project_set_track_solo(project.value, short_track, 1) == SONARE_OK);
+  CHECK(end_ppq(project.value) == 12.0);
+  REQUIRE(sonare_project_set_track_solo(project.value, short_track, 0) == SONARE_OK);
   CHECK(end_ppq(project.value) == 22.0);
 }
 
@@ -165,4 +171,26 @@ TEST_CASE("project position round-trips a located bar and refuses an aliased bar
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(bar_start_ppq == 0.0);
   CHECK(std::string(sonare_last_error_message()).find("bar_index") != std::string::npos);
+}
+
+TEST_CASE("project position refuses a bar start that resolves to a different PPQ",
+          "[c_api][project][effective_timeline][exactness]") {
+  ProjectHandle project;
+  constexpr double kSignatureChange = 1.0e-10;
+  const SonareProjectTimeSignatureSegment signatures[] = {{0.0, 4, 4}, {kSignatureChange, 3, 4}};
+  REQUIRE(sonare_project_set_time_signatures(project.value, signatures, 2) == SONARE_OK);
+
+  // The tiny first span contributes zero complete grid slots at the meter transition.
+  SonareProjectPosition refused{};
+  CHECK(sonare_project_position_at_ppq(project.value, 0.0, &refused) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message())
+            .find("ppq must identify a bar with an exactly representable PPQ start") !=
+        std::string::npos);
+  CHECK(refused.bpm == 0.0);
+
+  const SonareProjectPosition after = position_at(project.value, kSignatureChange);
+  CHECK(after.bar_index == 0);
+  CHECK(after.bar_start_ppq == kSignatureChange);
+  CHECK(bar_start(project.value, after.bar_index) == after.bar_start_ppq);
 }
