@@ -51,6 +51,19 @@ ErrorCode code_of(Fn&& fn) {
   return ErrorCode::Ok;
 }
 
+template <typename Fn>
+void require_refusal(Fn&& fn, const std::string& subject, const std::string& text) {
+  try {
+    fn();
+  } catch (const SonareParameterRefusal& error) {
+    REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    REQUIRE(error.subject() == subject);
+    REQUIRE(error.what() == text);
+    return;
+  }
+  FAIL("expected a structured parameter refusal");
+}
+
 /// @brief The scalar form the contract promises a constant map reproduces.
 float scalar_position(int output_frame, float rate) {
   return static_cast<float>(output_frame) * rate;
@@ -389,6 +402,71 @@ TEST_CASE("a profile the contract rejects throws InvalidParameter", "[time_map]"
     REQUIRE(code_of([&slow] { return slow.output_sample_count(std::size_t{1000000}, 512); }) ==
             kInvalid);
   }
+}
+
+TEST_CASE("scalar map entry points name the rejected rate", "[time_map]") {
+  require_refusal([] { return TimeStretchMap(0.0f); }, "rate",
+                  "rate must be finite and greater than 0");
+
+  TimeStretchMap map(1.0f);
+  require_refusal([&map] { map.assign(kNaN); }, "rate", "rate must be finite and greater than 0");
+}
+
+TEST_CASE("profile map entry points name indexed segment fields", "[time_map]") {
+  require_refusal([] { return TimeStretchMap(std::vector<TimeStretchSegment>{}); }, "segments",
+                  "segments must not be empty");
+  require_refusal([] { return TimeStretchMap(std::vector<TimeStretchSegment>{{1.0f, 1.0f}}); },
+                  "segments[0].input_start",
+                  "segments[0].input_start must be finite and in [0, 0]");
+  require_refusal(
+      [] { return TimeStretchMap(std::vector<TimeStretchSegment>{{0.0f, 1.0f}, {10.0f, 0.0f}}); },
+      "segments[1].rate", "segments[1].rate must be finite and greater than 0");
+  require_refusal(
+      [] { return TimeStretchMap(std::vector<TimeStretchSegment>{{0.0f, 1.0f}, {-1.0f, 1.0f}}); },
+      "segments[1].input_start", "segments[1].input_start must be finite and at least 0");
+  require_refusal(
+      [] {
+        return TimeStretchMap(
+            std::vector<TimeStretchSegment>{{0.0f, 1.0f}, {10.0f, 1.0f}, {10.0f, 1.0f}});
+      },
+      "segments[2].input_start", "segments[2].input_start must be finite and greater than 10");
+
+  TimeStretchMap map(1.0f);
+  require_refusal(
+      [&map] { map.assign(std::vector<TimeStretchSegment>{{0.0f, 1.0f}, {10.0f, -1.0f}}); },
+      "segments[1].rate", "segments[1].rate must be finite and greater than 0");
+}
+
+TEST_CASE("output_frame_count names its input frame count", "[time_map]") {
+  const TimeStretchMap map(1.0f);
+  require_refusal([&map] { return map.output_frame_count(-1); }, "input_frame_count",
+                  "input_frame_count must be an integer in [0, 2147483647]");
+}
+
+TEST_CASE("output_sample_count names its hop length", "[time_map]") {
+  const TimeStretchMap map(1.0f);
+  require_refusal([&map] { return map.output_sample_count(100, 0); }, "hop_length",
+                  "hop_length must be an integer in [1, 2147483647]");
+}
+
+TEST_CASE("hold_profile names its rejected arguments and row fields", "[time_map]") {
+  require_refusal([] { return hold_profile({}, 0, 1.0f); }, "input_frame_count",
+                  "input_frame_count must be an integer in [1, 2147483647]");
+  require_refusal([] { return hold_profile({}, 100, 0.0f); }, "target_rate",
+                  "target_rate must be finite and greater than 0");
+  require_refusal([] { return hold_profile({{10, 0}}, 100, 1.0f); }, "holds[0].frame_count",
+                  "holds[0].frame_count must be an integer in [1, 2147483647]");
+  require_refusal([] { return hold_profile({{-1, 1}}, 100, 1.0f); }, "holds[0].first_frame",
+                  "holds[0].first_frame must be an integer in [0, 2147483647]");
+  require_refusal([] { return hold_profile({{101, 1}}, 100, 1.0f); }, "holds[0].first_frame",
+                  "holds[0].first_frame must be an integer in [0, 100]");
+  require_refusal([] { return hold_profile({{95, 10}}, 100, 1.0f); }, "holds[0].frame_count",
+                  "holds[0].frame_count must be finite and at most 5");
+  require_refusal([] { return hold_profile({{10, 10}, {15, 1}}, 100, 1.0f); },
+                  "holds[1].first_frame",
+                  "holds[1].first_frame must be an integer in [20, 2147483647]");
+  require_refusal([] { return hold_profile({{0, 100}}, 100, 0.5f); }, "target_rate",
+                  "target_rate must be finite and in [1, 1]");
 }
 
 // --- constant() ------------------------------------------------------------

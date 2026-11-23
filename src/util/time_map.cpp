@@ -80,7 +80,7 @@ TimeStretchMap::TimeStretchMap(float rate) { assign(rate); }
 TimeStretchMap::TimeStretchMap(std::vector<TimeStretchSegment> segments) { assign(segments); }
 
 void TimeStretchMap::assign(float rate) {
-  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
+  util::check::greater_than(rate, 0.0, "rate");
   segments_.assign(1, TimeStretchSegment{0.0f, rate});
   output_start_.assign(1, 0.0);
 }
@@ -88,16 +88,28 @@ void TimeStretchMap::assign(float rate) {
 void TimeStretchMap::assign(const std::vector<TimeStretchSegment>& segments) {
   // Validated in full, including the derived output starts, before anything is
   // written: a rejected profile leaves the map as it was.
-  SONARE_CHECK(!segments.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(segments.front().input_start == 0.0f, ErrorCode::InvalidParameter);
+  if (segments.empty()) util::check::refuse("segments", util::refusal::kNonEmptyPredicate);
+  if (segments.front().input_start != 0.0f) {
+    const std::string subject = util::check::indexed_subject("segments", 0, "input_start");
+    util::check::within(segments.front().input_start, util::check::real_domain(0.0, 0.0),
+                        subject.c_str());
+  }
   for (size_t i = 0; i < segments.size(); ++i) {
-    SONARE_CHECK(numeric::finite_positive(segments[i].rate), ErrorCode::InvalidParameter);
+    if (!numeric::finite_positive(segments[i].rate)) {
+      const std::string subject = util::check::indexed_subject("segments", i, "rate");
+      util::check::greater_than(segments[i].rate, 0.0, subject.c_str());
+    }
     // Finiteness as well as order: an infinite breakpoint is strictly greater
     // than its predecessor and would place a segment no output frame reaches.
-    SONARE_CHECK(numeric::finite_non_negative(segments[i].input_start),
-                 ErrorCode::InvalidParameter);
-    SONARE_CHECK(i == 0 || segments[i].input_start > segments[i - 1].input_start,
-                 ErrorCode::InvalidParameter);
+    if (!numeric::finite_non_negative(segments[i].input_start)) {
+      const std::string subject = util::check::indexed_subject("segments", i, "input_start");
+      util::check::at_least(segments[i].input_start, 0.0, subject.c_str());
+    }
+    if (i > 0 && !(segments[i].input_start > segments[i - 1].input_start)) {
+      const std::string subject = util::check::indexed_subject("segments", i, "input_start");
+      util::check::greater_than(segments[i].input_start, segments[i - 1].input_start,
+                                subject.c_str());
+    }
   }
   double running = 0.0;
   for (size_t i = 1; i < segments.size(); ++i) {
@@ -134,7 +146,7 @@ int TimeStretchMap::output_frame_count(int input_frame_count) const {
   // Zero is a count, not a rejection: the scalar form projects it to zero and
   // the equality with it covers that argument too. Callers keep their own
   // positivity rejection where they have one.
-  SONARE_CHECK(input_frame_count >= 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(input_frame_count, 0, "input_frame_count");
   if (constant()) {
     size_t count = 0;
     if (!numeric::checked_projected_count(static_cast<size_t>(input_frame_count), segments_[0].rate,
@@ -148,7 +160,7 @@ int TimeStretchMap::output_frame_count(int input_frame_count) const {
 }
 
 size_t TimeStretchMap::output_sample_count(size_t input_sample_count, int hop_length) const {
-  SONARE_CHECK(hop_length > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   if (constant()) {
     size_t count = 0;
     if (!numeric::checked_projected_count(input_sample_count, segments_[0].rate, kMaxCount,
@@ -193,16 +205,31 @@ bool TimeStretchMap::agrees_through(const TimeStretchMap& other,
 
 std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds,
                                              int input_frame_count, float target_rate) {
-  SONARE_CHECK(input_frame_count > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_positive(target_rate), ErrorCode::InvalidParameter);
+  util::check::integer_at_least(input_frame_count, 1, "input_frame_count");
+  util::check::greater_than(target_rate, 0.0, "target_rate");
 
   int64_t held = 0;
   int cursor = 0;
-  for (const HoldRange& hold : holds) {
-    SONARE_CHECK(hold.frame_count > 0 && hold.first_frame >= cursor &&
-                     hold.first_frame <= input_frame_count &&
-                     hold.frame_count <= input_frame_count - hold.first_frame,
-                 ErrorCode::InvalidParameter);
+  for (size_t i = 0; i < holds.size(); ++i) {
+    const HoldRange& hold = holds[i];
+    if (hold.frame_count <= 0) {
+      const std::string subject = util::check::indexed_subject("holds", i, "frame_count");
+      util::check::integer_at_least(hold.frame_count, 1, subject.c_str());
+    }
+    if (hold.first_frame < cursor) {
+      const std::string subject = util::check::indexed_subject("holds", i, "first_frame");
+      util::check::integer_at_least(hold.first_frame, cursor, subject.c_str());
+    }
+    if (hold.first_frame > input_frame_count) {
+      const std::string subject = util::check::indexed_subject("holds", i, "first_frame");
+      util::check::integer_within(hold.first_frame,
+                                  util::check::integer_domain(cursor, input_frame_count),
+                                  subject.c_str());
+    }
+    if (hold.frame_count > input_frame_count - hold.first_frame) {
+      const std::string subject = util::check::indexed_subject("holds", i, "frame_count");
+      util::check::at_most(hold.frame_count, input_frame_count - hold.first_frame, subject.c_str());
+    }
     cursor = hold.first_frame;
     cursor += hold.frame_count;
     held += hold.frame_count;
@@ -218,7 +245,7 @@ std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds
   // Two conditions, not one. With every frame held there is no stretch region
   // and no rate changes the total, so only unity can be satisfied.
   if (held == input_frame_count) {
-    SONARE_CHECK(target_rate == 1.0f, ErrorCode::InvalidParameter);
+    util::check::within(target_rate, util::check::real_domain(1.0, 1.0), "target_rate");
     return {TimeStretchSegment{0.0f, 1.0f}};
   }
   SONARE_CHECK(requested > h, ErrorCode::InvalidParameter);
