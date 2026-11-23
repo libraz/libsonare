@@ -5,10 +5,13 @@
  * steps read it. Any other release builds a module that passes every test while contradicting the
  * pin, so `build:wasm` refuses to start when `emcc` on PATH reports a different one, and the source
  * manifest records the release each module was built with so the pack step can refuse a mismatch.
+ * CMake keeps the compiler a build tree was first configured with, whatever PATH says later, so
+ * the guard also refuses a build tree whose recorded compiler is not the active `emcc`'s.
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The tracked pin, relative to nothing: always this package's own file. */
@@ -56,8 +59,54 @@ export function toolchainProblem({ env = process.env, pinned = pinnedVersion() }
   return `The WASM modules are built with Emscripten ${pinned} (bindings/wasm/.emscripten-version), but ${found}.\n${activationHint(pinned)}`;
 }
 
+/** The real directory of the `emcc` PATH in @p env resolves to, or null when there is none. */
+export function emccDirectory(env = process.env) {
+  for (const dir of (env.PATH ?? '').split(delimiter)) {
+    if (dir === '') continue;
+    const candidate = join(dir, 'emcc');
+    try {
+      accessSync(candidate, constants.X_OK);
+    } catch {
+      continue;
+    }
+    return dirname(realpathSync(candidate));
+  }
+  return null;
+}
+
+/** The C++ compiler @p buildDir was configured with, read from CMake's own record, or null. */
+export function configuredCompiler(buildDir) {
+  const filesDir = join(buildDir, 'CMakeFiles');
+  if (!existsSync(filesDir)) return null;
+  for (const entry of readdirSync(filesDir).sort()) {
+    const record = join(filesDir, entry, 'CMakeCXXCompiler.cmake');
+    if (!existsSync(record)) continue;
+    const match = /^set\(CMAKE_CXX_COMPILER "([^"]+)"\)/m.exec(readFileSync(record, 'utf8'));
+    if (match !== null) return match[1];
+  }
+  return null;
+}
+
+/** Why @p buildDir would compile with another toolchain than the active `emcc`, or null. */
+export function buildTreeProblem(buildDir, { env = process.env } = {}) {
+  const compiler = configuredCompiler(buildDir);
+  if (compiler === null) return null;
+  const active = emccDirectory(env);
+  if (active === null) return null; // toolchainProblem already names a missing emcc.
+  const dir = dirname(compiler);
+  const configured = existsSync(compiler)
+    ? dirname(realpathSync(compiler))
+    : existsSync(dir)
+      ? realpathSync(dir)
+      : dir;
+  if (configured === active) return null;
+  return `${buildDir} is configured with ${compiler}, but the active Emscripten is ${join(active, 'emcc')}.\nCMake keeps the compiler a tree was first configured with, so move ${buildDir} aside and build again.`;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const problem = toolchainProblem();
+  const buildDir = process.argv[2];
+  const problem =
+    toolchainProblem() ?? (buildDir === undefined ? null : buildTreeProblem(resolve(buildDir)));
   if (problem !== null) {
     console.error(problem);
     process.exit(1);

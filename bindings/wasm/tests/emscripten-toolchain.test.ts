@@ -7,7 +7,16 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -20,6 +29,8 @@ import {
   writeManifests,
 } from '../scripts/dist-source-manifest.mjs';
 import {
+  buildTreeProblem,
+  configuredCompiler,
   parseEmccVersion,
   pinnedVersion,
   toolchainProblem,
@@ -32,7 +43,8 @@ const BANNER = (version: string) =>
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'sonare-emscripten-toolchain-'));
+  // Real path: the guard compares resolved directories, and tmpdir() is a symlink on macOS.
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'sonare-emscripten-toolchain-')));
 });
 
 afterEach(() => {
@@ -53,8 +65,20 @@ function stubPath(banner: string | null): NodeJS.ProcessEnv {
   return { ...process.env, PATH: [bin, '/usr/bin', '/bin'].join(delimiter) };
 }
 
-function runGuard(env: NodeJS.ProcessEnv) {
-  return spawnSync(process.execPath, [GUARD], { env, encoding: 'utf8' });
+function runGuard(env: NodeJS.ProcessEnv, ...args: string[]) {
+  return spawnSync(process.execPath, [GUARD, ...args], { env, encoding: 'utf8' });
+}
+
+/** A build tree whose CMake record names @p compiler, the way a configure leaves it. */
+function configuredTree(compiler: string): string {
+  const tree = join(root, 'build-wasm');
+  const record = join(tree, 'CMakeFiles', '4.1.2');
+  mkdirSync(record, { recursive: true });
+  writeFileSync(
+    join(record, 'CMakeCXXCompiler.cmake'),
+    `set(CMAKE_CXX_COMPILER "${compiler}")\nset(CMAKE_CXX_COMPILER_ARG1 "")\n`,
+  );
+  return tree;
 }
 
 describe('the pinned release', () => {
@@ -97,6 +121,45 @@ describe('build:wasm refuses another compiler', () => {
     const result = runGuard(stubPath(null));
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('but no emcc runs from PATH');
+  });
+});
+
+describe('build:wasm refuses a build tree configured with another compiler', () => {
+  it('builds a tree configured with the active emcc', () => {
+    const env = stubPath(BANNER(pinnedVersion()));
+    const tree = configuredTree(join(root, 'bin', 'em++'));
+    expect(buildTreeProblem(tree, { env })).toBeNull();
+    const result = runGuard(env, tree);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+  });
+
+  it('refuses a tree first configured with another emsdk, naming both paths and the tree', () => {
+    const env = stubPath(BANNER(pinnedVersion()));
+    const other = join(root, 'opt', 'emsdk', 'upstream', 'emscripten', 'em++');
+    const tree = configuredTree(other);
+    expect(configuredCompiler(tree)).toBe(other);
+    const result = runGuard(env, tree);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`${tree} is configured with ${other}`);
+    expect(result.stderr).toContain(`but the active Emscripten is ${join(root, 'bin', 'emcc')}`);
+    expect(result.stderr).toContain(`move ${tree} aside and build again`);
+  });
+
+  it('reads through a symlinked emcc to the directory it lives in', () => {
+    const real = join(root, 'emsdk', 'upstream', 'emscripten');
+    mkdirSync(real, { recursive: true });
+    writeFileSync(join(real, 'emcc'), `#!/bin/sh\necho '${BANNER(pinnedVersion())}'\n`);
+    chmodSync(join(real, 'emcc'), 0o755);
+    const env = stubPath(null);
+    symlinkSync(join(real, 'emcc'), join(root, 'bin', 'emcc'));
+    expect(buildTreeProblem(configuredTree(join(real, 'em++')), { env })).toBeNull();
+  });
+
+  it('lets a tree that was never configured through', () => {
+    const env = stubPath(BANNER(pinnedVersion()));
+    expect(buildTreeProblem(join(root, 'build-wasm'), { env })).toBeNull();
+    expect(runGuard(env, join(root, 'build-wasm')).status).toBe(0);
   });
 });
 
