@@ -220,9 +220,7 @@ describe('runtime refusal parity (WASM)', () => {
     );
   });
 
-  // WASM drives the engine directly and still names no cause for a refused lane edit; this flips
-  // red once the mixer edit causes reach WASM, and `.fails` comes off then.
-  it.fails('refuses a repeated send bus in the same words', () => {
+  it('refuses a repeated send bus in the same words', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       engine.setTrackBuses([
