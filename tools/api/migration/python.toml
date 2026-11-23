@@ -10024,24 +10024,6 @@ test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_o
 
 [[entry]]
 kind = "option"
-old = "Project.midi_cc_to_breakpoint(bindings)"
-to = "midi_cc_to_breakpoint(bindings)"
-changed = "each binding is a MidiCcBinding record; a mapping is TypeError"
-domain = "project"
-rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token"
-
-[[entry]]
-kind = "option"
-old = "Project.midi_param_to_cc(bindings)"
-to = "midi_param_to_cc(bindings)"
-changed = "each binding is a MidiCcBinding record; a mapping is TypeError"
-domain = "project"
-rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token"
-
-[[entry]]
-kind = "option"
 old = "RealtimeEngine.bind_midi_cc_binding(binding)"
 to = "RealtimeEngine.bind_midi_cc(binding)"
 changed = "binding is a MidiCcBinding record; a mapping is TypeError"
@@ -11159,14 +11141,14 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midi_param_to_cc"
-removed = "call the module function midi_param_to_cc, which returns a ProjectMidiEvent record or None"
+removed = "call the module function midi_param_to_cc, which takes each binding as a MidiCcBinding record (a mapping is TypeError) and returns a ProjectMidiEvent record or None"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_to_breakpoint"
-removed = "call the module function midi_cc_to_breakpoint, which returns an AutomationPoint record or None"
+removed = "call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None"
 domain = "project"
 rule = "midi-module-functions"
 
@@ -11174,33 +11156,6 @@ rule = "midi-module-functions"
 kind = "option"
 old = "Project.set_midi_events(events)"
 changed = "each event is a ProjectMidiEvent record, or the whole list is one (n, 3) array of ppq, word0, word1 columns; a tuple or mapping is TypeError"
-domain = "project"
-rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
-
-[[entry]]
-kind = "option"
-old = "Project.midi_route_events(events)"
-to = "midi_route_events(events)"
-changed = "each event is a ProjectMidiEvent record; a tuple or mapping is TypeError"
-domain = "project"
-rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
-
-[[entry]]
-kind = "option"
-old = "Project.midi_cc_learn(events)"
-to = "midi_cc_learn(events)"
-changed = "each event is a ProjectMidiEvent record; a tuple or mapping is TypeError"
-domain = "project"
-rule = "one-input-form"
-test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
-
-[[entry]]
-kind = "option"
-old = "Project.midi_cc_to_breakpoint(event)"
-to = "midi_cc_to_breakpoint(event)"
-changed = "a ProjectMidiEvent record; a tuple or mapping is TypeError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_project_midi.py::test_a_midi_event_is_taken_only_as_a_project_midi_event"
@@ -11374,15 +11329,6 @@ domain = "project"
 rule = "collections"
 
 [[entry]]
-kind = "option"
-old = "Project.midi_route_events(config)"
-to = "midi_route_events(config)"
-changed = "filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap; -1 and any other value outside 0..15 raise SonareValueError naming the key"
-domain = "project"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_project_midi.py::test_midi_route_absent_filters_mean_any_and_a_negative_is_refused"
-
-[[entry]]
 kind = "method"
 old = "Project.gm_instrument_name"
 removed = "call the module function gm_instrument_name"
@@ -11441,14 +11387,14 @@ rule = "midi-module-functions"
 [[entry]]
 kind = "method"
 old = "Project.midi_route_events"
-removed = "call the module function midi_route_events"
+removed = "call the module function midi_route_events, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError); in config, filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap, and -1 or any other value outside 0..15 raises SonareValueError naming the key"
 domain = "project"
 rule = "midi-module-functions"
 
 [[entry]]
 kind = "method"
 old = "Project.midi_cc_learn"
-removed = "call the module function midi_cc_learn"
+removed = "call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError)"
 domain = "project"
 rule = "midi-module-functions"
 

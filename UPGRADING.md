@@ -3663,7 +3663,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.bounce(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.bounce(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.bounce(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.midi_route_events(config)` | `midi_route_events(config)`: filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap; -1 and any other value outside 0..15 raise SonareValueError naming the key |
 | `Project.move_clip(new_track_id)` | int \| None, default None: None keeps the clip on its track and an explicit 0 raises SonareValueError |
 | `Project.set_audio_source_metadata(content_hash)` | None clears the field; an empty string raises SonareValueError |
 | `Project.set_audio_source_metadata(external_stem_role)` | None clears the field; an empty string raises SonareValueError |
@@ -3803,18 +3802,18 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.midi2_relative_registered_controller` | removed: call the module function midi2_relative_registered_controller, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_bank_program` | removed: call the module function midi_bank_program, which returns a list of frozen ProjectMidiEvent records instead of tuples |
 | `Project.midi_cc_index_for_name` | removed: call the module function midi_cc_index_for_name |
-| `Project.midi_cc_learn` | removed: call the module function midi_cc_learn |
+| `Project.midi_cc_learn` | removed: call the module function midi_cc_learn, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError) |
 | `Project.midi_cc_name` | removed: call the module function midi_cc_name |
-| `Project.midi_cc_to_breakpoint` | removed: call the module function midi_cc_to_breakpoint, which returns an AutomationPoint record or None |
+| `Project.midi_cc_to_breakpoint` | removed: call the module function midi_cc_to_breakpoint, which takes the event as a ProjectMidiEvent record (a tuple or mapping is TypeError) and each binding as a MidiCcBinding record (a mapping is TypeError), and returns an AutomationPoint record or None |
 | `Project.midi_cc` | removed: call the module function midi_cc, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_channel_pressure` | removed: call the module function midi_channel_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_note_off` | removed: call the module function midi_note_off, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_note_on` | removed: call the module function midi_note_on, which returns a frozen ProjectMidiEvent instead of a tuple |
-| `Project.midi_param_to_cc` | removed: call the module function midi_param_to_cc, which returns a ProjectMidiEvent record or None |
+| `Project.midi_param_to_cc` | removed: call the module function midi_param_to_cc, which takes each binding as a MidiCcBinding record (a mapping is TypeError) and returns a ProjectMidiEvent record or None |
 | `Project.midi_pitch_bend` | removed: call the module function midi_pitch_bend, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_poly_pressure` | removed: call the module function midi_poly_pressure, which returns a frozen ProjectMidiEvent instead of a tuple |
 | `Project.midi_program` | removed: call the module function midi_program, which returns a frozen ProjectMidiEvent instead of a tuple |
-| `Project.midi_route_events` | removed: call the module function midi_route_events |
+| `Project.midi_route_events` | removed: call the module function midi_route_events, which takes each event as a ProjectMidiEvent record (a tuple or mapping is TypeError); in config, filter_group, filter_channel and remap_channel are 0..15, absent or None for any / no remap, and -1 or any other value outside 0..15 raises SonareValueError naming the key |
 | `Project.per_note_controller_name` | removed: call the module function per_note_controller_name |
 
 #### C counts are size_t and returned through an out parameter
@@ -3912,11 +3911,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.annotate_keys(keys)` | each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'; an unknown tonic_pc is absent or None, and 255 or any value outside 0..11 raises SonareValueError naming the field |
 | `Project.bake_midi_fx(config_json)` | `Project.bake_midi_fx(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
 | `Project.edit_automation_lane(target_param_id)` | takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None keeps the lane's kind |
-| `Project.midi_cc_learn(events)` | `midi_cc_learn(events)`: each event is a ProjectMidiEvent record; a tuple or mapping is TypeError |
-| `Project.midi_cc_to_breakpoint(bindings)` | `midi_cc_to_breakpoint(bindings)`: each binding is a MidiCcBinding record; a mapping is TypeError |
-| `Project.midi_cc_to_breakpoint(event)` | `midi_cc_to_breakpoint(event)`: a ProjectMidiEvent record; a tuple or mapping is TypeError |
-| `Project.midi_param_to_cc(bindings)` | `midi_param_to_cc(bindings)`: each binding is a MidiCcBinding record; a mapping is TypeError |
-| `Project.midi_route_events(events)` | `midi_route_events(events)`: each event is a ProjectMidiEvent record; a tuple or mapping is TypeError |
 | `Project.preview_midi_fx_count(config_json)` | `Project.preview_midi_fx_count(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
 | `Project.set_assist_sidecar(module_id)` | takes module_id and payload positionally and schema_version, target_track_id, region_start_ppq and region_end_ppq as keywords; a descriptor mapping in place of module_id is TypeError |
 | `Project.set_clip_comp_segments(segments)` | each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError |
