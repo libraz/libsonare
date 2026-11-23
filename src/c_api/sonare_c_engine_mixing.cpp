@@ -452,14 +452,6 @@ SonareError mixer_edit_error(engine::RealtimeEngine& realtime, const EditContext
   return refuse_state("the mixer refused the change and retained no cause for it");
 }
 
-// The master EQ, insert and sidechain setters address the engine-owned master
-// strip; with none configured the refusal is the engine's state, not the call's.
-bool require_master_strip(const engine::RealtimeEngine& engine) {
-  if (engine.has_master_strip()) return true;
-  set_last_error(SONARE_ERROR_INVALID_STATE, kNoMasterStripText);
-  return false;
-}
-
 struct SidechainWording {
   const char* target_subject;  // nullptr for the master strip, which has no id
   const char* target_thing;
@@ -719,7 +711,6 @@ SonareError sonare_engine_set_master_sidechain(SonareEngine* engine, unsigned in
 #else
   engine::SidechainSourceKind kind;
   if (!sidechain_source_kind_from_c(source_kind, &kind)) return refuse_source_kind(source_kind);
-  if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
   if (engine->engine.set_master_sidechain(insert_index, kind, source_id)) return SONARE_OK;
   const SidechainWording wording{
       nullptr, nullptr, "must be less than the number of inserts on the master strip", "source_id",
@@ -910,7 +901,6 @@ SonareError sonare_engine_set_master_strip_eq_band_json(SonareEngine* engine, in
 #else
   SONARE_C_TRY
   const mastering::eq::EqBand band = sonare::c_api::parse_eq_band_json(band_json);
-  if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
   if (const SonareError err = check_eq_band(band, band_index, engine->engine.sample_rate());
       err != SONARE_OK) {
     return err;
@@ -931,7 +921,6 @@ SonareError sonare_engine_set_master_strip_insert_bypassed(SonareEngine* engine,
   return refuse_not_compiled_in(Feature::kMixing, insert_index, bypassed, reset_on_bypass);
 #else
   SONARE_C_TRY
-  if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
   if (engine->engine.set_master_insert_bypassed(insert_index, bypassed != 0,
                                                 reset_on_bypass != 0)) {
     return SONARE_OK;
@@ -1027,7 +1016,6 @@ SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareEngine* en
   return refuse_not_compiled_in(Feature::kMixing, insert_index, value);
 #else
   SONARE_C_TRY
-  if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
   return insert_param_result_to_error(
       engine->engine.set_master_insert_param_detailed(insert_index, param_name, value),
       [&] { return master_insert_target_error(engine->engine, insert_index, param_name); });
@@ -1164,7 +1152,6 @@ SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareEngine
   return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
-  if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
   if (engine->engine.restore_master_insert_param_by_name(insert_index, param_name, value)) {
     return SONARE_OK;
   }
@@ -1294,7 +1281,6 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareEngine* engi
   return refuse_not_compiled_in(Feature::kMixing, insert_index);
 #else
   SONARE_C_TRY
-  if (!require_master_strip(engine->engine)) return SONARE_ERROR_INVALID_STATE;
   const int64_t id = engine->engine.resolve_master_insert_automation_id(insert_index, param_name);
   if (id < 0) return master_insert_target_error(engine->engine, insert_index, param_name);
   *out_id = static_cast<uint32_t>(id);

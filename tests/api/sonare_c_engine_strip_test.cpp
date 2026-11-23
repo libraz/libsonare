@@ -1408,7 +1408,7 @@ TEST_CASE("a strip change that would overflow the insert id table is refused", "
   sonare_engine_destroy(engine);
 }
 
-TEST_CASE("master strip setters without a master strip report invalid state",
+TEST_CASE("master strip setters act on the default master strip before any is set",
           "[c_api][engine][mixing]") {
   SonareEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
@@ -1416,20 +1416,21 @@ TEST_CASE("master strip setters without a master strip report invalid state",
   const char* band = R"({"type":"peak","frequencyHz":1000,"gainDb":3,"q":1,"enabled":true})";
   uint32_t id = 7;
 
-  CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 0, band) == SONARE_ERROR_INVALID_STATE);
+  // The default strip has an EQ and no inserts, so only the insert index is refused.
+  CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 0, band) == SONARE_OK);
   CHECK(sonare_engine_set_master_strip_insert_bypassed(engine, 0, 1, 0) ==
-        SONARE_ERROR_INVALID_STATE);
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_engine_set_master_strip_insert_param_by_name(engine, 0, "levelDb", -3.0f) ==
-        SONARE_ERROR_INVALID_STATE);
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_engine_restore_master_strip_insert_param_by_name(engine, 0, "levelDb", -3.0f) ==
-        SONARE_ERROR_INVALID_STATE);
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_engine_resolve_master_insert_automation_id(engine, 0, "levelDb", &id) ==
-        SONARE_ERROR_INVALID_STATE);
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(id == 0);
   CHECK(sonare_engine_set_master_sidechain(engine, 0, SONARE_SIDECHAIN_SOURCE_TRACK, 10) ==
-        SONARE_ERROR_INVALID_STATE);
+        SONARE_ERROR_INVALID_PARAMETER);
 
-  // With the strip in place the same calls refuse only what they name.
+  // A set strip replaces the default one; the same calls refuse only what they name.
   REQUIRE(sonare_engine_set_master_strip_json(
               engine, insert_scene("strips", "master", {"utility.gain"}).c_str()) == SONARE_OK);
   CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 99, band) ==
@@ -1553,15 +1554,10 @@ TEST_CASE("insert automation resolvers define out_id on every exit path",
           expected);
   REQUIRE(track_id == 0);
 
-  // No master strip is configured, which is the engine's state rather than the call's.
-#if defined(SONARE_WITH_MIXING)
-  const SonareError master_expected = SONARE_ERROR_INVALID_STATE;
-#else
-  const SonareError master_expected = SONARE_ERROR_NOT_SUPPORTED;
-#endif
+  // The default master strip has no inserts, so the master takes the same path.
   uint32_t master_id = 0xDEADBEEFu;
   REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "cutoff", &master_id) ==
-          master_expected);
+          expected);
   REQUIRE(master_id == 0);
 
   uint32_t bus_id = 0xDEADBEEFu;

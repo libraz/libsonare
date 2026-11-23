@@ -819,11 +819,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Set the ramp time (ms) of the engine-level smoother.
 
         The time is one time constant: about 63% of the way at the set time.
-        Governs only ``set_parameter(..., smoothed=True)`` on parameters bound through the
-        automation engine. Reserved engine targets -- track and bus faders, pan
-        and width, and insert and instrument parameters -- keep their own fixed
-        smoothing whatever this is set to, and MIDI-CC mappings apply their values
-        directly. The default is 20 ms; ``0`` makes the governed changes instant.
+        Governs every ``set_parameter(..., smoothed=True)``, reserved fader, pan,
+        insert and instrument targets included: a smoothed set on a reserved target
+        ramps over this time and then through the target's fixed 5 ms click guard,
+        which a stepped set passes through too. Changing it retimes ramps already
+        running, and MIDI-CC mappings apply their values directly. The default is
+        20 ms; ``0`` makes a smoothed set a step.
         """
         lib = _get_lib()
         _check(

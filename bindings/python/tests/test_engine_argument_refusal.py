@@ -38,8 +38,7 @@ def test_value_refusal_is_sonare_value_error(
         assert isinstance(exc.value, SonareError)
 
 
-_MASTER_STRIP_SETTERS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
-    ("eq_band", lambda e: e.set_strip_eq_band("master", 0, _BAND)),
+_MASTER_INSERT_SETTERS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
     ("insert_bypassed", lambda e: e.set_strip_insert_bypassed("master", 0, True)),
     (
         "insert_param_by_name",
@@ -48,17 +47,21 @@ _MASTER_STRIP_SETTERS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
 ]
 
 
+def test_master_strip_eq_band_reaches_the_default_master_strip() -> None:
+    with RealtimeEngine(sample_rate=48000, max_block_size=64) as engine:
+        engine.set_strip_eq_band("master", 0, _BAND)
+
+
 @pytest.mark.parametrize(
-    ("name", "call"), _MASTER_STRIP_SETTERS, ids=[n for n, _ in _MASTER_STRIP_SETTERS]
+    ("name", "call"), _MASTER_INSERT_SETTERS, ids=[n for n, _ in _MASTER_INSERT_SETTERS]
 )
-def test_master_strip_setter_without_a_master_strip_is_coded_invalid_state(
+def test_master_insert_setter_refuses_an_insert_the_default_master_strip_lacks(
     name: str, call: Callable[[RealtimeEngine], object]
 ) -> None:
     with RealtimeEngine(sample_rate=48000, max_block_size=64) as engine:
-        with pytest.raises(SonareError) as exc:
+        with pytest.raises(SonareValueError) as exc:
             call(engine)
-        assert not isinstance(exc.value, SonareValueError)
-        assert exc.value.code == int(ErrorCode.INVALID_STATE)
+        assert exc.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 
 def test_call_on_closed_engine_is_coded_invalid_state() -> None:

@@ -476,8 +476,9 @@ SonareError sonare_engine_set_bus_sidechain(SonareEngine* engine, uint32_t bus_i
 /// @details @p insert_index counts the master strip's pre-fader inserts first,
 ///   then its post-fader inserts, as the other master insert setters do. Same
 ///   source rules, return codes and threading contract as
-///   sonare_engine_set_bus_sidechain, plus SONARE_ERROR_INVALID_STATE when no
-///   master strip has been set with sonare_engine_set_master_strip_json.
+///   sonare_engine_set_bus_sidechain. The setter acts on the engine's default
+///   master strip; a later sonare_engine_set_master_strip_json replaces it
+///   wholesale and the first one starts on its values.
 SonareError sonare_engine_set_master_sidechain(SonareEngine* engine, unsigned int insert_index,
                                                int source_kind, uint32_t source_id);
 /// @brief Reports whether sonare_engine_set_bus_sidechain would accept a binding.
@@ -537,14 +538,16 @@ SonareError sonare_engine_set_master_strip_json(SonareEngine* engine, const char
 /// @brief Sets one embedded EQ band on an engine-owned master strip.
 /// @details @p band_json uses the same JSON schema as @ref sonare_eq_set_band.
 ///          Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
-/// @return SONARE_ERROR_INVALID_STATE when no master strip has been set with
-///   @ref sonare_engine_set_master_strip_json.
+///          The setter acts on the engine's default master strip; a later
+///          @ref sonare_engine_set_master_strip_json replaces it wholesale and the first one
+///          starts on its values.
 SonareError sonare_engine_set_master_strip_eq_band_json(SonareEngine* engine, int band_index,
                                                         const char* band_json);
 /// @brief Toggles bypass for a master strip insert by combined pre/post insert index.
 /// @details Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
-/// @return SONARE_ERROR_INVALID_STATE when no master strip has been set with
-///   @ref sonare_engine_set_master_strip_json.
+///   The setter acts on the engine's default master strip; a later
+///   @ref sonare_engine_set_master_strip_json replaces it wholesale and the first one
+///   starts on its values.
 SonareError sonare_engine_set_master_strip_insert_bypassed(SonareEngine* engine,
                                                            unsigned int insert_index, int bypassed,
                                                            int reset_on_bypass);
@@ -579,8 +582,9 @@ SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareEngine* eng
                                                                const char* param_name, float value);
 /// @brief Realtime change of one master-strip insert parameter by JSON-key name.
 /// @details Master-strip counterpart of @ref sonare_engine_set_track_strip_insert_param_by_name.
-/// @return SONARE_ERROR_INVALID_STATE when no master strip has been set with
-///   @ref sonare_engine_set_master_strip_json.
+///   The setter acts on the engine's default master strip; a later
+///   @ref sonare_engine_set_master_strip_json replaces it wholesale and the first one
+///   starts on its values.
 SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareEngine* engine,
                                                                 unsigned int insert_index,
                                                                 const char* param_name,
@@ -633,8 +637,9 @@ SonareError sonare_engine_restore_track_strip_insert_param_by_name(SonareEngine*
                                                                    float value);
 /// @brief Master-strip counterpart of
 ///        @ref sonare_engine_restore_track_strip_insert_param_by_name.
-/// @return SONARE_ERROR_INVALID_STATE when no master strip has been set with
-///   @ref sonare_engine_set_master_strip_json.
+/// @details The setter acts on the engine's default master strip; a later
+///   @ref sonare_engine_set_master_strip_json replaces it wholesale and the first one
+///   starts on its values.
 SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareEngine* engine,
                                                                     unsigned int insert_index,
                                                                     const char* param_name,
@@ -738,9 +743,8 @@ SonareError sonare_engine_resolve_master_automation_id(SonareEngine* engine, con
                                                        uint32_t* out_id);
 /// @brief Resolves a master-strip insert parameter to its reserved automation id.
 /// @details Master-strip counterpart of
-///   @ref sonare_engine_resolve_track_insert_automation_id.
-/// @return SONARE_ERROR_INVALID_STATE when no master strip has been set with
-///   @ref sonare_engine_set_master_strip_json (and sets @p out_id to 0).
+///   @ref sonare_engine_resolve_track_insert_automation_id. It resolves against the
+///   engine's default master strip until sonare_engine_set_master_strip_json replaces it.
 SonareError sonare_engine_resolve_master_insert_automation_id(SonareEngine* engine,
                                                               unsigned int insert_index,
                                                               const char* param_name,

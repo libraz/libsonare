@@ -30,6 +30,19 @@ _PAN_LAW_CORPUS = json.loads(
     )
 )
 
+_SR = 48000
+_BLOCK = 256
+_SMOOTHING_MS = 20.0
+# A smoothed set ramps over the engine smoother's time and then through each reserved
+# target's fixed 5 ms click guard (sonare_engine_set_param_smoothing_ms).
+_CLICK_GUARD_MS = 5.0
+
+
+def _blocks_to_settle(start: float, target: float, tolerance: float) -> int:
+    """Blocks after which a smoothed set from ``start`` is within ``tolerance`` of ``target``."""
+    settle_ms = (_SMOOTHING_MS + _CLICK_GUARD_MS) * math.log(abs(start - target) / tolerance)
+    return math.ceil(settle_ms * 1e-3 * _SR / _BLOCK) + 1
+
 
 def test_track_monitor_mode_tokens_map_to_their_ordinals() -> None:
     assert [_track_monitor_mode_value(mode, "mode") for mode in ("off", "pfl", "afl")] == [0, 1, 2]
@@ -419,8 +432,13 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
 
 
 def test_engine_set_strip_routes_the_master_strip() -> None:
-    frames = 256 * 16
-    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
+    before = 2 * 10 ** (-12 / 20)
+    # 2 * 10^(-24/20) * sqrt((0.75^2 + 1) / 2): the linear law at pan 0.25 against its centre.
+    after = 2 * 10 ** (-24 / 20) * (1.5625 / 2) ** 0.5
+    settle_blocks = _blocks_to_settle(before, after, 5e-4)
+    frames = _BLOCK * (settle_blocks + 2)
+    with RealtimeEngine(sample_rate=_SR, max_block_size=_BLOCK) as engine:
+        engine.set_param_smoothing_ms(_SMOOTHING_MS)
         engine.set_clips(
             [
                 EngineClip(
@@ -459,18 +477,15 @@ def test_engine_set_strip_routes_the_master_strip() -> None:
         assert bad_bypass_error.value.code == 4
 
         engine.play()
-        processed = engine.process([[0.0] * 256])
+        processed = engine.process([[0.0] * _BLOCK])
         # Two unit clips (2) through the -12 dB master fader; a centred mono master is unity.
-        assert processed[0][-1] == pytest.approx(2 * 10 ** (-12 / 20), abs=1e-3)
+        assert processed[0][-1] == pytest.approx(before, abs=1e-3)
         engine.set_parameter(0x4D58FF01, -24.0, smoothed=True)
         engine.set_parameter(0x4D58FF02, 0.25)
         attenuated = processed
-        for _ in range(8):
-            attenuated = engine.process([[0.0] * 256])
-        # 2 * 10^(-24/20) * sqrt((0.75^2 + 1) / 2): the linear law at pan 0.25 against its centre.
-        assert attenuated[0][-1] == pytest.approx(
-            2 * 10 ** (-24 / 20) * (1.5625 / 2) ** 0.5, abs=1e-3
-        )
+        for _ in range(settle_blocks):
+            attenuated = engine.process([[0.0] * _BLOCK])
+        assert attenuated[0][-1] == pytest.approx(after, abs=1e-3)
 
 
 def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
@@ -558,10 +573,15 @@ def test_realtime_engine_process_monitor_returns_separate_bus() -> None:
         assert monitor[1][0] == pytest.approx(0.0)
 
 
+_FADER_TARGET = 10 ** (-12 / 20)
+_FADER_BLOCKS = _blocks_to_settle(1.0, _FADER_TARGET, 5e-4)
+
+
 def _fader_blocks(**set_kwargs: bool) -> list[float]:
     """Last sample of each block after one fader write, with the given set_parameter options."""
-    frames = 256 * 12
-    with RealtimeEngine(sample_rate=48000, max_block_size=256) as engine:
+    frames = _BLOCK * (_FADER_BLOCKS + 2)
+    with RealtimeEngine(sample_rate=_SR, max_block_size=_BLOCK) as engine:
+        engine.set_param_smoothing_ms(_SMOOTHING_MS)
         engine.set_clips(
             [
                 EngineClip(
@@ -576,16 +596,19 @@ def _fader_blocks(**set_kwargs: bool) -> list[float]:
         engine.set_track_lanes([{"track_id": 10}])
         engine.play()
         engine.set_parameter(engine.resolve_strip_automation_id(10, "faderDb"), -12.0, **set_kwargs)
-        return [engine.process([[0.0] * 256])[0][-1] for _ in range(10)]
+        return [engine.process([[0.0] * _BLOCK])[0][-1] for _ in range(_FADER_BLOCKS)]
 
 
 def test_set_parameter_smoothed_flag_defaults_to_the_immediate_write() -> None:
     omitted = _fader_blocks()
     assert _fader_blocks(smoothed=False) == omitted
     ramped = _fader_blocks(smoothed=True)
-    target = 10 ** (-12 / 20)
-    assert omitted[-1] == pytest.approx(target, abs=1e-3)
-    assert ramped[-1] == pytest.approx(target, abs=1e-3)
+    assert omitted[-1] == pytest.approx(_FADER_TARGET, abs=1e-3)
+    assert ramped[-1] == pytest.approx(_FADER_TARGET, abs=1e-3)
+    # The last block ending within one time constant is still at least 1/e of the step away.
+    within_one_constant = math.floor(_SMOOTHING_MS * 1e-3 * _SR / _BLOCK) - 1
+    step = 1.0 - _FADER_TARGET
+    assert abs(ramped[within_one_constant] - _FADER_TARGET) > step * math.exp(-1)
 
 
 def test_engine_track_strip_pan_and_send_setters() -> None:
