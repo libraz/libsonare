@@ -909,6 +909,26 @@ class TypeNamesRule(unittest.TestCase):
             ],
         )
 
+    def test_companion_of_an_error_class_keeps_the_prefix(self) -> None:
+        def record(surface: str, name: str) -> dict:
+            return {"surface": surface, "kind": "type", "name": name, "owner": "", "member": ""}
+
+        planted = [
+            record("node", "SonareErrorOptions"),
+            record("wasm", "SonareErrorOptions"),
+            record("python", "SonareValueErrorDetail"),
+            record("node", "SonareErrorsList"),
+            record("node", "SonareFoo"),
+        ]
+        verdict = self.judge([*self.CLEAN, *planted])
+        self.assertEqual(
+            sorted(f.key for f in verdict.violations), ["node:SonareErrorsList", "node:SonareFoo"]
+        )
+
+    def test_exempt_map_and_owner_list_share_one_source(self) -> None:
+        for key in check._ERROR_CLASSES:
+            self.assertEqual(rule("type-names").exempt[key], check._ERROR_CLASS_REASON)
+
 
 class EngineCounterpartsRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [

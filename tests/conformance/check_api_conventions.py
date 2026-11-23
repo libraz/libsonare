@@ -1020,6 +1020,12 @@ def _payload_channel_violation(r: dict) -> str | None:
 
 
 _ERROR_CLASS_REASON = "the error class keeps its Sonare prefix"
+_ERROR_CLASSES = (
+    "node:SonareError",
+    "wasm:SonareError",
+    "python:SonareError",
+    "python:SonareValueError",
+)
 
 
 _REGISTERED_CLASS_REASON = "registered with Web Audio or as a global"
@@ -1038,12 +1044,14 @@ _REGISTERED_CLASSES = (
 
 
 def _type_name_violation(r: dict) -> str | None:
-    """Flag a Sonare-prefixed type unless it is a registered class or named for one."""
+    """Flag a Sonare-prefixed type unless it is an exempt class or named for one."""
     name = r["name"]
     if not name.startswith("Sonare"):
         return None
     owners = [
-        key.split(":", 1)[1] for key in _REGISTERED_CLASSES if key.split(":", 1)[0] == r["surface"]
+        key.split(":", 1)[1]
+        for key in (*_ERROR_CLASSES, *_REGISTERED_CLASSES)
+        if key.split(":", 1)[0] == r["surface"]
     ]
     if any(
         name.startswith(owner) and name[len(owner) : len(owner) + 1].isupper() for owner in owners
@@ -1725,7 +1733,7 @@ RULES: list[Rule] = [
     Rule(
         name="type-names",
         summary=(
-            "public JS/Python type names carry no Sonare prefix, except the error class, the "
+            "public JS/Python type names carry no Sonare prefix, except the error classes, the "
             "registered classes and the companion types named for them"
         ),
         population=lambda r: (
@@ -1733,10 +1741,7 @@ RULES: list[Rule] = [
         ),
         violation=_type_name_violation,
         exempt={
-            "node:SonareError": _ERROR_CLASS_REASON,
-            "wasm:SonareError": _ERROR_CLASS_REASON,
-            "python:SonareError": _ERROR_CLASS_REASON,
-            "python:SonareValueError": _ERROR_CLASS_REASON,
+            **{key: _ERROR_CLASS_REASON for key in _ERROR_CLASSES},
             **{key: _REGISTERED_CLASS_REASON for key in _REGISTERED_CLASSES},
         },
     ),
