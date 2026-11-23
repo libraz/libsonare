@@ -27,6 +27,7 @@ import {
   tokenOrdinal,
   WARP_MODE,
 } from './internal/project_tokens.js';
+import { derivedCounts, withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
@@ -932,7 +933,9 @@ export class Project {
     }
     const { name, ...rest } = map;
     const label = optionalName('name', name, 'for no name');
-    this.native.setWarpMap(label === undefined ? rest : { ...rest, name: label });
+    withRespelled(derivedCounts('Project.setWarpMap'), () =>
+      this.native.setWarpMap(label === undefined ? rest : { ...rest, name: label }),
+    );
   }
 
   /** Remove a first-class warp map by id. */

@@ -54,6 +54,9 @@ describe('typed-array element pointers', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toBe(
+      'pitchCorrectTimevarying: f0Hz.length must be an integer of at least 1',
+    );
   });
 
   it('reads an empty voicedProb as given, so the frame count is refused rather than both omitted', () => {
@@ -75,5 +78,8 @@ describe('typed-array element pointers', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toBe(
+      'splitNote: f0Hz.length must be an integer in [1, 2147483647]',
+    );
   });
 });

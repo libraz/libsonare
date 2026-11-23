@@ -408,7 +408,11 @@ describe('editing effects', () => {
       RangeError,
     );
     expectRefusal(() => contourCorrection(tone, f0, SR, hop, { scaleModeMask: 0 }), RangeError);
-    expectRefusal(() => contourCorrection(tone, new Float32Array(), SR, hop), RangeError);
+    expectRefusal(
+      () => contourCorrection(tone, new Float32Array(), SR, hop),
+      RangeError,
+      /^pitchCorrectTimevarying: f0Hz\.length must be an integer of at least 1$/,
+    );
     expectRefusal(() => contourCorrection(tone, f0, SR, 0), RangeError);
   });
 

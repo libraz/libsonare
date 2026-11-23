@@ -8,6 +8,7 @@ import { refuseType, withEntry } from './internal/entry.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
+import { derivedCounts, withRespelled } from './internal/respell.js';
 import { addon } from './native.js';
 import type { AutoTuneOptions, AutoTuneResult, PitchCorrectOptions } from './types.js';
 import type { OptionsOf } from './validation.js';
@@ -225,11 +226,13 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
     assertPitchTrackLengths(f0Hz, voiced, voicedProb);
     // Positivity only: the corrector requires a positive hop to place the contour.
     const resolvedHopLength = resolvePositiveIntegerOption('hopLength', hopLength, 512);
-    return addon.pitchCorrectTimevarying(samples, sampleRate, f0Hz, resolvedHopLength, {
-      ...rest,
-      voiced: nativeVoiced,
-      voicedProb: voicedProb ?? undefined,
-    });
+    return withRespelled(derivedCounts('pitchCorrectTimevarying'), () =>
+      addon.pitchCorrectTimevarying(samples, sampleRate, f0Hz, resolvedHopLength, {
+        ...rest,
+        voiced: nativeVoiced,
+        voicedProb: voicedProb ?? undefined,
+      }),
+    );
   });
 }
 

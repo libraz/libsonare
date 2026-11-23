@@ -147,7 +147,7 @@ describe('RealtimeEngine native binding', () => {
     expect(MAX_TRACK_LANES).toBe(32);
     expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
     expect(() => engine.setTrackLanes(lanes)).toThrow(
-      'RealtimeEngine.setTrackLanes: laneCount must be an integer in [0, 32]',
+      'RealtimeEngine.setTrackLanes: lanes.length must be an integer in [0, 32]',
     );
     expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
     // A layout is a name: an ordinal never reaches the narrowing in the addon.
