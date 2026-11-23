@@ -114,7 +114,7 @@ std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config 
 ///          loudness over 3 s windows with 100 ms hops, an absolute gate of -70 LUFS,
 ///          and a relative gate 20 LU below the ungated mean loudness. The LRA is the
 ///          difference between the 95th and 10th percentiles of the gated distribution.
-/// @return Loudness range in LU (0 if insufficient data).
+/// @return Loudness range in LU, or kNotMeasured (NaN) when no block passes the gates.
 float ebur128_loudness_range_lu(const Audio& audio);
 
 /// @brief Computes the EBU Tech 3342 Loudness Range (LRA) from short-term loudness blocks.

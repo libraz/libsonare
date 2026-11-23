@@ -12,6 +12,7 @@ namespace sonare::metering {
 /// @brief Oversample factor the true-peak meter uses when the caller names none.
 inline constexpr int kDefaultTruePeakOversample = 4;
 
+/// @brief Linear true peak over all samples: 0 for silence, kNotMeasured (NaN) for no samples.
 float true_peak(const float* samples, size_t length,
                 int oversample_factor = kDefaultTruePeakOversample);
 float true_peak(const Audio& audio, int oversample_factor = kDefaultTruePeakOversample);

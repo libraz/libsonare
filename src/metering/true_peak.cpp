@@ -113,7 +113,7 @@ float true_peak(const float* data, size_t length, int oversample_factor) {
     util::check::one_of(oversample_factor, std::array<int, 5>{1, 2, 4, 8, 16}, "oversample_factor");
   }
   util::check::non_null_when_count(data, length, "samples", "length");
-  if (length == 0) return 0.0f;
+  if (length == 0) return kNotMeasured;
   // peak_abs absorbs a non-finite sample, and the skip test below compares an
   // interpolation bound against the running peak, so one would be dropped twice
   // over and reported as a finite true peak. There is no peak to report.

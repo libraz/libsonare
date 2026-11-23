@@ -5,6 +5,7 @@
 
 #include "metering/decimation.h"
 #include "metering/stereo.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::metering {
@@ -26,8 +27,20 @@ PhaseScopePoint make_point(const float* left, const float* right, size_t i) {
   point.mid = ms.mid;
   point.side = ms.side;
   point.radius = std::sqrt(point.mid * point.mid + point.side * point.side);
-  point.angle_rad = std::atan2(point.side, point.mid);
+  point.angle_rad = point.radius == 0.0f ? kNotMeasured : std::atan2(point.side, point.mid);
   return point;
+}
+
+// A silent sample counts as angle 0 in the mean, as it always has, so a mean over audio that
+// holds exact zeros is unchanged.
+double abs_angle_or_zero(const PhaseScopePoint& point) {
+  return std::isnan(point.angle_rad) ? 0.0 : std::abs(point.angle_rad);
+}
+
+// All-silent input has no angle at all.
+float average_abs_angle(double abs_angle_sum, size_t length, float max_radius) {
+  if (max_radius == 0.0f) return kNotMeasured;
+  return static_cast<float>(abs_angle_sum / static_cast<double>(length));
 }
 
 }  // namespace
@@ -54,10 +67,10 @@ PhaseScopeResult phase_scope(const float* left, const float* right, size_t lengt
     for (size_t i = 0; i < length; ++i) {
       const PhaseScopePoint point = make_point(left, right, i);
       result.points[i] = point;
-      abs_angle_sum += std::abs(point.angle_rad);
+      abs_angle_sum += abs_angle_or_zero(point);
       result.max_radius = std::max(result.max_radius, point.radius);
     }
-    result.average_abs_angle_rad = static_cast<float>(abs_angle_sum / static_cast<double>(length));
+    result.average_abs_angle_rad = average_abs_angle(abs_angle_sum, length, result.max_radius);
     return result;
   }
 
@@ -71,13 +84,13 @@ PhaseScopeResult phase_scope(const float* left, const float* right, size_t lengt
       length, max_points,
       [&](size_t i) {
         const PhaseScopePoint point = make_point(left, right, i);
-        abs_angle_sum += std::abs(point.angle_rad);
+        abs_angle_sum += abs_angle_or_zero(point);
         result.max_radius = std::max(result.max_radius, point.radius);
         return point;
       },
       [](const PhaseScopePoint& p) { return p.radius; },
       [&](const PhaseScopePoint& best) { result.points.push_back(best); });
-  result.average_abs_angle_rad = static_cast<float>(abs_angle_sum / static_cast<double>(length));
+  result.average_abs_angle_rad = average_abs_angle(abs_angle_sum, length, result.max_radius);
   return result;
 }
 

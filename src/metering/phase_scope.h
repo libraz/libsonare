@@ -12,13 +12,13 @@ struct PhaseScopePoint {
   float mid = 0.0f;
   float side = 0.0f;
   float radius = 0.0f;
-  float angle_rad = 0.0f;
+  float angle_rad = 0.0f;  ///< NaN at the origin, where a silent sample has no angle
 };
 
 struct PhaseScopeResult {
   std::vector<PhaseScopePoint> points;
   float correlation = 0.0f;
-  float average_abs_angle_rad = 0.0f;
+  float average_abs_angle_rad = 0.0f;  ///< NaN when every sample is silent
   float max_radius = 0.0f;
 };
 

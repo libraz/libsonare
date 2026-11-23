@@ -24,9 +24,10 @@ float crest_factor_db(const Audio& audio);
 /// @param samples Pointer to `frames * channels` interleaved samples.
 /// @param frames Number of sample frames.
 /// @param channels Channel count; must be positive.
-/// @return Peak-to-RMS ratio in dB, or 0 for silent or empty input, matching
+/// @return Peak-to-RMS ratio in dB, or kNotMeasured (NaN) for silent or empty input, matching
 ///         the mono `crest_factor_db` convention.
 float crest_factor_db_interleaved(const float* samples, std::size_t frames, int channels);
+/// @brief Fraction of samples at or above @p threshold; kNotMeasured (NaN) for no samples.
 float clipping_ratio(const Audio& audio, float threshold = kDefaultClippingThreshold);
 /// @brief What the frame length of silence_ratio accepts.
 inline constexpr util::check::NumericDomain kSilenceRatioFrameLengthDomain =
@@ -35,8 +36,10 @@ inline constexpr util::check::NumericDomain kSilenceRatioFrameLengthDomain =
 inline constexpr util::check::NumericDomain kSilenceRatioHopLengthDomain =
     util::check::integer_domain_of<int>(1);
 
+/// @brief Fraction of frames whose RMS is under @p threshold_db; kNotMeasured (NaN) for no samples.
 float silence_ratio(const Audio& audio, float threshold_db = -45.0f, int frame_length = 1024,
                     int hop_length = 256);
+/// @brief Mean sample value; kNotMeasured (NaN) for no samples.
 float dc_offset(const Audio& audio);
 
 }  // namespace sonare::metering

@@ -376,7 +376,7 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
 }
 
 float ebur128_loudness_range_lu(const Audio& audio) {
-  if (audio.empty()) return 0.0f;
+  if (audio.empty()) return kNotMeasured;
 
   // EBU Tech 3342: short-term loudness, 3 s window, 100 ms hop.
   constexpr double kWindowSec = 3.0;

@@ -85,7 +85,7 @@ float silence_ratio(const Audio& audio, float threshold_db, int frame_length, in
   // here rather than in the C-ABI wrapper: WASM calls this core function
   // directly, the way detect_clipping's sibling guard is already inherited.
   util::check::finite_float(threshold_db, "threshold_db");
-  if (audio.empty()) return 0.0f;
+  if (audio.empty()) return kNotMeasured;
 
   size_t silent_frames = 0;
   size_t total_frames = 0;
@@ -97,12 +97,11 @@ float silence_ratio(const Audio& audio, float threshold_db, int frame_length, in
     if (end == audio.size()) break;
   }
 
-  if (total_frames == 0) return 0.0f;
   return static_cast<float>(silent_frames) / static_cast<float>(total_frames);
 }
 
 float dc_offset(const Audio& audio) {
-  if (audio.empty()) return 0.0f;
+  if (audio.empty()) return kNotMeasured;
 
   const float* data = audio.data();
   require_measurable(data, audio.size());

@@ -65,6 +65,8 @@ std::vector<float> interleave_planar(const float* left, const float* right, std:
 // hundreds of megabytes held only to be read once.
 float interleaved_true_peak(const float* samples, std::size_t frames, int channels,
                             int oversample_factor) {
+  // No frames has no peak; the fold below would otherwise read it as silence.
+  if (frames == 0) return kNotMeasured;
   float peak = 0.0f;
   std::vector<float> channel(frames);
   for (int index = 0; index < channels; ++index) {

@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/common/loudness_measure.h"
 #include "metering/basic.h"
 #include "metering/bs1770_weighting.h"
 #include "metering/clipping.h"
@@ -1101,9 +1102,9 @@ TEST_CASE("ebur128_loudness_range_lu accepts mono input", "[meter][lufs]") {
   REQUIRE(lra < 1.0f);  // steady tone => very small loudness range
 }
 
-TEST_CASE("ebur128_loudness_range_lu handles empty input", "[meter][lufs]") {
+TEST_CASE("ebur128_loudness_range_lu reports empty input as not measured", "[meter][lufs]") {
   const Audio audio;  // empty (still mono)
-  REQUIRE_THAT(metering::ebur128_loudness_range_lu(audio), WithinAbs(0.0f, 1e-7f));
+  REQUIRE(std::isnan(metering::ebur128_loudness_range_lu(audio)));
 }
 
 TEST_CASE("dynamic range reports zero for steady signal", "[meter]") {
@@ -2030,4 +2031,54 @@ TEST_CASE("waveform_peaks refuses a zero bucket width by name", "[metering][wave
   const std::vector<float> samples(16, 0.5f);
   CHECK_THROWS_WITH(sonare::metering::waveform_peaks(samples.data(), samples.size(), 1, 0),
                     "samples_per_bucket must be an integer of at least 1");
+}
+
+TEST_CASE("a one-shot meter given no samples reports not measured, and silence as measured",
+          "[meter]") {
+  const Audio empty = Audio::from_vector(std::vector<float>{}, 48000);
+  CHECK(std::isnan(metering::true_peak(empty)));
+  CHECK(std::isnan(metering::true_peak_db(empty)));
+  CHECK(std::isnan(metering::silence_ratio(empty)));
+  CHECK(std::isnan(metering::dc_offset(empty)));
+  CHECK(std::isnan(metering::clipping_ratio(empty)));
+  CHECK(std::isnan(metering::detect_clipping(empty).clipping_ratio));
+  CHECK(std::isnan(metering::ebur128_loudness_range_lu(empty)));
+  // No frames has no peak, where the per-channel fold used to read it as silence.
+  CHECK(std::isnan(
+      sonare::mastering::common::measure_loudness_summary_interleaved(nullptr, 0, 2, 48000)
+          .true_peak_dbtp));
+
+  // Silence is measured: a peak and a mean of 0, every frame silent, nothing clipped, and the
+  // true peak level at its -inf end.
+  const Audio silent = Audio::from_vector(std::vector<float>(4800, 0.0f), 48000);
+  CHECK(metering::true_peak(silent) == 0.0f);
+  CHECK(metering::true_peak_db(silent) == -std::numeric_limits<float>::infinity());
+  CHECK(metering::silence_ratio(silent) == 1.0f);
+  CHECK(metering::dc_offset(silent) == 0.0f);
+  CHECK(metering::clipping_ratio(silent) == 0.0f);
+  CHECK(sonare::mastering::common::measure_loudness_summary_interleaved(
+            std::vector<float>(9600, 0.0f).data(), 4800, 2, 48000)
+            .true_peak_dbtp == -std::numeric_limits<float>::infinity());
+}
+
+TEST_CASE("phase scope leaves a silent sample's angle unmeasured and keeps the mean of audio",
+          "[meter]") {
+  // All silent: no sample has an angle, so neither has the mean.
+  const std::vector<float> zeros(8, 0.0f);
+  const auto silent = metering::phase_scope(zeros.data(), zeros.data(), zeros.size());
+  CHECK(std::isnan(silent.average_abs_angle_rad));
+  for (const auto& point : silent.points) CHECK(std::isnan(point.angle_rad));
+  CHECK(std::isnan(
+      metering::phase_scope(zeros.data(), zeros.data(), zeros.size(), 2).average_abs_angle_rad));
+
+  // Audio holding an exact zero: that point has no angle, and the mean is the sum of the
+  // others' absolute angles over every sample, as before.
+  const std::vector<float> left = {1.0f, 0.0f, -1.0f};
+  const std::vector<float> right = {-1.0f, 0.0f, -1.0f};
+  const auto mixed = metering::phase_scope(left.data(), right.data(), left.size());
+  CHECK(std::isnan(mixed.points[1].angle_rad));
+  const double expected = (std::abs(std::atan2(1.0, 0.0)) + std::abs(std::atan2(0.0, -1.0))) / 3.0;
+  CHECK_THAT(mixed.average_abs_angle_rad, WithinAbs(static_cast<float>(expected), 1e-6f));
+  CHECK(metering::phase_scope(left.data(), right.data(), left.size(), 2).average_abs_angle_rad ==
+        mixed.average_abs_angle_rad);
 }

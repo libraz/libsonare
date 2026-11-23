@@ -8,6 +8,7 @@
 
 #include "core/audio.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/parameter_checks.h"
 
 namespace sonare::metering {
@@ -21,7 +22,7 @@ struct ClippingRegion {
 
 struct ClippingResult {
   size_t clipped_samples = 0;
-  float clipping_ratio = 0.0f;
+  float clipping_ratio = kNotMeasured;  ///< NaN for no samples
   float max_clipped_peak = 0.0f;
   std::vector<ClippingRegion> regions;
 };
