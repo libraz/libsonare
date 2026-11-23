@@ -29,7 +29,9 @@ describe('a stereo band that was not measured', () => {
       });
     const silentRight = analyze(new Float32Array(tone.length));
     expect(silentRight.bands.length).toBeGreaterThan(0);
-    for (const band of silentRight.bands) expect(band).not.toHaveProperty('correlation');
+    for (const band of silentRight.bands) {
+      expect(band).not.toHaveProperty('correlation');
+    }
     const sounding = analyze(tone).bands.find((band) => band.lowHz <= 1000 && band.highHz > 1000);
     expect(sounding?.correlation).toBeCloseTo(1, 3);
   });

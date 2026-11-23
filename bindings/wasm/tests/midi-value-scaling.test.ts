@@ -41,7 +41,9 @@ describe('MIDI 1.0 <-> MIDI 2.0 value scaling', () => {
   it('returns every input exactly when widening then narrowing', () => {
     for (let v = 0; v < 128; v++) {
       expect(midi2VelocityToMidi1(midiVelocityToMidi2(v))).toBe(v);
-      if (v !== 0) expect(midi2NoteOnVelocityToMidi1(midiNoteOnVelocityToMidi2(v))).toBe(v);
+      if (v !== 0) {
+        expect(midi2NoteOnVelocityToMidi1(midiNoteOnVelocityToMidi2(v))).toBe(v);
+      }
       expect(midi2ControlToMidi1(midiControlToMidi2(v))).toBe(v);
     }
     for (let v = 0; v < 16384; v++) {

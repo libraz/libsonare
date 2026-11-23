@@ -12,7 +12,9 @@ const db = (linear: number): number => 20 * Math.log10(linear);
 
 function peak(samples: Float32Array): number {
   let found = 0;
-  for (const value of samples) found = Math.max(found, Math.abs(value));
+  for (const value of samples) {
+    found = Math.max(found, Math.abs(value));
+  }
   return found;
 }
 
@@ -20,7 +22,9 @@ function rms(...channels: Float32Array[]): number {
   let sum = 0;
   let count = 0;
   for (const channel of channels) {
-    for (const value of channel) sum += value * value;
+    for (const value of channel) {
+      sum += value * value;
+    }
     count += channel.length;
   }
   return Math.sqrt(sum / count);
@@ -29,7 +33,9 @@ function rms(...channels: Float32Array[]): number {
 /** A quiet bed with one spike, so an RMS target lifts the spike far past full scale. */
 function highCrest(spike = 0.9): Float32Array {
   const out = new Float32Array(LENGTH);
-  for (let i = 0; i < LENGTH; i += 1) out[i] = i % 2 === 0 ? 0.01 : -0.01;
+  for (let i = 0; i < LENGTH; i += 1) {
+    out[i] = i % 2 === 0 ? 0.01 : -0.01;
+  }
   out[LENGTH / 2] = spike;
   return out;
 }
