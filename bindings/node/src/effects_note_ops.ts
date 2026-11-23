@@ -12,7 +12,7 @@ import { mergeRespelled, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
 import { withRespelled } from './internal/respell.js';
-import { isAbsent } from './internal/value_guards.js';
+import { isAbsent, isPlainRecord } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
   AssignNoteTargetsResult,
@@ -220,9 +220,17 @@ function assertNoteSetEntries(notes: readonly NoteSetEntry[]): void {
     requireListBudget(notes, 'notes');
   }
   for (let index = 0; index < notes.length; index += 1) {
-    const note = notes[index];
-    assertIntegerValue(note?.frameStart, `notes[${index}].frameStart`);
-    assertIntegerValue(note.frameEnd, `notes[${index}].frameEnd`);
+    const note: unknown = notes[index];
+    if (!isPlainRecord(note)) {
+      throw refuseType(`notes[${index}] must be an object`);
+    }
+    for (const key of ['frameStart', 'frameEnd'] as const) {
+      const at = `notes[${index}].${key}`;
+      if (typeof note[key] !== 'number') {
+        throw refuseType(`${at} must be a number`);
+      }
+      assertIntegerValue(note[key], at);
+    }
   }
 }
 

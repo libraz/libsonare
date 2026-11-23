@@ -27,15 +27,17 @@
 namespace sonare_wasm_editing {
 
 /// @brief One edit's own amplitude envelope, budgeted before it is copied.
-inline std::vector<float> noteEnvelopeFromVal(const val& edit, std::size_t* cumulative_count) {
+inline std::vector<float> noteEnvelopeFromVal(const val& edit, const std::string& at,
+                                              std::size_t* cumulative_count) {
   const val envelope = objectProperty(edit, "amplitudeEnvelope");
   if (envelope.isUndefined()) return {};
-  accumulateWasmFloat32ArrayLength(envelope, "amplitudeEnvelope", cumulative_count);
-  return float32ArrayToVector(envelope, "amplitudeEnvelope");
+  const std::string name = elementField(at, "amplitudeEnvelope");
+  accumulateWasmFloat32ArrayLength(envelope, name.c_str(), cumulative_count);
+  return float32ArrayToVector(envelope, name.c_str());
 }
 
 /// @brief Reads a JS edit object.
-/// @param subject Names the edit in a rejection, e.g. "edit" or "note.edit".
+/// @param subject Names the edit in a rejection, e.g. "edit" or "notes[0].edit".
 inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, const char* subject,
                                                              std::size_t* cumulative_count) {
   sonare::editing::note_model::NoteEdit out;
@@ -49,24 +51,26 @@ inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, co
     // throws on absence, which a partial edit must not trigger.
     out.time_offset_samples = requireInt64Property(edit, "timeOffsetSamples", subject);
   }
-  out.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f);
-  out.gain_db = floatProperty(edit, "gainDb", 0.0f);
-  out.time_stretch_ratio = floatProperty(edit, "timeStretchRatio", out.time_stretch_ratio);
+  out.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f, subject);
+  out.gain_db = floatProperty(edit, "gainDb", 0.0f, subject);
+  out.time_stretch_ratio = floatProperty(edit, "timeStretchRatio", out.time_stretch_ratio, subject);
   sonare::util::check::greater_than(out.time_stretch_ratio, 0.0,
                                     (std::string(subject) + ".timeStretchRatio").c_str());
-  out.formant_shift_semitones = floatProperty(edit, "formantSemitones", 0.0f);
-  out.vibrato_depth_change = floatProperty(edit, "vibratoDepthChange", 0.0f);
-  out.drift_change = floatProperty(edit, "driftChange", 0.0f);
-  out.muted = boolProperty(edit, "muted", false);
-  out.amplitude_envelope = noteEnvelopeFromVal(edit, cumulative_count);
+  out.formant_shift_semitones = floatProperty(edit, "formantSemitones", 0.0f, subject);
+  out.vibrato_depth_change = floatProperty(edit, "vibratoDepthChange", 0.0f, subject);
+  out.drift_change = floatProperty(edit, "driftChange", 0.0f, subject);
+  out.muted = boolProperty(edit, "muted", false, subject);
+  out.amplitude_envelope = noteEnvelopeFromVal(edit, subject, cumulative_count);
   return out;
 }
 
 /// @brief Reads the edit riding on a JS note object, which is where the by-value
-///        door carries it.
+///        door carries it; @p at names the note, e.g. "notes[0]".
 inline sonare::editing::note_model::NoteEdit noteRowEditFromVal(const val& row,
+                                                                const std::string& at,
                                                                 std::size_t* cumulative_count) {
-  return noteEditFromVal(objectProperty(row, "edit"), "note.edit", cumulative_count);
+  return noteEditFromVal(objectProperty(row, "edit"), elementField(at, "edit").c_str(),
+                         cumulative_count);
 }
 
 /// @brief Writes one edit back, field for field.

@@ -315,7 +315,7 @@ function expectInvalidParameter(run: () => unknown): void {
   expect(error).toBeInstanceOf(RangeError);
   expect(isSonareError(error)).toBe(false);
   expect((error as Error).message).toMatch(
-    /^(extract|render)PercussiveEvents: (Invalid parameter|[a-z][A-Za-z.]* must be )/,
+    /^(extract|render)PercussiveEvents: (Invalid parameter|[a-z][A-Za-z.[\]0-9]* must be )/,
   );
 }
 
@@ -714,11 +714,11 @@ describe('renderPercussiveEvents', () => {
       { onsetSample: '0', offsetSample: 22050 },
     ]) {
       const caught = attempt(event);
-      expect(caught, `expected a RangeError for ${JSON.stringify(event)}`).toBeInstanceOf(
-        RangeError,
-      );
+      expect(caught, `expected a TypeError for ${JSON.stringify(event)}`).toBeInstanceOf(TypeError);
       // The addon's event reader names the field; the core's refusal does not.
-      expect((caught as Error).message).toMatch(/^renderPercussiveEvents: event\.\w+ /);
+      expect((caught as Error).message).toMatch(
+        /^renderPercussiveEvents: events\[0\]\.\w+ must be a number$/,
+      );
     }
 
     // The control. A reader that had started refusing every event would satisfy
@@ -1072,14 +1072,14 @@ describe('renderPercussiveEvents', () => {
         sampleRate: SR,
         events: [42 as unknown as PercussiveEventInput],
       }),
-    ).toThrow(/each event must be a plain object/);
+    ).toThrow('renderPercussiveEvents: events[0] must be an object');
     expect(() =>
       renderPercussiveEvents({
         samples: three,
         sampleRate: SR,
         events: [{ onsetSample: 0, offsetSample: 4410, edit: 7 as unknown as { gainDb: number } }],
       }),
-    ).toThrow(/event\.edit must be a plain object/);
+    ).toThrow('renderPercussiveEvents: events[0].edit must be an object');
 
     for (const gainDb of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
       expectInvalidParameter(() =>

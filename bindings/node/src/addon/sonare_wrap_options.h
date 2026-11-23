@@ -353,11 +353,13 @@ inline void node_require_property_type(Napi::Env env, bool ok, const char* key,
 
 /// @brief Read an int property: undefined/null returns the fallback, any other
 ///        non-number is refused by name (see note above).
-inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
+inline int IntProperty(const Napi::Object& obj, const char* key, int fallback,
+                       const std::string& at = std::string()) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
-  return node_narrow_int(obj.Env(), value, key);
+  const std::string name = node_element_field(at, key);
+  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "a number");
+  return node_narrow_int(obj.Env(), value, name.c_str());
 }
 
 /// @brief Read an int property whose 0 is the library default
@@ -481,11 +483,13 @@ inline int8_t Int8Property(const Napi::Object& obj, const char* key, int8_t fall
 
 /// @brief Read an int64 property: undefined/null returns the fallback, any other
 ///        non-number is refused by name.
-inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
+inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback,
+                             const std::string& at = std::string()) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
-  return node_narrow_int64(obj.Env(), value, key);
+  const std::string name = node_element_field(at, key);
+  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "a number");
+  return node_narrow_int64(obj.Env(), value, name.c_str());
 }
 
 /// @brief Read an int64 property whose C sentinel only absence selects (@ref AbsentIsSentinel).
@@ -540,11 +544,13 @@ inline float FloatProperty(const Napi::Object& obj, const char* key, float fallb
 ///   refused when non-finite and absent when omitted; a float carrying an engine result back
 ///   in, whose owner documents NaN as "unmeasurable", is read here, and the read site names
 ///   the result field it mirrors. Only a finite value no float can hold is refused.
-inline float FloatDataProperty(const Napi::Object& obj, const char* key, float fallback) {
+inline float FloatDataProperty(const Napi::Object& obj, const char* key, float fallback,
+                               const std::string& at = std::string()) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
-  return node_narrow_float_keeping_nonfinite(obj.Env(), value, key);
+  const std::string name = node_element_field(at, key);
+  node_require_property_type(obj.Env(), value.IsNumber(), name.c_str(), "a number");
+  return node_narrow_float_keeping_nonfinite(obj.Env(), value, name.c_str());
 }
 
 /// @brief Type-only float property read, for a field whose core check states its domain.
@@ -705,10 +711,12 @@ inline std::vector<std::pair<std::string, double>> NumberMapProperty(const Napi:
 
 /// @brief Read a bool property: undefined/null returns the fallback, any other
 ///        non-boolean is refused by name.
-inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback) {
+inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback,
+                         const std::string& at = std::string()) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
-  node_require_property_type(obj.Env(), value.IsBoolean(), key, "a boolean");
+  node_require_property_type(obj.Env(), value.IsBoolean(), node_element_field(at, key).c_str(),
+                             "a boolean");
   return value.As<Napi::Boolean>().Value();
 }
 
@@ -811,25 +819,25 @@ inline T ChoiceProperty(const Napi::Object& obj, const char* key, const NodeChoi
 ///   typed path CANNOT refuse -- the only copy of what was asked for was lost in
 ///   JS -- and declining to refuse the plain one would destroy the surviving copy
 ///   to match a case that never had it.
-inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char* key) {
+inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char* key,
+                                             const std::string& at = std::string()) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return {};
+  const std::string name = node_element_field(at, key);
   if (value.IsTypedArray()) {
     if (!IsFloat32Array(value)) {
-      throw Napi::TypeError::New(obj.Env(),
-                                 std::string(key) + " must be a Float32Array or a number array");
+      throw Napi::TypeError::New(obj.Env(), name + " must be a Float32Array or a number array");
     }
     auto floats = value.As<Napi::Float32Array>();
     return std::vector<float>(sonare_node::ElementData(floats),
                               sonare_node::ElementData(floats) + floats.ElementLength());
   }
   if (!value.IsArray()) {
-    throw Napi::TypeError::New(obj.Env(),
-                               std::string(key) + " must be a Float32Array or a number array");
+    throw Napi::TypeError::New(obj.Env(), name + " must be a Float32Array or a number array");
   }
   auto array = value.As<Napi::Array>();
   std::vector<float> values;
-  const uint32_t array_count = node_list_length(array, key);
+  const uint32_t array_count = node_list_length(array, name.c_str());
   values.reserve(array_count);
   for (uint32_t i = 0; i < array_count; ++i) {
     Napi::Value item = array.Get(i);
@@ -838,7 +846,7 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
       continue;
     }
     // Indexed, because the key alone cannot say which element was refused.
-    const std::string element = std::string(key) + "[" + std::to_string(i) + "]";
+    const std::string element = name + "[" + std::to_string(i) + "]";
     values.push_back(node_narrow_float_keeping_nonfinite(obj.Env(), item, element.c_str()));
   }
   return values;

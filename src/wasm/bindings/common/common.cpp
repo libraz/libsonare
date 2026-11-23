@@ -814,8 +814,8 @@ int builtinWaveformFromVal(const val& value) {
   return ordinal;
 }
 
-bool boolProperty(val object, const char* key, bool default_value) {
-  val value = typedPropertyValue(object, key, "boolean");
+bool boolProperty(val object, const char* key, bool default_value, const std::string& at) {
+  val value = typedPropertyValue(object, key, "boolean", elementField(at, key));
   return value.isUndefined() ? default_value : value.as<bool>();
 }
 

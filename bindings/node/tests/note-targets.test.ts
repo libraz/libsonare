@@ -374,7 +374,7 @@ describe('assignNoteTargets refuses what it cannot act on', () => {
         sampleRate: SR,
         targets: [7 as unknown as NoteTarget],
       }),
-    ).toThrow(/each target must be a plain object/);
+    ).toThrow('assignNoteTargets: targets[0] must be an object');
   });
 
   it('refuses a note without its span and a target missing a field, naming them', () => {
@@ -384,7 +384,7 @@ describe('assignNoteTargets refuses what it cannot act on', () => {
         sampleRate: SR,
         targets: targets(),
       }),
-    ).toThrow(/^assignNoteTargets: note\.onsetSample must be given$/);
+    ).toThrow(/^assignNoteTargets: notes\[0\]\.onsetSample must be a number$/);
     expect(() =>
       assignNoteTargets({
         notes: notes(),

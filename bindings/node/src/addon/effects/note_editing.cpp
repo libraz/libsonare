@@ -118,20 +118,26 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
 }
 
 /// Rejects a row whose declared-mandatory sample bound is absent or not a
-/// number, in place of the type-checked reader's silent fallback. Throws the
-/// error class the WASM surface throws for the same omission, so the two agree
-/// on the rejection as well as on the policy. Shared by the note and the
-/// percussive-event readers, whose input types declare the same two fields.
-void RequireSpanKey(const char* subject, const Napi::Object& row, const char* key) {
-  const Napi::Value value = row.Get(key);
-  if (value.IsUndefined() || value.IsNull()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(subject) + "." + key + " must be given");
+/// number, in place of the type-checked reader's silent fallback; an absent
+/// bound is refused as a wrong type, as the WASM surface refuses it. Shared by
+/// the note and the percussive-event readers, whose input types declare the
+/// same two fields. @p at names the row, e.g. "notes[0]".
+void RequireSpanKey(const std::string& at, const Napi::Object& row, const char* key) {
+  if (!row.Get(key).IsNumber()) {
+    throw Napi::TypeError::New(row.Env(), node_element_field(at, key) + " must be a number");
   }
-  if (!value.IsNumber()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(subject) + "." + key + " must be a number");
+}
+
+/// The element at @p index of @p list, which must be a non-array object, named
+/// "<list_name>[<index>]" in @p at for its own field refusals.
+Napi::Object RowObject(const Napi::Array& list, uint32_t index, const char* list_name,
+                       std::string* at) {
+  *at = std::string(list_name) + "[" + std::to_string(index) + "]";
+  const Napi::Value item = list.Get(index);
+  if (!item.IsObject() || item.IsArray()) {
+    throw Napi::TypeError::New(list.Env(), *at + " must be an object");
   }
+  return item.As<Napi::Object>();
 }
 
 /// Reads a JS note array onto the C structs, plus the envelope pool their edits
@@ -150,22 +156,19 @@ void ReadNotes(const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes
   notes->assign(count, SonareNoteObject{});
   for (uint32_t i = 0; i < count; ++i) {
     sonare_note_edit_init(&(*notes)[i].edit);
-    Napi::Value item = js_notes.Get(i);
-    if (!item.IsObject() || item.IsArray()) {
-      throw Napi::TypeError::New(js_notes.Env(), "each note must be a plain object");
-    }
-    Napi::Object note = item.As<Napi::Object>();
+    std::string at;
+    const Napi::Object note = RowObject(js_notes, i, "notes", &at);
     SonareNoteObject& row = (*notes)[i];
     if (require_span) {
-      RequireSpanKey("note", note, "onsetSample");
-      RequireSpanKey("note", note, "offsetSample");
+      RequireSpanKey(at, note, "onsetSample");
+      RequireSpanKey(at, note, "offsetSample");
     }
-    row.onset_sample = Int64Property(note, "onsetSample", row.onset_sample);
-    row.offset_sample = Int64Property(note, "offsetSample", row.offset_sample);
-    row.frame_start = IntProperty(note, "frameStart", row.frame_start);
-    row.frame_end = IntProperty(note, "frameEnd", row.frame_end);
-    row.median_hz = FloatDataProperty(note, "medianHz", row.median_hz);
-    ReadNoteEdit(note, envelopes, &row.edit);
+    row.onset_sample = Int64Property(note, "onsetSample", row.onset_sample, at);
+    row.offset_sample = Int64Property(note, "offsetSample", row.offset_sample, at);
+    row.frame_start = IntProperty(note, "frameStart", row.frame_start, at);
+    row.frame_end = IntProperty(note, "frameEnd", row.frame_end, at);
+    row.median_hz = FloatDataProperty(note, "medianHz", row.median_hz, at);
+    ReadNoteEdit(note, envelopes, &row.edit, at);
   }
 }
 
@@ -211,14 +214,9 @@ bool ReadNoteTargets(Napi::Env env, const Napi::Array& js_targets,
   const uint32_t count = node_list_length(js_targets, "targets");
   targets->assign(count, SonareNoteTarget{});
   for (uint32_t i = 0; i < count; ++i) {
-    Napi::Value item = js_targets.Get(i);
-    if (!item.IsObject() || item.IsArray()) {
-      throw Napi::TypeError::New(env, "each target must be a plain object");
-    }
-    Napi::Object target = item.As<Napi::Object>();
+    std::string label;
+    const Napi::Object target = RowObject(js_targets, i, "targets", &label);
     SonareNoteTarget& row = (*targets)[i];
-    // Indexed, because the key alone cannot say which target was refused.
-    const std::string label = std::string("targets[") + std::to_string(i) + "]";
     if (!RequiredDoubleValue(env, target.Get("startSec"), label + ".startSec", &row.start_sec) ||
         !RequiredDoubleValue(env, target.Get("endSec"), label + ".endSec", &row.end_sec) ||
         !RequiredFloatValue(env, target.Get("targetMidi"), label + ".targetMidi",
@@ -303,18 +301,21 @@ void ReadPercussiveRenderConfig(const Napi::Value& value, SonarePercussiveRender
 
 /// Reads an event's optional `edit`. A zeroed SonarePercussiveEventEdit is the
 /// identity, so an omitted edit, and an omitted key within one, is a no-op.
-void ReadPercussiveEventEdit(const Napi::Object& event, SonarePercussiveEventEdit* out) {
+void ReadPercussiveEventEdit(const Napi::Object& event, SonarePercussiveEventEdit* out,
+                             const std::string& at) {
   const Napi::Value edit_value = event.Get("edit");
   if (edit_value.IsUndefined() || edit_value.IsNull()) {
     return;
   }
+  const std::string edit_at = node_element_field(at, "edit");
   if (!edit_value.IsObject() || edit_value.IsArray()) {
-    throw Napi::TypeError::New(event.Env(), "event.edit must be a plain object");
+    throw Napi::TypeError::New(event.Env(), edit_at + " must be an object");
   }
   Napi::Object edit = edit_value.As<Napi::Object>();
-  out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", out->time_offset_samples);
-  out->gain_db = FloatProperty(edit, "gainDb", out->gain_db);
-  out->muted = BoolProperty(edit, "muted", out->muted != 0) ? 1 : 0;
+  out->time_offset_samples =
+      Int64Property(edit, "timeOffsetSamples", out->time_offset_samples, edit_at);
+  out->gain_db = FloatProperty(edit, "gainDb", out->gain_db, edit_at);
+  out->muted = BoolProperty(edit, "muted", out->muted != 0, edit_at) ? 1 : 0;
 }
 
 /// Reads a JS event array onto the C structs. Only the span and the edit are
@@ -327,17 +328,14 @@ void ReadPercussiveEvents(const Napi::Array& js_events,
   const uint32_t count = node_list_length(js_events, "events");
   events->assign(count, SonarePercussiveEvent{});
   for (uint32_t i = 0; i < count; ++i) {
-    Napi::Value item = js_events.Get(i);
-    if (!item.IsObject() || item.IsArray()) {
-      throw Napi::TypeError::New(js_events.Env(), "each event must be a plain object");
-    }
-    Napi::Object event = item.As<Napi::Object>();
+    std::string at;
+    const Napi::Object event = RowObject(js_events, i, "events", &at);
     SonarePercussiveEvent& row = (*events)[i];
-    RequireSpanKey("event", event, "onsetSample");
-    RequireSpanKey("event", event, "offsetSample");
-    row.onset_sample = node_narrow_int64(event.Env(), event.Get("onsetSample"), "onsetSample");
-    row.offset_sample = node_narrow_int64(event.Env(), event.Get("offsetSample"), "offsetSample");
-    ReadPercussiveEventEdit(event, &row.edit);
+    RequireSpanKey(at, event, "onsetSample");
+    RequireSpanKey(at, event, "offsetSample");
+    row.onset_sample = Int64Property(event, "onsetSample", 0, at);
+    row.offset_sample = Int64Property(event, "offsetSample", 0, at);
+    ReadPercussiveEventEdit(event, &row.edit, at);
   }
 }
 

@@ -611,7 +611,9 @@ describe('renderNotes', () => {
         notes: [{ onsetSample: 0, offsetSample: 8192, edit: { timeStretchRatio: -1 } }],
       }),
     ).toThrow(
-      new RangeError('renderNotes: note.edit.timeStretchRatio must be finite and greater than 0'),
+      new RangeError(
+        'renderNotes: notes[0].edit.timeStretchRatio must be finite and greater than 0',
+      ),
     );
     expect(() => renderNotes({ samples, sampleRate: 7999, notes })).toThrow(RangeError);
   });
@@ -747,7 +749,7 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
       // The field, not merely "something threw". A refusal for an unrelated
       // reason is indistinguishable from this one without it, which is exactly
       // the case the defect produced.
-      expect(error.message).toContain(`renderNotes: note.${fragment}`);
+      expect(error.message).toContain(`renderNotes: notes[0].${fragment}`);
     });
   }
 
@@ -1016,10 +1018,12 @@ describe('note input validation', () => {
       index === 0 ? { ...note, edit: { timeStretchRatio: 0 } } : note,
     );
     expect(() => splitNote({ ...source, notes: zeroed, index: 0, frame: 5 })).toThrow(
-      new RangeError('splitNote: note.edit.timeStretchRatio must be finite and greater than 0'),
+      new RangeError('splitNote: notes[0].edit.timeStretchRatio must be finite and greater than 0'),
     );
     expect(() => mergeNotes({ ...source, notes: zeroed, first: 0, last: 1 })).toThrow(
-      new RangeError('mergeNotes: note.edit.timeStretchRatio must be finite and greater than 0'),
+      new RangeError(
+        'mergeNotes: notes[0].edit.timeStretchRatio must be finite and greater than 0',
+      ),
     );
 
     // Control: the unit ratio splits and merges.
@@ -1963,7 +1967,7 @@ describe('splitNote', () => {
 
     const zeroed = [{ ...before[0], edit: { timeStretchRatio: 0 } }];
     expect(() => splitNote({ ...source, notes: zeroed, index: 0, frame: 20 })).toThrow(
-      new RangeError('splitNote: note.edit.timeStretchRatio must be finite and greater than 0'),
+      new RangeError('splitNote: notes[0].edit.timeStretchRatio must be finite and greater than 0'),
     );
     // Control: the extracted note, whose ratio is already 1, splits in two.
     const split = splitNote({ ...source, notes: before, index: 0, frame: 20 });

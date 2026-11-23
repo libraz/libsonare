@@ -56,7 +56,7 @@ int noteFrameArg(double value, const char* subject) {
   constexpr double kLowest = static_cast<double>(std::numeric_limits<int>::lowest());
   constexpr double kHighest = static_cast<double>(std::numeric_limits<int>::max());
   if (!std::isfinite(value) || std::floor(value) != value || value < kLowest || value > kHighest) {
-    throw WasmRangeError(std::string(subject) + " must be an integer frame index");
+    throw WasmRangeError(std::string(subject) + " must be an integer in [-2147483648, 2147483647]");
   }
   return static_cast<int>(value);
 }
@@ -169,33 +169,41 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, std::size_
                                                       float frame_rate, bool has_track,
                                                       std::size_t* cumulative_count) {
   editing::note_model::NoteObject note;
-  note.onset_sample = requireInt64Property(row, "onsetSample", "note");
-  note.offset_sample = requireInt64Property(row, "offsetSample", "note");
-  note.edit = noteRowEditFromVal(row, cumulative_count);
+  const std::string at = "notes[" + std::to_string(index) + "]";
+  note.onset_sample = requireInt64Property(row, "onsetSample", at.c_str());
+  note.offset_sample = requireInt64Property(row, "offsetSample", at.c_str());
+  note.edit = noteRowEditFromVal(row, at, cumulative_count);
 
   if (has_track) {
     // The note's pitch curve is the caller's own track sliced by its bounds.
+    const std::string start_name = at + ".frameStart";
+    const std::string end_name = at + ".frameEnd";
     const int frame_start = noteFrameArg(hasProperty(row, "frameStart")
-                                             ? requireNumberProperty(row, "frameStart", "note")
+                                             ? requireNumberProperty(row, "frameStart", at.c_str())
                                              : note.frame_start,
-                                         "note.frameStart");
-    const int frame_end =
-        noteFrameArg(hasProperty(row, "frameEnd") ? requireNumberProperty(row, "frameEnd", "note")
-                                                  : note.frame_end,
-                     "note.frameEnd");
-    if (frame_start < 0 || frame_end < frame_start ||
-        static_cast<std::size_t>(frame_end) > f0.size()) {
-      throw WasmRangeError("every note's frame span must lie inside f0Hz");
+                                         start_name.c_str());
+    const int frame_end = noteFrameArg(hasProperty(row, "frameEnd")
+                                           ? requireNumberProperty(row, "frameEnd", at.c_str())
+                                           : note.frame_end,
+                                       end_name.c_str());
+    // Checked in the C ABI's order and words (sonare_render_notes).
+    sonare::util::check::integer_within(frame_start, sonare_c_detail::kNoteFrameStartDomain,
+                                        start_name.c_str());
+    if (frame_end < frame_start) {
+      sonare::util::check::refuse_relation({end_name, start_name}, "{0} must not be less than {1}");
+    }
+    if (static_cast<std::size_t>(frame_end) > f0.size()) {
+      sonare::util::check::refuse_relation({end_name, "f0Hz.length"}, "{0} must not exceed {1}");
     }
     note.median_hz = static_cast<float>(hasProperty(row, "medianHz")
-                                            ? requireNumberProperty(row, "medianHz", "note")
+                                            ? requireNumberProperty(row, "medianHz", at.c_str())
                                             : note.median_hz);
     note.f0_hz.values.assign(f0.begin() + frame_start, f0.begin() + frame_end);
     note.f0_hz.frame_rate_hz = frame_rate;
     note.f0_hz.frame_offset = frame_start;
   } else if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
     // A curve edit with no track has nothing to act on; worded as the C ABI words it.
-    const std::string edit = "notes[" + std::to_string(index) + "].edit.";
+    const std::string edit = at + ".edit.";
     throw sonare::SonareParameterRefusal::relation(
         sonare::ErrorCode::InvalidParameter,
         {edit + "vibratoDepthChange", edit + "driftChange", "f0Hz"},
@@ -220,21 +228,23 @@ struct NoteSetEntry {
 // malformed edit is a bad argument rather than a measurement, so it is rejected
 // before any audio work.
 std::vector<NoteSetEntry> noteSetFromVal(const val& notes, std::size_t* cumulative_count) {
-  const std::string subject = "note";
-  const std::string list_subject = subject + "s";
-  const std::size_t count = wasmArrayLength(notes, list_subject.c_str());
+  const std::size_t count = wasmArrayLength(notes, "notes");
   std::vector<NoteSetEntry> out;
   out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
     const val row = notes[i];
+    const std::string at = "notes[" + std::to_string(i) + "]";
     NoteSetEntry entry;
-    entry.frame_start = noteFrameArg(requireNumberProperty(row, "frameStart", subject.c_str()),
-                                     (subject + ".frameStart").c_str());
-    entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", subject.c_str()),
-                                   (subject + ".frameEnd").c_str());
-    entry.edit = noteRowEditFromVal(row, cumulative_count);
+    entry.frame_start = noteFrameArg(requireNumberProperty(row, "frameStart", at.c_str()),
+                                     (at + ".frameStart").c_str());
+    entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", at.c_str()),
+                                   (at + ".frameEnd").c_str());
+    entry.edit = noteRowEditFromVal(row, at, cumulative_count);
     if (!editing::note_model::is_valid_note_edit(entry.edit)) {
-      throw WasmRangeError(subject + ".edit contains invalid values");
+      // Worded as the C ABI's to_core_edit_checked words it.
+      sonare::util::check::refuse((at + ".edit").c_str(),
+                                  "must hold finite values, a positive time-stretch ratio and a "
+                                  "non-negative envelope whose product with the gain stays finite");
     }
     out.push_back(std::move(entry));
   }
@@ -453,13 +463,12 @@ NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
 // nearest arm and written into pitch_shift_semitones with nothing left to catch
 // it (sonare_assign_note_targets).
 std::vector<NoteTarget> noteTargetsFromVal(const val& targets) {
-  const std::string subject = "target";
-  const std::string list_subject = subject + "s";
-  const std::size_t count = wasmArrayLength(targets, list_subject.c_str());
+  const std::size_t count = wasmArrayLength(targets, "targets");
   std::vector<NoteTarget> out;
   out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
     const val row = targets[i];
+    const std::string subject = "targets[" + std::to_string(i) + "]";
     NoteTarget target;
     target.start_sec = requireNumberProperty(row, "startSec", subject.c_str());
     target.end_sec = requireNumberProperty(row, "endSec", subject.c_str());
@@ -479,18 +488,19 @@ std::vector<NoteTarget> noteTargetsFromVal(const val& targets) {
 // All the rule reads -- the sample span and the measured pitch -- plus the two
 // fields it writes, which are carried in so a note it never touches comes back
 // with the edit it arrived with rather than a zeroed one.
-editing::note_model::NoteObject assignableNoteFromVal(const val& row) {
+editing::note_model::NoteObject assignableNoteFromVal(const val& row, const std::string& at) {
   editing::note_model::NoteObject note;
-  note.onset_sample = requireInt64Property(row, "onsetSample", "note");
-  note.offset_sample = requireInt64Property(row, "offsetSample", "note");
+  note.onset_sample = requireInt64Property(row, "onsetSample", at.c_str());
+  note.offset_sample = requireInt64Property(row, "offsetSample", at.c_str());
   // floatOption, not floatProperty: a note carrying no measured pitch spells it
   // 0 or non-finite and the rule reads both the same way, so a NaN here is the
   // caller's own "unvoiced" rather than a bad argument (note_target.h). 0 is
   // also NoteObject::median_hz's own default, so an absent field means the same.
   note.median_hz = floatOption(row, "medianHz", note.median_hz);
   const val edit = objectProperty(row, "edit");
-  note.edit.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f);
-  note.edit.muted = boolProperty(edit, "muted", false);
+  const std::string edit_at = at + ".edit";
+  note.edit.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f, edit_at);
+  note.edit.muted = boolProperty(edit, "muted", false, edit_at);
   return note;
 }
 
@@ -528,7 +538,7 @@ val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, v
   std::vector<editing::note_model::NoteObject> core_notes;
   core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
-    core_notes.push_back(assignableNoteFromVal(notes[i]));
+    core_notes.push_back(assignableNoteFromVal(notes[i], "notes[" + std::to_string(i) + "]"));
   }
 
   const std::size_t assigned =

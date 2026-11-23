@@ -438,26 +438,24 @@ describe('renderNotes', () => {
     // for an unrelated reason is indistinguishable from this one on the code
     // alone -- and the defect this replaced returned success, not another error.
     const malformed: ReadonlyArray<readonly [Record<string, unknown>, string]> = [
-      [{ offsetSample: 5000, edit: { gainDb: -6 } }, 'note.onsetSample must be given'],
-      [{ onsetSample: 0, edit: { gainDb: -6 } }, 'note.offsetSample must be given'],
+      [{ offsetSample: 5000, edit: { gainDb: -6 } }, 'notes[0].onsetSample must be a number'],
+      [{ onsetSample: 0, edit: { gainDb: -6 } }, 'notes[0].offsetSample must be a number'],
       // Present-but-undefined and present-but-null both read as absent, so the
       // three spellings of "not given" land on one answer instead of three.
       [
         { onsetSample: 0, offsetSample: undefined, edit: { gainDb: -6 } },
-        'note.offsetSample must be given',
+        'notes[0].offsetSample must be a number',
       ],
       [
         { onsetSample: 0, offsetSample: null, edit: { gainDb: -6 } },
-        'note.offsetSample must be given',
+        'notes[0].offsetSample must be a number',
       ],
-      [{ onsetSample: '0', offsetSample: 5000 }, 'note.onsetSample must be a number'],
+      [{ onsetSample: '0', offsetSample: 5000 }, 'notes[0].onsetSample must be a number'],
     ];
 
     for (const [note, fragment] of malformed) {
       const caught = missing(note);
-      expect(caught, `expected a RangeError for ${JSON.stringify(note)}`).toBeInstanceOf(
-        RangeError,
-      );
+      expect(caught, `expected a TypeError for ${JSON.stringify(note)}`).toBeInstanceOf(TypeError);
       expect((caught as { message: string }).message).toContain(`renderNotes: ${fragment}`);
     }
 

@@ -20,35 +20,38 @@ namespace sonare_node {
 /// The envelope is appended to @p envelopes and addressed by offset, because that
 /// is how the by-value C ABI keeps the pool's ownership straight; a handle-based
 /// door ignores both fields and reads the points out of @p envelopes itself.
+/// Refusals name each field under @p at, e.g. "notes[0].edit".
 inline void ReadNoteEditFields(const Napi::Object& edit, std::vector<float>* envelopes,
-                               SonareNoteEdit* out) {
-  out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0);
-  out->pitch_semitones = FloatProperty(edit, "pitchSemitones", 0.0f);
-  out->gain_db = FloatProperty(edit, "gainDb", 0.0f);
-  out->time_stretch_ratio = FloatProperty(edit, "timeStretchRatio", out->time_stretch_ratio);
-  out->formant_semitones = FloatProperty(edit, "formantSemitones", 0.0f);
-  out->vibrato_depth_change = FloatProperty(edit, "vibratoDepthChange", 0.0f);
-  out->drift_change = FloatProperty(edit, "driftChange", 0.0f);
-  out->muted = BoolProperty(edit, "muted", false) ? 1 : 0;
+                               SonareNoteEdit* out, const std::string& at) {
+  out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0, at);
+  out->pitch_semitones = FloatProperty(edit, "pitchSemitones", 0.0f, at);
+  out->gain_db = FloatProperty(edit, "gainDb", 0.0f, at);
+  out->time_stretch_ratio = FloatProperty(edit, "timeStretchRatio", out->time_stretch_ratio, at);
+  out->formant_semitones = FloatProperty(edit, "formantSemitones", 0.0f, at);
+  out->vibrato_depth_change = FloatProperty(edit, "vibratoDepthChange", 0.0f, at);
+  out->drift_change = FloatProperty(edit, "driftChange", 0.0f, at);
+  out->muted = BoolProperty(edit, "muted", false, at) ? 1 : 0;
 
-  const std::vector<float> envelope = FloatArrayProperty(edit, "amplitudeEnvelope");
+  const std::vector<float> envelope = FloatArrayProperty(edit, "amplitudeEnvelope", at);
   out->amplitude_envelope_offset = static_cast<int64_t>(envelopes->size());
   out->amplitude_envelope_count = envelope.size();
   envelopes->insert(envelopes->end(), envelope.begin(), envelope.end());
 }
 
-/// @brief Reads a note's optional `edit` key through @ref ReadNoteEditFields.
-///        An absent edit leaves @p out untouched, which is the identity.
+/// @brief Reads a note's optional `edit` key through @ref ReadNoteEditFields, naming
+///        refusals under @p at (the note's own path). An absent edit leaves @p out
+///        untouched, which is the identity.
 inline void ReadNoteEdit(const Napi::Object& note, std::vector<float>* envelopes,
-                         SonareNoteEdit* out) {
+                         SonareNoteEdit* out, const std::string& at) {
   const Napi::Value edit_value = note.Get("edit");
   if (edit_value.IsUndefined() || edit_value.IsNull()) {
     return;
   }
+  const std::string edit_at = node_element_field(at, "edit");
   if (!edit_value.IsObject() || edit_value.IsArray()) {
-    throw Napi::TypeError::New(note.Env(), "note.edit must be a plain object");
+    throw Napi::TypeError::New(note.Env(), edit_at + " must be an object");
   }
-  ReadNoteEditFields(edit_value.As<Napi::Object>(), envelopes, out);
+  ReadNoteEditFields(edit_value.As<Napi::Object>(), envelopes, out, edit_at);
 }
 
 /// @brief Marshals one edit, with its own copy of its envelope points, so the

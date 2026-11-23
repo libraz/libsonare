@@ -697,7 +697,8 @@ int builtinWaveformFromVal(const val& value);
 ///          applies JS truthiness, so `'false'`, `[]` and `0` would each arrive
 ///          as a flag the caller never wrote; the type test is the whole check.
 /// @throws WasmArgumentError naming @p key.
-bool boolProperty(val object, const char* key, bool default_value);
+bool boolProperty(val object, const char* key, bool default_value,
+                  const std::string& at = std::string());
 /// @brief Reads the GS insertion-effect realisation ("modern" or "classic") as
 ///        its C ABI ordinal (0 or 1): absent, `undefined` or `null` is modern.
 /// @throws WasmArgumentError naming @p key for a non-string or

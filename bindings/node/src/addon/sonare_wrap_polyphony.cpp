@@ -285,9 +285,9 @@ Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) 
   const Napi::Value edit_value = info[1];
   if (!edit_value.IsUndefined() && !edit_value.IsNull()) {
     if (!edit_value.IsObject() || edit_value.IsArray()) {
-      throw Napi::TypeError::New(info.Env(), "edit must be a plain object");
+      throw Napi::TypeError::New(info.Env(), "edit must be an object");
     }
-    ReadNoteEditFields(edit_value.As<Napi::Object>(), &envelope, &edit);
+    ReadNoteEditFields(edit_value.As<Napi::Object>(), &envelope, &edit, "edit");
   }
 
   // The edit's amplitude_envelope_offset and amplitude_envelope_count address the by-value door's

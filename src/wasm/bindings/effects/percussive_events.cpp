@@ -65,16 +65,18 @@ val percussiveEventToVal(const PercussiveEvent& event) {
 // measured figures are deliberately not read, so extraction's own output can be
 // handed back unchanged (sonare_render_percussive_events). An absent edit field
 // is its own identity spelling.
-PercussiveEvent renderablePercussiveEventFromVal(const val& row) {
+PercussiveEvent renderablePercussiveEventFromVal(const val& row, const std::string& at) {
   PercussiveEvent event;
-  event.onset_sample = requireInt64Property(row, "onsetSample", "event");
-  event.offset_sample = requireInt64Property(row, "offsetSample", "event");
+  event.onset_sample = requireInt64Property(row, "onsetSample", at.c_str());
+  event.offset_sample = requireInt64Property(row, "offsetSample", at.c_str());
   const val edit = objectProperty(row, "edit");
+  const std::string edit_at = at + ".edit";
   if (hasProperty(edit, "timeOffsetSamples")) {
-    event.edit.time_offset_samples = requireInt64Property(edit, "timeOffsetSamples", "event.edit");
+    event.edit.time_offset_samples =
+        requireInt64Property(edit, "timeOffsetSamples", edit_at.c_str());
   }
-  event.edit.gain_db = floatProperty(edit, "gainDb", event.edit.gain_db);
-  event.edit.muted = boolProperty(edit, "muted", event.edit.muted);
+  event.edit.gain_db = floatProperty(edit, "gainDb", event.edit.gain_db, edit_at);
+  event.edit.muted = boolProperty(edit, "muted", event.edit.muted, edit_at);
   return event;
 }
 
@@ -125,7 +127,8 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
   std::vector<PercussiveEvent> core_events;
   core_events.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
-    core_events.push_back(renderablePercussiveEventFromVal(events[i]));
+    core_events.push_back(
+        renderablePercussiveEventFromVal(events[i], "events[" + std::to_string(i) + "]"));
   }
 
   Audio audio = loadValidatedAudio("samples", samples, rate);
