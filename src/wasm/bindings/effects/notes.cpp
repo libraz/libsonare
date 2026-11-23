@@ -160,7 +160,8 @@ std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced,
 // curve edit is measured through when the caller handed a track in; every other
 // field of a JS note object is ignored, exactly as render_notes ignores the rest
 // of a NoteObject.
-editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std::vector<float>& f0,
+editing::note_model::NoteObject renderableNoteFromVal(const val& row, std::size_t index,
+                                                      const std::vector<float>& f0,
                                                       float frame_rate, bool has_track,
                                                       std::size_t* cumulative_count) {
   editing::note_model::NoteObject note;
@@ -189,8 +190,13 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
     note.f0_hz.frame_rate_hz = frame_rate;
     note.f0_hz.frame_offset = frame_start;
   } else if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
-    // A curve edit with no track has nothing to act on.
-    throw WasmRangeError("vibratoDepthChange and driftChange need f0Hz");
+    // A curve edit with no track has nothing to act on; worded as the C ABI words it.
+    const std::string edit = "notes[" + std::to_string(index) + "].edit.";
+    throw sonare::SonareParameterRefusal::relation(
+        sonare::ErrorCode::InvalidParameter,
+        {edit + "vibratoDepthChange", edit + "driftChange", "f0Hz"},
+        "{0} and {1} must be 0 when {2} {is_absent}")
+        .as_caller_spelled();
   }
   return note;
 }
@@ -309,7 +315,7 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
     core_notes.push_back(
-        renderableNoteFromVal(notes[i], f0, frame_rate, has_track, &cumulative_count));
+        renderableNoteFromVal(notes[i], i, f0, frame_rate, has_track, &cumulative_count));
   }
 
   Audio audio = loadValidatedAudio("samples", samples, rate);

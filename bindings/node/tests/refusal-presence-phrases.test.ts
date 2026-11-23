@@ -92,23 +92,25 @@ describe('presence tokens in a refusal', () => {
 
   it('words a curve edit with no track as one made while the track is omitted', () => {
     const sampleRate = 22050;
-    const samples = new Float32Array(sampleRate / 2);
+    const samples = new Float32Array(11000);
     const note = {
       onsetSample: 0,
-      offsetSample: samples.length,
+      offsetSample: samples.length / 2,
       frameStart: 0,
       frameEnd: 10,
       medianHz: 220,
     };
-    expectRefusal(
-      () =>
-        renderNotes({
-          samples,
-          sampleRate,
-          notes: [{ ...note, edit: { vibratoDepthChange: -1 } }],
-        }),
-      RangeError,
-      /must be 0 when f0Hz is omitted$/,
+    const later = { ...note, onsetSample: samples.length / 2, offsetSample: samples.length };
+    const error = caught(() =>
+      renderNotes({
+        samples,
+        sampleRate,
+        notes: [note, { ...later, edit: { driftChange: 1 } }],
+      }),
+    );
+    expect(error).toBeInstanceOf(RangeError);
+    expect(error.message).toBe(
+      'renderNotes: notes[1].edit.vibratoDepthChange and notes[1].edit.driftChange must be 0 when f0Hz is omitted',
     );
   });
 });
