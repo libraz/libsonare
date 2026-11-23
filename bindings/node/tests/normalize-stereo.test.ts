@@ -206,11 +206,10 @@ describe('normalizeStereo refusals', () => {
     ).toThrow(RangeError);
   });
 
-  it('refuses a target above full scale', () => {
-    const error = invalidParameter(() =>
+  it('accepts a target above full scale, which tests/normalize-unclipped.test.ts measures', () => {
+    expect(() =>
       normalizeStereo({ left: loud(), right: quiet(), sampleRate: SR, targetDb: 1 }),
-    );
-    expect(error.message).toBe('normalizeStereo: targetDb must be at most 0 when clip is set');
+    ).not.toThrow();
   });
 
   it('refuses a non-finite target', () => {

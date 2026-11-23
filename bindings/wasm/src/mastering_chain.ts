@@ -46,8 +46,8 @@ export interface NormalizeRequest {
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /**
-   * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'` and
-   * -20 for `mode: 'rms'`.
+   * Finite target level in dB. Defaults to 0 for `mode: 'peak'` and -20 for
+   * `mode: 'rms'`.
    */
   targetDb?: number;
   /** Normalization statistic. Default `'peak'`. */
@@ -57,10 +57,15 @@ export interface NormalizeRequest {
 /**
  * Normalize audio to a target peak or RMS level.
  *
+ * - `'peak'` (default): The result is not clipped; a caller writing to an integer format fits or
+ *   limits it. A target above 0 dB leaves the peak above full scale.
+ * - `'rms'`: One gain brings the signal RMS exactly to `targetDb`. The result is not clipped; an
+ *   RMS target can leave peaks above full scale.
+ *
  * @returns Normalized audio
  * @throws {TypeError} when `sampleRate` is missing or `mode` is not a string
  * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, an unknown `mode`
- *   or a `targetDb` that is not finite or sits above 0 dBFS
+ *   or a `targetDb` that is not finite
  */
 export function normalize(request: NormalizeRequest): Float32Array;
 export function normalize(
@@ -94,8 +99,8 @@ export interface NormalizeStereoRequest {
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /**
-   * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'` and
-   * -20 for `mode: 'rms'`.
+   * Finite target level in dB. Defaults to 0 for `mode: 'peak'` and -20 for
+   * `mode: 'rms'`.
    */
   targetDb?: number;
   /** Normalization statistic. Default `'peak'`. */
@@ -124,13 +129,17 @@ export interface NormalizeStereoResult {
  * preserved: for `mode: 'peak'` the louder channel reaches `targetDb` and the
  * other keeps its distance from it; for `mode: 'rms'` the quantity driven to
  * `targetDb` is the root mean square over both channels' samples together — the
- * quadratic mean of the per-channel figures, not their average — and the output
- * is hard-clipped to [-1, 1].
+ * quadratic mean of the per-channel figures, not their average.
+ *
+ * - `'peak'`: The result is not clipped; a caller writing to an integer format fits or limits it. A
+ *   target above 0 dB leaves the peak above full scale.
+ * - `'rms'`: One gain brings the signal RMS exactly to `targetDb`. The result is not clipped; an
+ *   RMS target can leave peaks above full scale.
  *
  * @param request.left - Left channel samples (float32)
  * @param request.right - Right channel samples, same length as `left`
  * @param request.sampleRate - Sample rate in Hz, required
- * @param request.targetDb - Finite target at or below 0 dBFS. Defaults to 0 for
+ * @param request.targetDb - Finite target level in dB. Defaults to 0 for
  *   `mode: 'peak'` and -20 for `mode: 'rms'`, matching the library and the other
  *   language surfaces.
  * @param request.mode - `'peak'` (default) or `'rms'`
