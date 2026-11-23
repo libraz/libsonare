@@ -37,7 +37,7 @@ decltype(auto) withCEntryRefusal(const char* entry, Body&& body) {
   try {
     return body();
   } catch (const sonare::SonareParameterRefusal& refusal) {
-    throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry), entry);
+    throw CEntryRefusal(sonare_field_spelling::wasm::Spelled(refusal, entry), entry, std::nullopt);
   }
 }
 
