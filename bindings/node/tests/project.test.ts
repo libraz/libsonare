@@ -293,7 +293,7 @@ it('adds and relinks an audio source without changing its id and restores it on 
     const relinked = project.sources().find((source) => source.id === sourceId);
     expect(relinked?.nameOrUri).toBe('asset://replacement.wav');
     expect(relinked).not.toHaveProperty('contentHash');
-    expect(relinked).not.toHaveProperty('externalStemRole');
+    expect(relinked?.externalStemRole).toBe('vocals');
 
     project.undo();
     expect(project.unresolvedAudioSourceIds()).not.toContain(sourceId);

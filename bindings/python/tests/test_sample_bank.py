@@ -398,10 +398,10 @@ def test_a_looped_sample_outlasts_the_frames_it_holds() -> None:
 
     looped = render("continuous")
     unlooped = render("none")
-    assert _peak(looped[held]) > 0.0
+    assert _peak(looped[0, held]) > 0.0
     # An order of magnitude, so a resonator or bus tail on the unlooped render
     # cannot satisfy this the way a bare inequality would.
-    assert _peak(looped[held]) > 10.0 * _peak(unlooped[held])
+    assert _peak(looped[0, held]) > 10.0 * _peak(unlooped[0, held])
 
 
 # -- the realtime engine ----------------------------------------------------

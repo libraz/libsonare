@@ -426,7 +426,7 @@ def test_synth_patch_lfo_shape_round_trips_and_refuses_unknown_values() -> None:
 
 def _repeated_note_diff(audio: np.ndarray) -> float:
     """Largest difference between two plays of one note, each aligned on its onset."""
-    mono = audio[:, 0]
+    mono = audio[0]
     loud = np.flatnonzero(np.abs(mono) > 1e-4)
     first = int(loud[0])
     second = int(loud[loud > first + 2 * 48000][0])

@@ -460,7 +460,7 @@ def test_bounce_new_options_refuse_values_by_keyword() -> None:
             project.bounce(metronome=EngineMetronomeConfig(click_samples=0))
         with pytest.raises(SonareValueError, match="mutually exclusive"):
             project.bounce(metronome=EngineMetronomeConfig(click_samples=10, click_sec=0.01))
-        with pytest.raises(SonareValueError, match=r"controller_profiles\[0\]"):
+        with pytest.raises(SonareValueError, match=r"controller_profiles\[1\]\[0\]"):
             project.bounce(
                 synth_instruments=[(0, "sawLead")],
                 controller_profiles=[(0, "gm"), (0, "gm")],
