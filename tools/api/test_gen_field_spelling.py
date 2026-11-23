@@ -224,6 +224,27 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(len(unbound), 1)
         self.assertEqual(idle, [("python", "length_of.apply.rendered_count", "rendered_mono")])
 
+    def test_a_length_of_row_binds_a_count_the_extractors_fold_into_its_array(self) -> None:
+        facts = [Fact("set_lanes", "lanes", "param", "python", "lanes")]
+        rule = {"python": {"length_of": {"set_lanes.lane_count": "lanes"}}}
+        rows, unbound, idle = gen.derive(facts, {}, rule, {"set_lanes": {"lanes", "lane_count"}})
+        self.assertEqual(rows["python"], [gen.Row("set_lanes", "lane_count", "lanes", True)])
+        self.assertEqual((unbound, idle), ([], []))
+
+    def test_a_folded_count_binds_to_an_unpaired_array_the_c_declaration_takes(self) -> None:
+        rule = {"node": {"length_of": {"split.note_count": "notes"}}}
+        rows, _, idle = gen.derive([], {}, rule, {"split": {"notes", "note_count"}})
+        self.assertEqual(rows["node"], [gen.Row("split", "note_count", "notes", True)])
+        self.assertEqual(idle, [])
+
+    def test_a_folded_count_needs_the_c_parameter_and_the_array(self) -> None:
+        facts = [Fact("set_lanes", "lanes", "param", "python", "lanes")]
+        for rule_array, params in (("lanes", {"lanes"}), ("tracks", {"lanes", "lane_count"})):
+            rule = {"python": {"length_of": {"set_lanes.lane_count": rule_array}}}
+            rows, _, idle = gen.derive(facts, {}, rule, {"set_lanes": params})
+            self.assertEqual(rows["python"], [])
+            self.assertEqual(idle, [("python", "length_of.set_lanes.lane_count", rule_array)])
+
 
 if __name__ == "__main__":
     unittest.main()

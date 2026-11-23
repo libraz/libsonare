@@ -195,7 +195,7 @@ def test_engine_track_buses_route_lane_sends() -> None:
         engine.set_track_lanes([{"track_id": i} for i in range(1, MAX_TRACK_LANES + 1)])
         with pytest.raises(
             SonareError,
-            match=r"^RealtimeEngine\.set_track_lanes: lane_count must be an integer in \[0, 32\]$",
+            match=r"^RealtimeEngine\.set_track_lanes: lanes length must be an integer in \[0, 32\]$",
         ):
             engine.set_track_lanes([{"track_id": i} for i in range(1, MAX_TRACK_LANES + 2)])
 

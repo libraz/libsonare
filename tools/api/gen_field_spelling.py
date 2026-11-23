@@ -10,7 +10,9 @@ and WASM the fields of the entry's object-typed parameters (``ts_request_fields.
 by canonical name and then, on every surface, by the per-surface ruled renames in
 ``field_spelling_renames.toml``, which bind only where the entry carries the renamed
 spelling. A ``[<surface>.length_of]`` row binds an entry's count subject to the array
-keyword whose length it is, and the refusal names it as "<keyword> length". A name another C subject already pairs with counts: a second form folded
+keyword whose length it is, and the refusal names it as "<keyword> length"; it also
+binds a count the parity extractors fold into its array, which carries no pairing,
+when the C declaration takes it and the facade takes the array. A name another C subject already pairs with counts: a second form folded
 into the entry (an ``_ex``) can name the same argument differently. A subject still unbound is reported, not tabled, and a
 ruled rename that binds nowhere fails the run. Every unbound parameter carries a
 reason in ``field_spelling_unbound.toml``; unbound record fields are output records
@@ -96,11 +98,17 @@ def derive(
     bindings: Iterable,
     request_fields: dict[str, list[dict]] | None = None,
     renames: dict[str, dict[str, str | list[str]]] | None = None,
+    c_params: dict[str, set[str]] | None = None,
 ) -> tuple[dict[str, list[Row]], list[Unbound], list[tuple[str, str, str]]]:
-    """Table rows per surface, the subjects no facade binds, and the ruled renames that bound nothing."""
+    """Table rows per surface, the subjects no facade binds, and the ruled renames that bound nothing.
+
+    ``c_params`` maps an entry key to its C parameter names, for the counts a facade
+    derives from an array and the extractors therefore leave unpaired.
+    """
     bindings = list(bindings)
     request_fields = request_fields or {}
     renames = renames or {}
+    c_params = c_params or {}
     names: dict[tuple[str, str], set[str]] = defaultdict(set)
     for surface, entries in request_fields.items():
         for row in entries:
@@ -145,6 +153,19 @@ def derive(
             used.add((b.surface, f"length_of.{b.c_key}.{b.c_subject}", array))
         else:
             unbound.append(Unbound(b.surface, b.c_key, b.c_subject, b.kind, f"{b.file}:{b.line}"))
+    paired = {(b.surface, b.c_key, b.c_subject) for b in bindings if b.c_subject is not None}
+    for surface, table in lengths.items():
+        for name, array in table.items():
+            key, _, subject = name.partition(".")
+            declared = c_params.get(key, set())
+            # An array the extractors leave unpaired (a caller-filled record list) still counts
+            # when the C declaration takes it under the spelling the surface gives it by rule.
+            takes_array = array in names[(surface, key)] or any(
+                mechanical(c, surface) == array for c in declared
+            )
+            if (surface, key, subject) not in paired and subject in declared and takes_array:
+                rows[surface].add(Row(key, subject, array, True))
+                used.add((surface, f"length_of.{name}", array))
     unbound.sort(key=lambda u: (u.surface, u.c_key, u.c_subject))
     idle = sorted(
         (surface, subject, spelling)
@@ -345,6 +366,17 @@ def load_bindings() -> Callable[[Path], list]:
     return field_bindings
 
 
+def load_c_params(root: Path) -> dict[str, set[str]]:
+    """Entry key -> the parameter names its C declaration takes, folded counts included."""
+    import check_parity
+    from facts import entry_key as facts_entry_key
+
+    params: dict[str, set[str]] = defaultdict(set)
+    for function in check_parity._EXTRACTORS["c"](root).functions:
+        params[facts_entry_key(function.key)].update(p.raw_name for p in function.params)
+    return params
+
+
 def load_request_fields() -> dict[str, list[dict]]:
     script = ROOT / "tools/api/ts_request_fields.cjs"
     return {
@@ -366,7 +398,7 @@ def main(argv: list[str], field_bindings: Callable[[Path], list] | None = None) 
         print("field spelling: the parity facts paired no subject", file=sys.stderr)
         return 1
     renames = tomllib.loads(RENAMES.read_text(encoding="utf-8"))
-    rows, unbound, idle = derive(bindings, load_request_fields(), renames)
+    rows, unbound, idle = derive(bindings, load_request_fields(), renames, load_c_params(ROOT))
     classified = tomllib.loads(UNBOUND.read_text(encoding="utf-8"))
     problems = classify(
         unbound, classified["params"], classified["pending"], classified.get("unclassified")
