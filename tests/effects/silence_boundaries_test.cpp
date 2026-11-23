@@ -84,8 +84,10 @@ TEST_CASE("trim and split refusals read as core member names", "[silence]") {
                       "signals[1] must not be empty");
 }
 
-TEST_CASE("silence ceiling reads its computed depth, and is not measured without one",
-          "[silence]") {
+TEST_CASE(
+    "silence ceiling reads its computed depth, is infinite under an exact zero, and is "
+    "not measured without a peak",
+    "[silence]") {
   constexpr size_t kHalf = 4096;
   const auto report_of = [](const std::vector<float>& x) {
     return split_with_report(x.data(), x.size(), 60.0f, kFrame, kHop);
@@ -97,11 +99,26 @@ TEST_CASE("silence ceiling reads its computed depth, and is not measured without
   std::fill(quiet_middle.begin() + kHalf, quiet_middle.begin() + 2 * kHalf, 1.0e-12f);
   CHECK_THAT(report_of(quiet_middle).silence_ceiling_db, Catch::Matchers::WithinAbs(240.0, 0.5));
 
-  // Exact silence has no peak, and an exactly-zero frame under a nonzero peak has no finite depth.
+  // Exact silence has no peak to measure a depth against.
   CHECK(std::isnan(report_of(std::vector<float>(2 * kHalf, 0.0f)).silence_ceiling_db));
+  // An exactly-zero frame under a nonzero peak is silent at every threshold, so the ceiling is
+  // +inf, and the detector agrees at a threshold far past any finite depth.
   std::vector<float> zero_tail(2 * kHalf, 1.0f);
   std::fill(zero_tail.begin() + kHalf, zero_tail.end(), 0.0f);
-  CHECK(std::isnan(report_of(zero_tail).silence_ceiling_db));
+  const auto zero_report = report_of(zero_tail);
+  CHECK(zero_report.silence_ceiling_db == std::numeric_limits<float>::infinity());
+  const auto deep = split(zero_tail.data(), zero_tail.size(), 1000.0f, kFrame, kHop);
+  REQUIRE(deep.size() == 1);
+  CHECK(static_cast<size_t>(deep.front().second) < zero_tail.size());
+
+  // An infinite ceiling never binds the union: the finite one does.
+  {
+    const float* pair[2] = {quiet_middle.data(), zero_tail.data()};
+    const std::size_t pair_lengths[2] = {quiet_middle.size(), zero_tail.size()};
+    CHECK_THAT(
+        split_common_with_report(pair, pair_lengths, 2, 60.0f, kFrame, kHop).silence_ceiling_db,
+        Catch::Matchers::WithinAbs(240.0, 0.5));
+  }
 
   // One signal without a measurable ceiling leaves the shared ceiling not measured.
   const std::vector<float> silent(2 * kHalf, 0.0f);

@@ -90,8 +90,8 @@ struct SplitReport {
   ///   threshold can find silence here. Above this figure the signal reads as
   ///   continuously sounding, which is why a caller holding one interval cannot
   ///   otherwise tell "no quiet moment exists" from "the threshold was set too
-  ///   loose to see one". NaN (not measured) when the peak is 0 or a frame is
-  ///   exactly 0, where the ratio has no finite depth.
+  ///   loose to see one". +inf when a frame is exactly 0 under a nonzero peak,
+  ///   which every threshold calls silent; NaN (not measured) when the peak is 0.
   float silence_ceiling_db = kNotMeasured;
 };
 

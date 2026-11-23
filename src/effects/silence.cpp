@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include "util/db.h"
@@ -161,10 +162,12 @@ SplitReport split_with_report(const float* x, std::size_t n, float top_db, int f
   if (!rms.empty()) {
     const float peak = *std::max_element(rms.begin(), rms.end());
     const float quietest = *std::min_element(rms.begin(), rms.end());
-    // A zero peak or a zero frame under a nonzero peak has no finite depth: not measured.
+    // A zero frame under a nonzero peak is silent at every threshold (+inf); no peak, no depth.
     if (peak > 0.0f && quietest > 0.0f) {
       report.silence_ceiling_db = static_cast<float>(
           -amplitude_to_level_db(static_cast<double>(quietest) / static_cast<double>(peak)));
+    } else if (peak > 0.0f) {
+      report.silence_ceiling_db = std::numeric_limits<float>::infinity();
     }
   }
   return report;
