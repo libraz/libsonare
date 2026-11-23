@@ -7,8 +7,15 @@
 
 #include "core/audio.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare::metering {
+
+/// @brief What the spectrum meter's FFT size accepts, as a power of two; the ceiling is the
+///        meter's FFT resource limit.
+inline constexpr util::check::NumericDomain kSpectrumNFftDomain = util::check::integer_domain(
+    2, static_cast<long long>(resource::kDefaultSpectrumResourceLimits.max_fft_size));
 
 struct SpectrumConfig {
   int n_fft = 2048;

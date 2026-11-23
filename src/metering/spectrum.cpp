@@ -37,9 +37,7 @@ FFT& get_frame_fft_cached(int n_fft) {
 }
 
 void validate_spectrum_config(const SpectrumConfig& config) {
-  util::check::even_integer_in_range(
-      config.n_fft, 2,
-      static_cast<long long>(resource::kDefaultSpectrumResourceLimits.max_fft_size), "n_fft");
+  util::check::power_of_two_within(config.n_fft, kSpectrumNFftDomain, "n_fft");
   SONARE_CHECK(resource::spectrum_shape_fits(config.n_fft), ErrorCode::InvalidParameter);
   SONARE_CHECK(config.octave_fraction > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.db_ref > 0.0f && config.db_amin > 0.0f, ErrorCode::InvalidParameter);

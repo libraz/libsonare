@@ -1186,6 +1186,23 @@ TEST_CASE("spectrum rejects an oversized FFT before allocating for a short input
   REQUIRE_THROWS_AS(metering::spectrum_frame(audio, 0, config), SonareException);
 }
 
+TEST_CASE("spectrum refuses an FFT size that is even but not a power of two", "[meter]") {
+  const std::vector<float> samples(4096, 0.25f);
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+  metering::SpectrumConfig config;
+  config.n_fft = 1536;
+  try {
+    (void)metering::spectrum(audio, config);
+    FAIL("an n_fft of 1536 was accepted");
+  } catch (const SonareException& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(std::string(e.what()).find("n_fft") != std::string::npos);
+  }
+  REQUIRE_THROWS_AS(metering::spectrum_frame(audio, 0, config), SonareException);
+  config.n_fft = 2;
+  REQUIRE_NOTHROW(metering::spectrum(audio, config));
+}
+
 TEST_CASE("fractional octave smoothing spreads isolated bins", "[meter]") {
   const std::vector<float> freqs = {0.0f, 100.0f, 110.0f, 120.0f, 1000.0f};
   const std::vector<float> values = {0.0f, 0.0f, 9.0f, 0.0f, 0.0f};

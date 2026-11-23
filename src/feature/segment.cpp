@@ -242,7 +242,7 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
   const std::size_t n_cells =
       util::check::element_count(static_cast<std::uint64_t>(cols), static_cast<std::uint64_t>(cols),
                                  std::numeric_limits<int>::max(), "cols", "the recurrence matrix");
-  util::check::integer_at_least(rows, 0, "rows");
+  util::check::integer_within(rows, kSegmentFeatureRowsDomain, "rows");
   const std::size_t feature_count =
       util::check::element_count(static_cast<std::uint64_t>(rows), static_cast<std::uint64_t>(cols),
                                  std::numeric_limits<int>::max(), "cols", "the feature matrix");
@@ -494,7 +494,7 @@ std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
   }
   k = std::min(k, cols);
   if (cols <= 0) return {};
-  util::check::integer_at_least(rows, 0, "rows");
+  util::check::integer_within(rows, kSegmentFeatureRowsDomain, "rows");
   const std::size_t feature_count =
       util::check::element_count(static_cast<std::uint64_t>(rows), static_cast<std::uint64_t>(cols),
                                  std::numeric_limits<int>::max(), "cols", "the feature matrix");

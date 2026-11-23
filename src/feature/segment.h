@@ -6,7 +6,13 @@
 #include <string>
 #include <vector>
 
+#include "util/parameter_checks.h"
+
 namespace sonare {
+
+/// @brief What the feature-row count of a recurrence matrix or agglomerative clustering accepts.
+inline constexpr util::check::NumericDomain kSegmentFeatureRowsDomain =
+    util::check::integer_domain_of<int>(0);
 
 /// @brief Cross-similarity matrix between two feature matrices.
 /// @details Mirrors `librosa.segment.cross_similarity`.
