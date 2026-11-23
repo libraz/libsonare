@@ -27,7 +27,10 @@ contract: recording it would overwrite the error being read. An accessor is exem
 public declaration's ``///`` block states ``ACCESSOR_CONTRACT``; its returns are then counted on
 their own line, not filed by class and not ratcheted. Without the statement they are filed as usual.
 Audio-thread entries (opened with ``SONARE_C_RT_API_ENTRY``) keep a bare code the same way, since
-writing the thread-local message is not realtime-safe; they are counted on a line of their own.
+writing the thread-local message is not realtime-safe; they are counted on a line of their own. An
+entry is exempt only while its public header calls it realtime-safe (``REALTIME_CONTRACT``), in its
+declaration's ``///`` block or in a ``/// -`` bullet naming it in backticks; an entry merely opened
+with the macro, as a control-thread setter could be, is filed as usual.
 A return directly under ``case ...ErrorCode::InvalidParameter:`` translates a core error whose
 text was recorded where it was raised, so it is not a refusal and is counted apart as well.
 
@@ -72,6 +75,7 @@ ACCESSOR_PREFIX = "sonare_last_"
 ACCESSOR_CONTRACT = "Like every sonare_last_* accessor, it records no error"
 HEADER_DIR = "include/sonare"
 RT_ENTRY = "SONARE_C_RT_API_ENTRY"
+REALTIME_CONTRACT = re.compile(r"realtime-safe|audio-thread only", re.IGNORECASE)
 TRANSLATION_CASE = re.compile(r"\bcase\s+[\w:]*\bErrorCode::InvalidParameter\s*:\s*$")
 NOT_FUNCTIONS = frozenset({"if", "for", "while", "switch", "catch", "return", "sizeof"})
 
@@ -350,6 +354,26 @@ def stated_accessors(headers: dict[str, str]) -> set[str]:
     return names
 
 
+def stated_realtime(headers: dict[str, str]) -> set[str]:
+    """``sonare_*`` declarations a public header calls realtime-safe (``REALTIME_CONTRACT``)."""
+    names: set[str] = set()
+    for raw in headers.values():
+        block: list[str] = []
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("///"):
+                block.append(stripped.removeprefix("///").strip())
+                continue
+            m = re.match(r"[^/]*\b(sonare_\w+)\s*\(", stripped)
+            if m and REALTIME_CONTRACT.search(" ".join(block)):
+                names.add(m.group(1))
+            block = []
+        for bullet in re.finditer(r"^/// - (.*(?:\n///   .*)*)", raw, re.MULTILINE):
+            if REALTIME_CONTRACT.search(bullet.group(1)):
+                names.update(re.findall(r"`(sonare_\w+)`", bullet.group(1)))
+    return names
+
+
 def accessor_functions(texts: dict[str, str], stated: set[str]) -> set[str]:
     """Stated ``sonare_last_*`` definitions plus the internal functions one forwards to by ``return f(...)``."""
     names: set[str] = set()
@@ -418,7 +442,12 @@ def refusing_helpers(texts: dict[str, str]) -> set[str]:
 
 
 def scan_text(
-    path: str, raw: str, refusing: set[str], scan: Scan, accessors: frozenset[str] = frozenset()
+    path: str,
+    raw: str,
+    refusing: set[str],
+    scan: Scan,
+    accessors: frozenset[str] = frozenset(),
+    realtime: frozenset[str] = frozenset(),
 ) -> None:
     code = blank_comments_and_strings(raw)
     start = 0
@@ -431,7 +460,7 @@ def scan_text(
         if owner is not None and owner[0] in accessors:
             scan.accessor_returns += 1
             continue
-        if owner is not None and RT_ENTRY in code[owner[1] : pos]:
+        if owner is not None and owner[0] in realtime and RT_ENTRY in code[owner[1] : pos]:
             scan.realtime_returns += 1
             continue
         if TRANSLATION_CASE.search(code[max(0, pos - 200) : pos]):
@@ -486,9 +515,10 @@ def scan(root: Path) -> Scan:
         for p in sorted((root / HEADER_DIR).glob("*.h"))
     }
     accessors = frozenset(accessor_functions(texts, stated_accessors(headers)))
+    realtime = frozenset(stated_realtime(headers))
     result = Scan()
     for path, raw in texts.items():
-        scan_text(path, raw, refusing, result, accessors)
+        scan_text(path, raw, refusing, result, accessors, realtime)
         scan_interim(path, raw, interim, result)
     return result
 

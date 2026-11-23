@@ -377,7 +377,7 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
 SonareError sonare_realtime_voice_changer_note_on(SonareRealtimeVoiceChanger* handle, int note,
                                                   float velocity);
 /// @brief Releases MIDI note @p note from the start of the next processed block; releasing a note
-///        that is not held succeeds and does nothing. Errors as
+///        that is not held succeeds and does nothing. Realtime-safe; errors as
 ///        @ref sonare_realtime_voice_changer_note_on.
 SonareError sonare_realtime_voice_changer_note_off(SonareRealtimeVoiceChanger* handle, int note);
 /// @brief Releases every held note from the start of the next processed block, bypassing the
@@ -400,6 +400,7 @@ SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVo
 /// @brief Reports the largest block the process entries accept: the prepared
 ///        @p max_block_size, or the library default when 0 was passed.
 /// @details @p out_max_block_size is written 0 first, and stays 0 before the handle is prepared.
+///          Realtime-safe, like @ref sonare_realtime_voice_changer_latency_samples.
 SonareError sonare_realtime_voice_changer_max_block_size(const SonareRealtimeVoiceChanger* handle,
                                                          int* out_max_block_size);
 /// @brief Number of blocks in which the chain discarded its own state because a

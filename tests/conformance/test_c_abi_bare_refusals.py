@@ -87,7 +87,7 @@ class ClassifyTest(unittest.TestCase):
     def test_a_present_pointer_test_is_not_a_null_refusal(self) -> None:
         r = one(
             "SonareError f(const char* error) {\n"
-            '  if (error != nullptr) { set_last_error(SONARE_ERROR_INVALID_PARAMETER, error);\n'
+            "  if (error != nullptr) { set_last_error(SONARE_ERROR_INVALID_PARAMETER, error);\n"
             "    return SONARE_ERROR_INVALID_PARAMETER; }\n}\n"
         )
         self.assertEqual((r.classes, r.state), ({"value"}, "text"))
@@ -169,7 +169,9 @@ class InterimTest(unittest.TestCase):
         self.assertEqual([line for line, _ in interim(source)], [2])
 
     def test_a_ruled_text_is_not_interim(self) -> None:
-        self.assertEqual(interim('SonareError sonare_a() { return refuse("x must be finite"); }\n'), [])
+        self.assertEqual(
+            interim('SonareError sonare_a() { return refuse("x must be finite"); }\n'), []
+        )
 
 
 _HEADER = """
@@ -230,9 +232,32 @@ SonareError sonare_entry(float* x) {
 }
 """
         result = scanner.Scan()
-        scanner.scan_text("t.cpp", source, set(), result)
+        scanner.scan_text("t.cpp", source, set(), result, realtime=frozenset({"sonare_rt_process"}))
         self.assertEqual(result.realtime_returns, 1)
         self.assertEqual([r.line for r in result.refusals], [9])
+
+    def test_an_audio_thread_entry_no_header_calls_realtime_safe_is_still_caught(self) -> None:
+        source = """
+SonareError sonare_rt_setter(float* x) {
+  SONARE_C_RT_API_ENTRY;
+  if (!x) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+"""
+        result = scanner.Scan()
+        scanner.scan_text("t.cpp", source, set(), result)
+        self.assertEqual(result.realtime_returns, 0)
+        self.assertEqual([(r.line, r.state) for r in result.refusals], [(4, "none")])
+
+    def test_realtime_safe_is_read_from_a_doc_block_or_a_bullet(self) -> None:
+        header = (
+            "/// - `sonare_a` and\n///   `sonare_b` are realtime-safe: they do not allocate.\n"
+            "/// @brief Reads a count. Realtime-safe.\nSonareError sonare_c(int x);\n"
+            "/// @brief Sets a value.\nSonareError sonare_d(int x);\n"
+        )
+        self.assertEqual(
+            scanner.stated_realtime({"h.h": header}), {"sonare_a", "sonare_b", "sonare_c"}
+        )
 
     def test_the_tree_has_stated_accessors(self) -> None:
         self.assertGreater(scanner.scan(scanner.ROOT).accessor_returns, 0)
