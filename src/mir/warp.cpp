@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 
 #include "core/spectrum.h"
@@ -12,6 +13,7 @@
 #include "feature/chroma.h"
 #include "mir/warp_detail.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/sequence.h"
 
 namespace sonare::mir {
@@ -509,13 +511,18 @@ Audio tsm_rate(const Audio& audio, float rate, size_t target_length, const WarpT
 
 WarpMap WarpMap::from_anchors(std::vector<WarpAnchor> anchors) {
   std::vector<WarpAnchor> clean = sanitize_anchors(std::move(anchors));
-  SONARE_CHECK(clean.size() >= 2, ErrorCode::InvalidParameter);
+  if (clean.size() < 2) {
+    util::check::refuse("anchors", "must contain at least two usable anchors");
+  }
   return WarpMap(std::move(clean));
 }
 
 WarpMap WarpMap::from_markers(const std::vector<double>& warp_samples,
                               const std::vector<double>& source_samples) {
-  SONARE_CHECK(warp_samples.size() == source_samples.size(), ErrorCode::InvalidParameter);
+  if (warp_samples.size() != source_samples.size()) {
+    util::check::refuse_relation({"warp_samples", "source_samples"},
+                                 "{0} and {1} must have the same length");
+  }
   std::vector<WarpAnchor> anchors;
   anchors.reserve(warp_samples.size());
   for (size_t i = 0; i < warp_samples.size(); ++i) {
@@ -541,14 +548,16 @@ double WarpMap::source_to_warp(double source_sample) const {
 
 ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
                                  const ChromaDtwConfig& config) {
-  SONARE_CHECK(!reference.empty() && !target.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0 && config.coarse_max_frames > 0 &&
-                   config.max_full_frames >= 0 && config.scale_factor >= 2 &&
-                   config.band_radius >= 0,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.bins_per_octave > 0 &&
-                   config.bins_per_octave <= std::numeric_limits<int>::max() / kChromaOctaves,
-               ErrorCode::InvalidParameter);
+  if (reference.empty()) util::check::refuse("reference", util::refusal::kNonEmptyPredicate);
+  if (target.empty()) util::check::refuse("target", util::refusal::kNonEmptyPredicate);
+  util::check::integer_at_least(config.hop_length, 1, "config.hop_length");
+  util::check::integer_at_least(config.coarse_max_frames, 1, "config.coarse_max_frames");
+  util::check::integer_at_least(config.max_full_frames, 0, "config.max_full_frames");
+  util::check::integer_at_least(config.scale_factor, 2, "config.scale_factor");
+  util::check::integer_at_least(config.band_radius, 0, "config.band_radius");
+  util::check::integer_in_range(config.bins_per_octave, 1,
+                                std::numeric_limits<int>::max() / kChromaOctaves,
+                                "config.bins_per_octave");
 
   // n_bins is a bin count, not an octave span, so it has to move with
   // bins_per_octave. ChromaCqtConfig defaults to 7 octaves at 36 bins/octave;
@@ -613,8 +622,10 @@ ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
 // ---------------------------------------------------------------------------
 
 Audio warp_to_length(const Audio& audio, size_t target_length, const WarpTsmConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(target_length > 0, ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
+  if (target_length == 0) {
+    util::check::refuse_outside(util::check::integer_domain_at_least(1), "target_length");
+  }
   // rate maps input length -> target length: out = in / rate => rate = in/target.
   const float rate = static_cast<float>(audio.size()) / static_cast<float>(target_length);
   return tsm_rate(audio, rate, target_length, config);
@@ -625,9 +636,11 @@ namespace {
 /// Rounds a warp-axis span to a sample count, refusing spans that are non-finite or exceed the
 /// int range tsm_rate indexes with.
 size_t checked_span_length(double span) {
-  SONARE_CHECK(std::isfinite(span) && span > 0.0 &&
-                   span <= static_cast<double>(std::numeric_limits<int>::max()),
-               ErrorCode::InvalidParameter);
+  constexpr int max_span = std::numeric_limits<int>::max();
+  if (!(std::isfinite(span) && span > 0.0 && span <= static_cast<double>(max_span))) {
+    util::check::refuse("map", "must have warp spans greater than 0 and at most " +
+                                   std::to_string(max_span) + " samples");
+  }
   return static_cast<size_t>(std::llround(span));
 }
 
@@ -639,14 +652,14 @@ int64_t clamped_source_position(double position, size_t size) {
 }  // namespace
 
 Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   SONARE_CHECK(map.valid(), ErrorCode::InvalidState);
   const auto& anchors = map.anchors();
   const WarpAnchor& first = anchors.front();
   const WarpAnchor& last = anchors.back();
   const double warp_span = last.warp_sample - first.warp_sample;
   const double source_span = last.source_sample - first.source_sample;
-  SONARE_CHECK(std::isfinite(source_span), ErrorCode::InvalidParameter);
+  if (!std::isfinite(source_span)) util::check::refuse("map", "must have a finite source span");
   SONARE_CHECK(warp_span > 0.0 && source_span > 0.0, ErrorCode::InvalidState);
   const size_t target_length = checked_span_length(warp_span);
   SONARE_CHECK(target_length > 0, ErrorCode::InvalidState);

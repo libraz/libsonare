@@ -12,6 +12,7 @@
 #include <cstring>
 #include <functional>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -35,14 +36,14 @@ using sonare::mir::WarpMap;
 using sonare::mir::WarpTsmConfig;
 
 template <typename Fn>
-bool throws_invalid_parameter(Fn&& fn) {
+std::string invalid_parameter_message(Fn&& fn) {
   try {
     fn();
   } catch (const sonare::SonareException& error) {
-    return error.code() == sonare::ErrorCode::InvalidParameter;
-  } catch (...) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    return error.what();
   }
-  return false;
+  return {};
 }
 
 // Deterministic order-independent stable hash over a float buffer (FNV-1a over
@@ -481,9 +482,14 @@ TEST_CASE("WarpMap is strictly monotonic and round-trips anchors", "[mir]") {
 
 TEST_CASE("WarpMap from_markers rejects non-monotonic / too-few anchors", "[mir]") {
   // Only one usable anchor after dedup -> invalid.
-  REQUIRE_THROWS([] { WarpMap::from_anchors({{0.0, 0.0}}); }());
+  const std::string anchor_message =
+      invalid_parameter_message([] { WarpMap::from_anchors({{0.0, 0.0}}); });
+  CHECK(anchor_message.find("anchors") != std::string::npos);
   // Mismatched marker vectors -> invalid.
-  REQUIRE_THROWS([] { WarpMap::from_markers({0.0, 1.0}, {0.0}); }());
+  const std::string marker_message =
+      invalid_parameter_message([] { WarpMap::from_markers({0.0, 1.0}, {0.0}); });
+  CHECK(marker_message.find("warp_samples") != std::string::npos);
+  CHECK(marker_message.find("source_samples") != std::string::npos);
 }
 
 TEST_CASE("WarpMap drops non-finite anchors before ordering them", "[mir]") {
@@ -551,7 +557,8 @@ TEST_CASE("chroma-DTW builds its chroma grid from the requested resolution", "[m
   SECTION("rejects a non-positive resolution") {
     ChromaDtwConfig cfg;
     cfg.bins_per_octave = 0;
-    REQUIRE_THROWS(chroma_dtw_align(a, b, cfg));
+    const std::string message = invalid_parameter_message([&] { chroma_dtw_align(a, b, cfg); });
+    CHECK(message.find("config.bins_per_octave") != std::string::npos);
   }
 }
 
@@ -561,38 +568,71 @@ TEST_CASE("chroma-DTW rejects invalid multiscale settings before feature extract
   const Audio target = make_tone(sr, 261.63, 0.35);
   ChromaDtwConfig baseline;
   REQUIRE_NOTHROW(chroma_dtw_align(reference, target, baseline));
+  const auto has_subject = [&](const ChromaDtwConfig& config, const std::string& subject) {
+    const std::string message =
+        invalid_parameter_message([&] { chroma_dtw_align(reference, target, config); });
+    CHECK(message.find(subject) != std::string::npos);
+  };
 
   SECTION("positive hop, coarse limit, scale, and band are required") {
     ChromaDtwConfig cfg;
     cfg.hop_length = 0;
-    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+    has_subject(cfg, "config.hop_length");
 
     cfg = ChromaDtwConfig();
     cfg.coarse_max_frames = 0;
     // Force the full-DTW path so only the invalid coarse limit is under test.
     cfg.max_full_frames = std::numeric_limits<int>::max();
-    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+    has_subject(cfg, "config.coarse_max_frames");
     cfg.coarse_max_frames = -1;
-    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+    has_subject(cfg, "config.coarse_max_frames");
 
     cfg = ChromaDtwConfig();
     cfg.max_full_frames = -1;
     cfg.coarse_max_frames = std::numeric_limits<int>::max();
-    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+    has_subject(cfg, "config.max_full_frames");
 
     for (const int scale : {0, 1, -1}) {
       cfg = ChromaDtwConfig();
       cfg.scale_factor = scale;
       cfg.max_full_frames = std::numeric_limits<int>::max();
       CAPTURE(scale);
-      REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+      has_subject(cfg, "config.scale_factor");
     }
 
     cfg = ChromaDtwConfig();
     cfg.band_radius = -1;
     cfg.max_full_frames = std::numeric_limits<int>::max();
-    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+    has_subject(cfg, "config.band_radius");
   }
+}
+
+TEST_CASE("chroma-DTW names empty input audio", "[mir]") {
+  const Audio input = make_tone(22050, 261.63, 0.3);
+  const Audio empty;
+  const ChromaDtwConfig config;
+
+  const std::string reference_message =
+      invalid_parameter_message([&] { chroma_dtw_align(empty, input, config); });
+  CHECK(reference_message.find("reference") != std::string::npos);
+
+  const std::string target_message =
+      invalid_parameter_message([&] { chroma_dtw_align(input, empty, config); });
+  CHECK(target_message.find("target") != std::string::npos);
+}
+
+TEST_CASE("warp_to_length names its empty audio and target length", "[mir]") {
+  const Audio input = make_tone(22050, 261.63, 0.3);
+  const Audio empty;
+  const WarpTsmConfig config;
+
+  const std::string audio_message =
+      invalid_parameter_message([&] { warp_to_length(empty, 1, config); });
+  CHECK(audio_message.find("audio") != std::string::npos);
+
+  const std::string length_message =
+      invalid_parameter_message([&] { warp_to_length(input, 0, config); });
+  CHECK(length_message.find("target_length") != std::string::npos);
 }
 
 TEST_CASE("chroma-DTW handles zero full-frame limit and extreme projection settings", "[mir]") {
@@ -892,18 +932,27 @@ TEST_CASE("warp_to_map follows local segment rates instead of one global rate", 
 
 TEST_CASE("warp_to_map refuses spans beyond the representable range", "[mir]") {
   Audio tone = make_tone(22050, 330.0, 0.1);
+  const Audio empty;
   const double n = static_cast<double>(tone.size());
   WarpTsmConfig cfg;
   cfg.n_fft = 512;
   cfg.hop_length = 128;
 
+  const std::string audio_message =
+      invalid_parameter_message([&] { warp_to_map(empty, WarpMap(), cfg); });
+  CHECK(audio_message.find("audio") != std::string::npos);
+
   // Warp axis far past the int range: refused before any allocation or rounding.
   const WarpMap huge_warp = WarpMap::from_anchors({{0.0, 0.0}, {1e30, n}});
-  REQUIRE_THROWS_AS(warp_to_map(tone, huge_warp, cfg), sonare::SonareException);
+  const std::string warp_span_message =
+      invalid_parameter_message([&] { warp_to_map(tone, huge_warp, cfg); });
+  CHECK(warp_span_message.find("map") != std::string::npos);
 
   // Finite anchors whose difference overflows to infinity.
   const WarpMap overflow = WarpMap::from_anchors({{0.0, -1e308}, {n, 1e308}});
-  REQUIRE_THROWS_AS(warp_to_map(tone, overflow, cfg), sonare::SonareException);
+  const std::string source_span_message =
+      invalid_parameter_message([&] { warp_to_map(tone, overflow, cfg); });
+  CHECK(source_span_message.find("map") != std::string::npos);
 
   // A source anchor past the audio end clamps to the end.
   const WarpMap far_source = WarpMap::from_anchors({{0.0, 0.0}, {n, 3.0 * n}});
