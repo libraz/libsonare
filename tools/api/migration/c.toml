@@ -4717,7 +4717,7 @@ old = "sonare_trim"
 changed = "takes const SonareTrimOptions* options (NULL = defaults; sonare_trim_options_init) before out"
 domain = "effects"
 rule = "options-struct"
-test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms clips and sonare_trim uses custom framing"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms reaches its target unclipped and sonare_trim uses custom framing"
 
 [[entry]]
 kind = "function"
