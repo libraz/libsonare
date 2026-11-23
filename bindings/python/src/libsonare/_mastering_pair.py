@@ -584,7 +584,8 @@ def _audio_profile_from_wire(wire: Mapping[str, Any]) -> MasteringAudioProfile:
     defects = wire.get("defects")
     return MasteringAudioProfile(
         duration_sec=float(wire["durationSec"]),
-        bpm=_optional_float(wire.get("bpm")),
+        # Not measured is an absent key; a null here names no infinite end and is refused.
+        bpm=float(wire["bpm"]) if "bpm" in wire else None,
         bpm_confidence=float(wire["bpmConfidence"]),
         loudness=_record(MasteringAudioProfileLoudness, wire["loudness"]),
         spectral=_record(MasteringAudioProfileSpectral, wire["spectral"]),
