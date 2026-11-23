@@ -797,10 +797,10 @@ inline void refuse_half_given_pair(const void* buffer, const void* length, const
   if ((buffer == nullptr) == (length == nullptr)) return;
   if (length == nullptr) {
     sonare::util::check::refuse_relation({length_name, buffer_name},
-                                         "{0} {must_be_present} when {1} {is_present}");
+                                         sonare::util::refusal::kPresentWhenPresentRelation);
   }
   sonare::util::check::refuse_relation({buffer_name, length_name},
-                                       "{0} {must_be_present} when {1} {is_present}");
+                                       sonare::util::refusal::kPresentWhenPresentRelation);
 }
 
 /// @brief Runs a core argument validator ahead of run_offline and returns its verdict as a status.

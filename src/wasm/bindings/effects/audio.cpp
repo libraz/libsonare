@@ -43,14 +43,16 @@ val js_hpss(val samples, const val& sample_rate, const val& kernel_harmonic,
 
   val out = val::object();
   if (with_residual) {
-    HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+    HpssAudioResultWithResidual result = sonare::util::check::with_camel_paths(
+        [&] { return hpss_with_residual(audio, config, stft_config); }, kHpssRequestKeys);
     out.set("harmonic", vectorToFloat32Array(result.harmonic.data(), result.harmonic.size()));
     out.set("percussive", vectorToFloat32Array(result.percussive.data(), result.percussive.size()));
     out.set("residual", vectorToFloat32Array(result.residual.data(), result.residual.size()));
     out.set("sampleRate", result.harmonic.sample_rate());
     return out;
   }
-  HpssAudioResult result = hpss(audio, config, stft_config);
+  HpssAudioResult result = sonare::util::check::with_camel_paths(
+      [&] { return hpss(audio, config, stft_config); }, kHpssRequestKeys);
   out.set("harmonic", vectorToFloat32Array(result.harmonic.data(), result.harmonic.size()));
   out.set("percussive", vectorToFloat32Array(result.percussive.data(), result.percussive.size()));
   out.set("sampleRate", result.harmonic.sample_rate());
@@ -168,7 +170,7 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   // Two spellings of one input, worded as the C ABI words it; neither reads every frame as voiced.
   if (has_voiced && has_prob) {
     sonare::util::check::refuse_relation({"voicedProb", "voiced"},
-                                         "{1} {must_be_absent} when {0} {is_present}");
+                                         sonare::util::refusal::kAbsentWhenPresentRelation);
   }
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);
@@ -220,7 +222,7 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   // Two spellings of one input, worded as the C ABI words it; neither reads every frame as voiced.
   if (has_voiced && has_prob) {
     sonare::util::check::refuse_relation({"voicedProb", "voiced"},
-                                         "{1} {must_be_absent} when {0} {is_present}");
+                                         sonare::util::refusal::kAbsentWhenPresentRelation);
   }
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);

@@ -197,4 +197,22 @@ inline std::string known_id_predicate(const std::string& thing, const std::strin
 /// @brief "{0} must not be NULL when {1} is not 0", for a pointer read only while a count is set.
 inline constexpr const char* kNonNullWhenCountRelation = "{0} {must_be_present} when {1} is not 0";
 
+/// @brief "{0} must not be NULL when {1} is not NULL", for a value read only beside another.
+inline constexpr const char* kPresentWhenPresentRelation =
+    "{0} {must_be_present} when {1} {is_present}";
+
+/// @brief "{1} must be NULL when {0} is not NULL", for two values the call takes one of at most.
+inline constexpr const char* kAbsentWhenPresentRelation =
+    "{1} {must_be_absent} when {0} {is_present}";
+
+/// @brief "{0} and {1} must not both be NULL", for two values the call needs one of at least.
+inline constexpr const char* kNotBothAbsentRelation = "{0} and {1} {must_not_both_be_absent}";
+
+/// @brief "{0} must not be NULL when {1} is chain", for a chain document a chain rig needs.
+inline constexpr const char* kPresentWhenChainRelation = "{0} {must_be_present} when {1} is chain";
+
+/// @brief "{0} must be NULL unless {1} is chain", for a chain document only a chain rig reads.
+inline constexpr const char* kAbsentUnlessChainRelation =
+    "{0} {must_be_absent} unless {1} is chain";
+
 }  // namespace sonare::util::refusal

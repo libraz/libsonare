@@ -658,11 +658,11 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   if (const SonareError err = run_validation([&] {
         if (voiced_prob == nullptr && voiced == nullptr) {
           check::refuse_relation({"voiced_prob", "voiced"},
-                                 "{0} and {1} {must_not_both_be_absent}");
+                                 sonare::util::refusal::kNotBothAbsentRelation);
         }
         if (voiced_prob != nullptr && voiced != nullptr) {
           check::refuse_relation({"voiced_prob", "voiced"},
-                                 "{1} {must_be_absent} when {0} {is_present}");
+                                 sonare::util::refusal::kAbsentWhenPresentRelation);
         }
         check::integer_within(n_frames, sonare_c_detail::kNoteSegmentFrameCountDomain, "n_frames");
         check::greater_than(frame_rate, 0.0, "frame_rate");
