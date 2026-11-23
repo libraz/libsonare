@@ -1,7 +1,7 @@
 import { chainConfigFromDocument } from './internal/chain_config.js';
 import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
-import { parseRecordJson } from './internal/record_json.js';
+import { parseCatalogJson, parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { masteringPlatformNames } from './mastering_catalog.js';
@@ -80,7 +80,7 @@ export interface MasteringAssistantSettings {
 
 /** The presets the assistant starts from: every mastering preset, no restoration one. */
 function assistantPresetNames(): MasteringPreset[] {
-  const catalog = parseRecordJson(addon.capabilityCatalog()) as CapabilityCatalog;
+  const catalog = parseCatalogJson(addon.capabilityCatalog()) as CapabilityCatalog;
   return catalog.masteringPresets
     .filter((entry) => entry.kind === 'mastering')
     .map((entry) => entry.name as MasteringPreset);

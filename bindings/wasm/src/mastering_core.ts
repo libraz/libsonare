@@ -3,7 +3,7 @@ import { assertDeclaredKeys, refuse, refuseType, withEntry } from './internal/en
 import { requireListBudget } from './internal/list_budget.js';
 import { refuseZeroSentinel } from './internal/metering_native.js';
 import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
-import { parseRecordJson, type ResultFamily } from './internal/record_json.js';
+import { parseCatalogJson, parseRecordJson, type ResultFamily } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { withRespelled } from './internal/respell.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
@@ -490,7 +490,7 @@ export function masteringInsertParamInfo(
       assertSampleRate(r.sampleRate);
     }
     const json = module.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
-    return parseRecordJson(json) as MasteringInsertParamInfo[];
+    return parseCatalogJson(json) as MasteringInsertParamInfo[];
   });
 }
 
@@ -514,7 +514,7 @@ export interface MasteringAmpPresetCatalogEntry {
 export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
   return withEntry('masteringAmpPresetCatalog', () => {
     const json = getSonareModule().masteringAmpPresetCatalog();
-    return parseRecordJson(json) as MasteringAmpPresetCatalogEntry[];
+    return parseCatalogJson(json) as MasteringAmpPresetCatalogEntry[];
   });
 }
 
@@ -558,7 +558,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
 export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
   return withEntry('masteringProcessorCatalog', () => {
     const json = getSonareModule().masteringProcessorCatalog();
-    return parseRecordJson(json) as MasteringProcessorCatalogEntry[];
+    return parseCatalogJson(json) as MasteringProcessorCatalogEntry[];
   });
 }
 
@@ -742,11 +742,14 @@ export function masteringApplyPairProcessorStereo(
 }
 
 /** The result family whose nulls each pair or stereo analysis restores; the others have none. */
-const ANALYSIS_FAMILIES: Readonly<Record<string, ResultFamily>> = {
+const ANALYSIS_FAMILIES: Readonly<Record<PairAnalysis | StereoAnalysis, ResultFamily>> = {
   'match.referenceLoudness': 'match_reference_loudness',
   'match.tonalBalance': 'match_tonal_balance',
   'match.tonalBalanceLogBands': 'match_tonal_balance',
+  'match.matchEqCurve': 'match_eq_curve',
+  'match.estimateReferenceDelaySamples': 'match_reference_delay',
   'stereo.monoCompatCheck': 'stereo_mono_compat',
+  'stereo.monoCompatCheckLogBands': 'stereo_mono_compat_log_bands',
 };
 
 /**
@@ -929,7 +932,7 @@ function profileParams(
 
 /** The presets the assistant starts from: every mastering preset, no restoration one. */
 function assistantPresetNames(): MasteringPreset[] {
-  const catalog = parseRecordJson(getSonareModule().capabilityCatalog()) as CapabilityCatalog;
+  const catalog = parseCatalogJson(getSonareModule().capabilityCatalog()) as CapabilityCatalog;
   return catalog.masteringPresets
     .filter((entry) => entry.kind === 'mastering')
     .map((entry) => entry.name as MasteringPreset);

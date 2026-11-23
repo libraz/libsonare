@@ -5,15 +5,16 @@ import { NULL_MEANS } from './result_null_means.js';
 /** A result family of `schemas/result-null-means.json`. */
 export type ResultFamily = keyof typeof NULL_MEANS;
 
+/** Parses a core JSON report into a result record of @p family; see {@link restoreNullMeans}. */
+export function parseRecordJson<T>(json: string, family: ResultFamily): T {
+  return restoreNullMeans(JSON.parse(json), family) as T;
+}
+
 /**
- * Parses a core JSON report into a result record. Without a family a `null`
- * member is dropped, so a value the report could not give is an absent field,
- * and array elements are kept. With one, see {@link restoreNullMeans}.
+ * Parses a catalog document. A catalog `null` means "not applicable" (no bound, no choices),
+ * so the member is dropped and reads as an absent field; array elements are kept.
  */
-export function parseRecordJson<T>(json: string, family?: ResultFamily): T {
-  if (family !== undefined) {
-    return restoreNullMeans(JSON.parse(json), family) as T;
-  }
+export function parseCatalogJson<T>(json: string): T {
   return JSON.parse(json, function (this: unknown, _key: string, value: unknown) {
     return value === null && !Array.isArray(this) ? undefined : value;
   }) as T;
@@ -30,7 +31,7 @@ export function restoreNullMeans(value: unknown, family: ResultFamily): unknown 
     if (node === null) {
       const end = table[path];
       if (end === undefined) {
-        throw codedError(ErrorCode.Unknown, `${family} report holds a null at ${path}`);
+        throw codedError(ErrorCode.InvalidFormat, `${family} report holds a null at ${path}`);
       }
       return end;
     }

@@ -2,7 +2,7 @@ import { chainConfigFromJson } from './internal/chain_config.js';
 import { withEntry } from './internal/entry.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
 import { resolveInsertParams } from './internal/processor_params.js';
-import { parseRecordJson } from './internal/record_json.js';
+import { parseCatalogJson } from './internal/record_json.js';
 import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
@@ -184,7 +184,7 @@ export function masteringInsertParamInfo(
       assertSampleRate(r.sampleRate);
     }
     const json = addon.masteringInsertParamInfo(r.insert, r.sampleRate ?? undefined);
-    return parseRecordJson(json) as MasteringInsertParamInfo[];
+    return parseCatalogJson(json) as MasteringInsertParamInfo[];
   });
 }
 
@@ -232,7 +232,7 @@ export function masteringInsertTiming<N extends MasteringInsertName>(
  */
 export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
   const json = addon.masteringProcessorCatalog();
-  return parseRecordJson(json) as MasteringProcessorCatalogEntry[];
+  return parseCatalogJson(json) as MasteringProcessorCatalogEntry[];
 }
 
 /** One built-in amp-sim rig with its resolved starting configuration. */
@@ -254,5 +254,5 @@ export interface MasteringAmpPresetCatalogEntry {
  */
 export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
   const json = addon.masteringAmpPresetCatalog();
-  return parseRecordJson(json) as MasteringAmpPresetCatalogEntry[];
+  return parseCatalogJson(json) as MasteringAmpPresetCatalogEntry[];
 }

@@ -8,6 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   analyze,
+  ErrorCode,
+  isSonareError,
   masteringAnalyzePair,
   masteringAnalyzeStereo,
   masteringAssistantSuggest,
@@ -15,6 +17,7 @@ import {
   masteringRepairAnalyze,
   masteringStreamingPreview,
   mixingAssistantSuggest,
+  type SonareError,
 } from '../dist/index.js';
 import { restoreNullMeans } from '../dist/internal/record_json.js';
 
@@ -66,6 +69,36 @@ describe('restoreNullMeans', () => {
       /audio_profile report holds a null at integratedLufs/,
     );
   });
+
+  it('codes a null at an unnamed path as InvalidFormat, the code a refused document carries', () => {
+    let caught: unknown;
+    try {
+      restoreNullMeans({ integratedLufs: null }, 'audio_profile');
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as SonareError).code).toBe(ErrorCode.InvalidFormat);
+    expect((caught as SonareError).message).toBe(
+      'audio_profile report holds a null at integratedLufs',
+    );
+  });
+
+  it('refuses a null at a log-band correlation, which the writer leaves absent instead', () => {
+    // A band silent in either channel has no correlation; the core omits the key rather than
+    // writing null, so a null there names no end and is a defect.
+    let caught: unknown;
+    try {
+      restoreNullMeans({ bands: [{ correlation: null }] }, 'stereo_mono_compat_log_bands');
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as SonareError).code).toBe(ErrorCode.InvalidFormat);
+    expect((caught as SonareError).message).toBe(
+      'stereo_mono_compat_log_bands report holds a null at bands[].correlation',
+    );
+  });
 });
 
 // Each family's entry point on silence and on a tone: every null the core
@@ -78,7 +111,9 @@ describe('every result family reads without a null on silence and on a tone', ()
     ['a silent second input', () => tone(440), silence],
     ['a silent first input', silence, () => tone(440)],
   ];
-  it.each(inputs)('%s', (_label, a, b) => {
+  it.each(inputs)('%s', (label, a, b) => {
+    // The curve and the delay refuse a silent input, so they read only where both inputs sound.
+    const bothSound = label === 'a tone';
     const records: Array<[string, unknown]> = [
       ['analyze', analyze({ samples: a(), sampleRate: SR })],
       ['masteringAssistantSuggest', masteringAssistantSuggest({ samples: a(), sampleRate: SR })],
@@ -102,10 +137,41 @@ describe('every result family reads without a null on silence and on a tone', ()
           sampleRate: SR,
         }),
       ],
+      ...((bothSound
+        ? [
+            [
+              'match.matchEqCurve',
+              masteringAnalyzePair({
+                analysis: 'match.matchEqCurve',
+                source: a(),
+                reference: b(),
+                sampleRate: SR,
+              }),
+            ],
+            [
+              'match.estimateReferenceDelaySamples',
+              masteringAnalyzePair({
+                analysis: 'match.estimateReferenceDelaySamples',
+                source: a(),
+                reference: b(),
+                sampleRate: SR,
+              }),
+            ],
+          ]
+        : []) as Array<[string, unknown]>),
       [
         'stereo.monoCompatCheck',
         masteringAnalyzeStereo({
           analysis: 'stereo.monoCompatCheck',
+          left: a(),
+          right: b(),
+          sampleRate: SR,
+        }),
+      ],
+      [
+        'stereo.monoCompatCheckLogBands',
+        masteringAnalyzeStereo({
+          analysis: 'stereo.monoCompatCheckLogBands',
           left: a(),
           right: b(),
           sampleRate: SR,

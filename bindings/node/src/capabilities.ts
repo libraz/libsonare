@@ -1,4 +1,4 @@
-import { parseRecordJson } from './internal/record_json.js';
+import { parseCatalogJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type { Capabilities, CapabilityCatalog, SystemInfo } from './types.js';
 
@@ -32,11 +32,11 @@ export function capabilities(): Capabilities {
  * report is absent from its object, never 0.
  */
 export function systemInfo(): SystemInfo {
-  const raw = parseRecordJson<{
+  const raw = JSON.parse(addon.systemInfo()) as {
     cpu?: { logical_cores?: number; physical_cores?: number };
     memory?: { total_gb?: number; available_gb?: number };
     parallel: { enabled: boolean; workers: number; strategy: string };
-  }>(addon.systemInfo());
+  };
   const { cpu, memory, parallel } = raw;
   return {
     cpu: {
@@ -62,5 +62,5 @@ export function systemInfo(): SystemInfo {
  * {@link masteringInsertParamInfo} return.
  */
 export function capabilityCatalog(): CapabilityCatalog {
-  return parseRecordJson(addon.capabilityCatalog()) as CapabilityCatalog;
+  return parseCatalogJson(addon.capabilityCatalog()) as CapabilityCatalog;
 }

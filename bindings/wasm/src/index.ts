@@ -1291,7 +1291,7 @@ export type {
   OfflineWorkerClientOptions,
 } from './worker_client.js';
 
-import { parseRecordJson } from './internal/record_json.js';
+import { parseCatalogJson } from './internal/record_json.js';
 
 export { OfflineWorkerClient } from './worker_client.js';
 
@@ -1432,7 +1432,7 @@ export function capabilityCatalog(): CapabilityCatalog {
     if (!module) {
       throw notInitializedError();
     }
-    return parseRecordJson(module.capabilityCatalog()) as CapabilityCatalog;
+    return parseCatalogJson(module.capabilityCatalog()) as CapabilityCatalog;
   });
 }
 

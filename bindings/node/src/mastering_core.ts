@@ -394,11 +394,14 @@ export function masteringApplyPairProcessorStereo(
 }
 
 /** The result family whose nulls each pair or stereo analysis restores; the others have none. */
-const ANALYSIS_FAMILIES: Readonly<Record<string, ResultFamily>> = {
+const ANALYSIS_FAMILIES: Readonly<Record<PairAnalysis | StereoAnalysis, ResultFamily>> = {
   'match.referenceLoudness': 'match_reference_loudness',
   'match.tonalBalance': 'match_tonal_balance',
   'match.tonalBalanceLogBands': 'match_tonal_balance',
+  'match.matchEqCurve': 'match_eq_curve',
+  'match.estimateReferenceDelaySamples': 'match_reference_delay',
   'stereo.monoCompatCheck': 'stereo_mono_compat',
+  'stereo.monoCompatCheckLogBands': 'stereo_mono_compat_log_bands',
 };
 
 /**
