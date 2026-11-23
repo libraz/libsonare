@@ -355,8 +355,8 @@ val ProjectWasm::applyVocalEdit(val request) {
   const SonareProjectVocalEditApplyDesc desc = applyDescFromVal(request, &storage);
   SonareProjectVocalEditApplyResult result{};
   sonare_project_vocal_edit_apply_result_init(&result);
-  const SonareError error = sonare_project_apply_vocal_edit(project_.get(), &desc, &result);
-  if (error != SONARE_OK) throwCodedCError(error);
+  checkCodedCErrorFlattening(sonare_project_apply_vocal_edit(project_.get(), &desc, &result),
+                             "desc");
   return applyResultToVal(result);
 }
 

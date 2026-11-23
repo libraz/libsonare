@@ -291,9 +291,8 @@ uint32_t SampleBankWasm::addSample(val data, val desc) {
   c.loop_mode = sampleDescLoopMode(desc);
 
   uint32_t index = 0;
-  const SonareError err =
-      sonare_sample_bank_add_sample(bank_, elementData(frames), frames.size(), &c, &index);
-  if (err != SONARE_OK) throwCodedCError(err);
+  checkCodedCErrorFlattening(
+      sonare_sample_bank_add_sample(bank_, elementData(frames), frames.size(), &c, &index), "desc");
   return index;
 }
 

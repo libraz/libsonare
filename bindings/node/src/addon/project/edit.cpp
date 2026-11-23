@@ -266,7 +266,7 @@ Napi::Value ProjectWrap::AddTrack(const Napi::CallbackInfo& info) {
   }
   desc.name = has_name ? name.c_str() : nullptr;
   uint32_t out_id = 0;
-  ThrowIfError(env, sonare_project_add_track(project_, &desc, &out_id));
+  ThrowIfErrorFlattening(env, sonare_project_add_track(project_, &desc, &out_id), "desc");
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -318,7 +318,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   }
 
   uint32_t out_id = 0;
-  ThrowIfError(env, sonare_project_add_clip(project_, &desc, &out_id));
+  ThrowIfErrorFlattening(env, sonare_project_add_clip(project_, &desc, &out_id), "desc");
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -369,8 +369,9 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
 
   uint32_t out_clip_id = 0;
   size_t out_take_count = 0;
-  ThrowIfError(
-      env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count));
+  ThrowIfErrorFlattening(
+      env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count),
+      "desc");
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("clipId", Napi::Number::New(env, out_clip_id));
@@ -512,7 +513,7 @@ Napi::Value ProjectWrap::SetWarpMap(const Napi::CallbackInfo& info) {
   const std::string name_storage = StringProperty(obj, "name", "");
   if (!FillWarpMapDesc(env, obj, &anchors, &desc)) return env.Undefined();
   desc.name = name_storage.empty() ? nullptr : name_storage.c_str();
-  ThrowIfError(env, sonare_project_set_warp_map(project_, &desc));
+  ThrowIfErrorFlattening(env, sonare_project_set_warp_map(project_, &desc), "desc");
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -899,8 +900,9 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
     return env.Undefined();  // exception already pending
   }
   uint32_t out_target_param_id = 0;
-  ThrowIfError(env,
-               sonare_project_add_automation_lane(project_, track_id, &desc, &out_target_param_id));
+  ThrowIfErrorFlattening(
+      env, sonare_project_add_automation_lane(project_, track_id, &desc, &out_target_param_id),
+      "desc");
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out_target_param_id));
   SONARE_NODE_CATCH(env)

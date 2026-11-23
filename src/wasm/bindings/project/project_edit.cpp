@@ -294,7 +294,8 @@ double ProjectWasm::addAutomationLane(const val& track_id_val, val desc) {
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
   uint32_t out = 0;
   d.target_kind = automationTargetKindFromVal(desc, SONARE_AUTOMATION_TARGET_OPAQUE);
-  checkCodedCError(sonare_project_add_automation_lane(project_.get(), track_id, &d, &out));
+  checkCodedCErrorFlattening(sonare_project_add_automation_lane(project_.get(), track_id, &d, &out),
+                             "desc");
   return static_cast<double>(out);
 }
 

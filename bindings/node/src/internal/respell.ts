@@ -60,29 +60,3 @@ export function withRespelled<T>(respelled: Respelled, call: () => T): T {
     throw respellRefusal(error, respelled);
   }
 }
-
-/**
- * The counts a native entry derives from the length of an array the caller passed, by entry. The
- * caller never wrote the count, so a refusal of one names the array's length instead.
- */
-const DERIVED_COUNTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  pitchCorrectTimevarying: { nFrames: 'f0Hz' },
-  renderNotes: { nFrames: 'f0Hz' },
-  splitNote: { nFrames: 'f0Hz', noteCount: 'notes' },
-  mergeNotes: { nFrames: 'f0Hz', noteCount: 'notes' },
-  'Project.setWarpMap': { 'desc.anchorCount': 'anchors' },
-  'RealtimeEngine.setTrackLanes': { laneCount: 'lanes' },
-  'RealtimeEngine.renderOffline': { numChannels: 'channels' },
-  'StreamingRetune.processMono': { numSamples: 'samples' },
-};
-
-/** The respelling of every count @p entry derives from an array's length, as `<array>.length`. */
-export function derivedCounts(entry: string): Respelled {
-  const counts = Object.hasOwn(DERIVED_COUNTS, entry) ? DERIVED_COUNTS[entry] : {};
-  return Object.fromEntries(
-    Object.entries(counts ?? {}).map(([count, array]) => [
-      count,
-      { name: `${array}.length`, scale: 1 },
-    ]),
-  );
-}

@@ -8,7 +8,6 @@ import {
 } from './internal/entry.js';
 import { stringifyWithinBudget } from './internal/list_budget.js';
 import { deinterleave, interleavePlanar } from './internal/planar.js';
-import { derivedCounts, withRespelled } from './internal/respell.js';
 import { isAbsent, isNonArrayObject } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
@@ -650,9 +649,7 @@ export class StreamingRetune {
 
   /** Process one mono block, returning the shifted samples (same length). */
   processMono(samples: Float32Array): Float32Array {
-    return withRespelled(derivedCounts('StreamingRetune.processMono'), () =>
-      this.native.processMono(samples),
-    );
+    return this.native.processMono(samples);
   }
 
   /** Release the native handle now instead of waiting for GC. Idempotent. */

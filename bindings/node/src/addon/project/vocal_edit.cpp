@@ -352,8 +352,8 @@ Napi::Value ProjectWrap::ApplyVocalEdit(const Napi::CallbackInfo& info) {
   if (!ReadApplyRequest(env, info[0], &storage)) return env.Undefined();
   SonareProjectVocalEditApplyResult result{};
   sonare_project_vocal_edit_apply_result_init(&result);
-  const SonareError error = sonare_project_apply_vocal_edit(project_, &storage.desc, &result);
-  ThrowIfError(env, error);
+  ThrowIfErrorFlattening(env, sonare_project_apply_vocal_edit(project_, &storage.desc, &result),
+                         "desc");
   if (env.IsExceptionPending()) return env.Undefined();
   return ApplyResultToObject(env, result);
   SONARE_NODE_CATCH(env)

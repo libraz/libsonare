@@ -11,7 +11,7 @@ import {
 import { mergeRespelled, refuseType, withEntry } from './internal/entry.js';
 import { requireListBudget } from './internal/list_budget.js';
 import { requireOneOf } from './internal/one_of.js';
-import { derivedCounts, withRespelled } from './internal/respell.js';
+import { withRespelled } from './internal/respell.js';
 import { isAbsent } from './internal/value_guards.js';
 import { addon } from './native.js';
 import type {
@@ -490,7 +490,7 @@ export function renderNotes(...args: unknown[]): Float32Array {
     const { entries: nativeNotes, respelled } = resolveEntryTimes(notes, 'notes', sampleRate, true);
     const nativeOptions =
       nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
-    return withRespelled(mergeRespelled(respelled, derivedCounts('renderNotes')), () =>
+    return withRespelled(respelled, () =>
       addon.renderNotes(samples, sampleRate, nativeNotes, nativeOptions),
     );
   });
@@ -638,14 +638,12 @@ export function splitNote(...args: unknown[]): NoteObject[] {
       sampleRate,
       false,
     );
-    const split: NoteObject[] = withRespelled(
-      mergeRespelled(respelled, derivedCounts('splitNote')),
-      () =>
-        addon.splitNote(samples, sampleRate, f0Hz, frameRate, nativeNotes, index, frame, {
-          ...options,
-          voiced: nativeVoiced,
-          voicedProb: voicedProb ?? undefined,
-        }),
+    const split: NoteObject[] = withRespelled(respelled, () =>
+      addon.splitNote(samples, sampleRate, f0Hz, frameRate, nativeNotes, index, frame, {
+        ...options,
+        voiced: nativeVoiced,
+        voicedProb: voicedProb ?? undefined,
+      }),
     );
     return split;
   });
@@ -726,14 +724,12 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
       sampleRate,
       false,
     );
-    const merged: NoteObject[] = withRespelled(
-      mergeRespelled(respelled, derivedCounts('mergeNotes')),
-      () =>
-        addon.mergeNotes(samples, sampleRate, f0Hz, frameRate, nativeNotes, first, last, {
-          ...options,
-          voiced: nativeVoiced,
-          voicedProb: voicedProb ?? undefined,
-        }),
+    const merged: NoteObject[] = withRespelled(respelled, () =>
+      addon.mergeNotes(samples, sampleRate, f0Hz, frameRate, nativeNotes, first, last, {
+        ...options,
+        voiced: nativeVoiced,
+        voicedProb: voicedProb ?? undefined,
+      }),
     );
     return merged;
   });

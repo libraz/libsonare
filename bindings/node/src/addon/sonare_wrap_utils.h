@@ -262,6 +262,12 @@ inline void ThrowIfError(Napi::Env env, SonareError err) {
   }
 }
 
+/// @brief ThrowIfError for a call whose struct argument's refusal subjects carry a "<c_root>."
+///        prefix, which the caller never wrote and which is stripped (ThrowSonareErrorFlattening).
+inline void ThrowIfErrorFlattening(Napi::Env env, SonareError err, const char* c_root) {
+  if (err != SONARE_OK) ThrowSonareErrorFlattening(env, err, c_root);
+}
+
 /// @brief ThrowIfError's audio-thread counterpart: reports @p err from the code
 ///        alone, never from the thread-local detail message.
 ///

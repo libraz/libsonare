@@ -131,13 +131,9 @@ sonare::engine::SidechainSourceKind sidechainSourceKindForQuery(int source_kind)
 void RealtimeEngineWasm::setTrackLanes(val lanes) {
 #if defined(SONARE_WITH_MIXING)
   const int count = static_cast<int>(wasmArrayLength(lanes, "lanes"));
-  sonare::util::check::with_camel_paths(
-      [count] {
-        sonare::util::check::integer_in_range(
-            count, 0, static_cast<long long>(sonare::engine::TrackMixerRuntime::kMaxTrackLanes),
-            "lane_count");
-      },
-      kDerivedCountKeys);
+  sonare::util::check::integer_in_range(
+      count, 0, static_cast<long long>(sonare::engine::TrackMixerRuntime::kMaxTrackLanes),
+      "lanes.length");
   std::vector<sonare::engine::TrackLaneConfig> configs;
   configs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {

@@ -13,6 +13,7 @@ using sonare_node::FloatProperty;
 using sonare_node::MidiByteProperty;
 using sonare_node::OptionalUint32Arg;
 using sonare_node::ThrowIfError;
+using sonare_node::ThrowIfErrorFlattening;
 using sonare_node::Uint32Property;
 
 namespace {
@@ -150,8 +151,10 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
   }
 
   uint32_t index = 0;
-  ThrowIfError(env, sonare_sample_bank_add_sample(bank_, sonare_node::ElementData(data),
-                                                  data.ElementLength(), &desc, &index));
+  ThrowIfErrorFlattening(env,
+                         sonare_sample_bank_add_sample(bank_, sonare_node::ElementData(data),
+                                                       data.ElementLength(), &desc, &index),
+                         "desc");
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, index);
   SONARE_NODE_CATCH(env)

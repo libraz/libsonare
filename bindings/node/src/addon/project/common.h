@@ -70,6 +70,7 @@ using sonare_node::RequiredWordValue;
 using sonare_node::RequireNumberValue;
 using sonare_node::StringProperty;
 using sonare_node::ThrowIfError;
+using sonare_node::ThrowIfErrorFlattening;
 using sonare_node::ThrowSonareErrorMessage;
 using sonare_node::Uint32Property;
 using sonare_node::WordProperty;

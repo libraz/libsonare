@@ -281,27 +281,6 @@ inline void rethrowLastCRefusal() {
   throwCodedCError(err);
 }
 
-/// @brief throwCodedCError for an entry whose recorded refusal names a subject @p renamed lists,
-///        such as a count the entry derives from an array the caller passed; each is spelled as
-///        its row names, after the request-key spelling the refusal already carries.
-template <std::size_t N>
-[[noreturn]] void throwCodedCErrorRenaming(
-    SonareError err, const std::array<sonare::util::check::MemberKey, N>& renamed) {
-  if (std::optional<sonare::SonareParameterRefusal> shown =
-          sonare_field_spelling::wasm::SpelledLastRefusal()) {
-    throwCEntryRefusal(shown->respelled(
-        shown->code(),
-        [&renamed](const std::string& subject) {
-          for (const sonare::util::check::MemberKey& row : renamed) {
-            if (subject == row.first) return std::string(row.second);
-          }
-          return subject;
-        },
-        true));
-  }
-  throwCodedCError(err);
-}
-
 /// @brief The messages of the diagnostics the most recent C-ABI call published, in order.
 inline std::vector<std::string> lastDiagnosticMessages() {
   std::vector<std::string> messages;
@@ -374,13 +353,6 @@ inline constexpr std::array<sonare::util::check::MemberKey, 5> kInverseRequestKe
      {"mfcc", "coefficients"},
      {"fmin", "fminHz"},
      {"fmax", "fmaxHz"}}};
-/// The counts an entry derives from the length of an array the caller passed, named as that
-/// length; an entry applies the table only where the count is derived, since a name such as
-/// numChannels is a real request key elsewhere.
-inline constexpr std::array<sonare::util::check::MemberKey, 3> kDerivedCountKeys{
-    {{"desc.anchorCount", "anchors.length"},
-     {"lane_count", "lanes.length"},
-     {"numChannels", "channels.length"}}};
 /// @brief The element pointer of @p copy, never null. A copy of a zero-length array is a given
 ///        argument of length 0, so a C entry answers with its own emptiness rule instead of
 ///        reading the null an empty container may carry as an omitted argument. Every pointer

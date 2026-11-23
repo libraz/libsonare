@@ -85,6 +85,12 @@ inline void checkCodedCError(SonareError err) {
   if (err != SONARE_OK) throwCodedCError(err);
 }
 
+/// checkCodedCError for a call whose struct argument's refusal subjects carry a "<c_root>."
+/// prefix the caller never wrote (throwCodedCErrorFlattening).
+inline void checkCodedCErrorFlattening(SonareError err, const char* c_root) {
+  if (err != SONARE_OK) throwCodedCErrorFlattening(err, c_root);
+}
+
 struct ProjectWasm {
   ProjectWasm();
 

@@ -44,7 +44,7 @@ uint32_t ProjectWasm::addTrack(val desc) {
     }
   }
   uint32_t out = 0;
-  checkCodedCError(sonare_project_add_track(project_.get(), &d, &out));
+  checkCodedCErrorFlattening(sonare_project_add_track(project_.get(), &d, &out), "desc");
   return out;
 }
 
@@ -78,7 +78,7 @@ uint32_t ProjectWasm::addClip(val desc) {
     d.source_uri = wasmCString(source_uri, "sourceUri");
   }
   uint32_t out = 0;
-  checkCodedCError(sonare_project_add_clip(project_.get(), &d, &out));
+  checkCodedCErrorFlattening(sonare_project_add_clip(project_.get(), &d, &out), "desc");
   return out;
 }
 
@@ -110,8 +110,8 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   }
   uint32_t clip_id = 0;
   size_t take_count = 0;
-  checkCodedCError(
-      sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count));
+  checkCodedCErrorFlattening(
+      sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count), "desc");
   val out = val::object();
   out.set("clipId", clip_id);
   out.set("takeCount", static_cast<double>(take_count));
@@ -198,8 +198,7 @@ void ProjectWasm::setWarpMap(val desc) {
   cdesc.name = name.empty() ? nullptr : wasmCString(name, "name");
   cdesc.anchors = anchors.empty() ? nullptr : anchors.data();
   cdesc.anchor_count = anchors.size();
-  const SonareError err = sonare_project_set_warp_map(project_.get(), &cdesc);
-  if (err != SONARE_OK) throwCodedCErrorRenaming(err, kDerivedCountKeys);
+  checkCodedCErrorFlattening(sonare_project_set_warp_map(project_.get(), &cdesc), "desc");
 }
 
 void ProjectWasm::removeWarpMap(const val& warp_ref_id_val) {

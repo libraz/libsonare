@@ -4,7 +4,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Audio, decodeChannels, init, timeStretch } from '../dist/index.js';
+import { Audio, decodeChannels, init, Project, timeStretch } from '../dist/index.js';
 
 const caught = (run: () => unknown): Error => {
   try {
@@ -50,5 +50,18 @@ describe('the encoded-audio entries name their bytes data, as Node does', () => 
     const error = caught(call);
     expect(error).toBeInstanceOf(TypeError);
     expect(error.message).toMatch(new RegExp(`^${entry.replace('.', '\\.')}: data `));
+  });
+});
+
+describe('a project descriptor refused by the native library', () => {
+  it.each([
+    ['startPpq', { startPpq: -1, lengthPpq: 960 }, 'startPpq must be finite and in [0, 1e12]'],
+    ['lengthPpq', { startPpq: 0, lengthPpq: -5 }, 'lengthPpq must be finite and in (0, 1e12]'],
+  ] as const)('names %s as the clip request spells it', (_field, clip, text) => {
+    const project = new Project();
+    const trackId = project.addTrack({ name: 'track' });
+    const error = caught(() => project.addClip({ trackId, ...clip }));
+    expect(error).toBeInstanceOf(RangeError);
+    expect(error.message).toBe(`Project.addClip: ${text}`);
   });
 });

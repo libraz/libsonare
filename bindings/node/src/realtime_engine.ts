@@ -36,7 +36,7 @@ import { optionalId } from './internal/optional_ints.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
 import { tokenOrdinal } from './internal/project_tokens.js';
-import { derivedCounts, withRespelled } from './internal/respell.js';
+import { withRespelled } from './internal/respell.js';
 import { refuseBuiltinSynthOrdinals } from './internal/synth_tokens.js';
 import { isAbsent, isNonArrayObject, isPlainRecord } from './internal/value_guards.js';
 import { addon } from './native.js';
@@ -833,10 +833,8 @@ export class RealtimeEngine {
       throw refuseType('lanes must be an array');
     }
     requireListBudget(lanes, 'lanes');
-    withRespelled(derivedCounts('RealtimeEngine.setTrackLanes'), () =>
-      this.native.setTrackLanes(
-        lanes.map((lane, index) => laneToNative('setTrackLanes', lane, index)),
-      ),
+    this.native.setTrackLanes(
+      lanes.map((lane, index) => laneToNative('setTrackLanes', lane, index)),
     );
     this.laneOrder = lanes.map((lane) => lane.trackId);
   }
@@ -1638,12 +1636,10 @@ export class RealtimeEngine {
         }
       });
     }
-    return withRespelled(derivedCounts('RealtimeEngine.renderOffline'), () =>
-      this.native.renderOffline(
-        record.channels,
-        optionalInteger(record.blockSize, 'blockSize'),
-        record.finalize ?? true,
-      ),
+    return this.native.renderOffline(
+      record.channels,
+      optionalInteger(record.blockSize, 'blockSize'),
+      record.finalize ?? true,
     );
   }
 

@@ -65,6 +65,8 @@ describe('addon list-length budget', () => {
   it('leaves a list inside the budget to the per-kind limit and its precise refusal', () => {
     const lanes = Array.from({ length: 33 }, (_, i) => ({ trackId: i + 1 }));
     expect(() => engine().setTrackLanes(lanes)).toThrow(RangeError);
-    expect(() => engine().setTrackLanes(lanes)).toThrow('laneCount must be an integer in [0, 32]');
+    expect(() => engine().setTrackLanes(lanes)).toThrow(
+      'lanes.length must be an integer in [0, 32]',
+    );
   });
 });
