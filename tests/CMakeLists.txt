@@ -394,6 +394,7 @@ if(BUILD_MASTERING)
     mastering/hysteresis_ja_reference_test.cpp
     mastering/hysteresis_ja_physical_test.cpp
     mastering/amp_sim_test.cpp
+    mastering/insert_channel_state_test.cpp
     mastering/insert_factory_extra_test.cpp
     mastering/insert_latency_alignment_test.cpp
     mastering/insert_param_metadata_test.cpp
