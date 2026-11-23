@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "c_api/engine_config_domains.h"
+#include "c_api/ppq_domains.h"
 #include "realtime_engine_wasm.h"
 #include "util/parameter_checks.h"
 
@@ -127,11 +128,14 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
     segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
     segment.bpm = doubleProperty(entry, "bpm", 0.0);
     segment.end_bpm = doubleProperty(entry, "endBpm", segment.end_bpm);
-    if (!sonare::transport::valid_public_tempo_segment(segment)) {
-      throw WasmRangeError(
-          "startPpq must be finite and in [0, 1e12]; bpm must be finite and greater than 0; "
-          "endBpm must be 0 or finite and greater than 0");
-    }
+    // Checked as the C-ABI setter checks it, one field at a time, under the request's names.
+    const std::string prefix = "segments[" + std::to_string(i) + "].";
+    sonare::util::check::within(segment.start_ppq, sonare_c_detail::kPublicPpqDomain,
+                                (prefix + "startPpq").c_str());
+    sonare::util::check::in_interval(segment.bpm, 0.0, false, sonare::transport::kMaxPublicTempoBpm,
+                                     true, (prefix + "bpm").c_str());
+    sonare::util::check::in_range(segment.end_bpm, 0.0, sonare::transport::kMaxPublicTempoBpm,
+                                  (prefix + "endBpm").c_str());
     parsed.push_back(segment);
   }
   engine_.set_tempo_segments(std::move(parsed));
@@ -139,12 +143,12 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
 void RealtimeEngineWasm::setTimeSignature(const val& numerator_val, const val& denominator_val) {
   const int numerator = checkedIntFromVal(numerator_val, "numerator");
   const int denominator = checkedIntFromVal(denominator_val, "denominator");
-  // Mirror the C-ABI guard (sonare_engine_set_time_signature): reject a
-  // non-positive numerator/denominator instead of silently collapsing to 1/1
-  // (tempo_map clamps with std::max(...,1)).
-  if (numerator <= 0 || denominator <= 0) {
-    throw WasmRangeError("numerator and denominator must each be an integer of at least 1");
-  }
+  // Checked as sonare_engine_set_time_signature checks them, so a non-positive value is refused
+  // rather than collapsed to 1/1 by the tempo map.
+  sonare::util::check::integer_within(
+      numerator, sonare_c_detail::kEngineTimeSignatureNumeratorDomain, "numerator");
+  sonare::util::check::integer_within(
+      denominator, sonare_c_detail::kEngineTimeSignatureDenominatorDomain, "denominator");
   engine_.set_time_signature(numerator, denominator);
 }
 void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
@@ -159,11 +163,15 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
     segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
     segment.time_sig.numerator = intProperty(entry, "numerator", 0);
     segment.time_sig.denominator = intProperty(entry, "denominator", 0);
-    if (!sonare::transport::valid_public_time_signature_segment(segment)) {
-      throw WasmRangeError(
-          "startPpq must be finite and in [0, 1e12]; numerator must be an integer of at least 1; "
-          "denominator must be an integer of at least 1");
-    }
+    const std::string prefix = "segments[" + std::to_string(i) + "].";
+    sonare::util::check::within(segment.start_ppq, sonare_c_detail::kPublicPpqDomain,
+                                (prefix + "startPpq").c_str());
+    sonare::util::check::integer_within(segment.time_sig.numerator,
+                                        sonare_c_detail::kEngineTimeSignatureNumeratorDomain,
+                                        (prefix + "numerator").c_str());
+    sonare::util::check::integer_within(segment.time_sig.denominator,
+                                        sonare_c_detail::kEngineTimeSignatureDenominatorDomain,
+                                        (prefix + "denominator").c_str());
     parsed.push_back(segment);
   }
   engine_.set_time_signature_segments(std::move(parsed));

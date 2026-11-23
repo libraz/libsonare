@@ -14,6 +14,7 @@
 #include "realtime_engine_wasm.h"
 #include "transport/tempo_map.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
  public:
@@ -137,7 +138,16 @@ std::shared_ptr<WasmClipPageProvider> createClipPageProvider(const val& num_chan
                                                              int64_t page_frames) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   if (!sonare::engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
-    throw WasmRangeError("clip page provider dimensions must be integers of at least 1");
+    // Refused as sonare_clip_page_provider_create refuses it, under the request's names.
+    namespace check = sonare::util::check;
+    check::integer_within(num_channels, sonare_c_detail::kEngineClipPageChannelsDomain,
+                          "numChannels");
+    check::integer_within(num_samples, sonare_c_detail::kEngineClipSamplesDomain, "numSamples");
+    check::integer_within(page_frames, sonare_c_detail::kEngineClipPageFramesDomain, "pageFrames");
+    check::refuse_relation({"numSamples", "pageFrames"},
+                           "{0} must span at most " +
+                               std::to_string(sonare::engine::kMaxClipPageCount) +
+                               " pages of {1} frames");
   }
   return std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames);
 }
