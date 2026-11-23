@@ -1206,7 +1206,9 @@ class _ProjectMidiMixin:
     # -- MIR ----------------------------------------------------------------
 
 
-def _scaled(name: str, value: ctypes._SimpleCData, out_type: type[ctypes._SimpleCData]) -> int:
+def _scaled(
+    name: str, value: ctypes._SimpleCData[int], out_type: type[ctypes._SimpleCData[int]]
+) -> int:
     """Call the C scaler ``name`` on an already narrowed ``value`` and return its result."""
     out = out_type(0)
     _check(getattr(_get_lib(), name)(value, ctypes.byref(out)))
