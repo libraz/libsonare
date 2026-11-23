@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast, get_args
 import numpy as np
 from numpy.typing import NDArray
 
-from ._errors import _refuse, _refuse_type, _unknown_error
+from ._errors import _malformed_output, _refuse, _refuse_type
 from ._ffi_types_vocal import (
     SonareVocalCancelCallback,
     SonareVocalStateToken,
@@ -248,9 +248,9 @@ def _rehydrate_item(raw: SonareProjectVocalRehydrateItem) -> ProjectVocalRehydra
 def _result_count(pointer: Any, count_value: int, name: str) -> int:
     count = int(count_value)
     if count < 0 or count > _MAX_RESULT_ITEMS:
-        raise _unknown_error(f"native vocal project {name} count is unreasonable: {count}")
+        raise _malformed_output(f"native vocal project {name} count is unreasonable: {count}")
     if count and not pointer:
-        raise _unknown_error(f"native vocal project {name} result contains a null array")
+        raise _malformed_output(f"native vocal project {name} result contains a null array")
     return count
 
 

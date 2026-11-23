@@ -7,7 +7,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from ._errors import _entry, _refuse, _unknown_error
+from ._errors import _entry, _malformed_output, _refuse
 from ._ffi import (
     SonareAnalyzeMelodyOptions,
     SonareBoundaryOptions,
@@ -602,7 +602,7 @@ def system_info() -> dict[str, Any]:
     """
     document = json.loads(_call_string(_get_lib().sonare_system_info_json))
     if not isinstance(document, dict):
-        raise _unknown_error("libsonare returned a non-object system info document")
+        raise _malformed_output("libsonare returned a non-object system info document")
     return document
 
 
@@ -611,7 +611,7 @@ def _capabilities_document() -> dict[str, Any]:
     lib = _get_lib()
     descriptor = json.loads(_call_string(lib.sonare_capabilities_json))
     if not isinstance(descriptor, dict):
-        raise _unknown_error("libsonare returned a non-object capabilities descriptor")
+        raise _malformed_output("libsonare returned a non-object capabilities descriptor")
     return descriptor
 
 

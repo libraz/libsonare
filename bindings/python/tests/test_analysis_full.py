@@ -458,6 +458,7 @@ def test_a_streamed_chord_quality_outside_the_mirror_is_refused() -> None:
 
 def test_every_ordinal_reader_refuses_a_drifted_mirror_as_malformed_output() -> None:
     from libsonare._effects_voice import _enum_name
+    from libsonare._engine_mixing import _sidechain_check
     from libsonare._project_render import _diagnostic_token
     from libsonare._project_synth import _ARTICULATIONS, _synth_enum_name
     from libsonare._runtime import _key_mode_token
@@ -470,3 +471,5 @@ def test_every_ordinal_reader_refuses_a_drifted_mirror_as_malformed_output() -> 
         _diagnostic_token(lambda _ordinal: None, 5, "diagnostic")
     with _raises_malformed("unknown synth enum ordinal: 999$"):
         _synth_enum_name(999, _ARTICULATIONS)
+    with _raises_malformed("unknown sidechain refusal ordinal: 99$"):
+        _sidechain_check(99)

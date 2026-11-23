@@ -74,7 +74,7 @@ def test_info_rejects_successful_zero_channel_probe(monkeypatch):
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(1), 10))
     monkeypatch.setattr(Audio, "file_num_channels", lambda path: 0)
 
-    with raises_coded(ErrorCode.UNKNOWN, match="invalid audio channel count"):
+    with raises_coded(ErrorCode.INVALID_FORMAT, match="invalid audio channel count"):
         _cli_analysis.cmd_info(SimpleNamespace(file="broken.wav", json=True))
 
 

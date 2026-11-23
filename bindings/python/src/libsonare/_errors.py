@@ -230,5 +230,9 @@ def _malformed_output(message: str) -> SonareError:
 
 
 def _unknown_error(message: str) -> SonareError:
-    """Build the error for a native result that fails the binding's sanity checks."""
+    """Build the error for a failure whose cause has no code.
+
+    A value of the library's own output that fails the reader's check is not one: that is
+    :func:`_malformed_output`.
+    """
     return SonareError(int(ErrorCode.UNKNOWN), message)

@@ -17,7 +17,7 @@ from typing import Any, Self
 
 import numpy as np
 
-from ._errors import _entry, _invalid_state, _refuse, _unknown_error
+from ._errors import _entry, _invalid_state, _malformed_output, _refuse
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._ffi_types_vocal import (
     SonareVocalAnalysisResult,
@@ -895,7 +895,7 @@ class VocalRenderJob(_HandleOwner):
             if native_succeeded:
                 self.close()
         if result is None:
-            raise _unknown_error("native vocal render finalize produced no result")
+            raise _malformed_output("native vocal render finalize produced no result")
         return result
 
     @_entry("VocalRenderJob.abort")

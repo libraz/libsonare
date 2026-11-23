@@ -9,7 +9,7 @@ from typing import Any, SupportsFloat, cast
 
 import numpy as np
 
-from ._errors import SonareError, _entry, _refuse, _refuse_type, _unknown_error
+from ._errors import SonareError, _entry, _malformed_output, _refuse, _refuse_type
 from ._ffi_types_vocal import (
     VOCAL_MAX_SAMPLE_RATE,
     VOCAL_MIN_SAMPLE_RATE,
@@ -125,11 +125,11 @@ def _operation_kind(kind: str) -> int:
 def _copy_pointer(pointer: Any, count: int, dtype: np.dtype[Any]) -> np.ndarray:
     """Copy a native array, rejecting an impossible count before allocation."""
     if count < 0 or count > _MAX_RESULT_ITEMS:
-        raise _unknown_error(f"native vocal result count is unreasonable: {count}")
+        raise _malformed_output(f"native vocal result count is unreasonable: {count}")
     if count == 0:
         return np.empty(0, dtype=dtype)
     if not pointer:
-        raise _unknown_error("native vocal result contains a null array")
+        raise _malformed_output("native vocal result contains a null array")
     return np.ctypeslib.as_array(pointer, shape=(count,)).copy()
 
 
@@ -245,7 +245,9 @@ def _native_output_length(lib: ctypes.CDLL, symbol: str, handle: ctypes.c_void_p
     _vocal_check(getattr(lib, symbol)(handle, ctypes.byref(output_length)))
     length = int(output_length.value)
     if length <= 0:
-        raise _unknown_error(f"native vocal {symbol} returned an invalid output length: {length}")
+        raise _malformed_output(
+            f"native vocal {symbol} returned an invalid output length: {length}"
+        )
     return length
 
 

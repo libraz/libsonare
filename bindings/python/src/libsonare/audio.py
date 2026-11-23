@@ -14,10 +14,10 @@ from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import (
     _entry,
+    _malformed_output,
     _refuse,
     _refuse_type,
     _require_open,
-    _unknown_error,
 )
 from ._features_metering import (
     _clipping_threshold,
@@ -420,7 +420,7 @@ class Audio:
             # The C API promises a positive count on success. Treat a broken
             # or incompatible implementation as an error rather than letting
             # callers report a successful but meaningless ``channels=0``.
-            raise _unknown_error("libsonare returned an invalid audio channel count")
+            raise _malformed_output("libsonare returned an invalid audio channel count")
         return channels
 
     @classmethod

@@ -43,7 +43,7 @@ from ._cli_repair import (
 from ._cli_repair import (
     register_repair_parsers,
 )
-from ._errors import SonareError, _unknown_error
+from ._errors import SonareError, _malformed_output
 from ._mastering_offline import _chain_config_paths, _check_chain_document, _nest_chain_config
 from ._narrowing import _FLOAT32_MAX
 from ._result_records import _result_to_json_dict
@@ -62,7 +62,7 @@ def _mastering_report_payload(report: Any, gain_db: float = 0.0) -> dict[str, ob
     """
 
     if report is None:
-        raise _unknown_error("loaded libsonare did not return a mastering report")
+        raise _malformed_output("loaded libsonare did not return a mastering report")
     before = report.before
     after = report.after
     return {

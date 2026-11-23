@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, cast
 
 from ._engine_conversions import _band_json_arg, _scene_entry_json
-from ._errors import _entry, _refuse, _refuse_type, _unknown_error
+from ._errors import _entry, _malformed_output, _refuse, _refuse_type
 from ._ffi import SonareSurroundPan
 from ._mixing import StripRef
 from ._narrowing import _narrow_double
@@ -102,7 +102,7 @@ def _sidechain_check(refusal: int) -> SidechainCheck:
     if refusal == 0:
         return SidechainCheck(ok=True, reason=None)
     if not 1 <= refusal <= len(_SIDECHAIN_REFUSALS):
-        raise _unknown_error(f"unknown sidechain refusal code {refusal}")
+        raise _malformed_output(f"unknown sidechain refusal ordinal: {refusal}")
     return SidechainCheck(ok=False, reason=cast(SidechainRefusal, _SIDECHAIN_REFUSALS[refusal - 1]))
 
 
