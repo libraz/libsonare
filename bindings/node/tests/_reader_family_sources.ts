@@ -82,6 +82,7 @@ export const READER_FAMILIES: Readonly<
     // of the wrong type is refused by name (node_require_property_type).
     BoolProperty: 'refuse',
     DbfsAsLinearProperty: 'refuse', // a dBFS value read through DomainFloatProperty
+    DomainDoubleProperty: 'refuse',
     DomainFloatProperty: 'refuse',
     DomainProperty: 'refuse',
     DoubleProperty: 'refuse',
@@ -129,6 +130,7 @@ export const READER_FAMILIES: Readonly<
     intInRangeOrAbsentProperty: 'refuse',
     int64Property: 'refuse',
     intProperty: 'refuse',
+    optionalDomainDoubleProperty: 'refuse',
     repairEnumOption: 'refuse', // enum strings for the repair options bags
     setNumberOption: 'refuse',
     stringProperty: 'refuse',
@@ -146,6 +148,7 @@ export const READER_FAMILIES: Readonly<
     requireInt64Property: 'out-of-scope',
     requireNumberProperty: 'out-of-scope',
     requireTypedProperty: 'out-of-scope',
+    requiredDomainDoubleProperty: 'out-of-scope',
   },
 };
 
@@ -429,9 +432,16 @@ export const TYPE_GATE_HELPERS: Readonly<Record<'node' | 'wasm', readonly string
     'MidiByteValue',
     'IntInRangeOrAbsentValue',
     'FloatValue',
+    'DomainDoubleValue',
     'NamedSelectorValue',
   ],
-  wasm: ['typedPropertyValue', 'numberFromVal', 'enumFromVal', 'stringFromVal'],
+  wasm: [
+    'typedPropertyValue',
+    'numberFromVal',
+    'enumFromVal',
+    'stringFromVal',
+    'requiredDomainDoubleProperty',
+  ],
 };
 
 // A list reader's type test is the array test that refuses anything else.
