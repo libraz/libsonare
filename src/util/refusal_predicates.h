@@ -168,8 +168,18 @@ inline std::string integer_at_least_predicate(long long bound) {
 /// @brief "must name a declared value".
 inline constexpr const char* kDeclaredValuePredicate = "must name a declared value";
 
+/// @brief Presence tokens: a refusal text says a value is left out or supplied through these,
+///        never through the word NULL, and each surface renders them in its own terms
+///        (presence_phrase in exception.h). The C rendering is given beside each.
+inline constexpr const char* kMustBeAbsent = "{must_be_absent}";    ///< "must be NULL"
+inline constexpr const char* kMustBePresent = "{must_be_present}";  ///< "must not be NULL"
+/// "must not both be NULL"
+inline constexpr const char* kMustNotBothBeAbsent = "{must_not_both_be_absent}";
+inline constexpr const char* kIsAbsent = "{is_absent}";    ///< "is NULL"
+inline constexpr const char* kIsPresent = "{is_present}";  ///< "is not NULL"
+
 /// @brief "must not be NULL", for a pointer the call reads or writes.
-inline constexpr const char* kNonNullPredicate = "must not be NULL";
+inline constexpr const char* kNonNullPredicate = kMustBePresent;
 
 /// @brief "must not be empty", for a string or list the call needs at least one element of.
 inline constexpr const char* kNonEmptyPredicate = "must not be empty";
@@ -185,6 +195,6 @@ inline std::string known_id_predicate(const std::string& thing, const std::strin
 }
 
 /// @brief "{0} must not be NULL when {1} is not 0", for a pointer read only while a count is set.
-inline constexpr const char* kNonNullWhenCountRelation = "{0} must not be NULL when {1} is not 0";
+inline constexpr const char* kNonNullWhenCountRelation = "{0} {must_be_present} when {1} is not 0";
 
 }  // namespace sonare::util::refusal

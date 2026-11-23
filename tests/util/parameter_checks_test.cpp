@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "util/db.h"
 #include "util/exception.h"
@@ -288,4 +289,92 @@ TEST_CASE("a domain's sentinel comes off the end it sits on and leaves the check
   CHECK_NOTHROW(check::integer_within(0, counts, "k"));
   CHECK(refusal_text([&] { check::integer_within(0, unset, "fixed_velocity"); }) ==
         "fixed_velocity must be an integer in [1, 127]");
+}
+
+TEST_CASE("a presence token renders as NULL in C and in each surface's own terms",
+          "[util][refusal]") {
+  using sonare::PresenceSpelling;
+  using sonare::SonareParameterRefusal;
+  const auto relation = [](std::vector<std::string> subjects, const std::string& text) {
+    try {
+      check::refuse_relation(std::move(subjects), text);
+    } catch (const SonareParameterRefusal& e) {
+      return e;
+    }
+    FAIL("refuse_relation returned");
+    throw std::logic_error("unreachable");
+  };
+  struct Row {
+    std::vector<std::string> subjects;
+    std::string pattern;
+    const char* c;
+    const char* python;
+    const char* js;
+  };
+  const std::string must_be_absent = refusal::kMustBeAbsent;
+  const std::string must_be_present = refusal::kMustBePresent;
+  const std::string is_absent = refusal::kIsAbsent;
+  const std::string is_present = refusal::kIsPresent;
+  const std::vector<Row> rows = {
+      {{"a", "mode"},
+       "{0} " + must_be_absent + " unless {1} is chain",
+       "a must be NULL unless mode is chain",
+       "a must be None unless mode is chain",
+       "a must be omitted unless mode is chain"},
+      {{"a", "mode"},
+       "{0} " + must_be_present + " when {1} is chain",
+       "a must not be NULL when mode is chain",
+       "a must not be None when mode is chain",
+       "a must be given when mode is chain"},
+      {{"sync", "ms"},
+       "{1} " + must_be_absent + " when {0} is tempoSync",
+       "ms must be NULL when sync is tempoSync",
+       "ms must be None when sync is tempoSync",
+       "ms must be omitted when sync is tempoSync"},
+      {{"a", "b"},
+       std::string("{0} and {1} ") + refusal::kMustNotBothBeAbsent,
+       "a and b must not both be NULL",
+       "a and b must not both be None",
+       "a and b must not both be omitted"},
+      {{"a", "b"},
+       "{0} " + must_be_present + " when {1} " + is_present,
+       "a must not be NULL when b is not NULL",
+       "a must not be None when b is not None",
+       "a must be given when b is given"},
+      {{"a", "b", "c"},
+       "{0} and {1} must be 0 when {2} " + is_absent,
+       "a and b must be 0 when c is NULL",
+       "a and b must be 0 when c is None",
+       "a and b must be 0 when c is omitted"},
+      {{"values", "count"},
+       refusal::kNonNullWhenCountRelation,
+       "values must not be NULL when count is not 0",
+       "values must not be None when count is not 0",
+       "values must be given when count is not 0"},
+  };
+  for (const Row& row : rows) {
+    const SonareParameterRefusal e = relation(row.subjects, row.pattern);
+    CHECK(std::string(e.what()) == row.c);
+    CHECK(e.text(PresenceSpelling::kC) == row.c);
+    CHECK(e.text(PresenceSpelling::kPython) == row.python);
+    CHECK(e.text(PresenceSpelling::kJs) == row.js);
+    // The token stays in the structured refusal, so a respelled one still renders per surface.
+    CHECK(e.predicate() == row.pattern);
+    const SonareParameterRefusal respelled =
+        e.respelled(e.code(), [](const std::string& s) { return s + "X"; }, true);
+    CHECK(respelled.predicate() == row.pattern);
+    CHECK(respelled.text(PresenceSpelling::kJs).find("NULL") == std::string::npos);
+  }
+
+  const std::string non_null = refusal_text([] { check::non_null(nullptr, "out"); });
+  CHECK(non_null == "out must not be NULL");
+  try {
+    check::non_null(nullptr, "out");
+  } catch (const SonareParameterRefusal& e) {
+    CHECK(e.predicate() == must_be_present);
+    CHECK(e.text(PresenceSpelling::kPython) == "out must not be None");
+    CHECK(e.text(PresenceSpelling::kJs) == "out must be given");
+  }
+  // Brace text that names no subject and no token is kept as written.
+  CHECK(relation({"a"}, "{0} {unknown} {7}").text(PresenceSpelling::kJs) == "a {unknown} {7}");
 }

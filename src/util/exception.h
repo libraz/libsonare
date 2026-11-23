@@ -44,6 +44,43 @@ struct RefusalDomain {
   bool hi_included = true;
 };
 
+/// @brief How a surface words a pointer or optional value being left out or supplied.
+/// @details A refusal text writes presence through the tokens in refusal_predicates.h
+///          (`{must_be_absent}`, `{is_present}`, ...) rather than through the word NULL, so each
+///          surface renders it in its own terms: C as NULL, Python as None, JS as omitted / given.
+enum class PresenceSpelling { kC, kPython, kJs };
+
+/// @brief The phrase @p token (a presence token's name, without braces) reads as in @p spelling,
+///        or nullptr when @p token names no presence token.
+inline const char* presence_phrase(const std::string& token, PresenceSpelling spelling) {
+  struct Row {
+    const char* token;
+    const char* c;
+    const char* python;
+    const char* js;
+  };
+  static constexpr Row kRows[] = {
+      {"must_be_absent", "must be NULL", "must be None", "must be omitted"},
+      {"must_be_present", "must not be NULL", "must not be None", "must be given"},
+      {"must_not_both_be_absent", "must not both be NULL", "must not both be None",
+       "must not both be omitted"},
+      {"is_absent", "is NULL", "is None", "is omitted"},
+      {"is_present", "is not NULL", "is not None", "is given"},
+  };
+  for (const Row& row : kRows) {
+    if (token != row.token) continue;
+    switch (spelling) {
+      case PresenceSpelling::kC:
+        return row.c;
+      case PresenceSpelling::kPython:
+        return row.python;
+      case PresenceSpelling::kJs:
+        return row.js;
+    }
+  }
+  return nullptr;
+}
+
 /// @brief A refusal of one or more parameters that carries their subject keys as data.
 /// @details The layer that knows where a parameter sits in a document, or how its caller spells
 ///          it, rethrows the refusal with each subject rewritten. what() reads
@@ -105,7 +142,8 @@ class SonareParameterRefusal : public SonareException {
   const std::string& subject() const { return subjects_.front(); }
   /// @brief Every subject, in the order the text names them.
   const std::vector<std::string>& subjects() const { return subjects_; }
-  /// @brief The predicate, or a relation's text with its "{i}" placeholders.
+  /// @brief The predicate, or a relation's text with its "{i}" placeholders; either may carry
+  ///        presence tokens, which what() renders as C spells them.
   const std::string& predicate() const { return predicate_; }
   const std::string& renamed_to() const { return renamed_to_; }
   /// @brief The accepted keys an unknown-key refusal lists, or empty.
@@ -114,6 +152,11 @@ class SonareParameterRefusal : public SonareException {
   const std::optional<RefusalDomain>& domain() const { return domain_; }
   /// @brief Whether the subjects are already in the caller's spelling.
   bool caller_spelled() const { return caller_spelled_; }
+
+  /// @brief The text what() reads with its presence tokens rendered in @p spelling.
+  std::string text(PresenceSpelling spelling) const {
+    return compose(form_, subjects_, predicate_, renamed_to_, expected_, spelling);
+  }
 
   /// @brief This refusal marked as already in the caller's spelling.
   SonareParameterRefusal as_caller_spelled() const {
@@ -138,7 +181,8 @@ class SonareParameterRefusal : public SonareException {
   SonareParameterRefusal(ErrorCode code, Form form, std::vector<std::string> subjects,
                          std::string predicate, std::string renamed_to, std::string expected,
                          bool caller_spelled)
-      : SonareException(code, compose(form, subjects, predicate, renamed_to, expected)),
+      : SonareException(
+            code, compose(form, subjects, predicate, renamed_to, expected, PresenceSpelling::kC)),
         form_(form),
         subjects_(std::move(subjects)),
         predicate_(std::move(predicate)),
@@ -148,9 +192,9 @@ class SonareParameterRefusal : public SonareException {
 
   static std::string compose(Form form, const std::vector<std::string>& subjects,
                              const std::string& predicate, const std::string& renamed_to,
-                             const std::string& expected) {
+                             const std::string& expected, PresenceSpelling spelling) {
     if (form == Form::Predicate || form == Form::WrongType) {
-      return subjects.front() + " " + predicate;
+      return subjects.front() + " " + render(predicate, {}, spelling);
     }
     if (form == Form::UnknownKey) {
       std::string text = "unknown key " + subjects.front();
@@ -161,22 +205,32 @@ class SonareParameterRefusal : public SonareException {
       }
       return text;
     }
+    return render(predicate, subjects, spelling);
+  }
+
+  /// @brief @p pattern with each "{i}" replaced by subject i and each presence token by its
+  ///        phrase in @p spelling; any other brace text is kept as written.
+  static std::string render(const std::string& pattern, const std::vector<std::string>& subjects,
+                            PresenceSpelling spelling) {
     std::string text;
-    for (std::size_t at = 0; at < predicate.size(); ++at) {
-      const std::size_t close = predicate.find('}', at);
-      if (predicate[at] == '{' && close != std::string::npos) {
-        const std::string index_text = predicate.substr(at + 1, close - at - 1);
-        if (!index_text.empty() &&
-            index_text.find_first_not_of("0123456789") == std::string::npos) {
-          const std::size_t index = std::stoul(index_text);
+    for (std::size_t at = 0; at < pattern.size(); ++at) {
+      const std::size_t close = pattern.find('}', at);
+      if (pattern[at] == '{' && close != std::string::npos) {
+        const std::string name = pattern.substr(at + 1, close - at - 1);
+        if (!name.empty() && name.find_first_not_of("0123456789") == std::string::npos) {
+          const std::size_t index = std::stoul(name);
           if (index < subjects.size()) {
             text += subjects[index];
             at = close;
             continue;
           }
+        } else if (const char* phrase = presence_phrase(name, spelling)) {
+          text += phrase;
+          at = close;
+          continue;
         }
       }
-      text += predicate[at];
+      text += pattern[at];
     }
     return text;
   }
