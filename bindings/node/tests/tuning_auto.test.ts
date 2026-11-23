@@ -108,9 +108,9 @@ describe("tuningCents: 'auto'", () => {
       /tuningCents must be a number or 'auto'/,
     );
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow(RangeError);
-    // The core's guard, which the facade deliberately does not mirror.
+    // The core's guard, which the facade deliberately does not mirror, in the caller's spelling.
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow(
-      /^detectKey: tuning_cents must be/,
+      new RangeError('detectKey: tuningCents must be finite and in [-50, 50)'),
     );
   });
 });

@@ -358,7 +358,7 @@ TuningArg tuningFromVal(const val& value, const char* key) {
   constexpr float kMaxTuningCents = 50.0f;
   if (!std::isfinite(out.tuning_cents) || out.tuning_cents < -kMaxTuningCents ||
       out.tuning_cents >= kMaxTuningCents) {
-    throw WasmRangeError(std::string(key) + " must be finite and in [-50, 50) cents");
+    throw WasmRangeError(std::string(key) + " must be finite and in [-50, 50)");
   }
   out.measure = false;
   return out;

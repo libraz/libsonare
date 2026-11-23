@@ -5,6 +5,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  detectKey,
   init,
   Mixer,
   mixingScenePreset,
@@ -209,6 +210,33 @@ describe('runtime refusal parity (WASM)', () => {
       );
     } finally {
       eq.destroy();
+    }
+  });
+  it('refuses an out-of-range tuning in the same words', () => {
+    expectRefusal(
+      () => detectKey({ samples: new Float32Array(48000), sampleRate: 48000, tuningCents: 70 }),
+      RangeError,
+      exactly('detectKey: tuningCents must be finite and in [-50, 50)'),
+    );
+  });
+
+  // WASM drives the engine directly and still names no cause for a refused lane edit; this flips
+  // red once the mixer edit causes reach WASM, and `.fails` comes off then.
+  it.fails('refuses a repeated send bus in the same words', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      engine.setTrackBuses([
+        { busId: 1, gainDb: 0 },
+        { busId: 2, gainDb: -6 },
+      ]);
+      engine.setTrackLanes([{ trackId: 10 }]);
+      expectRefusal(
+        () => engine.setTrackSends(10, [{ busId: 2 }, { busId: 2 }]),
+        RangeError,
+        exactly('RealtimeEngine.setTrackSends: sends[1].busId must not repeat an earlier send'),
+      );
+    } finally {
+      engine.destroy();
     }
   });
 });

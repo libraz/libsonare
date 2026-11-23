@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  detectKey,
   Mixer,
   mixingScenePreset,
   Project,
@@ -201,5 +202,27 @@ describe('runtime refusal parity (Node)', () => {
     } finally {
       eq.destroy();
     }
+  });
+  it('refuses a repeated send bus and an out-of-range tuning in the same words', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      engine.setTrackBuses([
+        { busId: 1, gainDb: 0 },
+        { busId: 2, gainDb: -6 },
+      ]);
+      engine.setTrackLanes([{ trackId: 10 }]);
+      expectRefusal(
+        () => engine.setTrackSends(10, [{ busId: 2 }, { busId: 2 }]),
+        RangeError,
+        exactly('RealtimeEngine.setTrackSends: sends[1].busId must not repeat an earlier send'),
+      );
+    } finally {
+      engine.destroy();
+    }
+    expectRefusal(
+      () => detectKey({ samples: new Float32Array(48000), sampleRate: 48000, tuningCents: 70 }),
+      RangeError,
+      exactly('detectKey: tuningCents must be finite and in [-50, 50)'),
+    );
   });
 });
