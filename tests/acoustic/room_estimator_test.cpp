@@ -247,6 +247,16 @@ TEST_CASE("estimate_room reports zero confidence for silence", "[acoustic][room_
   REQUIRE(std::isnan(est.dims.length));
   REQUIRE(std::isnan(est.dims.width));
   REQUIRE(std::isnan(est.dims.height));
+  // Silence has no direct sound to set against a reverberant one, so the ratio is not measured.
+  REQUIRE(std::isnan(est.drr_db));
+}
+
+TEST_CASE("estimate_room reads a direct sound with nothing outside its window as +inf DRR",
+          "[acoustic][room_estimator]") {
+  std::vector<float> click(48000, 0.0f);
+  click[24000] = 0.5f;
+  const RoomEstimate est = estimate_room(Audio::from_vector(std::move(click), 48000));
+  REQUIRE(est.drr_db == std::numeric_limits<float>::infinity());
 }
 
 TEST_CASE("estimate_room rejects invalid priors before analysis",

@@ -117,7 +117,10 @@ std::vector<MonoCompatBandResult> mono_compat_check_log_bands(const float* left,
   std::vector<MonoCompatBandResult> result;
   for (double low = low_hz; low < high_hz; low *= ratio) {
     const double high = std::min(static_cast<double>(high_hz), low * ratio);
-    result.push_back({static_cast<float>(low), static_cast<float>(high), 0.0f, 0.0f});
+    MonoCompatBandResult band;
+    band.low_hz = static_cast<float>(low);
+    band.high_hz = static_cast<float>(high);
+    result.push_back(band);
   }
   if (result.empty()) return result;
 
@@ -207,9 +210,10 @@ std::vector<MonoCompatBandResult> mono_compat_check_log_bands(const float* left,
   const double side_mean_square = total_side_energy / static_cast<double>(length);
 
   for (size_t band = 0; band < result.size(); ++band) {
+    // A band silent in either channel leaves no correlation to measure, as the broadband one.
     if (sum_ll[band] > 0.0 && sum_rr[band] > 0.0) {
-      result[band].correlation =
-          static_cast<float>(sum_lr[band] / std::sqrt(sum_ll[band] * sum_rr[band]));
+      result[band].correlation = static_cast<float>(
+          std::clamp(sum_lr[band] / std::sqrt(sum_ll[band] * sum_rr[band]), -1.0, 1.0));
     }
     if (total_side_spectral > 0.0) {
       const double share = sum_side[band] / total_side_spectral;

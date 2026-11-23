@@ -7,10 +7,12 @@
 #include <optional>
 #include <vector>
 
+#include "util/db.h"
+
 namespace sonare::mastering::stereo {
 
 struct MonoCompatResult {
-  float correlation = 0.0f;
+  float correlation = sonare::kNotMeasured;  ///< NaN when either channel is silent.
   float width = 0.0f;
   float mono_peak = 0.0f;
   float side_rms = 0.0f;
@@ -27,7 +29,7 @@ struct MonoCompatResult {
 struct MonoCompatBandResult {
   float low_hz = 0.0f;
   float high_hz = 0.0f;
-  float correlation = 0.0f;
+  float correlation = sonare::kNotMeasured;  ///< NaN when either channel is silent in the band.
   float side_rms = 0.0f;
 };
 

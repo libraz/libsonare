@@ -31,6 +31,7 @@
 #include "acoustic/room_types.h"         // sonare::RoomDimensions
 #include "analysis/acoustic_analyzer.h"  // AcousticConfig
 #include "core/audio.h"
+#include "util/db.h"
 #include "util/parameter_checks.h"
 
 namespace sonare {
@@ -41,7 +42,7 @@ struct RoomEstimate {
   RoomDimensions dims;                  ///< representative shoebox dimensions (m); NaN likewise
   std::vector<float> absorption_bands;  ///< per-octave-band mean wall absorption alpha-bar(f),
                                         ///< [0,1), ISO-reference air removed
-  float drr_db = 0.0f;                  ///< direct-to-reverberant ratio (dB)
+  float drr_db = kNotMeasured;          ///< direct-to-reverberant ratio (dB); NaN if silent
   std::vector<float> rt60_bands;        ///< per-band RT60 (s), straight from the analyzer
   float confidence = 0.0f;              ///< honest [0,1] support for the estimate
 };

@@ -158,6 +158,7 @@ This release gives the public interface one set of conventions on every surface 
 - `zero_crossings` refuses a non-finite sample in the core, so the C ABI and Python refuse it as the JS facades did.
 - `chordSymbolFromAnalysis` on Node and WASM leaves `slashBassPc` out when the bass is the root instead of returning 255.
 - On Node and WASM an acoustic value that was not measured is an absent key instead of NaN: the `rt60`, `edt`, `c50`, `c80` and `d50` of `detectAcoustic` / `analyzeImpulseResponse` (the blind path measures only `rt60`), and the `volume` and dimensions of `estimateRoom`. A band array none of whose bands was measured is absent instead of empty or all-NaN (`edtBands`, `c50Bands` and `c80Bands` on the blind path, `bandAbsorption` and `rt60Bands` of an estimate with no measurable decay); a measured one keeps every band, NaN where one band was not fitted.
+- The direct-to-reverberant ratio of `estimateRoom` (Python `estimate_room`, C `drr_db`) is not measured (NaN in C and C++, absent on the other surfaces) for a silent recording instead of 0 dB, and `+inf` when the direct sound has no energy outside its window; a per-band `correlation` of `stereo.monoCompatCheckLogBands` is likewise not measured where either channel is silent in the band instead of 0, as the broadband correlation already was.
 
 #### Editing and alignment
 

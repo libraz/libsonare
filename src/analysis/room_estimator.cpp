@@ -26,10 +26,11 @@ constexpr size_t kTmidHighBand = 3;
 // peak versus all energy outside that direct window (both the tail after it and
 // any build-up before it, per the ISO 3382 split). Meaningful for impulse-like
 // inputs; for sustained signals the analyzer flags the input blind and the
-// caller should weight `drr_db` by the returned confidence.
+// caller should weight `drr_db` by the returned confidence. Silence is not measured (NaN), and
+// a direct sound with no energy outside its window reads +inf.
 float estimate_drr_db(const Audio& x) {
   const size_t n = x.size();
-  if (n == 0) return 0.0f;
+  if (n == 0) return kNotMeasured;
   const float* d = x.data();
   size_t peak = 0;
   float best = 0.0f;
@@ -40,7 +41,7 @@ float estimate_drr_db(const Audio& x) {
       peak = i;
     }
   }
-  if (best <= 0.0f) return 0.0f;
+  if (best <= 0.0f) return kNotMeasured;
 
   const int half = std::max(1, static_cast<int>(std::lround(0.0025 * x.sample_rate())));
   const size_t lo = peak > static_cast<size_t>(half) ? peak - static_cast<size_t>(half) : 0;
@@ -55,8 +56,8 @@ float estimate_drr_db(const Audio& x) {
       reverb += e;  // both pre-direct build-up and the post-direct tail
     }
   }
-  constexpr double kEps = 1e-12;
-  return power_to_db_scalar(std::max(direct, kEps) / std::max(reverb, kEps));
+  return static_cast<float>(
+      level_difference_db(power_to_level_db(direct), power_to_level_db(reverb)));
 }
 
 }  // namespace

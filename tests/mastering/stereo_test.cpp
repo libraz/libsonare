@@ -599,6 +599,28 @@ TEST_CASE("MonoCompatCheck reports log-band phase correlation", "[mastering][ste
   REQUIRE(bands[0].side_rms > 0.3f);
 }
 
+TEST_CASE("MonoCompatCheck leaves a band's correlation unmeasured where a channel is silent",
+          "[mastering][stereo]") {
+  const std::vector<float> silent(4800, 0.0f);
+  auto tone = generate_sine_samples(1000.0f, 48000, 4800, 0.5f);
+
+  // Silent in both channels: no band has anything to correlate, and none has side energy.
+  for (const auto& band :
+       mono_compat_check_log_bands(silent.data(), silent.data(), silent.size(), 48000.0)) {
+    CHECK(std::isnan(band.correlation));
+    CHECK(band.side_rms == 0.0f);
+  }
+  // Silent in one channel: as the broadband reading, every band is unmeasured.
+  const auto one_sided =
+      mono_compat_check_log_bands(tone.data(), silent.data(), tone.size(), 48000.0);
+  REQUIRE_FALSE(one_sided.empty());
+  for (const auto& band : one_sided) CHECK(std::isnan(band.correlation));
+  CHECK(std::isnan(mono_compat_check(tone.data(), silent.data(), tone.size()).correlation));
+  // A default-constructed readout has measured nothing.
+  CHECK(std::isnan(MonoCompatBandResult{}.correlation));
+  CHECK(std::isnan(MonoCompatResult{}.correlation));
+}
+
 TEST_CASE("MonoCompatCheck log bands have frequency-dependent side energy", "[mastering][stereo]") {
   // A side component confined to a single low band must not smear into a flat,
   // broadband side_rms profile across every band.
