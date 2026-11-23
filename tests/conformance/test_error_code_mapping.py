@@ -174,11 +174,16 @@ def c_to_core(root: Path) -> dict[str, str]:
 
 def c_to_name(root: Path) -> dict[str, str]:
     """``SONARE_ERROR_Y -> "Name"``, the canonical cross-surface spelling."""
-    return _case_arms(
-        _strip_comments(_read(root, NODE_ADDON)),
-        "ErrorCodeName",
-        r'case\s+(SONARE_\w+)\s*:\s*return\s+"(\w+)"\s*;',
-    )
+    text = _strip_comments(_read(root, NODE_ADDON))
+    body = _braced_body(text, text.index("ErrorCodeName"))
+    # Labels stacked over one return, `default:` among them, all take that name.
+    names: dict[str, str] = {}
+    for arm in re.finditer(
+        r'((?:(?:case\s+SONARE_\w+|default)\s*:\s*)+)return\s+"(\w+)"\s*;', body
+    ):
+        for label in re.findall(r"case\s+(SONARE_\w+)", arm.group(1)):
+            names[label] = arm.group(2)
+    return names
 
 
 def wasm_mapping(root: Path) -> dict[str, tuple[int, str]]:
@@ -427,6 +432,18 @@ class NonVacuityTest(unittest.TestCase):
             path.write_text(text[: arm.start()] + text[arm.end() :], encoding="utf-8")
             problems = inconsistencies(Tables(root))
         self.assertEqual(problems, ["Cancelled: the WASM mapping has no case for it"])
+
+    def test_a_name_reached_only_through_default_is_not_a_canonical_name(self) -> None:
+        holder, root = self._copy()
+        with holder:
+            path = root / NODE_ADDON
+            text = path.read_text(encoding="utf-8")
+            arm = re.search(r"[ \t]*case SONARE_ERROR_UNKNOWN:\n(?=[ \t]*default:)", text)
+            self.assertIsNotNone(arm, "the codeName switch arm is no longer written this way")
+            assert arm is not None
+            path.write_text(text[: arm.start()] + text[arm.end() :], encoding="utf-8")
+            problems = inconsistencies(Tables(root))
+        self.assertEqual(problems, ["Unknown: SONARE_ERROR_UNKNOWN has no canonical codeName"])
 
     def test_reporting_the_non_error_as_a_success_names_the_surface(self) -> None:
         holder, root = self._copy()
