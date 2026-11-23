@@ -1766,7 +1766,9 @@ describe('Sonare WASM Project meter plumbing', () => {
   function smfWithSignatures(sigs: Array<[number, number]>): Uint8Array {
     const vlq = (value: number): number[] => {
       const out = [value & 0x7f];
-      for (let rest = value >>> 7; rest > 0; rest >>>= 7) out.unshift((rest & 0x7f) | 0x80);
+      for (let rest = value >>> 7; rest > 0; rest >>>= 7) {
+        out.unshift((rest & 0x7f) | 0x80);
+      }
       return out;
     };
     const body: number[] = [0x00, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20];
