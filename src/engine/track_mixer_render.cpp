@@ -213,6 +213,87 @@ bool TrackMixerRuntime::mix_source_into_lane(uint32_t track_id, float* const* so
   return true;
 }
 
+void TrackMixerRuntime::prepare_input_routing(int ramp_samples) noexcept {
+  input_ramp_samples_ = std::max(ramp_samples, 1);
+  input_routes_ = {};
+  input_target_has_ = false;
+  input_target_id_ = 0;
+}
+
+bool TrackMixerRuntime::input_routing_active(bool has_track) const noexcept {
+  if (has_track) return true;
+  return std::any_of(input_routes_.begin(), input_routes_.end(),
+                     [](const InputRoute& route) { return route.live; });
+}
+
+float TrackMixerRuntime::input_route_gain(const InputRoute& route, int offset) const noexcept {
+  const int position = route.elapsed + offset;
+  if (position >= input_ramp_samples_) return route.goal;
+  return route.start + (route.goal - route.start) *
+                           (static_cast<float>(position) / static_cast<float>(input_ramp_samples_));
+}
+
+void TrackMixerRuntime::mix_input_into_lanes(bool has_track, uint32_t track_id,
+                                             const float* const* input, int input_channels,
+                                             int num_samples) noexcept {
+  if (has_track != input_target_has_ || (has_track && track_id != input_target_id_)) {
+    input_target_has_ = has_track;
+    input_target_id_ = track_id;
+    bool target_routed = false;
+    for (InputRoute& route : input_routes_) {
+      if (!route.live) continue;
+      const bool target = has_track && route.track_id == track_id;
+      target_routed = target_routed || target;
+      route.start = input_route_gain(route, 0);
+      route.goal = target ? 1.0f : 0.0f;
+      route.elapsed = 0;
+    }
+    if (has_track && !target_routed) {
+      // A full table gives up its quietest route.
+      InputRoute* slot = &input_routes_[0];
+      for (InputRoute& route : input_routes_) {
+        if (!route.live) {
+          slot = &route;
+          break;
+        }
+        if (input_route_gain(route, 0) < input_route_gain(*slot, 0)) slot = &route;
+      }
+      *slot = InputRoute{true, track_id, 0.0f, 1.0f, 0};
+    }
+  }
+
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  const bool can_mix = input != nullptr && input_channels > 0 && num_samples > 0 &&
+                       num_samples <= max_block_size_ && !scratch_.empty();
+  for (InputRoute& route : input_routes_) {
+    if (!route.live) continue;
+    size_t lane_index = 0;
+    while (lanes != nullptr && lane_index < lanes->size() &&
+           (*lanes)[lane_index].track_id != route.track_id) {
+      ++lane_index;
+    }
+    if (lanes == nullptr || lane_index == lanes->size()) {
+      // The lane left with its strip, so the route stops without a ramp.
+      route.live = false;
+      continue;
+    }
+    if (can_mix) {
+      // A lane renders as many planes as the block carries, up to two.
+      for (int ch = 0; ch < std::min(input_channels, kMaxLaneChannels); ++ch) {
+        const float* src = input[ch];
+        if (!src) continue;
+        float* lane = lane_channel(lane_index, ch);
+        for (int i = 0; i < num_samples; ++i) {
+          lane[i] += src[i] * input_route_gain(route, i);
+        }
+      }
+      source_mix_lane_active_[lane_index] = true;
+    }
+    route.elapsed = std::min(route.elapsed + std::max(num_samples, 0), input_ramp_samples_);
+    if (route.elapsed >= input_ramp_samples_ && route.goal == 0.0f) route.live = false;
+  }
+}
+
 void TrackMixerRuntime::finish_source_mix(float* const* channels, int num_channels, int num_samples,
                                           MeterTelemetryTap* meter_tap, int64_t render_frame,
                                           ScopeTelemetryTap* scope_tap) noexcept {

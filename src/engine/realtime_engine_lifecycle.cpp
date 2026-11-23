@@ -287,6 +287,8 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   mixing_runtime_.prepare(sample_rate_, max_block_size_);
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
   track_mixer_runtime_.prepare(sample_rate_, max_block_size_);
+  track_mixer_runtime_.prepare_input_routing(static_cast<int>(std::lround(
+      sample_rate_ * static_cast<double>(rt::kClickGuardMs) / constants::kMsPerSecondD)));
   update_reported_graph_latency();
   monitor_bus_storage_.assign(
       static_cast<size_t>(max_block_size_) * static_cast<size_t>(prepared_channels_), 0.0f);

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -15,6 +16,7 @@
 #include "engine/track_mixer_internal.h"
 #include "mastering/api/insert_factory.h"
 #include "rt/command.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::engine {
 
@@ -303,11 +305,34 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 
     track_lane_ids_ = new_lane_ids;
     track_lane_count_ = new_lane_count;
+    // A track whose lane is gone takes the input track with it; its lane, strip and all, is gone.
+    if (const std::optional<uint32_t> input = input_track()) {
+      const auto end = new_lane_ids.begin() + static_cast<std::ptrdiff_t>(new_lane_count);
+      if (std::find(new_lane_ids.begin(), end, *input) == end) clear_input_track();
+    }
     // A removed track's ids are retired, and their queued edits and bases go with them.
     sync_insert_automation_targets();
     update_reported_graph_latency();
   }
   return report_track_mixer_edit(ok);
+}
+
+void RealtimeEngine::set_input_track(uint32_t track_id) {
+  const auto end = track_lane_ids_.begin() + static_cast<std::ptrdiff_t>(track_lane_count_);
+  if (std::find(track_lane_ids_.begin(), end, track_id) == end) {
+    util::check::refuse_unknown_id("track_id", "a track lane", "engine");
+  }
+  input_track_.store(kInputTrackSet | track_id, std::memory_order_release);
+}
+
+void RealtimeEngine::clear_input_track() noexcept {
+  input_track_.store(0, std::memory_order_release);
+}
+
+std::optional<uint32_t> RealtimeEngine::input_track() const noexcept {
+  const uint64_t state = input_track_.load(std::memory_order_acquire);
+  if ((state & kInputTrackSet) == 0) return std::nullopt;
+  return static_cast<uint32_t>(state);
 }
 
 namespace {

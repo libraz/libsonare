@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "automation/automation_engine.h"
@@ -832,11 +833,18 @@ class RealtimeEngine : private ClipPageRequestSink {
   int64_t record_offset_samples() const noexcept {
     return record_offset_samples_.load(std::memory_order_acquire);
   }
+  /// The dry input monitor: the live input passed straight to the output ahead of the master,
+  /// switched on and off in one step. Independent of the input track; with both on, dry and wet
+  /// sound together.
+  struct InputMonitorState {
+    bool enabled = true;
+    float gain = 1.0f;
+  };
   void set_input_monitor(bool enabled, float gain) noexcept {
     input_monitor_.store(InputMonitorState{enabled, gain});
   }
-  bool input_monitor_enabled() const noexcept { return input_monitor_.load().enabled; }
-  float input_monitor_gain() const noexcept { return input_monitor_.load().gain; }
+  /// Both fields as one write left them.
+  InputMonitorState input_monitor() const noexcept { return input_monitor_.load(); }
   void reset_capture() noexcept;
   int64_t captured_frames() const noexcept { return capture_sink_.captured_frames(); }
   uint32_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
@@ -894,6 +902,18 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @p insert_index, or -1 when the strip, the insert or the key is unknown.
   int master_insert_parameter_id(unsigned int insert_index, const std::string& key) const noexcept;
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
+  /// Routes the live input into @p track_id's lane, ahead of its strip, sends and fader, ramping
+  /// over 5 ms; moving it crossfades the two lanes. CONTROL thread; may be set before prepare and
+  /// survives it. The first two input channels feed the lane; the rest stay out.
+  /// The input is delayed like any lane source; master insert latency is not compensated.
+  /// Refuses (InvalidParameter, subject track_id) an id no lane carries, leaving the state as it
+  /// was.
+  void set_input_track(uint32_t track_id);
+  /// Stops routing the live input into a lane, ramping out over 5 ms. CONTROL thread.
+  void clear_input_track() noexcept;
+  /// The track the live input is routed into, or none. set_track_lanes dropping that track's lane
+  /// clears it, without a ramp.
+  std::optional<uint32_t> input_track() const noexcept;
   /// Replaces @p track_id's lane sends (empty clears them) and republishes the
   /// rest of the lane list unchanged through set_track_lanes, so an unchanged
   /// send list keeps its in-flight ramps. CONTROL thread only, like set_track_lanes.
@@ -1479,11 +1499,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Must not throw — it runs while an exception is in flight.
   void reset_to_unprepared() noexcept;
 
-  struct InputMonitorState {
-    bool enabled = true;
-    float gain = 1.0f;
-  };
-
   transport::TempoMap tempo_map_{};
   rt::RtPublisher<transport::TempoMap> tempo_map_snapshot_{};
   /// The control-thread tempo map: the published snapshot, else the engine's own map.
@@ -1864,6 +1879,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   // when a host reorders or replaces lanes before the next process block.
   std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes> track_lane_ids_{};
   size_t track_lane_count_ = 0;
+  // The input track as the audio thread reads it once per block: bit 32 set when a track is
+  // routed, its id in the low 32 bits.
+  static constexpr uint64_t kInputTrackSet = uint64_t{1} << 32;
+  std::atomic<uint64_t> input_track_{0};
   // Automated master-strip insert parameters. The master insert chain is not part
   // of TrackMixerRuntime, so its smoothers live here and are advanced once per
   // sub-block by tick_smoothed_params, mirroring the lane/bus slot table.

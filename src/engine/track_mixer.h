@@ -695,6 +695,20 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                          MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
                          ScopeTelemetryTap* scope_tap = nullptr) noexcept;
 
+  // Live input routed into one lane. Every change of lane ramps the input's contribution over
+  // prepare_input_routing()'s length: the lane left goes 1 -> 0 while the lane entered goes
+  // 0 -> 1, and a change mid-ramp starts a full ramp from the gain reached.
+  static constexpr size_t kMaxInputRoutes = 4;
+  // CONTROL, quiescent (prepare): the ramp length, and no route left sounding.
+  void prepare_input_routing(int ramp_samples) noexcept;
+  // AUDIO: true while @p has_track is set or a route is still ramping out.
+  bool input_routing_active(bool has_track) const noexcept;
+  // AUDIO, inside an open block: mixes the first two channels of @p input into the route's lane
+  // (one, on a one-plane lane). A route whose track has no lane in this block's snapshot mixes
+  // nowhere, the main bus included, and stops.
+  void mix_input_into_lanes(bool has_track, uint32_t track_id, const float* const* input,
+                            int input_channels, int num_samples) noexcept;
+
   enum class SidechainTargetKind : uint8_t { Lane = 0, Bus = 1, Master = 2 };
   // One table for every keyed insert. target_id is the lane's track id or the
   // bus id (0 for the master); source_id a track id or a bus id per source_kind.
@@ -1288,6 +1302,18 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   size_t master_insert_count_ = 0;
   const mixing::ChannelStrip* master_strip_ = nullptr;
   std::array<bool, kMaxTrackLanes> source_mix_lane_active_{};
+  struct InputRoute {
+    bool live = false;
+    uint32_t track_id = 0;
+    float start = 0.0f;
+    float goal = 0.0f;
+    int elapsed = 0;
+  };
+  float input_route_gain(const InputRoute& route, int offset) const noexcept;
+  std::array<InputRoute, kMaxInputRoutes> input_routes_{};
+  bool input_target_has_ = false;
+  uint32_t input_target_id_ = 0;
+  int input_ramp_samples_ = 1;
   std::array<BusState, kMaxBusLanes> bus_states_{};
   float* const* monitor_bus_ = nullptr;
   int monitor_bus_channel_count_ = 0;

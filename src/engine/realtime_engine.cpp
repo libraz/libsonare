@@ -426,6 +426,14 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   std::array<float*, kMaxAudioChannels> sub_channels{};
   int channels = 0;
   const bool capture_input = capture_source() == CaptureSource::kInput;
+#if defined(SONARE_WITH_MIXING)
+  // The input track, read once for the block; the lane lookup uses this block's snapshot.
+  const uint64_t input_track_state = input_track_.load(std::memory_order_acquire);
+  const bool input_track_set = (input_track_state & kInputTrackSet) != 0;
+  const bool route_input = track_mixer_runtime_.input_routing_active(input_track_set);
+#else
+  const bool route_input = false;
+#endif
   const int scratch_channels = std::min(
       {std::max(num_channels, 0), prepared_channels_, static_cast<int>(sub_channels.size())});
 #if defined(SONARE_WITH_MIXING)
@@ -446,7 +454,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     for (int ch = 0; ch < channels; ++ch) {
       sub_channels[static_cast<size_t>(ch)] = io[ch] ? io[ch] + offset : nullptr;
     }
-    if (capture_input) {
+    // The raw input is copied ahead of the dry monitor's gate, for capture and the input track.
+    if (capture_input || route_input) {
       for (int ch = 0; ch < channels; ++ch) {
         float* dst = input_capture_channels_[static_cast<size_t>(ch)];
         const float* src = sub_channels[static_cast<size_t>(ch)];
@@ -458,8 +467,10 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
       }
 #if defined(SONARE_WITH_MIXING)
-      meter_tap_.process_lightweight(input_capture_channels_.data(), channels, num_frames,
-                                     transport_.render_frame(), 0xFFFFu);
+      if (capture_input) {
+        meter_tap_.process_lightweight(input_capture_channels_.data(), channels, num_frames,
+                                       transport_.render_frame(), 0xFFFFu);
+      }
 #endif
     }
     const InputMonitorState monitor = input_monitor_reader_.try_load();
@@ -793,6 +804,13 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #endif
     }
 #if defined(SONARE_WITH_MIXING)
+    if (block_open && route_input) {
+      // Live input joins its lane like an instrument source, rolling or not.
+      track_mixer_runtime_.mix_input_into_lanes(
+          input_track_set, static_cast<uint32_t>(input_track_state),
+          reinterpret_cast<const float* const*>(input_capture_channels_.data()), channels,
+          num_frames);
+    }
     if (block_open) {
       // Aggregated block: run every lane that received audio through its strip /
       // sends / fader, and every bus chain, exactly once over the summed clip +
