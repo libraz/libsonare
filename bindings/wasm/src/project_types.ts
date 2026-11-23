@@ -388,8 +388,11 @@ export type ProjectAutomationTargetKind = 'opaque' | 'trackFaderDb' | 'trackPan'
 export interface ProjectAutomationLaneDesc {
   /** Host-defined, non-zero id of the parameter the lane drives (zero is reserved). */
   targetParamId: number;
-  /** Breakpoints (stored verbatim). */
-  points: ReadonlyArray<ProjectAutomationPoint>;
+  /**
+   * Breakpoints (stored verbatim; need not be pre-sorted). Omitted is an empty lane, so on edit
+   * it clears every breakpoint.
+   */
+  points?: ReadonlyArray<ProjectAutomationPoint>;
   /**
    * Persistent target classification. On add, omitted is `'opaque'`; on edit,
    * omitted keeps the lane's current kind.

@@ -1433,8 +1433,8 @@ describe('v1.2 feature additions (WASM)', () => {
       for (const [invalid, message] of [
         [0, 'RealtimeEngine.setTempo: tempo must be finite, positive, and at most 100000 BPM'],
         [-1, 'RealtimeEngine.setTempo: tempo must be finite, positive, and at most 100000 BPM'],
-        [Number.NaN, 'RealtimeEngine.setTempo: bpm must be a finite number'],
-        [Number.POSITIVE_INFINITY, 'RealtimeEngine.setTempo: bpm must be a finite number'],
+        [Number.NaN, 'RealtimeEngine.setTempo: bpm must be finite'],
+        [Number.POSITIVE_INFINITY, 'RealtimeEngine.setTempo: bpm must be finite'],
       ] as const) {
         expect(expectRefusalOf(() => engine.setTempo(invalid), RangeError).message).toBe(message);
         expect(engine.sampleAtPpq(1)).toBe(48000);

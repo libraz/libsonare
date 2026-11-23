@@ -1268,13 +1268,11 @@ inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* ou
   if (!RequireNumberValue(env, value, "waveform")) return false;
   // Range-checked before the int read rather than after it. Int32Value() WRAPS,
   // so 2^31 arrives as -2147483648 and the enum rejection below then names a
-  // number the caller never wrote. The WASM reader refuses the same input as
-  // out of 32-bit range, and this is the only field where the two are required
-  // to answer in the same words.
+  // number the caller never wrote. The words are the int narrowing's, as on WASM.
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
       number > static_cast<double>(std::numeric_limits<int>::max())) {
-    Napi::RangeError::New(env, "waveform must be a finite number within the 32-bit integer range")
+    Napi::RangeError::New(env, "waveform must be a finite number within [-2147483648, 2147483647]")
         .ThrowAsJavaScriptException();
     return false;
   }

@@ -12,6 +12,7 @@
 #include <sonare/sonare_c_project.h>
 #include <sonare/sonare_c_types.h>
 
+#include <cmath>
 #include <cstring>
 #include <iterator>
 #include <string>
@@ -107,14 +108,18 @@ inline int enumFromVal(emscripten::val value, const char* const* names, int coun
   // Reject non-number, non-string values (e.g. a boolean) instead of coercing
   // them to a bogus ordinal, matching the Node addon's enum reader.
   if (value.typeOf().as<std::string>() != "number") {
-    throw WasmTypeError(std::string("Expected ") + what + " to be a number or string");
+    throw WasmTypeError(std::string(what) + " must be a number or string");
   }
   // The name path cannot spell an ordinal outside the table, so the numeric path
   // must not either: mod source and destination land in a struct field the core
   // reads without re-checking, where 9, 10, 99 and -1 all render as "none".
-  const int ordinal = checkedIntFromVal(value, what);
-  requireOrdinalInRange(ordinal, 0, count - 1, what);
-  return ordinal;
+  const double number = value.as<double>();
+  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 ||
+      number >= static_cast<double>(count)) {
+    throw WasmRangeError(std::string(what) + " must be a name or an ordinal in [0, " +
+                         std::to_string(count) + ")");
+  }
+  return static_cast<int>(number);
 }
 
 /// Spells an enum ordinal as its canonical name, or hands back the ordinal

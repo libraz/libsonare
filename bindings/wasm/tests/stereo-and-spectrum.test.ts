@@ -191,7 +191,7 @@ describe('Spectrum meter wrapper (WASM)', () => {
         } catch (error) {
           message = (error as Error).message;
         }
-        expect(message).toContain('nFft must be a finite number within the 32-bit integer range');
+        expect(message).toContain('nFft must be a finite number within [-2147483648, 2147483647]');
         expect(message).not.toContain('power of two');
       });
     }

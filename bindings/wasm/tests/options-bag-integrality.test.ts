@@ -174,7 +174,7 @@ describe('the shared options-bag reader refuses a fractional value', () => {
       // The range check is the reader's OTHER rejection and it fires on a
       // different input class. Without this, a range check that had started
       // refusing everything would satisfy the assertion above.
-      expect(error.message).not.toContain('within the 32-bit integer range');
+      expect(error.message).not.toContain('within [-2147483648, 2147483647]');
       // The message names the entry the caller used, then the field.
       expect(error.message.startsWith(`${entry}: ${field} must be an integer`)).toBe(true);
     });

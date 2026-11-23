@@ -828,8 +828,11 @@ export interface ProjectAutomationLaneDesc {
    * omitted keeps the lane's current kind.
    */
   targetKind?: ProjectAutomationTargetKind;
-  /** Breakpoints (stored verbatim; need not be pre-sorted). */
-  points: ProjectAutomationPoint[];
+  /**
+   * Breakpoints (stored verbatim; need not be pre-sorted). Omitted is an empty lane, so on edit
+   * it clears every breakpoint.
+   */
+  points?: ProjectAutomationPoint[];
 }
 
 /** Mode of a {@link ProjectKeySegment}. */

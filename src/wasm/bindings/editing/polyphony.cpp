@@ -48,7 +48,7 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   const auto set_float = [&config](const char* key, float& field) {
     const float value = floatProperty(config, key, field);
     if (!std::isfinite(value)) {
-      throw WasmRangeError(std::string(key) + " must be a finite number");
+      throw WasmRangeError(std::string(key) + " must be finite");
     }
     field = value;
   };

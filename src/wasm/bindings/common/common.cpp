@@ -527,10 +527,13 @@ int checkedIntFromVal(const val& value, const char* key) {
   // agree; widening the positional path to match the saturating one would look
   // consistent and remove the only range check this surface has.
   const double number = numberFromVal(value, key);
-  if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
-      number > static_cast<double>(std::numeric_limits<int>::max())) {
+  // Truncated before the range, so an in-range fraction is refused as a fraction (the Node
+  // wording).
+  const double truncated = std::trunc(number);
+  if (!std::isfinite(number) || truncated < static_cast<double>(std::numeric_limits<int>::min()) ||
+      truncated > static_cast<double>(std::numeric_limits<int>::max())) {
     throw WasmRangeError(std::string(key) +
-                         " must be a finite number within the 32-bit integer range");
+                         " must be a finite number within [-2147483648, 2147483647]");
   }
   requireIntegral(number, key);
   return static_cast<int>(number);
@@ -707,7 +710,7 @@ double checkedDoubleFromVal(const val& value, const char* key) {
   // those bags is covered without someone having to repeat it.
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number)) {
-    throw WasmRangeError(std::string(key) + " must be a finite number");
+    throw WasmRangeError(std::string(key) + " must be finite");
   }
   return number;
 }

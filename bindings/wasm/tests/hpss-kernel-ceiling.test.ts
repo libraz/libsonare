@@ -367,7 +367,7 @@ describe('percussive-event separation kernel', () => {
         // check nor the core's parity and ceiling guards. Without this, 32.5
         // would pass by tripping the parity guard on the 32 it truncated to,
         // which says nothing about the integrality check.
-        expect(error.message).not.toContain('within the 32-bit integer range');
+        expect(error.message).not.toContain('within [-2147483648, 2147483647]');
         expect(error.message).not.toContain('must be an odd integer');
       });
 

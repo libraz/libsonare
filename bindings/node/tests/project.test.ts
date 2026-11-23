@@ -1285,7 +1285,7 @@ describe('Project native binding', () => {
       expect(
         () => nativeBuiltinBounce(project, waveform),
         `waveform ${waveform} must be rejected as out of range`,
-      ).toThrow(/32-bit integer range/);
+      ).toThrow(/must be a finite number within \[-2147483648, 2147483647\]/);
       project.destroy();
     }
   });

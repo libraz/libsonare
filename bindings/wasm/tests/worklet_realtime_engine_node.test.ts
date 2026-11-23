@@ -794,7 +794,7 @@ describe('SonareRealtimeEngineNode', () => {
         port.onmessage?.({ data: reply } as MessageEvent<unknown>);
         expect(seen).toHaveLength(1);
         // One prefix, the consumer's entry, even though the audio thread raised through its own.
-        expect(seen[0].message).toBe('SonareEngine.setTempo: bpm must be a finite number');
+        expect(seen[0].message).toBe('SonareEngine.setTempo: bpm must be finite');
         expect(seen[0].message).not.toContain('RealtimeEngine.');
         expect(seen[0].failure?.message).toBe(seen[0].message);
       } finally {

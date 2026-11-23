@@ -78,7 +78,7 @@ const graphCases: ReadonlyArray<
     'a source port outside the integer range at the second element',
     { connections: [link, { ...link, sourcePort: 2 ** 31 }] },
     RangeError,
-    'connections[1].sourcePort must be a finite number within the 32-bit integer range',
+    'connections[1].sourcePort must be a finite number within [-2147483648, 2147483647]',
   ],
   [
     'a non-object parameter binding',
@@ -237,13 +237,13 @@ const modCases: ReadonlyArray<readonly [string, unknown[], typeof TypeError, str
     'an absent source',
     [{ destination: 'pitchCents', depth: 1 }],
     TypeError,
-    'Expected mod source to be a number or string',
+    'mod source must be a number or string',
   ],
   [
     'an absent destination',
     [{ source: 'lfo1', depth: 1 }],
     TypeError,
-    'Expected mod destination to be a number or string',
+    'mod destination must be a number or string',
   ],
   [
     'an absent depth',
@@ -350,7 +350,7 @@ const anchorCases: ReadonlyArray<readonly [string, unknown[], typeof TypeError, 
       { warpSample: Number.POSITIVE_INFINITY, sourceSample: 0 },
     ],
     RangeError,
-    'anchors[1].warpSample must be a finite number',
+    'anchors[1].warpSample must be finite',
   ],
 ];
 

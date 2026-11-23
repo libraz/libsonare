@@ -44,4 +44,35 @@ describe('automation breakpoint conversion', () => {
       project.destroy();
     }
   });
+
+  it('adds an empty lane when points is omitted, and edits a lane empty the same way', () => {
+    const project = new Project();
+    try {
+      const track = project.addTrack({ kind: 'audio' });
+      const id = project.addAutomationLane(track, { targetParamId: 7 });
+      const lanePoints = () =>
+        JSON.parse(project.toJson()).tracks[0].automationLanes.find(
+          (lane: { targetParamId: number }) => lane.targetParamId === id,
+        ).points;
+      expect(lanePoints()).toEqual([]);
+      project.editAutomationLane(track, id, { targetParamId: id, points: [{ ppq: 0, value: 1 }] });
+      expect(lanePoints()).toHaveLength(1);
+      project.editAutomationLane(track, id, { targetParamId: id });
+      expect(lanePoints()).toEqual([]);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a points value that is not an array as a TypeError', () => {
+    const project = new Project();
+    try {
+      const track = project.addTrack({ kind: 'audio' });
+      expect(() =>
+        project.addAutomationLane(track, { targetParamId: 1, points: { ppq: 0 } as never }),
+      ).toThrow(new TypeError('Project.addAutomationLane: points must be an array'));
+    } finally {
+      project.destroy();
+    }
+  });
 });

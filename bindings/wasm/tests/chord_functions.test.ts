@@ -154,6 +154,12 @@ describe('chordFunctions refuses a malformed request by the field the caller wro
     ],
     ['a non-object chord', { chords: [5], key }, TypeError, 'chords[0] must be an object'],
     [
+      'a chord root that is not a number',
+      { chords: [{ root: 'C', quality: 'major' }], key },
+      TypeError,
+      'chords[0].root must be an integer',
+    ],
+    [
       'a chord root outside the pitch classes',
       {
         chords: [

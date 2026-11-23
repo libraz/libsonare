@@ -1018,7 +1018,11 @@ export function projectAutomationLaneValue(
   if (desc.targetParamId === 0) {
     throw refuse('project automation lane targetParamId must be non-zero');
   }
-  const { targetKind, points, ...rest } = desc;
+  const { targetKind, points: given, ...rest } = desc;
+  const points: unknown = isAbsent(given) ? [] : given;
+  if (!Array.isArray(points)) {
+    throw refuseType('points must be an array');
+  }
   requireListBudget(points, 'points');
   return {
     ...rest,

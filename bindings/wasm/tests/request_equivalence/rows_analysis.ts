@@ -88,7 +88,7 @@ export const ROWS: Row[] = [
     oneOf: [
       {
         fields: ['keyRoot'],
-        error: 'TypeError: chordFunctionalAnalysis: keyRoot must be a pitch class number 0-11',
+        error: 'TypeError: chordFunctionalAnalysis: keyRoot must be an integer',
       },
     ],
   },

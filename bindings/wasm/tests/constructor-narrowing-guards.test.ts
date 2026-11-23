@@ -48,7 +48,7 @@ function refusalFor(fn: () => unknown): Error {
 }
 
 /** The two refusals the shared checked reader can produce, verbatim. */
-const READER_RANGE = 'must be a finite number within the 32-bit integer range';
+const READER_RANGE = 'must be a finite number within [-2147483648, 2147483647]';
 const READER_FRACTIONAL = 'must be an integer';
 
 /**

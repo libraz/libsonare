@@ -118,12 +118,14 @@ export function projectAutomationLaneValue(
   if (desc.targetParamId === 0) {
     throw refuse('project automation lane targetParamId must be non-zero');
   }
-  if (Array.isArray(desc.points)) {
-    requireListBudget(desc.points, 'points');
+  const points: unknown = isAbsent(desc.points) ? [] : desc.points;
+  if (!Array.isArray(points)) {
+    throw refuseType('points must be an array');
   }
+  requireListBudget(points, 'points');
   return {
     ...desc,
-    points: desc.points.map((point, index) => automationPointValue(point, index)),
+    points: points.map((point, index) => automationPointValue(point, index)),
   };
 }
 

@@ -92,7 +92,7 @@ export function keyModeOrdinal(mode: unknown, field = 'key mode'): number {
 /** Ordinal of a pitch class 0-11; names and non-integers are refused. */
 export function pitchClassOrdinal(root: unknown, field: string): number {
   if (typeof root !== 'number') {
-    throw refuseType(`${field} must be a pitch class number 0-11`);
+    throw refuseType(`${field} must be an integer`);
   }
   if (!Number.isInteger(root) || root < 0 || root > 11) {
     throw refuse(`${field} must be an integer in [0, 11]`);
