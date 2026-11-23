@@ -29,9 +29,11 @@ import type {
   ProjectCompileResult,
   ProjectTimeline,
   RenderNotesRequest,
+  RoomEstimateResult,
   SidechainCheck,
   SidechainRefusal,
   SplitNoteRequest,
+  StereoMonoCompatBand,
   StereoMonoCompatCheckResult,
   VoicedFlags,
 } from '../src/index.js';
@@ -65,6 +67,8 @@ describe('result records type an unmeasured value as an absent field', () => {
     expectTypeOf<MixMonoRisk['correlation']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<MixMonoRisk['width']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<StereoMonoCompatCheckResult['correlation']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<StereoMonoCompatBand['correlation']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<RoomEstimateResult['drrDb']>().toEqualTypeOf<number | undefined>();
   });
 
   it('a level that is -Infinity for silence is never absent', () => {

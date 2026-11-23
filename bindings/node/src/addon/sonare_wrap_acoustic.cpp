@@ -259,7 +259,7 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   SetMeasured(out, "lengthM", est.dims.length);
   SetMeasured(out, "widthM", est.dims.width);
   SetMeasured(out, "heightM", est.dims.height);
-  out.Set("drrDb", Napi::Number::New(env, est.drr_db));
+  SetMeasured(out, "drrDb", est.drr_db);
   out.Set("confidence", Napi::Number::New(env, est.confidence));
   // nOctaveBands is at least 1, so no band at all means both estimates failed.
   if (band_count > 0) {

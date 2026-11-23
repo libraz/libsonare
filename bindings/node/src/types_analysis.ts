@@ -835,8 +835,11 @@ export interface RoomEstimateResult {
   widthM?: number;
   /** Estimated room height in metres; absent when no decay is measurable. */
   heightM?: number;
-  /** Direct-to-reverberant ratio in dB. */
-  drrDb: number;
+  /**
+   * Direct-to-reverberant ratio in dB; `Infinity` when the direct sound has no energy outside its
+   * window, absent when the recording is silent or empty.
+   */
+  drrDb?: number;
   /** Confidence of the estimate, in `[0, 1]`; 0 when nothing was measurable. */
   confidence: number;
   /**

@@ -13486,8 +13486,8 @@ export interface StereoMonoCompatBand {
   lowHz: number;
   /** Upper band edge in Hz. */
   highHz: number;
-  /** Inter-channel correlation (-1 to 1). */
-  correlation: number;
+  /** Inter-channel correlation (-1 to 1). Absent when either channel is silent in the band. */
+  correlation?: number;
   /** RMS of the band's share of the side signal 0.5 * (L - R), as a linear full-scale amplitude. */
   sideRms: number;
 }

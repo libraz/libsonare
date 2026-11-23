@@ -35696,6 +35696,14 @@ test = "bindings/wasm/tests/result-absence-types.test.ts::a level silence leaves
 
 [[entry]]
 kind = "field"
+old = "StereoMonoCompatBand.correlation"
+changed = "number -> optional number: absent when either channel is silent in the band, never 0"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/stereo-band-not-measured.test.ts::leaves a band correlation out where a channel is silent"
+
+[[entry]]
+kind = "field"
 old = "MixMonoRisk.correlation"
 changed = "optional: absent when either channel is silent"
 domain = "mastering"
@@ -35987,7 +35995,7 @@ old = "RoomEstimateResult.volume"
 changed = "number -> optional number: absent when no decay is measurable, never NaN"
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"
 
 [[entry]]
 kind = "field"
@@ -35995,7 +36003,7 @@ old = "RoomEstimateResult.lengthM"
 changed = "number -> optional number: absent when no decay is measurable, never NaN"
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"
 
 [[entry]]
 kind = "field"
@@ -36003,7 +36011,7 @@ old = "RoomEstimateResult.widthM"
 changed = "number -> optional number: absent when no decay is measurable, never NaN"
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"
 
 [[entry]]
 kind = "field"
@@ -36011,7 +36019,15 @@ old = "RoomEstimateResult.heightM"
 changed = "number -> optional number: absent when no decay is measurable, never NaN"
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateResult.drrDb"
+changed = "number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"
 
 [[entry]]
 kind = "field"
@@ -36019,7 +36035,7 @@ old = "RoomEstimateResult.bandAbsorption"
 changed = "Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count"
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"
 
 [[entry]]
 kind = "field"
@@ -36027,4 +36043,4 @@ old = "RoomEstimateResult.rt60Bands"
 changed = "Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count"
 domain = "effects"
 rule = "silence-is-infinite"
-test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions and both band arrays of a silent room estimate"
+test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"

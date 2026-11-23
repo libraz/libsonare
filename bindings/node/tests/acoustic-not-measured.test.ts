@@ -61,7 +61,7 @@ describe('acoustic values that were not measured', () => {
     }
   });
 
-  it('omits the dimensions and both band arrays of a silent room estimate', () => {
+  it('omits the dimensions, the DRR and both band arrays of a silent room estimate', () => {
     const estimate = estimateRoom(new Float32Array(48000), 48000);
     expect(estimate.confidence).toBe(0);
     for (const key of [
@@ -69,6 +69,7 @@ describe('acoustic values that were not measured', () => {
       'lengthM',
       'widthM',
       'heightM',
+      'drrDb',
       'bandAbsorption',
       'rt60Bands',
     ] as const) {

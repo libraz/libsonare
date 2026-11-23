@@ -396,7 +396,7 @@ export interface WasmRoomEstimateResult {
   lengthM?: number;
   widthM?: number;
   heightM?: number;
-  drrDb: number;
+  drrDb?: number;
   confidence: number;
   bandAbsorption?: Float32Array;
   rt60Bands?: Float32Array;

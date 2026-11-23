@@ -5269,6 +5269,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted |
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
 | `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.lengthM` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count |
@@ -5742,6 +5743,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
 | `MixMonoRisk.correlation` | optional: absent when either channel is silent |
 | `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |
+| `StereoMonoCompatBand.correlation` | number -> optional number: absent when either channel is silent in the band, never 0 |
 | `StereoMonoCompatCheckResult.correlation` | optional: absent when either channel is silent |
 | `StereoMonoCompatCheckResult.width` | T \| null -> optional number: `Infinity` for a fully out-of-phase pair, absent for silence |
 
@@ -9707,6 +9709,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AcousticResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band was measured; a measured array keeps every band, NaN where one band was not fitted |
 | `AcousticResult.rt60` | number -> optional number: absent when not measured, never NaN |
 | `RoomEstimateResult.bandAbsorption` | Float32Array -> optional Float32Array: absent when the absorption solve fails, never empty; a surviving array is padded with NaN to the other's band count |
+| `RoomEstimateResult.drrDb` | number -> optional number: absent when the recording is silent or empty, never 0; Infinity when the direct sound has no energy outside its window |
 | `RoomEstimateResult.heightM` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.lengthM` | number -> optional number: absent when no decay is measurable, never NaN |
 | `RoomEstimateResult.rt60Bands` | Float32Array -> optional Float32Array: absent when no band decay was measured, never all-NaN; a surviving array is padded with NaN to the other's band count |
@@ -10473,6 +10476,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixAssistantTrackProfile.integratedLufs` | T \| null -> optional number: `-Infinity` for a silent track, absent for a track that could not be measured |
 | `MixMonoRisk.correlation` | optional: absent when either channel is silent |
 | `MixMonoRisk.width` | optional: `Infinity` for a fully out-of-phase track, absent for silence |
+| `StereoMonoCompatBand.correlation` | number -> optional number: absent when either channel is silent in the band, never 0 |
 | `StereoMonoCompatCheckResult.correlation` | optional: absent when either channel is silent |
 | `StereoMonoCompatCheckResult.width` | T \| null -> optional number: `Infinity` for a fully out-of-phase pair, absent for silence |
 

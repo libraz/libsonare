@@ -293,7 +293,7 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   setMeasured(out, "lengthM", est.dims.length);
   setMeasured(out, "widthM", est.dims.width);
   setMeasured(out, "heightM", est.dims.height);
-  out.set("drrDb", est.drr_db);
+  setMeasured(out, "drrDb", est.drr_db);
   out.set("confidence", est.confidence);
   // nOctaveBands is at least 1, so no band at all means both estimates failed.
   if (band_count > 0) {
