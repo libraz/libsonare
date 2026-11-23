@@ -19,6 +19,7 @@ other, so they are separate.
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -154,6 +155,79 @@ class ReachTest(unittest.TestCase):
         # carried out at all, so "found nothing" cannot read as "looked at
         # nothing" from the outside.
         self.assertEqual(reach["sources_resolved"], 0)
+
+
+class UnwindTest(unittest.TestCase):
+    """Drives ``check_unwind`` over a compile database written for the test."""
+
+    def _run(self, units: dict[str, str], link: str = "em++ -fwasm-exceptions -o m.js"):
+        with tempfile.TemporaryDirectory() as directory:
+            build = Path(directory)
+            entries = []
+            objects = []
+            for source, flags in units.items():
+                output = f"src/CMakeFiles/x.dir/{source}.o"
+                entries.append(
+                    {
+                        "directory": str(build / "src"),
+                        "command": f"em++ {flags} -c {source} -o {output}",
+                        "file": source,
+                        "output": output,
+                    }
+                )
+                objects.append((build / output).resolve())
+            (build / "compile_commands.json").write_text(json.dumps(entries), encoding="utf-8")
+            with mock.patch.object(
+                gate_scope, "module_link_line", return_value=(build, link.split())
+            ):
+                return gate_scope.check_unwind(build, objects)
+
+    def test_units_and_link_built_to_unwind_pass_and_are_counted(self) -> None:
+        findings, scanned = self._run(
+            {"a.cpp": "-O3 -fwasm-exceptions", "b.c": "-fwasm-exceptions"}
+        )
+        self.assertEqual(findings, [])
+        self.assertEqual(scanned, 2)
+
+    def test_a_unit_without_the_flag_is_named(self) -> None:
+        findings, _ = self._run({"a.cpp": "-fwasm-exceptions", "b.cpp": "-O3"})
+        self.assertEqual(findings, ["b.cpp is compiled without -fwasm-exceptions"])
+
+    def test_the_js_based_form_and_disabled_catching_are_refused(self) -> None:
+        findings, _ = self._run(
+            {
+                "a.cpp": "-fwasm-exceptions -fexceptions",
+                "b.cpp": "-fwasm-exceptions -sDISABLE_EXCEPTION_CATCHING=1",
+            }
+        )
+        self.assertEqual(
+            findings,
+            [
+                "a.cpp is compiled with -fexceptions",
+                "b.cpp is compiled with -sDISABLE_EXCEPTION_CATCHING=1",
+            ],
+        )
+
+    def test_the_link_line_is_held_to_the_same_mode(self) -> None:
+        findings, _ = self._run({"a.cpp": "-fwasm-exceptions"}, link="em++ -fexceptions -o m.js")
+        self.assertEqual(
+            findings,
+            [
+                "the module link line lacks -fwasm-exceptions",
+                "the module link line carries -fexceptions",
+            ],
+        )
+
+    def test_a_linked_object_with_no_compile_command_is_a_finding_not_a_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            build = Path(directory)
+            (build / "compile_commands.json").write_text("[]", encoding="utf-8")
+            with mock.patch.object(
+                gate_scope, "module_link_line", return_value=(build, ["-fwasm-exceptions"])
+            ):
+                findings, scanned = gate_scope.check_unwind(build, [build / "x.cpp.o"])
+        self.assertEqual(scanned, 0)
+        self.assertEqual(findings, ["x.cpp.o: no compile command for a linked object"])
 
 
 if __name__ == "__main__":

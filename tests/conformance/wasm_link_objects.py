@@ -85,12 +85,11 @@ def _archive_members(
     return members
 
 
-def module_objects(build_dir: Path) -> list[Path]:
-    """Every object linked into the WASM module, static archives resolved."""
-    link_lines = _link_lines(build_dir)
+def module_link_line(build_dir: Path) -> tuple[Path, list[str]]:
+    """The WASM module's own link line under @p build_dir, with the directory it runs in."""
     module = [
         (link_dir, tokens)
-        for link_dir, tokens in link_lines
+        for link_dir, tokens in _link_lines(build_dir)
         if (_output_of(tokens) or "").endswith(".js")
     ]
     if len(module) != 1:
@@ -98,8 +97,13 @@ def module_objects(build_dir: Path) -> list[Path]:
             f"expected exactly one WASM module link line under {build_dir}, found "
             f"{len(module)}; the build tree does not look like a WASM module build"
         )
-    link_dir, tokens = module[0]
-    members = _archive_members(link_lines)
+    return module[0]
+
+
+def module_objects(build_dir: Path) -> list[Path]:
+    """Every object linked into the WASM module, static archives resolved."""
+    link_dir, tokens = module_link_line(build_dir)
+    members = _archive_members(_link_lines(build_dir))
     objects: list[Path] = []
     seen: set[Path] = set()
     for token in tokens:

@@ -7,6 +7,12 @@ sit in the always-compiled core list on purpose, because an always-compiled
 caller needs them -- so the useful check is not "zero" but "exactly the residue
 someone wrote a reason for".
 
+The same run holds the module to the build's exception mode: the link line and the
+compile line of every linked object carry ``-fwasm-exceptions`` and neither
+``-fexceptions`` nor ``DISABLE_EXCEPTION_CATCHING``, because one unit built
+otherwise skips its destructors on a throw.  The count of compile lines read is
+printed, and reading none fails.
+
 Two things this deliberately does not do:
 
 * It does not measure size.  ``tools/check_wasm_size.py`` says why in its own
@@ -34,13 +40,15 @@ from __future__ import annotations
 
 import argparse
 import collections
+import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from wasm_link_objects import module_objects
+from wasm_link_objects import module_link_line, module_objects
 
 ROOT = Path(__file__).resolve().parents[2]
 CMAKELISTS = ROOT / "src/CMakeLists.txt"
@@ -236,6 +244,56 @@ def check(build_dir: Path) -> tuple[list[str], dict[str, int]]:
     return findings, reach
 
 
+# Every unit of both modules unwinds through native Wasm exceptions; a unit built
+# with the JS-based form, or with catching disabled, skips the destructors of its
+# frames on a throw and cannot share a module with units that do not.
+_UNWIND_FLAG = "-fwasm-exceptions"
+
+
+def _refused_exception_flags(tokens: list[str]) -> list[str]:
+    return [t for t in tokens if t == "-fexceptions" or "DISABLE_EXCEPTION_CATCHING" in t]
+
+
+def _compile_tokens(entry: dict) -> list[str]:
+    arguments = entry.get("arguments")
+    return list(arguments) if arguments else shlex.split(entry["command"])
+
+
+def check_unwind(build_dir: Path, objects: list[Path]) -> tuple[list[str], int]:
+    """Findings for each linked unit, and the link line, not built to unwind natively.
+
+    Returns the findings and the number of linked objects whose compile line was read.
+    """
+    database = build_dir / "compile_commands.json"
+    if not database.is_file():
+        raise SystemExit(f"missing {database}; build the WASM module first")
+    by_output = {
+        (build_dir / entry["output"]).resolve(): entry
+        for entry in json.loads(database.read_text(encoding="utf-8"))
+        if "output" in entry
+    }
+    findings: list[str] = []
+    _, link_tokens = module_link_line(build_dir)
+    if _UNWIND_FLAG not in link_tokens:
+        findings.append(f"the module link line lacks {_UNWIND_FLAG}")
+    for flag in _refused_exception_flags(link_tokens):
+        findings.append(f"the module link line carries {flag}")
+    scanned = 0
+    for obj in objects:
+        entry = by_output.get(obj)
+        if entry is None:
+            findings.append(f"{obj.name}: no compile command for a linked object")
+            continue
+        scanned += 1
+        tokens = _compile_tokens(entry)
+        unit = _source_of(obj) or entry.get("file", obj.name)
+        if _UNWIND_FLAG not in tokens:
+            findings.append(f"{unit} is compiled without {_UNWIND_FLAG}")
+        for flag in _refused_exception_flags(tokens):
+            findings.append(f"{unit} is compiled with {flag}")
+    return findings, scanned
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", action="append", required=True, type=Path)
@@ -243,6 +301,21 @@ def main() -> int:
 
     failed = False
     for build_dir in args.build_dir:
+        unwind_findings, unwind_scanned = check_unwind(build_dir, module_objects(build_dir))
+        if unwind_scanned == 0:
+            print(f"{build_dir}: unwind scope read no compile line", file=sys.stderr)
+            failed = True
+        elif unwind_findings:
+            print(
+                f"{build_dir}: unwind scope failed (units_scanned={unwind_scanned})",
+                file=sys.stderr,
+            )
+            for finding in unwind_findings:
+                print(f"  - {finding}", file=sys.stderr)
+            failed = True
+        else:
+            print(f"{build_dir}: unwind scope OK (units_scanned={unwind_scanned})")
+
         findings, reach = check(build_dir)
         # Reach is printed on success as well as failure. A run that resolved no
         # source, or found no gated directory, has measured nothing, and without
