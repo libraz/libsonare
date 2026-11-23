@@ -253,7 +253,8 @@ class MatchEqCurveResult:
     frequencies: npt.NDArray[np.float32]
     """float32 frequencies in Hz."""
     gain_db: npt.NDArray[np.float32]
-    """float32 gain in dB at each frequency."""
+    """float32 gain in dB at each frequency. A band where the source has no energy gets 0 dB, one
+    where only the reference has none gets ``-maxGainDb``, and the decision precedes smoothing."""
 
 
 @dataclass(frozen=True, slots=True)

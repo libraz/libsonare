@@ -155,6 +155,19 @@ TEST_CASE("every null a result writes sits at a path declaring its infinite end"
        api::match_tonal_balance_schema_paths(), pair_renders("match.tonalBalance")},
       {"match_tonal_balance (log bands)", api::match_tonal_balance_null_means(),
        api::match_tonal_balance_schema_paths(), pair_renders("match.tonalBalanceLogBands")},
+      // A silent side is refused, and a band empty on either side is decided as a finite
+      // gain, so the curve writes no null from any pair it accepts.
+      {"match_eq_curve",
+       no_null_means(),
+       api::match_eq_curve_schema_paths(),
+       {[&] {
+          return api::analyze_named_pair("match.matchEqCurve", music.data(), inverted.data(),
+                                         kLength, kSampleRate);
+        },
+        [&, low = tones(110.0f, 220.0f, 0.2f), high = tones(3520.0f, 7040.0f, 0.2f)] {
+          return api::analyze_named_pair("match.matchEqCurve", low.data(), high.data(), kLength,
+                                         kSampleRate);
+        }}},
       {"stereo_mono_compat", api::stereo_mono_compat_null_means(),
        api::stereo_mono_compat_schema_paths(), stereo_renders("stereo.monoCompatCheck", {})},
       {"stereo_mono_compat_log_bands", no_null_means(),
