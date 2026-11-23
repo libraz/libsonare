@@ -281,7 +281,7 @@ def trim(
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
-        _check(rc)
+        _check(rc, flattened="options")
         return _from_c_float_array(out, out_length.value)
 
 

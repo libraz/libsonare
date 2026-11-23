@@ -590,6 +590,7 @@ def mastering_repair_dereverb_config_for_room(
         lib.sonare_mastering_repair_dereverb_apply_room_estimate(
             ctypes.byref(c_estimate), ctypes.byref(config)
         ),
+        flattened="config",
     )
     return DereverbClassicalConfig(
         threshold=_narrow_double(config.threshold, "config.threshold"),

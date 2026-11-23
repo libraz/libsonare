@@ -246,7 +246,7 @@ class StreamingMasteringChain:
         rc = lib.sonare_streaming_mastering_chain_create(
             config_json, ctypes.byref(options), ctypes.byref(handle)
         )
-        _check(rc)
+        _check(rc, flattened="options")
         self._lib = lib
         self._handle = handle
         try:

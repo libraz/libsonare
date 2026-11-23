@@ -173,7 +173,7 @@ def stft(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return StftResult(
             n_fft=out.n_fft,

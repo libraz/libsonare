@@ -641,7 +641,8 @@ class SampleBank:
                 _to_c_size_t(length, "length"),
                 ctypes.byref(desc),
                 ctypes.byref(out_index),
-            )
+            ),
+            flattened="desc",
         )
         return int(out_index.value)
 

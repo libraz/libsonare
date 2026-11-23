@@ -248,7 +248,8 @@ class _ProjectInspectionMixin:
                 _narrow_double(strength, "strength"),
                 ctypes.byref(options),
                 ctypes.byref(out_ppq),
-            )
+            ),
+            flattened="options",
         )
         return float(out_ppq.value)
 

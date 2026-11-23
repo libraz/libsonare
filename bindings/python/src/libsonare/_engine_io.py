@@ -369,7 +369,8 @@ class _EngineIoMixin:
                 _to_c_int64(frame_count, "frame_count"),
                 _to_c_int(_resolve_zero_default(block_size, "block_size"), "block_size"),
                 ctypes.byref(options),
-            )
+            ),
+            flattened="options",
         )
         return _plane_arrays(arrays, frame_count)
 

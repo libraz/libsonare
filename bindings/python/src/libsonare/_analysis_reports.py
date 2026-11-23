@@ -621,7 +621,7 @@ def analyze_impulse_response(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         count = out.band_count
         blind = bool(out.is_blind)

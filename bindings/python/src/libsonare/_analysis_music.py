@@ -560,7 +560,7 @@ def analyze_melody(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return MelodyResult(
             points=[

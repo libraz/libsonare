@@ -268,7 +268,7 @@ def mel_to_stft(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return _from_c_float_matrix(out.data, int(out.rows), int(out.n_frames))
     finally:
@@ -418,7 +418,7 @@ def mfcc_to_mel(
         ctypes.byref(options),
         ctypes.byref(out),
     )
-    _check(rc)
+    _check(rc, flattened="options")
     try:
         return _from_c_float_matrix(out.data, int(out.rows), int(out.n_frames))
     finally:

@@ -156,7 +156,8 @@ def decompose(
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),
                 ctypes.byref(out_h_length),
-            )
+            ),
+            flattened="options",
         )
         w = _from_c_float_array(out_w, out_w_length.value).reshape(n_features, n_components)
         h = _from_c_float_array(out_h, out_h_length.value).reshape(n_components, n_frames)
@@ -623,7 +624,7 @@ def hpss(
         ctypes.byref(residual) if with_residual else None,
     )
     try:
-        _check(rc)
+        _check(rc, flattened="options")
         n = int(out.length)
         return HpssResult(
             harmonic=_from_c_float_array(out.harmonic, n),

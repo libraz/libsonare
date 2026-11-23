@@ -257,7 +257,8 @@ class _ProjectEditMixin:
         _check(
             _get_lib().sonare_project_add_track(
                 self._require_handle(), ctypes.byref(desc), ctypes.byref(out_id)
-            )
+            ),
+            flattened="desc",
         )
         return int(out_id.value)
 
