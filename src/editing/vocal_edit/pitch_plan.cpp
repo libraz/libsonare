@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release compiled pitch curves when validation throws.
 #include "editing/vocal_edit/pitch_plan.h"
 
 #include <algorithm>

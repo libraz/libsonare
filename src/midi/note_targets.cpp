@@ -1,8 +1,5 @@
 #include "midi/note_targets.h"
 
-// SONARE_WASM_EXCEPTION_UNWIND: release imported clip, tempo, pairing, and targets.
-// Cleanup is required when an exception propagates to the binding caller.
-
 #include <algorithm>
 #include <string>
 

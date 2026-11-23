@@ -1,5 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release staged clips and sidecars when allocation propagates to
-// history.
 /// @file edit_command_clip.cpp
 /// @brief Clip edit-command apply/invert definitions.
 

@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release staged edits and history on exceptions before publication.
 #include "editing/vocal_edit/session.h"
 
 #include <algorithm>

@@ -1,5 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release staged tracks and sidecars when allocation propagates to
-// history.
 /// @file edit_command_track.cpp
 /// @brief Track edit-command apply/invert definitions.
 

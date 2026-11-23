@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release staged note vectors when an edit operation throws.
 #include <algorithm>
 #include <cmath>
 #include <limits>

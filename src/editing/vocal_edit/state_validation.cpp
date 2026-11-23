@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release validation scratch containers when a check throws.
 #include <cmath>
 #include <limits>
 #include <map>

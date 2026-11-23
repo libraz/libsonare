@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release decoded state vectors when strict decoding throws.
 #include "editing/vocal_edit/state_codec.h"
 
 #include <algorithm>

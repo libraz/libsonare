@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release the preset id list when allocation propagates.
 #include <array>
 #include <string>
 #include <string_view>

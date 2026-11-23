@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release edit vectors when validation throws.
 #include "editing/vocal_edit/types.h"
 
 #include <algorithm>

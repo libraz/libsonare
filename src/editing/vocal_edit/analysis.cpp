@@ -1,4 +1,3 @@
-// SONARE_WASM_EXCEPTION_UNWIND: release analysis and segmentation buffers when validation throws.
 #include "editing/vocal_edit/analysis.h"
 
 #include <Eigen/Dense>
