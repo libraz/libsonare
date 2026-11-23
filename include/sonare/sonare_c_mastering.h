@@ -69,8 +69,9 @@ typedef struct {
   size_t declip_unreconstructed_runs;
   int has_declip_unreconstructed_runs;  ///< Non-zero when a declip stage ran.
   /// The count of samples whose value before quantization and dither has |x| > 1.0, summed over
-  /// channels; 0 when none clipped. Read only when @c has_quantize_clipped_samples is non-zero,
-  /// which it is exactly when a quantizing stage ran (final.dither type none leaves it absent).
+  /// channels; 0 when none clipped. Set by final.bitDepth, final.dither and final.outputChain, and
+  /// read only when @c has_quantize_clipped_samples is non-zero, which it is exactly when one of
+  /// them quantized (final.dither type none leaves it absent). The chain has no such stage.
   size_t quantize_clipped_samples;
   int has_quantize_clipped_samples;  ///< Non-zero when a quantizing stage ran.
 } SonareMasteringResult;
@@ -207,9 +208,6 @@ typedef struct {
   /// @copydoc SonareMasteringResult::declip_unreconstructed_runs
   size_t declip_unreconstructed_runs;
   int has_declip_unreconstructed_runs;  ///< Non-zero when a declip stage ran.
-  /// @copydoc SonareMasteringResult::quantize_clipped_samples
-  size_t quantize_clipped_samples;
-  int has_quantize_clipped_samples;  ///< Non-zero when a quantizing stage ran.
 } SonareMasteringChainResult;
 
 /// @brief Result of running the mastering chain on a stereo pair.
@@ -243,9 +241,6 @@ typedef struct {
   /// @copydoc SonareMasteringResult::declip_unreconstructed_runs
   size_t declip_unreconstructed_runs;
   int has_declip_unreconstructed_runs;  ///< Non-zero when a declip stage ran.
-  /// @copydoc SonareMasteringResult::quantize_clipped_samples
-  size_t quantize_clipped_samples;
-  int has_quantize_clipped_samples;  ///< Non-zero when a quantizing stage ran.
 } SonareMasteringChainStereoResult;
 
 /// @details This call always runs exactly one true-peak limiter, so

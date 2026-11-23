@@ -122,8 +122,6 @@ class SonareMasteringChainResult(CStruct):
         ("loudness_gain_db", ctypes.c_float),
         ("declip_unreconstructed_runs", ctypes.c_size_t),
         ("has_declip_unreconstructed_runs", ctypes.c_int),
-        ("quantize_clipped_samples", ctypes.c_size_t),
-        ("has_quantize_clipped_samples", ctypes.c_int),
     ]
 
 
@@ -151,8 +149,6 @@ class SonareMasteringChainStereoResult(CStruct):
         ("loudness_gain_db", ctypes.c_float),
         ("declip_unreconstructed_runs", ctypes.c_size_t),
         ("has_declip_unreconstructed_runs", ctypes.c_int),
-        ("quantize_clipped_samples", ctypes.c_size_t),
-        ("has_quantize_clipped_samples", ctypes.c_int),
     ]
 
 

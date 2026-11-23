@@ -805,7 +805,9 @@ def _chain_result_fields(out: Any) -> dict[str, Any]:
         "report": _extract_mastering_report(out.report),
         "non_finite_substitution_count": int(out.non_finite_substitution_count),
         "loudness_gain_db": _measured_level(out.loudness_gain_db),
-        **_stage_counts(out),
+        "declip_unreconstructed_runs": _present_count(
+            out.declip_unreconstructed_runs, out.has_declip_unreconstructed_runs
+        ),
     }
 
 

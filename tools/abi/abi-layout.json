@@ -4147,21 +4147,9 @@
         "name": "has_declip_unreconstructed_runs",
         "offset": 296,
         "size": 4
-      },
-      {
-        "kind": "unsigned",
-        "name": "quantize_clipped_samples",
-        "offset": 304,
-        "size": 8
-      },
-      {
-        "kind": "signed",
-        "name": "has_quantize_clipped_samples",
-        "offset": 312,
-        "size": 4
       }
     ],
-    "size": 320
+    "size": 304
   },
   "SonareMasteringChainStereoResult": {
     "align": 8,
@@ -4285,21 +4273,9 @@
         "name": "has_declip_unreconstructed_runs",
         "offset": 304,
         "size": 4
-      },
-      {
-        "kind": "unsigned",
-        "name": "quantize_clipped_samples",
-        "offset": 312,
-        "size": 8
-      },
-      {
-        "kind": "signed",
-        "name": "has_quantize_clipped_samples",
-        "offset": 320,
-        "size": 4
       }
     ],
-    "size": 328
+    "size": 312
   },
   "SonareMasteringConfig": {
     "align": 4,

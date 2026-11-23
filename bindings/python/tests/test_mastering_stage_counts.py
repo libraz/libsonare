@@ -70,7 +70,7 @@ def test_a_chain_reports_the_declip_count_only_when_declip_ran() -> None:
         samples, sample_rate=_SAMPLE_RATE, overrides={"repair": {"declip": {"enabled": True}}}
     )
     assert with_declip.declip_unreconstructed_runs is not None
-    assert with_declip.quantize_clipped_samples is None
+    assert not hasattr(with_declip, "quantize_clipped_samples")
 
     without = master_audio(
         samples, sample_rate=_SAMPLE_RATE, overrides={"repair": {"declip": {"enabled": False}}}

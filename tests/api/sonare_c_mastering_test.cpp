@@ -2942,8 +2942,6 @@ TEST_CASE("a C mastering chain result carries the declip count only when declip 
                               R"({"repair":{"declip":{"enabled":true}}})", nullptr,
                               &with_declip) == SONARE_OK);
   CHECK(with_declip.has_declip_unreconstructed_runs == 1);
-  // The chain has no quantizing stage.
-  CHECK(with_declip.has_quantize_clipped_samples == 0);
   sonare_free_mastering_chain_result(&with_declip);
 
   SonareMasteringChainStereoResult without{};
@@ -2951,7 +2949,6 @@ TEST_CASE("a C mastering chain result carries the declip count only when declip 
                                      nullptr, nullptr, &without) == SONARE_OK);
   CHECK(without.has_declip_unreconstructed_runs == 0);
   CHECK(without.declip_unreconstructed_runs == 0);
-  CHECK(without.has_quantize_clipped_samples == 0);
   sonare_free_mastering_chain_stereo_result(&without);
 }
 #endif

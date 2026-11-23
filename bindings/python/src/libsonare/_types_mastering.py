@@ -421,10 +421,6 @@ class MasteringChainResult:
     #: than it reconstructs, summed over the channels.
     declip_unreconstructed_runs: int | None = None
     """Clipped runs left unreconstructed; None when no declip stage ran."""
-    #: Samples whose value before quantization and dither was past full scale
-    #: (``|x| > 1.0``), summed over the channels.
-    quantize_clipped_samples: int | None = None
-    """Samples clipped by quantization; None when no quantizing stage ran."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -466,7 +462,3 @@ class MasteringChainStereoResult:
     #: than it reconstructs, summed over the channels.
     declip_unreconstructed_runs: int | None = None
     """Clipped runs left unreconstructed; None when no declip stage ran."""
-    #: Samples whose value before quantization and dither was past full scale
-    #: (``|x| > 1.0``), summed over the channels.
-    quantize_clipped_samples: int | None = None
-    """Samples clipped by quantization; None when no quantizing stage ran."""
