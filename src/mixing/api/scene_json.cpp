@@ -91,8 +91,22 @@ std::optional<ChannelLayout> channel_layout_token(const std::string& value) {
   return layout;
 }
 
-[[noreturn]] void refuse(const std::string& message) {
-  throw SonareException(ErrorCode::InvalidFormat, message);
+// Every refusal names the document path, already in the caller's spelling, as its subject; a
+// facade that wrapped its own object into the document re-roots it. The code stays InvalidFormat.
+[[noreturn]] void refuse_at(const std::string& at, const std::string& predicate) {
+  throw SonareParameterRefusal::predicate(ErrorCode::InvalidFormat, at, predicate)
+      .as_caller_spelled();
+}
+
+[[noreturn]] void refuse_kind(const std::string& at, schema::Kind kind) {
+  if (at.empty()) throw SonareException(ErrorCode::InvalidFormat, schema::must_be(at, kind));
+  throw SonareParameterRefusal::wrong_type(ErrorCode::InvalidFormat, at,
+                                           std::string("must be ") + schema::kind_text(kind))
+      .as_caller_spelled();
+}
+
+[[noreturn]] void refuse_unknown(const std::string& at) {
+  throw SonareParameterRefusal::unknown(ErrorCode::InvalidFormat, at).as_caller_spelled();
 }
 
 // A closed set is read only as its token; a number is refused naming the tokens.
@@ -100,11 +114,11 @@ template <typename Enum>
 Enum token_value(const JsonValue& value, const std::string& at, const char* tokens,
                  std::optional<Enum> (*from_string)(const std::string&)) {
   if (!value.is_string()) {
-    if (value.is_number()) refuse(schema::refusal(at, std::string("must be one of ") + tokens));
-    refuse(schema::must_be(at, schema::Kind::String));
+    if (value.is_number()) refuse_at(at, std::string("must be one of ") + tokens);
+    refuse_kind(at, schema::Kind::String);
   }
   const auto parsed = from_string(value.as_string());
-  if (!parsed) refuse(schema::refusal(at, std::string("must be one of ") + tokens));
+  if (!parsed) refuse_at(at, std::string("must be one of ") + tokens);
   return *parsed;
 }
 
@@ -145,22 +159,25 @@ void refuse_unknown_keys(const JsonValue& object, const std::string& path, const
   for (const auto& entry : object.as_object()) {
     const std::string& key = entry.first;
     if (known.count(key) != 0 || util::json::is_annotation_key(key)) continue;
-    refuse(schema::unknown_key(schema::child_path(path, key)));
+    refuse_unknown(schema::child_path(path, key));
   }
 }
 
 // A present key of the wrong type (a JSON null included) is refused naming its path, as a
 // container of the wrong type is; only an absent key keeps the fallback.
 [[noreturn]] void refuse_type(const std::string& path, const char* key, schema::Kind kind) {
-  refuse(schema::must_be(schema::child_path(path, key), kind));
+  refuse_kind(schema::child_path(path, key), kind);
 }
 
 // An earlier spelling of a key is refused naming the current one; only `key` is read.
 const JsonValue* current_value(const JsonValue& object, const std::string& path, const char* key,
                                const char* earlier_key) {
   if (object.find(earlier_key) != nullptr) {
-    refuse(schema::child_path(path, earlier_key) + " is an earlier spelling; write " +
-           schema::child_path(path, key));
+    throw SonareParameterRefusal::relation(
+        ErrorCode::InvalidFormat,
+        {schema::child_path(path, earlier_key), schema::child_path(path, key)},
+        "{0} is an earlier spelling; write {1}")
+        .as_caller_spelled();
   }
   return object.find(key);
 }
@@ -168,7 +185,7 @@ const JsonValue* current_value(const JsonValue& object, const std::string& path,
 float float_from(const JsonValue& value, const std::string& at) {
   float converted = 0.0f;
   if (!numeric::checked_float_cast(value.as_number(), &converted)) {
-    refuse(schema::refusal(at, schema::kFloatRangePredicate));
+    refuse_at(at, schema::kFloatRangePredicate);
   }
   return converted;
 }
@@ -176,8 +193,8 @@ float float_from(const JsonValue& value, const std::string& at) {
 int int_from(const JsonValue& value, const std::string& at) {
   int converted = 0;
   if (!numeric::checked_integral_cast(value.as_number(), &converted)) {
-    refuse(schema::refusal(at, schema::integer_range_predicate(std::numeric_limits<int>::min(),
-                                                               std::numeric_limits<int>::max())));
+    refuse_at(at, schema::integer_range_predicate(std::numeric_limits<int>::min(),
+                                                  std::numeric_limits<int>::max()));
   }
   return converted;
 }
@@ -200,14 +217,14 @@ float number_or_earlier(const JsonValue& object, const std::string& path, const 
 // Pan and width are refused outside their documented domains, naming the field.
 float checked_pan(float value, const std::string& path, const char* key) {
   if (!pan_in_range(value)) {
-    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(-1.0, 1.0)));
+    refuse_at(schema::child_path(path, key), schema::range_predicate(-1.0, 1.0));
   }
   return value;
 }
 
 float checked_width(float value, const std::string& path, const char* key) {
   if (!width_in_range(value)) {
-    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(0.0, 2.0)));
+    refuse_at(schema::child_path(path, key), schema::range_predicate(0.0, 2.0));
   }
   return value;
 }
@@ -215,14 +232,14 @@ float checked_width(float value, const std::string& path, const char* key) {
 // Surround placement is refused outside its domains with the same rule as the setters.
 float checked_surround_azimuth(float value, const std::string& path, const char* key) {
   if (!surround_azimuth_in_range(value)) {
-    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(-180.0, 180.0)));
+    refuse_at(schema::child_path(path, key), schema::range_predicate(-180.0, 180.0));
   }
   return value;
 }
 
 float checked_surround_unit(float value, const std::string& path, const char* key) {
   if (!surround_unit_in_range(value)) {
-    refuse(schema::refusal(schema::child_path(path, key), schema::range_predicate(0.0, 1.0)));
+    refuse_at(schema::child_path(path, key), schema::range_predicate(0.0, 1.0));
   }
   return value;
 }
@@ -308,13 +325,13 @@ Insert insert_from_value(const JsonValue& object, const std::string& path) {
 template <typename T>
 std::vector<T> array_from_value(const JsonValue& array, const std::string& path,
                                 T (*parse)(const JsonValue&, const std::string&)) {
-  if (!array.is_array()) refuse(schema::must_be(path, schema::Kind::Array));
+  if (!array.is_array()) refuse_kind(path, schema::Kind::Array);
   std::vector<T> out;
   out.reserve(array.as_array().size());
   size_t index = 0;
   for (const auto& entry : array.as_array()) {
     const std::string element_path = schema::index_path(path, index++);
-    if (!entry.is_object()) refuse(schema::must_be(element_path, schema::Kind::Object));
+    if (!entry.is_object()) refuse_kind(element_path, schema::Kind::Object);
     out.push_back(parse(entry, element_path));
   }
   return out;
@@ -352,16 +369,16 @@ StripEq eq_from_value(const JsonValue& object, const std::string& path) {
   const auto* eq_value = object.find("eq");
   if (!eq_value) return eq;
   const std::string eq_path = schema::child_path(path, "eq");
-  if (!eq_value->is_object()) refuse(schema::must_be(eq_path, schema::Kind::Object));
+  if (!eq_value->is_object()) refuse_kind(eq_path, schema::Kind::Object);
   refuse_unknown_keys(*eq_value, eq_path, kKnownEq);
   eq.enabled = bool_or(*eq_value, eq_path, "enabled", eq.enabled);
   const auto* bands = eq_value->find("bands");
   if (!bands) return eq;
   const std::string bands_path = schema::child_path(eq_path, "bands");
-  if (!bands->is_array()) refuse(schema::must_be(bands_path, schema::Kind::Array));
+  if (!bands->is_array()) refuse_kind(bands_path, schema::Kind::Array);
   const auto& array = bands->as_array();
   if (array.size() > mastering::eq::ParametricEq::kMaxBands) {
-    refuse(schema::refusal(bands_path, "must have at most 24 bands"));
+    refuse_at(bands_path, "must have at most 24 bands");
   }
   eq.bands.reserve(array.size());
   for (size_t index = 0; index < array.size(); ++index) {
@@ -372,8 +389,8 @@ StripEq eq_from_value(const JsonValue& object, const std::string& path) {
     // ParametricEq has no tilt design; the shared codec stays permissive for EqualizerProcessor.
     if (band.type == mastering::eq::EqBandType::TiltShelf ||
         band.type == mastering::eq::EqBandType::FlatTilt) {
-      refuse(schema::refusal(schema::child_path(band_path, "type"),
-                             "must not be tiltShelf or flatTilt on a strip or bus EQ"));
+      refuse_at(schema::child_path(band_path, "type"),
+                "must not be tiltShelf or flatTilt on a strip or bus EQ");
     }
     eq.bands.push_back(band);
   }
@@ -417,13 +434,13 @@ Strip strip_from_value(const JsonValue& object, const std::string& path) {
   strip.channel_delay_samples = int_or_earlier(
       object, path, "channelDelaySamples", "channel_delay_samples", strip.channel_delay_samples);
   if (strip.channel_delay_samples < 0 || strip.channel_delay_samples > kMaxAlignmentDelaySamples) {
-    refuse(schema::refusal(schema::child_path(path, "channelDelaySamples"),
-                           schema::integer_range_predicate(0, kMaxAlignmentDelaySamples)));
+    refuse_at(schema::child_path(path, "channelDelaySamples"),
+              schema::integer_range_predicate(0, kMaxAlignmentDelaySamples));
   }
   strip.source_layout = channel_layout_or(object, path, "sourceLayout", strip.source_layout);
   if (const auto* sp = object.find("surroundPan")) {
     const std::string surround_path = schema::child_path(path, "surroundPan");
-    if (!sp->is_object()) refuse(schema::must_be(surround_path, schema::Kind::Object));
+    if (!sp->is_object()) refuse_kind(surround_path, schema::Kind::Object);
     refuse_unknown_keys(*sp, surround_path, kKnownSurround);
     SurroundPanParams parsed;
     parsed.azimuth = checked_surround_azimuth(
@@ -442,7 +459,7 @@ Strip strip_from_value(const JsonValue& object, const std::string& path) {
   }
   if (const auto* metering = object.find("metering")) {
     const std::string metering_path = schema::child_path(path, "metering");
-    if (!metering->is_object()) refuse(schema::must_be(metering_path, schema::Kind::Object));
+    if (!metering->is_object()) refuse_kind(metering_path, schema::Kind::Object);
     refuse_unknown_keys(*metering, metering_path, kKnownMetering);
     strip.metering.enabled = bool_or(*metering, metering_path, "enabled", strip.metering.enabled);
     strip.metering.lufs = bool_or(*metering, metering_path, "lufs", strip.metering.lufs);
@@ -452,8 +469,7 @@ Strip strip_from_value(const JsonValue& object, const std::string& path) {
         int_or(*metering, metering_path, "truePeakOversample", strip.metering.true_peak_oversample);
     // The realtime meter's own rule, so a scene never stores a factor it cannot run.
     if (!is_realtime_true_peak_oversample(strip.metering.true_peak_oversample)) {
-      refuse(schema::refusal(schema::child_path(metering_path, "truePeakOversample"),
-                             "must be 4 or 8"));
+      refuse_at(schema::child_path(metering_path, "truePeakOversample"), "must be 4 or 8");
     }
   }
   if (const auto* inserts = object.find("inserts")) {
@@ -480,9 +496,9 @@ Bus bus_from_value(const JsonValue& object, const std::string& path) {
     const std::string at = schema::child_path(path, "role");
     if (role->is_string()) bus.role = role->as_string();
     if (role->is_number() || (role->is_string() && !bus_role::is_declared(bus.role))) {
-      refuse(schema::refusal(at, std::string("must be one of ") + bus_role::kChoices));
+      refuse_at(at, std::string("must be one of ") + bus_role::kChoices);
     }
-    if (!role->is_string()) refuse(schema::must_be(at, schema::Kind::String));
+    if (!role->is_string()) refuse_kind(at, schema::Kind::String);
   }
   bus.layout = channel_layout_or(object, path, "layout", bus.layout);
   bus.input_trim_db =
@@ -524,8 +540,8 @@ Bus bus_from_value(const JsonValue& object, const std::string& path) {
       offending = "dualPanRight";
     }
     if (offending != nullptr) {
-      refuse(schema::refusal(schema::child_path(path, offending),
-                             "must stay at its default on a surround (>2 channel) layout"));
+      refuse_at(schema::child_path(path, offending),
+                "must stay at its default on a surround (>2 channel) layout");
     }
   }
   bus.eq = eq_from_value(object, path);
@@ -547,12 +563,12 @@ VcaGroup vca_group_from_value(const JsonValue& object, const std::string& path) 
   group.gain_db = number_or_earlier(object, path, "gainDb", "gain_db", group.gain_db);
   if (const auto* members = object.find("members")) {
     const std::string members_path = schema::child_path(path, "members");
-    if (!members->is_array()) refuse(schema::must_be(members_path, schema::Kind::Array));
+    if (!members->is_array()) refuse_kind(members_path, schema::Kind::Array);
     group.members.reserve(members->as_array().size());
     size_t index = 0;
     for (const auto& entry : members->as_array()) {
       if (!entry.is_string()) {
-        refuse(schema::must_be(schema::index_path(members_path, index), schema::Kind::String));
+        refuse_kind(schema::index_path(members_path, index), schema::Kind::String);
       }
       group.members.push_back(entry.as_string());
       ++index;
@@ -938,12 +954,12 @@ const std::vector<std::string>& scene_schema_paths() {
 }
 
 Scene scene_from_value(const JsonValue& root, const std::string& root_path) {
-  if (!root.is_object()) refuse(schema::must_be(root_path, schema::Kind::Object));
+  if (!root.is_object()) refuse_kind(root_path, schema::Kind::Object);
   static const KeySet kKnownRoot = known_keys("");
   Scene scene;
   scene.version = int_or(root, root_path, "version", kSceneFormatVersion);
   if (scene.version != kSceneFormatVersion) {
-    refuse(schema::refusal(schema::child_path(root_path, "version"), "must be 2"));
+    refuse_at(schema::child_path(root_path, "version"), "must be 2");
   }
   if (const auto* strips = root.find("strips")) {
     scene.strips = strips_from_value(*strips, schema::child_path(root_path, "strips"));

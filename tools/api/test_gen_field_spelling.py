@@ -296,6 +296,39 @@ class RenderTest(unittest.TestCase):
         self.assertIn("std::array<Override, 0> kLengths", text)
         self.assertIn('".length / " + std::string(quotient->divisor)', text)
 
+    def test_a_document_root_reroots_the_slot_the_facade_wraps_the_caller_object_into(
+        self,
+    ) -> None:
+        facts = [Fact("set_strip", None, "param", "python", "settings")]
+        rule = {"python": {"document_roots": {"set_strip": ["strips[0].", "settings."]}}}
+        rows, unbound, idle = gen.derive(facts, {}, rule)
+        row = gen.Row("set_strip", "strips[0].", "settings.", document=True)
+        self.assertEqual(rows["python"], [row])
+        self.assertEqual((unbound, idle), ([], []))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "_field_spelling.py"
+            path.write_text(gen.render_py(rows["python"]))
+            spec = importlib.util.spec_from_file_location("_field_spelling", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        self.assertEqual(
+            module.surface_spelling("set_strip", "strips[0].faderDB"), "settings.faderDB"
+        )
+        self.assertEqual(module.surface_spelling("set_strip", "strips[0]"), "settings")
+        self.assertEqual(module.surface_spelling("set_strip", "strips[1].pan"), "strips[1].pan")
+        self.assertEqual(module.surface_spelling("other", "strips[0].pan"), "strips[0].pan")
+        self.assertEqual(module.OVERRIDES, {})
+        text = gen.render_cpp("node", [row])
+        self.assertIn('kDocumentRoots = {{\n    {"set_strip", "strips[0].", "settings."},', text)
+        self.assertIn("std::array<Override, 0> kOverrides", text)
+
+    def test_a_document_root_whose_caller_keyword_the_entry_lacks_binds_nothing(self) -> None:
+        facts = [Fact("set_strip", None, "param", "node", "options")]
+        rule = {"node": {"document_roots": {"set_strip": ["strips[0].", "settings."]}}}
+        rows, _, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(rows["node"], [])
+        self.assertEqual(idle, [("node", "document_roots.set_strip", "strips[0]. -> settings.")])
+
     def test_a_quotient_operand_the_entry_does_not_take_binds_nothing(self) -> None:
         facts = [
             Fact("push", "frames", "param", "node", None),

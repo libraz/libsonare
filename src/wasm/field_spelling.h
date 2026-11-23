@@ -206,6 +206,34 @@ inline std::string SurfaceSpelling(std::string_view entry, std::string_view subj
 // The C roots naming an entry's object argument, whose keys the wasm caller writes bare.
 inline constexpr std::array<std::string_view, 2> kObjectRoots = {"options.", "config."};
 
+struct DocumentRoot {
+  std::string_view entry;
+  std::string_view prefix;
+  std::string_view root;
+};
+
+// (C entry key, document prefix, caller root): the facade puts the caller's object in the
+// document slot the prefix names, so a path under it is the caller's path under the root.
+inline constexpr std::array<DocumentRoot, 3> kDocumentRoots = {{
+    {"engine_set_bus_strip_json", "buses[0].", "settings."},
+    {"engine_set_master_strip_json", "strips[0].", "settings."},
+    {"engine_set_track_strip_json", "strips[0].", "settings."},
+}};
+
+// @p subject re-rooted under the caller's root when it lies in entry @p entry's document slot.
+inline std::optional<std::string> DocumentRooted(std::string_view entry, std::string_view subject) {
+  for (const DocumentRoot& row : kDocumentRoots) {
+    if (row.entry != entry) continue;
+    if (subject.substr(0, row.prefix.size()) == row.prefix) {
+      return std::string(row.root) + std::string(subject.substr(row.prefix.size()));
+    }
+    if (subject == row.prefix.substr(0, row.prefix.size() - 1)) {
+      return std::string(row.root.substr(0, row.root.size() - 1));
+    }
+  }
+  return std::nullopt;
+}
+
 // @p subject without a leading object-argument root, or without "<c_root>." when given.
 inline std::string_view Unrooted(std::string_view subject, std::string_view c_root) {
   for (const std::string_view root : kObjectRoots) {
@@ -224,12 +252,21 @@ inline std::optional<sonare::SonareParameterRefusal> SpelledLastRefusal(
     std::string_view c_root = {}) {
   const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
   if (refusal == nullptr) return std::nullopt;
-  if (refusal->caller_spelled()) return *refusal;
   const char* entry = sonare_c_detail::last_refusal_entry();
   const std::string_view key = entry != nullptr ? entry : "";
+  // A document path is already the caller's spelling; only its slot prefix is re-rooted.
+  if (refusal->caller_spelled()) {
+    return refusal->respelled(
+        refusal->code(),
+        [key](const std::string& subject) {
+          return DocumentRooted(key, subject).value_or(subject);
+        },
+        true);
+  }
   return refusal->respelled(
       refusal->code(),
       [key, c_root](const std::string& subject) {
+        if (std::optional<std::string> rooted = DocumentRooted(key, subject)) return *rooted;
         return SurfaceSpelling(key, Unrooted(subject, c_root));
       },
       true);

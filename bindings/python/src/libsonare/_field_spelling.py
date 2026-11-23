@@ -186,8 +186,24 @@ QUOTIENTS: dict[tuple[str, str], tuple[str, str]] = {
 }
 
 
+# (C entry key, document prefix, caller root): the facade puts the caller's mapping in the
+# document slot the prefix names, so a path under it is the caller's path under the root.
+DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = (
+    ("engine_set_bus_strip_json", "buses[0].", "settings."),
+    ("engine_set_master_strip_json", "strips[0].", "settings."),
+    ("engine_set_track_strip_json", "strips[0].", "settings."),
+)
+
+
 def surface_spelling(entry: str, subject: str) -> str:
     """The Python caller's spelling of ``subject`` on C entry ``entry`` (no sonare_ prefix)."""
+    for root_entry, prefix, root in DOCUMENT_ROOTS:
+        if root_entry != entry:
+            continue
+        if subject.startswith(prefix):
+            return root + subject[len(prefix) :]
+        if subject == prefix[:-1]:
+            return root[:-1]
     quotient = QUOTIENTS.get((entry, subject))
     if quotient is not None:
         return f"{quotient[0]} length / {quotient[1]}"

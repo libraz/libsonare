@@ -1114,6 +1114,77 @@ TEST_CASE("every renamed refusal subject reaches the caller under the facade's s
   }
 }
 
+namespace {
+
+// One call per document-root row: the facade's one-entry document with the caller's object in
+// slot 0, carrying an unknown key and, for the track strip, a value of the wrong kind.
+void set_strip_document(const std::string& entry, const std::string& entry_json) {
+  const EnginePtr engine = prepared_engine();
+  if (entry == "engine_set_bus_strip_json") {
+    const SonareEngineBus bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+    REQUIRE(sonare_engine_set_track_buses(engine.get(), bus, 1) == SONARE_OK);
+    const std::string json = "{\"buses\":[" + entry_json + "]}";
+    CHECK(sonare_engine_set_bus_strip_json(engine.get(), 1, json.c_str()) ==
+          SONARE_ERROR_INVALID_FORMAT);
+    return;
+  }
+  const std::string json = "{\"strips\":[" + entry_json + "]}";
+  if (entry == "engine_set_master_strip_json") {
+    CHECK(sonare_engine_set_master_strip_json(engine.get(), json.c_str()) ==
+          SONARE_ERROR_INVALID_FORMAT);
+    return;
+  }
+  REQUIRE(entry == "engine_set_track_strip_json");
+  CHECK(sonare_engine_set_track_strip_json(engine.get(), 1, json.c_str()) ==
+        SONARE_ERROR_INVALID_FORMAT);
+}
+
+template <typename Roots, typename Spell>
+void check_document_roots(const Roots& rows, const Spell& spelled_last_refusal) {
+  REQUIRE(!rows.empty());
+  for (const auto& row : rows) {
+    const std::string entry(row.entry);
+    const std::string prefix(row.prefix);
+    const std::string root(row.root);
+    CAPTURE(entry, prefix, root);
+    set_strip_document(entry, "{\"id\":\"1\",\"faderDB\":0}");
+    REQUIRE(sonare_last_refusal_entry() != nullptr);
+    CHECK(std::string(sonare_last_refusal_entry()) == entry);
+    REQUIRE(last_refusal_subjects() == std::vector<std::string>{prefix + "faderDB"});
+    const auto shown = spelled_last_refusal({});
+    REQUIRE(shown.has_value());
+    CHECK(shown->code() == sonare::ErrorCode::InvalidFormat);
+    CHECK(shown->form() == sonare::SonareParameterRefusal::Form::UnknownKey);
+    CHECK(std::string(shown->what()) == "unknown key " + root + "faderDB");
+
+    set_strip_document(entry, "{\"id\":\"1\",\"pan\":\"left\"}");
+    const auto wrong = spelled_last_refusal({});
+    REQUIRE(wrong.has_value());
+    CHECK(wrong->form() == sonare::SonareParameterRefusal::Form::WrongType);
+    CHECK(std::string(wrong->what()) == root + "pan must be a number");
+  }
+}
+
+}  // namespace
+
+TEST_CASE("a strip document refusal names the caller's settings object, not the document slot",
+          "[c_api][field_spelling]") {
+  SECTION("node") {
+    check_document_roots(sonare_field_spelling::node::kDocumentRoots, [](std::string_view root) {
+      return sonare_field_spelling::node::SpelledLastRefusal(root);
+    });
+  }
+  SECTION("wasm") {
+    check_document_roots(sonare_field_spelling::wasm::kDocumentRoots, [](std::string_view root) {
+      return sonare_field_spelling::wasm::SpelledLastRefusal(root);
+    });
+  }
+  SECTION("C callers read the document path") {
+    set_strip_document("engine_set_track_strip_json", "{\"id\":\"1\",\"faderDB\":0}");
+    CHECK(std::string(sonare_last_error_message()) == "unknown key strips[0].faderDB");
+  }
+}
+
 TEST_CASE("an empty SMF or MIDI Clip File buffer is refused as empty, not as left out",
           "[c_api][project]") {
   using ImportEntry = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);

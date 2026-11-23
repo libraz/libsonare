@@ -18,7 +18,7 @@ import pytest
 
 import libsonare
 from libsonare import SonareError
-from libsonare._field_spelling import OVERRIDES
+from libsonare._field_spelling import DOCUMENT_ROOTS, OVERRIDES
 
 _SR = 22050
 _TONE = (0.5 * np.sin(2 * np.pi * 440 * np.arange(_SR // 2) / _SR)).astype(np.float32)
@@ -287,3 +287,26 @@ def test_every_table_row_is_driven_or_undriven_for_a_closed_reason() -> None:
     assert driven
     assert set(_UNDRIVEN) <= set(OVERRIDES), "an undriven key is no longer a table row"
     assert set(_UNDRIVEN.values()) <= _REASONS
+
+
+def _strip_document_call(entry: str) -> Callable[[dict[str, Any]], None]:
+    engine = _engine()
+    engine.set_track_lanes([{"track_id": 1, "source_channel_layout": "stereo"}])
+    engine.set_track_buses([{"bus_id": 1}])
+    calls: dict[str, Callable[[dict[str, Any]], None]] = {
+        "engine_set_track_strip_json": lambda settings: engine.set_strip(1, settings),
+        "engine_set_master_strip_json": lambda settings: engine.set_strip("master", settings),
+        "engine_set_bus_strip_json": lambda settings: engine.set_bus_strip(1, settings),
+    }
+    return calls[entry]
+
+
+@pytest.mark.parametrize(("entry", "prefix", "root"), DOCUMENT_ROOTS)
+def test_a_strip_document_refusal_names_the_settings_mapping(
+    entry: str, prefix: str, root: str
+) -> None:
+    call = _strip_document_call(entry)
+    with pytest.raises(SonareError, match=rf": unknown key {re.escape(root)}faderDB$"):
+        call({"id": "1", "faderDB": 0})
+    with pytest.raises(SonareError, match=rf": {re.escape(root)}pan must be a number$"):
+        call({"id": "1", "pan": "left"})

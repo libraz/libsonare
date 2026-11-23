@@ -36,6 +36,6 @@ def test_engine_strip_setters_refuse_an_unknown_key() -> None:
                 call()
             assert not isinstance(refused.value, SonareValueError)
             assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
-            assert "unknown key strips[0].faderDB" in str(refused.value)
+            assert "unknown key settings.faderDB" in str(refused.value)
         annotated = '{"$schema":"s","version":2,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}'
         engine.set_strip(10, scene_strip(annotated))
