@@ -784,11 +784,11 @@ describe('SonareRealtimeEngineNode', () => {
         const sync = posted.at(-1) as { type: string; entry?: string; bpm: number };
         expect(sync).toMatchObject({ type: 'syncTempo', entry: 'SonareEngine.setTempo' });
         // The live engine refuses what the offline mirror accepted.
-        live.receiveSync({
+        live.receiveMessage({
           ...sync,
           tempoSegments: undefined,
           bpm: Number.NaN,
-        } as Parameters<typeof live.receiveSync>[0]);
+        });
         const reply = livePosted.at(-1) as { type: string; entry?: string; message: string };
         expect(reply).toMatchObject({ type: 'syncError', entry: 'SonareEngine.setTempo' });
         port.onmessage?.({ data: reply } as MessageEvent<unknown>);
@@ -2250,7 +2250,7 @@ describe('SonareRealtimeEngineNode', () => {
         for (const message of posted) {
           const type = (message as { type?: unknown }).type;
           if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+            live.receiveMessage(message);
           }
         }
         expect(
@@ -2327,7 +2327,7 @@ describe('SonareRealtimeEngineNode', () => {
         const automationId = offline.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
         expect(automationId).toBeGreaterThan(0);
         offline.setParameter(automationId, 12, 64);
-        live.receiveCommand({
+        live.receiveMessage({
           type: SonareEngineCommandType.SetParam,
           targetId: automationId,
           renderFrame: 64,
@@ -2338,7 +2338,7 @@ describe('SonareRealtimeEngineNode', () => {
         for (const message of posted) {
           const type = (message as { type?: unknown }).type;
           if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+            live.receiveMessage(message);
           }
         }
         const frames = blockSize * 40;
@@ -2353,9 +2353,9 @@ describe('SonareRealtimeEngineNode', () => {
           { id: 2, trackId: 8, channels: [b, b], startPpq: 0, lengthSamples: frames },
         ];
         offline.setClips(clips);
-        live.receiveSync({ type: 'syncClips', clips });
+        live.receiveMessage({ type: 'syncClips', clips });
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        live.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         let maxDiff = 0;
         let maxAbs = 0;
         // Bus 100's republished -96 dB gain ramps over 5 ms (two blocks) before it is silent.
@@ -2468,7 +2468,7 @@ describe('SonareRealtimeEngineNode', () => {
         for (const message of messages) {
           const type = (message as { type?: unknown }).type;
           if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+            live.receiveMessage(message);
           }
         }
       };
@@ -2543,9 +2543,9 @@ describe('SonareRealtimeEngineNode', () => {
         for (const message of messages) {
           const type = (message as { type?: unknown }).type;
           if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+            live.receiveMessage(message);
           } else if (typeof type === 'number') {
-            live.receiveCommand(message as Parameters<typeof live.receiveCommand>[0]);
+            live.receiveMessage(message);
           }
         }
       };
@@ -2576,9 +2576,9 @@ describe('SonareRealtimeEngineNode', () => {
           { id: 1, trackId: 7, channels: [tone, tone], startPpq: 0, lengthSamples: frames },
         ];
         offline.setClips(clips);
-        live.receiveSync({ type: 'syncClips', clips });
+        live.receiveMessage({ type: 'syncClips', clips });
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        live.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         const power = (): number => {
           let sum = 0;
           let liveSum = 0;
@@ -2725,9 +2725,9 @@ describe('SonareRealtimeEngineNode', () => {
           for (const message of messages) {
             const type = (message as { type?: unknown }).type;
             if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-              live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+              live.receiveMessage(message);
             } else if (typeof type === 'number') {
-              live.receiveCommand(message as Parameters<typeof live.receiveCommand>[0]);
+              live.receiveMessage(message);
             }
           }
         };
@@ -2822,13 +2822,13 @@ describe('SonareRealtimeEngineNode', () => {
           { id: 1, trackId: 7, channels: [left, right], startPpq: 0, lengthSamples: frames },
         ];
         offline.setClips(clips);
-        live.receiveSync({ type: 'syncClips', clips });
+        live.receiveMessage({ type: 'syncClips', clips });
         offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
         expect(
           live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
         ).toBe(true);
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        live.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         let maxDiff = 0;
         let maxAbs = 0;
         let imbalance = 0;
@@ -3203,9 +3203,9 @@ describe('SonareRealtimeEngineNode', () => {
           for (const message of messages) {
             const type = (message as { type?: unknown }).type;
             if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-              live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+              live.receiveMessage(message);
             } else if (typeof type === 'number') {
-              live.receiveCommand(message as Parameters<typeof live.receiveCommand>[0]);
+              live.receiveMessage(message);
             }
           }
         };
@@ -3235,9 +3235,9 @@ describe('SonareRealtimeEngineNode', () => {
           { id: 2, trackId: 8, channels: [right, left], startPpq: 0, lengthSamples: frames },
         ];
         offline.setClips(clips);
-        live.receiveSync({ type: 'syncClips', clips });
+        live.receiveMessage({ type: 'syncClips', clips });
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        live.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         let maxDiff = 0;
         let maxAbs = 0;
         for (let block = 0; block < 40; block += 1) {

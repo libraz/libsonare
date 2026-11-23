@@ -2034,7 +2034,7 @@ export class SonareEngine {
 
   // Posts an out-of-band control-sync message to the worklet engine processor.
   // Sync messages use a string `type` so the worklet's message handler routes
-  // them to receiveSync() (numeric `type` is reserved for SonareEngineCommandRecord).
+  // them through receiveMessage() (numeric `type` is reserved for SonareEngineCommandRecord).
   private postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
     // Teardown callbacks (a closing clip stream) still post while destroy runs; they are moot.
     if (this.epoch.closed) {

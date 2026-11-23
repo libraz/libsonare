@@ -6,16 +6,7 @@ import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_type
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
-import {
-  assertKnownProcessorOptions,
-  isEngineCaptureRequestMessage,
-  isEngineCommandRecord,
-  isEngineInsertGainReductionRequestMessage,
-  isEngineReadRequestMessage,
-  isEngineSyncMessage,
-  isEngineTransportRequestMessage,
-} from './guards.js';
-import { isRecord } from './protocol.js';
+import { assertKnownProcessorOptions } from './guards.js';
 
 /**
  * Registers the realtime-engine processor in an AudioWorkletGlobalScope. The processor initializes
@@ -64,7 +55,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
             }
             return;
           }
-          this.routeMessage(event.data);
+          this.bridge.receiveMessage(event.data);
         };
         if (port?.addEventListener) {
           port.addEventListener('message', onMessage);
@@ -85,49 +76,10 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         return true;
       }
 
-      /**
-       * Single dispatch point for the port, shared with the buffered replay so
-       * the two cannot recognize different message sets.
-       */
-      private routeMessage(data: unknown): void {
-        const bridge = this.bridge;
-        if (!bridge) {
-          return;
-        }
-        if (isEngineCommandRecord(data)) {
-          bridge.receiveCommand(data);
-        } else if (isEngineSyncMessage(data)) {
-          bridge.receiveSync(data);
-        } else if (isEngineCaptureRequestMessage(data)) {
-          bridge.receiveCaptureRequest(data);
-        } else if (isEngineTransportRequestMessage(data)) {
-          bridge.receiveTransportRequest(data);
-        } else if (isEngineInsertGainReductionRequestMessage(data)) {
-          bridge.receiveInsertGainReductionRequest(data);
-        } else if (isEngineReadRequestMessage(data)) {
-          bridge.receiveReadRequest(data);
-        } else if (
-          isRecord(data) &&
-          typeof data.type === 'string' &&
-          data.type.startsWith('sync')
-        ) {
-          // A sync the guard does not accept would otherwise vanish, leaving the
-          // live engine out of step with the offline mirror and nothing to see.
-          // Report it through the same channel as a sync the engine rejected.
-          this.port?.postMessage?.({
-            type: 'syncError',
-            syncType: data.type,
-            message: `Unrecognized worklet sync message: ${data.type}`,
-            ...(typeof data.entry === 'string' ? { entry: data.entry } : {}),
-          });
-          bridge.noteSyncSequence(data.syncSequence);
-        }
-      }
-
       private replayPendingMessages(): void {
         const messages = this.pendingMessages.splice(0);
         for (const data of messages) {
-          this.routeMessage(data);
+          this.bridge?.receiveMessage(data);
         }
       }
 
@@ -148,10 +100,10 @@ export function registerSonareRealtimeEngineWorkletProcessor(
             },
           });
           for (const message of options.initialSyncMessages ?? []) {
-            this.bridge.receiveSync(message);
+            this.bridge.receiveMessage(message);
           }
           for (const command of options.initialCommands ?? []) {
-            this.bridge.receiveCommand(command);
+            this.bridge.receiveMessage(command);
           }
           this.replayPendingMessages();
           port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });

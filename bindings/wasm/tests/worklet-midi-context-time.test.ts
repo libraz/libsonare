@@ -38,7 +38,7 @@ function liveProcessor(contextStartFrame: number) {
   });
   const engine = (processor as unknown as { engine: LiveEngine }).engine;
   engine.setSynthInstrument(0, {});
-  processor.receiveSync({ type: 'syncMidiInputSource', destinationId: 0 });
+  processor.receiveMessage({ type: 'syncMidiInputSource', destinationId: 0 });
   let contextFrame = contextStartFrame;
   const scope = globalThis as { currentFrame?: number };
   scope.currentFrame = contextFrame;
@@ -53,7 +53,7 @@ function liveProcessor(contextStartFrame: number) {
     }
   };
   const noteAt = (contextTimeSec: number) =>
-    processor.receiveSync({
+    processor.receiveMessage({
       type: NOTE_ON,
       group: 0,
       channel: 0,
@@ -63,7 +63,7 @@ function liveProcessor(contextStartFrame: number) {
       contextTimeSec,
     });
   const noteAtOffset = (offsetInBlockSamples: number) =>
-    processor.receiveSync({
+    processor.receiveMessage({
       type: NOTE_ON,
       group: 0,
       channel: 0,
@@ -72,7 +72,7 @@ function liveProcessor(contextStartFrame: number) {
       offsetInBlockSamples,
     });
   const lateCount = () => {
-    processor.receiveReadRequest({
+    processor.receiveMessage({
       type: 'engineReadRequest',
       requestId: replies.length,
       op: 'lateMidiEventCount',
@@ -82,7 +82,7 @@ function liveProcessor(contextStartFrame: number) {
     return (replies.at(-1) as { value: number }).value;
   };
   const trackNoteAt = (contextTimeSec: number) =>
-    processor.receiveSync({
+    processor.receiveMessage({
       type: 'syncMidiNoteOn',
       destinationId: 0,
       group: 0,
@@ -266,9 +266,9 @@ async function bridgedEngine() {
       const typed = message as Record<string, unknown>;
       posted.push(typed);
       if (typeof typed.type === 'string' && typed.type in ENGINE_SYNC_MESSAGE_TYPES) {
-        live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+        live.receiveMessage(message);
       } else if (typed.type === 'engineReadRequest') {
-        live.receiveReadRequest(message as Parameters<typeof live.receiveReadRequest>[0]);
+        live.receiveMessage(message);
       }
     },
   };

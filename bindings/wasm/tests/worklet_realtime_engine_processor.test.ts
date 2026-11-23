@@ -243,7 +243,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           scopeIntervalFrames,
         });
         try {
-          processor.receiveCommand({
+          processor.receiveMessage({
             type: SonareEngineCommandType.TransportPlay,
             renderFrame: -1,
           });
@@ -330,7 +330,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
       const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
       try {
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.Punch,
           renderFrame: -1,
           argInt: 0,
@@ -344,7 +344,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           value: SonareEngineCommandType.Punch,
         });
         // The control: whole samples are applied.
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.Punch,
           renderFrame: -1,
           argInt: 0,
@@ -382,13 +382,86 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         processor.process([[]], [[outL, outR]]);
         processor.process([[]], [[outL, outR]]);
         expect(engine.transportState().samplePosition).toBe(0);
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMarkers',
           markers: [{ id: 5, ppq: 2, name: 'chorus' }],
           syncSequence: 1,
         } as SonareEngineSyncMessage);
         processor.process([[]], [[outL, outR]]);
         expect(engine.transportState().samplePosition).toBe(engine.sampleAtPpq(2));
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('takes every port message through receiveMessage, so an entry of its own routes nothing', () => {
+      const blockSize = 128;
+      const commandRing = createSonareEngineCommandRingBuffer({ capacity: 8 });
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        commandSharedBuffer: commandRing.sharedBuffer,
+        transport: { postMessage: (message) => posted.push(message) },
+      });
+      const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
+      const outL = new Float32Array(blockSize);
+      const outR = new Float32Array(blockSize);
+      const hostHandled: unknown[] = [];
+      // A host's own entry keeps one message type for itself and hands every other one on.
+      const hostEntry = (data: unknown) => {
+        if ((data as { type?: unknown }).type === 'hostPing') {
+          hostHandled.push(data);
+        } else {
+          processor.receiveMessage(data);
+        }
+      };
+      try {
+        pushSonareEngineCommandRingBuffer(commandRing, {
+          type: SonareEngineCommandType.SeekMarker,
+          targetId: 5,
+          renderFrame: -1,
+          syncSequence: 1,
+        });
+        processor.process([[]], [[outL, outR]]);
+        expect(engine.transportState().samplePosition).toBe(0);
+        hostEntry({
+          type: 'syncMarkers',
+          markers: [
+            { id: 5, ppq: 2, name: 'chorus' },
+            { id: 6, ppq: 4, name: 'bridge' },
+          ],
+          syncSequence: 1,
+        });
+        processor.process([[]], [[outL, outR]]);
+        expect(engine.transportState().samplePosition).toBe(engine.sampleAtPpq(2));
+        hostEntry({ type: 'hostPing' });
+        expect(hostHandled).toEqual([{ type: 'hostPing' }]);
+        hostEntry({ type: 'transportRequest', requestId: 7, op: 'state' });
+        expect(posted.at(-1)).toMatchObject({ type: 'transportResponse', requestId: 7, ok: true });
+
+        // A type this build does not know is refused, and the command published behind it runs.
+        pushSonareEngineCommandRingBuffer(commandRing, {
+          type: SonareEngineCommandType.SeekMarker,
+          targetId: 6,
+          renderFrame: -1,
+          syncSequence: 2,
+        });
+        processor.process([[]], [[outL, outR]]);
+        expect(engine.transportState().samplePosition).toBe(engine.sampleAtPpq(2));
+        posted.length = 0;
+        hostEntry({ type: 'futureRequest', syncSequence: 2 });
+        expect(posted).toEqual([
+          {
+            type: 'syncError',
+            syncType: 'futureRequest',
+            message: 'Unrecognized worklet message: futureRequest',
+            failure: expect.objectContaining({ name: 'TypeError' }),
+          },
+        ]);
+        processor.process([[]], [[outL, outR]]);
+        expect(engine.transportState().samplePosition).toBe(engine.sampleAtPpq(4));
       } finally {
         processor.destroy();
       }
@@ -898,7 +971,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             }),
           ).toBe(true);
         }
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMixer',
           lanes: [{ trackId: 7 }],
           insertBaseResets: [{ kind: 'track', trackId: 7 }],
@@ -941,7 +1014,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         record('setTrackStripJson');
         record('clearTrackInsertParameterBases');
         record('restoreTrackStripInsertParamByName');
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMixer',
           lanes: [{ trackId: 7 }],
           trackStrips: [
@@ -1261,7 +1334,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         numChannels: 1,
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncParameters',
           parameters: [
             {
@@ -1279,7 +1352,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const engine = (processor as unknown as { engine: { parameters: () => unknown[] } }).engine;
         expect(engine.parameters()).toHaveLength(1);
 
-        processor.receiveSync({ type: 'syncParameters', parameters: [] });
+        processor.receiveMessage({ type: 'syncParameters', parameters: [] });
         expect(engine.parameters()).toHaveLength(0);
       } finally {
         processor.destroy();
@@ -1308,14 +1381,14 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           channels: [new Float32Array(64).fill(0.25)],
           startPpq: 0,
         });
-        processor.receiveSync({ type: 'syncClipsDelta', upserts: [clip(1)], removeIds: [] });
+        processor.receiveMessage({ type: 'syncClipsDelta', upserts: [clip(1)], removeIds: [] });
         const setClips = vi.spyOn(engine, 'setClips');
         const upsertClip = vi.spyOn(engine, 'upsertClip');
-        processor.receiveSync({ type: 'syncClipsDelta', upserts: [clip(2)], removeIds: [] });
+        processor.receiveMessage({ type: 'syncClipsDelta', upserts: [clip(2)], removeIds: [] });
         expect(upsertClip).toHaveBeenCalledTimes(1);
         expect(setClips).not.toHaveBeenCalled();
         expect(engine.clipCount).toBe(2);
-        processor.receiveSync({ type: 'syncClipsDelta', upserts: [], removeIds: [2, 5] });
+        processor.receiveMessage({ type: 'syncClipsDelta', upserts: [], removeIds: [2, 5] });
         expect(engine.clipCount).toBe(1);
         expect(setClips).not.toHaveBeenCalled();
       } finally {
@@ -1340,8 +1413,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         defaultCurve: 'exponential' as const,
       });
       try {
-        processor.receiveSync({ type: 'syncParameters', parameters: [parameter(7)] });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncParameters', parameters: [parameter(7)] });
+        processor.receiveMessage({
           type: 'syncAutomation',
           paramId: 7,
           points: [{ ppq: 0, value: 0.25 }],
@@ -1353,14 +1426,14 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         ).engine;
         const lanes = engine.automationLaneCount;
         expect(lanes).toBeGreaterThan(0);
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncParameters',
           parameters: [parameter(7), parameter(8)],
         });
         expect(engine.parameters()).toHaveLength(2);
         expect(engine.automationLaneCount).toBe(lanes);
         // As on the C ABI, clearing the parameters leaves the lanes in place.
-        processor.receiveSync({ type: 'syncParameters', parameters: [] });
+        processor.receiveMessage({ type: 'syncParameters', parameters: [] });
         expect(engine.parameters()).toHaveLength(0);
         expect(engine.automationLaneCount).toBe(lanes);
       } finally {
@@ -1375,8 +1448,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         numChannels: 1,
       });
       try {
-        processor.receiveSync({ type: 'syncMidiInputSource', destinationId: 3 });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncMidiInputSource', destinationId: 3 });
+        processor.receiveMessage({
           type: 'syncMidiInputNoteOn',
           group: 0,
           channel: 0,
@@ -1387,7 +1460,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const engine = (processor as unknown as { engine: { midiInputPendingCount: number } })
           .engine;
         expect(engine.midiInputPendingCount).toBe(1);
-        processor.receiveSync({ type: 'syncClearMidiInputSource' });
+        processor.receiveMessage({ type: 'syncClearMidiInputSource' });
       } finally {
         processor.destroy();
       }
@@ -1409,8 +1482,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         ).engine;
         const rawInput = vi.spyOn(engine, 'pushMidiInputUmp').mockImplementation(() => undefined);
         const words = new Uint32Array([0x41923c00, 0x12345678]);
-        processor.receiveSync({ type: 'syncMidiInputSource', destinationId: 9 });
-        processor.receiveSync({ type: 'syncMidiInputUmp', words, offsetInBlockSamples: 768 });
+        processor.receiveMessage({ type: 'syncMidiInputSource', destinationId: 9 });
+        processor.receiveMessage({ type: 'syncMidiInputUmp', words, offsetInBlockSamples: 768 });
 
         expect(rawInput).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x12345678]), 768);
         expect(rawInput.mock.calls[0]?.[0]).toEqual(Uint32Array.from([0x41923c00, 0x12345678]));
@@ -1438,13 +1511,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           }
         ).engine;
         const destinationUmp = vi.spyOn(engine, 'pushMidiUmp').mockImplementation(() => undefined);
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMidiUmp',
           destinationId: 4,
           words: Uint32Array.from([0x41923c00, 0x12345678]),
           renderFrame: 256,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMidiUmp',
           destinationId: 4,
           words: [0x20903c64],
@@ -1521,7 +1594,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           }
         ).native;
         const setTrackMonitorMode = vi.spyOn(engine, 'setTrackMonitorMode');
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.SetTrackMonitorMode,
           targetId: 2,
           renderFrame: 96,
@@ -1529,7 +1602,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         });
         expect(setTrackMonitorMode).toHaveBeenCalledWith(2, 2, 96);
         for (const targetId of [undefined, -1, 0x1_0000_0000]) {
-          processor.receiveCommand({
+          processor.receiveMessage({
             type: SonareEngineCommandType.SetTrackMonitorMode,
             targetId,
             renderFrame: 96,
@@ -1552,7 +1625,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
       try {
         expect(() =>
-          processor.receiveSync({
+          processor.receiveMessage({
             type: 'syncTempo',
             bpm: Number.NaN,
             timeSignature: { numerator: 4, denominator: 4 },
@@ -1571,7 +1644,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         maxBlockSize: 128,
         numChannels: 1,
       });
-      processor.receiveSync({ type: 'destroy' });
+      processor.receiveMessage({ type: 'destroy' });
       expect(processor.process([[]], [[new Float32Array(128)]])).toBe(false);
       // Idempotent after the sync has already released native state.
       processor.destroy();
@@ -1586,7 +1659,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: (message) => posted.push(message) },
       });
       try {
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         expect(processor.process([[]], [[new Float32Array(128)]])).toBe(true);
         expect(posted.length).toBeGreaterThan(0);
         expect(
@@ -1644,7 +1717,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       try {
         const left = new Float32Array(blockSize).fill(0.5);
         const right = new Float32Array(blockSize).fill(-0.5);
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClips',
           clips: [{ id: 1, channels: [left, right], startPpq: 0 }],
         });
@@ -1656,7 +1729,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(processor.process([[]], [[outL, outR]])).toBe(true);
         expect(Math.max(...outL.map(Math.abs), ...outR.map(Math.abs))).toBe(0);
 
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         expect(processor.process([[]], [[outL, outR]])).toBe(true);
         expect(Math.max(...outL.map(Math.abs))).toBeCloseTo(0.5, 5);
       } finally {
@@ -1682,25 +1755,25 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const source = new Float32Array(blockSize * 2).fill(0.5);
         const removed = new Float32Array(blockSize * 2).fill(1);
         const clip = { id: 1, trackId: 10, channels: [source], startPpq: 0 };
-        fullProcessor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
-        fullProcessor.receiveSync({ type: 'syncClips', clips: [clip] });
-        fullProcessor.receiveCommand({
+        fullProcessor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        fullProcessor.receiveMessage({ type: 'syncClips', clips: [clip] });
+        fullProcessor.receiveMessage({
           type: SonareEngineCommandType.TransportPlay,
           renderFrame: -1,
         });
 
-        deltaProcessor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
-        deltaProcessor.receiveSync({
+        deltaProcessor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        deltaProcessor.receiveMessage({
           type: 'syncClipsDelta',
           upserts: [{ id: 99, trackId: 10, channels: [removed], startPpq: 0 }],
           removeIds: [],
         });
-        deltaProcessor.receiveSync({
+        deltaProcessor.receiveMessage({
           type: 'syncClipsDelta',
           upserts: [clip],
           removeIds: [99],
         });
-        deltaProcessor.receiveCommand({
+        deltaProcessor.receiveMessage({
           type: SonareEngineCommandType.TransportPlay,
           renderFrame: -1,
         });
@@ -1726,8 +1799,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: () => undefined },
       });
       try {
-        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveMessage({
           type: 'syncClipPageProvider',
           clipId: 88,
           clip: { id: 88, trackId: 10, startPpq: 0, lengthSamples: 256, warpMode: 'off' },
@@ -1735,20 +1808,20 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           numSamples: 256,
           pageFrames: 128,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 88,
           pageIndex: 0,
           channels: [new Float32Array(128).fill(0.25)],
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 88,
           pageIndex: 1,
           channels: [new Float32Array(128).fill(0.5)],
         });
-        processor.receiveSync({ type: 'syncClipPageCommit', clipId: 88 });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: 'syncClipPageCommit', clipId: 88 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         const output = new Float32Array(blockSize);
         expect(processor.process([[]], [[output]])).toBe(true);
         expect(output[0]).toBeCloseTo(0.25, 4);
@@ -1767,28 +1840,28 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: (message) => posted.push(message) },
       });
       try {
-        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
         // The OPFS path creates and primes the provider before it has the
         // finished clip schedule, then commits the schedule independently.
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPageProvider',
           clipId: 89,
           numChannels: 1,
           numSamples: 8,
           pageFrames: 4,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 89,
           pageIndex: 0,
           channels: [new Float32Array(4).fill(0.25)],
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPageCommit',
           clipId: 89,
           clip: { id: 89, trackId: 10, startPpq: 0, lengthSamples: 8, warpMode: 'off' },
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         const first = new Float32Array(blockSize);
         expect(processor.process([[]], [[first]])).toBe(true);
@@ -1802,13 +1875,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           requests: [{ clipId: 89, pageIndex: 1 }],
         });
 
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 89,
           pageIndex: 1,
           channels: [new Float32Array(4).fill(0.5)],
         });
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.TransportSeekSample,
           renderFrame: -1,
           argInt: 0,
@@ -1852,26 +1925,26 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         ).native;
         const allocatingPop = vi.spyOn(engine, 'popClipPageRequest');
         const scratchPop = vi.spyOn(engine, 'popClipPageRequestToScratch');
-        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveMessage({
           type: 'syncClipPageProvider',
           clipId: 91,
           numChannels: 1,
           numSamples: 8,
           pageFrames: 4,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 91,
           pageIndex: 0,
           channels: [new Float32Array(4).fill(0.25)],
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPageCommit',
           clipId: 91,
           clip: { id: 91, trackId: 10, startPpq: 0, lengthSamples: 8, warpMode: 'off' },
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         // Page 1 stays missing: every quantum re-reports it natively, but only
         // the first report is posted.
@@ -1886,13 +1959,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
         // Once the page lands the set is empty again; evicting it and replaying
         // the same miss is a new change and is posted again.
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 91,
           pageIndex: 1,
           channels: [new Float32Array(4).fill(0.5)],
         });
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.TransportSeekSample,
           renderFrame: -1,
           argInt: 0,
@@ -1901,8 +1974,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           processor.process([[]], [[new Float32Array(blockSize)]]);
         }
         expect(posted).toHaveLength(1);
-        processor.receiveSync({ type: 'syncClipPageClear', clipId: 91, pageIndex: 1 });
-        processor.receiveCommand({
+        processor.receiveMessage({ type: 'syncClipPageClear', clipId: 91, pageIndex: 1 });
+        processor.receiveMessage({
           type: SonareEngineCommandType.TransportSeekSample,
           renderFrame: -1,
           argInt: 0,
@@ -1945,15 +2018,15 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         }
       };
       try {
-        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveMessage({
           type: 'syncClipPageProvider',
           clipId: 92,
           numChannels: 1,
           numSamples: pageFrames * 2,
           pageFrames,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPageCommit',
           clipId: 92,
           clip: {
@@ -1964,27 +2037,27 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             warpMode: 'off',
           },
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         run(intervalQuanta * 3 + 5);
         expect(postedAt).toEqual([0, intervalQuanta, intervalQuanta * 2, intervalQuanta * 3]);
 
         // Page lands, then is evicted and missed again: a changed set posts at once.
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 92,
           pageIndex: 0,
           channels: [new Float32Array(pageFrames).fill(0.5)],
         });
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.TransportSeekSample,
           renderFrame: -1,
           argInt: 0,
         });
         run(2);
         expect(postedAt).toHaveLength(4);
-        processor.receiveSync({ type: 'syncClipPageClear', clipId: 92, pageIndex: 0 });
-        processor.receiveCommand({
+        processor.receiveMessage({ type: 'syncClipPageClear', clipId: 92, pageIndex: 0 });
+        processor.receiveMessage({
           type: SonareEngineCommandType.TransportSeekSample,
           renderFrame: -1,
           argInt: 0,
@@ -2041,26 +2114,26 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: (message) => posted.push(message) },
       });
       try {
-        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveMessage({
           type: 'syncClipPageProvider',
           clipId: 90,
           numChannels: 1,
           numSamples: 8,
           pageFrames: 4,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPage',
           clipId: 90,
           pageIndex: 0,
           channels: [new Float32Array(4).fill(0.25)],
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClipPageCommit',
           clipId: 90,
           clip: { id: 90, trackId: 10, startPpq: 0, lengthSamples: 8, warpMode: 'off' },
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         // The first block only reads the resident page 0, but the engine looks
         // ahead of the playhead, so page 1 is requested before the block that
@@ -2097,19 +2170,19 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
-        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveMessage({
           type: 'syncClips',
           clips: [{ id: 1, trackId: 10, channels: [source], startPpq: 0 }],
         });
         const liveEngine = (processor as unknown as { engine: RealtimeEngine }).engine;
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.SetParam,
           targetId: liveEngine.resolveStripAutomationId(10, 'faderDb'),
           argFloat: -12,
           renderFrame: -1,
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         const out = new Float32Array(blockSize);
         expect(processor.process([[]], [[out]])).toBe(true);
@@ -2129,26 +2202,26 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: () => undefined },
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncBuiltinInstrument',
           destinationId: 4,
           config: { gain: 0.5 },
         });
-        processor.receiveSync({ type: 'syncMidiClips', clips: [] });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: 'syncMidiClips', clips: [] });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         const silentL = new Float32Array(blockSize);
         const silentR = new Float32Array(blockSize);
         expect(processor.process([[]], [[silentL, silentR]])).toBe(true);
         expect(Math.max(...silentL.map(Math.abs), ...silentR.map(Math.abs))).toBe(0);
 
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportStop, renderFrame: -1 });
-        processor.receiveCommand({
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportStop, renderFrame: -1 });
+        processor.receiveMessage({
           type: SonareEngineCommandType.TransportSeekSample,
           renderFrame: -1,
           argInt: 0,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMidiClips',
           clips: [
             {
@@ -2163,7 +2236,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             },
           ],
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         const outL = new Float32Array(blockSize);
         const outR = new Float32Array(blockSize);
@@ -2183,13 +2256,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: () => undefined },
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncBuiltinInstrument',
           destinationId: 8,
           config: { gain: 0.5 },
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
-        processor.receiveSync({
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({
           type: 'syncMidiNoteOn',
           destinationId: 8,
           group: 0,
@@ -2218,7 +2291,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMixer',
           lanes: [{ trackId: 10 }],
           trackStrips: [
@@ -2231,22 +2304,22 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           masterStripJson:
             '{"version":2,"strips":[{"id":"master","faderDb":-6,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncTrackStripEqBand',
           trackId: 10,
           bandIndex: 0,
           bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":3}',
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMasterStripEqBand',
           bandIndex: 0,
           bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":1}',
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClips',
           clips: [{ id: 1, trackId: 10, channels: [source], startPpq: 0 }],
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         const out = new Float32Array(blockSize);
         expect(processor.process([[]], [[out]])).toBe(true);
@@ -2269,7 +2342,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const source = new Float32Array(blockSize * 4).fill(1);
         const insertParams =
           '{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":6,"band0.enabled":1}';
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMixer',
           lanes: [{ trackId: 10 }],
           trackStrips: [
@@ -2280,24 +2353,24 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           ],
           masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncTrackStripInsertBypassed',
           trackId: 10,
           insertIndex: 0,
           bypassed: true,
           resetOnBypass: true,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMasterStripInsertBypassed',
           insertIndex: 0,
           bypassed: true,
           resetOnBypass: true,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClips',
           clips: [{ id: 1, trackId: 10, channels: [source], startPpq: 0 }],
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         const out = new Float32Array(blockSize);
         expect(processor.process([[]], [[out]])).toBe(true);
@@ -2319,7 +2392,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMixer',
           buses: [{ busId: 200, gainDb: 0 }],
           lanes: [{ trackId: 10, sends: [{ busId: 200, levelDb: 0, enabled: true }] }],
@@ -2331,7 +2404,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             },
           ],
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncBusStripInsertParamByName',
           busId: 200,
           insertIndex: 0,
@@ -2341,18 +2414,18 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         // A bus insert is bypassable live, exactly like a track or master one.
         // Re-posting the bus scene JSON is not a substitute: it rebuilds the
         // chain and drops the insert's internal state.
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncBusStripInsertBypassed',
           busId: 200,
           insertIndex: 0,
           bypassed: true,
           resetOnBypass: false,
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClips',
           clips: [{ id: 1, trackId: 10, channels: [source], startPpq: 0 }],
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
 
         const out = new Float32Array(blockSize);
         expect(processor.process([[]], [[out]])).toBe(true);
@@ -2382,25 +2455,25 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         for (let i = 0; i < frames; i += 1) {
           source[i] = 0.25 * Math.sin((2 * Math.PI * 1000 * i) / 48000);
         }
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMixer',
           buses: [{ busId: 200, gainDb: 0 }],
           lanes: [{ trackId: 10, outputBusId: 200 }],
         });
-        processor.receiveSync({ type: 'syncBusStripPanMode', busId: 200, panMode: 0 });
-        processor.receiveSync({ type: 'syncBusStripPanLaw', busId: 200, panLaw: 2 });
-        processor.receiveSync({ type: 'syncBusStripPan', busId: 200, pan: 1 });
-        processor.receiveSync({
+        processor.receiveMessage({ type: 'syncBusStripPanMode', busId: 200, panMode: 0 });
+        processor.receiveMessage({ type: 'syncBusStripPanLaw', busId: 200, panLaw: 2 });
+        processor.receiveMessage({ type: 'syncBusStripPan', busId: 200, pan: 1 });
+        processor.receiveMessage({
           type: 'syncBusStripEqBand',
           busId: 200,
           bandIndex: 0,
           bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}',
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncClips',
           clips: [{ id: 1, trackId: 10, channels: [source, source], startPpq: 0 }],
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         const out = [new Float32Array(blockSize), new Float32Array(blockSize)];
         for (let block = 0; block < 12; block += 1) {
           expect(processor.process([[]], [out])).toBe(true);
@@ -2409,13 +2482,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(rms(out[0])).toBeLessThan(rms(out[1]) * 0.01);
         expect(rms(out[1])).toBeGreaterThan(0.4);
 
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncBusStripDualPan',
           busId: 200,
           leftPan: -1,
           rightPan: -1,
         });
-        processor.receiveSync({ type: 'syncBusStripPanMode', busId: 200, panMode: 2 });
+        processor.receiveMessage({ type: 'syncBusStripPanMode', busId: 200, panMode: 2 });
         for (let block = 0; block < 12; block += 1) {
           expect(processor.process([[]], [out])).toBe(true);
         }
@@ -2437,7 +2510,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncCapture',
           bufferFrames: blockSize,
           channels: 2,
@@ -2445,7 +2518,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           recordOffsetSamples: -12,
           inputMonitor: { enabled: true, gain: 0.5 },
         });
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.ArmRecord,
           renderFrame: -1,
           argInt: 1,
@@ -2488,7 +2561,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: (message) => posted.push(message) },
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncCapture',
           bufferFrames: blockSize,
           channels: 1,
@@ -2496,7 +2569,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           recordOffsetSamples: 0,
           inputMonitor: { enabled: false, gain: 1 },
         });
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.ArmRecord,
           renderFrame: -1,
           argInt: 1,
@@ -2508,7 +2581,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           ),
         ).toBe(true);
 
-        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 1, op: 'status' });
+        processor.receiveMessage({ type: 'captureRequest', requestId: 1, op: 'status' });
         expect(posted.at(-1)).toMatchObject({
           type: 'captureResponse',
           requestId: 1,
@@ -2516,13 +2589,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           status: { capturedFrames: blockSize, source: 'input' },
         });
 
-        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 2, op: 'read' });
+        processor.receiveMessage({ type: 'captureRequest', requestId: 2, op: 'read' });
         const read = posted.at(-1) as { channels?: Float32Array[] };
         expect(read.channels?.[0][0]).toBeCloseTo(0.5, 4);
 
-        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 3, op: 'reset' });
+        processor.receiveMessage({ type: 'captureRequest', requestId: 3, op: 'reset' });
         expect(posted.at(-1)).toMatchObject({ type: 'captureResponse', requestId: 3, ok: true });
-        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 4, op: 'status' });
+        processor.receiveMessage({ type: 'captureRequest', requestId: 4, op: 'status' });
         expect(posted.at(-1)).toMatchObject({
           type: 'captureResponse',
           requestId: 4,
@@ -2544,15 +2617,15 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: (message) => posted.push(message) },
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncTempo',
           bpm: 90,
           timeSignature: { numerator: 7, denominator: 8 },
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
 
-        processor.receiveTransportRequest({ type: 'transportRequest', requestId: 11, op: 'state' });
+        processor.receiveMessage({ type: 'transportRequest', requestId: 11, op: 'state' });
         expect(posted.at(-1)).toMatchObject({
           type: 'transportResponse',
           requestId: 11,
@@ -2578,9 +2651,9 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         transport: { postMessage: (message) => posted.push(message) },
       });
       try {
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: 64 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: 64 });
         for (let index = 1; index < 64; index++) {
-          processor.receiveCommand({
+          processor.receiveMessage({
             type: SonareEngineCommandType.TransportSeekSample,
             renderFrame: 64,
             argInt: 0,
@@ -2588,7 +2661,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         }
         const insertParams =
           '{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}';
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMixer',
           lanes: [],
           masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
@@ -2597,7 +2670,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           ],
         });
         expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
-        processor.receiveTransportRequest({ type: 'transportRequest', requestId: 42, op: 'state' });
+        processor.receiveMessage({ type: 'transportRequest', requestId: 42, op: 'state' });
         expect(posted.at(-1)).toMatchObject({
           type: 'transportResponse',
           requestId: 42,
@@ -2620,18 +2693,18 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       });
       try {
         for (let index = 0; index < 64; index++) {
-          processor.receiveCommand({
+          processor.receiveMessage({
             type: SonareEngineCommandType.TransportSeekSample,
             renderFrame: 64,
             argInt: 0,
           });
         }
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: 64 });
-        processor.receiveSync({ type: 'syncMixer', lanes: [] });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: 64 });
+        processor.receiveMessage({ type: 'syncMixer', lanes: [] });
         for (let index = 0; index < 2; index++) {
           expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
         }
-        processor.receiveTransportRequest({ type: 'transportRequest', requestId: 43, op: 'state' });
+        processor.receiveMessage({ type: 'transportRequest', requestId: 43, op: 'state' });
         expect(posted.at(-1)).toMatchObject({
           type: 'transportResponse',
           requestId: 43,
@@ -2652,14 +2725,14 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         numChannels: 1,
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncTempo',
           bpm: 120,
           timeSignature: { numerator: 3, denominator: 4 },
           tempoSegments: [{ startPpq: 0, bpm: 120 }],
           timeSignatureSegments: [{ startPpq: 0, numerator: 3, denominator: 4 }],
         });
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncMetronome',
           config: {
             enabled: true,
@@ -2668,7 +2741,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             clickSec: 0.01,
           },
         });
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         expect(processor.process([[]], [[output]])).toBe(true);
         expect(output[4000]).toBeGreaterThan(0);
         expect(output[8000]).toBeGreaterThan(0);
@@ -2758,7 +2831,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         scopeIntervalFrames: blockSize,
       });
       try {
-        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+        processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         let phase = 0;
         for (let block = 0; block < 12; block++) {
           const inL = new Float32Array(blockSize);
@@ -3135,7 +3208,9 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           }) => { port?: MockPort })
         | undefined;
       const receiveSyncSpy = vi.spyOn(
-        SonareRealtimeEngineWorkletProcessor.prototype,
+        SonareRealtimeEngineWorkletProcessor.prototype as unknown as {
+          receiveSync: (message: SonareEngineSyncMessage) => void;
+        },
         'receiveSync',
       );
       // applySync is the handler that actually touches the live engine;
@@ -3278,19 +3353,19 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           0,
         );
         expect(rawInput).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x12345678]), 768);
-        // A string-typed message the guard does not know must stay dropped.
-        port.onmessage?.({ data: { type: 'totallyUnknownSync' } });
-        // A sync-prefixed one the guard does not know must not vanish: it is a
+        // A type the guards do not know must not vanish, sync-prefixed or not: it is a
         // producer/worklet version skew, and the node surfaces it via onSyncError.
         port.posted.length = 0;
+        port.onmessage?.({ data: { type: 'totallyUnknownSync' } });
         port.onmessage?.({ data: { type: 'syncSomethingThisBuildDoesNotKnow' } });
-        expect(port.posted).toEqual([
-          {
+        expect(port.posted).toEqual(
+          ['totallyUnknownSync', 'syncSomethingThisBuildDoesNotKnow'].map((syncType) => ({
             type: 'syncError',
-            syncType: 'syncSomethingThisBuildDoesNotKnow',
-            message: 'Unrecognized worklet sync message: syncSomethingThisBuildDoesNotKnow',
-          },
-        ]);
+            syncType,
+            message: `Unrecognized worklet message: ${syncType}`,
+            failure: expect.objectContaining({ name: 'TypeError' }),
+          })),
+        );
         port.onmessage?.({ data: syncMessageSamples.destroy });
         expect(applySyncSpy.mock.calls.map((call) => call[0].type)).toEqual(drivenTypes);
         expect(receiveSyncSpy.mock.calls.map((call) => (call[0] as { type: string }).type)).toEqual(
@@ -3359,7 +3434,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         },
       });
       try {
-        processor.receiveSync({
+        processor.receiveMessage({
           type: 'syncCapture',
           bufferFrames: blockSize,
           channels: 2,
@@ -3367,7 +3442,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           recordOffsetSamples: 0,
           inputMonitor: { enabled: false, gain: 1 },
         });
-        processor.receiveCommand({
+        processor.receiveMessage({
           type: SonareEngineCommandType.ArmRecord,
           renderFrame: -1,
           argInt: 1,
@@ -3377,7 +3452,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           [[new Float32Array(blockSize), new Float32Array(blockSize)]],
         );
 
-        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 10, op: 'read' });
+        processor.receiveMessage({ type: 'captureRequest', requestId: 10, op: 'read' });
         const read = posted.at(-1);
         const response = read?.message as { channels?: Float32Array[] };
         expect(response.channels).toHaveLength(2);
@@ -3389,14 +3464,14 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
         // The transfer detached only the temporary JS response. Native capture
         // storage remains available for subsequent control requests.
-        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 11, op: 'status' });
+        processor.receiveMessage({ type: 'captureRequest', requestId: 11, op: 'status' });
         expect(posted.at(-1)?.message).toMatchObject({
           type: 'captureResponse',
           requestId: 11,
           ok: true,
           status: { capturedFrames: blockSize },
         });
-        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 12, op: 'reset' });
+        processor.receiveMessage({ type: 'captureRequest', requestId: 12, op: 'reset' });
         expect(posted.at(-1)?.message).toMatchObject({
           type: 'captureResponse',
           requestId: 12,
@@ -3576,9 +3651,9 @@ describe('processor state reset through the worklet facade', () => {
   const deliver = (processor: SonareRealtimeEngineWorkletProcessor, posted: unknown[]): void => {
     for (const message of posted.splice(0)) {
       if (isEngineSyncMessage(message)) {
-        processor.receiveSync(message);
+        processor.receiveMessage(message);
       } else if (typeof (message as { type?: unknown }).type === 'number') {
-        processor.receiveCommand(message as SonareEngineCommandRecord);
+        processor.receiveMessage(message as SonareEngineCommandRecord);
       }
     }
   };

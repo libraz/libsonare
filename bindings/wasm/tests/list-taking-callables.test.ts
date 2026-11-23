@@ -33,8 +33,6 @@ const EXEMPT: Record<string, string> = {
     'message is spread one level and posted over the port; no facade walk',
   'SonareRealtimeEngineWorkletProcessor.constructor':
     'options are stored; the registration wrapper replays the initial messages',
-  'SonareRealtimeEngineWorkletProcessor.receiveSync':
-    'messages are built by the SonareEngine setters after their budget checks',
   'SonareRealtimeEngineWorkletProcessor.process':
     'inputs and outputs are the port arrays the audio runtime hands each render quantum',
   'SonareWorkletProcessor.process':

@@ -117,8 +117,8 @@ describe('realtime engine scope postMessage transport', () => {
       scopeIntervalFrames: 0,
     });
     try {
-      processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
-      control.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+      processor.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+      control.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
       let phase = 0;
       let audiblePeak = 0;
       for (let block = 0; block < 12; block++) {
@@ -195,7 +195,7 @@ describe('realtime engine scope postMessage transport', () => {
       >[0]['transport'],
     });
     try {
-      processor.receiveCommand({
+      processor.receiveMessage({
         type: SourceSonareEngineCommandType.TransportPlay,
         renderFrame: -1,
       });
@@ -230,7 +230,7 @@ describe('realtime engine scope postMessage transport', () => {
     );
     try {
       expect(configureScopeTelemetry).not.toHaveBeenCalled();
-      processor.receiveCommand({
+      processor.receiveMessage({
         type: SourceSonareEngineCommandType.TransportPlay,
         renderFrame: -1,
       });
@@ -266,7 +266,7 @@ describe('realtime engine scope postMessage transport', () => {
     );
     try {
       expect(configureScopeTelemetry).not.toHaveBeenCalled();
-      processor.receiveCommand({
+      processor.receiveMessage({
         type: SourceSonareEngineCommandType.TransportPlay,
         renderFrame: -1,
       });

@@ -342,16 +342,7 @@ async function createWiredSabEngine(): Promise<{
   let processor: SonareRealtimeEngineWorkletProcessor | undefined;
   const port = {
     postMessage: (message: unknown) => {
-      const type = (message as { type?: unknown }).type;
-      if (typeof type === 'number') {
-        processor?.receiveCommand(
-          message as Parameters<SonareRealtimeEngineWorkletProcessor['receiveCommand']>[0],
-        );
-      } else {
-        processor?.receiveSync(
-          message as Parameters<SonareRealtimeEngineWorkletProcessor['receiveSync']>[0],
-        );
-      }
+      processor?.receiveMessage(message);
     },
     onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
   };
@@ -395,19 +386,7 @@ describe('worklet attachOpfsClipStream', () => {
               typeof SharedArrayBuffer === 'function' && entry instanceof SharedArrayBuffer,
           ) ?? false,
         ).toBe(false);
-        const type =
-          typeof message === 'object' && message !== null
-            ? (message as { type?: unknown }).type
-            : undefined;
-        if (typeof type === 'number') {
-          processor?.receiveCommand(
-            message as Parameters<SonareRealtimeEngineWorkletProcessor['receiveCommand']>[0],
-          );
-        } else {
-          processor?.receiveSync(
-            message as Parameters<SonareRealtimeEngineWorkletProcessor['receiveSync']>[0],
-          );
-        }
+        processor?.receiveMessage(message);
       },
       onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
     };
@@ -467,7 +446,7 @@ describe('worklet attachOpfsClipStream', () => {
         worker.messages.map((message) => (message as { pageIndex: number }).pageIndex),
       ).toEqual([0, 1]);
 
-      processor.receiveCommand({
+      processor.receiveMessage({
         type: SonareEngineCommandType.TransportSeekSample,
         renderFrame: -1,
         argInt: 0,

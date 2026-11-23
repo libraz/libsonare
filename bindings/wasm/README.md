@@ -80,6 +80,8 @@ const engine = await SonareRealtimeEngineNode.create(audioContext, { moduleUrl: 
 
 Code that calls `init()` itself inside the worklet passes the same two values: `init({ moduleFactory, wasmBinary })`.
 
+An AudioWorklet entry of your own that constructs `SonareRealtimeEngineWorkletProcessor` itself passes every port message it does not handle itself to `receiveMessage`, which routes it and answers a type this build does not know with a `syncError`.
+
 ## Capabilities
 
 - **Analysis** — BPM, key, chords, downbeats, sections grouped by repeated material, melody, tuning, pitch, timbre, spectral features and metering. → [Analysis](https://libsonare.libraz.net/docs/wasm)

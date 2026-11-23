@@ -90,7 +90,7 @@ describe('SonareEngine surround pan at numChannels 6', () => {
       const replay = (messages: unknown[]): void => {
         for (const message of messages) {
           if (isEngineSyncMessage(message)) {
-            processor.receiveSync(message);
+            processor.receiveMessage(message);
           }
         }
       };

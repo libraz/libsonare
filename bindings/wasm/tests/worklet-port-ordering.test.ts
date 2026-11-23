@@ -79,18 +79,7 @@ async function bridgedEngine(mode: Mode) {
       }
     }
   };
-  const deliver = (message: unknown) => {
-    const type = (message as { type?: unknown }).type;
-    if (typeof type === 'number') {
-      live.receiveCommand(message as Parameters<Processor['receiveCommand']>[0]);
-    } else if (type === 'captureRequest') {
-      live.receiveCaptureRequest(message as Parameters<Processor['receiveCaptureRequest']>[0]);
-    } else if (type === 'transportRequest') {
-      live.receiveTransportRequest(message as Parameters<Processor['receiveTransportRequest']>[0]);
-    } else {
-      live.receiveSync(message as Parameters<Processor['receiveSync']>[0]);
-    }
-  };
+  const deliver = (message: unknown) => live.receiveMessage(message);
   const quantum = () => {
     live.process([[]], [[new Float32Array(BLOCK), new Float32Array(BLOCK)]]);
   };

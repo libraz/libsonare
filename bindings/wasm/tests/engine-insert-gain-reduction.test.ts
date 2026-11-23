@@ -166,7 +166,7 @@ describe('insert gain reduction query', () => {
       for (let block = 0; block < 20; ++block) {
         processor.process([[]], [[new Float32Array(BLOCK), new Float32Array(BLOCK)]]);
       }
-      processor.receiveInsertGainReductionRequest({
+      processor.receiveMessage({
         type: 'insertGainReductionRequest',
         requestId: 5,
         targetId: LANE_TARGET,
@@ -181,7 +181,7 @@ describe('insert gain reduction query', () => {
       expect(ok.values).toHaveLength(2);
       expect(Math.min(...ok.values)).toBeLessThan(-1);
 
-      processor.receiveInsertGainReductionRequest({
+      processor.receiveMessage({
         type: 'insertGainReductionRequest',
         requestId: 6,
         targetId: 41,
@@ -210,19 +210,13 @@ describe('insert gain reduction query', () => {
       postMessage: (message: unknown) => void;
       onmessage?: ((event: MessageEvent<unknown>) => void) | null;
     } = {
-      // Route each request into the processor and its reply back, as the port would.
+      // Route each message into the processor and its replies back, as the port would.
       postMessage: (message) => {
-        const request = message as { type: string };
-        if (request.type === 'insertGainReductionRequest') {
-          processor.receiveInsertGainReductionRequest(message as never);
-        } else if (request.type === 'transportRequest') {
-          processor.receiveTransportRequest(message as never);
-        } else if (request.type === 'captureRequest') {
-          processor.receiveCaptureRequest(message as never);
-        } else {
-          return;
+        const before = posted.length;
+        processor.receiveMessage(message);
+        for (const reply of posted.slice(before)) {
+          port.onmessage?.({ data: reply } as MessageEvent<unknown>);
         }
-        port.onmessage?.({ data: posted.at(-1) } as MessageEvent<unknown>);
       },
     };
     const node = await SonareRealtimeEngineNode.create(

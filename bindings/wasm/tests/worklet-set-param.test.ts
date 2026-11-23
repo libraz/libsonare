@@ -45,9 +45,9 @@ async function bridgedEngine(): Promise<{
       const typed = message as Record<string, unknown>;
       posted.push(typed);
       if (typeof typed.type === 'string' && typed.type in ENGINE_SYNC_MESSAGE_TYPES) {
-        live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+        live.receiveMessage(message);
       } else if (typeof typed.type === 'number') {
-        live.receiveCommand(message as never);
+        live.receiveMessage(message as never);
       }
     },
   };

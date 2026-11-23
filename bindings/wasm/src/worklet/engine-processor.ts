@@ -27,6 +27,12 @@ import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './aud
 import { buildCaptureConfig } from './engine-offline.js';
 import {
   assertKnownProcessorOptions,
+  isEngineCaptureRequestMessage,
+  isEngineCommandRecord,
+  isEngineInsertGainReductionRequestMessage,
+  isEngineReadRequestMessage,
+  isEngineSyncMessage,
+  isEngineTransportRequestMessage,
   requireChannelCount,
   requireIntegerOption,
   resolveScopeBandCount,
@@ -45,6 +51,7 @@ import {
   engineRingFromSharedBuffer,
   engineTelemetryRingFromSharedBuffer,
   externalMidiRingFromSharedBuffer,
+  isRecord,
   meterFromEngine,
   meterRingFromSharedBuffer,
   pendingSonareEngineCommandCount,
@@ -496,8 +503,46 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
-  /** @internal */
-  receiveCommand(command: SonareEngineCommandRecord): void {
+  /**
+   * Routes one message the node posted to the handler for its type. An AudioWorklet entry of a
+   * host's own passes every message it does not handle itself here. A message of a type this
+   * build does not know is answered with a `syncError` carrying a `TypeError` failure, and its
+   * sequence number is still noted, so the commands sent after it are not held.
+   */
+  receiveMessage(message: unknown): void {
+    if (isEngineCommandRecord(message)) {
+      this.receiveCommand(message);
+    } else if (isEngineSyncMessage(message)) {
+      this.receiveSync(message);
+    } else if (isEngineCaptureRequestMessage(message)) {
+      this.receiveCaptureRequest(message);
+    } else if (isEngineTransportRequestMessage(message)) {
+      this.receiveTransportRequest(message);
+    } else if (isEngineInsertGainReductionRequestMessage(message)) {
+      this.receiveInsertGainReductionRequest(message);
+    } else if (isEngineReadRequestMessage(message)) {
+      this.receiveReadRequest(message);
+    } else {
+      this.refuseUnknownMessage(message);
+    }
+  }
+
+  private refuseUnknownMessage(message: unknown): void {
+    const record = isRecord(message) ? message : {};
+    const syncType = typeof record.type === 'string' ? record.type : String(record.type);
+    this.receiveOrdered(record, () => {
+      const error = refuseType(`Unrecognized worklet message: ${syncType}`);
+      this.transport?.postMessage?.({
+        type: 'syncError',
+        syncType,
+        message: errorText(error),
+        failure: failurePayload(error),
+        ...(typeof record.entry === 'string' ? { entry: record.entry } : {}),
+      });
+    });
+  }
+
+  private receiveCommand(command: SonareEngineCommandRecord): void {
     if (!this.closed) {
       this.safeApplyCommand(command);
     }
@@ -507,8 +552,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   // thread. These handlers must remain bounded: expensive clip transforms are
   // performed on the main-thread mirror, and long pre-baked PCM arrives in
   // small pages before the final lightweight clip schedule is committed.
-  /** @internal */
-  receiveSync(message: SonareEngineSyncMessage): void {
+  private receiveSync(message: SonareEngineSyncMessage): void {
     this.receiveOrdered(message, () => {
       try {
         this.settleCommands();
@@ -555,7 +599,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   /** Records the sequence number a posted sync carried; a sync without one changes nothing. */
-  noteSyncSequence(sequence: unknown): void {
+  private noteSyncSequence(sequence: unknown): void {
     if (typeof sequence === 'number' && Number.isInteger(sequence) && sequence >= 0) {
       this.syncSequence = sequence >>> 0;
     }
@@ -1100,8 +1144,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
-  /** @internal */
-  receiveCaptureRequest(message: SonareEngineCaptureRequestMessage): void {
+  private receiveCaptureRequest(message: SonareEngineCaptureRequestMessage): void {
     this.receiveOrdered(message, () => {
       try {
         this.settleCommands();
@@ -1157,8 +1200,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     });
   }
 
-  /** @internal */
-  receiveTransportRequest(message: SonareEngineTransportRequestMessage): void {
+  private receiveTransportRequest(message: SonareEngineTransportRequestMessage): void {
     this.receiveOrdered(message, () => {
       try {
         this.settleCommands();
@@ -1209,8 +1251,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       : wireRenderFrame(message.renderFrame);
   }
 
-  /** @internal */
-  receiveReadRequest(message: SonareEngineReadRequestMessage): void {
+  private receiveReadRequest(message: SonareEngineReadRequestMessage): void {
     this.receiveOrdered(message, () => {
       try {
         this.settleCommands();
@@ -1238,8 +1279,9 @@ export class SonareRealtimeEngineWorkletProcessor {
     });
   }
 
-  /** @internal */
-  receiveInsertGainReductionRequest(message: SonareEngineInsertGainReductionRequestMessage): void {
+  private receiveInsertGainReductionRequest(
+    message: SonareEngineInsertGainReductionRequestMessage,
+  ): void {
     this.receiveOrdered(message, () => {
       try {
         this.settleCommands();

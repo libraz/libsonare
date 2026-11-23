@@ -35844,3 +35844,51 @@ domain = "effects"
 rule = "individual"
 entry = "./analysis"
 test = "bindings/wasm/tests/mastering-repair-declip-stereo.test.ts::reconstructs the narrower channel past its own clipped extent"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineWorkletProcessor.receiveCommand"
+removed = "private; an AudioWorklet entry of your own passes every message it does not handle itself to SonareRealtimeEngineWorkletProcessor.receiveMessage, which routes it and answers a type this build does not know with a syncError"
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineWorkletProcessor.receiveSync"
+removed = "private; an AudioWorklet entry of your own passes every message it does not handle itself to SonareRealtimeEngineWorkletProcessor.receiveMessage, which routes it and answers a type this build does not know with a syncError"
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineWorkletProcessor.receiveCaptureRequest"
+removed = "private; an AudioWorklet entry of your own passes every message it does not handle itself to SonareRealtimeEngineWorkletProcessor.receiveMessage, which routes it and answers a type this build does not know with a syncError"
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineWorkletProcessor.receiveTransportRequest"
+removed = "private; an AudioWorklet entry of your own passes every message it does not handle itself to SonareRealtimeEngineWorkletProcessor.receiveMessage, which routes it and answers a type this build does not know with a syncError"
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineWorkletProcessor.receiveInsertGainReductionRequest"
+removed = "private; an AudioWorklet entry of your own passes every message it does not handle itself to SonareRealtimeEngineWorkletProcessor.receiveMessage, which routes it and answers a type this build does not know with a syncError"
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineWorkletProcessor.noteSyncSequence"
+removed = "private; SonareRealtimeEngineWorkletProcessor.receiveMessage notes the sequence number of every message it is given, a refused or unknown one included"
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"

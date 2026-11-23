@@ -277,7 +277,7 @@ describe('insert automation ids (WASM)', () => {
       for (const message of posted.splice(0)) {
         const type = (message as { type?: unknown }).type;
         if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-          live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+          live.receiveMessage(message);
         }
       }
     };
@@ -369,16 +369,16 @@ describe('insert automation ids (WASM)', () => {
         },
       ];
       offline.setClips(clips);
-      live.receiveSync({ type: 'syncClips', clips });
+      live.receiveMessage({ type: 'syncClips', clips });
       offline.setParameter(gainId, -12);
-      live.receiveCommand({
+      live.receiveMessage({
         type: SonareEngineCommandType.SetParam,
         targetId: gainId,
         renderFrame: -1,
         argFloat: -12,
       });
       offline.play();
-      live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+      live.receiveMessage({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
       let expected = 0;
       let actual = 0;
       for (let block = 0; block < 30; block += 1) {
