@@ -306,7 +306,7 @@ void RealtimeEngine::deliver_live_ump(uint32_t destination_id, int64_t render_fr
     }
     return;
   }
-  observe_live_cc_for_automation(ump);
+  if (observe_live_cc_for_automation(ump)) return;
   midi_sequencer_.inject_event(destination_id, midi::DeviceFrame{render_frame}, ump, origin_id);
 }
 
@@ -423,30 +423,16 @@ void RealtimeEngine::set_external_midi_clock_enabled(bool enabled) noexcept {
   set_midi_sync_sink(enabled ? &external_clock_sync_sink_ : nullptr);
 }
 
-void RealtimeEngine::observe_live_cc_for_automation(const midi::Ump& ump) noexcept {
-  // The ONE live CC decode in the engine. Every path that can deliver a live
-  // controller message -- the queued scalar CC command, the queued raw UMP
-  // command, and the engine-owned live input source -- runs through here, so a
-  // gesture resolves to the same parameter and the same value whichever one it
-  // arrived on.
-  //
-  // observe_live_cc is the kind-aware decoder: it accumulates 14-bit MSB/LSB
-  // pairs and RPN/NRPN selector + Data Entry state per UMP group and channel, so a
-  // high-resolution controller drives its parameter at full precision instead of
-  // MSB-only 7 bits, and Data Entry resolves against the selector currently
-  // addressed on that channel. The cc_number-only lookup_param / value_to_unit
-  // pair cannot do either, which is why no live path calls it any more.
-  //
-  // AUDIO thread: called from apply_command and from dispatch_midi_span,
-  // both inside process(). The per UMP group and channel accumulator it mutates is owned by
-  // that single thread.
+bool RealtimeEngine::observe_live_cc_for_automation(const midi::Ump& ump) noexcept {
   const midi::CcMap* cc_map = midi_cc_maps_.current();
-  if (cc_map == nullptr) return;
+  if (cc_map == nullptr) return false;
+  bool consumed = false;
   uint32_t param_id = 0;
   float mapped_value = 0.0f;
-  if (cc_map->observe_live_cc(ump, &param_id, &mapped_value)) {
+  if (cc_map->observe_live_cc(ump, &param_id, &mapped_value, &consumed)) {
     automation_.set_parameter(param_id, mapped_value);
   }
+  return consumed;
 }
 
 void RealtimeEngine::dispatch_midi_without_render(int num_frames) noexcept {

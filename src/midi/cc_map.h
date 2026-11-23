@@ -84,6 +84,8 @@ struct CcBinding {
   uint8_t selector_msb = 0;
   /// RPN/NRPN selector LSB. 0 for ordinary CC kinds.
   uint8_t selector_lsb = 0;
+  /// When set, addressed live controller messages stop after automation observes them.
+  bool consume = false;
 };
 
 /// Extracts the controller number from a control-change UMP (MIDI 1.0 or 2.0).
@@ -208,6 +210,9 @@ class CcMap {
   /// per-group/channel live-decode state. Must be called from a single (audio)
   /// thread.
   bool observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) const noexcept;
+  /// Reports whether the message belongs to a consuming binding, even without a resolved value.
+  bool observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit,
+                       bool* consumed) const noexcept;
 
   /// Resets the per-group/channel live-decode accumulator state (14-bit MSB
   /// pending, RPN/NRPN selectors, Data Entry MSB). Does not touch bindings. Call
@@ -311,16 +316,33 @@ class CcMap {
   // its own pending value: MIDI permits CC#1 and CC#7 gestures to interleave on
   // one channel, so one shared MSB slot would make the first LSB address the
   // wrong controller (or disappear entirely).
+  struct LiveSelectorState {
+    struct Parameter {
+      uint8_t msb = 0x7Fu;
+      uint8_t lsb = 0x7Fu;
+      bool has_msb = false;
+      bool has_lsb = false;
+    };
+
+    Parameter rpn;
+    Parameter nrpn;
+    bool nrpn_active = false;
+
+    bool observe(uint8_t controller, uint8_t value) noexcept;
+    const Parameter& current() const noexcept { return nrpn_active ? nrpn : rpn; }
+    bool selected() const noexcept;
+  };
+  size_t find_selected_binding(uint8_t channel, const LiveSelectorState& selector) const noexcept;
+  size_t find_paired_binding(uint8_t channel, uint8_t controller) const noexcept;
+  size_t find_consuming_cc(const Ump& ump, uint8_t controller,
+                           const LiveSelectorState& selector) const noexcept;
+
   struct LiveChannelState {
     // 14-bit Control Change: MSB (CC 0..31) seen, awaiting its LSB (CC msb+32).
     std::array<bool, 32> cc_msb_valid{};
     std::array<uint8_t, 32> cc_msb_values{};
-    // Currently-addressed RPN/NRPN selector and which space is active.
-    bool nrpn_active = false;
-    uint8_t rpn_msb = 0x7Fu;
-    uint8_t rpn_lsb = 0x7Fu;
-    uint8_t nrpn_msb = 0x7Fu;
-    uint8_t nrpn_lsb = 0x7Fu;
+    LiveSelectorState midi1_selector;
+    LiveSelectorState midi2_selector;
     // Data Entry MSB (CC 6) last value, combined with the LSB (CC 38) into the
     // 14-bit Data Entry value.
     uint8_t data_msb = 0;

@@ -628,6 +628,12 @@ class RealtimeEngine : private ClipPageRequestSink {
     midi_input_source_generation_.fetch_add(1, std::memory_order_relaxed);
     midi_input_source_.store(source, std::memory_order_release);
   }
+  struct MidiInputBinding {
+    host::MidiInputSource* source = nullptr;
+    uint32_t destination_id = 0;
+  };
+  /// Reads the binding on the control thread while processing and source changes are stopped.
+  MidiInputBinding midi_input_binding() const noexcept;
   // Control-thread: enqueue a live MIDI SysEx message for `destination_id`. The
   // bytes are copied into a bounded payload slot (preparation may allocate) and a
   // kMidiSysExImmediate command carrying only a scalar slot reference is pushed,
@@ -678,6 +684,8 @@ class RealtimeEngine : private ClipPageRequestSink {
                     float max_value) noexcept;
   bool bind_midi_cc(const midi::CcBinding& binding) noexcept;
   void clear_midi_cc_bindings() noexcept;
+  /// Returns an owned snapshot in unspecified order. Control thread only.
+  std::vector<midi::CcBinding> midi_cc_bindings() const;
   size_t midi_cc_binding_count() const noexcept;
   void set_midi_output_sink(host::MidiOutputSink* sink) noexcept {
     midi_dispatch_sink_.output.store(sink, std::memory_order_release);
@@ -1065,7 +1073,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // which shares the insert ids' table and lifetime. -1 when the track has no
   // lane or the key is neither. Control-thread; touches no audio state.
   int64_t resolve_track_lane_automation_id(uint32_t track_id, const std::string& key) noexcept;
-  // resolve_track_lane_automation_id for a TrackMixerRuntime::kFaderDb / kPan @p param_id.
+  // Resolves the reserved track-lane id for TrackMixerRuntime::kFaderDb, kPan or kWidth.
   int64_t track_lane_automation_id(uint32_t track_id, unsigned int param_id) const noexcept;
   // Resolves a bus's fader ("faderDb") to its reserved id, which shares the insert
   // ids' table and lifetime. -1 when the bus is not configured or the key is not
@@ -1135,7 +1143,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   void set_param_smoothing_ms(float smoothing_ms) noexcept;
   /// Snaps every in-flight parameter ramp to its target: engine-level smoothed
   /// parameters are pushed at their final value and retired, and the track
-  /// mixer's lane fader/pan/gate and bus gain smoothers jump to their targets.
+  /// mixer's lane fader, pan, width and gate smoothers jump to their targets,
+  /// along with the bus gain smoothers.
   /// Part of @ref prime_offline_parameters; on its own it neither applies
   /// automation nor touches processor state. Not safe concurrently with a
   /// running audio thread.
@@ -1339,7 +1348,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   void purge_insert_edits(const InsertPurge& purge) noexcept;
   // Control thread, not concurrent with process(): retires entries whose strip
   // left the mixer or whose slot changed processor layout, mints entries for
-  // every configured lane, bus and slot in canonical order (each lane's fader/pan
+  // every configured lane, bus and slot in canonical order (each lane's control
   // entry then its slots, each bus's fader entry then its slots, master; slots in
   // index order), then purges the edits and bases of any id it retired.
   void sync_insert_automation_targets() noexcept;
@@ -1380,7 +1389,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Control thread: the reserved id for (live entry of @p target, @p param_id), or -1.
   int64_t insert_automation_id(const InsertAutomationTarget& target,
                                unsigned int param_id) const noexcept;
-  // Fallback for a track-lane fader/pan id with no manual base: it has no
+  // Fallback for a track-lane fader, pan or width id with no manual base: it has no
   // construction value, so it returns to the lane's rest value.
   bool restore_track_lane_parameter(uint32_t target_id) noexcept;
   // Control thread: true while @p target's track or bus is configured and its slot
@@ -1445,15 +1454,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   [[nodiscard]] bool recompute_pdc();
   // AUDIO thread: flush the engine-owned clip/instrument PDC delay lines.
   void flush_instrument_pdc_delays() noexcept;
-  // AUDIO thread: the single live control-change decode. Resolves @p ump through
-  // the kind-aware CcMap::observe_live_cc and pushes the resulting unit value to
-  // its bound parameter; a non-controller message resolves to nothing. Every
-  // live CC entry point routes through this, so the queued and engine-owned
-  // input paths cannot drift apart.
-  void observe_live_cc_for_automation(const midi::Ump& ump) noexcept;
+  // AUDIO thread: applies any resolved CC value and returns whether to suppress injection.
+  bool observe_live_cc_for_automation(const midi::Ump& ump) noexcept;
   // AUDIO thread: the single live UMP delivery. Utility, Flex Data and UMP
   // Stream messages are counted against the destination and dropped; anything
-  // else runs the live CC decode and is injected into the sequencer under
+  // else runs the live CC decode and, unless consumed, is injected under
   // @p origin_id (the input stream, or 0 for a host command).
   void deliver_live_ump(uint32_t destination_id, int64_t render_frame, const midi::Ump& ump,
                         uint32_t origin_id) noexcept;

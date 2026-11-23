@@ -59,6 +59,21 @@ void RealtimeEngine::require_quiescent() const {
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+RealtimeEngine::MidiInputBinding RealtimeEngine::midi_input_binding() const noexcept {
+  return {midi_input_source_.load(std::memory_order_acquire),
+          midi_input_destination_id_.load(std::memory_order_relaxed)};
+}
+
+std::vector<midi::CcBinding> RealtimeEngine::midi_cc_bindings() const {
+  std::vector<midi::CcBinding> bindings;
+  const auto& current = midi_cc_maps_.control_current();
+  if (!current) return bindings;
+  const size_t count = current->binding_count();
+  bindings.reserve(count);
+  for (size_t i = 0; i < count; ++i) bindings.push_back(current->binding_at(i));
+  return bindings;
+}
+
 void RealtimeEngine::start_midi_capture() {
   midi_capture_enabled_.store(false, std::memory_order_release);
   captured_midi_events_.reserve(kCapturedMidiCapacity);

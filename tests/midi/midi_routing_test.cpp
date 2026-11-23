@@ -16,6 +16,7 @@
 #include "midi/capture.h"
 #include "midi/cc_map.h"
 #include "midi/clock_sync.h"
+#include "midi/controller_numbers.h"
 #include "midi/midi_event.h"
 #include "midi/routing.h"
 #include "midi/ump.h"
@@ -2162,4 +2163,158 @@ TEST_CASE("MidiCapture push performs no allocation", "[midi][rt]") {
     capture.push(note_on_event(i, 0, 0, 60));
   }
   REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("CcMap reports consumption independently of controller value resolution",
+          "[midi][midi_cc_consume]") {
+  namespace midi = sonare::midi;
+  CcMap map;
+  CcBinding cc7;
+  cc7.cc_number = midi::cc::kChannelVolume;
+  cc7.param_id = 23;
+  cc7.consume = true;
+  REQUIRE(map.bind(cc7));
+
+  uint32_t param = 0;
+  float value = -1.0f;
+  bool consumed = false;
+  CHECK(map.observe_live_cc(make_midi1_control_change(0, 0, cc7.cc_number, 127), &param, &value,
+                            &consumed));
+  CHECK(consumed);
+  CHECK(param == 23);
+  CHECK(value == 1.0f);
+
+  cc7.channel = 4;
+  cc7.consume = false;
+  REQUIRE(map.bind(cc7));
+  CHECK(map.observe_live_cc(make_midi2_control_change(0, 4, cc7.cc_number, 0xffffffffu), &param,
+                            &value, &consumed));
+  CHECK_FALSE(consumed);
+  CHECK(map.observe_live_cc(make_midi2_control_change(0, 5, cc7.cc_number, 0xffffffffu), &param,
+                            &value, &consumed));
+  CHECK(consumed);
+
+  CcBinding paired;
+  paired.cc_number = midi::cc::kModulationWheel;
+  paired.cc_lsb_number = paired.cc_number + 32;
+  paired.kind = midi::CcBindingKind::kControlChange14;
+  paired.param_id = 24;
+  paired.consume = true;
+  REQUIRE(map.bind(paired));
+  CHECK_FALSE(map.observe_live_cc(make_midi1_control_change(0, 0, paired.cc_lsb_number, 33), &param,
+                                  &value, &consumed));
+  CHECK(consumed);
+  CHECK_FALSE(map.observe_live_cc(make_midi2_control_change(0, 0, paired.cc_lsb_number, 99), &param,
+                                  &value, &consumed));
+  CHECK(consumed);
+  CHECK(map.observe_live_cc(make_midi1_control_change(0, 0, paired.cc_number, 25), &param, &value,
+                            &consumed));
+  CHECK(consumed);
+  CHECK(param == paired.param_id);
+  CHECK(map.observe_live_cc(make_midi1_control_change(0, 0, paired.cc_lsb_number, 33), &param,
+                            &value, &consumed));
+  CHECK(consumed);
+  CHECK(param == paired.param_id);
+
+  cc7.cc_number = paired.cc_number;
+  REQUIRE(map.bind(cc7));
+  CHECK(map.observe_live_cc(make_midi1_control_change(0, 4, paired.cc_number, 25), &param, &value,
+                            &consumed));
+  CHECK(consumed);
+  CHECK(param == paired.param_id);
+  CHECK(map.observe_live_cc(make_midi2_control_change(0, 4, paired.cc_number, 99), &param, &value,
+                            &consumed));
+  CHECK(consumed);
+  CHECK(param == cc7.param_id);
+
+  CHECK_FALSE(map.observe_live_cc(make_midi1_note_on(0, 0, 60, 100), &param, &value, &consumed));
+  CHECK_FALSE(consumed);
+}
+
+TEST_CASE("CcMap consumes selected Data Entry and preserves selector messages",
+          "[midi][midi_cc_consume]") {
+  namespace midi = sonare::midi;
+  CcMap map;
+  CcBinding binding;
+  binding.cc_number = midi::cc::kDataEntryMsb;
+  binding.channel = 2;
+  binding.param_id = 26;
+  binding.kind = midi::CcBindingKind::kRpn;
+  binding.selector_msb = 0;
+  binding.selector_lsb = 1;
+  binding.consume = true;
+  REQUIRE(map.bind(binding));
+  auto nrpn = binding;
+  nrpn.kind = midi::CcBindingKind::kNrpn;
+  nrpn.selector_msb = 4;
+  nrpn.param_id = 27;
+  REQUIRE(map.bind(nrpn));
+
+  auto plain = binding;
+  plain.kind = midi::CcBindingKind::kControlChange7;
+  plain.cc_number = midi::cc::kRpnMsb;
+  plain.param_id = 28;
+  REQUIRE(map.bind(plain));
+
+  uint32_t param = 0;
+  float value = -1.0f;
+  bool consumed = true;
+  const auto observe = [&](const midi::Ump& ump) {
+    return map.observe_live_cc(ump, &param, &value, &consumed);
+  };
+  const auto cc = [&](uint8_t controller, uint8_t number) {
+    return make_midi1_control_change(2, binding.channel, controller, number);
+  };
+
+  CHECK(observe(cc(midi::cc::kRpnMsb, binding.selector_msb)));
+  CHECK(param == plain.param_id);
+  CHECK_FALSE(consumed);
+  CHECK_FALSE(observe(cc(midi::cc::kDataEntryLsb, 9)));
+  CHECK_FALSE(consumed);
+  CHECK_FALSE(observe(cc(midi::cc::kRpnLsb, binding.selector_lsb)));
+  CHECK_FALSE(consumed);
+  CHECK(observe(cc(midi::cc::kDataEntryLsb, 9)));
+  CHECK(consumed);
+  CHECK(param == binding.param_id);
+  CHECK(observe(cc(midi::cc::kDataEntryMsb, 21)));
+  CHECK(consumed);
+  CHECK_FALSE(observe(make_midi1_control_change(3, binding.channel, midi::cc::kDataEntryMsb, 21)));
+  CHECK_FALSE(consumed);
+
+  CHECK_FALSE(observe(cc(midi::cc::kNrpnMsb, nrpn.selector_msb)));
+  CHECK_FALSE(consumed);
+  CHECK_FALSE(observe(cc(midi::cc::kNrpnLsb, nrpn.selector_lsb)));
+  CHECK_FALSE(consumed);
+  CHECK(observe(cc(midi::cc::kDataEntryMsb, 21)));
+  CHECK(consumed);
+  CHECK(param == nrpn.param_id);
+  CHECK(observe(cc(midi::cc::kRpnMsb, binding.selector_msb)));
+  CHECK_FALSE(consumed);
+  CHECK(observe(cc(midi::cc::kDataEntryMsb, 21)));
+  CHECK(param == binding.param_id);
+  CHECK_FALSE(consumed);
+  CHECK_FALSE(observe(cc(midi::cc::kRpnLsb, binding.selector_lsb)));
+  CHECK(observe(cc(midi::cc::kDataEntryMsb, 21)));
+  CHECK(consumed);
+
+  CHECK_FALSE(observe(cc(midi::cc::kNrpnMsb, 127)));
+  CHECK_FALSE(observe(cc(midi::cc::kNrpnLsb, 127)));
+  CHECK_FALSE(observe(cc(midi::cc::kDataEntryMsb, 21)));
+  CHECK_FALSE(consumed);
+
+  CHECK(observe(midi::make_midi2_registered_controller(2, binding.channel, binding.selector_msb,
+                                                       binding.selector_lsb, 45)));
+  CHECK(consumed);
+  CHECK(param == binding.param_id);
+  CHECK(observe(midi::make_midi2_assignable_controller(2, nrpn.channel, nrpn.selector_msb,
+                                                       nrpn.selector_lsb, 45)));
+  CHECK(consumed);
+  CHECK(param == nrpn.param_id);
+
+  CHECK(observe(make_midi2_control_change(2, binding.channel, midi::cc::kRpnMsb, 0)));
+  CHECK_FALSE(consumed);
+  CHECK_FALSE(observe(make_midi2_control_change(2, binding.channel, midi::cc::kRpnLsb, 1u << 25u)));
+  CHECK_FALSE(consumed);
+  CHECK_FALSE(observe(make_midi2_control_change(2, binding.channel, midi::cc::kDataEntryLsb, 99)));
+  CHECK(consumed);
 }

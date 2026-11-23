@@ -397,11 +397,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       break;
     }
     case rt::CommandType::kMidiCcImmediate: {
-      // Group (1) queueable scalar MIDI: synthesize a MIDI 1.0 CC UMP from the
-      // packed scalar fields and route it through the sequencer's host-injection
-      // path so it reaches the instrument exactly like a clip-scheduled event.
-      // RT-safe: no allocation. command.sample_time has already been clamped to
-      // a concrete render frame by drain_commands (>= 0 here).
+      // Unpack MIDI 1.0 CC and consult automation before injection.
 #if defined(SONARE_WITH_ARRANGEMENT)
       const uint64_t packed = static_cast<uint64_t>(command.arg.i);
       const uint8_t value7 = static_cast<uint8_t>(packed & 0x7Fu);
@@ -409,8 +405,10 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const uint8_t channel = static_cast<uint8_t>((packed >> 16) & 0x0Fu);
       const uint8_t group = static_cast<uint8_t>((packed >> 24) & 0x0Fu);
       const midi::Ump ump = midi::make_midi1_control_change(group, channel, controller, value7);
-      observe_live_cc_for_automation(ump);
-      midi_sequencer_.inject_event(command.target_id, midi::DeviceFrame{command.sample_time}, ump);
+      if (!observe_live_cc_for_automation(ump)) {
+        midi_sequencer_.inject_event(command.target_id, midi::DeviceFrame{command.sample_time},
+                                     ump);
+      }
 #endif
       break;
     }

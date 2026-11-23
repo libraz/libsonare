@@ -467,10 +467,89 @@ void CcMap::reset_live_decode() const noexcept {
   }
 }
 
+bool CcMap::LiveSelectorState::observe(uint8_t controller, uint8_t value) noexcept {
+  if (controller == cc::kRpnMsb || controller == cc::kRpnLsb || controller == cc::kNrpnMsb ||
+      controller == cc::kNrpnLsb) {
+    const bool next_nrpn = controller == cc::kNrpnMsb || controller == cc::kNrpnLsb;
+    if (nrpn_active != next_nrpn) {
+      auto& next = next_nrpn ? nrpn : rpn;
+      next.has_msb = false;
+      next.has_lsb = false;
+      nrpn_active = next_nrpn;
+    }
+  }
+  switch (controller) {
+    case cc::kRpnMsb:
+      rpn.msb = value;
+      rpn.has_msb = true;
+      return true;
+    case cc::kRpnLsb:
+      rpn.lsb = value;
+      rpn.has_lsb = true;
+      return true;
+    case cc::kNrpnMsb:
+      nrpn.msb = value;
+      nrpn.has_msb = true;
+      return true;
+    case cc::kNrpnLsb:
+      nrpn.lsb = value;
+      nrpn.has_lsb = true;
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool CcMap::LiveSelectorState::selected() const noexcept {
+  const auto& parameter = current();
+  return parameter.has_msb && parameter.has_lsb &&
+         (parameter.msb != 0x7Fu || parameter.lsb != 0x7Fu);
+}
+
+size_t CcMap::find_selected_binding(uint8_t channel,
+                                    const LiveSelectorState& selector) const noexcept {
+  const auto kind = selector.nrpn_active ? CcBindingKind::kNrpn : CcBindingKind::kRpn;
+  const auto& parameter = selector.current();
+  return find_live_binding(channel, [&](const CcBinding& binding) {
+    return binding.kind == kind && binding.selector_msb == parameter.msb &&
+           binding.selector_lsb == parameter.lsb;
+  });
+}
+
+size_t CcMap::find_paired_binding(uint8_t channel, uint8_t controller) const noexcept {
+  return find_live_binding(channel, [&](const CcBinding& binding) {
+    return binding.kind == CcBindingKind::kControlChange14 &&
+           (controller < 32 ? binding.cc_number : binding.cc_lsb_number) == controller;
+  });
+}
+
+size_t CcMap::find_consuming_cc(const Ump& ump, uint8_t controller,
+                                const LiveSelectorState& selector) const noexcept {
+  const bool data_entry = controller == cc::kDataEntryMsb || controller == cc::kDataEntryLsb;
+  if (data_entry && selector.selected()) {
+    const size_t index = find_selected_binding(ump.channel(), selector);
+    if (index != kMaxBindings) return index;
+  }
+  if (controller < 64) {
+    const size_t index = find_paired_binding(ump.channel(), controller);
+    if (index != kMaxBindings) return index;
+  }
+  return find_addressed_binding(ump);
+}
+
 bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) const noexcept {
+  return observe_live_cc(ump, out_param, out_unit, nullptr);
+}
+
+bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit,
+                            bool* consumed) const noexcept {
+  if (consumed != nullptr) *consumed = false;
   if (out_param == nullptr || out_unit == nullptr) {
     return false;
   }
+  const auto mark_consumed = [this, consumed](size_t index) {
+    if (consumed != nullptr && index != kMaxBindings) *consumed = bindings_[index].consume;
+  };
   // Every MIDI 2.0 controller message already carries full resolution in
   // word[1] and names its own binding, so it resolves without the MIDI 1.0
   // accumulator (14-bit MSB/LSB reassembly and the selector + Data Entry
@@ -480,6 +559,18 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
   // impossible because they carry no controller number at all.
   if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
     const size_t idx = find_addressed_binding(ump);
+    uint8_t controller = 0;
+    if (cc_number_of(ump, &controller)) {
+      const uint8_t channel = ump.channel();
+      const auto group = ump_group_from_word0(ump.words[0]);
+      auto& selector = live_->channels[state_key(group, channel)].midi2_selector;
+      const auto value = Control32::from_raw(ump.words[1]).u7();
+      if (!selector.observe(controller, value) && consumed != nullptr) {
+        mark_consumed(find_consuming_cc(ump, controller, selector));
+      }
+    } else {
+      mark_consumed(idx);
+    }
     float norm = 0.0f;
     if (idx == kMaxBindings || !cc_normalized_value(ump, &norm)) {
       return false;
@@ -505,50 +596,22 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
     *out_param = b.param_id;
     *out_unit = b.min_value + norm * (b.max_value - b.min_value);
   };
-  auto emit_plain = [&] {
-    uint32_t param = 0;
-    if (!lookup_param(cc, channel, &param) ||
-        !value_to_unit(cc, channel, static_cast<float>(value7) / kCc7BitMax, out_unit)) {
-      return false;
-    }
-    *out_param = param;
+  auto emit_plain = [&](bool can_consume = true) {
+    const size_t index = find_addressed_binding(ump);
+    if (index == kMaxBindings) return false;
+    if (can_consume) mark_consumed(index);
+    emit_from(index, static_cast<float>(value7) / kCc7BitMax);
     return true;
   };
 
-  // RPN/NRPN selector messages address a parameter; they never emit a value.
-  if (cc == cc::kRpnMsb) {
-    st.rpn_msb = value7;
-    st.nrpn_active = false;
-    return emit_plain();
-  }
-  if (cc == cc::kRpnLsb) {
-    st.rpn_lsb = value7;
-    st.nrpn_active = false;
-    return emit_plain();
-  }
-  if (cc == cc::kNrpnMsb) {
-    st.nrpn_msb = value7;
-    st.nrpn_active = true;
-    return emit_plain();
-  }
-  if (cc == cc::kNrpnLsb) {
-    st.nrpn_lsb = value7;
-    st.nrpn_active = true;
-    return emit_plain();
-  }
+  // Selectors reach the instrument even when also mapped to plain automation.
+  if (st.midi1_selector.observe(cc, value7)) return emit_plain(false);
 
   // Data Entry drives the currently-selected RPN/NRPN binding at 14 bits.
   if (cc == cc::kDataEntryMsb || cc == cc::kDataEntryLsb) {
-    const bool nrpn = st.nrpn_active;
-    const uint8_t sel_msb = nrpn ? st.nrpn_msb : st.rpn_msb;
-    const uint8_t sel_lsb = nrpn ? st.nrpn_lsb : st.rpn_lsb;
-    const CcBindingKind want = nrpn ? CcBindingKind::kNrpn : CcBindingKind::kRpn;
-    const size_t idx = find_live_binding(channel, [&](const CcBinding& b) {
-      return b.kind == want && b.selector_msb == sel_msb && b.selector_lsb == sel_lsb;
-    });
-    if (idx == kMaxBindings) {
-      return emit_plain();
-    }
+    if (consumed != nullptr) mark_consumed(find_consuming_cc(ump, cc, st.midi1_selector));
+    const size_t idx = find_selected_binding(channel, st.midi1_selector);
+    if (idx == kMaxBindings) return emit_plain(false);
     uint16_t value14 = 0;
     if (cc == cc::kDataEntryMsb) {
       st.data_msb = value7;
@@ -562,10 +625,9 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
 
   // 14-bit Control Change LSB (CC 32..63): combine with the pending MSB.
   if (cc >= 32 && cc < 64) {
-    const size_t idx = find_live_binding(channel, [&](const CcBinding& b) {
-      return b.kind == CcBindingKind::kControlChange14 && b.cc_lsb_number == cc;
-    });
+    const size_t idx = find_paired_binding(channel, cc);
     if (idx != kMaxBindings) {
+      mark_consumed(idx);
       const uint8_t msb_number = static_cast<uint8_t>(cc - 32u);
       if (st.cc_msb_valid[msb_number]) {
         const uint16_t value14 = static_cast<uint16_t>(
@@ -582,10 +644,9 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
   // 14-bit Control Change MSB (CC 0..31): emit at MSB resolution (LSB 0 until it
   // arrives) and remember it so the following LSB completes the 14-bit value.
   if (cc < 32) {
-    const size_t idx = find_live_binding(channel, [&](const CcBinding& b) {
-      return b.kind == CcBindingKind::kControlChange14 && b.cc_number == cc;
-    });
+    const size_t idx = find_paired_binding(channel, cc);
     if (idx != kMaxBindings) {
+      mark_consumed(idx);
       st.cc_msb_valid[cc] = true;
       st.cc_msb_values[cc] = value7;
       const uint16_t value14 = static_cast<uint16_t>(static_cast<uint16_t>(value7) << 7u);
