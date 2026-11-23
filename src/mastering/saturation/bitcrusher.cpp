@@ -73,14 +73,20 @@ bool noise_sources_active(const BitCrusherConfig& config) noexcept {
 BitCrusher::BitCrusher(BitCrusherConfig config) : config_(config) { validate_config(config_); }
 
 void BitCrusher::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void BitCrusher::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "BitCrusher");
   prepared_ = true;
   sample_rate_ = sample_rate;
   update_hold_increment();
   update_coefficients();
   // Preallocate per-channel state so process() never resizes on the audio
   // thread (matches Tube/AmpSim).
-  const size_t n = dynamics::kRealtimePreparedChannels;
+  const auto n = static_cast<size_t>(max_channels);
   noise_.assign(static_cast<size_t>(std::max(max_block_size, 1)), 0.0f);
   pre_state_.assign(n, 0.0f);
   post_state_.assign(n, 0.0f);

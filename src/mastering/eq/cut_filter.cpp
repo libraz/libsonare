@@ -70,15 +70,21 @@ int slope_db_oct(CutFilterSlope slope) {
 }  // namespace
 
 void CutFilter::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void CutFilter::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "CutFilter");
   sample_rate_ = sample_rate;
-  brickwall_.prepare(sample_rate, max_block_size);
+  brickwall_.prepare(sample_rate, max_block_size, max_channels);
   prepared_ = true;
   // Preallocate per-channel biquad state up front so the audio-thread process()
   // path never resizes the state vectors (resize there would malloc and, worse,
   // would default-construct the state of channels already being processed).
   // Blocks wider than this throw instead of allocating (mirrors ParametricEq).
-  prepare_channels(static_cast<int>(kRealtimePreparedChannels));
+  prepare_channels(max_channels);
   apply_high_pass();
   apply_low_pass();
   rebuild_brickwall();
@@ -107,7 +113,7 @@ void CutFilter::process(float* const* channels, int num_channels, int num_sample
   if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
   }
-  // Per-channel biquad state is preallocated to kRealtimePreparedChannels in
+  // Per-channel biquad state is preallocated to the prepared channel count in
   // prepare(); never resize on the audio thread. Reject blocks wider than the
   // prepared state (matches the ParametricEq/LinearPhaseEq pattern).
   require_prepared_channels(num_channels, static_cast<size_t>(num_channels_), "CutFilter");

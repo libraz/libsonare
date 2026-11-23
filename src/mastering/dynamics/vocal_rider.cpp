@@ -36,18 +36,25 @@ bool valid_peak_gain(float max_boost_db, float output_gain_db) noexcept {
 VocalRider::VocalRider(VocalRiderConfig config) : ConfigBase(std::move(config)) {}
 
 void VocalRider::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void VocalRider::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "VocalRider");
 
   sample_rate_ = sample_rate;
   prepared_ = true;
   // Preallocate per-channel state up front so the audio-thread process() path
   // never resizes (assign() there would malloc and reset follower/gain state,
   // injecting a click). Blocks wider than this throw in ensure_followers().
-  if (followers_.size() < kRealtimePreparedChannels) {
-    followers_.resize(kRealtimePreparedChannels);
+  const auto channel_count = static_cast<size_t>(max_channels);
+  if (followers_.size() < channel_count) {
+    followers_.resize(channel_count);
   }
-  if (gain_state_db_.size() < kRealtimePreparedChannels) {
-    gain_state_db_.resize(kRealtimePreparedChannels, 0.0f);
+  if (gain_state_db_.size() < channel_count) {
+    gain_state_db_.resize(channel_count, 0.0f);
   }
   active_ = config_;
   update_coefficients(active_);
@@ -220,7 +227,7 @@ void VocalRider::validate_config(const VocalRiderConfig& config) {
 
 void VocalRider::ensure_followers(int num_channels) {
   // Followers and per-channel gain state are preallocated to
-  // kRealtimePreparedChannels in prepare(); never resize on the audio thread
+  // the prepared channel count in prepare(); never resize on the audio thread
   // (assign() would malloc and wipe the running envelope/gain state, producing
   // a click). Reject blocks wider than the prepared state.
   require_prepared_channels(num_channels, followers_.size(), "VocalRider");

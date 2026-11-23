@@ -47,6 +47,7 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   explicit Compressor(CompressorConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 

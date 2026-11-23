@@ -37,13 +37,19 @@ bool valid_max_gain_db(float v) noexcept {
 TransientShaper::TransientShaper(TransientShaperConfig config) : ConfigBase(std::move(config)) {}
 
 void TransientShaper::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void TransientShaper::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "TransientShaper");
 
   const int lookahead_samples = checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
   prepared_ = true;
   active_ = config_;
-  const size_t channel_count = kRealtimePreparedChannels;
+  const auto channel_count = static_cast<size_t>(max_channels);
   fast_followers_.assign(channel_count, {});
   slow_followers_.assign(channel_count, {});
   gain_state_db_.assign(channel_count, 0.0f);

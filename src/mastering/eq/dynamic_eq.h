@@ -53,6 +53,7 @@ class DynamicEq : public rt::ProcessorBase {
   static constexpr size_t kMaxBands = 8;
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   /// The band filters ring on; the detector only moves their gains.
@@ -125,7 +126,7 @@ class DynamicEq : public rt::ProcessorBase {
   // is on the detector's input only -- the audio path itself is never delayed.
 
   struct DetectorState {
-    std::vector<BandDetectorChannel> channels;  // preallocated to kRealtimePreparedChannels
+    std::vector<BandDetectorChannel> channels;  // preallocated to the prepared channel count
     // Cached design inputs so coefficients/ring are only rebuilt on change.
     float frequency_hz = -1.0f;
     float sidechain_freq_hz = -2.0f;
@@ -181,7 +182,7 @@ class DynamicEq : public rt::ProcessorBase {
   std::array<float, kMaxBands> last_applied_coeff_gain_db_{};
   std::array<DetectorState, kMaxBands> detectors_{};
   std::array<rt::StageGate, kMaxBands> band_gates_{};
-  std::vector<float*> sub_channels_;  // fixed to kRealtimePreparedChannels in prepare()
+  std::vector<float*> sub_channels_;  // fixed to the prepared channel count in prepare()
   float last_detector_db_ = sonare::constants::kFloorDb;
   // Position in the control interval, and the detector sums accumulated since it began.
   int control_phase_ = 0;
@@ -189,7 +190,7 @@ class DynamicEq : public rt::ProcessorBase {
   double detector_count_ = 0.0;
   std::array<double, kMaxBands> band_detector_sum_{};
   std::array<double, kMaxBands> band_detector_count_{};
-  std::vector<const float*> sidechain_view_;  // fixed to kRealtimePreparedChannels in prepare()
+  std::vector<const float*> sidechain_view_;  // fixed to the prepared channel count in prepare()
   const float* const* sidechain_channels_ = nullptr;
   int sidechain_num_channels_ = 0;
   int sidechain_num_samples_ = 0;

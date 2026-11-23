@@ -75,16 +75,22 @@ float compute_makeup_db(const CompressorConfig& config) {
 Compressor::Compressor(CompressorConfig config) : ConfigBase(std::move(config)) {}
 
 void Compressor::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void Compressor::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Compressor");
   sample_rate_ = sample_rate;
   prepared_ = true;
   // Seed the audio thread's live working config from the prepared baseline and
   // derive its coefficients; the per-sample loop reads active_, not config_.
   active_ = config_;
   update_coefficients(active_);
-  hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
-  hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
-  hpf_channel_gates_.assign(kRealtimePreparedChannels, rt::StageGate{});
+  hpf_x1_.assign(static_cast<size_t>(max_channels), 0.0f);
+  hpf_y1_.assign(static_cast<size_t>(max_channels), 0.0f);
+  hpf_channel_gates_.assign(static_cast<size_t>(max_channels), rt::StageGate{});
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant

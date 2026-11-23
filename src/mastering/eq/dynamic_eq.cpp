@@ -37,12 +37,19 @@ using sonare::constants::kFloorDb;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 void DynamicEq::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void DynamicEq::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0))
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  sonare::mastering::validate_prepare_args(sample_rate, max_block_size, max_channels, "DynamicEq");
   sample_rate_ = sample_rate;
-  eq_.prepare(sample_rate, max_block_size);
+  eq_.prepare(sample_rate, max_block_size, max_channels);
   // Preallocate every band's per-channel detector state up front so the audio-
-  // thread process()/ensure_detector path never allocates: kRealtimePreparedChannels
+  // thread process()/ensure_detector path never allocates: max_channels
   // channels and a detector-delay ring sized to the maximum supported delay.
   // The live FIFO length (look_size) is then varied within this capacity
   // without resizing.
@@ -53,11 +60,11 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
     // pass-through, so a key left from the last prepare would describe
     // coefficients that no longer exist and keep them from being designed.
     detector = DetectorState{};
-    detector.channels.assign(kRealtimePreparedChannels, {});
+    detector.channels.assign(static_cast<size_t>(max_channels), {});
     for (auto& channel : detector.channels) channel.prepare(max_detector_delay_samples_);
   }
-  sub_channels_.assign(kRealtimePreparedChannels, nullptr);
-  sidechain_view_.assign(kRealtimePreparedChannels, nullptr);
+  sub_channels_.assign(static_cast<size_t>(max_channels), nullptr);
+  sidechain_view_.assign(static_cast<size_t>(max_channels), nullptr);
   control_phase_ = 0;
   detector_sum_ = 0.0;
   detector_count_ = 0.0;

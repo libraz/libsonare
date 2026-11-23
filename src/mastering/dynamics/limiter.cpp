@@ -36,7 +36,13 @@ Limiter::Limiter(LimiterConfig config)
 }
 
 void Limiter::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void Limiter::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Limiter");
 
   const int lookahead_samples = checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
@@ -45,12 +51,12 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
   prepared_ = true;
   // Preallocate per-channel lookahead and scratch up front so the audio-thread
   // process() path never resizes (which would malloc). A block requesting more
-  // than kRealtimePreparedChannels channels throws in prepare_buffers().
-  lookahead_.assign(kRealtimePreparedChannels, {});
+  // than max_channels channels throws in prepare_buffers().
+  lookahead_.assign(static_cast<size_t>(max_channels), {});
   for (auto& buffer : lookahead_) {
     buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
   }
-  delayed_.assign(kRealtimePreparedChannels, 0.0f);
+  delayed_.assign(static_cast<size_t>(max_channels), 0.0f);
   gain_smoother_.prepare(sample_rate_, 0.0f, config_.release_ms);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -253,7 +259,7 @@ void Limiter::validate_config(const LimiterConfig& config) {
 
 void Limiter::prepare_buffers(int num_channels) {
   // The lookahead buffers and delayed_ scratch are preallocated to
-  // kRealtimePreparedChannels in prepare(). Never resize on the audio thread;
+  // max_channels in prepare(). Never resize on the audio thread;
   // reject blocks wider than the prepared state (matches the established
   // dynamics-processor pattern).
   require_prepared_channels(num_channels, lookahead_.size(), "Limiter");

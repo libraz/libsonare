@@ -38,6 +38,7 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   explicit SidechainRouter(SidechainRouterConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override { return lookahead_samples_; }
@@ -78,7 +79,7 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   static float gain_reduction_db(float input_db, const SidechainRouterConfig& config);
   /// @brief Verifies the prepared lookahead/HPF state can cover @p num_channels.
   /// @details RT-safe: never resizes on the audio thread. Per-channel state is
-  ///          preallocated to @c kRealtimePreparedChannels in prepare(); a block
+  ///          preallocated to the prepared channel count in prepare(); a block
   ///          (or sidechain) requesting more channels throws instead of
   ///          allocating, mirroring @ref Limiter::prepare_buffers.
   void ensure_capacity(int num_channels) const;
@@ -111,12 +112,12 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   // A single shared (linked) envelope follower so every output channel receives
   // the same gain, preserving the stereo image (mirrors Compressor/Limiter).
   sonare::rt::EnvelopeFollower follower_;
-  // Per-channel main-signal delay lines, sized to kRealtimePreparedChannels in
+  // Per-channel main-signal delay lines, sized to the prepared channel count in
   // prepare() and never resized on the audio thread. The gain is not delayed.
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
   // Per-source-channel one-pole HPF state for the sidechain detector. Each
   // source channel is filtered exactly once per sample (no shared index, no
-  // double-filtering). Sized to kRealtimePreparedChannels in prepare().
+  // double-filtering). Sized to the prepared channel count in prepare().
   std::vector<float> hpf_x1_;
   std::vector<float> hpf_y1_;
   float hpf_b0_ = 1.0f;

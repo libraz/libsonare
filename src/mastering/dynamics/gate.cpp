@@ -39,7 +39,13 @@ bool valid_range_db(float v) noexcept {
 Gate::Gate(GateConfig config) : ConfigBase(std::move(config)) {}
 
 void Gate::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void Gate::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Gate");
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
@@ -48,9 +54,9 @@ void Gate::prepare(double sample_rate, int max_block_size) {
   active_ = config_;
   update_coefficients(active_);
   prepared_ = true;
-  hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
-  hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
-  hpf_channel_gates_.assign(kRealtimePreparedChannels, rt::StageGate{});
+  hpf_x1_.assign(static_cast<size_t>(max_channels), 0.0f);
+  hpf_y1_.assign(static_cast<size_t>(max_channels), 0.0f);
+  hpf_channel_gates_.assign(static_cast<size_t>(max_channels), rt::StageGate{});
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant

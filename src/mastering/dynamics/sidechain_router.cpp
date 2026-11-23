@@ -34,6 +34,12 @@ bool valid_non_negative_ms(float v) noexcept { return std::isfinite(v) && v >= 0
 SidechainRouter::SidechainRouter(SidechainRouterConfig config) : ConfigBase(std::move(config)) {}
 
 void SidechainRouter::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void SidechainRouter::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!std::isfinite(sample_rate) || !(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be finite and positive");
   }
@@ -41,21 +47,23 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "SidechainRouter");
+
   const int lookahead_samples = checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
   lookahead_samples_ = lookahead_samples;
   prepared_ = true;
   // Preallocate per-channel main delay lines and the per-source-channel HPF state up front so the
   // audio-thread process() path never resizes (which would malloc). A block (or sidechain)
-  // requesting more than kRealtimePreparedChannels channels throws in ensure_capacity().
+  // requesting more than max_channels channels throws in ensure_capacity().
   const auto delay = static_cast<size_t>(std::max(lookahead_samples_, 0));
-  lookahead_.assign(kRealtimePreparedChannels, {});
+  lookahead_.assign(static_cast<size_t>(max_channels), {});
   for (auto& lookahead : lookahead_) {
     lookahead.prepare(delay);
   }
-  hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
-  hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
-  hpf_channel_gates_.assign(kRealtimePreparedChannels, rt::StageGate{});
+  hpf_x1_.assign(static_cast<size_t>(max_channels), 0.0f);
+  hpf_y1_.assign(static_cast<size_t>(max_channels), 0.0f);
+  hpf_channel_gates_.assign(static_cast<size_t>(max_channels), rt::StageGate{});
   active_ = config_;
   update_coefficients(active_);
   reset();
@@ -197,7 +205,7 @@ void SidechainRouter::set_sidechain(const float* const* channels, int num_channe
     }
   }
 
-  // The detector HPF state is preallocated to kRealtimePreparedChannels in
+  // The detector HPF state is preallocated to the prepared channel count in
   // prepare(); an external sidechain wider than that is rejected here (on the
   // non-RT control thread) rather than triggering an audio-thread resize.
   if (prepared_ && static_cast<size_t>(num_channels) > hpf_x1_.size()) {
@@ -283,7 +291,7 @@ void SidechainRouter::update_coefficients(const SidechainRouterConfig& config) {
 void SidechainRouter::ensure_capacity(int num_channels) const {
   // RT-safe: never resizes on the audio thread. The per-channel main delay
   // lines and per-source-channel HPF state are preallocated to
-  // kRealtimePreparedChannels in prepare(); a wider block throws instead of
+  // the prepared channel count in prepare(); a wider block throws instead of
   // allocating (matches Limiter::prepare_buffers).
   require_prepared_channels(num_channels, std::min(lookahead_.size(), hpf_x1_.size()),
                             "SidechainRouter");

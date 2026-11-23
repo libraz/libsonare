@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -44,14 +45,22 @@ bool valid_output_drive(float drive) noexcept { return drive >= 0.0f; }
 }  // namespace
 
 void PassiveTubeEq::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void PassiveTubeEq::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
+  sonare::mastering::validate_prepare_args(sample_rate, max_block_size, max_channels,
+                                           "PassiveTubeEq");
   sample_rate_ = sample_rate;
-  eq_.prepare(sample_rate, max_block_size);
+  eq_.prepare(sample_rate, max_block_size, max_channels);
   // Preallocate component state so the audio-thread process() never resizes
-  // (mirrors the kRealtimePreparedChannels pattern used by ParametricEq/DynamicEq).
-  component_state_.assign(kRealtimePreparedChannels, {});
+  // (mirrors the prepared-channel pattern used by ParametricEq/DynamicEq).
+  component_state_.assign(static_cast<size_t>(max_channels), {});
   component_stage_active_ = false;
   update_component_coefficients();
   rebuild();
@@ -261,7 +270,7 @@ void PassiveTubeEq::update_component_coefficients() {
 
 void PassiveTubeEq::prepare_component_state(int num_channels) {
   if (num_channels <= 0) return;
-  // Steady state: component_state_ is preallocated to kRealtimePreparedChannels
+  // Steady state: component_state_ is preallocated to the prepared channel count
   // in prepare(), so no audio-thread allocation occurs. Only grow (off the
   // common path) if a caller exceeds that — and never shrink.
   if (static_cast<size_t>(num_channels) > component_state_.size()) {

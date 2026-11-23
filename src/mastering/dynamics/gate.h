@@ -34,6 +34,7 @@ class Gate : public rt::RtConfigLifecycle<Gate, GateConfig> {
   explicit Gate(GateConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 

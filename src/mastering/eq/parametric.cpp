@@ -47,7 +47,13 @@ std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count) {
 }
 
 void ParametricEq::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void ParametricEq::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "ParametricEq");
 
   // Every band is designed at the new rate before anything is committed. A band
   // accepted at an earlier rate, or installed through set_band_at_rate, is
@@ -65,7 +71,7 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
   // Preallocate per-channel biquad state up front so the audio-thread process()
   // path never resizes the state vectors (resize there would malloc). Blocks
   // wider than this throw instead of allocating.
-  prepare_channels(static_cast<int>(kRealtimePreparedChannels));
+  prepare_channels(max_channels);
   reset();
   coefficients_ = designed;
   resolvable_.fill(true);
@@ -95,7 +101,7 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
     return;
   }
 
-  // Per-channel biquad state is preallocated to kRealtimePreparedChannels in
+  // Per-channel biquad state is preallocated to the prepared channel count in
   // prepare(); never resize on the audio thread. Reject blocks wider than the
   // prepared state (matches the dynamics-processor pattern).
   require_prepared_channels(num_channels, static_cast<size_t>(num_channels_), "ParametricEq");

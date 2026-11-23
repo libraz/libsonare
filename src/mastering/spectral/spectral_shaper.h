@@ -22,6 +22,7 @@ class SpectralShaper : public rt::ProcessorBase {
  public:
   explicit SpectralShaper(SpectralShaperConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int tail_samples() const noexcept override;
@@ -51,7 +52,7 @@ class SpectralShaper : public rt::ProcessorBase {
   SpectralShaperConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
-  // prepare() fixes these at dynamics::kRealtimePreparedChannels so process()
+  // prepare() fixes these at the prepared channel count so process()
   // never rebuilds filters/followers on the audio thread.
   std::vector<float> low_state_;
   std::vector<float> band_low_state_;

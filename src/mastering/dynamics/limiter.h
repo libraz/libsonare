@@ -30,6 +30,7 @@ class Limiter : public rt::ProcessorBase {
   explicit Limiter(LimiterConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
@@ -102,7 +103,7 @@ class Limiter : public rt::ProcessorBase {
  private:
   /// @brief Verifies the prepared lookahead state can cover @p num_channels.
   /// @details RT-safe: never resizes on the audio thread. The lookahead
-  ///          buffers are preallocated to @c kRealtimePreparedChannels in
+  ///          buffers are preallocated for the prepared channel count in
   ///          prepare(); a block requesting more channels throws instead of
   ///          allocating (which would malloc on the audio thread).
   void prepare_buffers(int num_channels);
@@ -140,7 +141,7 @@ class Limiter : public rt::ProcessorBase {
   bool prepared_ = false;
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
   // Per-channel delayed-sample scratch, allocated in prepare() so the per-block
-  // process() path never reallocates. Sized to kRealtimePreparedChannels.
+  // process() path never reallocates. Sized to the prepared channel count.
   std::vector<float> delayed_;
   // A single, shared gain smoother fed by the linked (max-peak) target so every
   // channel is scaled by the same gain. Per-channel smoothers would let the L/R

@@ -39,9 +39,15 @@ SpectralShaper::SpectralShaper(SpectralShaperConfig config) : config_(config) {
 }
 
 void SpectralShaper::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void SpectralShaper::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "SpectralShaper");
   sample_rate_ = sample_rate;
-  const size_t channel_count = dynamics::kRealtimePreparedChannels;
+  const auto channel_count = static_cast<size_t>(max_channels);
   low_state_.assign(channel_count, 0.0f);
   band_low_state_.assign(channel_count, 0.0f);
   gain_state_.assign(channel_count, 1.0f);

@@ -54,12 +54,18 @@ Transformer::Transformer(TransformerConfig config)
 }
 
 void Transformer::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void Transformer::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Transformer");
   sample_rate_ = sample_rate;
   prepared_ = true;
   // Preallocate per-channel hysteresis state so process() never resizes on the
   // audio thread (matches Tube/AmpSim).
-  states_.assign(dynamics::kRealtimePreparedChannels, common::JilesAthertonState{});
+  states_.assign(static_cast<size_t>(max_channels), common::JilesAthertonState{});
   reset();
 }
 

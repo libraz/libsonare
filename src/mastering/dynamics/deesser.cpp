@@ -37,19 +37,26 @@ bool valid_non_negative(float v) noexcept { return std::isfinite(v) && v >= 0.0f
 DeEsser::DeEsser(DeEsserConfig config) : ConfigBase(std::move(config)) {}
 
 void DeEsser::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void DeEsser::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "DeEsser");
 
   sample_rate_ = sample_rate;
   prepared_ = true;
   active_ = config_;
-  if (bandpass_.size() < kRealtimePreparedChannels) {
-    bandpass_.resize(kRealtimePreparedChannels, filter_coeffs_);
+  const auto channel_count = static_cast<size_t>(max_channels);
+  if (bandpass_.size() < channel_count) {
+    bandpass_.resize(channel_count, filter_coeffs_);
   }
-  if (bandpass2_.size() < kRealtimePreparedChannels) {
-    bandpass2_.resize(kRealtimePreparedChannels, filter_coeffs_);
+  if (bandpass2_.size() < channel_count) {
+    bandpass2_.resize(channel_count, filter_coeffs_);
   }
-  if (followers_.size() < kRealtimePreparedChannels) {
-    followers_.resize(kRealtimePreparedChannels);
+  if (followers_.size() < channel_count) {
+    followers_.resize(channel_count);
   }
   update_coefficients(active_);
   reset();

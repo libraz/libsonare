@@ -14,15 +14,24 @@ namespace sonare::effects::common {
 using sonare::constants::kTwoPi;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
-void DcBlocker::prepare(double sample_rate, int) {
+void DcBlocker::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void DcBlocker::prepare(double sample_rate, int, int max_channels) {
+  if (max_channels < 1 || max_channels > static_cast<int>(kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter, "max_channels exceeds DcBlocker capacity");
+  }
   if (sample_rate > 0.0) {
     const float pole =
         std::exp(-sonare::constants::kTwoPi * cutoff_hz_ / static_cast<float>(sample_rate));
     set_pole(pole);
   }
   // The only allocation: process() refuses a block wider than this state.
-  x1_.assign(kRealtimePreparedChannels, 0.0f);
-  y1_.assign(kRealtimePreparedChannels, 0.0f);
+  x1_.assign(static_cast<size_t>(max_channels), 0.0f);
+  y1_.assign(static_cast<size_t>(max_channels), 0.0f);
   reset();
 }
 

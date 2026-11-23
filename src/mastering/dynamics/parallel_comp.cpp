@@ -59,15 +59,22 @@ float update_limiter_sample(float sample, float& gain, float ceiling,
 ParallelComp::ParallelComp(ParallelCompConfig config) : ConfigBase(std::move(config)) {}
 
 void ParallelComp::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(kRealtimePreparedChannels));
+}
+
+void ParallelComp::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "ParallelComp");
 
   sample_rate_ = sample_rate;
   prepared_ = true;
-  if (followers_.size() < kRealtimePreparedChannels) {
-    followers_.resize(kRealtimePreparedChannels);
+  const auto channel_count = static_cast<size_t>(max_channels);
+  if (followers_.size() < channel_count) {
+    followers_.resize(channel_count);
   }
-  if (limiter_gains_.size() < kRealtimePreparedChannels) {
-    limiter_gains_.assign(kRealtimePreparedChannels, 1.0f);
+  if (limiter_gains_.size() < channel_count) {
+    limiter_gains_.assign(channel_count, 1.0f);
   }
   active_ = config_;
   update_coefficients(active_);
@@ -243,7 +250,7 @@ float ParallelComp::gain_reduction_db(float input_db, const ParallelCompConfig& 
 }
 
 void ParallelComp::ensure_followers(int num_channels) {
-  // Followers are preallocated to kRealtimePreparedChannels in prepare(); never
+  // Followers are preallocated to the prepared channel count in prepare(); never
   // grow the vector on the audio thread (emplace_back would malloc). Reject
   // blocks wider than the prepared state (matches the established pattern).
   require_prepared_channels(num_channels, std::min(followers_.size(), limiter_gains_.size()),
