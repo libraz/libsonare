@@ -76,6 +76,20 @@ class RequestFieldTest(unittest.TestCase):
         _, unbound, _ = gen.derive(facts, request)
         self.assertEqual(unbound, [])
 
+    def test_a_handle_class_request_answers_to_its_c_prefix(self) -> None:
+        facts = [Fact("engine_render_offline", "num_channels", "param", "node", None)]
+        request = {
+            "node": [
+                {"entry": "RealtimeEngine.renderOffline", "param": "r", "fields": ["channels"]}
+            ]
+        }
+        rule = {"node": {"length_of": {"engine_render_offline.num_channels": "channels"}}}
+        rows, unbound, idle = gen.derive(facts, request, rule)
+        self.assertEqual(
+            rows["node"], [gen.Row("engine_render_offline", "num_channels", "channels", True)]
+        )
+        self.assertEqual((unbound, idle), ([], []))
+
     def test_a_ruled_rename_is_tabled(self) -> None:
         facts = [Fact("resample", "target_sr", "param", "node", None)]
         request = {

@@ -20,7 +20,7 @@ struct Override {
 };
 
 // (C entry key, C-ABI subject) pairs the wasm facade binds under another name, sorted.
-inline constexpr std::array<Override, 56> kOverrides = {{
+inline constexpr std::array<Override, 57> kOverrides = {{
     {"align_take_to_reference", "reference_sample_rate", "sampleRate"},
     {"audio_spectrum_frame", "frame_offset", "startSample"},
     {"engine_apply_track_strip_insert_param_by_name_now", "track_id", "ref"},
@@ -38,6 +38,7 @@ inline constexpr std::array<Override, 56> kOverrides = {{
     {"engine_set_lane_sidechain", "track_id", "ref"},
     {"engine_set_master_strip_json", "scene_json", "settings"},
     {"engine_set_midi_destination_external", "external", "midiDestinationExternal"},
+    {"engine_set_part_rig", "inserts_json", "inserts"},
     {"engine_set_track_output_bus", "output_bus_id", "busId"},
     {"engine_set_track_strip_channel_delay_samples", "track_id", "ref"},
     {"engine_set_track_strip_dual_pan", "track_id", "ref"},
@@ -80,19 +81,58 @@ inline constexpr std::array<Override, 56> kOverrides = {{
 }};
 
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
-inline constexpr std::array<Override, 23> kLengths = {{
+inline constexpr std::array<Override, 64> kLengths = {{
+    {"align_take_to_reference", "reference_len", "reference"},
+    {"align_take_to_reference", "take_len", "take"},
+    {"chord_functions", "count", "chords"},
     {"decompose_note_pitch", "n_frames", "f0Hz"},
+    {"detect_key", "mode_count", "modes"},
+    {"detect_key_candidates", "mode_count", "modes"},
     {"downmix", "num_channels", "channels"},
     {"engine_process", "num_channels", "channels"},
     {"engine_push_midi_sysex", "size", "data"},
+    {"engine_render_offline", "num_channels", "channels"},
     {"engine_set_track_lanes", "lane_count", "lanes"},
+    {"eq_magnitude_response", "count", "frequenciesHz"},
+    {"eq_match", "reference_length", "reference"},
+    {"eq_match", "source_length", "source"},
+    {"eq_process", "num_samples", "samples"},
+    {"eq_set_sidechain", "num_samples", "samples"},
+    {"estimate_meter_json", "candidate_numerator_count", "candidateNumerators"},
+    {"mastering_ab_match_loudness", "reference_length", "reference"},
+    {"mastering_ab_match_loudness", "source_length", "source"},
+    {"mastering_ab_match_loudness_stereo", "reference_length", "referenceLeft"},
+    {"mastering_ab_match_loudness_stereo", "source_length", "sourceLeft"},
+    {"mastering_analyze_pair", "reference_length", "reference"},
+    {"mastering_analyze_pair", "source_length", "source"},
+    {"mastering_apply_pair_processor", "reference_length", "reference"},
+    {"mastering_apply_pair_processor", "source_length", "source"},
+    {"mastering_apply_pair_processor_stereo", "reference_length", "referenceLeft"},
+    {"mastering_apply_pair_processor_stereo", "source_length", "sourceLeft"},
     {"merge_notes", "n_frames", "f0Hz"},
     {"merge_notes", "note_count", "notes"},
+    {"midi_cc_learn", "count", "events"},
+    {"midi_route_events", "count", "events"},
     {"pitch_correct_timevarying", "n_frames", "f0Hz"},
+    {"playback_loudness_meter_push_interleaved", "frames", "samples"},
+    {"playback_renderer_process_interleaved", "frames", "samples"},
+    {"playback_renderer_process_planar", "in_channels", "planes"},
+    {"playback_renderer_render_offline", "frames", "samples"},
+    {"project_add_automation_lane", "point_count", "points"},
+    {"project_annotate_chords", "count", "chords"},
+    {"project_annotate_keys", "count", "keys"},
     {"project_apply_vocal_edit", "rendered_sample_count", "renderedMono"},
+    {"project_bounce", "builtin_instrument_count", "builtinInstruments"},
+    {"project_bounce", "instrument_count", "instruments"},
+    {"project_bounce", "synth_instrument_count", "synthInstruments"},
+    {"project_edit_automation_lane", "point_count", "points"},
+    {"project_import_external_stems", "stem_count", "stems"},
+    {"project_set_assist_sidecar", "payload_len", "payload"},
     {"project_set_warp_map", "anchor_count", "anchors"},
+    {"realtime_voice_changer_process_mono", "num_samples", "samples"},
     {"render_notes", "n_frames", "f0Hz"},
     {"render_notes", "note_count", "notes"},
+    {"render_percussive_events", "count", "events"},
     {"room_morph", "band_absorption_count", "bandAbsorption"},
     {"room_morph", "band_scattering_count", "bandScattering"},
     {"room_morph_stereo", "band_absorption_count", "bandAbsorption"},
@@ -101,9 +141,11 @@ inline constexpr std::array<Override, 23> kLengths = {{
     {"split_note", "n_frames", "f0Hz"},
     {"split_note", "note_count", "notes"},
     {"streaming_mastering_chain_process_mono", "num_samples", "samples"},
+    {"streaming_mastering_chain_process_stereo", "num_samples", "left"},
     {"streaming_retune_process_mono", "num_samples", "samples"},
     {"synthesize_rir", "band_absorption_count", "bandAbsorption"},
     {"synthesize_rir", "band_scattering_count", "bandScattering"},
+    {"vocal_draft_apply", "count", "operations"},
 }};
 
 template <std::size_t N>

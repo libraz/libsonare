@@ -122,6 +122,7 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("downmix", "num_channels"): "channels",
     ("engine_process", "num_channels"): "channels",
     ("engine_push_midi_sysex", "size"): "data",
+    ("engine_render_offline", "num_channels"): "channels",
     ("engine_set_track_lanes", "lane_count"): "lanes",
     ("eq_magnitude_response", "count"): "frequencies_hz",
     ("eq_match", "reference_length"): "reference",

@@ -96,6 +96,20 @@ def entry_key(entry: str) -> str:
     return camel_to_snake(entry.replace(".", "_"))
 
 
+def entry_keys(entry: str) -> set[str]:
+    """Every C key a facade entry may answer to: a handle class also answers under the C
+    prefixes the parity tables map to it (``RealtimeEngine.renderOffline`` is
+    ``engine_render_offline``)."""
+    keys = {entry_key(entry)}
+    owner, dot, method = entry.partition(".")
+    if dot:
+        from compare import _HANDLE_FULL_PREFIXES
+
+        tail = camel_to_snake(method)
+        keys.update(prefix + tail for prefix, cls in _HANDLE_FULL_PREFIXES if cls == owner)
+    return keys
+
+
 def derive(
     bindings: Iterable,
     request_fields: dict[str, list[dict]] | None = None,
@@ -114,7 +128,8 @@ def derive(
     names: dict[tuple[str, str], set[str]] = defaultdict(set)
     for surface, entries in request_fields.items():
         for row in entries:
-            names[(surface, entry_key(row["entry"]))].update(row["fields"])
+            for key in entry_keys(row["entry"]):
+                names[(surface, key)].update(row["fields"])
     for b in bindings:
         if b.surface_spelling is not None:
             names[(b.surface, b.c_key)].add(b.surface_spelling)
