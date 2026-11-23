@@ -201,6 +201,7 @@ TEST_CASE("sonare_system_info_json reports exactly the host facts the platform k
   CHECK(doc["parallel"]["strategy"].as_string() == sonare::system_info::parallel_strategy());
 
   CHECK(sonare_system_info_json(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out_json must not be NULL");
 }
 
 TEST_CASE("the last parameter refusal re-renders with the subjects a binding supplies",

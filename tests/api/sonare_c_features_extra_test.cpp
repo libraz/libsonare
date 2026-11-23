@@ -58,20 +58,19 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
 
   out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
   out.count = 7;
-  // Exactly one of voiced_prob and voiced_flags: both and neither are refused, naming both.
+  // Exactly one of voiced_prob and voiced: both and neither are refused, naming both.
   const std::vector<int32_t> flags(voiced.size(), 1);
   REQUIRE(sonare_note_segments(f0.data(), voiced.data(), flags.data(), f0.size(), 100.0f, &config,
                                &out) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()).find("voiced_prob") != std::string::npos);
-  CHECK(std::string(sonare_last_error_message()).find("voiced_flags") != std::string::npos);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "voiced must be NULL when voiced_prob is not NULL");
   REQUIRE(out.segments == nullptr);
   REQUIRE(out.count == 0);
   out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
   out.count = 7;
   REQUIRE(sonare_note_segments(f0.data(), nullptr, nullptr, f0.size(), 100.0f, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(std::string(sonare_last_error_message()).find("voiced_prob") != std::string::npos);
-  CHECK(std::string(sonare_last_error_message()).find("voiced_flags") != std::string::npos);
+  CHECK(std::string(sonare_last_error_message()) == "voiced_prob and voiced must not both be NULL");
   REQUIRE(out.segments == nullptr);
   REQUIRE(out.count == 0);
 

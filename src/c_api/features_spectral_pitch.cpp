@@ -655,13 +655,15 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   SONARE_C_ZERO_OUTS(out);
 #if defined(SONARE_WITH_PITCH_EDITOR)
   SONARE_C_REQUIRE_NONNULL(f0_hz);
-  if ((voiced_prob == nullptr) == (voiced == nullptr)) {
-    sonare_c_detail::set_last_error(
-        SONARE_ERROR_INVALID_PARAMETER,
-        "exactly one of voiced_prob and voiced_flags must be given, not both and not neither");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   if (const SonareError err = run_validation([&] {
+        if (voiced_prob == nullptr && voiced == nullptr) {
+          check::refuse_relation({"voiced_prob", "voiced"},
+                                 "{0} and {1} {must_not_both_be_absent}");
+        }
+        if (voiced_prob != nullptr && voiced != nullptr) {
+          check::refuse_relation({"voiced_prob", "voiced"},
+                                 "{1} {must_be_absent} when {0} {is_present}");
+        }
         check::integer_within(n_frames, sonare_c_detail::kNoteSegmentFrameCountDomain, "n_frames");
         check::greater_than(frame_rate, 0.0, "frame_rate");
       });
@@ -760,7 +762,7 @@ float sonare_midi_to_hz(float midi) { return midi_to_hz(midi); }
 
 SonareError sonare_hz_to_note(float hz, char** out_string) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_string)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!begin_string_output(out_string, "out_string")) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   *out_string = copy_string(hz_to_note(hz));
   return SONARE_OK;
@@ -769,9 +771,7 @@ SonareError sonare_hz_to_note(float hz, char** out_string) {
 
 float sonare_note_to_hz(const char* note) {
   SONARE_C_TRY
-  if (!note) {
-    throw SonareException(ErrorCode::InvalidParameter, "sonare_note_to_hz: note must not be NULL");
-  }
+  if (!note) check::refuse("note", sonare::util::refusal::kMustBePresent);
   return note_to_hz(std::string(note));
   SONARE_C_CATCH_RETURN(std::numeric_limits<float>::quiet_NaN())
 }

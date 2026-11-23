@@ -70,14 +70,8 @@ void fill_decompose_stems_config(const SonareDecomposeStemsConfig& config,
 SonareError check_factor_output_pairs(const void* out_w, const void* out_w_length,
                                       const void* out_h, const void* out_h_length) {
   return run_validation([&] {
-    if ((out_w != nullptr) != (out_w_length != nullptr)) {
-      sonare::util::check::refuse_relation({"out_w", "out_w_length"},
-                                           "{0} and {1} must be given together");
-    }
-    if ((out_h != nullptr) != (out_h_length != nullptr)) {
-      sonare::util::check::refuse_relation({"out_h", "out_h_length"},
-                                           "{0} and {1} must be given together");
-    }
+    ::sonare_c_detail::refuse_half_given_pair(out_w, out_w_length, "out_w", "out_w_length");
+    ::sonare_c_detail::refuse_half_given_pair(out_h, out_h_length, "out_h", "out_h_length");
   });
 }
 

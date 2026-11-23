@@ -288,12 +288,12 @@ TEST_CASE("the interleaved LUFS entries name the refused argument", "[c_api][com
   REQUIRE(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary, nullptr,
                                          nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() ==
-          "out_momentary_lufs and out_momentary_lufs_length must be given together");
+          "out_momentary_lufs_length must not be NULL when out_momentary_lufs is not NULL");
   REQUIRE(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary,
                                          &momentary_length, &short_term,
                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(last_message() ==
-          "out_short_term_lufs and out_short_term_lufs_length must be given together");
+          "out_short_term_lufs_length must not be NULL when out_short_term_lufs is not NULL");
   REQUIRE(sonare_lufs_series_interleaved(stereo.data(), 4800, -1, 48000, &momentary,
                                          &momentary_length, &short_term,
                                          &short_term_length) == SONARE_ERROR_INVALID_PARAMETER);

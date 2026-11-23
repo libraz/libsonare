@@ -77,15 +77,15 @@ TEST_CASE("decompose_stems refuses an unpaired factor output by name", "[c_api][
   CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out,
                                &component_length, &count, &w, nullptr, nullptr,
                                nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "out_w and out_w_length must be given together");
+  CHECK(last_message() == "out_w_length must not be NULL when out_w is not NULL");
   CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out,
                                &component_length, &count, nullptr, nullptr, &h,
                                nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "out_h and out_h_length must be given together");
+  CHECK(last_message() == "out_h_length must not be NULL when out_h is not NULL");
   CHECK(sonare_decompose_stems(samples.data(), samples.size(), kRate, &config, &out,
                                &component_length, &count, nullptr, nullptr, nullptr,
                                &h_length) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(last_message() == "out_h and out_h_length must be given together");
+  CHECK(last_message() == "out_h must not be NULL when out_h_length is not NULL");
 }
 
 TEST_CASE("decompose_stems_linked refuses channels and num_channels by name", "[c_api][effects]") {

@@ -198,6 +198,7 @@ TEST_CASE("sonare_hz_to_note hands each name to the caller", "[c_api]") {
   sonare_free_string(a4);
   sonare_free_string(c4);
   REQUIRE(sonare_hz_to_note(440.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "out_string must not be NULL");
 }
 
 TEST_CASE("sonare_hz_to_note / sonare_note_to_hz report a refused argument", "[c_api]") {
@@ -215,6 +216,7 @@ TEST_CASE("sonare_hz_to_note / sonare_note_to_hz report a refused argument", "[c
   }
   REQUIRE(std::isnan(sonare_note_to_hz(nullptr)));
   REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "note must not be NULL");
 
   // A valid call clears the failure it follows.
   REQUIRE(sonare_note_to_hz("A4") == Catch::Approx(440.0f).margin(0.01f));

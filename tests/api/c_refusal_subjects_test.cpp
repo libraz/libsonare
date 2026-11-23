@@ -45,8 +45,8 @@ TEST_CASE("the interleaved LUFS entries name themselves and the refused argument
   float* momentary = nullptr;
   CHECK(sonare_lufs_series_interleaved(stereo.data(), 4800, 2, 48000, &momentary, nullptr, nullptr,
                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK_THAT(last_message(),
-             Catch::Matchers::StartsWith("out_momentary_lufs and out_momentary_lufs_length"));
+  CHECK(last_message() ==
+        "out_momentary_lufs_length must not be NULL when out_momentary_lufs is not NULL");
   float* short_term = nullptr;
   size_t momentary_length = 0;
   size_t short_term_length = 0;

@@ -611,14 +611,12 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   // A pointer without its length cannot be consumed, so a half-given pair is a
   // caller error rather than a request to skip the series.
   if (const SonareError err = run_validation([&] {
-        if ((out_momentary_lufs == nullptr) != (out_momentary_lufs_length == nullptr)) {
-          util::check::refuse_relation({"out_momentary_lufs", "out_momentary_lufs_length"},
-                                       "{0} and {1} must be given together");
-        }
-        if ((out_short_term_lufs == nullptr) != (out_short_term_lufs_length == nullptr)) {
-          util::check::refuse_relation({"out_short_term_lufs", "out_short_term_lufs_length"},
-                                       "{0} and {1} must be given together");
-        }
+        ::sonare_c_detail::refuse_half_given_pair(out_momentary_lufs, out_momentary_lufs_length,
+                                                  "out_momentary_lufs",
+                                                  "out_momentary_lufs_length");
+        ::sonare_c_detail::refuse_half_given_pair(out_short_term_lufs, out_short_term_lufs_length,
+                                                  "out_short_term_lufs",
+                                                  "out_short_term_lufs_length");
       });
       err != SONARE_OK) {
     return err;

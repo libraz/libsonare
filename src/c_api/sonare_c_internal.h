@@ -319,10 +319,10 @@ inline bool begin_vector_output(T** out, size_t* out_length) {
 }
 
 /// @brief Clears a caller-owned string out-parameter before any other exit, or
-///        records INVALID_PARAMETER when it is NULL.
-inline bool begin_string_output(char** out) {
+///        refuses it by @p name when it is NULL.
+inline bool begin_string_output(char** out, const char* name) {
   if (out == nullptr) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "the output pointer must not be NULL");
+    refuse_null(name);
     return false;
   }
   *out = nullptr;
@@ -789,6 +789,19 @@ SonareError run_offline(const char* name, const float* samples, size_t length, i
 /// @brief @p e with each subject joined under @p root, coded InvalidParameter.
 sonare::SonareParameterRefusal relabel_struct_refusal(const sonare::SonareParameterRefusal& e,
                                                       const char* root);
+
+/// @brief Refuses an output pointer given without its length pointer, or the length without the
+///        pointer, naming the half that is missing: neither can be consumed alone.
+inline void refuse_half_given_pair(const void* buffer, const void* length, const char* buffer_name,
+                                   const char* length_name) {
+  if ((buffer == nullptr) == (length == nullptr)) return;
+  if (length == nullptr) {
+    sonare::util::check::refuse_relation({length_name, buffer_name},
+                                         "{0} {must_be_present} when {1} {is_present}");
+  }
+  sonare::util::check::refuse_relation({buffer_name, length_name},
+                                       "{0} {must_be_present} when {1} {is_present}");
+}
 
 /// @brief Runs a core argument validator ahead of run_offline and returns its verdict as a status.
 /// @details Lets an entry refuse its parameters through the core's own rule (recording the

@@ -443,7 +443,7 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "function"
 old = "sonare_note_segments"
-changed = "takes (f0_hz, voiced_prob, voiced_flags, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced_flags is non-NULL, and voiced flags read as 0/1 probabilities"
+changed = "takes (f0_hz, voiced_prob, voiced, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced is non-NULL, and voiced flags read as 0/1 probabilities"
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_features_extra_test.cpp::sonare_note_segments reads voiced flags as 0/1 probabilities"

@@ -292,7 +292,7 @@ uint32_t sonare_engine_abi_version(void) { return SONARE_ENGINE_ABI_VERSION; }
 
 SonareError sonare_capabilities_json(char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!begin_string_output(out_json, "out_json")) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   std::string capabilities = "{\"version\":\"" SONARE_VERSION_STRING "\",\"abi\":{\"project\":" +
                              std::to_string(SONARE_PROJECT_ABI_VERSION) +
@@ -356,7 +356,7 @@ void append_count(std::string& json, bool& first, const char* key,
 
 SonareError sonare_system_info_json(char** out_json) {
   SONARE_C_API_ENTRY;
-  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!begin_string_output(out_json, "out_json")) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   namespace info = sonare::system_info;
   std::string json = "{\"cpu\":{";

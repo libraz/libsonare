@@ -124,7 +124,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_griffin_lim` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t |
 | `sonare_mel_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after mel, which must equal n_mels * n_frames, and const SonareMelToAudioOptions* options (NULL = defaults; sonare_mel_to_audio_options_init) before out; htk moved into the struct |
 | `sonare_mfcc_to_audio` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t; takes size_t input_length after coefficients, which must equal n_mfcc * n_frames, and const SonareMfccToAudioOptions* options (NULL = defaults; sonare_mfcc_to_audio_options_init) before out; htk and lifter moved into the struct |
-| `sonare_note_segments` | takes (f0_hz, voiced_prob, voiced_flags, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced_flags is non-NULL, and voiced flags read as 0/1 probabilities |
+| `sonare_note_segments` | takes (f0_hz, voiced_prob, voiced, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced is non-NULL, and voiced flags read as 0/1 probabilities |
 | `sonare_vqt` | gamma is NaN for the automatic ERB-derived value and otherwise finite and >= 0; a negative gamma, which selected the automatic value, is refused with SONARE_ERROR_INVALID_PARAMETER 'gamma must be finite and at least 0' |
 
 #### An option left out takes the library's default
