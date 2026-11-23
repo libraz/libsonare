@@ -4871,8 +4871,24 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
+old = "sonare_normalize"
+changed = "a finite target above 0 dB is reached rather than refused, and the result is not clipped; a caller writing to an integer format fits or limits it"
+domain = "effects"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_effects_extra_test.cpp::the C normalize entries reach a target above full scale unclipped"
+
+[[entry]]
+kind = "function"
+old = "sonare_normalize_rms"
+changed = "the result is no longer hard-clipped to [-1, 1]: one gain brings the RMS exactly to target_db and can leave peaks above full scale; a finite target above 0 dB is accepted"
+domain = "effects"
+rule = "finite-or-refused"
+test = "tests/api/sonare_c_effects_extra_test.cpp::sonare_normalize_rms reaches its target unclipped"
+
+[[entry]]
+kind = "function"
 old = "sonare_normalize_stereo"
-changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize returns its buffer"
+changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize returns its buffer; a target above 0 dB is reached and the result is not clipped, as sonare_normalize"
 domain = "effects"
 rule = "one-entry-per-operation"
 test = "tests/api/sonare_c_effects_extra_test.cpp::normalize_stereo"
@@ -4880,7 +4896,7 @@ test = "tests/api/sonare_c_effects_extra_test.cpp::normalize_stereo"
 [[entry]]
 kind = "function"
 old = "sonare_normalize_rms_stereo"
-changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize_rms returns its buffer"
+changed = "returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize_rms returns its buffer; a target above 0 dB is reached and the result is not clipped, as sonare_normalize_rms"
 domain = "effects"
 rule = "one-entry-per-operation"
 test = "tests/api/sonare_c_effects_extra_test.cpp::normalize_rms_stereo"

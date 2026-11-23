@@ -89,8 +89,6 @@ def _normalize_target(target_db: float) -> float:
     target_db_c = ctypes.c_float(target_db).value
     if not np.isfinite(target_db_c):
         raise _refuse("target_db must be finite and in [-3.4028235e38, 3.4028235e38]")
-    if target_db_c > 0.0:
-        raise _refuse("target_db must be at or below 0 dBFS")
     return target_db_c
 
 
@@ -152,15 +150,17 @@ def normalize(
 ) -> np.ndarray:
     """Normalize audio so its peak or RMS level reaches ``target_db``.
 
-    The ``"rms"`` mode hard-clips the result to ``[-1, 1]``, which a target loud
-    enough to drive the peaks past full scale will reach.
+    The result is not clipped; a caller writing to an integer format fits or
+    limits it. A peak target above 0 dB leaves the peak above full scale, and an
+    RMS target, which one gain brings the signal RMS exactly to, can leave peaks
+    above full scale.
 
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz.
         mode: ``"peak"`` (default) or ``"rms"``; any other value is refused by name.
-        target_db: Finite target at or below 0 dBFS. Omitted, 0.0 dBFS for
-            ``"peak"`` and -20.0 dBFS for ``"rms"``, as on Node and WASM.
+        target_db: Finite target in dBFS. Omitted, 0.0 dBFS for ``"peak"`` and
+            -20.0 dBFS for ``"rms"``, as on Node and WASM.
 
     Returns:
         ``float32`` array of normalized samples.
@@ -204,12 +204,12 @@ def normalize_stereo(
     channel reaches ``target_db`` and the other keeps its distance from it.
     Normalizing each channel on its own gain instead would lift the quieter side
     until the two levels matched, which changes the stereo balance rather than
-    the level. The ``"rms"`` mode hard-clips the result to ``[-1, 1]``.
+    the level. As with :func:`normalize`, the result is not clipped.
 
     A pair that cannot be processed together is refused: either channel empty,
     or the two lengths unequal. The C entry takes one sample rate for the pair,
-    so the two channels cannot disagree on it here. A silent pair comes back
-    untouched.
+    so the two channels cannot disagree on it here. A silent pair is refused,
+    since it has no level to scale from.
 
     A legacy library that lacks the native ``sonare_normalize_stereo`` entry
     point cannot provide the operation, so it raises ``SonareError(NotSupported)``.
@@ -219,8 +219,8 @@ def normalize_stereo(
         right: Right channel samples, same length as ``left``.
         sample_rate: Sample rate in Hz, shared by both channels.
         mode: ``"peak"`` (default) or ``"rms"``; any other value is refused by name.
-        target_db: Finite target at or below 0 dBFS. Omitted, 0.0 dBFS for
-            ``"peak"`` and -20.0 dBFS for ``"rms"``, as on Node and WASM.
+        target_db: Finite target in dBFS. Omitted, 0.0 dBFS for ``"peak"`` and
+            -20.0 dBFS for ``"rms"``, as on Node and WASM.
 
     Returns:
         :class:`NormalizeStereoResult` with the two normalized channels and their

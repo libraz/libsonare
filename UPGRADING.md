@@ -464,6 +464,13 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_phase_vocoder` | pass a hop_length of 0 for a quarter of n_fft; the hop is a size_t |
 | `sonare_streaming_retune_prepare` | max_block_size 0 is refused; pass the largest block the stream will process |
 
+#### A number outside its domain is refused, never passed through
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_normalize_rms` | the result is no longer hard-clipped to [-1, 1]: one gain brings the RMS exactly to target_db and can leave peaks above full scale; a finite target above 0 dB is accepted |
+| `sonare_normalize` | a finite target above 0 dB is reached rather than refused, and the result is not clipped; a caller writing to an integer format fits or limits it |
+
 #### String values are lowerCamelCase tokens
 
 | 1.x | 2.0.0 |
@@ -568,8 +575,8 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_hpss_with_residual` | removed: call sonare_hpss with a non-NULL out_residual; harmonic, percussive, length and sample rate arrive in SonareHpssResult |
 | `sonare_mastering_repair_denoise_classical_linked` | returns SonareDenoiseLinkedResult* out (channels and the SonareDenoiseReport), freed with sonare_free_denoise_linked_result, in place of caller channel buffers and a report |
 | `sonare_mastering_repair_dereverb_classical_linked` | returns SonareDereverbLinkedResult* out (channels and the SonareDereverbReport), freed with sonare_free_dereverb_linked_result, in place of caller channel buffers and a report |
-| `sonare_normalize_rms_stereo` | returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize_rms returns its buffer |
-| `sonare_normalize_stereo` | returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize returns its buffer |
+| `sonare_normalize_rms_stereo` | returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize_rms returns its buffer; a target above 0 dB is reached and the result is not clipped, as sonare_normalize_rms |
+| `sonare_normalize_stereo` | returns float** out_left, float** out_right and size_t* out_length, each buffer freed with sonare_free_floats, as sonare_normalize returns its buffer; a target above 0 dB is reached and the result is not clipped, as sonare_normalize |
 | `sonare_realtime_voice_changer_create_json` | removed: parse with sonare_realtime_voice_changer_config_from_json, then call sonare_realtime_voice_changer_create |
 | `sonare_realtime_voice_changer_process_interleaved` | takes const float* carrier after input (NULL = none), mono and shared by every channel |
 | `sonare_realtime_voice_changer_process_mono` | takes const float* carrier after input (NULL = none); a NULL carrier while an external carrier is configured is SONARE_ERROR_INVALID_STATE |
@@ -1320,7 +1327,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `Audio.master_audio` | preset, overrides and on_progress are keyword-only; preset defaults to None (was "pop"), which runs overrides as the whole chain (overrides={} returns the input); neither given raises SonareValueError |
-| `Audio.normalize(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError |
+| `Audio.normalize(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1]) |
 | `Audio.voice_change_realtime(preset)` | `Audio.realtime_voice_changer_render(config)`: renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError |
 
 #### Historical aliases are removed
@@ -2436,8 +2443,8 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `RealtimeVoiceChanger.constructor(preset)` | `RealtimeVoiceChanger.constructor(config)` |
-| `normalize(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError |
-| `normalize_stereo(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError |
+| `normalize(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1]) |
+| `normalize_stereo(target_db)` | target_db is keyword-only and defaults to None, the default of the new mode keyword ("peak" 0.0 dBFS, "rms" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1]) |
 
 #### Historical aliases are removed
 

@@ -144,17 +144,17 @@ class TestNormalizeRmsStereoLevel:
         assert abs(joint_db - mean_of_db) > 1.0
         assert abs(joint_db - mean_of_linear) > 1.0
 
-    def test_an_rms_target_that_overshoots_full_scale_is_hard_clipped(self) -> None:
-        """Peaks sit above the RMS, so a loud RMS target saturates -- as documented.
+    def test_an_rms_target_that_overshoots_full_scale_lands_unclipped(self) -> None:
+        """Peaks sit above the RMS, so a 0 dB RMS target leaves them past full scale.
 
-        The achieved RMS is therefore below the target.
+        Nothing clips them, so the achieved RMS is the target.
         """
         tone = sine(440.0, 0.1, sr=SR, amp=0.5)
         result = _RMS_STEREO(tone, tone, SR, target_db=0.0)
 
-        assert np.max(np.abs(result.left)) == pytest.approx(1.0, abs=1e-6)
-        assert np.max(np.abs(result.right)) == pytest.approx(1.0, abs=1e-6)
-        assert _rms_db(result.left) < -1.0
+        assert _rms_db(result.left) == pytest.approx(0.0, abs=1e-3)
+        assert _rms_db(result.right) == pytest.approx(0.0, abs=1e-3)
+        assert np.max(np.abs(result.left)) > 1.4
 
 
 class TestNormalizeStereoSilence:
@@ -258,10 +258,18 @@ class TestNormalizeStereoPairRefusals:
         )
 
     @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
-    def test_a_positive_target_is_refused_by_name(self, call: object) -> None:
+    def test_a_positive_target_is_reached(self, call: object) -> None:
+        # Equal alternations: the pair's peak and RMS are both 0.1, so either mode lands on 3 dB.
+        result = call(_alternating(0.1), _alternating(0.1), SR, target_db=3.0)  # type: ignore[operator]
+        assert _peak_db(result.left) == pytest.approx(3.0, abs=1e-3)
+        assert _peak_db(result.right) == pytest.approx(3.0, abs=1e-3)
+
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
+    @pytest.mark.parametrize("target_db", [float("nan"), float("inf"), -float("inf")])
+    def test_a_non_finite_target_is_refused_by_name(self, call: object, target_db: float) -> None:
         left, right = _pair()
-        with pytest.raises(SonareValueError, match="at or below 0 dBFS"):
-            call(left, right, SR, target_db=3.0)  # type: ignore[operator]
+        with pytest.raises(SonareValueError, match="target_db must be finite"):
+            call(left, right, SR, target_db=target_db)  # type: ignore[operator]
 
     @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_a_non_finite_sample_is_refused_naming_its_channel(self, call: object) -> None:
@@ -325,6 +333,8 @@ class TestMode:
             call(*args, mode=1)  # type: ignore[operator]
 
     @pytest.mark.parametrize("mode", ["peak", "rms"])
-    def test_a_target_above_full_scale_is_refused_in_either_mode(self, mode: str) -> None:
-        with pytest.raises(SonareValueError, match="target_db must be at or below 0 dBFS"):
-            libsonare.normalize(_alternating(0.1), SR, mode=mode, target_db=0.5)  # type: ignore[arg-type]
+    def test_a_target_above_full_scale_is_reached_in_either_mode(self, mode: str) -> None:
+        # The alternation's peak and RMS are both its amplitude, so either mode lands on 0.5 dB.
+        result = libsonare.normalize(_alternating(0.1), SR, mode=mode, target_db=0.5)  # type: ignore[arg-type]
+        assert _peak_db(result) == pytest.approx(0.5, abs=1e-3)
+        assert np.max(np.abs(result)) > 1.0

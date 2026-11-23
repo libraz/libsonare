@@ -7735,7 +7735,7 @@ test = "bindings/python/tests/test_core_validation_refusals.py::test_master_audi
 [[entry]]
 kind = "option"
 old = "normalize(target_db)"
-changed = "target_db is keyword-only and defaults to None, the default of the new mode keyword (\"peak\" 0.0 dBFS, \"rms\" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError"
+changed = "target_db is keyword-only and defaults to None, the default of the new mode keyword (\"peak\" 0.0 dBFS, \"rms\" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1])"
 domain = "effects"
 rule = "one-input-form"
 test = "bindings/python/tests/test_normalize_stereo.py::test_an_omitted_target_is_the_mode_default"
@@ -7743,7 +7743,7 @@ test = "bindings/python/tests/test_normalize_stereo.py::test_an_omitted_target_i
 [[entry]]
 kind = "option"
 old = "normalize_stereo(target_db)"
-changed = "target_db is keyword-only and defaults to None, the default of the new mode keyword (\"peak\" 0.0 dBFS, \"rms\" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError"
+changed = "target_db is keyword-only and defaults to None, the default of the new mode keyword (\"peak\" 0.0 dBFS, \"rms\" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1])"
 domain = "effects"
 rule = "one-input-form"
 test = "bindings/python/tests/test_normalize_stereo.py::test_an_omitted_target_is_the_mode_default"
@@ -7751,7 +7751,7 @@ test = "bindings/python/tests/test_normalize_stereo.py::test_an_omitted_target_i
 [[entry]]
 kind = "option"
 old = "Audio.normalize(target_db)"
-changed = "target_db is keyword-only and defaults to None, the default of the new mode keyword (\"peak\" 0.0 dBFS, \"rms\" -20.0 dBFS); a target above 0 dBFS or not finite raises SonareValueError"
+changed = "target_db is keyword-only and defaults to None, the default of the new mode keyword (\"peak\" 0.0 dBFS, \"rms\" -20.0 dBFS); a target that is not finite raises SonareValueError; a target above 0 dBFS is reached, and the result is not clipped in either mode (rms mode no longer hard-clips to [-1, 1])"
 domain = "core"
 rule = "one-input-form"
 test = "bindings/python/tests/test_normalize_stereo.py::test_an_omitted_target_is_the_mode_default"

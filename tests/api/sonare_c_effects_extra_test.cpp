@@ -1621,6 +1621,31 @@ TEST_CASE("sonare_normalize_rms_stereo measures the pair together", "[c_api][eff
   sonare_free_floats(out_right);
 }
 
+TEST_CASE("the C normalize entries reach a target above full scale unclipped", "[c_api][effects]") {
+  // A +/-0.5 alternation: its peak and RMS are both 0.5, so every entry lands on +3 dB.
+  const std::vector<float> samples = {0.5f, -0.5f, 0.5f, -0.5f};
+  const double expected = std::pow(10.0, 3.0 / 20.0);
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_normalize(samples.data(), samples.size(), 22050, 3.0f, &out, &out_length) ==
+          SONARE_OK);
+  CHECK(std::abs(out[0] - expected) < 1e-5);
+  sonare_free_floats(out);
+
+  using StereoEntry =
+      SonareError (*)(const float*, const float*, size_t, int, float, float**, float**, size_t*);
+  for (StereoEntry entry : {&sonare_normalize_stereo, &sonare_normalize_rms_stereo}) {
+    float* out_left = nullptr;
+    float* out_right = nullptr;
+    REQUIRE(entry(samples.data(), samples.data(), samples.size(), 22050, 3.0f, &out_left,
+                  &out_right, &out_length) == SONARE_OK);
+    CHECK(std::abs(out_left[0] - expected) < 1e-5);
+    CHECK(std::abs(out_right[1] + expected) < 1e-5);
+    sonare_free_floats(out_left);
+    sonare_free_floats(out_right);
+  }
+}
+
 TEST_CASE("the stereo normalize outputs are cleared before validation", "[c_api][effects]") {
   const std::vector<float> samples = {0.5f, -0.5f, 0.5f, -0.5f};
 

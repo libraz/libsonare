@@ -965,12 +965,15 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
 #include "sonare_c_engine.h"
 #include "sonare_c_voice_changer.h"
 
-/// @brief Peak-normalize mono audio. @p target_db must be finite and <= 0 dBFS;
-/// positive targets are rejected rather than hard-clipped.
+/// @brief Peak-normalize mono audio. @p target_db must be finite.
+/// @details The result is not clipped; a caller writing to an integer format fits or limits it.
+///   A target above 0 dB leaves the peak above full scale.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length);
-/// @brief RMS-normalize mono audio with hard clipping to [-1, 1].
+/// @brief RMS-normalize mono audio. @p target_db must be finite.
+/// @details One gain brings the signal RMS exactly to target_db. The result is not clipped; an
+///   RMS target can leave peaks above full scale.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
                                  float target_db, float** out, size_t* out_length);
@@ -1023,7 +1026,7 @@ SonareError sonare_biquad_filter(const float* samples, size_t length, int sample
 ///   quieter side until the two peaks match, which is not what normalizing a
 ///   stereo recording means. The louder channel reaches @p target_db and the
 ///   other keeps its level relative to it. Same argument policy as
-///   @ref sonare_normalize -- @p target_db must be finite and <= 0 dBFS -- plus
+///   @ref sonare_normalize -- @p target_db must be finite, and the result is not clipped -- plus
 ///   the pair itself must be processable together: neither channel empty, one
 ///   @p length, one @p sample_rate.
 /// @note @p out_left and @p out_right each receive @p length samples, reported once in
@@ -1035,9 +1038,9 @@ SonareError sonare_normalize_stereo(const float* left, const float* right, size_
 /// @brief RMS-normalize a stereo pair on a gain measured across both channels.
 /// @details The level driven to @p target_db is the root mean square over the
 ///   two channels' samples together -- the quadratic mean of the per-channel
-///   figures, not their average. Hard-clips to [-1, 1] as
-///   @ref sonare_normalize_rms does, and shares @ref sonare_normalize_stereo's
-///   argument and pair policy.
+///   figures, not their average. Like @ref sonare_normalize_rms the result is
+///   not clipped, and it shares @ref sonare_normalize_stereo's argument and pair
+///   policy.
 /// @note Free @p out_left and @p out_right with @ref sonare_free_floats.
 SonareError sonare_normalize_rms_stereo(const float* left, const float* right, size_t length,
                                         int sample_rate, float target_db, float** out_left,
