@@ -80,9 +80,9 @@ export interface ExtractNotesRequest extends NoteExtractorOptions {
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
-  /** Per-frame voiced flags (truthy = voiced). Takes precedence over `voicedProb`. */
+  /** Per-frame voiced flags (truthy = voiced). Give exactly one of `voiced` and `voicedProb`; both or neither is a TypeError. */
   voiced?: VoicedFlags;
-  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  /** Per-frame voicing probability in `[0, 1]`, given in place of `voiced`. */
   voicedProb?: Float32Array;
 }
 
@@ -351,8 +351,8 @@ export function noteMove(...args: unknown[]): Float32Array {
  * The per-note F0 curve is deliberately not returned — it is already the
  * caller's, as `f0Hz.subarray(note.frameStart, note.frameEnd)`.
  *
- * Voicing comes from `voiced` when given, and otherwise from `voicedProb`
- * thresholded at `voicedThreshold`; at least one of the two is required. Prefer
+ * Voicing comes from exactly one of `voiced` and `voicedProb`, the latter
+ * thresholded at `voicedThreshold`. Prefer
  * `voiced`: `voicedProb` rises with F0 for a fixed frame length, so a fixed
  * threshold silently drops low-register notes.
  *
@@ -360,10 +360,10 @@ export function noteMove(...args: unknown[]): Float32Array {
  *   plus the optional segmentation tuning.
  * @returns One {@link NoteObject} per segmented note, in time order. A pitch
  *   track that segments into nothing returns an empty array.
- * @throws {TypeError} Neither `voiced` nor `voicedProb` was given.
+ * @throws {TypeError} Both or neither of `voiced` and `voicedProb` were given.
  * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
- *   of the supported range, or the selected voicing array differs from
- *   `f0Hz` in length (`voiced`, or `voicedProb` when `voiced` is omitted).
+ *   of the supported range, or the given voicing array differs from
+ *   `f0Hz` in length.
  *
  * @example
  * ```ts
@@ -575,12 +575,12 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * @param request - Audio, its sample rate, the F0 track, the current note set,
  *   the note to split and the frame to cut at.
  * @returns The whole new note set, in time order.
- * @throws {TypeError} Neither `voiced` nor `voicedProb` was given, `notes` is
+ * @throws {TypeError} Both or neither of `voiced` and `voicedProb` were given, `notes` is
  *   not an array, or one of its entries is missing a finite `frameStart` and
  *   `frameEnd`.
  * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
- *   of the supported range, or the selected voicing array differs from
- *   `f0Hz` in length (`voiced`, or `voicedProb` when `voiced` is omitted).
+ *   of the supported range, or the given voicing array differs from
+ *   `f0Hz` in length.
  * @throws {SonareError} `index` is out of range, or `frame` is not strictly
  *   inside that note's own span.
  *
@@ -668,12 +668,12 @@ export function splitNote(...args: unknown[]): NoteObject[] {
  *   and the inclusive run to join.
  * @returns The whole new note set, in time order, one note shorter per note
  *   joined away.
- * @throws {TypeError} Neither `voiced` nor `voicedProb` was given, `notes` is
+ * @throws {TypeError} Both or neither of `voiced` and `voicedProb` were given, `notes` is
  *   not an array, or one of its entries is missing a finite `frameStart` and
  *   `frameEnd`.
  * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
- *   of the supported range, or the selected voicing array differs from
- *   `f0Hz` in length (`voiced`, or `voicedProb` when `voiced` is omitted).
+ *   of the supported range, or the given voicing array differs from
+ *   `f0Hz` in length.
  * @throws {SonareError} `first` is not less than `last`, or `last` is out of
  *   range.
  *

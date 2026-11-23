@@ -755,23 +755,35 @@ describe('analysis features: note segments voicing', () => {
     expect(viaVoiced).toEqual(viaProb());
   });
 
-  it('lets voiced take precedence over voicedProb', () => {
-    const silent = new Float32Array(frames);
-    const both = noteSegments({
-      f0Hz,
-      voiced: new Uint8Array(frames).fill(1),
-      voicedProb: silent,
-      frameRate: 100,
-    });
-    expect(both).toEqual(viaProb());
-    expect(noteSegments({ f0Hz, voicedProb: silent, frameRate: 100 })).toEqual([]);
+  it('refuses voiced and voicedProb given together, as two spellings of one input', () => {
+    let caught: unknown;
+    try {
+      noteSegments({
+        f0Hz,
+        voiced: new Uint8Array(frames).fill(1),
+        voicedProb: new Float32Array(frames),
+        frameRate: 100,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TypeError);
+    expect((caught as Error).message).toBe(
+      'noteSegments: voiced must be omitted when voicedProb is given',
+    );
   });
 
   it('refuses a call with neither voiced nor voicedProb by name', () => {
-    expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
-      /give voiced or voicedProb/,
+    let caught: unknown;
+    try {
+      noteSegments({ f0Hz, frameRate: 100 } as never);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TypeError);
+    expect((caught as Error).message).toBe(
+      'noteSegments: voicedProb and voiced must not both be omitted',
     );
-    expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
   });
 
   it('refuses the old voicedFlags key as unknown', () => {

@@ -990,24 +990,35 @@ describe('noteSegments voicing input', () => {
     expect(fromVoiced).toEqual(fromProb());
   });
 
-  it('lets voiced take precedence over voicedProb', () => {
-    const silent = new Float32Array(60);
-    const both = sonare.noteSegments({
-      f0Hz,
-      voiced: new Uint8Array(60).fill(1),
-      voicedProb: silent,
-      frameRate: 100,
-      minNoteMs: 100,
-    });
-    expect(both).toEqual(fromProb());
-    expect(sonare.noteSegments({ f0Hz, voicedProb: silent, frameRate: 100 })).toEqual([]);
+  it('refuses voiced and voicedProb given together, as two spellings of one input', () => {
+    let caught: unknown;
+    try {
+      api.noteSegments({
+        f0Hz,
+        voiced: new Uint8Array(60).fill(1),
+        voicedProb: new Float32Array(60),
+        frameRate: 100,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TypeError);
+    expect((caught as Error).message).toBe(
+      'noteSegments: voiced must be omitted when voicedProb is given',
+    );
   });
 
   it('refuses a call with neither voiced nor voicedProb by name', () => {
-    expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(
-      /give voiced or voicedProb/,
+    let caught: unknown;
+    try {
+      api.noteSegments({ f0Hz, frameRate: 100 } as never);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(TypeError);
+    expect((caught as Error).message).toBe(
+      'noteSegments: voicedProb and voiced must not both be omitted',
     );
-    expect(() => api.noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(TypeError);
   });
 
   it('refuses the old voicedFlags key as unknown', () => {

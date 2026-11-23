@@ -89,9 +89,9 @@ export interface ExtractNotesRequest extends NoteExtractorOptions {
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
-  /** Per-frame voiced flags (truthy = voiced); takes precedence over `voicedProb` when supplied. Omit it to use the probability array. */
+  /** Per-frame voiced flags (truthy = voiced). Give exactly one of `voiced` and `voicedProb`; both or neither is a TypeError. */
   voiced?: VoicedFlags;
-  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  /** Per-frame voicing probability in `[0, 1]`, given in place of `voiced`. */
   voicedProb?: Float32Array;
 }
 
@@ -177,9 +177,9 @@ interface NoteSetRequest extends NoteExtractorOptions {
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
-  /** Per-frame voiced flags (truthy = voiced); takes precedence over `voicedProb` when supplied. Omit it to use the probability array. */
+  /** Per-frame voiced flags (truthy = voiced). Give exactly one of `voiced` and `voicedProb`; both or neither is a TypeError. */
   voiced?: VoicedFlags;
-  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  /** Per-frame voicing probability in `[0, 1]`, given in place of `voiced`. */
   voicedProb?: Float32Array;
   /** The current note set. Each note's `[frameStart, frameEnd)` must be non-empty and inside the track. */
   notes: readonly NoteSetEntry[];
@@ -356,17 +356,17 @@ export function noteMove(...args: unknown[]): Float32Array {
  * `f0Hz` sliced by `[frameStart, frameEnd)`. The amplitude curve is measured
  * here, so it is, one entry per F0 frame over that note's span.
  *
- * Voicing comes from `voiced` (truthy = voiced) when it is supplied. `voicedProb`
- * is read only when `voiced` is absent or `null`, and then a frame counts as voiced at or above
- * `voicedThreshold` (default 0.5). At least one of the two is required. Because
- * `voicedProb` from pYIN rises with F0 for a fixed frame length, prefer passing
- * a {@link PitchResult}'s `voicedFlag` through `voiced`.
+ * Voicing comes from exactly one of `voiced` (truthy = voiced) and `voicedProb`,
+ * where a frame counts as voiced at or above `voicedThreshold` (default 0.5).
+ * Because `voicedProb` from pYIN rises with F0 for a fixed frame length, prefer
+ * passing a {@link PitchResult}'s `voicedFlag` through `voiced`.
  *
  * @param request - Audio, F0 track, frame cadence and segmenter options
  * @returns One {@link NoteObject} per segmented note, in time order; an empty
  *   array when the track segments to nothing
- * @throws RangeError when the selected voicing array differs from `f0Hz` in
- *   length (`voiced`, or `voicedProb` when `voiced` is omitted), the
+ * @throws TypeError when both or neither of `voiced` and `voicedProb` are given
+ * @throws RangeError when the given voicing array differs from `f0Hz` in
+ *   length (`voiced` or `voicedProb`), the
  *   samples/sample rate fail the shared input checks, or on an empty `f0Hz`, a
  *   non-positive `frameRate`, a `voicedProb` outside `[0, 1]`, or a negative
  *   option value
@@ -410,7 +410,7 @@ export function extractNotes(...args: unknown[]): NoteObject[] {
       request.samples,
       request.sampleRate,
       request.f0Hz,
-      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+      request.voicedProb ?? undefined,
       voicedF32,
       request.frameRate,
       request,
@@ -597,8 +597,9 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * @param request - The source, the current note set, and where to cut
  * @returns The whole new note set, one note longer than the one handed in, or
  *   the same length when a half with no sample span is omitted
- * @throws RangeError when the selected voicing array differs from `f0Hz` in
- *   length (`voiced`, or `voicedProb` when `voiced` is omitted), or the
+ * @throws TypeError when both or neither of `voiced` and `voicedProb` are given
+ * @throws RangeError when the given voicing array differs from `f0Hz` in
+ *   length (`voiced` or `voicedProb`), or the
  *   samples/sample rate fail the shared input checks
  * @throws RangeError on the track arguments {@link extractNotes} itself rejects
  * @throws RangeError when both or neither of `frame` and `frameSec` are given
@@ -653,7 +654,7 @@ export function splitNote(...args: unknown[]): NoteObject[] {
         request.samples,
         request.sampleRate,
         request.f0Hz,
-        request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+        request.voicedProb ?? undefined,
         voicedF32,
         request.frameRate,
         notes,
@@ -682,8 +683,9 @@ export function splitNote(...args: unknown[]): NoteObject[] {
  * @param request - The source, the current note set, and the run to join
  * @returns The whole new note set, `last - first` notes shorter than the one
  *   handed in
- * @throws RangeError when the selected voicing array differs from `f0Hz` in
- *   length (`voiced`, or `voicedProb` when `voiced` is omitted), or the
+ * @throws TypeError when both or neither of `voiced` and `voicedProb` are given
+ * @throws RangeError when the given voicing array differs from `f0Hz` in
+ *   length (`voiced` or `voicedProb`), or the
  *   samples/sample rate fail the shared input checks
  * @throws RangeError on the track arguments {@link extractNotes} itself rejects
  * @throws RangeError unless `first < last < notes.length`,
@@ -731,7 +733,7 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
         request.samples,
         request.sampleRate,
         request.f0Hz,
-        request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+        request.voicedProb ?? undefined,
         voicedF32,
         request.frameRate,
         notes,

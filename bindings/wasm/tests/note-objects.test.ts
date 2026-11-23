@@ -1690,14 +1690,13 @@ describe('raw note pitch entry points', () => {
 });
 
 describe('splitNote', () => {
-  it('raw note entry points ignore voicedProb when voiced flags are present', () => {
+  it('raw note entry points refuse voicedProb beside voiced flags', () => {
     const source = gappedSource();
     const module = getSonareModule();
     const voiced = Float32Array.from(source.voiced);
-    const invalidProb = new Float32Array(fixtureFrames - 1);
+    const prob = new Float32Array(fixtureFrames).fill(1);
     const options = {};
-
-    const expectedExtract = module.extractNotes(
+    const notes = module.extractNotes(
       source.samples,
       source.sampleRate,
       source.f0Hz,
@@ -1706,102 +1705,78 @@ describe('splitNote', () => {
       source.frameRate,
       options,
     );
-    expect(
-      module.extractNotes(
-        source.samples,
-        source.sampleRate,
-        source.f0Hz,
-        invalidProb,
-        voiced,
-        source.frameRate,
-        options,
-      ),
-    ).toEqual(expectedExtract);
-
-    const expectedSplit = module.splitNote(
-      source.samples,
-      source.sampleRate,
-      source.f0Hz,
-      undefined,
-      voiced,
-      source.frameRate,
-      expectedExtract,
-      1,
-      18,
-      options,
-    );
-    expect(
-      module.splitNote(
-        source.samples,
-        source.sampleRate,
-        source.f0Hz,
-        invalidProb,
-        voiced,
-        source.frameRate,
-        expectedExtract,
-        1,
-        18,
-        options,
-      ),
-    ).toEqual(expectedSplit);
-
-    const expectedMerge = module.mergeNotes(
-      source.samples,
-      source.sampleRate,
-      source.f0Hz,
-      undefined,
-      voiced,
-      source.frameRate,
-      expectedExtract,
-      0,
-      1,
-      options,
-    );
-    expect(
-      module.mergeNotes(
-        source.samples,
-        source.sampleRate,
-        source.f0Hz,
-        invalidProb,
-        voiced,
-        source.frameRate,
-        expectedExtract,
-        0,
-        1,
-        options,
-      ),
-    ).toEqual(expectedMerge);
+    const calls = [
+      () =>
+        module.extractNotes(
+          source.samples,
+          source.sampleRate,
+          source.f0Hz,
+          prob,
+          voiced,
+          source.frameRate,
+          options,
+        ),
+      () =>
+        module.splitNote(
+          source.samples,
+          source.sampleRate,
+          source.f0Hz,
+          prob,
+          voiced,
+          source.frameRate,
+          notes,
+          1,
+          18,
+          options,
+        ),
+      () =>
+        module.mergeNotes(
+          source.samples,
+          source.sampleRate,
+          source.f0Hz,
+          prob,
+          voiced,
+          source.frameRate,
+          notes,
+          0,
+          1,
+          options,
+        ),
+    ];
+    for (const call of calls) {
+      expect(call).toThrow(/voiced must be omitted when voicedProb is given$/);
+    }
   });
 
-  it('ignores invalid voicedProb whenever explicit voiced flags are supplied', () => {
+  it('refuses any voicedProb beside explicit voiced flags, before reading it', () => {
     const source = gappedSource();
-    const expectedExtract = extractNotes(source);
-    const expectedSplit = splitNote({ ...source, notes: expectedExtract, index: 1, frame: 18 });
-    const expectedMerge = mergeNotes({ ...source, notes: expectedExtract, first: 0, last: 1 });
-    const invalidProbabilities = [
+    const notes = extractNotes(source);
+    const probabilities = [
+      new Float32Array(fixtureFrames).fill(1),
       new Float32Array(fixtureFrames - 1),
       new Float32Array(fixtureFrames).fill(Number.NaN),
       new Float32Array(fixtureFrames).fill(1.5),
     ];
 
-    for (const voicedProb of invalidProbabilities) {
-      expect(extractNotes({ ...source, voicedProb })).toEqual(expectedExtract);
-      expect(
-        splitNote({ ...source, voicedProb, notes: expectedExtract, index: 1, frame: 18 }),
-      ).toEqual(expectedSplit);
-      expect(
-        mergeNotes({ ...source, voicedProb, notes: expectedExtract, first: 0, last: 1 }),
-      ).toEqual(expectedMerge);
+    for (const voicedProb of probabilities) {
+      for (const call of [
+        () => extractNotes({ ...source, voicedProb }),
+        () => splitNote({ ...source, voicedProb, notes, index: 1, frame: 18 }),
+        () => mergeNotes({ ...source, voicedProb, notes, first: 0, last: 1 }),
+      ]) {
+        expect(call).toThrow(TypeError);
+        expect(call).toThrow(/: voiced must be omitted when voicedProb is given$/);
+      }
     }
 
     expect(() =>
       extractNotes({
         ...source,
         voiced: undefined,
-        voicedProb: invalidProbabilities[0],
+        voicedProb: probabilities[1],
       }),
     ).toThrow(RangeError);
-    for (const voicedProb of invalidProbabilities.slice(1)) {
+    for (const voicedProb of probabilities.slice(2)) {
       expectRangeRefusal(() => extractNotes({ ...source, voiced: undefined, voicedProb }));
     }
   });

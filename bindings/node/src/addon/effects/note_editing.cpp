@@ -99,14 +99,16 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
     out->voiced_ptr = sonare_node::ElementData(out->voiced);
   }
   const Napi::Value prob_value = opts.Get("voicedProb");
-  if (!out->voiced_ptr && IsFloat32Array(prob_value)) {
+  if (IsFloat32Array(prob_value)) {
     auto arr = prob_value.As<Napi::Float32Array>();
-    if (arr.ElementLength() != n_frames) {
+    if (!out->voiced_ptr && arr.ElementLength() != n_frames) {
       Napi::RangeError::New(env, "voicedProb must match f0Hz length").ThrowAsJavaScriptException();
       return false;
     }
     out->voiced_prob.assign(sonare_node::ElementData(arr),
                             sonare_node::ElementData(arr) + arr.ElementLength());
+    // Beside voiced the core refuses the pair before reading either, so the length is not checked.
+    out->voiced_prob.resize(n_frames);
     out->prob_ptr = sonare_node::ElementData(out->voiced_prob);
   }
   return true;

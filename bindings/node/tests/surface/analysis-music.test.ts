@@ -748,14 +748,13 @@ describe('tempo range on detectBpm and detectBeats', () => {
 });
 
 describe('noteSegments voiced', () => {
-  it('takes voiced in place of voicedProb, and voiced wins when both are given', () => {
+  it('takes voiced in place of voicedProb, and refuses the two given together', () => {
     const f0Hz = Float32Array.from({ length: 50 }, () => 440);
     const voiced = Uint8Array.from({ length: 50 }, () => 1);
     const frameRate = 100;
-    const result = noteSegments({ f0Hz, frameRate, voiced });
-    expect(result.length).toBeGreaterThan(0);
-    expect(noteSegments({ f0Hz, frameRate, voiced, voicedProb: new Float32Array(50) })).toEqual(
-      result,
-    );
+    expect(noteSegments({ f0Hz, frameRate, voiced }).length).toBeGreaterThan(0);
+    expect(() =>
+      noteSegments({ f0Hz, frameRate, voiced, voicedProb: new Float32Array(50) }),
+    ).toThrow(TypeError);
   });
 });

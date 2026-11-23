@@ -233,6 +233,7 @@ describe('extractNotes', () => {
       ...tone,
       sampleRate: SR,
       frameRate: FRAME_RATE,
+      voiced: undefined,
       voicedProb: probability,
     });
     const actual = extractNotes({
@@ -1114,35 +1115,24 @@ describe('splitNote and mergeNotes', () => {
     }
   }
 
-  function expectSameNotes(actual: NoteObject[], expected: NoteObject[]): void {
-    expect(actual.map(measurements)).toEqual(expected.map(measurements));
-    for (let i = 0; i < expected.length; i += 1) {
-      expectSameValues(actual[i].amplitude, expected[i].amplitude);
-      expect(actual[i].edit).toEqual(expected[i].edit);
-    }
-  }
-
-  it('ignores invalid voicedProb whenever explicit voiced flags are supplied', () => {
+  it('refuses any voicedProb beside explicit voiced flags, before reading it', () => {
     const source = gappedSource();
-    const expectedExtract = extractNotes(source);
-    const expectedSplit = splitNote({ ...source, notes: expectedExtract, index: 1, frame: 18 });
-    const expectedMerge = mergeNotes({ ...source, notes: expectedExtract, first: 0, last: 1 });
+    const notes = extractNotes(source);
     const invalidProbabilities = [
       new Float32Array(SET_FRAMES - 1),
       new Float32Array(SET_FRAMES).fill(Number.NaN),
       new Float32Array(SET_FRAMES).fill(1.5),
     ];
 
-    for (const voicedProb of invalidProbabilities) {
-      expectSameNotes(extractNotes({ ...source, voicedProb }), expectedExtract);
-      expectSameNotes(
-        splitNote({ ...source, voicedProb, notes: expectedExtract, index: 1, frame: 18 }),
-        expectedSplit,
-      );
-      expectSameNotes(
-        mergeNotes({ ...source, voicedProb, notes: expectedExtract, first: 0, last: 1 }),
-        expectedMerge,
-      );
+    for (const voicedProb of [new Float32Array(SET_FRAMES).fill(1), ...invalidProbabilities]) {
+      for (const call of [
+        () => extractNotes({ ...source, voicedProb }),
+        () => splitNote({ ...source, voicedProb, notes, index: 1, frame: 18 }),
+        () => mergeNotes({ ...source, voicedProb, notes, first: 0, last: 1 }),
+      ]) {
+        expect(call).toThrow(TypeError);
+        expect(call).toThrow(/: voiced must be omitted when voicedProb is given$/);
+      }
     }
 
     expect(() =>

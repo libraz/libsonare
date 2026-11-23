@@ -80,15 +80,13 @@ val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_leng
       [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
-// Exactly one of `voiced_prob` (Float32Array) and `voiced_flags` (Uint8Array) is given.
+// `voiced_prob` (Float32Array) and `voiced_flags` (Uint8Array) are two spellings of one input;
+// the C entry refuses both and neither.
 val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& frame_rate_val,
                      val options) {
   const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
   const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
   const bool has_flags = !voiced_flags.isUndefined() && !voiced_flags.isNull();
-  if (has_prob == has_flags) {
-    throw WasmRangeError("exactly one of voicedProb and voicedFlags must be given");
-  }
   std::vector<float> f0 = float32ArrayToVector(f0_hz, "f0Hz");
   std::vector<float> probabilities;
   std::vector<int32_t> flags;
@@ -97,10 +95,11 @@ val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& fr
     if (probabilities.size() != f0.size()) {
       throw WasmRangeError("voicedProb must have the same length as f0Hz");
     }
-  } else {
-    const std::vector<uint8_t> raw = uint8ArrayToVector(voiced_flags, "voicedFlags");
+  }
+  if (has_flags) {
+    const std::vector<uint8_t> raw = uint8ArrayToVector(voiced_flags, "voiced");
     if (raw.size() != f0.size()) {
-      throw WasmRangeError("voicedFlags must have the same length as f0Hz");
+      throw WasmRangeError("voiced must have the same length as f0Hz");
     }
     flags.assign(raw.begin(), raw.end());
   }

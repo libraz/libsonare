@@ -1,5 +1,5 @@
 import { toVoicedFloat32 } from './internal/effects_common.js';
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { refuseType, withEntry } from './internal/entry.js';
 import { getSonareModule } from './module_state.js';
 import type { NoteSegment, PiptrackResult, PitchResult } from './public_types.js';
 import type { VoicedFlags } from './public_types_spectral.js';
@@ -173,7 +173,7 @@ export function pitchPyin(...args: unknown[]): PitchResult {
 
 /**
  * Parameters for segmenting an F0 track into stable monophonic notes. Give
- * `voiced` or `voicedProb`; `voiced` takes precedence.
+ * exactly one of `voiced` and `voicedProb`; both or neither is a TypeError.
  */
 export interface NoteSegmentsRequest {
   /** Per-frame F0 track in Hz, one value per frame, at `frameRate` frames per second. */
@@ -182,7 +182,7 @@ export interface NoteSegmentsRequest {
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
    * unvoiced.
    *
-   * Read only when `voiced` is omitted. Pass {@link PitchResult.voicedFlag} as
+   * Given in place of `voiced`. Pass {@link PitchResult.voicedFlag} as
    * `voiced` instead. Do **not** pass {@link pitchPyin}'s `voicedProb`: that
    * value is the frame's voiced observation mass and rises with F0 for a fixed
    * `frameLength`, so a fixed threshold silently returns no segments at all for
@@ -190,8 +190,8 @@ export interface NoteSegmentsRequest {
    */
   voicedProb?: Float32Array;
   /**
-   * Per-frame voiced flags (truthy = voiced), the same length as `f0Hz`. Takes
-   * precedence over `voicedProb`; `voicedThreshold` does not apply.
+   * Per-frame voiced flags (truthy = voiced), the same length as `f0Hz`, given in
+   * place of `voicedProb`; `voicedThreshold` does not apply.
    */
   voiced?: VoicedFlags;
   /** Frames per second of the F0 track. */
@@ -209,28 +209,22 @@ export interface NoteSegmentsRequest {
 /**
  * Segment a caller-supplied monophonic F0 track into stable note regions.
  *
- * `f0Hz` and the voicing input (`voiced`, or `voicedProb` when `voiced` is
- * omitted) must have the same non-zero length. Zero-Hz frames and unvoiced frames (a `voicedProb`
+ * `f0Hz` and the one voicing input given (`voiced` or `voicedProb`) must have
+ * the same non-zero length. Zero-Hz frames and unvoiced frames (a `voicedProb`
  * below `voicedThreshold`, default `0.5`, or a zero flag) are treated as unvoiced.
  */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[];
 export function noteSegments(...args: unknown[]): NoteSegment[] {
   return withEntry('noteSegments', () => {
     const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
-    if (r.voiced == null && r.voicedProb == null) {
-      throw refuseType('give voiced or voicedProb');
-    }
-    // The embind reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
+    // The embind reader takes 0/1 bytes. Both voicing inputs are passed as given, so the core
+    // refuses both and neither as two spellings of one input.
     const flags = r.voiced != null ? Uint8Array.from(toVoicedFloat32(r.voiced)) : null;
-    const prob = flags === null ? r.voicedProb : null;
+    const prob = r.voicedProb ?? null;
     if (prob != null && !(prob instanceof Float32Array)) {
       throw refuseType('voicedProb must be a Float32Array');
     }
-    const voicing = (flags ?? prob) as Float32Array | Uint8Array;
-    if (r.f0Hz?.length !== voicing.length) {
-      throw refuse(`${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`);
-    }
-    return getSonareModule().noteSegments(r.f0Hz, prob ?? null, flags, r.frameRate, {
+    return getSonareModule().noteSegments(r.f0Hz, prob, flags, r.frameRate, {
       segmentationThresholdCents: r.segmentationThresholdCents,
       minNoteMs: r.minNoteMs,
       referenceHz: r.referenceHz,

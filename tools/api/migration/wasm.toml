@@ -1290,19 +1290,19 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "function"
 old = "noteSegments"
-changed = "request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed"
+changed = "request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed"
 domain = "analysis"
 rule = "individual"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::lets voiced take precedence over voicedProb"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses voiced and voicedProb given together, as two spellings of one input"
 
 [[entry]]
 kind = "function"
 old = "noteSegments"
-changed = "request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed"
+changed = "request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed"
 domain = "analysis"
 rule = "individual"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::lets voiced take precedence over voicedProb"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses voiced and voicedProb given together, as two spellings of one input"
 
 [[entry]]
 kind = "function"
@@ -7572,7 +7572,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "NoteSegmentsRequest.voicedProb"
-changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins"
+changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; exactly one of the two, both or neither is a TypeError"
 domain = "analysis"
 rule = "individual"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses a call with neither voiced nor voicedProb by name"
@@ -7580,7 +7580,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::refuses a call wi
 [[entry]]
 kind = "field"
 old = "NoteSegmentsRequest.voicedProb"
-changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins"
+changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; exactly one of the two, both or neither is a TypeError"
 domain = "analysis"
 rule = "individual"
 entry = "./analysis"
@@ -36044,3 +36044,11 @@ changed = "Float32Array -> optional Float32Array: absent when no band decay was 
 domain = "effects"
 rule = "silence-is-infinite"
 test = "bindings/wasm/tests/acoustic-not-measured.test.ts::omits the dimensions, the DRR and both band arrays of a silent room estimate"
+
+[[entry]]
+kind = "field"
+old = "ExtractNotesRequest.voiced"
+changed = "voicedProb given beside voiced is a TypeError (voiced was read and voicedProb ignored); likewise on splitNote and mergeNotes, whose requests carry the same voicing fields"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/voicing-spellings.test.ts::refuses both given together"

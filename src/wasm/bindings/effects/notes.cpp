@@ -61,19 +61,23 @@ int noteFrameArg(double value, const char* subject) {
 }
 
 // The F0 track every extraction-shaped note entry point is measured against.
-// Mirrors the C ABI's validate_track_args and make_track: one of the two voicing
-// inputs is required, and voicedProb is read only when voiced is absent.
+// Mirrors the C ABI's validate_track_args and make_track: exactly one of the two
+// voicing inputs is given, since they are two spellings of one input.
 editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_rate,
                                                 const val& f0_hz, const val& voiced_prob,
                                                 const val& voiced, float frame_rate,
                                                 float voiced_threshold,
                                                 std::size_t* cumulative_count) {
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
-  const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  // Worded as the C ABI words them; a presence requirement makes each a shape refusal.
   if (!has_voiced && !has_prob) {
-    // Worded as the C ABI words it; the presence requirement makes it a shape refusal.
     sonare::util::check::refuse_relation({"voicedProb", "voiced"},
                                          "{0} and {1} {must_not_both_be_absent}");
+  }
+  if (has_voiced && has_prob) {
+    sonare::util::check::refuse_relation({"voicedProb", "voiced"},
+                                         "{1} {must_be_absent} when {0} {is_present}");
   }
   if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
     throw WasmRangeError("frameRate must be finite and greater than 0");
@@ -106,8 +110,7 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
     // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
     // negative or non-finite -- pitchPyin leaves NaN there unless asked to fill
     // it -- and every consumer reads all three as contributing no measurement.
-    // voicedProb is read only when voiced is absent, so it is validated only then.
-    if (!has_voiced && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
+    if (has_prob && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
       throw WasmRangeError("voicedProb values must be in [0, 1]");
     }
   }

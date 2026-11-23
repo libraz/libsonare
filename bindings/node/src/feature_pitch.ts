@@ -1,5 +1,5 @@
 import { toVoicedInt32 } from './internal/effects_common.js';
-import { refuse, refuseType, withEntry } from './internal/entry.js';
+import { withEntry } from './internal/entry.js';
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { nativeTuningToCents } from './internal/tuning_units.js';
@@ -170,7 +170,7 @@ export interface PiptrackRequest {
   threshold?: number;
 }
 
-/** Request for {@link noteSegments}. Give `voiced` or `voicedProb`; `voiced` takes precedence. */
+/** Request for {@link noteSegments}. Give exactly one of `voiced` and `voicedProb`; both or neither is a TypeError. */
 export interface NoteSegmentsRequest {
   /** Per-frame F0 track in Hz, one value per frame, at `frameRate` frames per second. */
   f0Hz: Float32Array;
@@ -178,7 +178,7 @@ export interface NoteSegmentsRequest {
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
    * unvoiced.
    *
-   * Read only when `voiced` is omitted. Pass `pitchPyin`'s `voicedFlag` as
+   * Given in place of `voiced`. Pass `pitchPyin`'s `voicedFlag` as
    * `voiced` instead. Do **not** pass its `voicedProb`: that value is the
    * frame's voiced observation mass and rises with F0 for a fixed `frameLength`,
    * so a fixed threshold silently returns no segments at all for low-register
@@ -186,8 +186,8 @@ export interface NoteSegmentsRequest {
    */
   voicedProb?: Float32Array;
   /**
-   * Per-frame voiced flags (truthy = voiced), the same length as `f0Hz`. Takes
-   * precedence over `voicedProb`; `voicedThreshold` does not apply.
+   * Per-frame voiced flags (truthy = voiced), the same length as `f0Hz`, given in
+   * place of `voicedProb`; `voicedThreshold` does not apply.
    */
   voiced?: VoicedFlags;
   /** Frames per second of the F0 track. */
@@ -645,23 +645,12 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
       minNoteMs !== undefined ||
       referenceHz !== undefined ||
       voicedThreshold !== undefined;
-    if (r.voiced == null && r.voicedProb == null) {
-      throw refuseType('give voiced or voicedProb');
-    }
-    // The native reader takes 0/1 bytes; voiced wins, so voicedProb is not sent beside it.
+    // The native reader takes 0/1 bytes. Both voicing inputs are passed as given, so the core
+    // refuses both and neither as two spellings of one input.
     const flags = r.voiced != null ? Uint8Array.from(toVoicedInt32(r.voiced)) : null;
-    const prob = flags === null ? r.voicedProb : null;
-    const voicing = flags ?? prob;
-    if (
-      ArrayBuffer.isView(r.f0Hz) &&
-      ArrayBuffer.isView(voicing) &&
-      r.f0Hz.length !== voicing.length
-    ) {
-      throw refuse(`${flags ? 'voiced' : 'voicedProb'} must have the same length as f0Hz`);
-    }
     return addon.noteSegments(
       r.f0Hz,
-      prob ?? null,
+      r.voicedProb ?? null,
       flags,
       r.frameRate,
       hasTuningOptions

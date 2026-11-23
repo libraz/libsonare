@@ -5103,7 +5103,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `GriffinLimRequest.nFft` | omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError |
 | `NoteSegmentsConfig` | removed: put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on NoteSegmentsRequest |
 | `NoteSegmentsRequest.config` | removed: put segmentationThresholdCents, minNoteMs, referenceHz and voicedThreshold directly on the request |
-| `NoteSegmentsRequest.voicedProb` | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins |
+| `NoteSegmentsRequest.voicedProb` | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; exactly one of the two, both or neither is a TypeError |
 | `OnsetStrengthMultiRequest.fmax` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
 | `OnsetStrengthMultiRequest.fmin` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
 | `OnsetStrengthMultiRequest.htk` | removed: drop the key; onsetStrengthMulti never read it, and it is now refused as unknown (TypeError) |
@@ -5111,7 +5111,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `VqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
 | `fourierTempogram` | norm option removed |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
-| `noteSegments` | request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed |
+| `noteSegments` | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
 | `samplesToFrames(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 
 ### Node: Effects, separation, repair and room acoustics
@@ -5536,6 +5536,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `DeclipOptions.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `DeclipReport.interpolatedRuns` | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
 | `DeclipReport.linkedRuns` | 0 unless linkChannels: true is passed: each channel of a stereo declip, in masteringRepairDeclipStereo and in a masteringRepairApply declip stage, repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); linkChannels: true restores the union |
+| `ExtractNotesRequest.voiced` | voicedProb given beside voiced is a TypeError (voiced was read and voicedProb ignored); extractNotes, splitNote and mergeNotes |
 | `MasteringRepairDeclipRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
@@ -9472,8 +9473,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `FunctionalChord.roman` | `FunctionalChord.romanNumeral` |
 | `GriffinLimRequest.nFft` (`./analysis`) | omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError |
 | `GriffinLimRequest.nFft` | omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (was a 2048 default); a size that disagrees with the bin count is a RangeError |
-| `NoteSegmentsRequest.voicedProb` (`./analysis`) | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins |
-| `NoteSegmentsRequest.voicedProb` | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required, voiced wins |
+| `NoteSegmentsRequest.voicedProb` (`./analysis`) | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; exactly one of the two, both or neither is a TypeError |
+| `NoteSegmentsRequest.voicedProb` | optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; exactly one of the two, both or neither is a TypeError |
 | `PcenRequest.options` (`./analysis`) | removed: put the PCEN fields (timeConstant, gain, bias, power, eps) directly on the request object |
 | `PcenRequest.options` | removed: put the PCEN fields (timeConstant, gain, bias, power, eps) directly on the request object |
 | `PitchYinRequest.fillNa` (`./analysis`) | removed: drop the key; YIN always returns a finite per-frame estimate, and it is now refused as unknown (TypeError) |
@@ -9485,8 +9486,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `fourierTempogram` | norm option removed |
 | `framesToSamples(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `framesToSamples(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
-| `noteSegments` (`./analysis`) | request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed |
-| `noteSegments` | request gains voiced?: VoicedFlags (wins over voicedProb); voicedProb optional; nested config removed |
+| `noteSegments` (`./analysis`) | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
+| `noteSegments` | request gains voiced?: VoicedFlags, given in place of voicedProb (both or neither is a TypeError); voicedProb optional; nested config removed |
 | `samplesToFrames(hopLength)` (`./analysis`) | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `samplesToFrames(hopLength)` | a hop of 0 or a negative is refused with RangeError ('hopLength must be an integer in [1, 2147483647]') like the other frame conversions; 1.x computed with it and returned 0 frames or a negative sample index |
 | `streamAnalyzerConfigDefaults` | removed: Omit a StreamConfig field; the analyzer reads an absent field as the library default. |
@@ -10162,6 +10163,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `DeclipReport.interpolatedRuns` (`./analysis`) | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
 | `DeclipReport.interpolatedRuns` | `DeclipReport.unreconstructedRuns`: counts the runs left clipped (past the 512-sample cap, without a usable solve, or reconstructed more than 20 dB above the threshold) instead of runs filled by interpolation; repairedSamples counts only the reconstructed runs |
 | `DeclipReport.linkedRuns` | 0 unless linkChannels: true is passed: each channel of a stereo declip, in masteringRepairDeclipStereo and in a masteringRepairApply declip stage, repairs its own clipped runs by default and leaves every sample it did not clip bit-identical (was always the union of all channels' runs); linkChannels: true restores the union |
+| `ExtractNotesRequest.voiced` | voicedProb given beside voiced is a TypeError (voiced was read and voicedProb ignored); likewise on splitNote and mergeNotes, whose requests carry the same voicing fields |
 | `MasteringRepairDeclipRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDeclipStereoRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `MasteringRepairDetectClippingRequest.lpcBlend` | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |

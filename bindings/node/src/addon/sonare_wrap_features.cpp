@@ -804,26 +804,24 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   Napi::Float32Array f0;
   if (!RequiredFloat32ArrayValue(env, info[0], "f0Hz", &f0)) return env.Undefined();
+  // Two spellings of one input: both are passed as given, and the C entry refuses both and neither.
   const bool has_prob = !info[1].IsUndefined() && !info[1].IsNull();
   const bool has_flags = !info[2].IsUndefined() && !info[2].IsNull();
-  if (has_prob == has_flags) {
-    Napi::RangeError::New(env, "exactly one of voicedProb or voicedFlags must be given")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   Napi::Float32Array voiced_prob;
   Napi::Uint8Array voiced_flags;
   if (has_prob && !RequiredFloat32ArrayValue(env, info[1], "voicedProb", &voiced_prob)) {
     return env.Undefined();
   }
-  if (has_flags && !RequiredUint8ArrayValue(env, info[2], "voicedFlags", &voiced_flags)) {
+  if (has_flags && !RequiredUint8ArrayValue(env, info[2], "voiced", &voiced_flags)) {
     return env.Undefined();
   }
-  const size_t voicing_length =
-      has_prob ? voiced_prob.ElementLength() : voiced_flags.ElementLength();
-  if (voicing_length != f0.ElementLength()) {
-    Napi::RangeError::New(env, std::string(has_prob ? "voicedProb" : "voicedFlags") +
-                                   " length must equal f0Hz length")
+  if (has_prob && voiced_prob.ElementLength() != f0.ElementLength()) {
+    Napi::RangeError::New(env, "voicedProb must have the same length as f0Hz")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (has_flags && voiced_flags.ElementLength() != f0.ElementLength()) {
+    Napi::RangeError::New(env, "voiced must have the same length as f0Hz")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -833,7 +831,7 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   std::vector<int32_t> flags_i32;
   if (has_flags)
     flags_i32.assign(sonare_node::ElementData(voiced_flags),
-                     sonare_node::ElementData(voiced_flags) + voicing_length);
+                     sonare_node::ElementData(voiced_flags) + voiced_flags.ElementLength());
 
   SonareNoteSegmenterConfig config;
   sonare_note_segmenter_config_init(&config);
@@ -857,7 +855,8 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   SonareNoteSegmentsResult result{};
   const SonareError error = sonare_note_segments(
       sonare_node::ElementData(f0), has_prob ? sonare_node::ElementData(voiced_prob) : nullptr,
-      has_flags ? flags_i32.data() : nullptr, f0.ElementLength(), frame_rate, &config, &result);
+      has_flags ? sonare_node::ElementData(flags_i32) : nullptr, f0.ElementLength(), frame_rate,
+      &config, &result);
   if (error != SONARE_OK) {
     ThrowIfError(env, error);
     return env.Undefined();
