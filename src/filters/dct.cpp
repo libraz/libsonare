@@ -10,6 +10,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/thread_local_cache.h"
 
 namespace sonare {
@@ -34,17 +35,19 @@ bool checked_dct_element_count(int n_output, int n_input, std::size_t* element_c
                                        static_cast<std::size_t>(n_input), limit, element_count);
 }
 
-void validate_dct_dimensions(int n_output, int n_input) {
+std::size_t validate_dct_dimensions(int n_output, int n_input) {
+  util::check::integer_at_least(n_output, 1, "n_output");
+  util::check::integer_at_least(n_input, 1, "n_input");
   std::size_t element_count = 0;
+  // The product can overflow even when each caller-provided dimension is valid.
   SONARE_CHECK(checked_dct_element_count(n_output, n_input, &element_count),
                ErrorCode::InvalidParameter);
+  return element_count;
 }
 }  // namespace
 
 std::vector<float> create_dct_matrix(int n_output, int n_input) {
-  std::size_t element_count = 0;
-  SONARE_CHECK(checked_dct_element_count(n_output, n_input, &element_count),
-               ErrorCode::InvalidParameter);
+  const std::size_t element_count = validate_dct_dimensions(n_output, n_input);
 
   std::vector<float> matrix(element_count);
 
@@ -68,14 +71,15 @@ std::vector<float> create_dct_matrix(int n_output, int n_input) {
 }
 
 const std::vector<float>& get_dct_matrix_cached(int n_output, int n_input) {
-  validate_dct_dimensions(n_output, n_input);
+  (void)validate_dct_dimensions(n_output, n_input);
   auto key = std::make_pair(n_output, n_input);
   return get_or_create_bounded_cache_entry(g_dct_cache, key, kMaxDctCacheSize,
                                            [&] { return create_dct_matrix(n_output, n_input); });
 }
 
 std::vector<float> dct_ii(const float* input, int n_input, int n_output) {
-  SONARE_CHECK(input != nullptr && n_input > 0, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  util::check::integer_at_least(n_input, 1, "n_input");
 
   if (n_output <= 0) {
     n_output = n_input;
@@ -104,13 +108,13 @@ std::vector<float> dct_ii(const float* input, int n_input, int n_output) {
 }
 
 std::vector<float> dct_ii(const std::vector<float>& input, int n_output) {
-  SONARE_CHECK(input.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
-               ErrorCode::InvalidParameter);
+  util::check::integer_within(input.size(), util::check::integer_domain_of<int>(0), "input");
   return dct_ii(input.data(), static_cast<int>(input.size()), n_output);
 }
 
 std::vector<float> idct_ii(const float* input, int n_input, int n_output) {
-  SONARE_CHECK(input != nullptr && n_input > 0, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  util::check::integer_at_least(n_input, 1, "n_input");
 
   if (n_output <= 0) {
     n_output = n_input;
@@ -123,9 +127,11 @@ std::vector<float> idct_ii(const float* input, int n_input, int n_output) {
 }
 
 void idct_ii_into(const float* input, int n_input, float* output, int n_output) {
-  SONARE_CHECK(input != nullptr && output != nullptr && n_input > 0 && n_output > 0,
-               ErrorCode::InvalidParameter);
-  validate_dct_dimensions(n_input, n_output);
+  util::check::non_null(input, "input");
+  util::check::non_null(output, "output");
+  util::check::integer_at_least(n_input, 1, "n_input");
+  util::check::integer_at_least(n_output, 1, "n_output");
+  (void)validate_dct_dimensions(n_input, n_output);
   // Inverse DCT-II (DCT-III with orthonormal scaling). The orthonormal inverse
   // is the transpose of the forward matrix, so reuse the cached DCT-II matrix
   // D = create_dct_matrix(n_input, n_output) where

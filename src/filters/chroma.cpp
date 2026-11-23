@@ -8,6 +8,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/lru_cache.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -100,9 +101,9 @@ float hz_to_chroma(float hz, float tuning) {
 }
 
 std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilterConfig& config) {
-  SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_fft > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  util::check::integer_at_least(n_fft, 1, "n_fft");
+  util::check::integer_at_least(config.n_chroma, 1, "n_chroma");
 
   // Direct port of librosa.filters.chroma: Gaussian bumps per FFT bin, an
   // optional per-octave Gaussian envelope (ctroct/octwidth), column (axis=0)
@@ -192,8 +193,8 @@ std::shared_ptr<const std::vector<float>> get_chroma_filterbank_cached(
 
 std::vector<float> apply_chroma_filterbank(const float* power, int n_bins, int n_frames,
                                            const float* filterbank, int n_chroma) {
-  SONARE_CHECK(power != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(filterbank != nullptr, ErrorCode::InvalidParameter);
+  util::check::non_null(power, "power");
+  util::check::non_null(filterbank, "filterbank");
 
   // Output: [n_chroma x n_frames]
   std::vector<float> chromagram(n_chroma * n_frames);

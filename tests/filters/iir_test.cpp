@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -61,6 +63,47 @@ TEST_CASE("IIR coefficient helpers match shared RBJ biquad designs", "[iir]") {
                        rt::rbj_bandpass(kTwoPi * center / static_cast<float>(sr), q));
   require_coeffs_close(notch_coeffs(center, bandwidth, sr),
                        rt::rbj_notch(kTwoPi * center / static_cast<float>(sr), q));
+}
+
+TEST_CASE("IIR refusals name their input", "[iir]") {
+  constexpr int sample_rate = 48000;
+  constexpr float cutoff = 1000.0f;
+  constexpr float sample = 0.25f;
+  const BiquadCoeffs coeffs = lowpass_coeffs(cutoff, sample_rate);
+  const CascadedBiquad empty;
+
+  CHECK_THROWS_WITH(highpass_coeffs(0.0f, sample_rate), "cutoff_hz must be > 0");
+  CHECK_THROWS_WITH(lowpass_coeffs(cutoff, 0), "sample_rate must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(lowpass_coeffs(sample_rate / 2.0f, sample_rate),
+                    "cutoff_hz must be below the Nyquist frequency of sample_rate");
+  CHECK_THROWS_WITH(bandpass_coeffs(2000.0f, 0.0f, sample_rate), "bandwidth_hz must be > 0");
+  CHECK_THROWS_WITH(notch_coeffs(sample_rate / 2.0f, 100.0f, sample_rate),
+                    "center_hz must be below the Nyquist frequency of sample_rate");
+  CHECK_NOTHROW(bandpass_coeffs(2000.0f, std::numeric_limits<float>::infinity(), sample_rate));
+  CHECK_THROWS_WITH(highpass_coeffs_4th(0.0f, sample_rate), "cutoff_hz must be > 0");
+  CHECK_THROWS_WITH(lowpass_coeffs_4th(sample_rate / 2.0f, sample_rate),
+                    "cutoff_hz must be below the Nyquist frequency of sample_rate");
+
+  CHECK_THROWS_WITH(apply_biquad(nullptr, 1, coeffs), "input must not be NULL");
+  CHECK_THROWS_WITH(apply_biquad_filtfilt(nullptr, 1, coeffs), "input must not be NULL");
+  CHECK_THROWS_WITH(apply_biquad_filtfilt(&sample, 0, coeffs), "size must be > 0");
+  CHECK_THROWS_WITH(apply_cascade(nullptr, 1, empty), "input must not be NULL");
+  CHECK_THROWS_WITH(apply_cascade(&sample, 0, empty), "size must be > 0");
+  CHECK_THROWS_WITH(apply_cascade(&sample, 1, empty), "cascade.sections must not be empty");
+  CHECK_THROWS_WITH(apply_cascade_filtfilt(nullptr, 1, empty), "input must not be NULL");
+  CHECK_THROWS_WITH(apply_cascade_filtfilt(&sample, 0, empty), "size must be > 0");
+  CHECK_THROWS_WITH(apply_cascade_filtfilt(&sample, 1, empty),
+                    "cascade.sections must not be empty");
+
+  std::vector<float> empty_audio;
+  CHECK_THROWS_WITH(butterworth_zero_phase(empty_audio, 0.0f, sample_rate, 2, true),
+                    "cutoff_hz must be > 0");
+  CHECK_THROWS_WITH(butterworth_zero_phase(empty_audio, cutoff, sample_rate, 3, true),
+                    "order must be an even integer in [2, 2147483647]");
+  CHECK_THROWS_WITH(butterworth_zero_phase_gain(cutoff, cutoff, 0, 2, true),
+                    "sample_rate must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(butterworth_zero_phase_gain(cutoff, sample_rate / 2.0f, sample_rate, 2, true),
+                    "cutoff_hz must be below the Nyquist frequency of sample_rate");
 }
 
 TEST_CASE("highpass_coeffs valid range", "[iir]") {

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -207,4 +208,28 @@ TEST_CASE("DCT rejects invalid dimensions across its public entry paths", "[dct]
 #if defined(SONARE_WITH_MIXING)
   REQUIRE(cache_entry_survived);
 #endif
+}
+
+TEST_CASE("DCT argument refusals name their input", "[dct]") {
+  const float sample = 0.25f;
+  float output = 0.0f;
+
+  CHECK_THROWS_WITH(sonare::create_dct_matrix(0, 1),
+                    "n_output must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(sonare::create_dct_matrix(1, 0),
+                    "n_input must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(sonare::get_dct_matrix_cached(0, 1),
+                    "n_output must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(sonare::dct_ii(nullptr, 1), "input must not be NULL");
+  CHECK_THROWS_WITH(sonare::dct_ii(&sample, 0), "n_input must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(sonare::idct_ii(nullptr, 1), "input must not be NULL");
+  CHECK_THROWS_WITH(sonare::idct_ii(&sample, 0), "n_input must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(sonare::idct_ii_into(nullptr, 1, &output, 1), "input must not be NULL");
+  CHECK_THROWS_WITH(sonare::idct_ii_into(&sample, 1, nullptr, 1), "output must not be NULL");
+  CHECK_THROWS_WITH(sonare::idct_ii_into(&sample, 1, &output, 0),
+                    "n_output must be an integer in [1, 2147483647]");
+
+  const std::vector<float> empty;
+  const char* empty_subject = empty.data() == nullptr ? "input " : "n_input ";
+  CHECK_THROWS_WITH(sonare::dct_ii(empty), Catch::Matchers::StartsWith(empty_subject));
 }

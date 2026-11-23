@@ -89,6 +89,24 @@ TEST_CASE("create_mel_filterbank dimensions", "[mel]") {
   REQUIRE(fb.size() == static_cast<size_t>(config.n_mels * n_bins));
 }
 
+TEST_CASE("Mel filterbank refusals name their input", "[mel]") {
+  const float sample = 1.0f;
+  MelFilterConfig config;
+  CHECK_THROWS_WITH(create_mel_filterbank(0, 2048, config),
+                    "sample_rate must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(create_mel_filterbank(22050, 0, config),
+                    "n_fft must be an integer in [1, 2147483647]");
+
+  CHECK_THROWS_WITH(apply_mel_filterbank(nullptr, 1, 1, &sample, 1), "power must not be NULL");
+  CHECK_THROWS_WITH(apply_mel_filterbank(&sample, 1, 1, nullptr, 1), "filterbank must not be NULL");
+  CHECK_THROWS_WITH(apply_mel_filterbank(&sample, 0, 1, &sample, 1),
+                    "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(apply_mel_filterbank(&sample, 1, 0, &sample, 1),
+                    "n_frames must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(apply_mel_filterbank(&sample, 1, 1, &sample, 0),
+                    "n_mels must be an integer in [1, 2147483647]");
+}
+
 TEST_CASE("create_mel_filterbank refuses a band count whose extent wraps", "[mel]") {
   const int sr = 22050;
   const int n_fft = 2048;

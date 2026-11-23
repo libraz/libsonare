@@ -73,6 +73,22 @@ TEST_CASE("create_chroma_filterbank dimensions", "[chroma]") {
   REQUIRE(fb.size() == static_cast<size_t>(config.n_chroma * n_bins));
 }
 
+TEST_CASE("Chroma filterbank refusals name their input", "[chroma]") {
+  ChromaFilterConfig config;
+  CHECK_THROWS_WITH(create_chroma_filterbank(0, 2048, config),
+                    "sample_rate must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(create_chroma_filterbank(22050, 0, config),
+                    "n_fft must be an integer in [1, 2147483647]");
+  config.n_chroma = 0;
+  CHECK_THROWS_WITH(create_chroma_filterbank(22050, 2048, config),
+                    "n_chroma must be an integer in [1, 2147483647]");
+
+  const float sample = 1.0f;
+  CHECK_THROWS_WITH(apply_chroma_filterbank(nullptr, 1, 1, &sample, 1), "power must not be NULL");
+  CHECK_THROWS_WITH(apply_chroma_filterbank(&sample, 1, 1, nullptr, 1),
+                    "filterbank must not be NULL");
+}
+
 TEST_CASE("create_chroma_filterbank honors base_c anchoring", "[chroma]") {
   // base_c=true anchors pitch class 0 on C by rolling the rows up by 3 (per 12);
   // base_c=false leaves the raw A-anchored bank. The two must differ, and the

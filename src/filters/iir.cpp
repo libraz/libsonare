@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "effects/preemphasis.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -98,22 +100,35 @@ void apply_biquad_filtfilt_into(const float* input, size_t size, const BiquadCoe
 }  // namespace
 
 BiquadCoeffs highpass_coeffs(float cutoff_hz, int sr) {
-  SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  if (!(cutoff_hz > 0.0f)) util::check::refuse("cutoff_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(cutoff_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"cutoff_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
   return to_filter_coeffs(
       rt::rbj_highpass(normalized_omega(cutoff_hz, sr), constants::kButterworthQ));
 }
 
 BiquadCoeffs lowpass_coeffs(float cutoff_hz, int sr) {
-  SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  if (!(cutoff_hz > 0.0f)) util::check::refuse("cutoff_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(cutoff_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"cutoff_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
   return to_filter_coeffs(
       rt::rbj_lowpass(normalized_omega(cutoff_hz, sr), constants::kButterworthQ));
 }
 
 BiquadCoeffs bandpass_coeffs(float center_hz, float bandwidth_hz, int sr) {
-  SONARE_CHECK(center_hz > 0 && bandwidth_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(center_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  if (!(center_hz > 0.0f)) util::check::refuse("center_hz", "must be > 0");
+  if (!(bandwidth_hz > 0.0f)) util::check::refuse("bandwidth_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(center_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"center_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
 
   // Q = center / bandwidth
   const float q = center_hz / bandwidth_hz;
@@ -121,8 +136,13 @@ BiquadCoeffs bandpass_coeffs(float center_hz, float bandwidth_hz, int sr) {
 }
 
 BiquadCoeffs notch_coeffs(float center_hz, float bandwidth_hz, int sr) {
-  SONARE_CHECK(center_hz > 0 && bandwidth_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(center_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  if (!(center_hz > 0.0f)) util::check::refuse("center_hz", "must be > 0");
+  if (!(bandwidth_hz > 0.0f)) util::check::refuse("bandwidth_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(center_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"center_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
 
   const float q = center_hz / bandwidth_hz;
   return to_filter_coeffs(rt::rbj_notch(normalized_omega(center_hz, sr), q));
@@ -132,7 +152,7 @@ std::vector<float> apply_biquad(const float* input, size_t size, const BiquadCoe
   if (size == 0) {
     return {};
   }
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
 
   return apply_biquad_zi(input, size, coeffs, BiquadZi{0.0f, 0.0f});
 }
@@ -143,15 +163,20 @@ std::vector<float> apply_biquad(const std::vector<float>& input, const BiquadCoe
 
 std::vector<float> apply_biquad_filtfilt(const float* input, size_t size,
                                          const BiquadCoeffs& coeffs) {
-  SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  if (size == 0) util::check::refuse("size", "must be > 0");
   std::vector<float> output(size);
   apply_biquad_filtfilt_into(input, size, coeffs, output.data());
   return output;
 }
 
 CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
-  SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  if (!(cutoff_hz > 0.0f)) util::check::refuse("cutoff_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(cutoff_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"cutoff_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
 
   // 4th order Butterworth = cascade of two 2nd order sections
   // Each section uses different Q values for proper Butterworth response
@@ -167,8 +192,12 @@ CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
 }
 
 CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr) {
-  SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  if (!(cutoff_hz > 0.0f)) util::check::refuse("cutoff_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(cutoff_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"cutoff_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
 
   CascadedBiquad cascade;
   cascade.sections.resize(2);
@@ -180,8 +209,10 @@ CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr) {
 }
 
 std::vector<float> apply_cascade(const float* input, size_t size, const CascadedBiquad& cascade) {
-  SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(!cascade.sections.empty(), ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  if (size == 0) util::check::refuse("size", "must be > 0");
+  if (cascade.sections.empty())
+    util::check::refuse("cascade.sections", util::refusal::kNonEmptyPredicate);
 
   std::vector<float> result(input, input + size);
   for (const auto& section : cascade.sections) {
@@ -192,8 +223,10 @@ std::vector<float> apply_cascade(const float* input, size_t size, const Cascaded
 
 std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
                                           const CascadedBiquad& cascade) {
-  SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(!cascade.sections.empty(), ErrorCode::InvalidParameter);
+  util::check::non_null(input, "input");
+  if (size == 0) util::check::refuse("size", "must be > 0");
+  if (cascade.sections.empty())
+    util::check::refuse("cascade.sections", util::refusal::kNonEmptyPredicate);
 
   // Apply each section's filtfilt in sequence
   std::vector<float> result(input, input + size);
@@ -207,8 +240,13 @@ std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
 
 void butterworth_zero_phase(std::vector<float>& x, float cutoff_hz, int sr, int order,
                             bool highpass) {
-  SONARE_CHECK(cutoff_hz > 0 && sr > 0 && cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(order >= 2 && order % 2 == 0, ErrorCode::InvalidParameter);
+  if (!(cutoff_hz > 0.0f)) util::check::refuse("cutoff_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(cutoff_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"cutoff_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
+  util::check::even_integer_in_range(order, 2, std::numeric_limits<int>::max(), "order");
   if (x.empty()) return;
 
   // Double precision: low-cutoff poles near the unit circle make float noise reach -60 dB.
@@ -244,8 +282,13 @@ void butterworth_zero_phase(std::vector<float>& x, float cutoff_hz, int sr, int 
 
 double butterworth_zero_phase_gain(double freq_hz, float cutoff_hz, int sr, int order,
                                    bool highpass) {
-  SONARE_CHECK(cutoff_hz > 0 && sr > 0 && cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(order >= 2 && order % 2 == 0, ErrorCode::InvalidParameter);
+  if (!(cutoff_hz > 0.0f)) util::check::refuse("cutoff_hz", "must be > 0");
+  util::check::integer_at_least(sr, 1, "sample_rate");
+  if (!(cutoff_hz < sr / 2.0f)) {
+    util::check::refuse_relation({"cutoff_hz", "sample_rate"},
+                                 "{0} must be below the Nyquist frequency of {1}");
+  }
+  util::check::even_integer_in_range(order, 2, std::numeric_limits<int>::max(), "order");
   const double w = sonare::constants::kTwoPiD * freq_hz / static_cast<double>(sr);
   const double c1 = std::cos(w);
   const double s1 = std::sin(w);
