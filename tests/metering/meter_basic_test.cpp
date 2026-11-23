@@ -162,6 +162,18 @@ void require_lufs_series_near(const std::vector<float>& actual,
   }
 }
 
+template <typename Call>
+void require_parameter_refusal(Call&& call, const char* subject, const char* text) {
+  try {
+    std::forward<Call>(call)();
+    FAIL("expected a parameter refusal");
+  } catch (const sonare::SonareParameterRefusal& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(error.subject() == subject);
+    CHECK(std::string(error.what()) == text);
+  }
+}
+
 }  // namespace
 
 TEST_CASE("meter peak and rms", "[meter]") {
@@ -1888,7 +1900,8 @@ TEST_CASE("dynamic range refuses audio it cannot order", "[meter][numeric]") {
   poisoned[30000] = nan_sample;
   const Audio bad = Audio::from_buffer(poisoned.data(), poisoned.size(), 48000);
 
-  REQUIRE_THROWS_AS(metering::dynamic_range(bad, config), SonareException);
+  require_parameter_refusal([&] { (void)metering::dynamic_range(bad, config); }, "audio",
+                            "audio contains a non-finite sample");
 
   // The control: the same signal without it still measures, so the refusal is
   // the non-finite one.
@@ -2048,6 +2061,135 @@ TEST_CASE("waveform_peaks refuses a zero bucket width by name", "[metering][wave
   const std::vector<float> samples(16, 0.5f);
   CHECK_THROWS_WITH(sonare::metering::waveform_peaks(samples.data(), samples.size(), 1, 0),
                     "samples_per_bucket must be an integer of at least 1");
+}
+
+TEST_CASE("clipping detector names its refused threshold", "[metering][clipping][refusal]") {
+  const Audio audio = Audio::from_vector(std::vector<float>{0.5f}, 48000);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  for (float threshold : {-0.1f, 1.1f, nan, inf, -inf}) {
+    require_parameter_refusal([&] { (void)metering::detect_clipping(audio, threshold); },
+                              "threshold", "threshold must be finite and in [0, 1]");
+  }
+}
+
+TEST_CASE("waveform peak entries name their refused inputs", "[metering][waveform][refusal]") {
+  const std::vector<float> samples{0.25f, 0.5f};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float poisoned[] = {0.25f, nan};
+
+  require_parameter_refusal([&] { (void)metering::waveform_peaks(nullptr, 1, 1, 1); }, "samples",
+                            "samples must not be NULL when frames is not 0");
+  require_parameter_refusal(
+      [&] { (void)metering::waveform_peaks(samples.data(), samples.size(), 0, 1); }, "num_channels",
+      "num_channels must be an integer in [1, 2147483647]");
+  require_parameter_refusal([&] { (void)metering::waveform_peaks(poisoned, 2, 1, 1); }, "samples",
+                            "samples contains a non-finite sample");
+  require_parameter_refusal(
+      [&] {
+        (void)metering::waveform_peak_pyramid(samples.data(), samples.size(), 1,
+                                              std::vector<size_t>{});
+      },
+      "samples_per_bucket_levels", "samples_per_bucket_levels must not be empty");
+}
+
+TEST_CASE("vectorscope names its refused inputs", "[metering][vectorscope][refusal]") {
+  const std::vector<float> samples{0.25f};
+
+  require_parameter_refusal(
+      [&] { (void)metering::vectorscope(samples.data(), samples.data(), 0, 1); }, "length",
+      "length must be an integer of at least 1");
+  require_parameter_refusal(
+      [&] { (void)metering::vectorscope(nullptr, samples.data(), samples.size()); }, "left",
+      "left must not be NULL");
+  require_parameter_refusal(
+      [&] { (void)metering::vectorscope(samples.data(), nullptr, samples.size(), 0); }, "right",
+      "right must not be NULL");
+}
+
+TEST_CASE("phase scope names its refused inputs", "[metering][phase_scope][refusal]") {
+  const std::vector<float> samples{0.25f};
+
+  require_parameter_refusal(
+      [&] { (void)metering::phase_scope(samples.data(), samples.data(), 0, 1); }, "length",
+      "length must be an integer of at least 1");
+  require_parameter_refusal(
+      [&] { (void)metering::phase_scope(nullptr, samples.data(), samples.size()); }, "left",
+      "left must not be NULL");
+  require_parameter_refusal(
+      [&] { (void)metering::phase_scope(samples.data(), nullptr, samples.size(), 0); }, "right",
+      "right must not be NULL");
+}
+
+TEST_CASE("LUFS public forms name their refused arguments", "[metering][lufs][refusal]") {
+  const std::vector<float> samples(8, 0.25f);
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+  metering::LufsConfig config;
+  config.block_duration_sec = 0.0f;
+  require_parameter_refusal(
+      [&] { (void)metering::lufs_interleaved(samples.data(), samples.size(), 1, 48000, config); },
+      "config.block_duration_sec", "config.block_duration_sec must be greater than 0");
+
+  config = {};
+  config.block_overlap = std::numeric_limits<float>::quiet_NaN();
+  require_parameter_refusal(
+      [&] { (void)metering::lufs_interleaved(samples.data(), samples.size(), 1, 48000, config); },
+      "config.block_overlap", "config.block_overlap must be finite and in [0, 1)");
+
+  config = {};
+  config.momentary_duration_sec = 0.0f;
+  require_parameter_refusal(
+      [&] { (void)metering::lufs_interleaved(samples.data(), samples.size(), 1, 48000, config); },
+      "config.momentary_duration_sec", "config.momentary_duration_sec must be greater than 0");
+
+  config = {};
+  config.short_term_duration_sec = 0.0f;
+  require_parameter_refusal(
+      [&] { (void)metering::lufs_interleaved(samples.data(), samples.size(), 1, 48000, config); },
+      "config.short_term_duration_sec", "config.short_term_duration_sec must be greater than 0");
+
+  config = {};
+  require_parameter_refusal(
+      [&] { (void)metering::lufs_interleaved(samples.data(), samples.size(), 0, 48000, config); },
+      "num_channels", "num_channels must be an integer in [1, 2147483647]");
+  require_parameter_refusal(
+      [&] { (void)metering::lufs_interleaved(samples.data(), samples.size(), 1, 0, config); },
+      "sample_rate", "sample_rate must be an integer in [1, 2147483647]");
+  require_parameter_refusal([&] { (void)metering::lufs_interleaved(nullptr, 1, 1, 48000, config); },
+                            "samples", "samples must not be NULL when frames is not 0");
+
+  const auto require_bad_config = [](const auto& call) {
+    metering::LufsConfig invalid;
+    invalid.block_duration_sec = 0.0f;
+    require_parameter_refusal([&] { call(invalid); }, "config.block_duration_sec",
+                              "config.block_duration_sec must be greater than 0");
+  };
+  std::vector<float> momentary;
+  std::vector<float> short_term;
+  require_bad_config(
+      [&](const metering::LufsConfig& invalid) { (void)metering::lufs(audio, invalid); });
+  require_bad_config([&](const metering::LufsConfig& invalid) {
+    (void)metering::lufs(audio, invalid, &short_term);
+  });
+  require_bad_config([&](const metering::LufsConfig& invalid) {
+    (void)metering::lufs_interleaved(samples.data(), samples.size(), 1, 48000, invalid, &momentary,
+                                     &short_term);
+  });
+  require_bad_config(
+      [&](const metering::LufsConfig& invalid) { (void)metering::momentary_lufs(audio, invalid); });
+  require_bad_config([&](const metering::LufsConfig& invalid) {
+    (void)metering::short_term_lufs(audio, invalid);
+  });
+}
+
+TEST_CASE("LUFS target gain names its refused arguments", "[metering][lufs][refusal]") {
+  const std::vector<float> samples(8, 0.25f);
+  require_parameter_refusal(
+      [&] {
+        (void)metering::gain_to_integrated_lufs(samples.data(), samples.size(), 0, 48000, -14.0f);
+      },
+      "num_channels", "num_channels must be an integer in [1, 2147483647]");
 }
 
 TEST_CASE("a one-shot meter given no samples reports not measured, and silence as measured",

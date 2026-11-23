@@ -5,7 +5,6 @@
 
 #include "util/constants.h"
 #include "util/db.h"
-#include "util/exception.h"
 #include "util/parameter_checks.h"
 
 namespace sonare::metering {
@@ -17,7 +16,7 @@ float clipping_threshold_from_db(float threshold_db) {
 }
 
 ClippingResult detect_clipping(const Audio& audio, float threshold, size_t min_region_samples) {
-  SONARE_CHECK(threshold >= 0.0f && threshold <= 1.0f, ErrorCode::InvalidParameter);
+  util::check::in_range(threshold, 0.0, 1.0, "threshold");
 
   ClippingResult result;
   if (audio.empty()) return result;

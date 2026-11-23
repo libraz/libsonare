@@ -62,8 +62,9 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   }
 
   // A non-finite sample would put a NaN level into the std::sort below.
-  SONARE_CHECK_MSG(numeric::all_finite(audio.data(), audio.size()), ErrorCode::InvalidParameter,
-                   "audio contains a non-finite sample");
+  if (!numeric::all_finite(audio.data(), audio.size())) {
+    util::check::refuse("audio", "contains a non-finite sample");
+  }
 
   size_t window = 0;
   size_t hop = 0;

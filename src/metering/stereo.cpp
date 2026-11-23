@@ -1,7 +1,7 @@
 #include "metering/stereo.h"
 
 #include "metering/decimation.h"
-#include "util/exception.h"
+#include "util/parameter_checks.h"
 #include "util/stereo_metrics.h"
 
 namespace sonare::metering {
@@ -20,8 +20,11 @@ std::vector<VectorscopePoint> vectorscope(const float* left, const float* right,
 
 std::vector<VectorscopePoint> vectorscope(const float* left, const float* right, size_t length,
                                           size_t max_points) {
-  SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(left != nullptr && right != nullptr, ErrorCode::InvalidParameter);
+  if (length == 0) {
+    util::check::refuse("length", util::refusal::integer_at_least_predicate(1));
+  }
+  util::check::non_null(left, "left");
+  util::check::non_null(right, "right");
 
   auto point_at = [&](size_t i) {
     const detail::MidSide ms = detail::mid_side(left, right, i);

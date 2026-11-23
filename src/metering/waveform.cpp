@@ -52,16 +52,17 @@ void validate_samples_per_bucket(size_t samples_per_bucket) {
 
 WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int channels,
                                    size_t samples_per_bucket) {
-  SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
+  util::check::non_null_when_count(samples, frames, "samples", "frames");
+  util::check::integer_at_least(channels, 1, "num_channels");
   validate_samples_per_bucket(samples_per_bucket);
   const size_t channel_count = static_cast<size_t>(channels);
   SONARE_CHECK(frames <= std::numeric_limits<size_t>::max() / channel_count,
                ErrorCode::InvalidParameter);
   // A bucket whose samples are not finite has no min/max to report, and the 0/0
   // it would otherwise carry is what a display draws as silence.
-  SONARE_CHECK_MSG(numeric::all_finite(samples, frames * channel_count),
-                   ErrorCode::InvalidParameter, "audio contains a non-finite sample");
+  if (!numeric::all_finite(samples, frames * channel_count)) {
+    util::check::refuse("samples", "contains a non-finite sample");
+  }
 
   WaveformPeaksResult result;
   result.channels = channels;
@@ -91,7 +92,9 @@ WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int chan
 std::vector<WaveformPeaksResult> waveform_peak_pyramid(
     const float* samples, size_t frames, int channels,
     const std::vector<size_t>& samples_per_bucket_levels) {
-  SONARE_CHECK(!samples_per_bucket_levels.empty(), ErrorCode::InvalidParameter);
+  if (samples_per_bucket_levels.empty()) {
+    util::check::refuse("samples_per_bucket_levels", util::refusal::kNonEmptyPredicate);
+  }
   std::vector<WaveformPeaksResult> result;
   result.reserve(samples_per_bucket_levels.size());
   for (size_t level : samples_per_bucket_levels) {

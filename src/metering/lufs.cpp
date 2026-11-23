@@ -11,8 +11,8 @@
 #include "metering/bs1770_weighting.h"
 #include "rt/biquad_design.h"
 #include "util/db.h"
-#include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
@@ -30,6 +30,8 @@ constexpr size_t kChunkFrames = 1u << 17;
 
 // Upper bound of the block overlap fraction the accumulator accepts.
 constexpr float kMaxBlockOverlap = 0.99f;
+constexpr util::check::NumericDomain kLufsBlockOverlapDomain =
+    util::check::real_domain(0.0, true, 1.0, false);
 
 // Energies are accumulated in double, so a quiet block keeps its full range; only zero energy
 // has no measurable loudness (-inf), which the gates below then drop as the standard says.
@@ -270,11 +272,16 @@ float short_term_overlap_for(int sample_rate, float duration_sec) {
 }
 
 void validate_config(const LufsConfig& config) {
-  SONARE_CHECK(config.block_duration_sec > 0.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.block_overlap >= 0.0f && config.block_overlap < 1.0f,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.momentary_duration_sec > 0.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.short_term_duration_sec > 0.0f, ErrorCode::InvalidParameter);
+  if (!(config.block_duration_sec > 0.0f)) {
+    util::check::refuse("config.block_duration_sec", "must be greater than 0");
+  }
+  util::check::within(config.block_overlap, kLufsBlockOverlapDomain, "config.block_overlap");
+  if (!(config.momentary_duration_sec > 0.0f)) {
+    util::check::refuse("config.momentary_duration_sec", "must be greater than 0");
+  }
+  if (!(config.short_term_duration_sec > 0.0f)) {
+    util::check::refuse("config.short_term_duration_sec", "must be greater than 0");
+  }
 }
 
 /// Whole measurement; each out-parameter, when given, takes the series the
@@ -283,9 +290,9 @@ LufsResult measure_lufs(const float* samples, size_t frames, int channels, int s
                         const LufsConfig& config, std::vector<float>* momentary_out,
                         std::vector<float>* short_term_out) {
   validate_config(config);
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  util::check::integer_at_least(channels, 1, "num_channels");
+  util::check::non_null_when_count(samples, frames, "samples", "frames");
 
   const WeightedBlockEnergies blocks =
       k_weighted_block_energies(samples, frames, channels, sample_rate, config);
@@ -315,9 +322,9 @@ LufsGainToTarget gain_to_integrated_lufs(const float* samples, size_t frames, in
                                          int sample_rate, float target_lufs,
                                          const LufsConfig& config) {
   validate_config(config);
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  util::check::integer_at_least(channels, 1, "num_channels");
+  util::check::non_null_when_count(samples, frames, "samples", "frames");
 
   const std::vector<double> energies =
       k_weighted_block_energies(samples, frames, channels, sample_rate, config).integrated;

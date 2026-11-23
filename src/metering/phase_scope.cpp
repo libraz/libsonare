@@ -6,15 +6,18 @@
 #include "metering/decimation.h"
 #include "metering/stereo.h"
 #include "util/db.h"
-#include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare::metering {
 
 namespace {
 
 void validate_stereo_buffers(const float* left, const float* right, size_t length) {
-  SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(left != nullptr && right != nullptr, ErrorCode::InvalidParameter);
+  if (length == 0) {
+    util::check::refuse("length", util::refusal::integer_at_least_predicate(1));
+  }
+  util::check::non_null(left, "left");
+  util::check::non_null(right, "right");
 }
 
 }  // namespace
