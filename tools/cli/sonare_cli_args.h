@@ -225,6 +225,9 @@ std::optional<std::string> find_cli_token(std::string_view value,
 /// church modes, case-insensitive. Every option naming a mode reads it.
 /// @throws std::invalid_argument for a name outside the table.
 sonare::Mode parse_mode_option(const std::string& value);
+
+/// Every mode name the CLI reads, in the order a refusal lists them.
+std::vector<std::string> cli_mode_names();
 /// Reads the comma-separated integer numerators of --meter-candidates; an empty entry is skipped.
 /// Only the shape is checked here: which numerators are acceptable, and how many, is the core's.
 /// @throws std::invalid_argument naming the first entry that is not an integer.

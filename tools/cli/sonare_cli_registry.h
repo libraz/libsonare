@@ -158,6 +158,8 @@ struct CliOptionMetadata {
   /// which is what lets the cross-surface checker compare it with the Python
   /// parser's `choices=` / `type=` domains instead of assuming they agree.
   CliOptionDomain domain;
+  /// The names the option reads beside its domain (the mode names of a scale mask).
+  std::vector<std::string> names;
   /// `cli_option_stated_default`, the text `--help` prints.
   std::string stated_default;
 };

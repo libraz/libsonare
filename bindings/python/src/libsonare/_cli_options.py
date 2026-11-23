@@ -37,6 +37,7 @@ from ._cli_inventory import (
     _canonical_option_string,
     _cli_domain,
     _cli_integer_ceiling,
+    _cli_names,
     _cli_scalar_type,
     _inventory_subparsers,
     _option_type,
@@ -484,6 +485,7 @@ def _mode_mask(value: str) -> int:
 _cli_scalar_type(_finite_float, "number")
 _cli_scalar_type(_candidate_count, "integer")
 _cli_scalar_type(_mode_mask, "integer")
+_cli_names(_mode_mask, _cli_mode_names)
 _cli_scalar_type(_positive_finite_float, "number")
 _cli_scalar_type(_tempo_bpm, "number")
 _cli_scalar_type(_closed_unit_float, "number")

@@ -1264,6 +1264,7 @@ class CliContractSelfTest(unittest.TestCase):
         required = {
             "name": "input",
             "type": "path",
+            "value": "required",
             "default": None,
             "stated_default": None,
             "aliases": [],
@@ -1280,9 +1281,17 @@ class CliContractSelfTest(unittest.TestCase):
         CHECKER._validate_option(required, "required", errors)
         self.assertTrue(any("required option needs a null default" in error for error in errors))
 
+        required["default"] = None
+        required["value"] = "maybe"
+        errors.clear()
+        CHECKER._validate_option(required, "required", errors)
+        self.assertTrue(any("required.value: expected one of" in error for error in errors), errors)
+        required["value"] = "required"
+
         repeatable = {
             "name": "set",
             "type": "string",
+            "value": "required",
             "default": [],
             "stated_default": None,
             "aliases": [],
@@ -1304,6 +1313,7 @@ class CliContractSelfTest(unittest.TestCase):
         optional_number = {
             "name": "semitones",
             "type": "number",
+            "value": "required",
             "default": None,
             "stated_default": None,
             "aliases": [],
@@ -1331,6 +1341,7 @@ class CliContractSelfTest(unittest.TestCase):
             {
                 "name": "zeta",
                 "type": "string",
+                "value": "required",
                 "default": "",
                 "stated_default": None,
                 "aliases": ["z", "zz"],
@@ -1342,11 +1353,13 @@ class CliContractSelfTest(unittest.TestCase):
                     "exclusive_minimum": False,
                     "maximum": None,
                     "exclusive_maximum": False,
+                    "names": [],
                 },
             },
             {
                 "name": "alpha",
                 "type": "number",
+                "value": "required",
                 "default": [],
                 "stated_default": None,
                 "aliases": ["a"],
@@ -1371,6 +1384,7 @@ class CliContractSelfTest(unittest.TestCase):
             (0, "default", "drifted"),
             (0, "aliases", ["different"]),
             (0, "repeatable", False),
+            (0, "value", "optional"),
             (
                 0,
                 "domain",
@@ -1380,9 +1394,22 @@ class CliContractSelfTest(unittest.TestCase):
                     "exclusive_minimum": False,
                     "maximum": None,
                     "exclusive_maximum": False,
+                    "names": [],
                 },
             ),
             (1, "domain", None),
+            (
+                1,
+                "domain",
+                {
+                    "choices": ["one", "two"],
+                    "minimum": None,
+                    "exclusive_minimum": False,
+                    "maximum": None,
+                    "exclusive_maximum": False,
+                    "names": ["major"],
+                },
+            ),
             (
                 1,
                 "domain",
@@ -1392,6 +1419,7 @@ class CliContractSelfTest(unittest.TestCase):
                     "exclusive_minimum": False,
                     "maximum": None,
                     "exclusive_maximum": False,
+                    "names": [],
                 },
             ),
         ):

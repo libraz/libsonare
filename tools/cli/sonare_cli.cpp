@@ -206,7 +206,7 @@ void emit_inventory_default(JsonBuilder& json, const CliOptionMetadata& option) 
 // a visible difference rather than an invisible one.
 void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
   json.key("domain");
-  if (option.domain.empty()) {
+  if (option.domain.empty() && option.names.empty()) {
     json.null_value();
     return;
   }
@@ -224,11 +224,28 @@ void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
   } else {
     json.null_value();
   }
-  json.kv("exclusive_maximum", option.domain.exclusive_maximum).end_object();
+  json.kv("exclusive_maximum", option.domain.exclusive_maximum).key("names").begin_array();
+  for (const auto& name : option.names) json.value(name);
+  json.end_array().end_object();
+}
+
+const char* inventory_value(CliOptionArity arity) {
+  switch (arity) {
+    case CliOptionArity::Flag:
+      return "none";
+    case CliOptionArity::OptionalValue:
+      return "optional";
+    case CliOptionArity::RequiredValue:
+      break;
+  }
+  return "required";
 }
 
 void emit_inventory_option(JsonBuilder& json, const CliOptionMetadata& option) {
-  json.begin_object().kv("name", option.name).kv("type", option.type);
+  json.begin_object()
+      .kv("name", option.name)
+      .kv("type", option.type)
+      .kv("value", inventory_value(option.arity));
   emit_inventory_default(json, option);
   json.key("stated_default");
   if (option.stated_default.empty()) {

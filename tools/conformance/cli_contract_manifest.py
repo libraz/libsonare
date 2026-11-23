@@ -93,6 +93,7 @@ def _validate_declared_inventory(manifest: Any, inventory: Any, errors: list[str
         if inventory["option_fields"] != [
             "name",
             "type",
+            "value",
             "default",
             "stated_default",
             "aliases",

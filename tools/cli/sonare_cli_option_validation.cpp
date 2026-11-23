@@ -188,6 +188,7 @@ std::vector<CliOptionMetadata> cli_option_metadata_for_command(const std::string
         option.implicit_optional_default.kind != CliOptionDefaultKind::Null;
     metadata.implicit_optional_default = option.implicit_optional_default;
     metadata.domain = option.domain;
+    if (option.accepts_mode_name) metadata.names = cli_mode_names();
     result.push_back(std::move(metadata));
   }
   return result;

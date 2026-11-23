@@ -307,6 +307,12 @@ std::string cli_mode_name_list() {
 
 }  // namespace
 
+std::vector<std::string> cli_mode_names() {
+  std::vector<std::string> names;
+  for (const auto& entry : kCliModeNames) names.emplace_back(entry.name);
+  return names;
+}
+
 sonare::Mode parse_mode_option(const std::string& value) {
   std::string key = value;
   std::transform(key.begin(), key.end(), key.begin(),

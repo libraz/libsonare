@@ -43,6 +43,11 @@ _PATH_OPTION_NAMES = frozenset(
 # option and the other did not" from an invisible drift into a failure.
 _DOMAIN_ATTRIBUTE = "sonare_cli_domain"
 
+# A table of names a ``type=`` callable reads beside its declared domain, such as
+# the mode names a scale mask also accepts. The callable stores the table's reader
+# so both CLIs publish their own table and the checker proves the two agree.
+_NAMES_ATTRIBUTE = "sonare_cli_names"
+
 # Options a command cannot run without, keyed by command path. One table rather
 # than argparse's ``required=True`` because a parent parser shares one action
 # across commands (``-o`` is required on a render, optional on ``trim-silence``),
@@ -126,6 +131,7 @@ def _domain_record(
         "exclusive_minimum": exclusive_minimum,
         "maximum": maximum,
         "exclusive_maximum": exclusive_maximum,
+        "names": [],
     }
 
 
@@ -177,6 +183,12 @@ def _cli_integer_ceiling(target: _TargetT, ceiling: int) -> _TargetT:
     return target
 
 
+def _cli_names(target: _TargetT, names: Callable[[], Sequence[str]]) -> _TargetT:
+    """Record the name table a type callable reads beside its domain, returning @p target."""
+    setattr(target, _NAMES_ATTRIBUTE, names)
+    return target
+
+
 def _cli_scalar_type(target: _TargetT, scalar_type: str) -> _TargetT:
     """Record the contract type a type callable produces, returning @p target."""
     setattr(target, _SCALAR_TYPE_ATTRIBUTE, scalar_type)
@@ -205,14 +217,28 @@ def _action_domain(action: argparse.Action) -> dict[str, Any] | None:
 
     A domain declared on the action itself wins; otherwise an argparse
     ``choices=`` tuple or a domain recorded on the ``type=`` callable is published.
+    A name table recorded on the ``type=`` callable fills the record's ``names``.
     """
     declared = getattr(action, _DOMAIN_ATTRIBUTE, None)
-    if declared is not None:
-        return dict(declared)
-    if action.choices is not None and not isinstance(action.choices, dict):
-        return _domain_record(choices=list(action.choices))
     type_domain = getattr(action.type, _DOMAIN_ATTRIBUTE, None)
-    return dict(type_domain) if type_domain is not None else None
+    record: dict[str, Any] | None
+    if declared is not None:
+        record = dict(declared)
+    elif action.choices is not None and not isinstance(action.choices, dict):
+        record = _domain_record(choices=list(action.choices))
+    else:
+        record = dict(type_domain) if type_domain is not None else None
+    names = getattr(action.type, _NAMES_ATTRIBUTE, None)
+    if names is None:
+        return record
+    return {**(record or _domain_record()), "names": [str(name) for name in names()]}
+
+
+def _option_value(action: argparse.Action) -> str:
+    """Whether an option takes no value, an optional one, or a required one."""
+    if action.nargs == 0:
+        return "none"
+    return "optional" if action.nargs == argparse.OPTIONAL else "required"
 
 
 def _canonical_option_string(action: argparse.Action) -> str:
@@ -358,6 +384,7 @@ def _inventory_option(
     return {
         "name": canonical,
         "type": option_type,
+        "value": _option_value(action),
         "default": default,
         "stated_default": _stated_default(action),
         "aliases": aliases,

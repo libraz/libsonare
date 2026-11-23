@@ -41,6 +41,7 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
             assert set(option) == {
                 "name",
                 "type",
+                "value",
                 "default",
                 "stated_default",
                 "aliases",
@@ -58,6 +59,7 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
         "exclusive_minimum": True,
         "maximum": None,
         "exclusive_maximum": False,
+        "names": [],
     }
     assert _option(pitch_record, "algorithm")["domain"] == {
         "choices": ["yin", "pyin"],
@@ -65,6 +67,7 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
         "exclusive_minimum": False,
         "maximum": None,
         "exclusive_maximum": False,
+        "names": [],
     }
     loudness_record = next(
         command
@@ -80,6 +83,24 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
     ]
     # An option nobody narrowed says so explicitly rather than omitting the key.
     assert _option(chroma_record, "n-fft")["domain"] is None
+
+
+def test_inventory_publishes_value_arity_and_mode_names() -> None:
+    from libsonare._cli_common import _cli_mode_names
+    from libsonare._cli_inventory import build_cli_contract
+
+    commands = {record["path"]: record for record in build_cli_contract(_parser())["commands"]}
+
+    # A bare `--synth` is accepted, so the value is optional; a flag takes none.
+    assert _option(commands["project.bounce"], "synth")["value"] == "optional"
+    assert _option(commands["pitch"], "json")["value"] == "none"
+    assert _option(commands["pitch"], "algorithm")["value"] == "required"
+    # A scale mask also reads mode names, published from the CLI's one mode table.
+    for path, name in (
+        ("scale-quantize", "mode-mask"),
+        ("pitch-correct-timevarying", "scale-mode-mask"),
+    ):
+        assert _option(commands[path], name)["domain"]["names"] == _cli_mode_names()
 
 
 def test_inventory_preserves_required_repeatable_and_none_defaults() -> None:

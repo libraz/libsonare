@@ -415,6 +415,7 @@ def _validate_option(option: Any, label: str, errors: list[str]) -> None:
         {
             "name",
             "type",
+            "value",
             "default",
             "stated_default",
             "aliases",
@@ -433,6 +434,8 @@ def _validate_option(option: Any, label: str, errors: list[str]) -> None:
         errors.append(f"{label}.domain: expected null or a domain record")
     if not isinstance(option["name"], str) or not option["name"]:
         errors.append(f"{label}.name: expected a non-empty string")
+    if option["value"] not in _OPTION_VALUE_KINDS:
+        errors.append(f"{label}.value: expected one of {', '.join(sorted(_OPTION_VALUE_KINDS))}")
     type_is_valid = _type_token(option["type"], f"{label}.type", errors)
     if not _strings(option["aliases"], f"{label}.aliases", errors):
         pass
@@ -1093,9 +1096,14 @@ def _validate_rules(manifest: Any, errors: list[str]) -> None:
                 errors.append(f"{label}.cases: no active case {case!r}")
 
 
+# Whether an option takes no value, an optional value (`--synth` alone is
+# accepted), or a required one.
+_OPTION_VALUE_KINDS = {"none", "optional", "required"}
+
 _OPTION_RECORD_FIELDS = {
     "name",
     "type",
+    "value",
     "default",
     "stated_default",
     "aliases",
@@ -1106,13 +1114,16 @@ _OPTION_RECORD_FIELDS = {
 
 # One option's accepted value set, published by both surfaces so the comparison
 # below can see a domain that only one of them declares.  A value outside it is
-# refused on the command line, exit 2, before any input is read.
+# refused on the command line, exit 2, before any input is read. `names` lists
+# the words an option reads beside its domain (the mode names of a scale mask),
+# each surface from its own table, so comparing them proves the tables agree.
 _DOMAIN_RECORD_FIELDS = {
     "choices",
     "minimum",
     "exclusive_minimum",
     "maximum",
     "exclusive_maximum",
+    "names",
 }
 
 
@@ -1125,6 +1136,8 @@ def _domain_is_well_formed(domain: Any) -> bool:
         and set(domain) == _DOMAIN_RECORD_FIELDS
         and isinstance(domain["choices"], list)
         and all(isinstance(choice, str) for choice in domain["choices"])
+        and isinstance(domain["names"], list)
+        and all(isinstance(name, str) and name for name in domain["names"])
         and (domain["minimum"] is None or isinstance(domain["minimum"], (int, float)))
         and (domain["maximum"] is None or isinstance(domain["maximum"], (int, float)))
         and isinstance(domain["exclusive_minimum"], bool)
@@ -1144,6 +1157,7 @@ def _option_inventory_is_well_formed(options: Any) -> bool:
         isinstance(option, dict)
         and set(option) == _OPTION_RECORD_FIELDS
         and isinstance(option.get("name"), str)
+        and option.get("value") in _OPTION_VALUE_KINDS
         and (option.get("stated_default") is None or isinstance(option["stated_default"], str))
         and isinstance(option.get("aliases"), list)
         and all(isinstance(alias, str) for alias in option["aliases"])
@@ -1171,6 +1185,7 @@ def _normalized_option_inventory(
         {
             "name": option["name"],
             "type": option["type"],
+            "value": option["value"],
             "default": option["default"],
             "stated_default": option["stated_default"],
             "aliases": sorted(option["aliases"]),
