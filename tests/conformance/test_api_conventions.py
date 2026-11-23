@@ -835,6 +835,19 @@ class PayloadChannelsRule(unittest.TestCase):
         verdict = run("payload-channels", [*self.CLEAN, capacity, payload])
         self.assertEqual([f.key for f in verdict.violations], ["node:Import.numSourceChannels"])
 
+    def test_a_boolean_over_the_channels_is_not_a_count(self) -> None:
+        flags = []
+        for surface, member, type_ in (
+            ("wasm", "linkChannels", "boolean | undefined"),
+            ("python", "link_channels", "bool"),
+        ):
+            flag = keyed_field(surface, "Declip", member)
+            flag["type"] = type_
+            flags.append(flag)
+        verdict = run("payload-channels", [*self.CLEAN, *flags])
+        self.assertEqual(verdict.read, 4)
+        self.assertFalse(verdict.failed)
+
 
 class TypeNamesRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [

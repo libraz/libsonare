@@ -986,7 +986,8 @@ def _payload_channel_records(records: list[dict]) -> list[dict]:
         if r["kind"] not in ("option", "field") or r["surface"] not in ("node", "wasm", "python"):
             continue
         prefix = _payload_prefix(r.get("member", ""))
-        if prefix is None:
+        # A boolean such as linkChannels names a mode over the channels, not a count of them.
+        if prefix is None or _non_null(r.get("type") or "") in ("bool", "boolean"):
             continue
         snake = r["surface"] == "python"
         rate = f"{prefix}_sample_rate" if snake else f"{prefix}SampleRate"
