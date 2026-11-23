@@ -151,9 +151,9 @@
       { "id": "max_src_rate", "src_sr": 384000, "target_sr": 48000 }
     ],
     "refused": [
-      { "id": "target_below_min", "src_sr": 48000, "target_sr": 7999, "cause": "argument", "message": "resample: target_sr must be within [8000, 384000]" },
-      { "id": "target_above_max", "src_sr": 48000, "target_sr": 384001, "cause": "argument", "message": "resample: target_sr must be within [8000, 384000]" },
-      { "id": "src_below_min", "src_sr": 1000, "target_sr": 48000, "cause": "argument", "message": "resample: src_sr must be within [8000, 384000]" },
+      { "id": "target_below_min", "src_sr": 48000, "target_sr": 7999, "cause": "argument", "message": "target_sample_rate must be an integer in [8000, 384000]" },
+      { "id": "target_above_max", "src_sr": 48000, "target_sr": 384001, "cause": "argument", "message": "target_sample_rate must be an integer in [8000, 384000]" },
+      { "id": "src_below_min", "src_sr": 1000, "target_sr": 48000, "cause": "argument", "message": "sample_rate must be an integer in [8000, 384000]" },
       { "id": "nan_sample", "src_sr": 48000, "target_sr": 44100, "nan_at": 1, "cause": "argument", "message": "samples contains a non-finite sample at index 1" }
     ]
   },

@@ -4,16 +4,17 @@
 #include <array>
 #include <climits>
 #include <cmath>
-#include <string>
 
 #include "CDSPResampler.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
 std::vector<float> resample(const float* samples, size_t size, int src_sr, int target_sr) {
-  SONARE_CHECK(src_sr > 0 && target_sr > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(src_sr, 1, "sample_rate");
+  util::check::integer_at_least(target_sr, 1, "target_sample_rate");
   // Reject null + size>0 before either the copy or resampler path can dereference it.
   // A null pointer with size==0 is treated as an empty input (valid).
   SONARE_CHECK_MSG(samples != nullptr || size == 0, ErrorCode::InvalidParameter,
@@ -100,15 +101,8 @@ std::vector<float> resample(const float* samples, size_t size, int src_sr, int t
 }
 
 std::vector<float> resample_checked(const float* samples, size_t size, int src_sr, int target_sr) {
-  const std::string range =
-      "[" + std::to_string(kMinAudioSampleRate) + ", " + std::to_string(kMaxAudioSampleRate) + "]";
-  if (target_sr < kMinAudioSampleRate || target_sr > kMaxAudioSampleRate) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "resample: target_sr must be within " + range);
-  }
-  if (src_sr < kMinAudioSampleRate || src_sr > kMaxAudioSampleRate) {
-    throw SonareException(ErrorCode::InvalidParameter, "resample: src_sr must be within " + range);
-  }
+  util::check::integer_within(target_sr, kAudioSampleRateDomain, "target_sample_rate");
+  util::check::integer_within(src_sr, kAudioSampleRateDomain, "sample_rate");
   if (size == 0) {
     return {};
   }
@@ -178,6 +172,7 @@ std::vector<float> resample_impulse_response(const float* samples, size_t size, 
 
 Audio resample(const Audio& audio, int target_sr) {
   if (audio.empty()) {
+    util::check::integer_at_least(target_sr, 1, "target_sample_rate");
     return Audio::from_buffer(nullptr, 0, target_sr);
   }
 

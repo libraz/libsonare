@@ -103,7 +103,7 @@ void validate_offline_audio_samples(const char* name, const float* samples, std:
 }
 
 Audio Audio::from_buffer(const float* samples, size_t size, int sample_rate) {
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
   // Reject null + size>0 to avoid UB in the iterator-pair vector constructor.
   // A null pointer with size==0 is treated as an empty buffer (valid).
   SONARE_CHECK_MSG(samples != nullptr || size == 0, ErrorCode::InvalidParameter,
@@ -117,7 +117,7 @@ Audio Audio::from_buffer(const float* samples, size_t size, int sample_rate) {
 }
 
 Audio Audio::from_vector(std::vector<float> samples, int sample_rate) {
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
   size_t size = samples.size();
   auto buffer = std::make_shared<std::vector<float>>(std::move(samples));
   return Audio(buffer, 0, size, sample_rate);
@@ -277,7 +277,9 @@ Audio Audio::slice_samples(size_t start_sample, size_t end_sample) const {
 }
 
 float Audio::operator[](size_t index) const {
-  SONARE_CHECK(index < length_, ErrorCode::InvalidParameter);
+  if (index >= length_) {
+    util::check::refuse("index", "must be less than " + std::to_string(length_));
+  }
   return (*buffer_)[offset_ + index];
 }
 

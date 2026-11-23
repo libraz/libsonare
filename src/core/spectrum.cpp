@@ -486,8 +486,8 @@ std::vector<float> Spectrogram::to_db(float ref, float amin, float top_db) const
 }
 
 const std::complex<float>& Spectrogram::at(int bin, int frame) const {
-  SONARE_CHECK(bin >= 0 && bin < n_bins_, ErrorCode::InvalidParameter);
-  SONARE_CHECK(frame >= 0 && frame < n_frames_, ErrorCode::InvalidParameter);
+  util::check::integer_in_range(bin, 0, n_bins_ - 1, "bin");
+  util::check::integer_in_range(frame, 0, n_frames_ - 1, "frame");
   return data_[bin * n_frames_ + frame];
 }
 
@@ -601,9 +601,12 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
 
 Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, int hop_length,
                   int sample_rate, const GriffinLimConfig& config) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter);
+  util::check::non_null(magnitude, "magnitude");
+  util::check::integer_at_least(n_bins, 1, "n_bins");
+  util::check::integer_at_least(n_frames, 1, "n_frames");
+  if (n_bins != n_fft / 2 + 1) {
+    util::check::refuse_relation({"n_bins", "n_fft"}, "{0} must equal {1} / 2 + 1");
+  }
   hop_length = resolve_resynthesis_hop(hop_length, n_fft);
   // This is an overlap-add reconstruction, so it owes the same geometry the other
   // reconstructing paths check: past nFft/2 the windows stop summing to a constant
@@ -693,7 +696,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // re-analysis can return to and no phase estimate can change, so every
   // iteration count yields the same reconstruction as none.
   const int iterations = n_frames > 1 ? config.n_iter : 0;
-  if (iterations > 0) SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  if (iterations > 0) util::check::integer_at_least(sample_rate, 1, "sample_rate");
   for (int iter = 0; iter < iterations; ++iter) {
     griffin_lim_synthesize(spectrum.data(), n_bins, n_frames, n_fft, hop_length, synthesis_window,
                            window_product_vec, fft, frame_spectrum, frame, output, window_sum);
@@ -818,7 +821,7 @@ void build_reassignment_windows(const StftConfig& config, std::vector<float>& pa
 
 ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfig& config,
                                              float ref_power, bool fill_nan) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const int n_fft = config.n_fft;
   const int hop_length = config.hop_length;
   // reassigned_spectrogram bypasses Spectrogram::compute (it drives
@@ -826,9 +829,12 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   // inherit that path's n_fft/hop_length > 0 guard. Without this check,
   // hop_length == 0 divides by zero in the workspace frame-count math
   // (SIGFPE) instead of returning a recoverable error.
-  SONARE_CHECK(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(n_fft, 1, "n_fft");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   const int win_length = config.actual_win_length();
-  SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
+  if (win_length > n_fft) {
+    util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");
+  }
 
   std::vector<float> padded_window, t_window, dw_window;
   double window_center = 0.0;
@@ -892,12 +898,15 @@ template <typename CenterOf, typename CombineOf>
 std::vector<float> reassign_axis(const Audio& audio, const StftConfig& config, float ref_power,
                                  bool fill_nan, bool use_time_window, CenterOf center_of_factory,
                                  CombineOf combine_of_factory) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const int n_fft = config.n_fft;
   const int hop_length = config.hop_length;
-  SONARE_CHECK(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(n_fft, 1, "n_fft");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
   const int win_length = config.actual_win_length();
-  SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
+  if (win_length > n_fft) {
+    util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");
+  }
 
   std::vector<float> padded_window, t_window, dw_window;
   double window_center = 0.0;

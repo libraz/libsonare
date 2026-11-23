@@ -126,10 +126,10 @@ describe('empty-sample guards (WASM)', () => {
 describe('NaN/Inf guards (WASM)', () => {
   it('resample rejects invalid source/target sample rates before allocation', () => {
     expect(expectRefusalOf(() => resample(sine(), 0, SR), RangeError).message).toBe(
-      'resample: src_sr must be within [8000, 384000]',
+      'sampleRate must be an integer in [8000, 384000]',
     );
     expect(expectRefusalOf(() => resample(sine(), SR, 2_000_000_000), RangeError).message).toBe(
-      'resample: target_sr must be within [8000, 384000]',
+      'targetSampleRate must be an integer in [8000, 384000]',
     );
   });
   it('feature-core wrappers reject NaN and inconsistent matrix dimensions', () => {

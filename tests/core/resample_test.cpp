@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <numeric>
 #include <vector>
@@ -43,6 +44,17 @@ TEST_CASE("resample same rate returns copy", "[resample]") {
   for (size_t i = 0; i < samples.size(); ++i) {
     REQUIRE(result[i] == samples[i]);
   }
+}
+
+TEST_CASE("resample names the refused sample rate", "[resample][refusal]") {
+  using Catch::Matchers::StartsWith;
+  CHECK_THROWS_WITH(resample(nullptr, 0, 0, 44100), StartsWith("sample_rate "));
+  CHECK_THROWS_WITH(resample(nullptr, 0, 44100, 0), StartsWith("target_sample_rate "));
+  CHECK_THROWS_WITH(resample_checked(nullptr, 0, 7999, 44100), StartsWith("sample_rate "));
+  CHECK_THROWS_WITH(resample_checked(nullptr, 0, 44100, 7999), StartsWith("target_sample_rate "));
+  CHECK_THROWS_WITH(resample(Audio(), 0), StartsWith("target_sample_rate "));
+  CHECK_THROWS_WITH(resample_impulse_response(nullptr, 0, 44100, 0),
+                    StartsWith("target_sample_rate "));
 }
 
 TEST_CASE("resample rejects null samples for non-empty input", "[resample]") {

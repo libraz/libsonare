@@ -175,6 +175,14 @@ TEST_CASE("validate_config leaves analysis-only STFTs free of the overlap rule",
   REQUIRE_NOTHROW(Spectrogram::compute(audio, config));
 }
 
+TEST_CASE("Spectrogram names an out-of-range bin or frame", "[spectrum][refusal]") {
+  using Catch::Matchers::StartsWith;
+  const std::complex<float> data[3] = {};
+  const auto spectrum = Spectrogram::from_complex(data, 3, 1, 4, 1, 22050, WindowType::Hann);
+  CHECK_THROWS_WITH(spectrum.at(3, 0), StartsWith("bin "));
+  CHECK_THROWS_WITH(spectrum.at(0, 1), StartsWith("frame "));
+}
+
 TEST_CASE("Spectrogram compute basic", "[spectrum]") {
   constexpr int sr = 22050;
   constexpr int samples = sr;  // 1 second
@@ -1141,10 +1149,7 @@ TEST_CASE("Griffin-Lim rejects an invalid sample rate on each reconstruction pat
       static_cast<void>(
           griffin_lim(magnitude.data(), n_bins, n_frames, n_fft, hop_length, 0, config));
     } catch (const SonareException& error) {
-      if (n_frames > 1 && n_iter > 0) {
-        const SonareException expected(ErrorCode::InvalidParameter);
-        CHECK(std::string(error.what()) == expected.what());
-      }
+      CHECK_THAT(std::string(error.what()), Catch::Matchers::StartsWith("sample_rate "));
       return error.code();
     }
     return ErrorCode::Ok;
@@ -1157,6 +1162,18 @@ TEST_CASE("Griffin-Lim rejects an invalid sample rate on each reconstruction pat
   // A single frame skips the iteration loop even when n_iter is positive.
   CHECK(error_code(1, 2) == ErrorCode::InvalidParameter);
   CHECK(error_code(1, 0) == ErrorCode::InvalidParameter);
+}
+
+TEST_CASE("Griffin-Lim names the refused magnitude and dimensions", "[spectrum][griffin_lim]") {
+  using Catch::Matchers::StartsWith;
+  constexpr int n_fft = 32;
+  constexpr int n_bins = n_fft / 2 + 1;
+  const float magnitude = 0.5f;
+  CHECK_THROWS_WITH(griffin_lim(nullptr, n_bins, 1, n_fft, 8, 22050), StartsWith("magnitude "));
+  CHECK_THROWS_WITH(griffin_lim(&magnitude, 0, 1, n_fft, 8, 22050), StartsWith("n_bins "));
+  CHECK_THROWS_WITH(griffin_lim(&magnitude, n_bins, 0, n_fft, 8, 22050), StartsWith("n_frames "));
+  CHECK_THROWS_WITH(griffin_lim(&magnitude, 1, 1, n_fft, 8, 22050),
+                    "n_bins must equal n_fft / 2 + 1");
 }
 
 TEST_CASE("Griffin-Lim bounds the reconstruction its own geometry asks for",
@@ -1510,36 +1527,32 @@ TEST_CASE("reassignment axes agree with the combined transform across STFT geome
   }
 }
 
-TEST_CASE("reassignment helpers reject non-positive STFT dimensions", "[spectrum][reassign]") {
-  Audio audio = Audio::from_vector(generate_sine(22050, 440.0f, 22050), 22050);
+TEST_CASE("reassignment helpers name refused audio and STFT dimensions", "[spectrum][reassign]") {
+  using Catch::Matchers::StartsWith;
+  const Audio audio = Audio::from_vector({0.0f}, 22050);
+  StftConfig config;
 
-  SECTION("reassign_frequencies rejects zero n_fft") {
-    StftConfig config;
-    config.n_fft = 0;
-    config.hop_length = 256;
-    REQUIRE_THROWS_AS(reassign_frequencies(audio, config), SonareException);
-  }
+  CHECK_THROWS_WITH(reassign_frequencies(Audio(), config), StartsWith("audio "));
+  CHECK_THROWS_WITH(reassign_times(Audio(), config), StartsWith("audio "));
+  CHECK_THROWS_WITH(reassigned_spectrogram(Audio(), config), StartsWith("audio "));
 
-  SECTION("reassign_frequencies rejects zero hop_length") {
-    StftConfig config;
-    config.n_fft = 1024;
-    config.hop_length = 0;
-    REQUIRE_THROWS_AS(reassign_frequencies(audio, config), SonareException);
-  }
+  config.n_fft = 0;
+  config.hop_length = 8;
+  CHECK_THROWS_WITH(reassign_frequencies(audio, config), StartsWith("n_fft "));
+  CHECK_THROWS_WITH(reassign_times(audio, config), StartsWith("n_fft "));
+  CHECK_THROWS_WITH(reassigned_spectrogram(audio, config), StartsWith("n_fft "));
 
-  SECTION("reassign_times rejects zero n_fft") {
-    StftConfig config;
-    config.n_fft = 0;
-    config.hop_length = 256;
-    REQUIRE_THROWS_AS(reassign_times(audio, config), SonareException);
-  }
+  config.n_fft = 32;
+  config.hop_length = 0;
+  CHECK_THROWS_WITH(reassign_frequencies(audio, config), StartsWith("hop_length "));
+  CHECK_THROWS_WITH(reassign_times(audio, config), StartsWith("hop_length "));
+  CHECK_THROWS_WITH(reassigned_spectrogram(audio, config), StartsWith("hop_length "));
 
-  SECTION("reassign_times rejects zero hop_length") {
-    StftConfig config;
-    config.n_fft = 1024;
-    config.hop_length = 0;
-    REQUIRE_THROWS_AS(reassign_times(audio, config), SonareException);
-  }
+  config.hop_length = 8;
+  config.win_length = 64;
+  CHECK_THROWS_WITH(reassign_frequencies(audio, config), "win_length must be at most n_fft");
+  CHECK_THROWS_WITH(reassign_times(audio, config), "win_length must be at most n_fft");
+  CHECK_THROWS_WITH(reassigned_spectrogram(audio, config), "win_length must be at most n_fft");
 }
 
 TEST_CASE("each cache is one fixed formula regardless of which was filled first",

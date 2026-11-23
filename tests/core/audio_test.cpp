@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdio>
 #include <cstring>
 #include <iterator>
@@ -46,6 +47,14 @@ TEST_CASE("default Audio exposes a valid empty iterator range", "[audio][iterato
   size_t visited = 0;
   for ([[maybe_unused]] float sample : audio) ++visited;
   REQUIRE(visited == 0);
+}
+
+TEST_CASE("Audio names invalid factory rates and indices", "[audio][refusal]") {
+  using Catch::Matchers::StartsWith;
+  CHECK_THROWS_WITH(Audio::from_buffer(nullptr, 0, 0), StartsWith("sample_rate "));
+  CHECK_THROWS_WITH(Audio::from_vector({}, 0), StartsWith("sample_rate "));
+  const Audio audio = Audio::from_vector({0.0f}, 22050);
+  CHECK_THROWS_WITH(audio[1], StartsWith("index "));
 }
 
 TEST_CASE("Audio from_buffer null safety", "[audio]") {
