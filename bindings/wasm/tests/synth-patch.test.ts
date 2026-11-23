@@ -476,9 +476,7 @@ describe('Sonare WASM NativeSynth', () => {
             ),
           RangeError,
         ).message,
-      ).toBe(
-        'Project.bounce: synthInstruments[0].patch.modRoutings[0].source must be an integer in [1, 12]',
-      );
+      ).toBe('Project.bounce: synthInstruments[0].patch.modRoutings[0].source must not be none');
       expect(
         expectRefusalOf(
           () =>
@@ -490,7 +488,7 @@ describe('Sonare WASM NativeSynth', () => {
           RangeError,
         ).message,
       ).toBe(
-        'Project.bounce: synthInstruments[0].patch.modRoutings[0].destination must be an integer in [1, 12]',
+        'Project.bounce: synthInstruments[0].patch.modRoutings[0].destination must not be none',
       );
       // Not vacuous: a real routing on both ends still passes.
       const audio = bounceSynth(
