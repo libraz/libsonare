@@ -93,8 +93,9 @@ Napi::Value SonareWrap::Clicks(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 4, "duration", 0.1f, &duration)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
-  const SonareError error = sonare_clicks(times.Data(), times.ElementLength(), sample_rate, length,
-                                          frequency, duration, &out, &out_length);
+  const SonareError error =
+      sonare_clicks(sonare_node::ElementData(times), times.ElementLength(), sample_rate, length,
+                    frequency, duration, &out, &out_length);
   if (error != SONARE_OK) return CheckCResult(env, error);
   return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
@@ -121,8 +122,8 @@ Napi::Value SonareWrap::TrimSilence(const Napi::CallbackInfo& info) {
   size_t count = 0;
   int64_t start = 0;
   int64_t end = 0;
-  SonareError err = sonare_trim_silence(arr.Data(), arr.ElementLength(), top_db, frame_length,
-                                        hop_length, &out, &count, &start, &end);
+  SonareError err = sonare_trim_silence(sonare_node::ElementData(arr), arr.ElementLength(), top_db,
+                                        frame_length, hop_length, &out, &count, &start, &end);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("audio", TakeCFloats(env, out, count));
@@ -151,8 +152,8 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
   }
   int* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_split_silence(arr.Data(), arr.ElementLength(), top_db, frame_length,
-                                         hop_length, &out, &count);
+  SonareError err = sonare_split_silence(sonare_node::ElementData(arr), arr.ElementLength(), top_db,
+                                         frame_length, hop_length, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCInts(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -189,7 +190,7 @@ Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     signal_arrays.push_back(value.As<Napi::Float32Array>());
-    signal_ptrs.push_back(signal_arrays.back().Data());
+    signal_ptrs.push_back(sonare_node::ElementData(signal_arrays.back()));
     lengths.push_back(signal_arrays.back().ElementLength());
   }
 
@@ -243,8 +244,8 @@ Napi::Value SonareWrap::FrameSignal(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_frame_signal(arr.Data(), arr.ElementLength(), frame_length, hop_length,
-                                        &out, &count, &n_frames);
+  SonareError err = sonare_frame_signal(sonare_node::ElementData(arr), arr.ElementLength(),
+                                        frame_length, hop_length, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);
@@ -272,7 +273,7 @@ Napi::Value SonareWrap::PadCenter(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_pad_center(arr.Data(), arr.ElementLength(),
+  SonareError err = sonare_pad_center(sonare_node::ElementData(arr), arr.ElementLength(),
                                       static_cast<size_t>(target_size), pad_value, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
@@ -298,7 +299,7 @@ Napi::Value SonareWrap::FixLength(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_fix_length(arr.Data(), arr.ElementLength(),
+  SonareError err = sonare_fix_length(sonare_node::ElementData(arr), arr.ElementLength(),
                                       static_cast<size_t>(target_size), pad_value, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
@@ -339,8 +340,9 @@ Napi::Value SonareWrap::OnsetBacktrack(const Napi::CallbackInfo& info) {
   const auto energy = info[1].As<Napi::Float32Array>();
   int* out = nullptr;
   size_t count = 0;
-  const SonareError err = sonare_onset_backtrack(events.data(), events.size(), energy.Data(),
-                                                 energy.ElementLength(), &out, &count);
+  const SonareError err =
+      sonare_onset_backtrack(events.data(), events.size(), sonare_node::ElementData(energy),
+                             energy.ElementLength(), &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCInts(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -369,8 +371,8 @@ Napi::Value SonareWrap::PeakPick(const Napi::CallbackInfo& info) {
   }
   int* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_peak_pick(arr.Data(), arr.ElementLength(), pre_max, post_max, pre_avg,
-                                     post_avg, delta, wait, &out, &count);
+  SonareError err = sonare_peak_pick(sonare_node::ElementData(arr), arr.ElementLength(), pre_max,
+                                     post_max, pre_avg, post_avg, delta, wait, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCInts(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -388,7 +390,7 @@ Napi::Value SonareWrap::VectorNormalize(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
-      sonare_vector_normalize(arr.Data(), arr.ElementLength(),
+      sonare_vector_normalize(sonare_node::ElementData(arr), arr.ElementLength(),
                               static_cast<SonareNormType>(norm_type), threshold, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
@@ -427,8 +429,8 @@ Napi::Value SonareWrap::Pcen(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_pcen(arr.Data(), n_bins, n_frames, sr, hop, time_constant, gain, bias,
-                                power, eps, &out, &count);
+  SonareError err = sonare_pcen(sonare_node::ElementData(arr), n_bins, n_frames, sr, hop,
+                                time_constant, gain, bias, power, eps, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -448,8 +450,8 @@ Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_preemphasis(arr.Data(), arr.ElementLength(), coef, zi, use_zi ? 1 : 0, &out, &count);
+  SonareError err = sonare_preemphasis(sonare_node::ElementData(arr), arr.ElementLength(), coef, zi,
+                                       use_zi ? 1 : 0, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -469,8 +471,8 @@ Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_deemphasis(arr.Data(), arr.ElementLength(), coef, zi, use_zi ? 1 : 0, &out, &count);
+  SonareError err = sonare_deemphasis(sonare_node::ElementData(arr), arr.ElementLength(), coef, zi,
+                                      use_zi ? 1 : 0, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)

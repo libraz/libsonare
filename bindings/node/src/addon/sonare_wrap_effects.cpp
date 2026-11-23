@@ -46,7 +46,7 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   HpssArguments args;
@@ -98,7 +98,7 @@ Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
 
@@ -117,7 +117,7 @@ Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
 
@@ -140,7 +140,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float rate = node_narrow_float(env, info[2], "speedRatio");
@@ -173,7 +173,7 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float semitones = node_narrow_float(env, info[2], "semitones");
@@ -215,7 +215,7 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float current_midi = node_narrow_float(env, info[2], "currentMidi");
@@ -249,7 +249,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
@@ -260,7 +260,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   sonare::editing::pitch_editor::F0Track track;
   track.sample_rate = sr;
   track.hop_length = hop_length;
-  track.f0_hz.assign(f0.Data(), f0.Data() + n_frames);
+  track.f0_hz.assign(sonare_node::ElementData(f0), sonare_node::ElementData(f0) + n_frames);
   track.voiced.resize(n_frames);
   track.voiced_prob.resize(n_frames);
 
@@ -316,7 +316,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
@@ -366,8 +366,9 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
         Napi::RangeError::New(env, "voiced must match f0Hz length").ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      voiced.assign(arr.Data(), arr.Data() + arr.ElementLength());
-      voiced_ptr = voiced.data();
+      voiced.assign(sonare_node::ElementData(arr),
+                    sonare_node::ElementData(arr) + arr.ElementLength());
+      voiced_ptr = sonare_node::ElementData(voiced);
     }
     if (!voiced_ptr && opts.Has("voicedProb") && IsFloat32Array(opts.Get("voicedProb"))) {
       auto arr = opts.Get("voicedProb").As<Napi::Float32Array>();
@@ -376,16 +377,17 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      voiced_prob.assign(arr.Data(), arr.Data() + arr.ElementLength());
-      prob_ptr = voiced_prob.data();
+      voiced_prob.assign(sonare_node::ElementData(arr),
+                         sonare_node::ElementData(arr) + arr.ElementLength());
+      prob_ptr = sonare_node::ElementData(voiced_prob);
     }
   }
 
   float* out = nullptr;
   size_t out_length = 0;
-  SonareError err =
-      sonare_pitch_correct_timevarying(data, length, sr, f0.Data(), prob_ptr, voiced_ptr, n_frames,
-                                       hop_length, &config, &out, &out_length);
+  SonareError err = sonare_pitch_correct_timevarying(data, length, sr, sonare_node::ElementData(f0),
+                                                     prob_ptr, voiced_ptr, n_frames, hop_length,
+                                                     &config, &out, &out_length);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -437,8 +439,8 @@ Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t out_length = 0;
   SonareKey used{};
-  const SonareError err = sonare_auto_tune(typed.Data(), typed.ElementLength(), sr, key_ptr,
-                                           &config, &out, &out_length, &used);
+  const SonareError err = sonare_auto_tune(sonare_node::ElementData(typed), typed.ElementLength(),
+                                           sr, key_ptr, &config, &out, &out_length, &used);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -470,7 +472,7 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   int onset_sample = node_narrow_int(env, info[2], "onsetSample");
@@ -507,7 +509,7 @@ Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   sonare::validate_offline_audio_input("samples", data, length, sr);
@@ -537,7 +539,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float pitch_semitones = node_narrow_float(env, info[2], "pitchSemitones");
@@ -583,8 +585,9 @@ Napi::Value SonareWrap::RealtimeVoiceChangerRender(const Napi::CallbackInfo& inf
   sonare_realtime_voice_changer_config_init(&config);
   SonareError err = sonare_realtime_voice_changer_config_from_json(preset.c_str(), &config);
   if (err == SONARE_OK) {
-    err = sonare_realtime_voice_changer_render(samples.Data(), samples.ElementLength(), sample_rate,
-                                               &config, channels, &output, &output_length);
+    err = sonare_realtime_voice_changer_render(sonare_node::ElementData(samples),
+                                               samples.ElementLength(), sample_rate, &config,
+                                               channels, &output, &output_length);
   }
   if (err != SONARE_OK) {
     sonare_free_floats(output);
@@ -604,7 +607,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float threshold_db{};
@@ -644,8 +647,9 @@ Napi::Value SonareWrap::Fade(const Napi::CallbackInfo& info) {
 
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError err = sonare_fade(samples.Data(), samples.ElementLength(), sample_rate,
-                                      fade_in_sec, fade_out_sec, &output, &output_length);
+  const SonareError err =
+      sonare_fade(sonare_node::ElementData(samples), samples.ElementLength(), sample_rate,
+                  fade_in_sec, fade_out_sec, &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     sonare_node::ThrowSonareError(env, err);
@@ -680,8 +684,9 @@ Napi::Value SonareWrap::BiquadFilter(const Napi::CallbackInfo& info) {
 
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError err = sonare_biquad_filter(samples.Data(), samples.ElementLength(), sample_rate,
-                                               &config, &output, &output_length);
+  const SonareError err =
+      sonare_biquad_filter(sonare_node::ElementData(samples), samples.ElementLength(), sample_rate,
+                           &config, &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     sonare_node::ThrowSonareError(env, err);
@@ -700,7 +705,7 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
   float target_db{};
@@ -751,13 +756,14 @@ Napi::Value SonareWrap::NormalizeStereo(const Napi::CallbackInfo& info) {
 
   // Re-apply the C-ABI input validation these direct core calls would otherwise
   // bypass. Per channel, because each carries its own samples.
-  sonare::validate_offline_audio_input("left", left_typed.Data(), left_typed.ElementLength(), sr);
-  sonare::validate_offline_audio_input("right", right_typed.Data(), right_typed.ElementLength(),
-                                       sr);
-  sonare::Audio left =
-      sonare::Audio::from_buffer(left_typed.Data(), left_typed.ElementLength(), sr);
-  sonare::Audio right =
-      sonare::Audio::from_buffer(right_typed.Data(), right_typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("left", sonare_node::ElementData(left_typed),
+                                       left_typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("right", sonare_node::ElementData(right_typed),
+                                       right_typed.ElementLength(), sr);
+  sonare::Audio left = sonare::Audio::from_buffer(sonare_node::ElementData(left_typed),
+                                                  left_typed.ElementLength(), sr);
+  sonare::Audio right = sonare::Audio::from_buffer(sonare_node::ElementData(right_typed),
+                                                   right_typed.ElementLength(), sr);
   // The core measures the pair as one signal it calls `audio`; the caller passed left and right.
   const std::array<sonare_c_detail::CPairName, 1> pair{{{"audio", "left", "right"}}};
   sonare::NormalizeStereoResult result = sonare_c_detail::with_c_pair_names(pair, [&] {

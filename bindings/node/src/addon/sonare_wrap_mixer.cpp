@@ -191,8 +191,8 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    left_ptrs.push_back(left_arrays.back().Data());
-    right_ptrs.push_back(right_arrays.back().Data());
+    left_ptrs.push_back(sonare_node::ElementData(left_arrays.back()));
+    right_ptrs.push_back(sonare_node::ElementData(right_arrays.back()));
   }
 
   if (length > static_cast<size_t>(block_size_)) {
@@ -203,9 +203,9 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
 
   Napi::Float32Array left_out = Napi::Float32Array::New(env, length);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, length);
-  SonareError err = sonare_mixer_process_stereo(mixer_, count > 0 ? left_ptrs.data() : nullptr,
-                                                count > 0 ? right_ptrs.data() : nullptr, count,
-                                                left_out.Data(), right_out.Data(), length);
+  SonareError err = sonare_mixer_process_stereo(
+      mixer_, count > 0 ? left_ptrs.data() : nullptr, count > 0 ? right_ptrs.data() : nullptr,
+      count, sonare_node::ElementData(left_out), sonare_node::ElementData(right_out), length);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "mixer process failed: ");
     return env.Undefined();
@@ -294,8 +294,8 @@ Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
 
   Napi::Float32Array left_out = Napi::Float32Array::New(env, num_samples);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, num_samples);
-  SonareError err =
-      sonare_mixer_drain_tail_stereo(mixer_, left_out.Data(), right_out.Data(), num_samples);
+  SonareError err = sonare_mixer_drain_tail_stereo(
+      mixer_, sonare_node::ElementData(left_out), sonare_node::ElementData(right_out), num_samples);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "mixer drain failed: ");
     return env.Undefined();

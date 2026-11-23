@@ -502,7 +502,8 @@ Napi::Value VocalEditSessionWrap::ExportState(const Napi::CallbackInfo& info) {
   const SonareError error = sonare_vocal_session_export_state(session_, &state.value);
   if (!CheckVocalError(env, error)) return env.Undefined();
   Napi::Uint8Array result = Napi::Uint8Array::New(env, state.value.size);
-  if (state.value.size != 0) std::memcpy(result.Data(), state.value.data, state.value.size);
+  if (state.value.size != 0)
+    std::memcpy(sonare_node::ElementData(result), state.value.data, state.value.size);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -958,9 +959,9 @@ Napi::Value CreateVocalEditSession(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SonareVocalSession* session = nullptr;
-  const SonareError error =
-      sonare_vocal_session_create(samples.Data(), static_cast<int64_t>(samples.ElementLength()), 1,
-                                  sample_rate, &options, &session);
+  const SonareError error = sonare_vocal_session_create(
+      sonare_node::ElementData(samples), static_cast<int64_t>(samples.ElementLength()), 1,
+      sample_rate, &options, &session);
   if (!CheckVocalError(env, error)) return env.Undefined();
   return VocalEditSessionWrap::NewInstance(env, session);
   SONARE_NODE_CATCH(env)
@@ -989,8 +990,8 @@ Napi::Value RestoreVocalEditSession(const Napi::CallbackInfo& info) {
   }
   SonareVocalSession* session = nullptr;
   const SonareError error = sonare_vocal_session_restore(
-      samples.Data(), static_cast<int64_t>(samples.ElementLength()), 1, sample_rate, state.Data(),
-      state.ElementLength(), &options, &session);
+      sonare_node::ElementData(samples), static_cast<int64_t>(samples.ElementLength()), 1,
+      sample_rate, sonare_node::ElementData(state), state.ElementLength(), &options, &session);
   if (!CheckVocalError(env, error)) return env.Undefined();
   return VocalEditSessionWrap::NewInstance(env, session);
   SONARE_NODE_CATCH(env)

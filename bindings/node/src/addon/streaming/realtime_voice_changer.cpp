@@ -394,10 +394,12 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoImpl(const Napi::CallbackInfo& 
                                    : Napi::Float32Array::New(env, input.ElementLength());
   const int frames = static_cast<int>(input.ElementLength());
   const bool ok = with_carrier
-                      ? changer_->process_block(input.Data(),
-                                                info[carrier_index].As<Napi::Float32Array>().Data(),
-                                                output.Data(), frames)
-                      : changer_->process_block(input.Data(), output.Data(), frames);
+                      ? changer_->process_block(
+                            sonare_node::ElementData(input),
+                            sonare_node::ElementData(info[carrier_index].As<Napi::Float32Array>()),
+                            sonare_node::ElementData(output), frames)
+                      : changer_->process_block(sonare_node::ElementData(input),
+                                                sonare_node::ElementData(output), frames);
   if (!ok) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kCarrierRequiredMessage);
     return env.Undefined();
@@ -462,7 +464,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
   // RT-safe path: reuse the per-instance planar scratch (allocated in Prepare) and pointer
   // table. Deinterleave -> process_block -> interleave; no per-call scratch allocation.
   const size_t stride = static_cast<size_t>(max_block_size_);
-  const float* in_data = input.Data();
+  const float* in_data = sonare_node::ElementData(input);
   for (int ch = 0; ch < channels; ++ch) {
     float* dst = planar_scratch_.data() + static_cast<size_t>(ch) * stride;
     for (size_t i = 0; i < frames; ++i) {
@@ -471,9 +473,10 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
   }
   const bool ok =
       with_carrier
-          ? changer_->process_block(planar_ptrs_.data(), channels,
-                                    info[carrier_index].As<Napi::Float32Array>().Data(),
-                                    static_cast<int>(frames))
+          ? changer_->process_block(
+                planar_ptrs_.data(), channels,
+                sonare_node::ElementData(info[carrier_index].As<Napi::Float32Array>()),
+                static_cast<int>(frames))
           : changer_->process_block(planar_ptrs_.data(), channels, static_cast<int>(frames));
   if (!ok) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kCarrierRequiredMessage);
@@ -481,7 +484,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
   }
   Napi::Float32Array output = into ? info[output_index].As<Napi::Float32Array>()
                                    : Napi::Float32Array::New(env, input.ElementLength());
-  float* out_data = output.Data();
+  float* out_data = sonare_node::ElementData(output);
   for (int ch = 0; ch < channels; ++ch) {
     const float* src = planar_scratch_.data() + static_cast<size_t>(ch) * stride;
     for (size_t i = 0; i < frames; ++i) {
@@ -538,11 +541,12 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereoImpl(const Napi::Callba
   }
   // In-place planar stereo: the planar process_block reads and writes the
   // supplied channel buffers directly, so the caller's L/R arrays are mutated.
-  float* channels[2] = {left.Data(), right.Data()};
-  const bool ok =
-      with_carrier ? changer_->process_block(channels, 2, info[2].As<Napi::Float32Array>().Data(),
-                                             static_cast<int>(frames))
-                   : changer_->process_block(channels, 2, static_cast<int>(frames));
+  float* channels[2] = {sonare_node::ElementData(left), sonare_node::ElementData(right)};
+  const bool ok = with_carrier
+                      ? changer_->process_block(
+                            channels, 2, sonare_node::ElementData(info[2].As<Napi::Float32Array>()),
+                            static_cast<int>(frames))
+                      : changer_->process_block(channels, 2, static_cast<int>(frames));
   if (!ok) {
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kCarrierRequiredMessage);
   }

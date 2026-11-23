@@ -69,7 +69,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sampleRate");
 

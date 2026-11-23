@@ -114,7 +114,7 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    in_pointers[ch] = plane.Data();
+    in_pointers[ch] = sonare_node::ElementData(plane);
   }
 
   int out_channels = 0;
@@ -126,7 +126,7 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
   std::vector<float*> out_pointers(static_cast<size_t>(out_channels));
   for (int ch = 0; ch < out_channels; ++ch) {
     Napi::Float32Array plane = Napi::Float32Array::New(env, static_cast<size_t>(frames));
-    out_pointers[static_cast<size_t>(ch)] = plane.Data();
+    out_pointers[static_cast<size_t>(ch)] = sonare_node::ElementData(plane);
     outputs.Set(static_cast<uint32_t>(ch), plane);
   }
 
@@ -165,7 +165,7 @@ Napi::Value PlaybackRendererWrap::ProcessSilence(const Napi::CallbackInfo& info)
   std::vector<float*> out_pointers(static_cast<size_t>(out_channels));
   for (int ch = 0; ch < out_channels; ++ch) {
     Napi::Float32Array plane = Napi::Float32Array::New(env, static_cast<size_t>(frames));
-    out_pointers[static_cast<size_t>(ch)] = plane.Data();
+    out_pointers[static_cast<size_t>(ch)] = sonare_node::ElementData(plane);
     outputs.Set(static_cast<uint32_t>(ch), plane);
   }
   // Realtime entry: see the note in sonare_wrap_playback.h.
@@ -201,9 +201,10 @@ Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& i
   Napi::Float32Array output =
       Napi::Float32Array::New(env, frames * static_cast<size_t>(out_channels));
   // Realtime entry: see the note in sonare_wrap_playback.h.
-  sonare_node::ThrowIfRealtimeError(env, sonare_playback_renderer_process_interleaved(
-                                             renderer_, input.Data(), in_channels, output.Data(),
-                                             out_channels, static_cast<int>(frames)));
+  sonare_node::ThrowIfRealtimeError(
+      env, sonare_playback_renderer_process_interleaved(
+               renderer_, sonare_node::ElementData(input), in_channels,
+               sonare_node::ElementData(output), out_channels, static_cast<int>(frames)));
   if (env.IsExceptionPending()) return env.Undefined();
   return output;
   SONARE_NODE_CATCH(env)
@@ -229,14 +230,14 @@ Napi::Value PlaybackRendererWrap::RenderOffline(const Napi::CallbackInfo& info) 
   float* out = nullptr;
   size_t out_frames = 0;
   int out_channels = 0;
-  sonare_node::ThrowIfError(
-      env, sonare_playback_renderer_render_offline(renderer_, input.Data(), frames, in_channels,
-                                                   &out, &out_frames, &out_channels));
+  sonare_node::ThrowIfError(env, sonare_playback_renderer_render_offline(
+                                     renderer_, sonare_node::ElementData(input), frames,
+                                     in_channels, &out, &out_frames, &out_channels));
   if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Float32Array samples =
       Napi::Float32Array::New(env, out_frames * static_cast<size_t>(out_channels));
-  std::memcpy(samples.Data(), out, samples.ElementLength() * sizeof(float));
+  std::memcpy(sonare_node::ElementData(samples), out, samples.ElementLength() * sizeof(float));
   sonare_free_floats(out);
   return samples;
   SONARE_NODE_CATCH(env)

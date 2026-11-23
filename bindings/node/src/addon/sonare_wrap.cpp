@@ -717,7 +717,7 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
 
   int sample_rate = 48000;

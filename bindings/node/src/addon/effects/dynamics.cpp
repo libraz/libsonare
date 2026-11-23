@@ -74,7 +74,8 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::dynamics::CompressorConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -99,8 +100,8 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
   }
   sonare::mastering::dynamics::Compressor processor(config);
   int latency = 0;
-  std::vector<float> out =
-      run_dynamics_offline(processor, typed.Data(), typed.ElementLength(), sr, latency);
+  std::vector<float> out = run_dynamics_offline(processor, sonare_node::ElementData(typed),
+                                                typed.ElementLength(), sr, latency);
   return make_dynamics_result(env, out, latency);
   SONARE_NODE_CATCH(env)
 }
@@ -113,7 +114,8 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::dynamics::GateConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -128,8 +130,8 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
   }
   sonare::mastering::dynamics::Gate processor(config);
   int latency = 0;
-  std::vector<float> out =
-      run_dynamics_offline(processor, typed.Data(), typed.ElementLength(), sr, latency);
+  std::vector<float> out = run_dynamics_offline(processor, sonare_node::ElementData(typed),
+                                                typed.ElementLength(), sr, latency);
   return make_dynamics_result(env, out, latency);
   SONARE_NODE_CATCH(env)
 }
@@ -142,7 +144,8 @@ Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInf
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::dynamics::TransientShaperConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -159,8 +162,8 @@ Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInf
   }
   sonare::mastering::dynamics::TransientShaper processor(config);
   int latency = 0;
-  std::vector<float> out =
-      run_dynamics_offline(processor, typed.Data(), typed.ElementLength(), sr, latency);
+  std::vector<float> out = run_dynamics_offline(processor, sonare_node::ElementData(typed),
+                                                typed.ElementLength(), sr, latency);
   return make_dynamics_result(env, out, latency);
   SONARE_NODE_CATCH(env)
 }

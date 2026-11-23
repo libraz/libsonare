@@ -26,7 +26,8 @@ bool ReadArrayNumber(Napi::Env env, const Napi::Value& value, const char* field,
   if (value.IsUndefined() || value.IsNull()) return true;
   if (IsFloat32Array(value)) {
     const auto array = value.As<Napi::Float32Array>();
-    out->assign(array.Data(), array.Data() + array.ElementLength());
+    out->assign(sonare_node::ElementData(array),
+                sonare_node::ElementData(array) + array.ElementLength());
   } else if (value.IsArray()) {
     const auto array = value.As<Napi::Array>();
     const uint32_t array_count = node_list_length(array, field);
@@ -501,8 +502,10 @@ Napi::Object AnalysisResultToObject(Napi::Env env, const SonareVocalAnalysisResu
   Napi::Float32Array f0 = Napi::Float32Array::New(env, result.analysis.frame_count);
   Napi::Uint8Array voiced = Napi::Uint8Array::New(env, result.analysis.frame_count);
   if (result.analysis.frame_count != 0) {
-    std::memcpy(f0.Data(), result.analysis.f0_hz, result.analysis.frame_count * sizeof(float));
-    std::memcpy(voiced.Data(), result.analysis.voiced, result.analysis.frame_count);
+    std::memcpy(sonare_node::ElementData(f0), result.analysis.f0_hz,
+                result.analysis.frame_count * sizeof(float));
+    std::memcpy(sonare_node::ElementData(voiced), result.analysis.voiced,
+                result.analysis.frame_count);
   }
   analysis.Set("f0Hz", f0);
   analysis.Set("voiced", voiced);
@@ -571,12 +574,16 @@ Napi::Object PitchResultToObject(Napi::Env env, const SonareVocalPitchResult& re
   Napi::Uint8Array voiced = Napi::Uint8Array::New(env, result.frame_count);
   Napi::Uint8Array has_target = Napi::Uint8Array::New(env, result.frame_count);
   if (result.frame_count != 0) {
-    std::memcpy(source.Data(), result.source_samples, result.frame_count * sizeof(double));
-    std::memcpy(measured.Data(), result.measured_midi, result.frame_count * sizeof(double));
-    std::memcpy(target.Data(), result.target_midi, result.frame_count * sizeof(double));
-    std::memcpy(effective.Data(), result.effective_midi, result.frame_count * sizeof(double));
-    std::memcpy(voiced.Data(), result.voiced, result.frame_count);
-    std::memcpy(has_target.Data(), result.has_target, result.frame_count);
+    std::memcpy(sonare_node::ElementData(source), result.source_samples,
+                result.frame_count * sizeof(double));
+    std::memcpy(sonare_node::ElementData(measured), result.measured_midi,
+                result.frame_count * sizeof(double));
+    std::memcpy(sonare_node::ElementData(target), result.target_midi,
+                result.frame_count * sizeof(double));
+    std::memcpy(sonare_node::ElementData(effective), result.effective_midi,
+                result.frame_count * sizeof(double));
+    std::memcpy(sonare_node::ElementData(voiced), result.voiced, result.frame_count);
+    std::memcpy(sonare_node::ElementData(has_target), result.has_target, result.frame_count);
   }
   object.Set("sourceSamples", source);
   object.Set("measuredMidi", measured);
@@ -736,8 +743,10 @@ bool ReadCreateOptions(Napi::Env env, const Napi::Value& value, SonareVocalCreat
           .ThrowAsJavaScriptException();
       return false;
     }
-    f0_storage->assign(f0.Data(), f0.Data() + f0.ElementLength());
-    voiced_storage->assign(voiced.Data(), voiced.Data() + voiced.ElementLength());
+    f0_storage->assign(sonare_node::ElementData(f0),
+                       sonare_node::ElementData(f0) + f0.ElementLength());
+    voiced_storage->assign(sonare_node::ElementData(voiced),
+                           sonare_node::ElementData(voiced) + voiced.ElementLength());
     sonare_vocal_analysis_init(analysis_storage);
     // Omitted analysis settings inherit the create defaults; supplied ones replace them below.
     analysis_storage->fmin_hz = options->fmin_hz;

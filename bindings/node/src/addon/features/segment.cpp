@@ -19,7 +19,8 @@ Napi::Object SegmentMatrixResult(Napi::Env env, SonareSegmentMatrix* result) {
   out.Set("cols", Napi::Number::New(env, result->cols));
   auto values = Napi::Float32Array::New(env, static_cast<size_t>(result->rows) * result->cols);
   if (result->values != nullptr) {
-    std::memcpy(values.Data(), result->values, values.ElementLength() * sizeof(float));
+    std::memcpy(sonare_node::ElementData(values), result->values,
+                values.ElementLength() * sizeof(float));
   }
   out.Set("values", values);
   sonare_free_segment_matrix(result);
@@ -29,7 +30,7 @@ Napi::Object SegmentMatrixResult(Napi::Env env, SonareSegmentMatrix* result) {
 Napi::Int32Array SegmentIndicesResult(Napi::Env env, SonareSegmentIndices* result) {
   auto values = Napi::Int32Array::New(env, result->count);
   if (result->values != nullptr) {
-    std::memcpy(values.Data(), result->values, result->count * sizeof(int));
+    std::memcpy(sonare_node::ElementData(values), result->values, result->count * sizeof(int));
   }
   sonare_free_segment_indices(result);
   return values;
@@ -83,7 +84,8 @@ Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
   }
   SonareSegmentMatrix result{};
   const SonareError err = sonare_segment_cross_similarity(
-      x.Data(), x_rows, x_cols, y.Data(), y_rows, y_cols, k, metric.c_str(), mode.c_str(), &result);
+      sonare_node::ElementData(x), x_rows, x_cols, sonare_node::ElementData(y), y_rows, y_cols, k,
+      metric.c_str(), mode.c_str(), &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
   SONARE_NODE_CATCH(env)
@@ -117,8 +119,9 @@ Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   SonareSegmentMatrix result{};
-  const SonareError err = sonare_segment_recurrence_matrix(
-      data.Data(), rows, cols, k, width, sym ? 1 : 0, metric.c_str(), mode.c_str(), &result);
+  const SonareError err =
+      sonare_segment_recurrence_matrix(sonare_node::ElementData(data), rows, cols, k, width,
+                                       sym ? 1 : 0, metric.c_str(), mode.c_str(), &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
   SONARE_NODE_CATCH(env)
@@ -136,8 +139,8 @@ Napi::Value SonareWrap::SegmentRecurrenceToLag(const Napi::CallbackInfo& info) {
   bool pad{};
   if (!OptionalBoolArg(env, info, 2, "pad", true, &pad)) return env.Undefined();
   SonareSegmentMatrix result{};
-  const SonareError err =
-      sonare_segment_recurrence_to_lag(recurrence.Data(), n, pad ? 1 : 0, &result);
+  const SonareError err = sonare_segment_recurrence_to_lag(sonare_node::ElementData(recurrence), n,
+                                                           pad ? 1 : 0, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
   SONARE_NODE_CATCH(env)
@@ -156,7 +159,8 @@ Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
     return env.Undefined();
   if (!SegmentMatrixInput(env, lag, lags, rows)) return env.Undefined();
   SonareSegmentMatrix result{};
-  const SonareError err = sonare_segment_lag_to_recurrence(lag.Data(), rows, lags, &result);
+  const SonareError err =
+      sonare_segment_lag_to_recurrence(sonare_node::ElementData(lag), rows, lags, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
   SONARE_NODE_CATCH(env)
@@ -185,8 +189,9 @@ Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
   int n_segments{};
   if (!OptionalIntArg(env, info, 4, "nSegments", 4, &n_segments)) return env.Undefined();
   SonareSegmentIndices result{};
-  const SonareError err = sonare_segment_subsegment(data.Data(), rows, cols, boundaries.data(),
-                                                    boundaries.size(), n_segments, &result);
+  const SonareError err =
+      sonare_segment_subsegment(sonare_node::ElementData(data), rows, cols, boundaries.data(),
+                                boundaries.size(), n_segments, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentIndicesResult(env, &result);
   SONARE_NODE_CATCH(env)
@@ -211,8 +216,8 @@ Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SonareSegmentIndices result{};
-  const SonareError err =
-      sonare_segment_agglomerative(data.Data(), rows, cols, k, linkage.c_str(), &result);
+  const SonareError err = sonare_segment_agglomerative(sonare_node::ElementData(data), rows, cols,
+                                                       k, linkage.c_str(), &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentIndicesResult(env, &result);
   SONARE_NODE_CATCH(env)
@@ -236,8 +241,8 @@ Napi::Value SonareWrap::SegmentPathEnhance(const Napi::CallbackInfo& info) {
   int n_filters{};
   if (!OptionalIntArg(env, info, 5, "nFilters", 7, &n_filters)) return env.Undefined();
   SonareSegmentMatrix result{};
-  const SonareError err = sonare_segment_path_enhance(recurrence.Data(), n, win, max_ratio,
-                                                      min_ratio, n_filters, &result);
+  const SonareError err = sonare_segment_path_enhance(sonare_node::ElementData(recurrence), n, win,
+                                                      max_ratio, min_ratio, n_filters, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
   SONARE_NODE_CATCH(env)

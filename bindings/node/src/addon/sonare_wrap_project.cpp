@@ -668,7 +668,7 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_project_set_source_audio(
-                        project_, source_id, audio.Data(),
+                        project_, source_id, sonare_node::ElementData(audio),
                         static_cast<int64_t>(audio.ElementLength() / static_cast<size_t>(channels)),
                         channels, sample_rate));
   return env.Undefined();

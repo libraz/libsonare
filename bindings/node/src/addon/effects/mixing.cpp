@@ -173,8 +173,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    left_ptrs.push_back(left_arrays.back().Data());
-    right_ptrs.push_back(right_arrays.back().Data());
+    left_ptrs.push_back(sonare_node::ElementData(left_arrays.back()));
+    right_ptrs.push_back(sonare_node::ElementData(right_arrays.back()));
   }
 
   const int sample_rate = node_narrow_int(env, info[2], "sampleRate");

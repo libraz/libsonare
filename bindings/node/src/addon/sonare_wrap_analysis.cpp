@@ -352,7 +352,8 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   }
 
   char* json_str = nullptr;
-  SonareError err = sonare_estimate_meter_json(beat_times.Data(), beat_strengths.Data(),
+  SonareError err = sonare_estimate_meter_json(sonare_node::ElementData(beat_times),
+                                               sonare_node::ElementData(beat_strengths),
                                                beat_times.ElementLength(), &options, &json_str);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
@@ -546,7 +547,8 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
     return deferred.Promise();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
+  std::vector<float> samples(sonare_node::ElementData(typed),
+                             sonare_node::ElementData(typed) + typed.ElementLength());
   int sample_rate{};
   if (!OptionalIntArg(env, info, 1, "sampleRate", sonare::constants::kDefaultSampleRate,
                       &sample_rate)) {

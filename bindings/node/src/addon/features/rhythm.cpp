@@ -45,7 +45,7 @@ Napi::Value SonareWrap::Tonnetz(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_tonnetz(arr.Data(), n_chroma, n_frames, &out, &count);
+  SonareError err = sonare_tonnetz(sonare_node::ElementData(arr), n_chroma, n_frames, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -80,8 +80,8 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, center, norm,
-                                     mode, &out, &count, &n_frames);
+  SonareError err = sonare_tempogram(sonare_node::ElementData(arr), arr.ElementLength(), sr, hop,
+                                     win, center, norm, mode, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);
@@ -119,8 +119,8 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_cyclic_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, bpm_min,
-                                            n_bins, &out, &count, &n_frames);
+  SonareError err = sonare_cyclic_tempogram(sonare_node::ElementData(arr), arr.ElementLength(), sr,
+                                            hop, win, bpm_min, n_bins, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);
@@ -158,8 +158,8 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_plp(arr.Data(), arr.ElementLength(), sr, hop, bpm_min, bpm_max, win, &out, &count);
+  SonareError err = sonare_plp(sonare_node::ElementData(arr), arr.ElementLength(), sr, hop, bpm_min,
+                               bpm_max, win, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -186,8 +186,8 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_onset_strength(arr.Data(), arr.ElementLength(), sr, n_fft, hop, n_mels, &out, &count);
+  SonareError err = sonare_onset_strength(sonare_node::ElementData(arr), arr.ElementLength(), sr,
+                                          n_fft, hop, n_mels, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -220,8 +220,9 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_onset_strength_multi(arr.Data(), arr.ElementLength(), sr, n_fft, hop,
-                                                n_mels, n_bands, &out, &count, &n_frames);
+  SonareError err =
+      sonare_onset_strength_multi(sonare_node::ElementData(arr), arr.ElementLength(), sr, n_fft,
+                                  hop, n_mels, n_bands, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nBands", Napi::Number::New(env, n_bands));
@@ -258,8 +259,8 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_fourier_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, center,
-                                             norm, &out, &count, &n_frames);
+  SonareError err = sonare_fourier_tempogram(sonare_node::ElementData(arr), arr.ElementLength(), sr,
+                                             hop, win, center, norm, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   int n_bins = n_frames > 0 ? static_cast<int>(count / static_cast<size_t>(n_frames)) : 0;
   Napi::Object result = Napi::Object::New(env);
@@ -293,8 +294,8 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   size_t n_factors = factors.size();
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_tempogram_ratio(arr.Data(), arr.ElementLength(), win, sr, hop,
-                                           factors_ptr, n_factors, &out, &count);
+  SonareError err = sonare_tempogram_ratio(sonare_node::ElementData(arr), arr.ElementLength(), win,
+                                           sr, hop, factors_ptr, n_factors, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -328,8 +329,8 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   nnls_options.stft_blend_weight = blend_weight;
   nnls_options.stft_blend_n_fft = blend_n_fft;
   nnls_options.hop_length = hop_length;
-  SonareError err = sonare_nnls_chroma(arr.Data(), arr.ElementLength(), sr, &nnls_options, &out,
-                                       &count, &n_frames);
+  SonareError err = sonare_nnls_chroma(sonare_node::ElementData(arr), arr.ElementLength(), sr,
+                                       &nnls_options, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   int n_chroma = n_frames > 0 ? static_cast<int>(count / static_cast<size_t>(n_frames)) : 12;
   Napi::Object result = Napi::Object::New(env);
@@ -359,7 +360,7 @@ Napi::Value SonareWrap::Resample(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   int src_sr = node_narrow_int(env, info[1], "srcSr");
   int target_sr = node_narrow_int(env, info[2], "targetSr");

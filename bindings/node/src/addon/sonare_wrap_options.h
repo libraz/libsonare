@@ -27,6 +27,24 @@
 
 namespace sonare_node {
 
+/// @brief The element pointer of @p array, never null. A zero-length array is a given argument
+///        of length 0, so a C entry answers with its own emptiness rule instead of reading the
+///        null a zero-length view carries as an omitted argument. Every typed-array pointer the
+///        addon reads goes through here.
+template <typename T>
+T* ElementData(Napi::TypedArrayOf<T> array) {
+  static T empty{};
+  T* data = array.Data();
+  return data != nullptr ? data : &empty;
+}
+
+/// @brief The element pointer of a copy taken from a typed array, never null, for the same reason.
+template <typename T>
+T* ElementData(std::vector<T>& copy) {
+  static T empty{};
+  return copy.empty() ? &empty : copy.data();
+}
+
 // Defined in sonare_wrap_utils.cpp; the positional domain readers report a core refusal through it.
 void ThrowCurrentException(Napi::Env env);
 
@@ -790,7 +808,8 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
                                  std::string(key) + " must be a Float32Array or a number array");
     }
     auto floats = value.As<Napi::Float32Array>();
-    return std::vector<float>(floats.Data(), floats.Data() + floats.ElementLength());
+    return std::vector<float>(sonare_node::ElementData(floats),
+                              sonare_node::ElementData(floats) + floats.ElementLength());
   }
   if (!value.IsArray()) {
     throw Napi::TypeError::New(obj.Env(),
@@ -821,7 +840,8 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
 inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const char* name) {
   if (IsFloat32Array(value)) {
     auto arr = value.As<Napi::Float32Array>();
-    return std::vector<float>(arr.Data(), arr.Data() + arr.ElementLength());
+    return std::vector<float>(sonare_node::ElementData(arr),
+                              sonare_node::ElementData(arr) + arr.ElementLength());
   }
   if (value.IsArray()) {
     auto arr = value.As<Napi::Array>();
@@ -1667,11 +1687,11 @@ inline bool RequiredBytesArg(Napi::Env env, const Napi::CallbackInfo& info, size
   if (env.IsExceptionPending()) return false;
   if (info.Length() > index && info[index].IsBuffer()) {
     auto buffer = info[index].As<Napi::Buffer<uint8_t>>();
-    *data = buffer.Data();
+    *data = sonare_node::ElementData(buffer);
     *len = buffer.ElementLength();
   } else if (info.Length() > index && IsUint8Array(info[index])) {
     auto array = info[index].As<Napi::Uint8Array>();
-    *data = array.Data();
+    *data = sonare_node::ElementData(array);
     *len = array.ByteLength();
   } else {
     Napi::TypeError::New(env, std::string(label) + " must be a Buffer or Uint8Array")

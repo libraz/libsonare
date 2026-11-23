@@ -41,14 +41,14 @@ Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t out_frames = 0;
   int out_channels = 0;
-  ThrowIfError(env, sonare_playback_render_interleaved(input.Data(), frames, in_channels,
-                                                       sample_rate, config_json.c_str(), hrtf, &out,
-                                                       &out_frames, &out_channels));
+  ThrowIfError(env, sonare_playback_render_interleaved(
+                        sonare_node::ElementData(input), frames, in_channels, sample_rate,
+                        config_json.c_str(), hrtf, &out, &out_frames, &out_channels));
   if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Float32Array samples =
       Napi::Float32Array::New(env, out_frames * static_cast<size_t>(out_channels));
-  std::memcpy(samples.Data(), out, samples.ElementLength() * sizeof(float));
+  std::memcpy(sonare_node::ElementData(samples), out, samples.ElementLength() * sizeof(float));
   sonare_free_floats(out);
 
   Napi::Object result = Napi::Object::New(env);

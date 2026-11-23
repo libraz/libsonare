@@ -57,7 +57,7 @@ Array TypedArrayFromVec(Napi::Env env, const std::vector<Value>& vec) {
       out[i] = vec[i];
     }
   } else if (!vec.empty()) {
-    std::memcpy(out.Data(), vec.data(), vec.size() * sizeof(Value));
+    std::memcpy(sonare_node::ElementData(out), vec.data(), vec.size() * sizeof(Value));
   }
   return out;
 }
@@ -288,9 +288,9 @@ Napi::Value StreamAnalyzerWrap::Process(const Napi::CallbackInfo& info) {
   }
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
   if (has_offset) {
-    analyzer_->process(typed.Data(), typed.ElementLength(), offset);
+    analyzer_->process(sonare_node::ElementData(typed), typed.ElementLength(), offset);
   } else {
-    analyzer_->process(typed.Data(), typed.ElementLength());
+    analyzer_->process(sonare_node::ElementData(typed), typed.ElementLength());
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

@@ -57,8 +57,8 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   }
 
   SonareSectionResult result{};
-  SonareError err =
-      sonare_analyze_sections(typed.Data(), typed.ElementLength(), sample_rate, &options, &result);
+  SonareError err = sonare_analyze_sections(sonare_node::ElementData(typed), typed.ElementLength(),
+                                            sample_rate, &options, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -122,8 +122,8 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   }
 
   SonareBoundaryResult result{};
-  SonareError err =
-      sonare_detect_boundaries(typed.Data(), typed.ElementLength(), sample_rate, &options, &result);
+  SonareError err = sonare_detect_boundaries(sonare_node::ElementData(typed), typed.ElementLength(),
+                                             sample_rate, &options, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -200,9 +200,9 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   sonare_analyze_melody_options_init(&melody_options);
   melody_options.use_pyin = use_pyin ? 1 : 0;
   melody_options.center = center ? 1 : 0;
-  SonareError err =
-      sonare_analyze_melody(typed.Data(), typed.ElementLength(), sample_rate, fmin, fmax,
-                            frame_length, hop_length, threshold, &melody_options, &result);
+  SonareError err = sonare_analyze_melody(sonare_node::ElementData(typed), typed.ElementLength(),
+                                          sample_rate, fmin, fmax, frame_length, hop_length,
+                                          threshold, &melody_options, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

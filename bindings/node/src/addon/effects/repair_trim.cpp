@@ -95,13 +95,15 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::TrimSilenceConfig config;
   float threshold_db = 0.0f;
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = ReadTrimConfig(info[2].As<Napi::Object>(), &threshold_db);
   }
-  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   sonare::mastering::repair::TrimReport report;
   sonare::Audio result = sonare::mastering::repair::trim_silence(audio, config, &report);
   return EmitMonoResult(env, result, EmitTrimReport(env, report));
@@ -140,7 +142,8 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
   const SonareTrimSilenceConfig config = ToCTrimConfig(core_config, threshold_db);
   SonareTrimSilenceStereoResult result{};
   SonareError err = sonare_mastering_repair_trim_silence_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -170,7 +173,8 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRange(const Napi::CallbackInfo&
   const SonareTrimSilenceConfig config = ToCTrimConfig(core_config, threshold_db);
   SonareTrimRange range{};
   SonareError err = sonare_mastering_repair_detect_trim_range(
-      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &range);
+      sonare_node::ElementData(typed), typed.ElementLength(), sr, has_options ? &config : nullptr,
+      &range);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -210,7 +214,8 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::Callbac
   const SonareTrimSilenceConfig config = ToCTrimConfig(core_config, threshold_db);
   SonareTrimRange range{};
   SonareError err = sonare_mastering_repair_detect_trim_range_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, has_options ? &config : nullptr, &range);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      has_options ? &config : nullptr, &range);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

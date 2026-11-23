@@ -318,7 +318,7 @@ void RenderOnJsThread(JsInstrumentSlot* slot, float* const* channels, int num_ch
   Napi::Array outputs = Napi::Array::New(env, static_cast<size_t>(num_channels));
   for (int ch = 0; ch < num_channels; ++ch) {
     Napi::Float32Array base = ScratchChannel(slot, static_cast<size_t>(ch), frames);
-    std::memset(base.Data(), 0, frames * sizeof(float));
+    std::memset(sonare_node::ElementData(base), 0, frames * sizeof(float));
     outputs.Set(static_cast<uint32_t>(ch),
                 Napi::Float32Array::New(env, frames, base.ArrayBuffer(), base.ByteOffset()));
   }
@@ -329,7 +329,7 @@ void RenderOnJsThread(JsInstrumentSlot* slot, float* const* channels, int num_ch
   for (int ch = 0; ch < num_channels; ++ch) {
     Napi::Float32Array base = ScratchChannel(slot, static_cast<size_t>(ch), frames);
     // A scratch the instrument transferred away was just replaced by zeros.
-    const float* src = base.Data();
+    const float* src = sonare_node::ElementData(base);
     float* dst = channels[ch];
     for (size_t i = 0; i < frames; ++i) dst[i] += src[i];
   }
@@ -381,7 +381,7 @@ Napi::Object BounceResultObject(Napi::Env env, const float* interleaved, size_t 
   const size_t len = frames * static_cast<size_t>(num_channels);
   Napi::Float32Array data = Napi::Float32Array::New(env, len);
   if (len > 0 && interleaved != nullptr) {
-    std::memcpy(data.Data(), interleaved, len * sizeof(float));
+    std::memcpy(sonare_node::ElementData(data), interleaved, len * sizeof(float));
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("interleaved", data);

@@ -163,9 +163,10 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
   out->id_pointers.reserve(count);
   out->name_pointers.reserve(count);
   for (uint32_t index = 0; index < count; ++index) {
-    out->left.push_back(out->left_handles[index].Data());
-    out->right.push_back(out->right_handles[index].IsEmpty() ? nullptr
-                                                             : out->right_handles[index].Data());
+    out->left.push_back(sonare_node::ElementData(out->left_handles[index]));
+    out->right.push_back(out->right_handles[index].IsEmpty()
+                             ? nullptr
+                             : sonare_node::ElementData(out->right_handles[index]));
     out->id_pointers.push_back(out->ids[index].c_str());
     out->name_pointers.push_back(out->has_name[index] ? out->names[index].c_str() : nullptr);
   }

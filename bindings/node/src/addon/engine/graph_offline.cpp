@@ -326,7 +326,8 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array interleaved = Napi::Float32Array::New(env, result.sample_count);
   if (result.sample_count > 0 && result.interleaved != nullptr) {
-    std::memcpy(interleaved.Data(), result.interleaved, result.sample_count * sizeof(float));
+    std::memcpy(sonare_node::ElementData(interleaved), result.interleaved,
+                result.sample_count * sizeof(float));
   }
   // Capture scalars before freeing: the free contract only promises to release
   // the owned buffers, not to keep scalar fields readable afterwards.

@@ -126,8 +126,9 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   if (!ReadTranscribeConfig(env, request, &config)) return env.Undefined();
 
   TranscribeResultGuard result;
-  const SonareError error = sonare_transcribe(samples.Data(), samples.ElementLength(), sample_rate,
-                                              tempo_bpm, &config, &result.value);
+  const SonareError error =
+      sonare_transcribe(sonare_node::ElementData(samples), samples.ElementLength(), sample_rate,
+                        tempo_bpm, &config, &result.value);
   if (error != SONARE_OK) {
     sonare_node::ThrowSonareError(env, error);
     return env.Undefined();
@@ -172,8 +173,8 @@ Napi::Value ProjectWrap::TranscribeToClip(const Napi::CallbackInfo& info) {
 
   size_t note_count = 0;
   const SonareError error =
-      sonare_project_transcribe_to_clip(project_, clip_id, samples.Data(), samples.ElementLength(),
-                                        sample_rate, &config, &note_count);
+      sonare_project_transcribe_to_clip(project_, clip_id, sonare_node::ElementData(samples),
+                                        samples.ElementLength(), sample_rate, &config, &note_count);
   if (error != SONARE_OK) {
     sonare_node::ThrowSonareError(env, error);
     return env.Undefined();

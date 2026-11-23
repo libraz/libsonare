@@ -63,7 +63,7 @@ bool ReadOptionalVoicedFlags(Napi::Env env, const Napi::Value& value, size_t n_f
     Napi::RangeError::New(env, "voiced must match f0Hz length").ThrowAsJavaScriptException();
     return false;
   }
-  *data = storage->Data();
+  *data = sonare_node::ElementData(*storage);
   return true;
 }
 
@@ -94,8 +94,9 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
       Napi::RangeError::New(env, "voiced must match f0Hz length").ThrowAsJavaScriptException();
       return false;
     }
-    out->voiced.assign(arr.Data(), arr.Data() + arr.ElementLength());
-    out->voiced_ptr = out->voiced.data();
+    out->voiced.assign(sonare_node::ElementData(arr),
+                       sonare_node::ElementData(arr) + arr.ElementLength());
+    out->voiced_ptr = sonare_node::ElementData(out->voiced);
   }
   const Napi::Value prob_value = opts.Get("voicedProb");
   if (!out->voiced_ptr && IsFloat32Array(prob_value)) {
@@ -104,8 +105,9 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
       Napi::RangeError::New(env, "voicedProb must match f0Hz length").ThrowAsJavaScriptException();
       return false;
     }
-    out->voiced_prob.assign(arr.Data(), arr.Data() + arr.ElementLength());
-    out->prob_ptr = out->voiced_prob.data();
+    out->voiced_prob.assign(sonare_node::ElementData(arr),
+                            sonare_node::ElementData(arr) + arr.ElementLength());
+    out->prob_ptr = sonare_node::ElementData(out->voiced_prob);
   }
   return true;
 }
@@ -379,7 +381,7 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
@@ -392,9 +394,9 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
   }
 
   OwnedNoteObjects result;
-  const SonareError err =
-      sonare_extract_notes(data, length, sr, f0.Data(), options.prob_ptr, options.voiced_ptr,
-                           n_frames, frame_rate, &options.config, &result.value);
+  const SonareError err = sonare_extract_notes(data, length, sr, sonare_node::ElementData(f0),
+                                               options.prob_ptr, options.voiced_ptr, n_frames,
+                                               frame_rate, &options.config, &result.value);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);
     return env.Undefined();
@@ -415,7 +417,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
 
@@ -442,7 +444,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
     }
     if (IsFloat32Array(f0_value)) {
       f0 = f0_value.As<Napi::Float32Array>();
-      f0_data = f0.Data();
+      f0_data = sonare_node::ElementData(f0);
       n_frames = f0.ElementLength();
     }
     const Napi::Value voiced_value = opts.Get("voiced");
@@ -509,8 +511,8 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
 
   OwnedPitchDecomposition decomposition;
   const SonareError err =
-      sonare_decompose_note_pitch(f0.Data(), voiced_data, f0.ElementLength(), frame_rate, median_hz,
-                                  vibrato_cutoff_hz, &decomposition.value);
+      sonare_decompose_note_pitch(sonare_node::ElementData(f0), voiced_data, f0.ElementLength(),
+                                  frame_rate, median_hz, vibrato_cutoff_hz, &decomposition.value);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);
     return env.Undefined();
@@ -556,7 +558,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
@@ -575,11 +577,11 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   ReadNotes(info[4].As<Napi::Array>(), &notes, &envelopes);
 
   OwnedNoteObjects result;
-  const SonareError err =
-      sonare_split_note(data, length, sr, f0.Data(), options.prob_ptr, options.voiced_ptr, n_frames,
-                        frame_rate, &options.config, notes.empty() ? nullptr : notes.data(),
-                        notes.size(), envelopes.empty() ? nullptr : envelopes.data(),
-                        envelopes.size(), index, frame, &result.value);
+  const SonareError err = sonare_split_note(
+      data, length, sr, sonare_node::ElementData(f0), options.prob_ptr, options.voiced_ptr,
+      n_frames, frame_rate, &options.config, notes.empty() ? nullptr : notes.data(), notes.size(),
+      envelopes.empty() ? nullptr : envelopes.data(), envelopes.size(), index, frame,
+      &result.value);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);
     return env.Undefined();
@@ -616,7 +618,7 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   auto f0 = info[2].As<Napi::Float32Array>();
@@ -636,8 +638,8 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
 
   OwnedNoteObjects result;
   const SonareError err = sonare_merge_notes(
-      data, length, sr, f0.Data(), options.prob_ptr, options.voiced_ptr, n_frames, frame_rate,
-      &options.config, notes.empty() ? nullptr : notes.data(), notes.size(),
+      data, length, sr, sonare_node::ElementData(f0), options.prob_ptr, options.voiced_ptr,
+      n_frames, frame_rate, &options.config, notes.empty() ? nullptr : notes.data(), notes.size(),
       envelopes.empty() ? nullptr : envelopes.data(), envelopes.size(), first, last, &result.value);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);
@@ -767,7 +769,7 @@ Napi::Value SonareWrap::ExtractPercussiveEvents(const Napi::CallbackInfo& info) 
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
 
@@ -799,7 +801,7 @@ Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   const size_t length = typed.ElementLength();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
 

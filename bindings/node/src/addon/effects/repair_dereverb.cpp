@@ -101,7 +101,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::DereverbClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     config = read_dereverb_config(info[2].As<Napi::Object>(), config);
@@ -110,7 +111,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
     Napi::RangeError::New(env, "hopLength must be in (0, nFft / 2]").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   sonare::mastering::repair::DereverbReport report;
   sonare::Audio result = sonare::mastering::repair::dereverb_classical(audio, config, &report);
   return EmitMonoResult(env, result, EmitDereverbReport(env, report));
@@ -150,7 +152,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::Callb
   }
   SonareDereverbStereoResult result{};
   SonareError err = sonare_mastering_repair_dereverb_classical_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -212,8 +215,9 @@ Napi::Value SonareWrap::MasteringRepairDetectReverb(const Napi::CallbackInfo& in
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_dereverb_config_c(info[2].As<Napi::Object>(), config);
   SonareReverbDetection detection{};
-  SonareError err = sonare_mastering_repair_detect_reverb(
-      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  SonareError err =
+      sonare_mastering_repair_detect_reverb(sonare_node::ElementData(typed), typed.ElementLength(),
+                                            sr, has_options ? &config : nullptr, &detection);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

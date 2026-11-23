@@ -73,8 +73,9 @@ Napi::Value PlaybackLoudnessMeterWrap::PushInterleaved(const Napi::CallbackInfo&
     return env.Undefined();
   }
   // The C entry counts frames, not samples.
-  sonare_node::ThrowIfError(env, sonare_playback_loudness_meter_push_interleaved(
-                                     meter_, samples.Data(), samples.ElementLength() / channels));
+  sonare_node::ThrowIfError(
+      env, sonare_playback_loudness_meter_push_interleaved(
+               meter_, sonare_node::ElementData(samples), samples.ElementLength() / channels));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

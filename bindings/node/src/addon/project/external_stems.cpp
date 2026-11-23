@@ -97,7 +97,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
         return env.Undefined();
       }
       stem_buffers.push_back(array);
-      stem_planes.push_back(array.Data());
+      stem_planes.push_back(sonare_node::ElementData(array));
     }
     SonareExternalStemDesc desc{};
     desc.name = names.back().c_str();

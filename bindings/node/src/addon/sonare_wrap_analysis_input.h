@@ -23,7 +23,7 @@ inline bool ReadMonoAnalysisInput(const Napi::CallbackInfo& info, MonoAnalysisIn
                                   int default_sample_rate) {
   if (!RequireFloat32Array(info, 0, "samples must be a Float32Array")) return false;
   out->samples = info[0].As<Napi::Float32Array>();
-  out->data = out->samples.Data();
+  out->data = sonare_node::ElementData(out->samples);
   out->length = out->samples.ElementLength();
   if (!OptionalIntArg(info.Env(), info, 1, "sampleRate", default_sample_rate, &out->sample_rate))
     return false;

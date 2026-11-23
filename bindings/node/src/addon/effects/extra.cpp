@@ -156,8 +156,9 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   size_t out_w_length = 0;
   float* out_h = nullptr;
   size_t out_h_length = 0;
-  SonareError err = sonare_decompose(arr.Data(), n_features, n_frames, n_components, n_iter, beta,
-                                     &options, &out_w, &out_w_length, &out_h, &out_h_length);
+  SonareError err =
+      sonare_decompose(sonare_node::ElementData(arr), n_features, n_frames, n_components, n_iter,
+                       beta, &options, &out_w, &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object w = Napi::Object::New(env);
   w.Set("rows", Napi::Number::New(env, n_features));
@@ -191,9 +192,9 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   size_t out_w_length = 0;
   float* out_h = nullptr;
   size_t out_h_length = 0;
-  SonareError err =
-      sonare_decompose_stems(arr.Data(), arr.ElementLength(), sr, &config, &out, &component_length,
-                             &n_components, &out_w, &out_w_length, &out_h, &out_h_length);
+  SonareError err = sonare_decompose_stems(sonare_node::ElementData(arr), arr.ElementLength(), sr,
+                                           &config, &out, &component_length, &n_components, &out_w,
+                                           &out_w_length, &out_h, &out_h_length);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -203,7 +204,8 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   for (size_t c = 0; c < component_count; ++c) {
     auto component = Napi::Float32Array::New(env, component_length);
     if (component_length > 0 && out != nullptr) {
-      std::memcpy(component.Data(), out + c * component_length, component_length * sizeof(float));
+      std::memcpy(sonare_node::ElementData(component), out + c * component_length,
+                  component_length * sizeof(float));
     }
     components.Set(static_cast<uint32_t>(c), component);
   }
@@ -253,7 +255,8 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
     for (size_t ch = 0; ch < channel_count; ++ch) {
       auto slice = Napi::Float32Array::New(env, component_length);
       if (component_length > 0 && out != nullptr) {
-        std::memcpy(slice.Data(), out + (c * channel_count + ch) * component_length,
+        std::memcpy(sonare_node::ElementData(slice),
+                    out + (c * channel_count + ch) * component_length,
                     component_length * sizeof(float));
       }
       component_channels.Set(static_cast<uint32_t>(ch), slice);
@@ -307,8 +310,8 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t out_length = 0;
-  SonareError err = sonare_nn_filter(arr.Data(), n_features, n_frames, aggregate.c_str(), k, width,
-                                     &out, &out_length);
+  SonareError err = sonare_nn_filter(sonare_node::ElementData(arr), n_features, n_frames,
+                                     aggregate.c_str(), k, width, &out, &out_length);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("rows", Napi::Number::New(env, n_features));
@@ -332,8 +335,9 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   }
   float* out = nullptr;
   size_t out_length = 0;
-  SonareError err = sonare_remix(arr.Data(), arr.ElementLength(), sr, intervals.data(),
-                                 intervals.size() / 2, align_zeros, &out, &out_length);
+  SonareError err =
+      sonare_remix(sonare_node::ElementData(arr), arr.ElementLength(), sr, intervals.data(),
+                   intervals.size() / 2, align_zeros, &out, &out_length);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
@@ -353,9 +357,9 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   }
   int* out = nullptr;
   size_t out_count = 0;
-  SonareError err =
-      sonare_remix_aligned_intervals(arr.Data(), arr.ElementLength(), sr, intervals.data(),
-                                     intervals.size() / 2, align_zeros, &out, &out_count);
+  SonareError err = sonare_remix_aligned_intervals(
+      sonare_node::ElementData(arr), arr.ElementLength(), sr, intervals.data(),
+      intervals.size() / 2, align_zeros, &out, &out_count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCInts(env, out, out_count * 2);
   SONARE_NODE_CATCH(env)
@@ -379,8 +383,8 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   if (!OptionalResynthesisHopArg(env, info, 4, &hop_length)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
-  SonareError err = sonare_phase_vocoder(arr.Data(), arr.ElementLength(), sr, rate, n_fft,
-                                         hop_length, &out, &out_length);
+  SonareError err = sonare_phase_vocoder(sonare_node::ElementData(arr), arr.ElementLength(), sr,
+                                         rate, n_fft, hop_length, &out, &out_length);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)

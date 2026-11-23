@@ -150,7 +150,8 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
           .ThrowAsJavaScriptException();
       return false;
     }
-    clip_storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
+    clip_storage.emplace_back(sonare_node::ElementData(channel),
+                              sonare_node::ElementData(channel) + channel.ElementLength());
     clip_ptrs.push_back(clip_storage.back().data());
   }
 
@@ -701,7 +702,7 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
       return env.Undefined();
     }
     Napi::Float32Array channel = value.As<Napi::Float32Array>();
-    if (channel.Data() == nullptr) {
+    if (sonare_node::ElementData(channel) == nullptr) {
       Napi::TypeError::New(env, "capture channel must not be detached")
           .ThrowAsJavaScriptException();
       return env.Undefined();
@@ -718,7 +719,8 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    buffers.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
+    buffers.emplace_back(sonare_node::ElementData(channel),
+                         sonare_node::ElementData(channel) + channel.ElementLength());
   }
 
   InstallCaptureBuffers(env, std::move(buffers), frames);

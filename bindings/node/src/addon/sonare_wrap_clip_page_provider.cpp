@@ -112,7 +112,8 @@ Napi::Value ClipPageProviderWrap::Supply(const Napi::CallbackInfo& info) {
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
+    storage.emplace_back(sonare_node::ElementData(channel),
+                         sonare_node::ElementData(channel) + channel.ElementLength());
     ptrs.push_back(storage.back().data());
   }
   ThrowIfError(env, sonare_clip_page_provider_supply(provider_, page_index, ptrs.data(),

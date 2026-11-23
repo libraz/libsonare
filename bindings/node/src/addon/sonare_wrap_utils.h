@@ -320,7 +320,8 @@ inline Napi::Value MeasuredNumber(Napi::Env env, double value) {
 ///        a null @p data leaves the n zeros the array was created with.
 inline Napi::Float32Array Float32ArrayFrom(Napi::Env env, const float* data, size_t n) {
   auto array = Napi::Float32Array::New(env, n);
-  if (n > 0 && data != nullptr) std::memcpy(array.Data(), data, n * sizeof(float));
+  if (n > 0 && data != nullptr)
+    std::memcpy(sonare_node::ElementData(array), data, n * sizeof(float));
   return array;
 }
 
@@ -383,7 +384,8 @@ inline Napi::Float32Array TakeCFloats(Napi::Env env, float* data, size_t length)
 /// @brief The Int32Array counterpart of TakeCFloats for a C-owned int array.
 inline Napi::Int32Array TakeCInts(Napi::Env env, int* data, size_t length) {
   auto out = Napi::Int32Array::New(env, length);
-  if (length > 0 && data != nullptr) std::memcpy(out.Data(), data, length * sizeof(int));
+  if (length > 0 && data != nullptr)
+    std::memcpy(sonare_node::ElementData(out), data, length * sizeof(int));
   sonare_free_ints(data);
   return out;
 }
@@ -404,7 +406,8 @@ inline Napi::Value CheckCResult(Napi::Env env, SonareError err) {
 inline std::vector<int> IntVectorFromValue(const Napi::Value& value, const char* name) {
   if (IsInt32Array(value)) {
     auto arr = value.As<Napi::Int32Array>();
-    return std::vector<int>(arr.Data(), arr.Data() + arr.ElementLength());
+    return std::vector<int>(sonare_node::ElementData(arr),
+                            sonare_node::ElementData(arr) + arr.ElementLength());
   }
   if (value.IsArray()) {
     auto arr = value.As<Napi::Array>();

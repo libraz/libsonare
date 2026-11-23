@@ -215,7 +215,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
+  const float* data = sonare_node::ElementData(typed);
   size_t length = typed.ElementLength();
   const SonarePitchClass key_root = info[1].IsUndefined() || info[1].IsNull()
                                         ? SONARE_PITCH_C

@@ -150,8 +150,8 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
   }
 
   uint32_t index = 0;
-  ThrowIfError(
-      env, sonare_sample_bank_add_sample(bank_, data.Data(), data.ElementLength(), &desc, &index));
+  ThrowIfError(env, sonare_sample_bank_add_sample(bank_, sonare_node::ElementData(data),
+                                                  data.ElementLength(), &desc, &index));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, index);
   SONARE_NODE_CATCH(env)

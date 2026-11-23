@@ -104,7 +104,7 @@ inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, LinkedPlan
   planes->out_ptrs.reserve(count);
   for (size_t index = 0; index < count; ++index) {
     planes->outputs.push_back(Napi::Float32Array::New(env, planes->in.length));
-    planes->out_ptrs.push_back(planes->outputs.back().Data());
+    planes->out_ptrs.push_back(sonare_node::ElementData(planes->outputs.back()));
   }
   return true;
 }

@@ -824,7 +824,7 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, ChannelInputs* i
           .ThrowAsJavaScriptException();
       return false;
     }
-    inputs->ptrs.push_back(inputs->arrays.back().Data());
+    inputs->ptrs.push_back(sonare_node::ElementData(inputs->arrays.back()));
   }
   return true;
 }

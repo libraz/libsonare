@@ -36,13 +36,14 @@ Napi::Value CqtResultToObject(Napi::Env env, const SonareCqtResult& result) {
       static_cast<size_t>(result.n_bins) * static_cast<size_t>(result.n_frames);
   auto magnitude = Napi::Float32Array::New(env, magnitude_count);
   if (magnitude_count > 0 && result.magnitude != nullptr) {
-    std::memcpy(magnitude.Data(), result.magnitude, magnitude_count * sizeof(float));
+    std::memcpy(sonare_node::ElementData(magnitude), result.magnitude,
+                magnitude_count * sizeof(float));
   }
   out.Set("magnitude", magnitude);
 
   auto frequencies = Napi::Float32Array::New(env, static_cast<size_t>(result.n_bins));
   if (result.n_bins > 0 && result.frequencies != nullptr) {
-    std::memcpy(frequencies.Data(), result.frequencies,
+    std::memcpy(sonare_node::ElementData(frequencies), result.frequencies,
                 static_cast<size_t>(result.n_bins) * sizeof(float));
   }
   out.Set("frequencies", frequencies);
@@ -80,8 +81,8 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   if (!OptionalFloatArg(env, info, 6, "filterScale", 1.0f, &filter_scale)) return env.Undefined();
 
   SonareCqtResult result{};
-  SonareError err = fn(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
-                       bins_per_octave, filter_scale, &result);
+  SonareError err = fn(sonare_node::ElementData(typed), typed.ElementLength(), sr, hop_length, fmin,
+                       n_bins, bins_per_octave, filter_scale, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -148,8 +149,9 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
     return env.Undefined();
 
   SonareCqtResult result{};
-  SonareError err = sonare_vqt(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
-                               bins_per_octave, filter_scale, gamma, &result);
+  SonareError err =
+      sonare_vqt(sonare_node::ElementData(typed), typed.ElementLength(), sr, hop_length, fmin,
+                 n_bins, bins_per_octave, filter_scale, gamma, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -188,9 +190,9 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   }
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError error = sonare_cqt_to_audio(magnitude.Data(), magnitude.ElementLength(), n_bins,
-                                                n_frames, sample_rate, hop_length, fmin,
-                                                bins_per_octave, n_iter, &output, &output_length);
+  const SonareError error = sonare_cqt_to_audio(
+      sonare_node::ElementData(magnitude), magnitude.ElementLength(), n_bins, n_frames, sample_rate,
+      hop_length, fmin, bins_per_octave, n_iter, &output, &output_length);
   if (error != SONARE_OK) return CheckCResult(env, error);
   return TakeCFloats(env, output, output_length);
   SONARE_NODE_CATCH(env)
@@ -230,8 +232,8 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError error = sonare_vqt_to_audio(
-      magnitude.Data(), magnitude.ElementLength(), n_bins, n_frames, sample_rate, hop_length, fmin,
-      bins_per_octave, gamma, n_iter, &output, &output_length);
+      sonare_node::ElementData(magnitude), magnitude.ElementLength(), n_bins, n_frames, sample_rate,
+      hop_length, fmin, bins_per_octave, gamma, n_iter, &output, &output_length);
   if (error != SONARE_OK) return CheckCResult(env, error);
   return TakeCFloats(env, output, output_length);
   SONARE_NODE_CATCH(env)
@@ -294,7 +296,8 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   config.fmax = fmax;
   config.htk = htk;
 
-  std::vector<float> stft = sonare::mel_to_stft(typed.Data(), n_mels, n_frames, config, sr);
+  std::vector<float> stft =
+      sonare::mel_to_stft(sonare_node::ElementData(typed), n_mels, n_frames, config, sr);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nBins", Napi::Number::New(env, n_fft / 2 + 1));
@@ -353,7 +356,8 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   config.fmax = fmax;
   config.htk = htk;
 
-  sonare::Audio result = sonare::mel_to_audio(typed.Data(), n_mels, n_frames, config, n_iter, sr);
+  sonare::Audio result =
+      sonare::mel_to_audio(sonare_node::ElementData(typed), n_mels, n_frames, config, n_iter, sr);
   return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }
@@ -385,9 +389,9 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 7, "momentum", 0.99f, &momentum)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
-  const SonareError err =
-      sonare_griffin_lim(magnitude.Data(), magnitude.ElementLength(), n_bins, n_frames, n_fft,
-                         hop_length, sample_rate, n_iter, momentum, &out, &out_length);
+  const SonareError err = sonare_griffin_lim(
+      sonare_node::ElementData(magnitude), magnitude.ElementLength(), n_bins, n_frames, n_fft,
+      hop_length, sample_rate, n_iter, momentum, &out, &out_length);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCFloats(env, out, out_length);
   SONARE_NODE_CATCH(env)
@@ -414,7 +418,8 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   float lifter{};
   if (!OptionalFloatArg(env, info, 4, "lifter", 0.0f, &lifter)) return env.Undefined();
 
-  std::vector<float> mel = sonare::mfcc_to_mel(typed.Data(), n_mfcc, n_frames, n_mels, lifter);
+  std::vector<float> mel =
+      sonare::mfcc_to_mel(sonare_node::ElementData(typed), n_mfcc, n_frames, n_mels, lifter);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nMels", Napi::Number::New(env, n_mels));
@@ -478,8 +483,8 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   config.fmax = fmax;
   config.htk = htk;
 
-  sonare::Audio result =
-      sonare::mfcc_to_audio(typed.Data(), n_mfcc, n_frames, config, n_iter, sr, lifter);
+  sonare::Audio result = sonare::mfcc_to_audio(sonare_node::ElementData(typed), n_mfcc, n_frames,
+                                               config, n_iter, sr, lifter);
   return Float32ArrayFrom(env, result.data(), result.size());
   SONARE_NODE_CATCH(env)
 }
@@ -515,9 +520,9 @@ Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
   size_t count = 0;
   int out_n_subbands = 0;
   int out_n_frames = 0;
-  SonareError err =
-      sonare_spectral_contrast(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length, n_bands,
-                               fmin, quantile, &out, &count, &out_n_subbands, &out_n_frames);
+  SonareError err = sonare_spectral_contrast(sonare_node::ElementData(arr), arr.ElementLength(), sr,
+                                             n_fft, hop_length, n_bands, fmin, quantile, &out,
+                                             &count, &out_n_subbands, &out_n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("rows", Napi::Number::New(env, out_n_subbands));
@@ -550,8 +555,9 @@ Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
   size_t count = 0;
   int out_n_coefficients = 0;
   int out_n_frames = 0;
-  SonareError err = sonare_poly_features(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length,
-                                         order, &out, &count, &out_n_coefficients, &out_n_frames);
+  SonareError err =
+      sonare_poly_features(sonare_node::ElementData(arr), arr.ElementLength(), sr, n_fft,
+                           hop_length, order, &out, &count, &out_n_coefficients, &out_n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("rows", Napi::Number::New(env, out_n_coefficients));
@@ -582,8 +588,8 @@ Napi::Value SonareWrap::ZeroCrossings(const Napi::CallbackInfo& info) {
   }
   int* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_zero_crossings(arr.Data(), arr.ElementLength(), threshold, ref_magnitude,
-                                          pad, zero_pos, &out, &count);
+  SonareError err = sonare_zero_crossings(sonare_node::ElementData(arr), arr.ElementLength(),
+                                          threshold, ref_magnitude, pad, zero_pos, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return TakeCInts(env, out, count);
   SONARE_NODE_CATCH(env)
@@ -602,8 +608,8 @@ Napi::Value SonareWrap::PitchTuning(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float out_tuning = 0.0f;
-  SonareError err = sonare_pitch_tuning(arr.Data(), arr.ElementLength(), resolution,
-                                        bins_per_octave, &out_tuning);
+  SonareError err = sonare_pitch_tuning(sonare_node::ElementData(arr), arr.ElementLength(),
+                                        resolution, bins_per_octave, &out_tuning);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return Napi::Number::New(env, out_tuning);
   SONARE_NODE_CATCH(env)
@@ -660,8 +666,9 @@ Napi::Value SonareWrap::EstimateTuning(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   float out_tuning = 0.0f;
-  SonareError err = sonare_estimate_tuning(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length,
-                                           resolution, bins_per_octave, &out_tuning);
+  SonareError err =
+      sonare_estimate_tuning(sonare_node::ElementData(arr), arr.ElementLength(), sr, n_fft,
+                             hop_length, resolution, bins_per_octave, &out_tuning);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return Napi::Number::New(env, out_tuning);
   SONARE_NODE_CATCH(env)

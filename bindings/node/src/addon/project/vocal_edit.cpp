@@ -73,7 +73,8 @@ bool CopyFiniteSamples(Napi::Env env, const Napi::Value& value, const char* fiel
         .ThrowAsJavaScriptException();
     return false;
   }
-  out->assign(array.Data(), array.Data() + array.ElementLength());
+  out->assign(sonare_node::ElementData(array),
+              sonare_node::ElementData(array) + array.ElementLength());
   for (size_t index = 0; index < out->size(); ++index) {
     if (!std::isfinite((*out)[index])) {
       Napi::RangeError::New(env, std::string(field) + " must contain finite samples")
@@ -93,7 +94,8 @@ bool CopyBytes(Napi::Env env, const Napi::Value& value, const char* field,
         .ThrowAsJavaScriptException();
     return false;
   }
-  out->assign(array.Data(), array.Data() + array.ElementLength());
+  out->assign(sonare_node::ElementData(array),
+              sonare_node::ElementData(array) + array.ElementLength());
   return true;
 }
 

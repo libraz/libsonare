@@ -78,7 +78,7 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
 
   SonareLufsResult lufs{};
-  SonareError err = sonare_lufs(typed.Data(), typed.ElementLength(), sr, &lufs);
+  SonareError err = sonare_lufs(sonare_node::ElementData(typed), typed.ElementLength(), sr, &lufs);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -105,7 +105,8 @@ Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
 
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_momentary_lufs(typed.Data(), typed.ElementLength(), sr, &out, &count);
+  SonareError err = sonare_momentary_lufs(sonare_node::ElementData(typed), typed.ElementLength(),
+                                          sr, &out, &count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -124,7 +125,8 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
 
   float* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_short_term_lufs(typed.Data(), typed.ElementLength(), sr, &out, &count);
+  SonareError err = sonare_short_term_lufs(sonare_node::ElementData(typed), typed.ElementLength(),
+                                           sr, &out, &count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -154,7 +156,8 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
 
   SonareLufsResult lufs{};
-  SonareError err = sonare_lufs_interleaved(typed.Data(), frames, channels, sr, &lufs);
+  SonareError err =
+      sonare_lufs_interleaved(sonare_node::ElementData(typed), frames, channels, sr, &lufs);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -196,8 +199,8 @@ Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
   float* short_term = nullptr;
   size_t short_term_count = 0;
   SonareError err =
-      sonare_lufs_series_interleaved(typed.Data(), frames, channels, sr, &momentary,
-                                     &momentary_count, &short_term, &short_term_count);
+      sonare_lufs_series_interleaved(sonare_node::ElementData(typed), frames, channels, sr,
+                                     &momentary, &momentary_count, &short_term, &short_term_count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -219,8 +222,8 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeLu(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
 
   float out_lra = 0.0f;
-  SonareError err =
-      sonare_ebur128_loudness_range_lu(typed.Data(), typed.ElementLength(), sr, &out_lra);
+  SonareError err = sonare_ebur128_loudness_range_lu(sonare_node::ElementData(typed),
+                                                     typed.ElementLength(), sr, &out_lra);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -241,7 +244,7 @@ Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn) 
   int sr{};
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sr)) return env.Undefined();
   float out_value = 0.0f;
-  SonareError err = fn(typed.Data(), typed.ElementLength(), sr, &out_value);
+  SonareError err = fn(sonare_node::ElementData(typed), typed.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -280,8 +283,8 @@ Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 4, "hopLength", 256, &hop_length)) return env.Undefined();
   float ratio = 0.0f;
   const SonareError err =
-      sonare_metering_silence_ratio(samples.Data(), samples.ElementLength(), sample_rate,
-                                    threshold_db, frame_length, hop_length, &ratio);
+      sonare_metering_silence_ratio(sonare_node::ElementData(samples), samples.ElementLength(),
+                                    sample_rate, threshold_db, frame_length, hop_length, &ratio);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -314,8 +317,8 @@ Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
   int oversample{};
   if (!OptionalIntArg(env, info, 2, "oversampleFactor", 4, &oversample)) return env.Undefined();
   float out_value = 0.0f;
-  SonareError err = sonare_metering_true_peak_dbtp(typed.Data(), typed.ElementLength(), sr,
-                                                   oversample, &out_value);
+  SonareError err = sonare_metering_true_peak_dbtp(
+      sonare_node::ElementData(typed), typed.ElementLength(), sr, oversample, &out_value);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -346,8 +349,8 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   }
   const size_t min_region = static_cast<size_t>(min_region_value);
   SonareClippingResult result{};
-  SonareError err = sonare_metering_detect_clipping(typed.Data(), typed.ElementLength(), sr,
-                                                    threshold, min_region, &result);
+  SonareError err = sonare_metering_detect_clipping(
+      sonare_node::ElementData(typed), typed.ElementLength(), sr, threshold, min_region, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -391,8 +394,9 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   float high_p{};
   if (!RequiredFloatValue(env, info[5], "highP", &high_p)) return env.Undefined();
   SonareDynamicRangeResult result{};
-  SonareError err = sonare_metering_dynamic_range(typed.Data(), typed.ElementLength(), sr,
-                                                  window_sec, hop_sec, low_p, high_p, &result);
+  SonareError err =
+      sonare_metering_dynamic_range(sonare_node::ElementData(typed), typed.ElementLength(), sr,
+                                    window_sec, hop_sec, low_p, high_p, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -528,7 +532,8 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn) {
   int sr{};
   if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
   float out_value = 0.0f;
-  SonareError err = fn(left.Data(), right.Data(), left.ElementLength(), sr, &out_value);
+  SonareError err = fn(sonare_node::ElementData(left), sonare_node::ElementData(right),
+                       left.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -570,8 +575,9 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   size_t max_points = 0;
   if (!OptionalSizeTArg(env, info, 3, "maxPoints", 0, &max_points)) return env.Undefined();
   SonareVectorscopeResult result{};
-  SonareError err = sonare_metering_vectorscope(left.Data(), right.Data(), left.ElementLength(), sr,
-                                                max_points, &result);
+  SonareError err =
+      sonare_metering_vectorscope(sonare_node::ElementData(left), sonare_node::ElementData(right),
+                                  left.ElementLength(), sr, max_points, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -608,8 +614,9 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   size_t max_points = 0;
   if (!OptionalSizeTArg(env, info, 3, "maxPoints", 0, &max_points)) return env.Undefined();
   SonarePhaseScopeResult result{};
-  SonareError err = sonare_metering_phase_scope(left.Data(), right.Data(), left.ElementLength(), sr,
-                                                max_points, &result);
+  SonareError err =
+      sonare_metering_phase_scope(sonare_node::ElementData(left), sonare_node::ElementData(right),
+                                  left.ElementLength(), sr, max_points, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -658,8 +665,8 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
     db_amin = FloatProperty(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
-  SonareError err = sonare_metering_spectrum(typed.Data(), typed.ElementLength(), sr, n_fft, smooth,
-                                             octave, db_ref, db_amin, &result);
+  SonareError err = sonare_metering_spectrum(sonare_node::ElementData(typed), typed.ElementLength(),
+                                             sr, n_fft, smooth, octave, db_ref, db_amin, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -694,8 +701,8 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   }
   SonareSpectrumResult result{};
   SonareError err =
-      sonare_metering_spectrum_frame(typed.Data(), typed.ElementLength(), sr, frame_offset, n_fft,
-                                     smooth, octave, db_ref, db_amin, &result);
+      sonare_metering_spectrum_frame(sonare_node::ElementData(typed), typed.ElementLength(), sr,
+                                     frame_offset, n_fft, smooth, octave, db_ref, db_amin, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1014,8 +1021,8 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   }
   SonareWaveformPeaksResult result{};
   const size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
-  SonareError err =
-      sonare_waveform_peaks(typed.Data(), frames, channels, samples_per_bucket, &result);
+  SonareError err = sonare_waveform_peaks(sonare_node::ElementData(typed), frames, channels,
+                                          samples_per_bucket, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1057,8 +1064,8 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   }
   SonareWaveformPeakPyramidResult result{};
   const size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
-  SonareError err = sonare_waveform_peak_pyramid(typed.Data(), frames, channels, levels.data(),
-                                                 levels.size(), &result);
+  SonareError err = sonare_waveform_peak_pyramid(sonare_node::ElementData(typed), frames, channels,
+                                                 levels.data(), levels.size(), &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

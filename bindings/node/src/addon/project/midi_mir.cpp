@@ -29,7 +29,7 @@ Napi::Object AssistSidecarToObject(Napi::Env env, SonareProjectAssistSidecar* si
   out.Set("regionEndPpq", Napi::Number::New(env, sidecar->region_end_ppq));
   Napi::Uint8Array payload = Napi::Uint8Array::New(env, sidecar->payload_len);
   if (sidecar->payload_len > 0 && sidecar->payload != nullptr) {
-    std::memcpy(payload.Data(), sidecar->payload, sidecar->payload_len);
+    std::memcpy(sonare_node::ElementData(payload), sidecar->payload, sidecar->payload_len);
   }
   out.Set("payload", payload);
   sonare_free_project_assist_sidecar(sidecar);
@@ -287,9 +287,10 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   float out_bpm = 0.0f;
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 4 ? info[4] : env.Undefined());
-  ThrowIfError(env, sonare_project_auto_tempo(project_, audio.Data(), audio.ElementLength(),
-                                              sample_rate, &options, candidate_index,
-                                              apply_time_signatures ? 1 : 0, &out_bpm));
+  ThrowIfError(
+      env, sonare_project_auto_tempo(project_, sonare_node::ElementData(audio),
+                                     audio.ElementLength(), sample_rate, &options, candidate_index,
+                                     apply_time_signatures ? 1 : 0, &out_bpm));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_bpm);
   SONARE_NODE_CATCH(env)
@@ -310,9 +311,9 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
   size_t count = 0;
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 2 ? info[2] : env.Undefined());
-  ThrowIfError(
-      env, sonare_project_analyze_tempo(project_, audio.Data(), audio.ElementLength(), sample_rate,
-                                        &options, candidates, std::size(candidates), &count));
+  ThrowIfError(env, sonare_project_analyze_tempo(project_, sonare_node::ElementData(audio),
+                                                 audio.ElementLength(), sample_rate, &options,
+                                                 candidates, std::size(candidates), &count));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Array output =
       Napi::Array::New(env, static_cast<uint32_t>(std::min(count, std::size(candidates))));
@@ -483,10 +484,11 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
   Napi::Value payload_value = obj.Get("payload");
   if (sonare_node::IsUint8Array(payload_value)) {
     Napi::Uint8Array arr = payload_value.As<Napi::Uint8Array>();
-    payload.assign(arr.Data(), arr.Data() + arr.ByteLength());
+    payload.assign(sonare_node::ElementData(arr), sonare_node::ElementData(arr) + arr.ByteLength());
   } else if (payload_value.IsBuffer()) {
     Napi::Buffer<uint8_t> buf = payload_value.As<Napi::Buffer<uint8_t>>();
-    payload.assign(buf.Data(), buf.Data() + buf.ElementLength());
+    payload.assign(sonare_node::ElementData(buf),
+                   sonare_node::ElementData(buf) + buf.ElementLength());
   } else if (!payload_value.IsUndefined() && !payload_value.IsNull()) {
     Napi::TypeError::New(env, "payload must be a Uint8Array or Buffer")
         .ThrowAsJavaScriptException();
@@ -593,8 +595,9 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareTakeAlignment alignment{};
   const SonareError code = sonare_align_take_to_reference(
-      reference.Data(), reference.ElementLength(), sample_rate, take.Data(), take.ElementLength(),
-      take_sample_rate, &config, &raw_anchors, &count, &alignment);
+      sonare_node::ElementData(reference), reference.ElementLength(), sample_rate,
+      sonare_node::ElementData(take), take.ElementLength(), take_sample_rate, &config, &raw_anchors,
+      &count, &alignment);
   std::unique_ptr<SonareProjectWarpAnchor, WarpAnchorArrayDeleter> anchors(raw_anchors);
   if (code != SONARE_OK) {
     ThrowSonareError(env, code);

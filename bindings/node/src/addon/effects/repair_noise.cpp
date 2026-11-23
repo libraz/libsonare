@@ -196,7 +196,8 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::DenoiseClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -219,7 +220,8 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   sonare::mastering::repair::DenoiseReport report;
   sonare::Audio result = sonare::mastering::repair::denoise_classical(audio, config, &report);
   return EmitMonoResult(env, result, EmitDenoiseReport(env, report));
@@ -259,7 +261,8 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::Callba
   }
   SonareDenoiseStereoResult result{};
   SonareError err = sonare_mastering_repair_denoise_classical_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -310,7 +313,8 @@ Napi::Value SonareWrap::MasteringRepairDetectNoiseFloor(const Napi::CallbackInfo
   if (has_options) config = read_denoise_config(info[2].As<Napi::Object>(), config);
   SonareNoiseDetection detection{};
   SonareError err = sonare_mastering_repair_detect_noise_floor(
-      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+      sonare_node::ElementData(typed), typed.ElementLength(), sr, has_options ? &config : nullptr,
+      &detection);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -333,7 +337,8 @@ Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& i
                                         sonare_c_detail::kNoiseBandSampleRateDomain);
   // The C entry writes into the array's own storage; no intermediate buffer.
   auto bins = Napi::Int32Array::New(env, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT);
-  SonareError err = sonare_mastering_repair_noise_band_bins(n_fft, sample_rate, bins.Data());
+  SonareError err =
+      sonare_mastering_repair_noise_band_bins(n_fft, sample_rate, sonare_node::ElementData(bins));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -350,7 +355,8 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::DehumConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -365,7 +371,8 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
     config.mode = static_cast<sonare::mastering::repair::DehumMode>(
         parse_dehum_mode(options, static_cast<int>(config.mode)));
   }
-  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   sonare::mastering::repair::DehumReport report;
   sonare::Audio result = sonare::mastering::repair::dehum(audio, config, &report);
   return EmitMonoResult(env, result, EmitDehumReport(env, report));
@@ -405,7 +412,8 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
   }
   SonareDehumStereoResult result{};
   SonareError err = sonare_mastering_repair_dehum_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -429,8 +437,9 @@ Napi::Value SonareWrap::MasteringRepairDetectHum(const Napi::CallbackInfo& info)
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_dehum_config_c(info[2].As<Napi::Object>(), config);
   SonareHumDetection detection{};
-  SonareError err = sonare_mastering_repair_detect_hum(typed.Data(), typed.ElementLength(), sr,
-                                                       has_options ? &config : nullptr, &detection);
+  SonareError err =
+      sonare_mastering_repair_detect_hum(sonare_node::ElementData(typed), typed.ElementLength(), sr,
+                                         has_options ? &config : nullptr, &detection);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

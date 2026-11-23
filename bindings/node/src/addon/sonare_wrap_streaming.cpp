@@ -229,8 +229,9 @@ Napi::Value StreamingMasteringChainWrap::ProcessMono(const Napi::CallbackInfo& i
   size_t length = typed.ElementLength();
   Napi::Float32Array out_arr = Napi::Float32Array::New(env, length);
   if (length > 0) {
-    std::memcpy(out_arr.Data(), typed.Data(), length * sizeof(float));
-    float* channels[] = {out_arr.Data()};
+    std::memcpy(sonare_node::ElementData(out_arr), sonare_node::ElementData(typed),
+                length * sizeof(float));
+    float* channels[] = {sonare_node::ElementData(out_arr)};
     chain_->process_block(channels, 1, static_cast<int>(length));
   }
   return out_arr;
@@ -254,9 +255,11 @@ Napi::Value StreamingMasteringChainWrap::ProcessStereo(const Napi::CallbackInfo&
   Napi::Float32Array left_out = Napi::Float32Array::New(env, length);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, length);
   if (length > 0) {
-    std::memcpy(left_out.Data(), left.Data(), length * sizeof(float));
-    std::memcpy(right_out.Data(), right.Data(), length * sizeof(float));
-    float* channels[] = {left_out.Data(), right_out.Data()};
+    std::memcpy(sonare_node::ElementData(left_out), sonare_node::ElementData(left),
+                length * sizeof(float));
+    std::memcpy(sonare_node::ElementData(right_out), sonare_node::ElementData(right),
+                length * sizeof(float));
+    float* channels[] = {sonare_node::ElementData(left_out), sonare_node::ElementData(right_out)};
     chain_->process_block(channels, 2, static_cast<int>(length));
   }
   Napi::Object out = Napi::Object::New(env);
@@ -280,7 +283,8 @@ Napi::Value StreamingMasteringChainWrap::FlushMono(const Napi::CallbackInfo& inf
   const int written = chain_->flush(channels, 1, max_block_size_);
   Napi::Float32Array out = Napi::Float32Array::New(env, static_cast<size_t>(written));
   if (written > 0) {
-    std::memcpy(out.Data(), scratch.data(), static_cast<size_t>(written) * sizeof(float));
+    std::memcpy(sonare_node::ElementData(out), scratch.data(),
+                static_cast<size_t>(written) * sizeof(float));
   }
   return out;
   SONARE_NODE_CATCH(env)
@@ -303,8 +307,8 @@ Napi::Value StreamingMasteringChainWrap::FlushStereo(const Napi::CallbackInfo& i
   Napi::Float32Array right = Napi::Float32Array::New(env, static_cast<size_t>(written));
   if (written > 0) {
     const size_t byte_count = static_cast<size_t>(written) * sizeof(float);
-    std::memcpy(left.Data(), left_scratch.data(), byte_count);
-    std::memcpy(right.Data(), right_scratch.data(), byte_count);
+    std::memcpy(sonare_node::ElementData(left), left_scratch.data(), byte_count);
+    std::memcpy(sonare_node::ElementData(right), right_scratch.data(), byte_count);
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", left);
@@ -552,7 +556,8 @@ Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& i
   // every later process() call, and a JS ArrayBuffer can be detached or
   // transferred the moment this setter returns.
   Napi::Float32Array key = info[0].As<Napi::Float32Array>();
-  std::vector<float> staged(key.Data(), key.Data() + key.ElementLength());
+  std::vector<float> staged(sonare_node::ElementData(key),
+                            sonare_node::ElementData(key) + key.ElementLength());
   if (staged.empty()) {
     ClearSidechainStorage();
     return env.Undefined();
@@ -583,8 +588,10 @@ Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo&
   }
   // Copy both channels before the core is given any pointer, for the same
   // detach reason as the mono setter.
-  std::vector<float> staged_left(left.Data(), left.Data() + left.ElementLength());
-  std::vector<float> staged_right(right.Data(), right.Data() + right.ElementLength());
+  std::vector<float> staged_left(sonare_node::ElementData(left),
+                                 sonare_node::ElementData(left) + left.ElementLength());
+  std::vector<float> staged_right(sonare_node::ElementData(right),
+                                  sonare_node::ElementData(right) + right.ElementLength());
   if (staged_left.empty()) {
     ClearSidechainStorage();
     return env.Undefined();
@@ -659,8 +666,9 @@ Napi::Value StreamingEqualizerWrap::ProcessMono(const Napi::CallbackInfo& info) 
   size_t length = typed.ElementLength();
   Napi::Float32Array out_arr = Napi::Float32Array::New(env, length);
   if (length > 0) {
-    std::memcpy(out_arr.Data(), typed.Data(), length * sizeof(float));
-    float* channels[] = {out_arr.Data()};
+    std::memcpy(sonare_node::ElementData(out_arr), sonare_node::ElementData(typed),
+                length * sizeof(float));
+    float* channels[] = {sonare_node::ElementData(out_arr)};
     eq_->process(channels, 1, static_cast<int>(length));
   }
   return out_arr;
@@ -684,9 +692,11 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
   Napi::Float32Array left_out = Napi::Float32Array::New(env, length);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, length);
   if (length > 0) {
-    std::memcpy(left_out.Data(), left.Data(), length * sizeof(float));
-    std::memcpy(right_out.Data(), right.Data(), length * sizeof(float));
-    float* channels[] = {left_out.Data(), right_out.Data()};
+    std::memcpy(sonare_node::ElementData(left_out), sonare_node::ElementData(left),
+                length * sizeof(float));
+    std::memcpy(sonare_node::ElementData(right_out), sonare_node::ElementData(right),
+                length * sizeof(float));
+    float* channels[] = {sonare_node::ElementData(left_out), sonare_node::ElementData(right_out)};
     eq_->process(channels, 2, static_cast<int>(length));
   }
   Napi::Object out = Napi::Object::New(env);
@@ -706,7 +716,8 @@ Napi::Value StreamingEqualizerWrap::MagnitudeResponse(const Napi::CallbackInfo& 
   Napi::Float32Array frequencies = info[1].As<Napi::Float32Array>();
   const size_t count = frequencies.ElementLength();
   Napi::Float32Array out = Napi::Float32Array::New(env, count);
-  eq_->magnitude_response_db(ParsePlacementInt(placement), frequencies.Data(), count, out.Data());
+  eq_->magnitude_response_db(ParsePlacementInt(placement), sonare_node::ElementData(frequencies),
+                             count, sonare_node::ElementData(out));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -770,15 +781,17 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   }
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();
   Napi::Float32Array reference = info[1].As<Napi::Float32Array>();
-  sonare::validate_offline_audio_input("source", source.Data(), source.ElementLength(),
-                                       sample_rate);
-  sonare::validate_offline_audio_input("reference", reference.Data(), reference.ElementLength(),
-                                       reference_sample_rate);
+  sonare::validate_offline_audio_input("source", sonare_node::ElementData(source),
+                                       source.ElementLength(), sample_rate);
+  sonare::validate_offline_audio_input("reference", sonare_node::ElementData(reference),
+                                       reference.ElementLength(), reference_sample_rate);
   sonare::mastering::match::MatchEqConfig match_config;
   match_config.max_bands = max_bands;
   sonare::mastering::match::configure_equalizer_from_audio(
-      *eq_, sonare::Audio::from_buffer(source.Data(), source.ElementLength(), sample_rate),
-      sonare::Audio::from_buffer(reference.Data(), reference.ElementLength(),
+      *eq_,
+      sonare::Audio::from_buffer(sonare_node::ElementData(source), source.ElementLength(),
+                                 sample_rate),
+      sonare::Audio::from_buffer(sonare_node::ElementData(reference), reference.ElementLength(),
                                  reference_sample_rate),
       match_config);
   return env.Undefined();
@@ -968,8 +981,10 @@ Napi::Value StreamingRetuneWrap::ProcessMono(const Napi::CallbackInfo& info) {
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
   // The C entry point works in place, so copy the caller's samples into the
   // result buffer first and never mutate the argument.
-  Napi::Float32Array out = Float32ArrayFrom(env, input.Data(), input.ElementLength());
-  ThrowIfError(env, sonare_streaming_retune_process_mono(retune_, out.Data(), out.ElementLength()));
+  Napi::Float32Array out =
+      Float32ArrayFrom(env, sonare_node::ElementData(input), input.ElementLength());
+  ThrowIfError(env, sonare_streaming_retune_process_mono(retune_, sonare_node::ElementData(out),
+                                                         out.ElementLength()));
   if (env.IsExceptionPending()) return env.Undefined();
   return out;
   SONARE_NODE_CATCH(env)

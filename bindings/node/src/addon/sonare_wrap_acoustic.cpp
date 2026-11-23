@@ -202,10 +202,11 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   auto typed = info[0].As<Napi::Float32Array>();
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
-  if (!ValidateAcousticInput(env, "samples", typed.Data(), typed.ElementLength(), sample_rate))
+  if (!ValidateAcousticInput(env, "samples", sonare_node::ElementData(typed), typed.ElementLength(),
+                             sample_rate))
     return env.Undefined();
-  const sonare::Audio audio =
-      sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate);
+  const sonare::Audio audio = sonare::Audio::from_buffer(sonare_node::ElementData(typed),
+                                                         typed.ElementLength(), sample_rate);
   Napi::Object opts = info.Length() >= 3 && info[2].IsObject() ? info[2].As<Napi::Object>()
                                                                : Napi::Object::New(env);
 
@@ -368,9 +369,11 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, "samples", typed.Data(), typed.ElementLength(), sr))
+  if (!ValidateAcousticInput(env, "samples", sonare_node::ElementData(typed), typed.ElementLength(),
+                             sr))
     return env.Undefined();
-  const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  const sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   Napi::Object opts = info[2].As<Napi::Object>();
 
   const sonare::effects::acoustic::RoomMorphConfig cfg =
@@ -405,9 +408,10 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, "left", left.Data(), left.ElementLength(), sr))
+  if (!ValidateAcousticInput(env, "left", sonare_node::ElementData(left), left.ElementLength(), sr))
     return env.Undefined();
-  if (!ValidateAcousticInput(env, "right", right.Data(), right.ElementLength(), sr))
+  if (!ValidateAcousticInput(env, "right", sonare_node::ElementData(right), right.ElementLength(),
+                             sr))
     return env.Undefined();
   if (left.ElementLength() != right.ElementLength()) {
     Napi::RangeError::New(env, "left and right must have the same length")
@@ -415,9 +419,9 @@ Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const sonare::Audio left_audio =
-      sonare::Audio::from_buffer(left.Data(), left.ElementLength(), sr);
+      sonare::Audio::from_buffer(sonare_node::ElementData(left), left.ElementLength(), sr);
   const sonare::Audio right_audio =
-      sonare::Audio::from_buffer(right.Data(), right.ElementLength(), sr);
+      sonare::Audio::from_buffer(sonare_node::ElementData(right), right.ElementLength(), sr);
   Napi::Object opts = info[3].As<Napi::Object>();
 
   const Napi::Value spacing = opts.Get("receiverSpacingM");

@@ -185,7 +185,8 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::DeclickConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -197,7 +198,8 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
     config.residual_ratio = FloatProperty(options, "residualRatio", config.residual_ratio);
   }
-  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclickReport report;
   sonare::Audio result = sonare::mastering::repair::declick(audio, config, &report);
   return EmitMonoResult(env, result, EmitDeclickReport(env, report));
@@ -237,7 +239,8 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
   }
   SonareDeclickStereoResult result{};
   SonareError err = sonare_mastering_repair_declick_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -261,8 +264,9 @@ Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& in
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_declick_config_c(info[2].As<Napi::Object>(), config);
   SonareClickDetection detection{};
-  SonareError err = sonare_mastering_repair_detect_clicks(
-      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  SonareError err =
+      sonare_mastering_repair_detect_clicks(sonare_node::ElementData(typed), typed.ElementLength(),
+                                            sr, has_options ? &config : nullptr, &detection);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -279,7 +283,8 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -288,7 +293,8 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
     config.iterations = IntProperty(options, "iterations", config.iterations);
   }
-  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclipReport report;
   sonare::Audio result = sonare::mastering::repair::declip(audio, config, &report);
   return EmitMonoResult(env, result, EmitDeclipReport(env, report));
@@ -329,7 +335,8 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
   }
   SonareDeclipStereoResult result{};
   SonareError err = sonare_mastering_repair_declip_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -356,7 +363,8 @@ Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& 
   }
   SonareClipDetection detection{};
   SonareError err = sonare_mastering_repair_detect_clipping(
-      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+      sonare_node::ElementData(typed), typed.ElementLength(), sr, has_options ? &config : nullptr,
+      &detection);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -373,7 +381,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = node_narrow_int(env, info[1], "sampleRate");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input("samples", typed.Data(), typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input("samples", sonare_node::ElementData(typed),
+                                       typed.ElementLength(), sr);
   sonare::mastering::repair::DecrackleConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -381,7 +390,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
     config.mode = parse_decrackle_mode(options, config.mode);
     config.levels = IntProperty(options, "levels", config.levels);
   }
-  sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  sonare::Audio audio =
+      sonare::Audio::from_buffer(sonare_node::ElementData(typed), typed.ElementLength(), sr);
   sonare::mastering::repair::DecrackleReport report;
   sonare::Audio result = sonare::mastering::repair::decrackle(audio, config, &report);
   return EmitMonoResult(env, result, EmitDecrackleReport(env, report));
@@ -421,7 +431,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
   }
   SonareDecrackleStereoResult result{};
   SonareError err = sonare_mastering_repair_decrackle_stereo(
-      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+      sonare_node::ElementData(left), sonare_node::ElementData(right), left.ElementLength(), sr,
+      &config, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -445,8 +456,9 @@ Napi::Value SonareWrap::MasteringRepairDetectCrackle(const Napi::CallbackInfo& i
   const bool has_options = info.Length() >= 3 && info[2].IsObject();
   if (has_options) config = read_decrackle_config_c(info[2].As<Napi::Object>(), config);
   SonareCrackleDetection detection{};
-  SonareError err = sonare_mastering_repair_detect_crackle(
-      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  SonareError err =
+      sonare_mastering_repair_detect_crackle(sonare_node::ElementData(typed), typed.ElementLength(),
+                                             sr, has_options ? &config : nullptr, &detection);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

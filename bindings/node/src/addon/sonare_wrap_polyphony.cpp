@@ -139,8 +139,8 @@ PolyphonicAnalysisWrap::PolyphonicAnalysisWrap(const Napi::CallbackInfo& info)
   if (!ReadPolyphonicConfig(env, info[2], &config)) return;
 
   auto samples = info[0].As<Napi::Float32Array>();
-  SonareError err = sonare_polyphonic_analyze(samples.Data(), samples.ElementLength(), sample_rate,
-                                              &config, &analysis_);
+  SonareError err = sonare_polyphonic_analyze(
+      sonare_node::ElementData(samples), samples.ElementLength(), sample_rate, &config, &analysis_);
   if (err != SONARE_OK) {
     // analyze() clears its out-pointer before validating, so a failure leaves
     // nothing to release here.
@@ -315,7 +315,7 @@ Napi::Value PolyphonicAnalysisWrap::Polyphony(const Napi::CallbackInfo& info) {
   }
   auto out = Napi::Int32Array::New(env, written);
   if (written > 0) {
-    std::memcpy(out.Data(), counts.data(), written * sizeof(int32_t));
+    std::memcpy(sonare_node::ElementData(out), counts.data(), written * sizeof(int32_t));
   }
   return out;
   SONARE_NODE_CATCH(env)
