@@ -23,6 +23,9 @@ import {
   realtimeVoiceChangerPresetConfig,
   remix,
   remixAlignedIntervals,
+  scaleCorrectionSemitones,
+  scaleMaskForMode,
+  scalePitchClassEnabled,
   scaleQuantizeMidi,
   spectralContrast,
   timeStretch,
@@ -463,6 +466,56 @@ describe('newly exposed Node functions', () => {
   it('scaleQuantizeMidi rejects an out-of-range modeMask', () => {
     expect(() => scaleQuantizeMidi(0, -1, 69)).toThrow();
     expect(() => scaleQuantizeMidi(0, 5000, 69)).toThrow();
+  });
+
+  it('refuses a wrong-typed scale root, mode mask or pitch class as a non-integer', () => {
+    const bad = 'x' as unknown as number;
+    const rows: Array<[string, () => unknown, RegExp]> = [
+      [
+        'scaleQuantizeMidi root',
+        () => scaleQuantizeMidi(bad, 1, 60),
+        /scaleQuantizeMidi: root must be an integer/,
+      ],
+      [
+        'scaleQuantizeMidi modeMask',
+        () => scaleQuantizeMidi(0, bad, 60),
+        /scaleQuantizeMidi: modeMask must be an integer/,
+      ],
+      [
+        'scaleMaskForMode root',
+        () => scaleMaskForMode(bad as never, 'major'),
+        /scaleMaskForMode: root must be an integer/,
+      ],
+      [
+        'scaleCorrectionSemitones root',
+        () => scaleCorrectionSemitones(bad, 1, 60),
+        /scaleCorrectionSemitones: root must be an integer/,
+      ],
+      [
+        'scaleCorrectionSemitones modeMask',
+        () => scaleCorrectionSemitones(0, bad, 60),
+        /scaleCorrectionSemitones: modeMask must be an integer/,
+      ],
+      [
+        'scalePitchClassEnabled root',
+        () => scalePitchClassEnabled(bad, 1, 0),
+        /scalePitchClassEnabled: root must be an integer/,
+      ],
+      [
+        'scalePitchClassEnabled modeMask',
+        () => scalePitchClassEnabled(0, bad, 0),
+        /scalePitchClassEnabled: modeMask must be an integer/,
+      ],
+      [
+        'scalePitchClassEnabled pitchClass',
+        () => scalePitchClassEnabled(0, 1, bad),
+        /scalePitchClassEnabled: pitchClass must be an integer/,
+      ],
+    ];
+    for (const [, call, message] of rows) {
+      expect(call).toThrow(TypeError);
+      expect(call).toThrow(message);
+    }
   });
 
   it('phaseVocoder rejects a non-number sampleRate', () => {

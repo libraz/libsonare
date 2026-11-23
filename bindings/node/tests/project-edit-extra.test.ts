@@ -865,3 +865,65 @@ describe('masteringInsertNames', () => {
     }
   });
 });
+
+describe('wrong-typed domain fields', () => {
+  it('refuses wrong-typed time-signature, automation target, warp map id and graph port fields as non-integers', () => {
+    const bad = 'x' as unknown as number;
+    const project = new Project();
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+    try {
+      const track = project.addTrack({ kind: 'audio' });
+      const anchors = [
+        { warpSample: 0, sourceSample: 0 },
+        { warpSample: 10, sourceSample: 10 },
+      ];
+      const graph = {
+        nodes: [
+          { id: 'in', numPorts: bad },
+          { id: 'out', numPorts: 1 },
+        ],
+        connections: [{ sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0 }],
+        inputNode: 'in',
+        outputNode: 'out',
+      };
+      const rows: Array<[string, () => unknown, RegExp]> = [
+        [
+          'numerator',
+          () => project.setTimeSignatures([{ startPpq: 0, numerator: bad, denominator: 4 }]),
+          /Project\.setTimeSignatures: numerator must be an integer/,
+        ],
+        [
+          'denominator',
+          () => project.setTimeSignatures([{ startPpq: 0, numerator: 4, denominator: bad }]),
+          /Project\.setTimeSignatures: denominator must be an integer/,
+        ],
+        [
+          'targetParamId',
+          () =>
+            project.addAutomationLane(track, {
+              targetParamId: bad,
+              points: [{ ppq: 0, value: 0 }],
+            }),
+          /Project\.addAutomationLane: targetParamId must be an integer/,
+        ],
+        [
+          'warp map id',
+          () => project.setWarpMap({ id: bad, anchors }),
+          /Project\.setWarpMap: id must be an integer/,
+        ],
+        [
+          'graph numPorts',
+          () => engine.setGraph(graph),
+          /RealtimeEngine\.setGraph: spec\.nodes\[0\]\.numPorts must be an integer/,
+        ],
+      ];
+      for (const [, call, message] of rows) {
+        expect(call).toThrow(TypeError);
+        expect(call).toThrow(message);
+      }
+    } finally {
+      engine.destroy();
+      project.destroy();
+    }
+  });
+});
