@@ -21,12 +21,10 @@ struct PlaybackLoudnessMeter::Impl {
 
 PlaybackLoudnessMeter::PlaybackLoudnessMeter(int channels, int sample_rate) {
   if (channels != 1 && channels != 2 && channels != 6 && channels != 8) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "PlaybackLoudnessMeter: channel count must be 1, 2, 6, or 8");
+    throw SonareException(ErrorCode::InvalidParameter, "channel count must be 1, 2, 6, or 8");
   }
   if (sample_rate <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "PlaybackLoudnessMeter: sample rate must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sample rate must be positive");
   }
 
   // LUFS only: the MeterConfig defaults.
@@ -51,20 +49,16 @@ PlaybackLoudnessMeter::~PlaybackLoudnessMeter() = default;
 void PlaybackLoudnessMeter::push_interleaved(const float* samples, size_t frames) {
   // Offline entry point: the caller does not own the finite check here.
   if (frames == 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "PlaybackLoudnessMeter::push_interleaved: samples must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, "samples must not be empty");
   }
   if (samples == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "PlaybackLoudnessMeter::push_interleaved: samples must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "samples must not be null");
   }
 
   Impl& im = *impl_;
   const size_t ch = static_cast<size_t>(im.channels);
   if (!numeric::all_finite(samples, frames * ch)) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "PlaybackLoudnessMeter::push_interleaved: samples contains a non-finite sample");
+    throw SonareException(ErrorCode::InvalidParameter, "samples contains a non-finite sample");
   }
   // Every frame reaches the meter in this call; the meter keeps its own gating state.
   for (size_t offset = 0; offset < frames; offset += kPlaybackLoudnessBlockFrames) {

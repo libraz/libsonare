@@ -71,12 +71,10 @@ float interp_at(const float* S, int n_bins, int n_frames, const std::vector<floa
 std::vector<float> interp_harmonics(const float* x, int n_bins, int n_frames,
                                     const std::vector<float>& freqs,
                                     const std::vector<float>& harmonics) {
-  if (x == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "interp_harmonics: x is null");
+  if (x == nullptr) throw SonareException(ErrorCode::InvalidParameter, "x is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "interp_harmonics: freqs size must equal n_bins");
+    throw SonareException(ErrorCode::InvalidParameter, "freqs size must equal n_bins");
   }
   const int H = static_cast<int>(harmonics.size());
   std::vector<float> out(static_cast<size_t>(H) * n_bins * n_frames, 0.0f);
@@ -101,8 +99,7 @@ std::vector<float> interp_harmonics(const std::vector<float>& x, int n_bins, int
     std::size_t expected = 0;
     if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
         x.size() != expected) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "interp_harmonics: x size must equal n_bins * n_frames");
+      throw SonareException(ErrorCode::InvalidParameter, "x size must equal n_bins * n_frames");
     }
   }
   return interp_harmonics(x.data(), n_bins, n_frames, freqs, harmonics);
@@ -111,14 +108,13 @@ std::vector<float> interp_harmonics(const std::vector<float>& x, int n_bins, int
 std::vector<float> salience(const float* S, int n_bins, int n_frames,
                             const std::vector<float>& freqs, const std::vector<float>& harmonics,
                             float fill_value, const std::vector<float>& weights) {
-  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "salience: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "S is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
-    throw SonareException(ErrorCode::InvalidParameter, "salience: freqs size must equal n_bins");
+    throw SonareException(ErrorCode::InvalidParameter, "freqs size must equal n_bins");
   }
   if (!weights.empty() && weights.size() != harmonics.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "salience: weights size must equal harmonics size");
+    throw SonareException(ErrorCode::InvalidParameter, "weights size must equal harmonics size");
   }
   // Per-harmonic weights (librosa's `weights`); empty => uniform. Normalizing by
   // the weight sum keeps the empty case byte-identical to the prior mean.
@@ -153,8 +149,7 @@ std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frame
     std::size_t expected = 0;
     if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
         S.size() != expected) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "salience: S size must equal n_bins * n_frames");
+      throw SonareException(ErrorCode::InvalidParameter, "S size must equal n_bins * n_frames");
     }
   }
   return salience(S.data(), n_bins, n_frames, freqs, harmonics, fill_value, weights);
@@ -163,14 +158,13 @@ std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frame
 std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
                                 const std::vector<float>& f0, const std::vector<float>& freqs,
                                 const std::vector<float>& harmonics) {
-  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "f0_harmonics: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "S is null");
   if (n_bins <= 0 || n_frames <= 0 || harmonics.empty()) return {};
   if (static_cast<int>(freqs.size()) != n_bins) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "f0_harmonics: freqs size must equal n_bins");
+    throw SonareException(ErrorCode::InvalidParameter, "freqs size must equal n_bins");
   }
   if (static_cast<int>(f0.size()) != n_frames) {
-    throw SonareException(ErrorCode::InvalidParameter, "f0_harmonics: f0 size must equal n_frames");
+    throw SonareException(ErrorCode::InvalidParameter, "f0 size must equal n_frames");
   }
   const int H = static_cast<int>(harmonics.size());
   std::vector<float> out(static_cast<size_t>(H) * n_frames, 0.0f);
@@ -193,8 +187,7 @@ std::vector<float> f0_harmonics(const std::vector<float>& S, int n_bins, int n_f
     std::size_t expected = 0;
     if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
         S.size() != expected) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "f0_harmonics: S size must equal n_bins * n_frames");
+      throw SonareException(ErrorCode::InvalidParameter, "S size must equal n_bins * n_frames");
     }
   }
   return f0_harmonics(S.data(), n_bins, n_frames, f0, freqs, harmonics);

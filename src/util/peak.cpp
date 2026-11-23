@@ -15,19 +15,16 @@ namespace sonare {
 std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_max, int pre_avg,
                            int post_avg, float delta, int wait) {
   if (pre_max < 0 || post_max <= 0 || pre_avg < 0 || post_avg <= 0 || wait < 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "peak_pick: post windows must be positive and other windows non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "post windows must be positive and other windows non-negative");
   }
   if (n > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "peak_pick: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   std::vector<int> peaks;
   if (n == 0) return peaks;
   if (n > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "peak_pick: input length exceeds the peak index range");
+    throw SonareException(ErrorCode::InvalidParameter, "input length exceeds the peak index range");
   }
 
   const int N = static_cast<int>(n);
@@ -77,8 +74,7 @@ std::vector<float> sliding_max(const float* x, std::size_t n, std::size_t radius
   std::vector<float> y(n);
   if (n == 0) return y;
   if (x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "sliding_max: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   // Indices whose values are decreasing, from window[head]; the head is the window maximum.
   // Each index is pushed once, so a vector with a moving head is the whole queue.
@@ -148,7 +144,7 @@ std::vector<int> select_peaks_min_distance(const std::vector<int>& candidates, c
     sorted_values[i] = values[by_frame[i]];
     // An unordered value would send the slot arithmetic below out of range.
     SONARE_CHECK_MSG(!std::isnan(sorted_values[i]), ErrorCode::InvalidParameter,
-                     "select_peaks_min_distance: NaN candidate value");
+                     "NaN candidate value");
   }
   std::sort(sorted_values.begin(), sorted_values.end());
   std::vector<std::size_t> filled(n, 0);

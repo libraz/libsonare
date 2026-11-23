@@ -98,13 +98,13 @@ EqualizerProcessor::~EqualizerProcessor() {
 
 void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   if (!is_valid_realtime_block_size(max_block_size)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor::prepare: max_block_size must be within [1, " +
-                              std::to_string(kMaxRealtimeBlockSize) + "]");
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "max_block_size must be within [1, " + std::to_string(kMaxRealtimeBlockSize) + "]");
   }
   if (!is_valid_realtime_sample_rate(sample_rate)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor::prepare: sample_rate must be finite and within [" +
+                          "sample_rate must be finite and within [" +
                               std::to_string(kMinAudioSampleRate) + ", " +
                               std::to_string(kMaxAudioSampleRate) + "]");
   }

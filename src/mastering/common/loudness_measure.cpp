@@ -37,18 +37,16 @@ static_assert(kLoudnessSeriesHopSeconds == metering::kLufsShortTermHopSec,
 static_assert(kDefaultTruePeakOversample == metering::kDefaultTruePeakOversample,
               "true-peak oversample mirror drifted from metering::kDefaultTruePeakOversample");
 
-void require_planar_pair(const float* left, const float* right, std::size_t frames,
-                         const char* name) {
+void require_planar_pair(const float* left, const float* right, std::size_t frames) {
   if ((left == nullptr || right == nullptr) && frames != 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(name) + ": channel pointer is null with non-zero frames");
+                          "channel pointer is null with non-zero frames");
   }
 }
 
-void require_series(const LoudnessSeries* series, const char* name) {
+void require_series(const LoudnessSeries* series) {
   if (series == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(name) + ": series pointer is null");
+    throw SonareException(ErrorCode::InvalidParameter, "series pointer is null");
   }
 }
 
@@ -130,7 +128,7 @@ float measure_lufs(const Audio& audio) { return metering::lufs(audio).integrated
 float measure_lufs(const float* samples, std::size_t length, int sample_rate) {
   if (samples == nullptr && length != 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "measure_lufs: samples pointer is null with non-zero length");
+                          "samples pointer is null with non-zero length");
   }
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   return metering::lufs(audio).integrated_lufs;
@@ -139,9 +137,8 @@ float measure_lufs(const float* samples, std::size_t length, int sample_rate) {
 float measure_lufs_interleaved(const float* samples, std::size_t frames, int channels,
                                int sample_rate) {
   if (samples == nullptr && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_lufs_interleaved: samples pointer is null with non-zero frame count");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "samples pointer is null with non-zero frame count");
   }
   return metering::lufs_interleaved(samples, frames, channels, sample_rate).integrated_lufs;
 }
@@ -152,9 +149,8 @@ float measure_lra_interleaved(const float* samples, std::size_t frames, int chan
     return metering::lufs_interleaved(nullptr, 0, channels, sample_rate).loudness_range_lu;
   }
   if (samples == nullptr) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_lra_interleaved: samples pointer is null with non-zero frame count");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "samples pointer is null with non-zero frame count");
   }
   return metering::lufs_interleaved(samples, frames, channels, sample_rate).loudness_range_lu;
 }
@@ -165,7 +161,7 @@ float measure_true_peak_dbtp(const Audio& audio, int oversample_factor) {
 
 float measure_true_peak_dbtp_stereo_planar(const float* left, const float* right,
                                            std::size_t frames, int oversample_factor) {
-  require_planar_pair(left, right, frames, "measure_true_peak_dbtp_stereo_planar");
+  require_planar_pair(left, right, frames);
   return true_peak_to_dbtp(std::max(metering::true_peak(left, frames, oversample_factor),
                                     metering::true_peak(right, frames, oversample_factor)));
 }
@@ -192,7 +188,7 @@ LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::
 LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const float* right,
                                                        std::size_t frames, int sample_rate,
                                                        int true_peak_oversample) {
-  require_planar_pair(left, right, frames, "measure_loudness_summary_stereo_planar");
+  require_planar_pair(left, right, frames);
   return stereo_planar_summary(left, right, frames, sample_rate, true_peak_oversample, nullptr);
 }
 
@@ -200,11 +196,10 @@ LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::
                                                      int channels, int sample_rate,
                                                      int true_peak_oversample,
                                                      LoudnessSeries* series) {
-  require_series(series, "measure_loudness_summary_interleaved");
+  require_series(series);
   if (samples == nullptr && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_loudness_summary_interleaved: samples pointer is null with non-zero frame count");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "samples pointer is null with non-zero frame count");
   }
   return interleaved_summary(samples, frames, channels, sample_rate, true_peak_oversample, series);
 }
@@ -213,18 +208,17 @@ LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const 
                                                        std::size_t frames, int sample_rate,
                                                        int true_peak_oversample,
                                                        LoudnessSeries* series) {
-  require_series(series, "measure_loudness_summary_stereo_planar");
-  require_planar_pair(left, right, frames, "measure_loudness_summary_stereo_planar");
+  require_series(series);
+  require_planar_pair(left, right, frames);
   return stereo_planar_summary(left, right, frames, sample_rate, true_peak_oversample, series);
 }
 
 void measure_loudness_series_interleaved(const float* samples, std::size_t frames, int channels,
                                          int sample_rate, LoudnessSeries* series) {
-  require_series(series, "measure_loudness_series_interleaved");
+  require_series(series);
   if (samples == nullptr && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_loudness_series_interleaved: samples pointer is null with non-zero frame count");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "samples pointer is null with non-zero frame count");
   }
   metering::lufs_interleaved(samples, frames, channels, sample_rate, kSeriesConfig,
                              &series->momentary_lufs, &series->short_term_lufs);
@@ -233,8 +227,8 @@ void measure_loudness_series_interleaved(const float* samples, std::size_t frame
 void measure_loudness_series_stereo_planar(const float* left, const float* right,
                                            std::size_t frames, int sample_rate,
                                            LoudnessSeries* series) {
-  require_series(series, "measure_loudness_series_stereo_planar");
-  require_planar_pair(left, right, frames, "measure_loudness_series_stereo_planar");
+  require_series(series);
+  require_planar_pair(left, right, frames);
   const std::vector<float> interleaved = interleave_planar(left, right, frames);
   metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate, kSeriesConfig,
                              &series->momentary_lufs, &series->short_term_lufs);
@@ -245,9 +239,8 @@ void stage_level_delta_lu(const LoudnessSeries& before, const LoudnessSeries& af
                           std::vector<float>* short_term_delta) {
   if (before.momentary_lufs.size() != after.momentary_lufs.size() ||
       before.short_term_lufs.size() != after.short_term_lufs.size()) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "stage_level_delta_lu: series lengths differ, so the stage changed the frame count");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "series lengths differ, so the stage changed the frame count");
   }
   difference_series(before.momentary_lufs, after.momentary_lufs, momentary_delta);
   difference_series(before.short_term_lufs, after.short_term_lufs, short_term_delta);
@@ -257,9 +250,8 @@ LoudnessSummary measure_residual_loudness_summary(const float* before, const flo
                                                   std::size_t frames, int sample_rate,
                                                   int true_peak_oversample) {
   if ((before == nullptr || after == nullptr) && frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_residual_loudness_summary: input pointer is null with non-zero frames");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "input pointer is null with non-zero frames");
   }
   std::vector<float> residual(frames);
   for (std::size_t frame = 0; frame < frames; ++frame) {
@@ -278,10 +270,9 @@ LoudnessSummary measure_residual_loudness_summary_stereo_planar(
   if ((before_left == nullptr || before_right == nullptr || after_left == nullptr ||
        after_right == nullptr) &&
       frames != 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "measure_residual_loudness_summary_stereo_planar: channel pointer is null with non-zero "
-        "frames");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "channel pointer is null with non-zero "
+                          "frames");
   }
   std::vector<float> left(frames);
   std::vector<float> right(frames);

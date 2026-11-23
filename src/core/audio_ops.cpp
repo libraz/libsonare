@@ -24,11 +24,10 @@ constexpr std::size_t kMaxMaterializedMuEdges = 65536;
 
 std::vector<float> mu_compress(const float* x, std::size_t n, int mu, bool quantize) {
   if (n > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mu_compress: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (mu <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "mu_compress: mu must be strictly positive");
+    throw SonareException(ErrorCode::InvalidParameter, "mu must be strictly positive");
   }
 
   const float mu_f = static_cast<float>(mu);
@@ -38,7 +37,7 @@ std::vector<float> mu_compress(const float* x, std::size_t n, int mu, bool quant
   for (std::size_t i = 0; i < n; ++i) {
     const float v = x[i];
     if (v < -1.0f || v > 1.0f) {
-      throw SonareException(ErrorCode::InvalidParameter, "mu_compress: input out of range [-1, 1]");
+      throw SonareException(ErrorCode::InvalidParameter, "input out of range [-1, 1]");
     }
     const float s = (v > 0.0f) ? 1.0f : (v < 0.0f) ? -1.0f : 0.0f;
     y[i] = s * std::log1p(mu_f * std::abs(v)) / log1p_mu;
@@ -94,11 +93,10 @@ std::vector<float> mu_compress(const std::vector<float>& x, int mu, bool quantiz
 
 std::vector<float> mu_expand(const float* x, std::size_t n, int mu, bool quantize) {
   if (n > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mu_expand: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (mu <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "mu_expand: mu must be strictly positive");
+    throw SonareException(ErrorCode::InvalidParameter, "mu must be strictly positive");
   }
 
   std::vector<float> y(n);
@@ -108,7 +106,7 @@ std::vector<float> mu_expand(const float* x, std::size_t n, int mu, bool quantiz
     float v = x[i];
     if (quantize) v *= scale;
     if (v < -1.0f || v > 1.0f) {
-      throw SonareException(ErrorCode::InvalidParameter, "mu_expand: input out of range [-1, 1]");
+      throw SonareException(ErrorCode::InvalidParameter, "input out of range [-1, 1]");
     }
     const float s = (v > 0.0f) ? 1.0f : (v < 0.0f) ? -1.0f : 0.0f;
     y[i] = s / mu_f * (std::pow(1.0f + mu_f, std::abs(v)) - 1.0f);
@@ -122,8 +120,7 @@ std::vector<float> mu_expand(const std::vector<float>& x, int mu, bool quantize)
 
 std::vector<float> autocorrelate(const float* y, std::size_t n, int max_size) {
   if (n > 0 && y == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "autocorrelate: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
 
   const std::size_t out_size =
@@ -136,18 +133,18 @@ std::vector<float> autocorrelate(const std::vector<float>& y, int max_size) {
 }
 
 std::vector<float> lpc(const float* y, std::size_t n, int order) {
-  if (order < 1) throw SonareException(ErrorCode::InvalidParameter, "lpc: order must be >= 1");
+  if (order < 1) throw SonareException(ErrorCode::InvalidParameter, "order must be >= 1");
   if (n > 0 && y == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "lpc: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (n <= static_cast<std::size_t>(order)) {
-    throw SonareException(ErrorCode::InvalidParameter, "lpc: input length must exceed order");
+    throw SonareException(ErrorCode::InvalidParameter, "input length must exceed order");
   }
 
   LpcResult model = lpc_burg(y, n, order);
   if (model.order_reached < order) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "lpc: signal is ill-conditioned for an order-" + std::to_string(order) +
+                          "signal is ill-conditioned for an order-" + std::to_string(order) +
                               " model; stable up to order " + std::to_string(model.order_reached));
   }
   return std::move(model.ar);

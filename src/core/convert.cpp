@@ -72,7 +72,7 @@ float midi_to_hz(float midi) {
 std::string hz_to_note(float hz) {
   if (!(hz > 0.0f) || !std::isfinite(hz)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "hz_to_note: hz must be finite and positive, got " + std::to_string(hz));
+                          "hz must be finite and positive, got " + std::to_string(hz));
   }
 
   const float midi = hz_to_midi(hz);
@@ -80,9 +80,8 @@ std::string hz_to_note(float hz) {
   if (!std::isfinite(rounded_midi) ||
       rounded_midi < static_cast<double>(std::numeric_limits<int>::min()) ||
       rounded_midi > static_cast<double>(std::numeric_limits<int>::max())) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        "hz_to_note: hz has no representable note name, got " + std::to_string(hz));
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "hz has no representable note name, got " + std::to_string(hz));
   }
   const int midi_int = static_cast<int>(rounded_midi);
 
@@ -97,8 +96,7 @@ std::string hz_to_note(float hz) {
 
 float note_to_hz(const std::string& note) {
   const auto invalid = [&note]() {
-    return SonareException(ErrorCode::InvalidParameter,
-                           "note_to_hz: cannot parse note name \"" + note + "\"");
+    return SonareException(ErrorCode::InvalidParameter, "cannot parse note name \"" + note + "\"");
   };
   if (note.empty()) throw invalid();
 
@@ -141,8 +139,7 @@ float note_to_hz(const std::string& note) {
       throw invalid();  // std::invalid_argument / std::out_of_range from stoll
     }
     if (parsed_octave < kMinNoteOctave || parsed_octave > kMaxNoteOctave) {
-      throw SonareException(ErrorCode::InvalidParameter, "note_to_hz: octave of \"" + note +
-                                                             "\" must be in [" +
+      throw SonareException(ErrorCode::InvalidParameter, "octave of \"" + note + "\" must be in [" +
                                                              std::to_string(kMinNoteOctave) + ", " +
                                                              std::to_string(kMaxNoteOctave) + "]");
     }
@@ -181,14 +178,14 @@ int time_to_frames(float time, int sr, int hop_length) {
 
 float samples_to_time(int samples, int sr) {
   if (sr <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "samples_to_time: sr must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sr must be positive");
   }
   return static_cast<float>(samples) / sr;
 }
 
 int time_to_samples(float time, int sr) {
   if (sr <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "time_to_samples: sr must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sr must be positive");
   }
   const double samples = static_cast<double>(time) * static_cast<double>(sr);
   if (!std::isfinite(samples)) {
@@ -253,7 +250,7 @@ std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_leng
 
 float bin_to_hz(int bin, int sr, int n_fft) {
   if (sr <= 0 || n_fft <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "bin_to_hz: sr and n_fft must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sr and n_fft must be positive");
   }
   // Promote to double before multiplying so bin * sr cannot overflow int at
   // high sample rates / large FFT bins (e.g. bin=2048, sr=192000 overflows a
@@ -264,7 +261,7 @@ float bin_to_hz(int bin, int sr, int n_fft) {
 
 int hz_to_bin(float hz, int sr, int n_fft) {
   if (sr <= 0 || n_fft <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "hz_to_bin: sr and n_fft must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "sr and n_fft must be positive");
   }
   // This helper is part of the established non-throwing scalar conversion
   // family: NaN has no ordered bin and maps to the neutral zero sentinel,

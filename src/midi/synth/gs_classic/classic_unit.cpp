@@ -74,9 +74,9 @@ void GsClassicUnit::prepare(double sample_rate, int max_block_size) {
   const int returned_max = down_[0]->getMaxOutLen(drawn_max);
   if (!graph_.prepare(*models_, *type_, static_cast<std::size_t>(drawn_max),
                       &gs_classic_extension_kernels())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "GsClassicUnit: type " + std::to_string(type_->type) +
-                              " is not a graph the classic engine can draw");
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "type " + std::to_string(type_->type) + " is not a graph the classic engine can draw");
   }
 
   // Walk zeros through the pair one host sample at a time; the widest gap between

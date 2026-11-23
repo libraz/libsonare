@@ -23,14 +23,12 @@ inline size_t reflect_index(int64_t index, size_t size) {
 
 inline std::vector<float> reflect_center_pad(const float* data, size_t size, int pad) {
   if (pad < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "reflect_center_pad: pad must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "pad must be non-negative");
   }
   const size_t margin = static_cast<size_t>(pad);
   size_t padded_size = 0;
   if (!numeric::checked_add(size, 2 * margin, &padded_size)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "reflect_center_pad: output length overflows");
+    throw SonareException(ErrorCode::InvalidParameter, "output length overflows");
   }
   std::vector<float> padded(padded_size, 0.0f);
   if (data == nullptr || size == 0) return padded;

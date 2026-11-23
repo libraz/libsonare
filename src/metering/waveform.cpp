@@ -61,8 +61,7 @@ WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int chan
   // A bucket whose samples are not finite has no min/max to report, and the 0/0
   // it would otherwise carry is what a display draws as silence.
   SONARE_CHECK_MSG(numeric::all_finite(samples, frames * channel_count),
-                   ErrorCode::InvalidParameter,
-                   "waveform_peaks: audio contains a non-finite sample");
+                   ErrorCode::InvalidParameter, "audio contains a non-finite sample");
 
   WaveformPeaksResult result;
   result.channels = channels;

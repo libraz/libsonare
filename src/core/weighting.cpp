@@ -113,23 +113,20 @@ std::vector<float> frequency_weighting(const std::vector<float>& freqs, const st
   if (k == "C") return C_weighting(freqs, min_db);
   if (k == "D") return D_weighting(freqs, min_db);
   if (k == "Z") return std::vector<float>(freqs.size(), 0.0f);
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "frequency_weighting: unknown kind '" + kind + "'");
+  throw SonareException(ErrorCode::InvalidParameter, "unknown kind '" + kind + "'");
 }
 
 std::vector<float> perceptual_weighting(const float* S, int n_bins, int n_frames,
                                         const std::vector<float>& freqs, const std::string& kind) {
   if (n_bins < 0 || n_frames < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "perceptual_weighting: negative shape");
+    throw SonareException(ErrorCode::InvalidParameter, "negative shape");
   }
   if (static_cast<int>(freqs.size()) != n_bins) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "perceptual_weighting: freqs size must equal n_bins");
+    throw SonareException(ErrorCode::InvalidParameter, "freqs size must equal n_bins");
   }
   const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
   if (total > 0 && S == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "perceptual_weighting: null spectrogram with non-zero shape");
+    throw SonareException(ErrorCode::InvalidParameter, "null spectrogram with non-zero shape");
   }
 
   std::vector<float> weights = frequency_weighting(freqs, kind);

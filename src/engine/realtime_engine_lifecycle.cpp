@@ -37,7 +37,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   if (applied_timeline_sample_rate_ > 0.0 &&
       effective_sample_rate != applied_timeline_sample_rate_) {
     throw SonareException(ErrorCode::InvalidState,
-                          "prepare: sample rate differs from the installed project timeline");
+                          "sample rate differs from the installed project timeline");
   }
   {
     // The loop is held in quarter notes, so a new rate moves its length in samples.
@@ -66,7 +66,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // Raised only after prepare_impl() committed, so the engine stays prepared.
   if (!clip_sysex_prepared) {
     throw SonareException(ErrorCode::InvalidState,
-                          "prepare: a bound instrument refused a scheduled MIDI SysEx; the MIDI "
+                          "a bound instrument refused a scheduled MIDI SysEx; the MIDI "
                           "clip schedule was cleared");
   }
 }
@@ -220,8 +220,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
     if (midi::own_sysex_payloads(refreshed, &error, rack_sysex_preparer())) {
       midi_sequencer_.set_midi_clips(std::move(refreshed));
     } else if (error == midi::MidiSysExPayloadError::kOutOfMemory) {
-      throw SonareException(ErrorCode::OutOfMemory,
-                            "prepare: could not allocate MIDI SysEx operations");
+      throw SonareException(ErrorCode::OutOfMemory, "could not allocate MIDI SysEx operations");
     } else {
       midi_sequencer_.set_midi_clips({});
       clip_sysex_prepared = false;
@@ -234,7 +233,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   // the caller does not get a prepared engine that silently renders its
   // instruments out of phase with the clip bus.
   SONARE_CHECK_MSG(recompute_pdc(), ErrorCode::OutOfMemory,
-                   "prepare: could not allocate the latency compensation delays");
+                   "could not allocate the latency compensation delays");
 #endif
   metronome_.prepare(sample_rate, active_tempo_map_);
 #if defined(SONARE_WITH_MIXING)
@@ -434,7 +433,7 @@ void RealtimeEngine::prime_offline_parameters(int num_channels, int block_size) 
   if (max_block_size_ <= 0 || num_channels <= 0) return;
   if (block_size > max_block_size_) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "prime_offline_parameters: block size exceeds the prepared block size");
+                          "block size exceeds the prepared block size");
   }
   const int frames = std::max(1, block_size);
 
@@ -490,13 +489,13 @@ void RealtimeEngine::render_offline_span(float* const* out, int num_channels, in
   // render_offline, so none of them can render past the prepared width.
   if (num_channels > prepared_channels_) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "render_offline: requested channel count exceeds the prepared channel "
+                          "requested channel count exceeds the prepared channel "
                           "count");
   }
 
   if (block_size > max_block_size_) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "render_offline: block size exceeds the prepared block size");
+                          "block size exceeds the prepared block size");
   }
   const int frames_per_block = std::max(1, block_size);
   // Reuse the member scratch: size it once here, before any state changes, so a
@@ -548,7 +547,7 @@ void RealtimeEngine::render_offline_span(float* const* out, int num_channels, in
   }
   if (promised_misses != 0) {
     throw SonareException(ErrorCode::InvalidState,
-                          "render_offline: a streamed clip page was not resident, so part of "
+                          "a streamed clip page was not resident, so part of "
                           "the render is silence");
   }
 }
@@ -556,7 +555,7 @@ void RealtimeEngine::render_offline_span(float* const* out, int num_channels, in
 ClipSchedule RealtimeEngine::freeze_offline(int num_channels, int64_t total_frames, int block_size,
                                             uint32_t clip_id, double start_ppq, float gain) {
   if (num_channels <= 0 || total_frames <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "freeze_offline: empty render shape");
+    throw SonareException(ErrorCode::InvalidParameter, "empty render shape");
   }
   auto owned = std::make_shared<ClipAudioStorage>();
   {
@@ -595,8 +594,7 @@ std::vector<std::vector<float>> RealtimeEngine::render_offline_aligned(int num_c
                                                                        int64_t total_frames,
                                                                        int block_size) {
   if (num_channels <= 0 || total_frames <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "render_offline_aligned: empty render shape");
+    throw SonareException(ErrorCode::InvalidParameter, "empty render shape");
   }
   const int64_t latency = static_cast<int64_t>(render_latency_q8(source_layer_render_) >> 8);
   const int64_t render_frames = total_frames + latency;

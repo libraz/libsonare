@@ -451,12 +451,12 @@ void BinauralRenderer::prepare(double sample_rate, int max_block_size, const Hrt
   if (!numeric::finite_positive(sample_rate) || max_block_size <= 0 ||
       max_block_size > INT_MAX / 2 || slots.count < 1 || slots.count > kVirtualSlotCount) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "binaural: invalid sample rate, block size or slot set");
+                          "invalid sample rate, block size or slot set");
   }
   const double rounded_sample_rate = std::round(sample_rate);
   if (!numeric::finite_in_closed_range(rounded_sample_rate, 1.0, static_cast<double>(INT_MAX))) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "binaural: invalid sample rate, block size or slot set");
+                          "invalid sample rate, block size or slot set");
   }
   const int rate = static_cast<int>(rounded_sample_rate);
 
@@ -471,15 +471,14 @@ void BinauralRenderer::prepare(double sample_rate, int max_block_size, const Hrt
     for (int a = 0; a < im.hrtf->azimuth_count(); ++a) {
       const float itd = im.hrtf->itd_samples(e, a);
       if (!std::isfinite(itd)) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "binaural: invalid HRTF history dimensions");
+        throw SonareException(ErrorCode::InvalidParameter, "invalid HRTF history dimensions");
       }
       max_itd = std::max(max_itd, std::fabs(static_cast<double>(itd)));
     }
   }
   const double rounded_max_itd = std::ceil(max_itd);
   if (rounded_max_itd > static_cast<double>(INT_MAX - 1) || im.taps <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "binaural: invalid HRTF history dimensions");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid HRTF history dimensions");
   }
   const int max_offset = static_cast<int>(rounded_max_itd) + 1;
   int filter_capacity = 0;
@@ -491,7 +490,7 @@ void BinauralRenderer::prepare(double sample_rate, int max_block_size, const Hrt
       !numeric::checked_add(history_len, max_block_size, &history_with_block) ||
       !numeric::checked_size_product(static_cast<std::size_t>(history_with_block), std::size_t{2},
                                      static_cast<std::size_t>(INT_MAX), &history_capacity)) {
-    throw SonareException(ErrorCode::InvalidParameter, "binaural: invalid HRTF history dimensions");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid HRTF history dimensions");
   }
   im.history_len = history_len;
 

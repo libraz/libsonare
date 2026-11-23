@@ -38,7 +38,7 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   // into inf - inf for every later window, which then orders a sort. WASM calls this
   // directly, so the check belongs here rather than in the C-ABI wrapper.
   SONARE_CHECK_MSG(numeric::all_finite(data, n_samples), ErrorCode::InvalidParameter,
-                   "DynamicsAnalyzer: audio contains a non-finite sample");
+                   "audio contains a non-finite sample");
 
   // Compute peak and cumulative squared samples once for overall and per-window RMS.
   std::vector<double> prefix_sum(n_samples + 1);

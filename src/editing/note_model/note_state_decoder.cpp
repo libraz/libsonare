@@ -262,18 +262,16 @@ std::vector<DecodedSpan> path_spans(const std::vector<PathState>& path, double h
 std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float fmin_hz,
                                             float fmax_hz, float reference_hz,
                                             float segmentation_threshold_cents, float min_note_ms) {
-  SONARE_CHECK_MSG(input.track != nullptr, ErrorCode::InvalidParameter,
-                   "decode_note_states: track is required");
+  SONARE_CHECK_MSG(input.track != nullptr, ErrorCode::InvalidParameter, "track is required");
   const pitch_editor::F0Track& track = *input.track;
   const std::size_t n = track.f0_hz.size();
   SONARE_CHECK_MSG(track.voiced.size() == n && input.frame_rms.size() == n,
-                   ErrorCode::InvalidParameter,
-                   "decode_note_states: voiced and frame_rms need one entry per frame");
+                   ErrorCode::InvalidParameter, "voiced and frame_rms need one entry per frame");
   if (n == 0) return {};
   SONARE_CHECK_MSG(track.frame_rate() > 0.0f, ErrorCode::InvalidParameter,
-                   "decode_note_states: track needs a frame cadence");
+                   "track needs a frame cadence");
   SONARE_CHECK_MSG(fmin_hz > 0.0f && fmax_hz > fmin_hz && reference_hz > 0.0f,
-                   ErrorCode::InvalidParameter, "decode_note_states: invalid pitch range");
+                   ErrorCode::InvalidParameter, "invalid pitch range");
 
   const double h = 1.0 / static_cast<double>(track.frame_rate());
   const double reference = static_cast<double>(reference_hz);
@@ -282,7 +280,7 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
   const auto low = static_cast<int>(std::floor(to_cents(fmin_hz) / kBinCents));
   const auto high = static_cast<int>(std::ceil(to_cents(fmax_hz) / kBinCents));
   SONARE_CHECK_MSG(high > low, ErrorCode::InvalidParameter,
-                   "decode_note_states: pitch range spans fewer than two bins");
+                   "pitch range spans fewer than two bins");
   const std::size_t nb = static_cast<std::size_t>(high - low + 1);
   std::vector<double> centres(nb);
   for (std::size_t b = 0; b < nb; ++b) {
@@ -475,10 +473,9 @@ std::vector<float> frame_rms_for_track(const Audio& audio, const pitch_editor::F
 
 std::vector<int> narrow_valley_frames(const Audio& audio, const pitch_editor::F0Track& track) {
   const double spf = track.samples_per_frame();
-  SONARE_CHECK_MSG(spf > 0.0, ErrorCode::InvalidParameter,
-                   "narrow_valley_frames: track needs a frame cadence");
+  SONARE_CHECK_MSG(spf > 0.0, ErrorCode::InvalidParameter, "track needs a frame cadence");
   SONARE_CHECK_MSG(audio.sample_rate() > 0, ErrorCode::InvalidParameter,
-                   "narrow_valley_frames: audio needs a sample rate");
+                   "audio needs a sample rate");
   const auto total = static_cast<std::ptrdiff_t>(audio.size());
   const auto frames = static_cast<std::size_t>(std::max(0, track.n_frames()));
   const auto voiced = [&](std::size_t t) {
@@ -518,7 +515,7 @@ std::vector<int> narrow_valley_frames(const Audio& audio, const pitch_editor::F0
 
 std::vector<int> onset_frames_for_track(const Audio& audio, const pitch_editor::F0Track& track) {
   SONARE_CHECK_MSG(track.frame_rate() > 0.0f, ErrorCode::InvalidParameter,
-                   "onset_frames_for_track: track needs a frame cadence");
+                   "track needs a frame cadence");
   const detail::MonophonicOnsetEvidence evidence = detail::monophonic_onset_evidence(audio);
   std::vector<int> frames;
   if (!evidence.available) return frames;

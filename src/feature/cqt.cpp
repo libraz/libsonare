@@ -828,8 +828,7 @@ Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const Cqt
   // at each binding so the C ABI, the WASM bindings (which call this directly)
   // and the in-process callers all inherit one rule.
   if (!numeric::all_finite(magnitude, n_bins, n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "griffinlim_cqt: magnitude contains a non-finite value");
+    throw SonareException(ErrorCode::InvalidParameter, "magnitude contains a non-finite value");
   }
 
   // Seed Griffin-Lim with the CQT magnitude laid back onto the STFT grid of the

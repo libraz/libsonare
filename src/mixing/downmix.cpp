@@ -13,7 +13,7 @@ void downmix(ChannelLayout from, ChannelLayout to, const float* const* in, float
   const int nin = channel_count(from);
   const int nout = channel_count(to);
   SONARE_CHECK_MSG(in != nullptr && out != nullptr, ErrorCode::InvalidParameter,
-                   "downmix: null plane array");
+                   "null plane array");
   SONARE_CHECK_MSG(nout <= nin, ErrorCode::NotSupported, "downmix cannot upmix");
 
   if (from == to) {
@@ -94,7 +94,7 @@ void downmix(ChannelLayout from, ChannelLayout to, const float* const* in, float
     return;
   }
 
-  SONARE_CHECK_MSG(false, ErrorCode::NotSupported, "downmix: unsupported layout conversion");
+  SONARE_CHECK_MSG(false, ErrorCode::NotSupported, "unsupported layout conversion");
 }
 
 }  // namespace sonare::mixing

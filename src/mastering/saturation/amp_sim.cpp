@@ -385,17 +385,17 @@ void AmpSim::allocate_cab_ir_history() {
 
 void AmpSim::load_cab_ir(const float* impulse_response, int num_samples, double ir_sample_rate) {
   if (num_samples < 0 || (num_samples > 0 && impulse_response == nullptr)) {
-    throw SonareException(ErrorCode::InvalidParameter, "load_cab_ir: invalid IR");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid IR");
   }
   if (!std::isfinite(ir_sample_rate) || ir_sample_rate < 0.0) {
-    throw SonareException(ErrorCode::InvalidParameter, "load_cab_ir: invalid IR sample rate");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid IR sample rate");
   }
   // Validate the whole source before truncation: a non-finite sample past the
   // budget still means the caller handed over a broken IR, and silently keeping
   // the part that happened to fit would hide it.
   for (int i = 0; i < num_samples; ++i) {
     if (!std::isfinite(impulse_response[i])) {
-      throw SonareException(ErrorCode::InvalidParameter, "load_cab_ir: IR must be finite");
+      throw SonareException(ErrorCode::InvalidParameter, "IR must be finite");
     }
   }
   cab_ir_source_.assign(impulse_response, impulse_response + num_samples);

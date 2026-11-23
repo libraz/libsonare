@@ -91,14 +91,14 @@ Sha256::Sha256() noexcept
 
 void Sha256::update(const std::uint8_t* data, std::size_t size) {
   if (finalized_) {
-    throw SonareException(ErrorCode::InvalidState, "sha256: update after finalization");
+    throw SonareException(ErrorCode::InvalidState, "update after finalization");
   }
   if (data == nullptr && size != 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sha256: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   const std::uint64_t max_bit_length = std::numeric_limits<std::uint64_t>::max();
   if (size > (max_bit_length - bit_length_) / 8u) {
-    throw SonareException(ErrorCode::InvalidParameter, "sha256: input is too large");
+    throw SonareException(ErrorCode::InvalidParameter, "input is too large");
   }
   if (size == 0) return;
 

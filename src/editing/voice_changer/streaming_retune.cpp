@@ -48,8 +48,7 @@ int resolve_grain_size(int requested, double sample_rate) noexcept {
 }
 
 void refuse_if_invalid(const StreamingRetuneConfig& config) {
-  const std::string problem =
-      streaming_retune_config_problem(config, "StreamingRetune", kClassFieldNames);
+  const std::string problem = streaming_retune_config_problem(config, nullptr, kClassFieldNames);
   if (!problem.empty()) throw SonareException(ErrorCode::InvalidParameter, problem);
 }
 }  // namespace
@@ -86,14 +85,14 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   // Finite and in range: the default grain size rounds sample_rate to an int.
   if (!is_valid_realtime_sample_rate(sample_rate)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingRetune::prepare: sample_rate must be finite and within [" +
+                          "sample_rate must be finite and within [" +
                               std::to_string(kMinAudioSampleRate) + ", " +
                               std::to_string(kMaxAudioSampleRate) + "]");
   }
   if (!is_valid_realtime_block_size(max_block_size)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingRetune::prepare: max_block_size must be within [1, " +
-                              std::to_string(kMaxRealtimeBlockSize) + "]");
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "max_block_size must be within [1, " + std::to_string(kMaxRealtimeBlockSize) + "]");
   }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;

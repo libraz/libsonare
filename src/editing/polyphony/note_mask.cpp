@@ -177,12 +177,12 @@ NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& t
   }
   SONARE_CHECK_MSG(per_ridge_stretch.empty() || per_ridge_stretch.size() == track.ridges.size(),
                    ErrorCode::InvalidParameter,
-                   "build_note_masks: perRidgeStretch must be empty or one value per ridge");
+                   "perRidgeStretch must be empty or one value per ridge");
   for (const float stretch : per_ridge_stretch) {
     // Only a negative number carries the refusal; a NaN passes every comparison
     // that would have caught it and reaches the geometry as a stretch.
     SONARE_CHECK_MSG(std::isfinite(stretch), ErrorCode::InvalidParameter,
-                     "build_note_masks: perRidgeStretch must be finite");
+                     "perRidgeStretch must be finite");
   }
 
   const int n_bins = geometry.n_bins;

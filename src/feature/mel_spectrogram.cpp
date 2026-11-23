@@ -142,7 +142,7 @@ std::vector<float> MelSpectrogram::delta(const float* features, int n_features, 
     features_finite = std::isfinite(features[index]);
   }
   SONARE_CHECK_MSG(features_finite, ErrorCode::InvalidParameter,
-                   "MelSpectrogram::delta: features contains a non-finite value");
+                   "features contains a non-finite value");
 
   int half_width = width / 2;
   std::vector<float> out(n_features * n_frames, 0.0f);

@@ -51,7 +51,7 @@ StftFrameReader::StftFrameReader(const float* samples, std::size_t size, int sam
       frame_(static_cast<std::size_t>(checked.n_fft), 0.0f),
       frame_spectrum_(static_cast<std::size_t>(checked.n_fft / 2 + 1)) {
   SONARE_CHECK_MSG(samples != nullptr || size == 0, ErrorCode::InvalidParameter,
-                   "StftFrameReader: samples must not be null for a non-empty signal");
+                   "samples must not be null for a non-empty signal");
   padded_length_ = center_ ? size_ + 2 * pad_ : size_;
 }
 
@@ -79,7 +79,7 @@ const float* StftFrameReader::interior_span(std::size_t start, int count) const 
 
 const std::complex<float>* StftFrameReader::frame(int index) {
   SONARE_CHECK_MSG(index >= 0 && index < n_frames_, ErrorCode::InvalidParameter,
-                   "StftFrameReader::frame: index out of range");
+                   "index out of range");
 
   const std::size_t start = static_cast<std::size_t>(index) * static_cast<std::size_t>(hop_length_);
   const std::size_t remaining = start < padded_length_ ? padded_length_ - start : 0;
@@ -127,13 +127,11 @@ IstftAccumulator::IstftAccumulator(int n_frames, int sample_rate, const StftConf
       frame_(static_cast<std::size_t>(checked.n_fft), 0.0f),
       trimmed_(),
       fft_(checked.n_fft) {
-  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter,
-                   "IstftAccumulator: nFrames must be positive");
+  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "nFrames must be positive");
   // to_audio's length <= 0 branch trims to the valid region instead, which has
   // no streaming counterpart here: the result length would not be known until
   // the last frame. Refuse it by name rather than silently taking this branch.
-  SONARE_CHECK_MSG(target_length > 0, ErrorCode::InvalidParameter,
-                   "IstftAccumulator: targetLength must be positive");
+  SONARE_CHECK_MSG(target_length > 0, ErrorCode::InvalidParameter, "targetLength must be positive");
 
   // window_product_ enters as the periodic analysis window and becomes
   // analysis * synthesis, the normalizer to_audio accumulates.
@@ -171,10 +169,9 @@ void IstftAccumulator::finalize_before(std::size_t end) {
 }
 
 void IstftAccumulator::push(const std::complex<float>* frame) {
-  SONARE_CHECK_MSG(frame != nullptr, ErrorCode::InvalidParameter,
-                   "IstftAccumulator::push: frame must not be null");
+  SONARE_CHECK_MSG(frame != nullptr, ErrorCode::InvalidParameter, "frame must not be null");
   SONARE_CHECK_MSG(pushed_ < n_frames_, ErrorCode::InvalidParameter,
-                   "IstftAccumulator::push: more frames pushed than declared");
+                   "more frames pushed than declared");
 
   const std::size_t start =
       static_cast<std::size_t>(pushed_) * static_cast<std::size_t>(hop_length_);
@@ -201,7 +198,7 @@ void IstftAccumulator::push(const std::complex<float>* frame) {
 
 Audio IstftAccumulator::finish() {
   SONARE_CHECK_MSG(pushed_ == n_frames_, ErrorCode::InvalidParameter,
-                   "IstftAccumulator::finish: fewer frames pushed than declared");
+                   "fewer frames pushed than declared");
   finalize_before(full_length_);
   return Audio::from_vector(std::move(trimmed_), sample_rate_);
 }

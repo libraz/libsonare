@@ -18,7 +18,7 @@ int frame_count(std::size_t n, int frame_length, int hop_length) {
   const std::size_t count =
       (n - static_cast<std::size_t>(frame_length)) / static_cast<std::size_t>(hop_length) + 1;
   SONARE_CHECK_MSG(count <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
-                   ErrorCode::InvalidParameter, "frame_count: frame count exceeds int range");
+                   ErrorCode::InvalidParameter, "frame count exceeds int range");
   return static_cast<int>(count);
 }
 
@@ -26,10 +26,10 @@ std::vector<float> frame(const float* x, std::size_t n, int frame_length, int ho
   util::check::integer_within(frame_length, kFrameLengthDomain, "frame_length");
   util::check::integer_within(hop_length, kFrameHopLengthDomain, "hop_length");
   if (n > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "frame: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (!numeric::all_finite(x, n)) {
-    throw SonareException(ErrorCode::InvalidParameter, "frame: input contains a non-finite sample");
+    throw SonareException(ErrorCode::InvalidParameter, "input contains a non-finite sample");
   }
 
   const int n_frames = frame_count(n, frame_length, hop_length);

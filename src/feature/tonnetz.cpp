@@ -46,11 +46,10 @@ std::vector<float> tonnetz(const Chroma& chroma) {
 
 std::vector<float> tonnetz(const float* chromagram, int n_chroma, int n_frames) {
   if (chromagram == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "tonnetz: chromagram is null");
+    throw SonareException(ErrorCode::InvalidParameter, "chromagram is null");
   }
   if (n_chroma != kChromaBins) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "tonnetz: only 12-bin chromagrams are supported");
+    throw SonareException(ErrorCode::InvalidParameter, "only 12-bin chromagrams are supported");
   }
   if (n_frames <= 0) {
     return {};

@@ -171,11 +171,11 @@ const Value* admit_insert_params(const std::string& json_params,
   } catch (const sonare::util::json::JsonResourceError& e) {
     throw SonareException(
         ErrorCode::InvalidParameter,
-        std::string("make_insert: json_params exceeds the JSON parse budget (") + e.what() + ")");
+        std::string("json_params exceeds the JSON parse budget (") + e.what() + ")");
   } catch (const sonare::util::json::JsonError& e) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
+    throw SonareException(ErrorCode::InvalidParameter, e.what());
   } catch (const std::invalid_argument& e) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
+    throw SonareException(ErrorCode::InvalidParameter, e.what());
   }
   if (!out_root->is_object()) {
     throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
@@ -1421,7 +1421,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
     const std::string& name, const std::string& json_params, const float* impulse_response,
     int ir_num_samples, const sonare::resource::ProjectImportResourceLimits& limits) {
   if (ir_num_samples < 0 || (ir_num_samples > 0 && impulse_response == nullptr)) {
-    throw SonareException(ErrorCode::InvalidParameter, "make_insert_with_ir: invalid IR");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid IR");
   }
 #ifdef SONARE_HAVE_FX
   if (name == "effects.reverb.convolution") {

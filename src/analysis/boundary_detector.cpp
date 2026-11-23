@@ -158,7 +158,7 @@ BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chro
     // reads nothing, so there is no bin count to agree on.
     SONARE_CHECK_MSG(config_.n_chroma == 0 || chroma.n_chroma() == config_.n_chroma,
                      ErrorCode::InvalidParameter,
-                     "BoundaryDetector: chromagram has " + std::to_string(chroma.n_chroma()) +
+                     "chromagram has " + std::to_string(chroma.n_chroma()) +
                          " bins but the config expects " + std::to_string(config_.n_chroma));
     chroma_frames = chroma.n_frames();
 

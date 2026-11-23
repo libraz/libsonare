@@ -374,18 +374,14 @@ size_t checked_from_complex_size(int n_bins, int n_frames, int n_fft, int hop_le
   // carried into iSTFT, this keeps the invariant used by FFT::inverse:
   // n_bins must be the one-sided spectrum for an even FFT.
   SONARE_CHECK_MSG(n_fft >= 2 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: n_fft must be even and >= 2");
+                   "n_fft must be even and >= 2");
   SONARE_CHECK_MSG(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: n_bins must equal n_fft / 2 + 1");
-  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: n_frames must be positive");
-  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: hop_length must be positive");
-  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: sample_rate must be positive");
+                   "n_bins must equal n_fft / 2 + 1");
+  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "n_frames must be positive");
+  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be positive");
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "sample_rate must be positive");
   SONARE_CHECK_MSG(win_length == 0 || (win_length > 0 && win_length <= n_fft),
-                   ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: win_length must be 0 or in [1, n_fft]");
+                   ErrorCode::InvalidParameter, "win_length must be 0 or in [1, n_fft]");
   // Compute the element count in size_t so the multiply cannot overflow int;
   // reject sizes that would not fit in a vector index.
   size_t total = 0;
@@ -401,8 +397,7 @@ Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bin
                                       bool center, int win_length, PadMode pad_mode) {
   const size_t total =
       checked_from_complex_size(n_bins, n_frames, n_fft, hop_length, sample_rate, win_length);
-  SONARE_CHECK_MSG(data != nullptr, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: data must not be null");
+  SONARE_CHECK_MSG(data != nullptr, ErrorCode::InvalidParameter, "data must not be null");
   std::vector<std::complex<float>> spectrum(data, data + total);
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, sample_rate,
                      win_length, center, window, pad_mode);
@@ -415,7 +410,7 @@ Spectrogram Spectrogram::from_complex(std::vector<std::complex<float>>&& data, i
   const size_t total =
       checked_from_complex_size(n_bins, n_frames, n_fft, hop_length, sample_rate, win_length);
   SONARE_CHECK_MSG(data.size() == total, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: data must hold n_bins * n_frames values");
+                   "data must hold n_bins * n_frames values");
   return Spectrogram(std::move(data), n_bins, n_frames, n_fft, hop_length, sample_rate, win_length,
                      center, window, pad_mode);
 }
@@ -607,9 +602,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // once -- while a negative runs the same empty loop under a different number.
   SONARE_CHECK_MSG(config.n_iter >= 0 && config.n_iter <= resource::kMaxGriffinLimIterations,
                    ErrorCode::InvalidParameter,
-                   "griffin_lim: nIter must be in [0, " +
-                       std::to_string(resource::kMaxGriffinLimIterations) + "], got " +
-                       std::to_string(config.n_iter));
+                   "nIter must be in [0, " + std::to_string(resource::kMaxGriffinLimIterations) +
+                       "], got " + std::to_string(config.n_iter));
 
   // Element count in size_t so the n_bins*n_frames multiply and the column-major
   // index cannot overflow int for large caller-supplied n_frames.
@@ -623,8 +617,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // at each binding so the C ABI, the WASM bindings (which call this directly)
   // and the in-process callers all inherit one rule.
   if (!numeric::all_finite(magnitude, total)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "griffin_lim: magnitude contains a non-finite value");
+    throw SonareException(ErrorCode::InvalidParameter, "magnitude contains a non-finite value");
   }
 
   // Initialize with random phase
@@ -667,7 +660,7 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
                             &reconstructed_samples) ||
       reconstructed_samples > kMaxAudioBufferSize) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "griffin_lim: reconstruction exceeds the offline resource limit");
+                          "reconstruction exceeds the offline resource limit");
   }
   const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
@@ -745,10 +738,10 @@ Audio griffin_lim(const std::vector<float>& magnitude, int n_bins, int n_frames,
 
 MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power) {
   if (!(power > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "magphase: power must be > 0");
+    throw SonareException(ErrorCode::InvalidParameter, "power must be > 0");
   }
   if (n > 0 && spec == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "magphase: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   MagPhase out;
   out.magnitude.resize(n);

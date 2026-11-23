@@ -90,12 +90,10 @@ std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, si
 void unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag,
                                   AutocorrelationWorkspace* workspace, std::vector<float>* out) {
   if (n > 0 && input == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "unnormalized_autocorrelation: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (workspace == nullptr || out == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "unnormalized_autocorrelation: workspace and output must not be null");
+    throw SonareException(ErrorCode::InvalidParameter, "workspace and output must not be null");
   }
 
   const size_t out_size = std::min(max_lag, n);
@@ -116,8 +114,7 @@ void unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag,
 
   constexpr size_t kMaxAutocorrN = (static_cast<size_t>(1) << 29);
   if (n > kMaxAutocorrN) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "unnormalized_autocorrelation: input too large");
+    throw SonareException(ErrorCode::InvalidParameter, "input too large");
   }
 
   const size_t fft_size = next_power_of_2(2 * n - 1);
@@ -154,8 +151,7 @@ double percentile_sorted(const std::vector<float>& sorted, double percentile) {
   // and its cast to size_t an out-of-bounds index. An infinity is ordered, so the
   // clamp bounds it as the documented out-of-range case; only a NaN is refused.
   if (std::isnan(percentile)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "percentile_sorted: percentile must not be NaN");
+    throw SonareException(ErrorCode::InvalidParameter, "percentile must not be NaN");
   }
   const double position = std::clamp(percentile, 0.0, 1.0) * static_cast<double>(sorted.size() - 1);
   const size_t low = static_cast<size_t>(std::floor(position));
@@ -195,16 +191,13 @@ void power_to_db(const float* power, size_t n, float ref, float amin, float top_
 
 void compute_autocorrelation(const float* input, int n, int max_lag, float* output) {
   if (n < 0 || max_lag < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "compute_autocorrelation: lengths must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "lengths must be non-negative");
   }
   if (n > 0 && input == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "compute_autocorrelation: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (max_lag > 0 && output == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "compute_autocorrelation: null output with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null output with non-zero length");
   }
 
   for (int i = 0; i < max_lag; ++i) {

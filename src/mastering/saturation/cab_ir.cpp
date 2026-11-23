@@ -90,7 +90,7 @@ float piston_minus3db_argument() noexcept {
 
 std::vector<float> generate_cab_ir(const CabIrSpec& spec, double sample_rate) {
   if (!std::isfinite(sample_rate) || !(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "generate_cab_ir: invalid sample rate");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid sample rate");
   }
   const CabGeometry geometry = cab_geometry(spec.cab_model);
   const float distance_cm = std::clamp(spec.mic_distance_cm, 0.0f, kMaxMicDistanceCm);
@@ -214,7 +214,7 @@ std::vector<float> generate_cab_ir(const CabIrSpec& spec, double sample_rate) {
 
   for (float v : ir) {
     if (!std::isfinite(v)) {
-      throw SonareException(ErrorCode::InvalidParameter, "generate_cab_ir: non-finite response");
+      throw SonareException(ErrorCode::InvalidParameter, "non-finite response");
     }
   }
   return ir;

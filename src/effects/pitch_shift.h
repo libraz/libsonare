@@ -28,7 +28,7 @@ struct PitchShiftPlan {
 
 /// Refusal message for a failed plan, shared by every caller that reports one.
 inline constexpr const char* kPitchShiftPlanError =
-    "pitch_shift: needs non-empty input, a finite positive ratio, a shifted rate "
+    "pitch shift needs non-empty input, a finite positive ratio, a shifted rate "
     "sample_rate * ratio from 1000 Hz to INT_MAX, and a stretched intermediate within the "
     "audio buffer limit";
 

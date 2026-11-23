@@ -515,21 +515,20 @@ GsEfxProcessor::GsEfxProcessor(const GsEfx& state, GsEfxRealization realization,
                                GsEfxStageFactory factory, GsEfxBuildPolicy policy)
     : state_(state), realization_(realization), policy_(policy), factory_(std::move(factory)) {
   if (realization_ != GsEfxRealization::kModern && realization_ != GsEfxRealization::kClassic) {
-    throw SonareException(ErrorCode::InvalidParameter, "GsEfxProcessor: unknown realization");
+    throw SonareException(ErrorCode::InvalidParameter, "unknown realization");
   }
   if (state.type > 0x7F7Fu || state.type_msb != static_cast<uint8_t>(state.type >> 8)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "GsEfxProcessor: type bytes are not a canonical 7-bit pair");
+    throw SonareException(ErrorCode::InvalidParameter, "type bytes are not a canonical 7-bit pair");
   }
   if (state_.type != 0 && gs_efx_type_defaults(state_.type) == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "GsEfxProcessor: unsupported EFX type " + std::to_string(state_.type));
+                          "unsupported EFX type " + std::to_string(state_.type));
   }
   for (size_t slot = 0; slot < state_.params.size(); ++slot) {
     if (state_.params[slot] > 0x7Fu ||
         !gs_efx_parameter_takes(state_.type, static_cast<uint8_t>(slot), state_.params[slot])) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "GsEfxProcessor: parameter byte is outside the selected type");
+                            "parameter byte is outside the selected type");
     }
   }
   const std::vector<GsEfxStage> stages = realization_ == GsEfxRealization::kModern
@@ -540,15 +539,13 @@ GsEfxProcessor::GsEfxProcessor(const GsEfx& state, GsEfxRealization realization,
   if (policy_ == GsEfxBuildPolicy::kRequireCompleteGraph && !stages.empty()) {
     for (const Sf2EfxStageRt& stage : unit_.stages) {
       if (stage.proc == nullptr) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "GsEfxProcessor: unavailable stage " + stage.name);
+        throw SonareException(ErrorCode::InvalidParameter, "unavailable stage " + stage.name);
       }
     }
   }
   if (state_.type != 0 && unit_.stages.empty() &&
       policy_ == GsEfxBuildPolicy::kRequireCompleteGraph) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "GsEfxProcessor: type has no drawable graph");
+    throw SonareException(ErrorCode::InvalidParameter, "type has no drawable graph");
   }
   build_parameter_plan();
 }

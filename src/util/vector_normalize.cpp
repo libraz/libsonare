@@ -80,8 +80,7 @@ void block_column_norms(const float* x, int rows, int cols, int c0, int n, NormT
 
 std::vector<float> normalize(const float* x, std::size_t n, NormType norm, float threshold) {
   if (n > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "normalize: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   // A null pointer with zero length is a valid empty transform, but forming
   // the iterator pair [nullptr, nullptr) is not a defined C++ range.
@@ -104,14 +103,14 @@ std::vector<float> normalize(const std::vector<float>& x, NormType norm, float t
 std::vector<float> normalize_matrix(const float* x, int rows, int cols, int axis, NormType norm,
                                     float threshold) {
   if (rows < 0 || cols < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "normalize_matrix: negative dimension");
+    throw SonareException(ErrorCode::InvalidParameter, "negative dimension");
   }
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   if (total > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "normalize_matrix: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "null input");
   }
   if (axis != 0 && axis != 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "normalize_matrix: axis must be 0 or 1");
+    throw SonareException(ErrorCode::InvalidParameter, "axis must be 0 or 1");
   }
   // See normalize(): do not construct an iterator range from a null pointer
   // when the matrix has no elements.

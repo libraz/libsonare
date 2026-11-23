@@ -13,10 +13,8 @@
 namespace sonare {
 
 Audio native_spectral_time_stretch(const Audio& audio, float rate, int n_fft, int hop_length) {
-  SONARE_CHECK_MSG(n_fft >= 1, ErrorCode::InvalidParameter,
-                   "native_spectral_time_stretch: n_fft must be >= 1");
-  SONARE_CHECK_MSG(hop_length >= 1, ErrorCode::InvalidParameter,
-                   "native_spectral_time_stretch: hop_length must be >= 1");
+  SONARE_CHECK_MSG(n_fft >= 1, ErrorCode::InvalidParameter, "n_fft must be >= 1");
+  SONARE_CHECK_MSG(hop_length >= 1, ErrorCode::InvalidParameter, "hop_length must be >= 1");
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   std::size_t output_size = 0;
   constexpr std::size_t kMaxOutputSamples =

@@ -602,11 +602,9 @@ TEST_CASE("streaming retune config refusals are owned by the core and named by e
                                : field == "grain_size" ? "grain_size_samples"
                                                        : field;
 
-    require_argument_refusal([&] { StreamingRetune core(config); },
-                             "StreamingRetune: " + field + " " + predicate);
+    require_argument_refusal([&] { StreamingRetune core(config); }, field + " " + predicate);
     StreamingRetune live;
-    require_argument_refusal([&] { live.set_config(config); },
-                             "StreamingRetune: " + field + " " + predicate);
+    require_argument_refusal([&] { live.set_config(config); }, field + " " + predicate);
     CHECK(live.config().semitones == 0.0f);
 
     SonareStreamingRetune* handle = nullptr;

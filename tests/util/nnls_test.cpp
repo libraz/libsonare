@@ -88,5 +88,5 @@ TEST_CASE("nnls vector overload requires exact matrix sizes", "[util][nnls][edge
       [&] {
         nnls(std::vector<float>{}, std::numeric_limits<int>::max(), 2, std::vector<float>{}, 1);
       },
-      "nnls: A and B sizes must match"));
+      "A and B sizes must match"));
 }

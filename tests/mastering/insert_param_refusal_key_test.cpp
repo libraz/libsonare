@@ -25,7 +25,6 @@ using sonare::mastering::api::make_insert;
 constexpr std::size_t kKeylessCeiling = 0;
 
 constexpr double kBeyondBound = 1.0e6;
-constexpr const char* kMakeInsertPrefix = "make_insert: ";
 constexpr const char* kUnreadNote = "unknown key ";
 
 std::string number_text(double value) {
@@ -48,8 +47,6 @@ void probe(const std::string& insert, const std::string& key, const std::string&
     (void)make_insert(insert, params);
   } catch (const sonare::SonareException& e) {
     std::string message = e.what();
-    if (message.rfind(kMakeInsertPrefix, 0) == 0)
-      message.erase(0, std::string(kMakeInsertPrefix).size());
     if (message.rfind(kUnreadNote, 0) == 0) return;
     ++tally->read;
     // A relation names every member it constrains, so the probed key need not come first.

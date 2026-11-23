@@ -16,7 +16,7 @@ float derive_b(float time_constant, int sr, int hop_length) {
     // Signal the bad parameters rather than substituting a magic coefficient
     // that happens to pass the (0,1] range check and silently mis-normalizes.
     throw SonareException(ErrorCode::InvalidParameter,
-                          "pcen: time_constant, sr, and hop_length must be positive");
+                          "time_constant, sr, and hop_length must be positive");
   }
   double T = static_cast<double>(time_constant) * static_cast<double>(sr) /
              static_cast<double>(hop_length);
@@ -29,47 +29,47 @@ float derive_b(float time_constant, int sr, int hop_length) {
 
 std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConfig& config) {
   if (S == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "pcen: S is null");
+    throw SonareException(ErrorCode::InvalidParameter, "S is null");
   }
   if (!std::isfinite(config.time_constant) || !std::isfinite(config.gain) ||
       !std::isfinite(config.bias) || !std::isfinite(config.power) || !std::isfinite(config.eps)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "pcen: scalar configuration values must be finite");
+                          "scalar configuration values must be finite");
   }
   if (config.b.size() > 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "pcen: b must have length 0 or 1");
+    throw SonareException(ErrorCode::InvalidParameter, "b must have length 0 or 1");
   }
   for (float value : config.b) {
     if (!std::isfinite(value)) {
-      throw SonareException(ErrorCode::InvalidParameter, "pcen: b values must be finite");
+      throw SonareException(ErrorCode::InvalidParameter, "b values must be finite");
     }
   }
   for (float value : config.zi) {
     if (!std::isfinite(value)) {
-      throw SonareException(ErrorCode::InvalidParameter, "pcen: zi values must be finite");
+      throw SonareException(ErrorCode::InvalidParameter, "zi values must be finite");
     }
   }
   if (n_bins <= 0 || n_frames <= 0) {
     return {};
   }
   if (config.eps <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "pcen: eps must be strictly positive");
+    throw SonareException(ErrorCode::InvalidParameter, "eps must be strictly positive");
   }
   if (config.power < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "pcen: power must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "power must be non-negative");
   }
   if (config.bias < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "pcen: bias must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "bias must be non-negative");
   }
   if (config.gain < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "pcen: gain must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "gain must be non-negative");
   }
 
   float b =
       config.b.empty() ? derive_b(config.time_constant, config.sr, config.hop_length) : config.b[0];
   if (!std::isfinite(b) || b <= 0.0f || b > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "pcen: derived/explicit smoothing coefficient out of range (0,1]");
+                          "derived/explicit smoothing coefficient out of range (0,1]");
   }
 
   // Initial AR(1) delay state. librosa mirrors `scipy.signal.lfilter` with
@@ -82,7 +82,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
   std::vector<float> d(static_cast<size_t>(n_bins), 1.0f - b);
   if (!config.zi.empty()) {
     if (static_cast<int>(config.zi.size()) != n_bins) {
-      throw SonareException(ErrorCode::InvalidParameter, "pcen: zi length must equal n_bins");
+      throw SonareException(ErrorCode::InvalidParameter, "zi length must equal n_bins");
     }
     for (int k = 0; k < n_bins; ++k) d[k] = config.zi[k];
   }
@@ -111,7 +111,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
       // product is re-formed below rather than stored, so it contracts as it did.
       if (std::isinf(s * smooth)) {
         throw SonareException(ErrorCode::InvalidParameter,
-                              "pcen: gain overflows the float range for this input");
+                              "gain overflows the float range for this input");
       }
       // librosa special-cases power==0 as logarithmic compression
       // (S_out = log1p(S * smooth)); the power law would yield 1 - 1 = 0.
@@ -128,8 +128,7 @@ std::vector<float> pcen(const std::vector<float>& S, int n_bins, int n_frames,
     std::size_t expected = 0;
     if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
         S.size() != expected) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "pcen: S size must equal n_bins * n_frames");
+      throw SonareException(ErrorCode::InvalidParameter, "S size must equal n_bins * n_frames");
     }
   }
   return pcen(S.data(), n_bins, n_frames, config);

@@ -184,21 +184,20 @@ void validate_decompose_shape(int n_features, int n_frames, int n_components, in
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
                           int n_iter, const std::string& solver, float beta,
                           const std::string& init) {
-  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "decompose: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "S is null");
   validate_decompose_shape(n_features, n_frames, n_components, n_iter);
   if (solver != "mu") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "decompose: only solver=\"mu\" is supported");
+    throw SonareException(ErrorCode::InvalidParameter, "only solver=\"mu\" is supported");
   }
   if (!std::isfinite(beta)) {
-    throw SonareException(ErrorCode::InvalidParameter, "decompose: beta must be finite");
+    throw SonareException(ErrorCode::InvalidParameter, "beta must be finite");
   }
   // A non-finite element factorises into all-NaN W/H that no caller can tell
   // apart from a valid result by shape. Rejected here rather than at each
   // binding so the C ABI, the WASM bindings (which call this directly) and the
   // in-process callers all inherit one rule.
   if (!all_finite(S, n_features, n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter, "decompose: S contains a non-finite value");
+    throw SonareException(ErrorCode::InvalidParameter, "S contains a non-finite value");
   }
 
   DecomposeResult out;
@@ -207,8 +206,7 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
   } else if (init == "nndsvd") {
     init_nndsvd(S, out.W, out.H, n_features, n_components, n_frames);
   } else {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "decompose: init must be \"random\" or \"nndsvd\"");
+    throw SonareException(ErrorCode::InvalidParameter, "init must be \"random\" or \"nndsvd\"");
   }
 
   // Generalized beta-divergence multiplicative updates (Fevotte-Idier 2011).
@@ -285,7 +283,7 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
     if (!all_finite(out.W.data(), n_features, n_components) ||
         !all_finite(out.H.data(), n_components, n_frames)) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "decompose: beta overflows the factor update for this input");
+                            "beta overflows the factor update for this input");
     }
   }
   return out;
@@ -293,27 +291,26 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
 
 std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
                              const std::string& aggregate, int k, int width) {
-  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "nn_filter: S is null");
+  if (S == nullptr) throw SonareException(ErrorCode::InvalidParameter, "S is null");
   if (n_features <= 0 || n_frames <= 0) return {};
   if (aggregate != "mean" && aggregate != "median" && aggregate != "min" && aggregate != "max") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "nn_filter: aggregate must be mean/median/min/max");
+    throw SonareException(ErrorCode::InvalidParameter, "aggregate must be mean/median/min/max");
   }
   // librosa rejects a negative exclusion width (it would silently disable the
   // |i-j| < width time-exclusion band and yield a degenerate self-including
   // filter). Mirror that rejection instead of treating width<0 as width=0.
   if (width < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "nn_filter: width must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter, "width must be non-negative");
   }
   // The most dangerous non-finite case in this file: a NaN poisons the cosine
   // similarities, then disappears in the aggregation, so the caller gets an
   // entirely finite spectrogram whose values have silently shifted, with
   // nothing to detect it by. Rejected here so every surface inherits the rule.
   if (!all_finite(S, n_features, n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter, "nn_filter: S contains a non-finite value");
+    throw SonareException(ErrorCode::InvalidParameter, "S contains a non-finite value");
   }
   if (k <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "nn_filter: k must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "k must be positive");
   }
 
   // Pre-compute column norms for cosine similarity. Feature-major with per-frame

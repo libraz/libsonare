@@ -17,6 +17,7 @@
 #include "util/non_finite_sample.h"
 #include "util/numeric_validation.h"
 #include "util/parallel_for.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -148,12 +149,12 @@ void median_filter_line(const float* in, float* out, int n, int kernel_size, Sli
 }
 
 /// Rejects a null spectrogram, an even or non-positive kernel, and one above the maximum.
-void check_median_kernel(const char* fn_name, const float* magnitude, int kernel_size) {
+void check_median_kernel(const float* magnitude, int kernel_size) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
   SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
-                   std::string(fn_name) + ": kernel_size " + std::to_string(kernel_size) +
-                       " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
+                   "kernel_size " + std::to_string(kernel_size) + " exceeds the maximum " +
+                       std::to_string(kMaxHpssKernelSize));
 }
 
 }  // namespace
@@ -187,7 +188,7 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
   // Bound before the per-thread allocations below, not after. This bounds one
   // factor only -- the product is held by the worker count at the parallel_for
   // below, since each worker builds its own kernel-wide pair.
-  check_median_kernel("median_filter_horizontal", magnitude, kernel_size);
+  check_median_kernel(magnitude, kernel_size);
 
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
@@ -223,7 +224,7 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
   // Bound before the per-thread allocations below, not after. This bounds one
   // factor only -- the product, kernel pair plus n_bins staging pair per worker,
   // is held by the worker count at the parallel_for below.
-  check_median_kernel("median_filter_vertical", magnitude, kernel_size);
+  check_median_kernel(magnitude, kernel_size);
 
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
@@ -270,8 +271,12 @@ namespace {
 /// @brief Which component a single-component HPSS pass reconstructs.
 enum class HpssComponent { kHarmonic, kPercussive };
 
-/// @brief Refuses a mask power or margin the mask expressions are not defined for.
+/// @brief Refuses a kernel size, mask power or margin the mask expressions are not defined for.
 void validate_mask_config(const HpssConfig& config) {
+  util::check::odd_integer_in_range(config.kernel_size_harmonic, 1, kMaxHpssKernelSize,
+                                    "kernel_size_harmonic");
+  util::check::odd_integer_in_range(config.kernel_size_percussive, 1, kMaxHpssKernelSize,
+                                    "kernel_size_percussive");
   SONARE_CHECK_MSG(std::isfinite(config.power) && config.power > 0.0f, ErrorCode::InvalidParameter,
                    "HPSS power must be finite and positive");
   SONARE_CHECK_MSG(std::isfinite(config.margin_harmonic) && config.margin_harmonic >= 0.0f &&

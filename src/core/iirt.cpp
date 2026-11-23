@@ -202,17 +202,16 @@ int frame_count_for_iirt(size_t n_samples, int win_length, int hop_length, bool 
 
 std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& config) {
   if (n_samples > 0 && y == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "iirt: y is null");
+    throw SonareException(ErrorCode::InvalidParameter, "y is null");
   if (config.sr <= 0 || config.hop_length <= 0 || config.win_length <= 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "iirt: sr, hop_length, and win_length must be positive");
+                          "sr, hop_length, and win_length must be positive");
   }
   if (config.n_filters <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "iirt: n_filters must be positive");
-  if (!(config.Q > 0.0f))
-    throw SonareException(ErrorCode::InvalidParameter, "iirt: Q must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "n_filters must be positive");
+  if (!(config.Q > 0.0f)) throw SonareException(ErrorCode::InvalidParameter, "Q must be positive");
   if (config.filter_order < 2 || config.filter_order % 2 != 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "iirt: filter_order must be even and >= 2");
+    throw SonareException(ErrorCode::InvalidParameter, "filter_order must be even and >= 2");
   }
   if (n_samples == 0 || config.n_filters == 0) return {};
 

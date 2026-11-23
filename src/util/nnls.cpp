@@ -28,13 +28,12 @@ double lipschitz_upper_bound(const Eigen::MatrixXd& matrix) {
 std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, int B_cols,
                         int max_iter, float tol) {
   if (A == nullptr || B == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "nnls: A and B must be non-null");
+    throw SonareException(ErrorCode::InvalidParameter, "A and B must be non-null");
   }
   if (A_rows <= 0 || A_cols <= 0 || B_cols <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "nnls: dimensions must be positive");
+    throw SonareException(ErrorCode::InvalidParameter, "dimensions must be positive");
   }
-  if (tol < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter, "nnls: tol must be non-negative");
+  if (tol < 0.0f) throw SonareException(ErrorCode::InvalidParameter, "tol must be non-negative");
 
   // Build A once and solve all B columns together with projected FISTA. This
   // reuses AtA/AtB and turns the former per-column active-set factorisations
@@ -99,7 +98,7 @@ std::vector<float> nnls(const std::vector<float>& A, int A_rows, int A_cols,
         !numeric::checked_matrix_element_count(A_rows, B_cols, &expected_b) ||
         A.size() != expected_a || B.size() != expected_b) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "nnls: A and B sizes must match their matrix dimensions");
+                            "A and B sizes must match their matrix dimensions");
     }
   }
   return nnls(A.data(), A_rows, A_cols, B.data(), B_cols, max_iter, tol);

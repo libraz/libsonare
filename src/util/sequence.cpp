@@ -100,9 +100,9 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
               const std::vector<std::pair<int, int>>& step_sizes_sigma,
               const std::vector<float>& weights_add) {
   if (X == nullptr || Y == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "dtw: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "null input");
   if (X_rows != Y_rows)
-    throw SonareException(ErrorCode::InvalidParameter, "dtw: feature dims must match");
+    throw SonareException(ErrorCode::InvalidParameter, "feature dims must match");
   if (X_cols <= 0 || Y_cols <= 0) return {};
   // The accumulation and backpointer matrices are indexed with the int
   // expression `i * Y_cols + j`; reject a cell count that would overflow int
@@ -110,7 +110,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   // guard that product. (~46k x 46k cells is already far beyond any musical
   // alignment.)
   if (!fits_int_product(X_cols, Y_cols)) {
-    throw SonareException(ErrorCode::InvalidParameter, "dtw: cost matrix too large");
+    throw SonareException(ErrorCode::InvalidParameter, "cost matrix too large");
   }
 
   // Resolve the step pattern. Default is symmetric P0: {(1,1),(1,0),(0,1)}.
@@ -120,7 +120,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   for (const auto& s : steps) {
     if (s.first < 0 || s.second < 0 || (s.first == 0 && s.second == 0)) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "dtw: step sizes must be non-negative and not (0,0)");
+                            "step sizes must be non-negative and not (0,0)");
     }
   }
   std::vector<float> weights = weights_add;
@@ -128,7 +128,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
     weights.assign(steps.size(), 1.0f);
   } else if (weights.size() != steps.size()) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "dtw: weights_add must have the same length as step_sizes_sigma");
+                          "weights_add must have the same length as step_sizes_sigma");
   }
 
   DtwResult result;
@@ -230,7 +230,7 @@ RqaResult rqa(const float* rec, int n) {
   // rec is an n x n matrix indexed with the int expression `i * n + j`; reject a
   // size whose element count would overflow int (UB) before iterating.
   if (!fits_int_product(n, n)) {
-    throw SonareException(ErrorCode::InvalidParameter, "rqa: recurrence matrix too large");
+    throw SonareException(ErrorCode::InvalidParameter, "recurrence matrix too large");
   }
   int n2 = n * n;
   int n_rec = 0;
@@ -272,7 +272,7 @@ RqaResult rqa(const float* rec, int n) {
 std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const float* transition,
                          const float* p_init) {
   if (log_prob == nullptr || transition == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "viterbi: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "null input");
   }
   if (n_states <= 0 || n_steps <= 0) return {};
   // The emissions are indexed with the int expression `s * n_steps + t`, the
@@ -280,7 +280,7 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
   // `p * n_states + s`; reject sizes whose element counts would overflow int
   // (UB) before iterating, matching dtw/rqa above.
   if (!fits_int_product(n_states, n_steps) || !fits_int_product(n_states, n_states)) {
-    throw SonareException(ErrorCode::InvalidParameter, "viterbi: trellis too large");
+    throw SonareException(ErrorCode::InvalidParameter, "trellis too large");
   }
   // Transition logs are step-invariant; a single-step path never reads them.
   std::vector<float> log_transition;
@@ -354,13 +354,13 @@ std::vector<int> viterbi_discriminative(const float* posteriors, int n_states, i
                                         const float* transition, const float* p_state,
                                         const float* p_init) {
   if (posteriors == nullptr || transition == nullptr || p_state == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "viterbi_discriminative: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "null input");
   }
   if (n_states <= 0 || n_steps <= 0) return {};
   // Mirror viterbi's overflow guard: this function indexes `s * n_steps + t` with
   // int arithmetic in the loop below, before delegating to viterbi().
   if (!fits_int_product(n_states, n_steps)) {
-    throw SonareException(ErrorCode::InvalidParameter, "viterbi_discriminative: trellis too large");
+    throw SonareException(ErrorCode::InvalidParameter, "trellis too large");
   }
   std::vector<float> log_prob(static_cast<size_t>(n_states) * n_steps);
   for (int s = 0; s < n_states; ++s) {

@@ -236,10 +236,9 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
   reject_non_streaming_repair(config_);
   if (config_.loudness.enabled) {
     if (std::isinf(options.loudness_static_gain_db)) {
-      throw SonareException(
-          ErrorCode::InvalidParameter,
-          "StreamingMasteringChain: loudness_static_gain_db must be finite, or NaN when the "
-          "loudness stage's input has no measurable loudness");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "loudness_static_gain_db must be finite, or NaN when the "
+                            "loudness stage's input has no measurable loudness");
     }
     // Bound the caller-supplied static gain by the ceiling headroom plus the
     // configured limiter depth when the stage-input peak is provided, mirroring
@@ -254,7 +253,7 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
     loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
     if (!numeric::finite(loudness_static_gain_linear_)) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "StreamingMasteringChain: loudness_static_gain_db must produce a "
+                            "loudness_static_gain_db must produce a "
                             "finite linear gain");
     }
   }
@@ -268,15 +267,15 @@ StreamingMasteringChain& StreamingMasteringChain::operator=(StreamingMasteringCh
 void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, int num_channels) {
   util::check::integer_within(num_channels, kStreamingChainChannelCountDomain, "num_channels");
   if (!is_valid_realtime_block_size(max_block_size)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain::prepare: max_block_size must be within [1, " +
-                              std::to_string(kMaxRealtimeBlockSize) + "]");
-  }
-  if (!is_valid_realtime_sample_rate(sample_rate)) {
     throw SonareException(
         ErrorCode::InvalidParameter,
-        "StreamingMasteringChain::prepare: sample_rate must be finite and within [" +
-            std::to_string(kMinAudioSampleRate) + ", " + std::to_string(kMaxAudioSampleRate) + "]");
+        "max_block_size must be within [1, " + std::to_string(kMaxRealtimeBlockSize) + "]");
+  }
+  if (!is_valid_realtime_sample_rate(sample_rate)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "sample_rate must be finite and within [" +
+                              std::to_string(kMinAudioSampleRate) + ", " +
+                              std::to_string(kMaxAudioSampleRate) + "]");
   }
 
   // A stage's own prepare() can throw for a reason only it can see — a

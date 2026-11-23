@@ -34,18 +34,16 @@ float default_zi_de(const float* x, std::size_t n, float coef) {
 
 std::vector<float> preemphasis(const float* x, std::size_t n, float coef, std::optional<float> zi) {
   if (n > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "preemphasis: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (!numeric::finite(coef)) {
-    throw SonareException(ErrorCode::InvalidParameter, "preemphasis: coef must be finite");
+    throw SonareException(ErrorCode::InvalidParameter, "coef must be finite");
   }
   if (zi.has_value() && !numeric::finite(*zi)) {
-    throw SonareException(ErrorCode::InvalidParameter, "preemphasis: zi must be finite");
+    throw SonareException(ErrorCode::InvalidParameter, "zi must be finite");
   }
   if (!numeric::all_finite(x, n)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "preemphasis: input contains a non-finite sample");
+    throw SonareException(ErrorCode::InvalidParameter, "input contains a non-finite sample");
   }
   std::vector<float> y(n);
   if (n == 0) return y;
@@ -63,18 +61,16 @@ std::vector<float> preemphasis(const std::vector<float>& x, float coef, std::opt
 
 std::vector<float> deemphasis(const float* x, std::size_t n, float coef, std::optional<float> zi) {
   if (n > 0 && x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "deemphasis: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   if (!numeric::finite(coef)) {
-    throw SonareException(ErrorCode::InvalidParameter, "deemphasis: coef must be finite");
+    throw SonareException(ErrorCode::InvalidParameter, "coef must be finite");
   }
   if (zi.has_value() && !numeric::finite(*zi)) {
-    throw SonareException(ErrorCode::InvalidParameter, "deemphasis: zi must be finite");
+    throw SonareException(ErrorCode::InvalidParameter, "zi must be finite");
   }
   if (!numeric::all_finite(x, n)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "deemphasis: input contains a non-finite sample");
+    throw SonareException(ErrorCode::InvalidParameter, "input contains a non-finite sample");
   }
   std::vector<float> y(n);
   if (n == 0) return y;

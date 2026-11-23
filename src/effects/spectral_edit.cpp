@@ -182,16 +182,14 @@ void apply_op(std::vector<std::complex<float>>& buf, int n_frames, int n_fft, in
 
 void validate_spectral_region_op(const SpectralRegionOp& op) {
   SONARE_CHECK_MSG(numeric::finite(op.low_hz) && numeric::finite(op.high_hz),
-                   ErrorCode::InvalidParameter,
-                   "SpectralRegionOp: low_hz and high_hz must be finite");
+                   ErrorCode::InvalidParameter, "low_hz and high_hz must be finite");
   SONARE_CHECK_MSG(numeric::finite(op.gain_db), ErrorCode::InvalidParameter,
-                   "SpectralRegionOp: gain_db must be finite");
+                   "gain_db must be finite");
   const bool applies_gain =
       op.mode == SpectralEditMode::Gain || op.mode == SpectralEditMode::Attenuate;
-  SONARE_CHECK_MSG(!applies_gain || numeric::finite(db_to_linear(op.gain_db)),
-                   ErrorCode::InvalidParameter,
-                   "SpectralRegionOp: gain_db " + std::to_string(op.gain_db) +
-                       " is past the float range as a linear gain");
+  SONARE_CHECK_MSG(
+      !applies_gain || numeric::finite(db_to_linear(op.gain_db)), ErrorCode::InvalidParameter,
+      "gain_db " + std::to_string(op.gain_db) + " is past the float range as a linear gain");
 }
 
 Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
@@ -241,7 +239,7 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
   Audio out = edited.to_audio(static_cast<int>(audio.size()));
   // A finite gain can still carry a loud bin past the float range.
   SONARE_CHECK_MSG(numeric::all_finite(out.data(), out.size()), ErrorCode::InvalidParameter,
-                   "spectral_edit: gain_db drives the output past the float range");
+                   "gain_db drives the output past the float range");
   return out;
 }
 

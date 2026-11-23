@@ -32,16 +32,15 @@ void load_tempo_map(transport::TempoMap& map, const SmfImportResult& imported) {
 std::vector<editing::note_model::NoteTarget> note_targets_from_smf(const uint8_t* bytes,
                                                                    size_t size, int track_index) {
   if (bytes == nullptr && size != 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "note_targets_from_smf: bytes is NULL");
+    throw SonareException(ErrorCode::InvalidParameter, "bytes is NULL");
   }
   const SmfImportResult imported = import_smf(bytes, size);
   if (!imported.recoverable()) {
-    throw SonareException(ErrorCode::InvalidFormat, "note_targets_from_smf: unreadable SMF");
+    throw SonareException(ErrorCode::InvalidFormat, "unreadable SMF");
   }
   if (track_index < 0 || static_cast<size_t>(track_index) >= imported.clips.size()) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "note_targets_from_smf: no MIDI-bearing track at index " +
-                              std::to_string(track_index) + " (" +
+                          "no MIDI-bearing track at index " + std::to_string(track_index) + " (" +
                               std::to_string(imported.clips.size()) + " available)");
   }
 

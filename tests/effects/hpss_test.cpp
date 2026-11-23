@@ -1110,7 +1110,7 @@ TEST_CASE("hpss refuses an oversized kernel through its public entry point", "[h
   // Nothing clamps these on the way in: the C ABI, the Node addon and the WASM
   // binding all assign the caller's value straight into HpssConfig, so the
   // ceiling is reachable from every surface rather than only by calling the
-  // filters directly. The message is checked for the filter's name because it is
+  // filters directly. The message is checked for the field's name because it is
   // the only observable that says which field reached which guard -- swapping
   // that wiring would leave both filters running and nothing else would notice.
   Audio audio = create_harmonic_audio(440.0f, 22050, 0.05f);
@@ -1135,7 +1135,7 @@ TEST_CASE("hpss refuses an oversized kernel through its public entry point", "[h
       REQUIRE(names_kernel_ceiling(error));
       const std::string message(error.what());
       const std::string expected_filter =
-          percussive_side ? "median_filter_vertical" : "median_filter_horizontal";
+          percussive_side ? "kernel_size_percussive" : "kernel_size_harmonic";
       CAPTURE(message);
       REQUIRE(message.find(expected_filter) != std::string::npos);
     }
@@ -1201,7 +1201,7 @@ TEST_CASE("every hpss entry point reaches the kernel ceiling", "[hpss]") {
         REQUIRE(names_kernel_ceiling(error));
         const std::string message(error.what());
         const std::string expected_filter =
-            percussive_side ? "median_filter_vertical" : "median_filter_horizontal";
+            percussive_side ? "kernel_size_percussive" : "kernel_size_harmonic";
         CAPTURE(message);
         REQUIRE(message.find(expected_filter) != std::string::npos);
       }

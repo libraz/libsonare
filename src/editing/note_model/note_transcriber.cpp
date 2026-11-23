@@ -152,55 +152,54 @@ TranscribeConfig validate_and_resolve(const Audio& audio, const TranscribeConfig
   // rate, and the only Audio that carries one is the default-constructed one,
   // which the emptiness check below already refuses. A guard here could never
   // fire.
-  require(!audio.empty(), "transcribe_notes: audio must not be empty");
+  require(!audio.empty(), "audio must not be empty");
   require(std::isfinite(config.reference_hz) && config.reference_hz > 0.0f,
-          "transcribe_notes: reference_hz must be finite and positive");
+          "reference_hz must be finite and positive");
   require(std::isfinite(config.min_note_ms) && config.min_note_ms >= 0.0f,
-          "transcribe_notes: min_note_ms must be finite and non-negative");
+          "min_note_ms must be finite and non-negative");
   require(std::isfinite(config.tempo_bpm) && config.tempo_bpm >= 0.0f,
-          "transcribe_notes: tempo_bpm must be finite and non-negative");
+          "tempo_bpm must be finite and non-negative");
   require(config.min_note_division >= 0 && config.min_note_division <= kMaxMinNoteDivision,
-          "transcribe_notes: min_note_division must be 0 or within [1, 128]");
+          "min_note_division must be 0 or within [1, 128]");
   require(config.min_note_division == 0 || config.min_note_ms == 0.0f,
-          "transcribe_notes: min_note_division and min_note_ms cannot both be set");
+          "min_note_division and min_note_ms cannot both be set");
   require(config.min_note_division == 0 || config.tempo_bpm > 0.0f,
-          "transcribe_notes: min_note_division needs a positive tempo_bpm");
+          "min_note_division needs a positive tempo_bpm");
   require(std::isfinite(config.segmentation_threshold_cents) &&
               config.segmentation_threshold_cents > 0.0f,
-          "transcribe_notes: segmentation_threshold_cents must be finite and positive");
+          "segmentation_threshold_cents must be finite and positive");
   require(std::isfinite(config.velocity_floor_db) && config.velocity_floor_db < 0.0f,
-          "transcribe_notes: velocity_floor_db must be finite and negative");
+          "velocity_floor_db must be finite and negative");
   require(config.fixed_velocity == 0 ||
               (config.fixed_velocity >= kMinVelocity && config.fixed_velocity <= kMaxVelocity),
-          "transcribe_notes: fixed_velocity must be 0 or within [1, 127]");
+          "fixed_velocity must be 0 or within [1, 127]");
   require(config.source == TranscribeSource::kMonophonic ||
               config.source == TranscribeSource::kPolyphonic,
-          "transcribe_notes: source is not a known TranscribeSource");
+          "source is not a known TranscribeSource");
   require(config.monophonic_model == MonophonicModel::kSegments ||
               config.monophonic_model == MonophonicModel::kSinging,
-          "transcribe_notes: monophonic_model is not a known MonophonicModel");
+          "monophonic_model is not a known MonophonicModel");
   require(config.max_polyphony == 0 ||
               (config.max_polyphony >= 1 && config.max_polyphony <= polyphony::kMaxPolyphonyVoices),
-          "transcribe_notes: max_polyphony must be 0 or within [1, 64]");
+          "max_polyphony must be 0 or within [1, 64]");
   require(std::isfinite(config.min_frame_peak_ratio) && config.min_frame_peak_ratio <= 1.0f,
-          "transcribe_notes: min_frame_peak_ratio must be finite and at most 1");
+          "min_frame_peak_ratio must be finite and at most 1");
   require(std::isfinite(config.min_ridge_peak_ratio) && config.min_ridge_peak_ratio <= 1.0f,
-          "transcribe_notes: min_ridge_peak_ratio must be finite and at most 1");
+          "min_ridge_peak_ratio must be finite and at most 1");
   require(std::isfinite(config.reattack_ratio) &&
               (config.reattack_ratio <= 0.0f || config.reattack_ratio > 1.0f),
-          "transcribe_notes: reattack_ratio must be 0, negative, or finite and above 1");
+          "reattack_ratio must be 0, negative, or finite and above 1");
   if (config.source == TranscribeSource::kMonophonic) {
-    require(config.max_polyphony == 0,
-            "transcribe_notes: max_polyphony applies to polyphonic transcription only");
+    require(config.max_polyphony == 0, "max_polyphony applies to polyphonic transcription only");
     require(config.min_frame_peak_ratio == 0.0f,
-            "transcribe_notes: min_frame_peak_ratio applies to polyphonic transcription only");
+            "min_frame_peak_ratio applies to polyphonic transcription only");
     require(config.min_ridge_peak_ratio == 0.0f,
-            "transcribe_notes: min_ridge_peak_ratio applies to polyphonic transcription only");
+            "min_ridge_peak_ratio applies to polyphonic transcription only");
     require(config.reattack_ratio == 0.0f,
-            "transcribe_notes: reattack_ratio applies to polyphonic transcription only");
+            "reattack_ratio applies to polyphonic transcription only");
   } else {
     require(config.monophonic_model == MonophonicModel::kSegments,
-            "transcribe_notes: monophonic_model applies to monophonic transcription only");
+            "monophonic_model applies to monophonic transcription only");
   }
 
   // Resolve omitted endpoints before checking the ordering; the two chains have different ranges.
@@ -209,10 +208,9 @@ TranscribeConfig validate_and_resolve(const Audio& audio, const TranscribeConfig
   resolved.fmin = range.fmin;
   resolved.fmax = range.fmax;
   resolved.min_note_ms = resolve_transcribe_polyphony_limits(config).min_note_ms;
-  require(std::isfinite(resolved.fmin) && resolved.fmin > 0.0f,
-          "transcribe_notes: fmin must be finite and positive");
+  require(std::isfinite(resolved.fmin) && resolved.fmin > 0.0f, "fmin must be finite and positive");
   require(std::isfinite(resolved.fmax) && resolved.fmax > resolved.fmin,
-          "transcribe_notes: fmax must be finite and greater than fmin");
+          "fmax must be finite and greater than fmin");
   return resolved;
 }
 
@@ -947,14 +945,12 @@ std::vector<TranscribedNote> transcribe_monophonic_track(const Audio& audio,
                                                          const pitch_editor::F0Track& track,
                                                          const TranscribeConfig& config) {
   const TranscribeConfig resolved = validate_and_resolve(audio, config);
-  require(resolved.source == TranscribeSource::kMonophonic,
-          "transcribe_monophonic_track: source must be monophonic");
-  require(track.sample_rate == audio.sample_rate(),
-          "transcribe_monophonic_track: track sample rate must match the audio");
-  require(track.frame_rate() > 0.0f, "transcribe_monophonic_track: track needs a frame cadence");
+  require(resolved.source == TranscribeSource::kMonophonic, "source must be monophonic");
+  require(track.sample_rate == audio.sample_rate(), "track sample rate must match the audio");
+  require(track.frame_rate() > 0.0f, "track needs a frame cadence");
   require(track.voiced.size() == track.f0_hz.size() &&
               (track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size()),
-          "transcribe_monophonic_track: track arrays must have one entry per frame");
+          "track arrays must have one entry per frame");
   if (track.n_frames() == 0) return {};
   const int frame_length =
       pitch_editor::default_editing_pitch_config(audio.sample_rate()).frame_length;

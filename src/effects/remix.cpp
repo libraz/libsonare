@@ -77,8 +77,7 @@ std::vector<std::pair<int, int>> align_remix_intervals(
     const float* y, std::size_t n, const std::vector<std::pair<int, int>>& intervals,
     bool align_zeros) {
   if (n > 0 && y == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "align_remix_intervals: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   const int length = static_cast<int>(n);
   const auto clamp_pair = [length](int start, int end) {
@@ -128,7 +127,7 @@ std::vector<std::pair<int, int>> align_remix_intervals(
 std::vector<float> remix(const float* y, std::size_t n,
                          const std::vector<std::pair<int, int>>& intervals, bool align_zeros) {
   if (n > 0 && y == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "remix: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
   const std::vector<std::pair<int, int>> resolved =
       align_remix_intervals(y, n, intervals, align_zeros);

@@ -89,14 +89,14 @@ inline void validate_section_grid(const SectionGrid& grid) {
     SONARE_CHECK_MSG(numeric::finite_non_negative(grid.beat_times[i]) &&
                          (i == 0 || grid.beat_times[i] >= grid.beat_times[i - 1]),
                      ErrorCode::InvalidParameter,
-                     "SectionGrid: beat_times must be finite, non-negative and ascending");
+                     "beat_times must be finite, non-negative and ascending");
   }
   for (size_t i = 0; i < grid.downbeat_indices.size(); ++i) {
     const int index = grid.downbeat_indices[i];
     SONARE_CHECK_MSG(index >= 0 && static_cast<size_t>(index) < grid.beat_times.size() &&
                          (i == 0 || index > grid.downbeat_indices[i - 1]),
                      ErrorCode::InvalidParameter,
-                     "SectionGrid: downbeat_indices must index beat_times in ascending order");
+                     "downbeat_indices must index beat_times in ascending order");
   }
 }
 

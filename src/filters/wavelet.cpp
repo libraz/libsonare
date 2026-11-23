@@ -137,12 +137,12 @@ std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& f
     int e = 0;
     if (!checked_floor_by2(-ilen, &s) || !checked_floor_by2(ilen, &e)) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "wavelet: derived length is outside the integer range");
+                            "derived length is outside the integer range");
     }
     const long long effective = static_cast<long long>(e) - static_cast<long long>(s);
     if (effective <= 0 || effective > std::numeric_limits<int>::max()) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "wavelet: effective length is outside the integer range");
+                            "effective length is outside the integer range");
     }
     L[i] = static_cast<int>(effective);
     n_start[i] = s;
@@ -157,13 +157,13 @@ std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& f
     if (!std::isfinite(max_ceil_wide) || max_ceil_wide < 1.0L ||
         max_ceil_wide > static_cast<long double>(kMaxIntPowerOfTwo)) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "wavelet: FFT length is outside the supported range");
+                            "FFT length is outside the supported range");
     }
     const int max_ceil = static_cast<int>(max_ceil_wide);
     const int fft_length = next_power_of_2(max_ceil);
     if (fft_length <= 0) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "wavelet: FFT length is outside the supported range");
+                            "FFT length is outside the supported range");
     }
     n_fft = static_cast<size_t>(fft_length);
   }
@@ -173,14 +173,12 @@ std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& f
   if (pad_fft) {
     if (!numeric::checked_size_product(n_filters, n_fft, std::numeric_limits<size_t>::max(),
                                        &total)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "wavelet: output element count overflows size_t");
+      throw SonareException(ErrorCode::InvalidParameter, "output element count overflows size_t");
     }
   } else {
     for (int Lk : L) {
       if (!numeric::checked_add(total, static_cast<size_t>(Lk), &total)) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "wavelet: output element count overflows size_t");
+        throw SonareException(ErrorCode::InvalidParameter, "output element count overflows size_t");
       }
     }
   }

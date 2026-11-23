@@ -20,17 +20,16 @@ namespace {
 // These entries take a feature matrix rather than audio, so nothing upstream has
 // checked it. One non-finite cell poisons its whole column norm and every distance
 // drawn from it, leaving the neighbour sorts below no ordering to work with.
-void require_finite_features(const float* m, std::size_t count, const char* fn) {
+void require_finite_features(const float* m, std::size_t count) {
   SONARE_CHECK_MSG(numeric::all_finite(m, count), ErrorCode::InvalidParameter,
-                   std::string(fn) + ": features contain a non-finite value");
+                   "features contain a non-finite value");
 }
 
-std::size_t checked_feature_count(int rows, int cols, const char* fn) {
+std::size_t checked_feature_count(int rows, int cols) {
   std::size_t count = 0;
   if (!numeric::checked_matrix_element_count(rows, cols, &count) ||
       count > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn) + ": invalid or oversized feature matrix");
+    throw SonareException(ErrorCode::InvalidParameter, "invalid or oversized feature matrix");
   }
   return count;
 }
@@ -168,24 +167,23 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
                                     int Y_rows, int Y_cols, int k, const std::string& metric,
                                     const std::string& mode) {
   if (X == nullptr || Y == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "cross_similarity: null input");
+    throw SonareException(ErrorCode::InvalidParameter, "null input");
   if (X_rows != Y_rows)
-    throw SonareException(ErrorCode::InvalidParameter, "cross_similarity: feature dims must match");
+    throw SonareException(ErrorCode::InvalidParameter, "feature dims must match");
   if (mode != "connectivity" && mode != "affinity") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "cross_similarity: mode must be 'connectivity' or 'affinity'");
+    throw SonareException(ErrorCode::InvalidParameter, "mode must be 'connectivity' or 'affinity'");
   }
   if (X_cols <= 0 || Y_cols <= 0) return {};
   // The output is indexed with the int expression `i * Y_cols + j`; reject a size
   // whose element count would overflow int (UB) before iterating.
   if (static_cast<int64_t>(X_cols) * static_cast<int64_t>(Y_cols) >
       static_cast<int64_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "cross_similarity: matrix too large");
+    throw SonareException(ErrorCode::InvalidParameter, "matrix too large");
   }
-  const std::size_t x_count = checked_feature_count(X_rows, X_cols, "cross_similarity");
-  const std::size_t y_count = checked_feature_count(Y_rows, Y_cols, "cross_similarity");
-  require_finite_features(X, x_count, "cross_similarity");
-  if (Y != X || y_count > x_count) require_finite_features(Y, y_count, "cross_similarity");
+  const std::size_t x_count = checked_feature_count(X_rows, X_cols);
+  const std::size_t y_count = checked_feature_count(Y_rows, Y_cols);
+  require_finite_features(X, x_count);
+  if (Y != X || y_count > x_count) require_finite_features(Y, y_count);
 
   if (mode == "affinity") {
     // librosa default: k = min(n_ref, 2*ceil(sqrt(n_ref))).
@@ -238,20 +236,18 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
 std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int k, int width,
                                      bool sym, const std::string& metric, const std::string& mode) {
   if (mode != "connectivity" && mode != "affinity") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "recurrence_matrix: mode must be 'connectivity' or 'affinity'");
+    throw SonareException(ErrorCode::InvalidParameter, "mode must be 'connectivity' or 'affinity'");
   }
-  if (data == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "recurrence_matrix: null input");
+  if (data == nullptr) throw SonareException(ErrorCode::InvalidParameter, "null input");
   if (cols <= 0) return {};
   // The output is indexed with the int expression `i * cols + j`; reject a size
   // whose element count would overflow int (UB) before iterating.
   if (static_cast<int64_t>(cols) * static_cast<int64_t>(cols) >
       static_cast<int64_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "recurrence_matrix: matrix too large");
+    throw SonareException(ErrorCode::InvalidParameter, "matrix too large");
   }
-  const std::size_t feature_count = checked_feature_count(rows, cols, "recurrence_matrix");
-  require_finite_features(data, feature_count, "recurrence_matrix");
+  const std::size_t feature_count = checked_feature_count(rows, cols);
+  require_finite_features(data, feature_count);
   if (width < 1) width = 1;
 
   if (mode == "affinity") {
@@ -315,7 +311,7 @@ std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad) {
   // size whose element count would overflow int (UB) before iterating.
   if (static_cast<int64_t>(n) * static_cast<int64_t>(n_lags) >
       static_cast<int64_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter, "recurrence_to_lag: matrix too large");
+    throw SonareException(ErrorCode::InvalidParameter, "matrix too large");
   }
   // Column i is column i of the (zero-padded) recurrence rolled up by i rows.
   std::vector<float> out(static_cast<size_t>(n_lags) * n, 0.0f);
@@ -333,8 +329,7 @@ std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags) {
   // The two layouts recurrence_to_lag writes: unpadded (n lag rows, wrapped) and
   // padded (2n lag rows, negative lags wrapped into the lower half).
   if (n_lags != n_rows && n_lags != 2 * n_rows) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "lag_to_recurrence: n_lags must be n_rows or 2 * n_rows");
+    throw SonareException(ErrorCode::InvalidParameter, "n_lags must be n_rows or 2 * n_rows");
   }
   std::vector<float> out(static_cast<size_t>(n_rows) * n_rows, 0.0f);
   for (int row = 0; row < n_rows; ++row) {
@@ -435,8 +430,8 @@ std::vector<int> contiguous_ward_runs(const float* block, int rows, int len, int
 std::vector<int> subsegment(const float* data, int rows, int cols,
                             const std::vector<int>& boundaries, int n_segments) {
   if (data == nullptr || rows <= 0 || cols <= 0 || n_segments <= 0) return boundaries;
-  const std::size_t feature_count = checked_feature_count(rows, cols, "subsegment");
-  require_finite_features(data, feature_count, "subsegment");
+  const std::size_t feature_count = checked_feature_count(rows, cols);
+  require_finite_features(data, feature_count);
 
   // Normalize the parent boundaries: clamp into [0, cols], add the 0 and cols
   // endpoints, and drop duplicates so each [a, b) parent span is well-formed.
@@ -490,18 +485,16 @@ std::vector<int> subsegment(const float* data, int rows, int cols,
 
 std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
                                const std::string& linkage) {
-  if (data == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "agglomerative: null input");
-  if (k <= 0)
-    throw SonareException(ErrorCode::InvalidParameter, "agglomerative: k must be positive");
+  if (data == nullptr) throw SonareException(ErrorCode::InvalidParameter, "null input");
+  if (k <= 0) throw SonareException(ErrorCode::InvalidParameter, "k must be positive");
   if (linkage != "average" && linkage != "single" && linkage != "complete" && linkage != "ward") {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "agglomerative: linkage must be average/single/complete/ward");
+                          "linkage must be average/single/complete/ward");
   }
   k = std::min(k, cols);
   if (cols <= 0) return {};
-  const std::size_t feature_count = checked_feature_count(rows, cols, "agglomerative");
-  require_finite_features(data, feature_count, "agglomerative");
+  const std::size_t feature_count = checked_feature_count(rows, cols);
+  require_finite_features(data, feature_count);
   if (k >= cols) {
     std::vector<int> labels(cols);
     for (int i = 0; i < cols; ++i) labels[i] = i;
