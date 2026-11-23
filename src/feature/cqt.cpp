@@ -212,8 +212,8 @@ std::vector<float> CqtResult::to_db(float ref, float amin, float top_db) const {
 }
 
 const std::complex<float>& CqtResult::at(int bin, int frame) const {
-  SONARE_CHECK(bin >= 0 && bin < n_bins_, ErrorCode::InvalidParameter);
-  SONARE_CHECK(frame >= 0 && frame < n_frames_, ErrorCode::InvalidParameter);
+  util::check::integer_in_range(bin, 0, static_cast<long long>(n_bins_) - 1, "bin");
+  util::check::integer_in_range(frame, 0, static_cast<long long>(n_frames_) - 1, "frame");
   return data_[bin * n_frames_ + frame];
 }
 
@@ -307,7 +307,7 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
                                              const CqtKernel* donor, int host_concurrency) {
   validate_cqt_config(config);
-  SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sr, 1, "sr");
   auto kernel = std::unique_ptr<CqtKernel>(new CqtKernel());
 
   // Center frequencies for all bins.
@@ -581,7 +581,7 @@ std::vector<std::complex<float>> apply_sparse_kernel_frames(
 
 CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback progress_callback) {
   validate_cqt_config(config);
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   int sr = audio.sample_rate();
 
@@ -724,7 +724,7 @@ Audio icqt(const CqtResult& cqt_result, int length) {
 
 CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   validate_cqt_config(config);
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   const int sr = audio.sample_rate();
   // librosa.pseudo_cqt: |basis| . |Hann STFT| at the kernel's own FFT size,
@@ -777,7 +777,7 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
 
 CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
   validate_cqt_config(config);
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   const int sr = audio.sample_rate();
   std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);

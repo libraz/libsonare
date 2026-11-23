@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <vector>
 
@@ -64,6 +65,26 @@ TEST_CASE("NNLS harmonic template has expected shape and non-negative values", "
   for (float value : matrix) {
     REQUIRE(value >= 0.0f);
   }
+}
+
+TEST_CASE("NNLS chroma refusals name their input values", "[nnls_chroma][validation]") {
+  const NnlsChromaConfig config;
+  CHECK_THROWS_WITH(build_nnls_harmonic_template({}, config), "cqt_frequencies must not be empty");
+
+  NnlsChromaConfig bad_config = config;
+  bad_config.n_pitches = 0;
+  CHECK_THROWS_WITH(build_nnls_harmonic_template({440.0f}, bad_config),
+                    "n_pitches must be an integer in [1, 2147483647]");
+  bad_config = config;
+  bad_config.n_harmonics = 0;
+  CHECK_THROWS_WITH(build_nnls_harmonic_template({440.0f}, bad_config),
+                    "n_harmonics must be an integer in [1, 2147483647]");
+
+  CHECK_THROWS_WITH(nnls_chroma(Audio(), config), "audio must not be empty");
+  bad_config = config;
+  bad_config.cqt.bins_per_octave = 0;
+  CHECK_THROWS_WITH(nnls_chroma(sine(440.0f, 0.1f), bad_config),
+                    "bins_per_octave must be an integer in [1, 2147483647]");
 }
 
 TEST_CASE("NNLS harmonic template uses planned harmonic weight ratios", "[nnls_chroma]") {

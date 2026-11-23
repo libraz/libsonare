@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <vector>
 
@@ -50,6 +51,18 @@ TEST_CASE("MelSpectrogram compute basic", "[mel_spectrogram]") {
   REQUIRE(mel.n_frames() > 0);
   REQUIRE(mel.sample_rate() == 22050);
   REQUIRE(mel.hop_length() == 256);
+}
+
+TEST_CASE("MelSpectrogram entry points name their required inputs",
+          "[mel_spectrogram][validation]") {
+  CHECK_THROWS_WITH(MelSpectrogram::compute(Audio(), MelConfig()), "audio must not be empty");
+  CHECK_THROWS_WITH(MelSpectrogram::from_spectrogram(Spectrogram(), 22050, MelFilterConfig()),
+                    "spec must not be empty");
+
+  const Audio audio = create_test_audio();
+  const Spectrogram spec = Spectrogram::compute(audio, StftConfig());
+  CHECK_THROWS_WITH(MelSpectrogram::from_spectrogram(spec, 0, MelFilterConfig()),
+                    Catch::Matchers::ContainsSubstring("sr must be an integer"));
 }
 
 TEST_CASE("MelSpectrogram from_spectrogram", "[mel_spectrogram]") {
@@ -310,6 +323,9 @@ TEST_CASE("MelSpectrogram at accessor", "[mel_spectrogram]") {
       REQUIRE_THAT(mel.at(m, t), WithinAbs(power.at(m, t), 1e-10f));
     }
   }
+  CHECK_THROWS_WITH(mel.at(-1, 0), Catch::Matchers::ContainsSubstring("mel must be an integer"));
+  CHECK_THROWS_WITH(mel.at(0, mel.n_frames()),
+                    Catch::Matchers::ContainsSubstring("frame must be an integer"));
 }
 
 TEST_CASE("MelConfig binds its converted fields by name", "[mel][config]") {
@@ -373,4 +389,9 @@ TEST_CASE("mfcc and delta refuse a member by its name", "[mel_spectrogram]") {
   const char* expected = "width must be an odd integer in [3, 2147483647]";
   CHECK_THROWS_WITH(MelSpectrogram::delta(features.data(), 4, 8, 1), expected);
   CHECK_THROWS_WITH(MelSpectrogram::delta(features.data(), 4, 8, 4), expected);
+  CHECK_THROWS_WITH(MelSpectrogram::delta(nullptr, 4, 8, 3), "features must not be NULL");
+  CHECK_THROWS_WITH(MelSpectrogram::delta(features.data(), 0, 8, 3),
+                    "n_features must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(MelSpectrogram::delta(features.data(), 4, 0, 3),
+                    "n_frames must be an integer in [1, 2147483647]");
 }

@@ -541,4 +541,13 @@ TEST_CASE("onset entry points refuse lag and n_bands by name", "[onset]") {
                     "lag must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(onset_strength_multi(mel, 0), "n_bands must be an integer in [1, 2147483647]");
   CHECK_THROWS_WITH(onset_strength_multi(mel, 17), "n_bands must be at most n_mels");
+
+  CHECK_THROWS_WITH(compute_onset_strength(MelSpectrogram()), "mel_spec must not be empty");
+  CHECK_THROWS_WITH(onset_strength_multi(MelSpectrogram(), 1), "mel_spec must not be empty");
+  CHECK_THROWS_WITH(spectral_flux(Spectrogram()), "spec must not be empty");
+  CHECK_THROWS_WITH(spectral_flux(nullptr, 4, 8), "magnitude must not be NULL");
+  CHECK_THROWS_WITH(spectral_flux(magnitude.data(), 0, 8),
+                    "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(spectral_flux(magnitude.data(), 4, 0),
+                    "n_frames must be an integer in [1, 2147483647]");
 }

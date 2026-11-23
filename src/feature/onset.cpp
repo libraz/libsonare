@@ -44,7 +44,7 @@ std::vector<float> shift_onset_frames(std::vector<float> onset_env, int frame_of
 
 std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
                                           const OnsetConfig& config) {
-  SONARE_CHECK(!mel_spec.empty(), ErrorCode::InvalidParameter);
+  if (mel_spec.empty()) util::check::refuse("mel_spec", util::refusal::kNonEmptyPredicate);
   util::check::integer_within<int>(config.lag, kOnsetCountDomain, "lag");
 
   int n_mels = mel_spec.n_mels();
@@ -135,7 +135,7 @@ void validate_onset_n_bands(int n_bands) {
 
 std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands,
                                         const OnsetConfig& config) {
-  SONARE_CHECK(!mel_spec.empty(), ErrorCode::InvalidParameter);
+  if (mel_spec.empty()) util::check::refuse("mel_spec", util::refusal::kNonEmptyPredicate);
   validate_onset_n_bands(n_bands);
   util::check::integer_within<int>(config.lag, kOnsetCountDomain, "lag");
 
@@ -237,13 +237,14 @@ std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vect
 }
 
 std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
   return spectral_flux(spec.magnitude().data(), spec.n_bins(), spec.n_frames(), lag);
 }
 
 std::vector<float> spectral_flux(const float* magnitude, int n_bins, int n_frames, int lag) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  util::check::non_null(magnitude, "magnitude");
+  util::check::integer_at_least(n_bins, 1, "n_bins");
+  util::check::integer_at_least(n_frames, 1, "n_frames");
   util::check::integer_within<int>(lag, kOnsetCountDomain, "lag");
 
   std::vector<float> flux(n_frames, 0.0f);

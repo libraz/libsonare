@@ -14,6 +14,7 @@
 #include "util/lru_cache.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -110,8 +111,8 @@ std::vector<float> vqt_frequencies(float fmin, int n_bins, int bins_per_octave) 
 
 std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bins_per_octave,
                                   float gamma) {
-  SONARE_CHECK(bins_per_octave > 0 && numeric::finite_non_negative(gamma),
-               ErrorCode::InvalidParameter);
+  util::check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
+  util::check::within(gamma, kVqtGammaDomain, "gamma");
   const size_t n = frequencies.size();
   std::vector<float> bandwidths(n);
 
@@ -133,7 +134,8 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
 
 std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   validate_cqt_config(config.to_cqt_config());
-  SONARE_CHECK(sr > 0 && numeric::finite_non_negative(config.gamma), ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sr, 1, "sr");
+  util::check::within(config.gamma, kVqtGammaDomain, "gamma");
   auto kernel = std::unique_ptr<VqtKernel>(new VqtKernel());
 
   // Compute center frequencies
@@ -261,7 +263,7 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
 
 VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback progress_callback) {
   validate_cqt_config(config.to_cqt_config());
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   VqtConfig resolved = config;
   resolved.gamma = resolve_vqt_gamma(config);

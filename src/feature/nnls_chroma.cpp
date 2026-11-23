@@ -9,6 +9,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/nnls.h"
+#include "util/parameter_checks.h"
 #include "util/vector_normalize.h"
 
 namespace sonare {
@@ -90,8 +91,11 @@ std::vector<float> cqt_magnitude_to_chroma(const CqtResult& cqt_result) {
 
 std::vector<float> build_nnls_harmonic_template(const std::vector<float>& cqt_frequencies,
                                                 const NnlsChromaConfig& config) {
-  SONARE_CHECK(!cqt_frequencies.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_pitches > 0 && config.n_harmonics > 0, ErrorCode::InvalidParameter);
+  if (cqt_frequencies.empty()) {
+    util::check::refuse("cqt_frequencies", util::refusal::kNonEmptyPredicate);
+  }
+  util::check::integer_at_least(config.n_pitches, 1, "n_pitches");
+  util::check::integer_at_least(config.n_harmonics, 1, "n_harmonics");
 
   const int n_bins = static_cast<int>(cqt_frequencies.size());
   std::vector<float> matrix(static_cast<size_t>(n_bins) * config.n_pitches, 0.0f);
@@ -141,8 +145,8 @@ std::vector<float> build_nnls_harmonic_template(const std::vector<float>& cqt_fr
 }
 
 Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.cqt.bins_per_octave > 0, ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
+  util::check::integer_within<int>(config.cqt.bins_per_octave, kCqtCountDomain, "bins_per_octave");
 
   CqtConfig cqt_config = config.cqt;
   cqt_config.fmin = tune_cqt_fmin(cqt_config.fmin, config.tuning);

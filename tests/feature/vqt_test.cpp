@@ -7,6 +7,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -187,6 +188,20 @@ TEST_CASE("vqt_bandwidths with gamma>0", "[vqt]") {
   // With gamma>0, bandwidth = alpha*f + gamma (relative-bandwidth alpha).
   REQUIRE_THAT(bw[0], WithinRel(alpha[0] * 100.0f + gamma, 0.001f));
   REQUIRE_THAT(bw[1], WithinRel(alpha[1] * 200.0f + gamma, 0.001f));
+}
+
+TEST_CASE("VQT input refusals name their source values", "[vqt][validation]") {
+  CHECK_THROWS_WITH(vqt_bandwidths({}, 0, 0.0f),
+                    Catch::Matchers::ContainsSubstring("bins_per_octave"));
+  CHECK_THROWS_WITH(vqt_bandwidths({100.0f}, 12, -1.0f), "gamma must be finite and at least 0");
+
+  VqtConfig config;
+  config.gamma = 1.0f;
+  CHECK_THROWS_WITH(VqtKernel::create(0, config),
+                    Catch::Matchers::ContainsSubstring("sr must be an integer"));
+  config.gamma = -1.0f;
+  CHECK_THROWS_WITH(VqtKernel::create(22050, config), "gamma must be finite and at least 0");
+  CHECK_THROWS_WITH(vqt(Audio(), VqtConfig()), "audio must not be empty");
 }
 
 TEST_CASE("vqt left at its default gamma selects librosa automatic bandwidth", "[vqt]") {

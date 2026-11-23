@@ -7,6 +7,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstdint>
 #include <iterator>
@@ -455,7 +456,10 @@ TEST_CASE("CQT phase correctness", "[cqt]") {
 
 TEST_CASE("cqt empty audio throws", "[cqt]") {
   Audio empty_audio;
-  REQUIRE_THROWS(cqt(empty_audio, CqtConfig()));
+  CHECK_THROWS_WITH(cqt(empty_audio, CqtConfig()), "audio must not be empty");
+  CHECK_THROWS_WITH(pseudo_cqt(empty_audio, CqtConfig()), "audio must not be empty");
+  CHECK_THROWS_WITH(hybrid_cqt(empty_audio, CqtConfig()), "audio must not be empty");
+  CHECK_THROWS_WITH(vqt(empty_audio, VqtConfig()), "audio must not be empty");
 }
 
 TEST_CASE("cqt rejects center frequencies at or above Nyquist", "[cqt][validation]") {
@@ -475,9 +479,11 @@ TEST_CASE("CqtResult at accessor", "[cqt]") {
   REQUIRE_NOTHROW(result.at(0, 0));
 
   // Invalid access
-  REQUIRE_THROWS(result.at(-1, 0));
-  REQUIRE_THROWS(result.at(0, result.n_frames()));
-  REQUIRE_THROWS(result.at(result.n_bins(), 0));
+  CHECK_THROWS_WITH(result.at(-1, 0), Catch::Matchers::ContainsSubstring("bin must be an integer"));
+  CHECK_THROWS_WITH(result.at(0, result.n_frames()),
+                    Catch::Matchers::ContainsSubstring("frame must be an integer"));
+  CHECK_THROWS_WITH(result.at(result.n_bins(), 0),
+                    Catch::Matchers::ContainsSubstring("bin must be an integer"));
 }
 
 // D-21 regression: changing only `filter_scale` must invalidate the kernel
@@ -1473,6 +1479,8 @@ TEST_CASE("cqt, pseudo_cqt, hybrid_cqt and vqt refuse a member by its name", "[c
   VqtConfig vqt_config;
   vqt_config.n_bins = 0;
   CHECK_THROWS_WITH(vqt(audio, vqt_config), "n_bins must be an integer in [1, 2147483647]");
+  CHECK_THROWS_WITH(CqtKernel::create(0, config),
+                    Catch::Matchers::ContainsSubstring("sr must be an integer"));
 }
 
 TEST_CASE("the constant-Q transforms bound n_bins before allocating its frequencies", "[cqt]") {

@@ -27,7 +27,7 @@ MelSpectrogram::MelSpectrogram(std::vector<float> power, int n_mels, int n_frame
       hop_length_(hop_length) {}
 
 MelSpectrogram MelSpectrogram::compute(const Audio& audio, const MelConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
 
   // Compute STFT
   Spectrogram spec = Spectrogram::compute(audio, config.to_stft_config());
@@ -37,8 +37,8 @@ MelSpectrogram MelSpectrogram::compute(const Audio& audio, const MelConfig& conf
 
 MelSpectrogram MelSpectrogram::from_spectrogram(const Spectrogram& spec, int sr,
                                                 const MelFilterConfig& mel_config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
+  if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
+  util::check::integer_at_least(sr, 1, "sr");
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
@@ -128,8 +128,9 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
 
 std::vector<float> MelSpectrogram::delta(const float* features, int n_features, int n_frames,
                                          int width) {
-  SONARE_CHECK(features != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_features > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  util::check::non_null(features, "features");
+  util::check::integer_at_least(n_features, 1, "n_features");
+  util::check::integer_at_least(n_frames, 1, "n_frames");
   util::check::odd_within(width, kMelDeltaWidthDomain, "width");
   // The regression below spreads one non-finite element across every frame
   // whose window covers it, so a NaN input yields a mostly-NaN delta that is
@@ -211,8 +212,8 @@ std::vector<float> MelSpectrogram::delta(const float* features, int n_features, 
 }
 
 float MelSpectrogram::at(int mel, int frame) const {
-  SONARE_CHECK(mel >= 0 && mel < n_mels_, ErrorCode::InvalidParameter);
-  SONARE_CHECK(frame >= 0 && frame < n_frames_, ErrorCode::InvalidParameter);
+  util::check::integer_in_range(mel, 0, static_cast<long long>(n_mels_) - 1, "mel");
+  util::check::integer_in_range(frame, 0, static_cast<long long>(n_frames_) - 1, "frame");
   return power_[mel * n_frames_ + frame];
 }
 
