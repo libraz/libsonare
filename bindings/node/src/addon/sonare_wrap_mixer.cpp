@@ -87,10 +87,10 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!info[0].IsString()) {
-    Napi::TypeError::New(env, "sceneJson must be a string").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "document must be a string").ThrowAsJavaScriptException();
     return;
   }
-  std::string json = node_narrow_string(env, info[0], "sceneJson");
+  std::string json = node_narrow_string(env, info[0], "document");
   if (!OptionalDomainArg<int>(env, info, 1, "sampleRate", 48000, sonare::kAudioSampleRateDomain,
                               &sample_rate_))
     return;

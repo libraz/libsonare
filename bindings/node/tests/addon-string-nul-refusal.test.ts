@@ -91,12 +91,7 @@ function withNativeEngine<T>(body: (engine: NativeJsonEngine) => T): T {
 }
 
 const BAND_JSON = '{"type":"peak","frequencyHz":1000,"gainDb":3,"q":1}';
-const SCENE_JSON = JSON.stringify({
-  version: 2,
-  strips: [],
-  buses: [{ id: '1', inserts: [] }],
-  connections: [],
-});
+const BUS_SETTINGS_JSON = JSON.stringify({ id: '1', inserts: [] });
 
 describe('embedded NUL refusal, mastering chain documents', () => {
   it('a chain configuration document is refused by name', () => {
@@ -131,7 +126,7 @@ describe('embedded NUL refusal, by reader', () => {
   it('OptionalStringArg names the argument', () => {
     withNativeEngine((engine) => {
       engine.setTrackBuses([{ busId: 1 }]);
-      engine.setBusStripJson(1, SCENE_JSON);
+      engine.setBusStripJson(1, BUS_SETTINGS_JSON);
       expect(() => engine.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
       expectNulRefusal(
         () => engine.setBusStripEqBandJson(1, 0, `${BAND_JSON}${NUL}garbage`),
@@ -209,7 +204,7 @@ describe('embedded NUL refusal, by handoff kind', () => {
   it('a JSON key (EQ band)', () => {
     withNativeEngine((engine) => {
       engine.setTrackBuses([{ busId: 1 }]);
-      engine.setBusStripJson(1, SCENE_JSON);
+      engine.setBusStripJson(1, BUS_SETTINGS_JSON);
       expect(() => engine.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
       expect(() => engine.setBusStripEqBandJson(1, 0, 'garbage')).toThrow();
       expectNulRefusal(
@@ -263,9 +258,9 @@ describe('embedded NUL refusal, text handed to the core as std::string', () => {
     expectUnknownPresetRefusal(() =>
       realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id),
     );
-    expectNulRefusal(() => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`), 'presetJson');
+    expectNulRefusal(() => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`), 'document');
     const json = new Project().toJson();
-    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
+    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'document');
   });
 });
 

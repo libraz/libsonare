@@ -5678,7 +5678,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RoomEstimateRequest` | `EstimateRoomRequest` |
 | `RoomGeometryOptions` | `RoomGeometry` |
 | `VoiceChangeRealtimeRequest` | `RealtimeVoiceChangerRenderRequest`: renamed with realtimeVoiceChangerRender; the fields are unchanged |
-| `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult |
+| `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(document: string): RealtimeVoiceChangerValidatePresetJsonResult |
 
 #### The ./worklet entry exports only the documented surface
 
@@ -5690,7 +5690,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is SonareError InvalidFormat (masteringRepairApply: unknown key stages[0].clipThreshold); declip takes clipThresholdDb in dBFS |
+| `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is a TypeError (masteringRepairApply: unknown key stages[0].clipThreshold), and a value out of its domain is a RangeError naming stages[<i>].<key>; declip takes clipThresholdDb in dBFS |
 
 #### Other individual changes
 
@@ -10377,7 +10377,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `RoomGeometryOptions` | `RoomGeometry` |
 | `SpectralEditOptions.window` (`./analysis`) | type WindowType (was SpectralEditWindow); 'rect' removed |
 | `VoiceChangeRealtimeRequest` | `RealtimeVoiceChangerRenderRequest`: renamed with realtimeVoiceChangerRender; the fields are unchanged |
-| `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult |
+| `validateRealtimeVoiceChangerPresetJson` | `realtimeVoiceChangerValidatePresetJson`: renamed to realtimeVoiceChangerValidatePresetJson(document: string): RealtimeVoiceChangerValidatePresetJsonResult |
 
 #### The ./worklet entry exports only the documented surface
 
@@ -10392,7 +10392,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
-| `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is SonareError InvalidFormat (masteringRepairApply: unknown key stages[0].clipThreshold); declip takes clipThresholdDb in dBFS |
+| `masteringRepairApply` | stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is a TypeError (masteringRepairApply: unknown key stages[0].clipThreshold), and a value out of its domain is a RangeError naming stages[<i>].<key>; declip takes clipThresholdDb in dBFS |
 
 #### Other individual changes
 

@@ -151,7 +151,7 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
   [
     'realtimeVoiceChangerValidatePresetJson',
     () => sonare.realtimeVoiceChangerValidatePresetJson(5 as never),
-    'json',
+    'document',
   ],
 ];
 

@@ -508,9 +508,9 @@ export interface RealtimeVoiceChangerValidatePresetJsonResult {
 
 /** Checks a preset document and returns it normalised. */
 export function realtimeVoiceChangerValidatePresetJson(
-  json: string,
+  document: string,
 ): RealtimeVoiceChangerValidatePresetJsonResult {
-  return addon.validateRealtimeVoiceChangerPresetJson(json);
+  return addon.validateRealtimeVoiceChangerPresetJson(document);
 }
 
 /**

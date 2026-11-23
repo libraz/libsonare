@@ -339,20 +339,15 @@ describe('repair: session', () => {
     });
     expect(result.channels).toHaveLength(2);
     expect(result.reports.map((r) => r.stage)).toEqual(['declip', 'declick']);
-    // The stage list is a document the core reads, so an earlier key is its InvalidFormat refusal.
+    // The stage list is a per-call argument, so a 1.x key is a refused argument naming its path.
     const earlier = () =>
       api.masteringRepairApply?.({
         channels: [left],
         sampleRate,
         stages: [{ stage: 'declip', clipThreshold: 0.9 }],
       });
-    expect(earlier).toThrow(expect.objectContaining({ code: sonare.ErrorCode.InvalidFormat }));
-    expect(earlier).toThrow(
-      expect.objectContaining({
-        name: 'SonareError',
-        message: 'masteringRepairApply: unknown key stages[0].clipThreshold',
-      }),
-    );
+    expect(earlier).toThrow(TypeError);
+    expect(earlier).toThrow('masteringRepairApply: unknown key stages[0].clipThreshold');
     // @ts-expect-error a misspelt stage setting is a type error
     const _bad: MasteringRepairStage = { stage: 'declick', thresholdd: 1 };
     // @ts-expect-error the stage name is a closed set

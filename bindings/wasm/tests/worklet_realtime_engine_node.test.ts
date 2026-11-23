@@ -26,7 +26,7 @@ const stripDocument = (json: string) => JSON.parse(json).strips[0];
 const busDocument = (json: string) => JSON.parse(json).buses[0];
 /** The scene text the facade sends for one strip or bus taken from a document. */
 const sceneOf = (key: 'strips' | 'buses', json: string): string =>
-  JSON.stringify({ [key]: [JSON.parse(json)[key][0]] });
+  JSON.stringify(JSON.parse(json)[key][0]);
 
 /** The offline mirror's read side the commit tests inspect. */
 type RealtimeEngineLike = {
@@ -1388,7 +1388,7 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: 'syncMixer',
-              trackStrips: [{ trackId: 3, sceneJson: sceneOf('strips', trackStripJson) }],
+              trackStrips: [{ trackId: 3, settingsJson: sceneOf('strips', trackStripJson) }],
               masterStripJson: sceneOf('strips', masterStripJson),
             }),
             expect.objectContaining({
@@ -1435,7 +1435,7 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: 'syncMixer',
-              busStrips: [{ busId: 100, sceneJson: sceneOf('buses', busStripJson) }],
+              busStrips: [{ busId: 100, settingsJson: sceneOf('buses', busStripJson) }],
             }),
             expect.objectContaining({
               type: 'syncClipsDelta',
@@ -2244,9 +2244,7 @@ describe('SonareRealtimeEngineNode', () => {
         }>;
         expect(syncs.at(-1)).toEqual(expect.objectContaining({ buses: [], busStrips: [] }));
         expect(syncs.at(-1)?.insertParamOverrides ?? []).toEqual([]);
-        expect(JSON.parse(syncs.at(-1)?.masterStripJson ?? '{}').strips[0]).not.toHaveProperty(
-          'inputTrimDb',
-        );
+        expect(JSON.parse(syncs.at(-1)?.masterStripJson ?? '{}')).not.toHaveProperty('inputTrimDb');
         for (const message of posted) {
           const type = (message as { type?: unknown }).type;
           if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
@@ -2887,8 +2885,8 @@ describe('SonareRealtimeEngineNode', () => {
           (message) => (message as { type?: unknown }).type === 'syncMixer',
         );
         const lastSync = mixerSyncs[mixerSyncs.length - 1] as {
-          busStrips: Array<{ busId: number; sceneJson: string }>;
-          trackStrips: Array<{ trackId: number; sceneJson: string }>;
+          busStrips: Array<{ busId: number; settingsJson: string }>;
+          trackStrips: Array<{ trackId: number; settingsJson: string }>;
           masterStripJson: string;
           insertParamOverrides?: Array<{
             kind: string;
@@ -2900,8 +2898,10 @@ describe('SonareRealtimeEngineNode', () => {
           }>;
         };
         const busScene = (busId: number) =>
-          JSON.parse(lastSync.busStrips.find((strip) => strip.busId === busId)?.sceneJson ?? '{}');
-        expect(busScene(100).buses[0]).toEqual(
+          JSON.parse(
+            lastSync.busStrips.find((strip) => strip.busId === busId)?.settingsJson ?? '{}',
+          );
+        expect(busScene(100)).toEqual(
           expect.objectContaining({
             id: '100',
             pan: 0.6,
@@ -2911,29 +2911,29 @@ describe('SonareRealtimeEngineNode', () => {
           }),
         );
         expect(busScene(200)).toEqual({
-          version: 2,
-          strips: [],
-          buses: [{ id: 'bus-200', dualPanLeft: -0.7, dualPanRight: -0.2, panMode: 'dualPan' }],
-          connections: [],
+          id: 'bus-200',
+          dualPanLeft: -0.7,
+          dualPanRight: -0.2,
+          panMode: 'dualPan',
         });
-        expect(JSON.parse(lastSync.masterStripJson).strips[0].eq).toEqual({
+        expect(JSON.parse(lastSync.masterStripJson).eq).toEqual({
           enabled: true,
           bands: [{}, expect.objectContaining({ frequencyHz: 3000, gainDb: -6 })],
         });
         const trackScene = JSON.parse(
-          lastSync.trackStrips.find((strip) => strip.trackId === 7)?.sceneJson ?? '{}',
+          lastSync.trackStrips.find((strip) => strip.trackId === 7)?.settingsJson ?? '{}',
         );
-        expect(trackScene.strips[0].eq).toEqual({
+        expect(trackScene.eq).toEqual({
           enabled: true,
           bands: [expect.objectContaining({ frequencyHz: 1500, gainDb: 6 })],
         });
-        expect(trackScene.strips[0].inserts[0].params).toEqual(
+        expect(trackScene.inserts[0].params).toEqual(
           expect.objectContaining({ 'band0.gainDb': 0 }),
         );
-        expect(JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params).toEqual(
+        expect(JSON.parse(lastSync.masterStripJson).inserts[0].params).toEqual(
           expect.objectContaining({ 'band0.gainDb': 0 }),
         );
-        expect(busScene(100).buses[0].inserts[0].params).toEqual(
+        expect(busScene(100).inserts[0].params).toEqual(
           expect.objectContaining({ 'band0.gainDb': 0 }),
         );
         expect(lastSync.insertParamOverrides).toHaveLength(3);

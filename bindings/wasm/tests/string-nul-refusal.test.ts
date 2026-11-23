@@ -13,7 +13,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   type BuiltinSynthWaveform,
-  ErrorCode,
   init,
   type MasteringPreset,
   Mixer,
@@ -208,13 +207,9 @@ describe('embedded NUL refusal, by handoff kind', () => {
       engine.setBusStrip(1, SCENE_BUS);
       const native = nativeOf(engine);
       expect(() => native.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
+      expect(() => native.setBusStripEqBandJson(1, 0, 'garbage')).toThrow(RangeError);
       expect(() => native.setBusStripEqBandJson(1, 0, 'garbage')).toThrow(
-        expect.objectContaining({
-          code: ErrorCode.InvalidFormat,
-          message: expect.stringMatching(
-            /^RealtimeEngine\.setBusStripEqBandJson: unexpected JSON character at byte 0$/,
-          ),
-        }),
+        /^RealtimeEngine\.setBusStripEqBandJson: band must be valid JSON: unexpected JSON character at byte 0$/,
       );
       expectNulRefusal(
         () => native.setBusStripEqBandJson(1, 0, `${BAND_JSON}${NUL}garbage`),
@@ -344,16 +339,16 @@ describe('embedded NUL refusal, std::string entry points', () => {
   it('a JSON text is refused by name, not reported as trailing data', () => {
     const json = new Project().toJson();
     expect(() => Project.fromJson(json)).not.toThrow();
-    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'Project.fromJson', 'json');
+    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'Project.fromJson', 'document');
     expectNulRefusal(
       () => Project.fromJsonWithDiagnostics(`${json}${NUL}junk`),
       'Project.fromJsonWithDiagnostics',
-      'json',
+      'document',
     );
     expectNulRefusal(
       () => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`),
       'realtimeVoiceChangerValidatePresetJson',
-      'json',
+      'document',
     );
   });
 

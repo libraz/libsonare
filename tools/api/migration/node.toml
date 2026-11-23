@@ -10596,7 +10596,7 @@ test = "bindings/node/tests/surface/effects-voice.test.ts::preset config and pre
 kind = "function"
 old = "validateRealtimeVoiceChangerPresetJson"
 to = "realtimeVoiceChangerValidatePresetJson"
-changed = "renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult"
+changed = "renamed to realtimeVoiceChangerValidatePresetJson(document: string): RealtimeVoiceChangerValidatePresetJsonResult"
 domain = "effects"
 rule = "type-names"
 test = "bindings/node/tests/surface/effects-voice.test.ts::renames the validator to its C name"
@@ -16267,7 +16267,7 @@ test = "bindings/node/tests/project.test.ts::serializes a typed MIDI-FX config a
 [[entry]]
 kind = "function"
 old = "masteringRepairApply"
-changed = "stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is SonareError InvalidFormat (masteringRepairApply: unknown key stages[0].clipThreshold); declip takes clipThresholdDb in dBFS"
+changed = "stages reach the core as written: a stage field the core does not declare, a 1.x spelling such as the linear clipThreshold included, is a TypeError (masteringRepairApply: unknown key stages[0].clipThreshold), and a value out of its domain is a RangeError naming stages[<i>].<key>; declip takes clipThresholdDb in dBFS"
 domain = "effects"
 rule = "old-documents-refused"
 test = "bindings/node/tests/surface/effects-repair.test.ts::masteringRepairApply stages are a discriminated union with clipThresholdDb"

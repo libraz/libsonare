@@ -427,17 +427,9 @@ describe('addon positional-argument readers bail out before touching native stat
       engine.armCapture(false);
       expect(engineStateSnapshot(engine)).not.toBe(before);
       // The same strip rebuilt without its insert loses the automation id,
-      // which is what a swallowed bad `sceneJson` used to cause.
+      // which is what a swallowed bad `settingsJson` used to cause.
       const withInsert = engineStateSnapshot(engine);
-      engine.setTrackStripJson(
-        TRACK_ID,
-        JSON.stringify({
-          version: 2,
-          strips: [{ id: `track-${TRACK_ID}` }],
-          buses: [],
-          connections: [],
-        }),
-      );
+      engine.setTrackStripJson(TRACK_ID, JSON.stringify({ id: `track-${TRACK_ID}` }));
       expect(() => engine.resolveTrackInsertAutomationId(TRACK_ID, 0, 'band0.gainDb')).toThrow(
         RangeError,
       );

@@ -348,7 +348,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.midiGm2DrumName', 'note', () => addon.midiGm2DrumName(0, 'x')],
   ['addon.midiCcName', 'controller', () => addon.midiCcName('x')],
   ['addon.midiPerNoteControllerName', 'index', () => addon.midiPerNoteControllerName('x')],
-  ['Project.setMixerSceneJson', 'sceneJson', () => withProject((p) => p.setMixerSceneJson(5))],
+  ['Project.setMixerSceneJson', 'document', () => withProject((p) => p.setMixerSceneJson(5))],
   ['Audio.silenceRatio', 'thresholdDb', () => readerAudio().silenceRatio('x')],
   ['Audio.truePeakDb', 'oversampleFactor', () => readerAudio().truePeakDb('x')],
   [
@@ -723,7 +723,7 @@ export const CASES: AbortGuardCase[] = [
   {
     name: 'RealtimeEngine.setBusStripJson',
     missingRequired: [],
-    badArguments: [{ argument: 'sceneJson', call: (e) => e.setBusStripJson(BUS_ID, 42) }],
+    badArguments: [{ argument: 'settingsJson', call: (e) => e.setBusStripJson(BUS_ID, 42) }],
   },
   {
     name: 'RealtimeEngine.setBusStripEqBandJson',
@@ -736,7 +736,7 @@ export const CASES: AbortGuardCase[] = [
   {
     name: 'RealtimeEngine.setTrackStripJson',
     missingRequired: [],
-    badArguments: [{ argument: 'sceneJson', call: (e) => e.setTrackStripJson(TRACK_ID, 42) }],
+    badArguments: [{ argument: 'settingsJson', call: (e) => e.setTrackStripJson(TRACK_ID, 42) }],
   },
   {
     name: 'RealtimeEngine.setTrackStripEqBandJson',
@@ -760,7 +760,7 @@ export const CASES: AbortGuardCase[] = [
   {
     name: 'RealtimeEngine.setMasterStripJson',
     missingRequired: [],
-    badArguments: [{ argument: 'sceneJson', call: (e) => e.setMasterStripJson(42) }],
+    badArguments: [{ argument: 'settingsJson', call: (e) => e.setMasterStripJson(42) }],
   },
   {
     name: 'RealtimeEngine.setMasterStripEqBandJson',
@@ -2106,7 +2106,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'Project.fromJson',
     missingRequired: [],
     rejectsArgument: [
-      { argument: 'json', call: () => addon.Project.fromJson(1) },
+      { argument: 'document', call: () => addon.Project.fromJson(1) },
       { argument: 'withDiagnostics', call: () => addon.Project.fromJson('{}', 'yes') },
     ],
   },
@@ -2518,7 +2518,7 @@ export const CASES: AbortGuardCase[] = [
   // the child-process matrix below turns that into an exit code.
   //
   // The shapes matter as much as the values: `new Mixer(2 ** 32, 128)` never
-  // reaches the reader, because the sceneJson type check refuses it first.
+  // reaches the reader, because the document type check refuses it first.
   {
     name: 'downmix',
     missingRequired: [],

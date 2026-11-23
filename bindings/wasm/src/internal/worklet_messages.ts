@@ -378,8 +378,8 @@ export interface SonareEngineSyncMixerMessage {
   sidechainDelta?: boolean;
   lanes: EngineTrackLane[];
   buses?: EngineBus[];
-  trackStrips?: Array<{ trackId: number; sceneJson: string }>;
-  busStrips?: Array<{ busId: number; sceneJson: string }>;
+  trackStrips?: Array<{ trackId: number; settingsJson: string }>;
+  busStrips?: Array<{ busId: number; settingsJson: string }>;
   masterStripJson?: string;
   /** Retained by-name insert values, applied after strip and sidechain replay. */
   insertParamOverrides?: SonareEngineSyncMixerInsertParamOverride[];

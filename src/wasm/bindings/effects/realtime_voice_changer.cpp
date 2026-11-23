@@ -749,7 +749,7 @@ std::string realtimeVoiceChangerPresetJson(const std::string& id) {
 }
 
 val validateRealtimeVoiceChangerPresetJson(const std::string& json) {
-  wasmRefuseEmbeddedNul(json, "json");
+  wasmRefuseEmbeddedNul(json, "document");
   // Full schema-level validation (schemaVersion, id/name string limits,
   // unknown-key rejection, every value range) — must match the C/Node/
   // Python contract. Earlier this only did a from_json→to_json roundtrip,

@@ -571,7 +571,7 @@ export interface WasmProject {
   setOverlapPolicy: (policy: number) => void;
   getOverlapPolicy: () => number;
   getSampleRate: () => number;
-  setMixerSceneJson: (sceneJson: string) => void;
+  setMixerSceneJson: (document: string) => void;
   setMarker: (marker: {
     id: number;
     ppq: number;
@@ -602,8 +602,8 @@ export interface ProjectModule {
   Project: {
     new (): WasmProject;
     fromJson: {
-      (json: string, withDiagnostics?: false | null): WasmProject;
-      (json: string, withDiagnostics: true): { project: WasmProject; diagnostics: string };
+      (document: string, withDiagnostics?: false | null): WasmProject;
+      (document: string, withDiagnostics: true): { project: WasmProject; diagnostics: string };
     };
   };
   SampleBank: { new (): WasmSampleBank };

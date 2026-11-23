@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCode } from '../src/errors';
 import type { RealtimeEngine } from '../src/index';
 import { SonareEngine } from '../src/worklet/engine';
 import {
@@ -17,37 +16,23 @@ const trackTarget: StripJsonTarget = { kind: 'track', trackId: 10 };
 const busTarget: StripJsonTarget = { kind: 'bus', busId: 20 };
 const masterTarget: StripJsonTarget = { kind: 'master' };
 
+// Each strip's JSON is the bare settings object a scene holds at strips[i] / buses[i].
 function scene(inserts: unknown[], extra: Record<string, unknown> = {}): string {
-  return JSON.stringify({
-    version: 2,
-    strips: [{ id: 'track-10', inserts, ...extra }],
-    buses: [],
-    connections: [],
-  });
+  return JSON.stringify({ id: 'track-10', inserts, ...extra });
 }
 
 function busScene(inserts: unknown[]): string {
-  return JSON.stringify({
-    version: 2,
-    strips: [],
-    buses: [{ id: 'bus-20', inserts }],
-    connections: [],
-  });
+  return JSON.stringify({ id: 'bus-20', inserts });
 }
 
 function masterScene(inserts: unknown[]): string {
-  return JSON.stringify({
-    version: 2,
-    strips: [{ id: 'master', inserts }],
-    buses: [],
-    connections: [],
-  });
+  return JSON.stringify({ id: 'master', inserts });
 }
 
 function fakeEngine(calls: string[]): RealtimeEngine {
   return {
     applyCommandsDueNowPreservingFuture: () => undefined,
-    // The strip scene text reaches the embind object behind the facade.
+    // The strip settings text reaches the embind object behind the facade.
     native: {
       setTrackStripJson: (_trackId: number, json: string) => calls.push(json),
       setBusStripJson: (_busId: number, json: string) => calls.push(json),
@@ -185,44 +170,29 @@ describe('strip state retention', () => {
     );
   });
 
-  it('refuses non-object entries and wrong-typed containers as scene_from_json does', () => {
-    const document = (strips: unknown) =>
-      JSON.stringify({ version: 2, strips, buses: [], connections: [] });
-    const refusals: [unknown, RegExp][] = [
+  it('refuses non-object settings and wrong-typed inserts as the core settings reader does', () => {
+    const refusals: [unknown, string][] = [
+      [null, 'settings must be an object'],
+      [[], 'settings must be an object'],
       [
-        [null, { id: 'track-10', inserts: [{ processor: 'delay' }] }],
-        /strips\[0\] must be an object/,
+        { id: 'track-10', inserts: [null, { processor: 'delay' }] },
+        'settings.inserts[0] must be an object',
       ],
       [
-        [{ id: 'track-10', inserts: [null, { processor: 'delay' }] }],
-        /inserts\[0\] must be an object/,
+        { id: 'track-10', inserts: [{ processor: 'delay' }, []] },
+        'settings.inserts[1] must be an object',
       ],
-      [
-        [{ id: 'track-10', inserts: [{ processor: 'delay' }, []] }],
-        /inserts\[1\] must be an object/,
-      ],
-      [[{ id: 'track-10', inserts: { processor: 'delay' } }], /inserts must be an array/],
-      [[{ id: 'track-10', inserts: null }], /inserts must be an array/],
-      [{ id: 'track-10' }, /strips must be an array/],
+      [{ id: 'track-10', inserts: { processor: 'delay' } }, 'settings.inserts must be an array'],
+      [{ id: 'track-10', inserts: null }, 'settings.inserts must be an array'],
     ];
-    for (const [strips, message] of refusals) {
-      let caught: unknown;
-      try {
-        decodedInsertSignature(document(strips), trackTarget);
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toMatchObject({ code: ErrorCode.InvalidFormat, codeName: 'InvalidFormat' });
-      expect((caught as Error).message).toMatch(message);
+    for (const [settings, message] of refusals) {
+      expect(() => decodedInsertSignature(JSON.stringify(settings), trackTarget)).toThrow(
+        TypeError,
+      );
+      expect(() => decodedInsertSignature(JSON.stringify(settings), trackTarget)).toThrow(message);
     }
-    // Absent containers are empty, as in the core reader.
-    expect(decodedInsertSignature(document([{ id: 'track-10' }]), trackTarget)).toBe('[]');
-    expect(
-      decodedInsertSignature(
-        JSON.stringify({ version: 2, buses: [], connections: [] }),
-        trackTarget,
-      ),
-    ).toBe('[]');
+    // Absent inserts are empty, as in the core reader.
+    expect(decodedInsertSignature(JSON.stringify({ id: 'track-10' }), trackTarget)).toBe('[]');
   });
 
   it('does not settle active insert ramps during a scalar mixer sync', () => {
@@ -293,12 +263,9 @@ describe('strip state retention', () => {
     const busSync: unknown[][] = [];
     const busCtx = fakeMixerContext(fakeEngine(busCalls), busCache, undefined, busSync);
     const busNext = JSON.stringify({
-      version: 2,
-      strips: [],
-      buses: [
-        { id: 'bus-20', width: 1.2, inserts: [{ processor: 'delay', params: { timeMs: 240 } }] },
-      ],
-      connections: [],
+      id: 'bus-20',
+      width: 1.2,
+      inserts: [{ processor: 'delay', params: { timeMs: 240 } }],
     });
     setBusStripJson(busCtx, 20, busNext);
     expect(busCalls).toEqual([busNext]);
@@ -309,12 +276,9 @@ describe('strip state retention', () => {
     const masterSync: unknown[][] = [];
     const masterCtx = fakeMixerContext(fakeEngine(masterCalls), new Map(), masterJson, masterSync);
     const masterNext = JSON.stringify({
-      version: 2,
-      strips: [
-        { id: 'master', faderDb: -3, inserts: [{ processor: 'delay', params: { timeMs: 240 } }] },
-      ],
-      buses: [],
-      connections: [],
+      id: 'master',
+      faderDb: -3,
+      inserts: [{ processor: 'delay', params: { timeMs: 240 } }],
     });
     setMasterStripJson(masterCtx, masterNext);
     expect(masterCalls).toEqual([masterNext]);

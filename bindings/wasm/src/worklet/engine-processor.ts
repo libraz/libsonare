@@ -795,10 +795,10 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         this.engine.setTrackLanes(message.lanes);
         for (const strip of message.trackStrips ?? []) {
-          this.native.setTrackStripJson(strip.trackId, strip.sceneJson);
+          this.native.setTrackStripJson(strip.trackId, strip.settingsJson);
         }
         for (const strip of message.busStrips ?? []) {
-          this.native.setBusStripJson(strip.busId, strip.sceneJson);
+          this.native.setBusStripJson(strip.busId, strip.settingsJson);
         }
         if (message.masterStripJson) {
           this.native.setMasterStripJson(message.masterStripJson);

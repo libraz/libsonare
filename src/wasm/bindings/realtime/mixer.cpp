@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstdint>
-#include <optional>
 #include <string>
 
 #include "c_api/eq_band_json.h"
@@ -85,34 +84,6 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
                    boolProperty(send, "enabled", true), timing});
   }
   return out;
-}
-
-// Parses a strip scene fragment as sonare_engine_set_*_strip_json does: only a
-// syntactic JSON failure becomes InvalidFormat. A refusal re-rooted from the document slot
-// under the caller's `settings` (as C entry @p entry spells it) is a refused argument.
-sonare::mixing::api::Scene parseStripScene(const std::string& scene_json, const char* entry) {
-  sonare::mixing::api::Scene scene;
-  try {
-    scene = sonare::mixing::api::scene_from_json(scene_json);
-  } catch (const sonare::SonareParameterRefusal& refusal) {
-    bool rooted = false;
-    sonare::SonareParameterRefusal shown = refusal.respelled(
-        refusal.code(),
-        [entry, &rooted](const std::string& subject) {
-          std::optional<std::string> spelled =
-              sonare_field_spelling::wasm::DocumentRooted(entry, subject);
-          rooted = rooted || spelled.has_value();
-          return spelled.value_or(subject);
-        },
-        true);
-    if (!rooted) throw shown;
-    throw shown.respelled(
-        sonare::ErrorCode::InvalidParameter, [](const std::string& subject) { return subject; },
-        true);
-  } catch (const sonare::util::json::JsonError& e) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
-  }
-  return scene;
 }
 
 std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& owner) {
@@ -421,50 +392,44 @@ void RealtimeEngineWasm::setMasterSidechain(const val& insert_index_val, const v
 #endif
 }
 
-void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::string& scene_json) {
+void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::string& settings_json) {
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
   withCEntryRefusal("engine_set_bus_strip_json", [&] {
     if (bus_id == 0) sonare::util::check::refuse_unknown_id("bus_id", "a bus", "engine");
   });
-  const sonare::mixing::api::Scene scene = parseStripScene(scene_json, "engine_set_bus_strip_json");
-  if (scene.buses.empty()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                  "scene_json must contain at least one bus");
-  }
+  const sonare::mixing::api::Bus settings =
+      sonare::mixing::api::bus_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_bus_strip_json", [&] {
-    if (!engine_.set_bus_strip(bus_id, scene.buses.front())) {
+    if (!engine_.set_bus_strip(bus_id, settings)) {
       sonare_c_detail::throw_mixer_edit_refusal(engine_, sonare_c_detail::MixerEditScope::kStrip);
     }
   });
 #else
   (void)bus_id;
-  (void)scene_json;
+  (void)settings_json;
   throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif
 }
 
-void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val, const std::string& scene_json) {
+void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val,
+                                           const std::string& settings_json) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
 #if defined(SONARE_WITH_MIXING)
   withCEntryRefusal("engine_set_track_strip_json", [&] {
     if (track_id == 0) sonare_c_detail::refuse_unknown_mixer_track();
   });
-  const sonare::mixing::api::Scene scene =
-      parseStripScene(scene_json, "engine_set_track_strip_json");
-  if (scene.strips.empty()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                  "scene_json must contain at least one strip");
-  }
+  const sonare::mixing::api::Strip settings =
+      sonare::mixing::api::strip_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_track_strip_json", [&] {
-    if (!engine_.set_track_strip(track_id, scene.strips.front())) {
+    if (!engine_.set_track_strip(track_id, settings)) {
       sonare_c_detail::throw_mixer_edit_refusal(engine_, sonare_c_detail::MixerEditScope::kStrip);
     }
   });
 #else
   (void)track_id;
-  (void)scene_json;
+  (void)settings_json;
   throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif
@@ -538,21 +503,17 @@ void RealtimeEngineWasm::setTrackStripInsertBypassed(const val& track_id_val,
 #endif
 }
 
-void RealtimeEngineWasm::setMasterStripJson(const std::string& scene_json) {
+void RealtimeEngineWasm::setMasterStripJson(const std::string& settings_json) {
 #if defined(SONARE_WITH_MIXING)
-  const sonare::mixing::api::Scene scene =
-      parseStripScene(scene_json, "engine_set_master_strip_json");
-  if (scene.strips.empty()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                  "scene_json must contain at least one strip");
-  }
+  const sonare::mixing::api::Strip settings =
+      sonare::mixing::api::strip_settings_from_json(settings_json, "settings");
   withCEntryRefusal("engine_set_master_strip_json", [&] {
-    if (!engine_.set_master_strip(scene.strips.front())) {
+    if (!engine_.set_master_strip(settings)) {
       sonare_c_detail::throw_mixer_edit_refusal(engine_, sonare_c_detail::MixerEditScope::kStrip);
     }
   });
 #else
-  (void)scene_json;
+  (void)settings_json;
   throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif

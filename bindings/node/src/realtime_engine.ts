@@ -298,15 +298,13 @@ function eqBandJsonOf(band: EqBandInput): string {
   return stringifyWithinBudget(band, 'band');
 }
 
-function sceneStripJson(settings: MixSceneStripInput): string {
-  return stringifyWithinBudget(
-    { strips: [mixSceneStripToNative(settings, 'settings')] },
-    'settings',
-  );
+// The strip setters read the bare strip or bus object, the element a scene holds at strips[i] / buses[i].
+function stripSettingsJson(settings: MixSceneStripInput): string {
+  return stringifyWithinBudget(mixSceneStripToNative(settings, 'settings'), 'settings');
 }
 
-function sceneBusJson(settings: MixSceneBusInput): string {
-  return stringifyWithinBudget({ buses: [mixSceneBusToNative(settings, 'settings')] }, 'settings');
+function busSettingsJson(settings: MixSceneBusInput): string {
+  return stringifyWithinBudget(mixSceneBusToNative(settings, 'settings'), 'settings');
 }
 
 function bypassState(
@@ -1013,7 +1011,7 @@ export class RealtimeEngine {
    * {@link setTrackBuses}.
    */
   setBusStrip(busId: number, settings: MixSceneBusInput): void {
-    this.native.setBusStripJson(busId, sceneBusJson(settings));
+    this.native.setBusStripJson(busId, busSettingsJson(settings));
   }
 
   /** Replaces one equalizer band of a bus strip. */
@@ -1028,7 +1026,7 @@ export class RealtimeEngine {
    */
   setStrip(ref: StripRef, settings: MixSceneStripInput): void {
     const target = stripTarget(ref);
-    const json = sceneStripJson(settings);
+    const json = stripSettingsJson(settings);
     if (target.master) {
       this.native.setMasterStripJson(json);
     } else {

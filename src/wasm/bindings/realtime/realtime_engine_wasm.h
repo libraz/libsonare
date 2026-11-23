@@ -259,8 +259,8 @@ class RealtimeEngineWasm {
   int canSetMasterSidechain(const emscripten::val& insert_index_val,
                             const emscripten::val& source_kind_val,
                             const emscripten::val& source_id_val) const;
-  void setBusStripJson(const emscripten::val& bus_id_val, const std::string& scene_json);
-  void setTrackStripJson(const emscripten::val& track_id_val, const std::string& scene_json);
+  void setBusStripJson(const emscripten::val& bus_id_val, const std::string& settings_json);
+  void setTrackStripJson(const emscripten::val& track_id_val, const std::string& settings_json);
   void setTrackStripEqBandJson(const emscripten::val& track_id_val,
                                const emscripten::val& band_index_val, const std::string& band_json);
   void setBusStripEqBandJson(const emscripten::val& bus_id_val,
@@ -268,7 +268,7 @@ class RealtimeEngineWasm {
   void setTrackStripInsertBypassed(const emscripten::val& track_id_val,
                                    const emscripten::val& insert_index_val, bool bypassed,
                                    bool reset_on_bypass);
-  void setMasterStripJson(const std::string& scene_json);
+  void setMasterStripJson(const std::string& settings_json);
   void setMasterStripEqBandJson(const emscripten::val& band_index_val,
                                 const std::string& band_json);
   void setMasterStripInsertBypassed(const emscripten::val& insert_index_val, bool bypassed,

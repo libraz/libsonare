@@ -759,40 +759,39 @@ export class SonareEngine {
   }
 
   /**
-   * Replaces a strip (a track's, or the master) with `settings`; the document
-   * is sent as `{ strips: [settings] }`. A track is declared first when it has
-   * no lane yet.
+   * Replaces a strip (a track's, or the master) with `settings`, the object a
+   * scene holds at `strips[i]`. A track is declared first when it has no lane yet.
    */
   setStrip(target: string | number, settings: MixSceneStripInput): void {
-    const sceneJson = stringifyWithinBudget(
-      { strips: [mixSceneStripToNative(settings, 'settings')] },
+    const settingsJson = stringifyWithinBudget(
+      mixSceneStripToNative(settings, 'settings'),
       'settings',
     );
     if (target === 'master') {
-      mixer.setMasterStripJson(this.mixerContext, sceneJson);
+      mixer.setMasterStripJson(this.mixerContext, settingsJson);
       return;
     }
     // Parse before declaring a new lane so malformed text cannot declare one.
-    mixer.decodedInsertSignature(sceneJson, { kind: 'track', trackId: 0 });
+    mixer.decodedInsertSignature(settingsJson, { kind: 'track', trackId: 0 });
     const laneIndex = this.ensureTrackLane(target);
     const trackId = this.trackLaneIds[laneIndex];
     const { insertBaseResets, constructionOverrides } = strips.setTrackStripJson(
       this.stripContext,
       trackId,
-      sceneJson,
+      settingsJson,
       this.trackStripJson,
     );
-    mixer.pruneStripSidechains(this.mixerContext, { kind: 'track', trackId }, sceneJson);
+    mixer.pruneStripSidechains(this.mixerContext, { kind: 'track', trackId }, settingsJson);
     this.syncMixer(insertBaseResets, constructionOverrides);
   }
 
-  /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
+  /** Replaces a bus strip with `settings`, the object a scene holds at `buses[i]`. */
   setBusStrip(busId: number, settings: MixSceneBusInput): void {
-    const sceneJson = stringifyWithinBudget(
-      { buses: [mixSceneBusToNative(settings, 'settings')] },
+    const settingsJson = stringifyWithinBudget(
+      mixSceneBusToNative(settings, 'settings'),
       'settings',
     );
-    mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
+    mixer.setBusStripJson(this.mixerContext, busId, settingsJson);
   }
 
   /** Sets one EQ band of a strip (a track's, or the master). */
@@ -2093,8 +2092,8 @@ export class SonareEngine {
       sendSmoothedParam: (paramId, value, commitCache) =>
         this.sendSmoothedParam(paramId, value, commitCache),
       getMasterStripJson: () => this.masterStripJson,
-      cacheMasterStripJson: (sceneJson) => {
-        this.masterStripJson = sceneJson;
+      cacheMasterStripJson: (settingsJson) => {
+        this.masterStripJson = settingsJson;
       },
     };
   }
@@ -2110,8 +2109,8 @@ export class SonareEngine {
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       resolveTargetId: (target) => this.resolveTargetId(target),
       readStripJson: (target) => mixer.cachedStripJson(this.mixerContext, target),
-      writeStripJson: (target, sceneJson) =>
-        mixer.cacheStripJson(this.mixerContext, target, sceneJson),
+      writeStripJson: (target, settingsJson) =>
+        mixer.cacheStripJson(this.mixerContext, target, settingsJson),
       insertParamOverrides: this.insertParamOverrides,
       clearInsertAutomationLanes: (target) => this.clearInsertAutomationLanes(target),
     };

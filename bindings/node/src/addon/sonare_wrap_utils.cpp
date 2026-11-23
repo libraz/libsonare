@@ -254,23 +254,9 @@ Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& m
 
 namespace {
 
-/// @brief The code the last refusal is classed by: a subject in the document slot an entry wraps
-///        the caller's object into is a refused argument, whatever code the document check carried.
-SonareError ClassifyingCode(SonareError err) {
-  const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
-  if (refusal == nullptr) return err;
-  const std::string entry = LastRefusalEntry();
-  for (const std::string& subject : refusal->subjects()) {
-    if (sonare_field_spelling::node::DocumentRooted(entry, subject)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-  }
-  return err;
-}
-
 /// Throws the error for @p err with @p message, carrying the last refusal when there is one.
 void ThrowWithLastRefusal(Napi::Env env, SonareError err, const std::string& message) {
-  Napi::Error error = MakeSonareError(env, ClassifyingCode(err), message, LastRefusalIsShape());
+  Napi::Error error = MakeSonareError(env, err, message, LastRefusalIsShape());
   if (const std::optional<sonare::SonareParameterRefusal> shown = ShownLastRefusal()) {
     AttachRefusal(env, error.Value(), *shown, LastRefusalEntry());
   }
@@ -292,8 +278,7 @@ void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_ro
     ThrowSonareError(env, err);
     return;
   }
-  Napi::Error error =
-      MakeSonareError(env, ClassifyingCode(err), RefusalText(*shown), shown->shape_error());
+  Napi::Error error = MakeSonareError(env, err, RefusalText(*shown), shown->shape_error());
   AttachRefusal(env, error.Value(), *shown, LastRefusalEntry());
   error.ThrowAsJavaScriptException();
 }

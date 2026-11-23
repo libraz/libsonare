@@ -593,16 +593,16 @@ export class Project {
    * Deserialize project JSON into a new project. Throws cleanly (with the joined
    * native diagnostic messages) on malformed input.
    */
-  static fromJson(json: string): Project {
-    return adoptProject(addon.Project.fromJson(json));
+  static fromJson(document: string): Project {
+    return adoptProject(addon.Project.fromJson(document));
   }
 
   /**
    * Deserialize project JSON and return native warning diagnostics emitted on
    * successful loads, such as dangling source references preserved for repair.
    */
-  static fromJsonWithDiagnostics(json: string): { project: Project; diagnostics: string } {
-    const result = addon.Project.fromJson(json, true);
+  static fromJsonWithDiagnostics(document: string): { project: Project; diagnostics: string } {
+    const result = addon.Project.fromJson(document, true);
     return {
       project: adoptProject(result.project),
       diagnostics: result.diagnostics,
@@ -647,8 +647,8 @@ export class Project {
    *   recognise (e.g. `unknown key strips[2].faderDB`; `$`- and `x-`-prefixed keys are
    *   exempt); the project's scene is left unchanged.
    */
-  setMixerSceneJson(sceneJson: string): void {
-    this.native.setMixerSceneJson(sceneJson);
+  setMixerSceneJson(document: string): void {
+    this.native.setMixerSceneJson(document);
   }
 
   /**

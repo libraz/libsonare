@@ -523,14 +523,14 @@ export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
 /**
  * Checks a preset document and returns it normalised.
  *
- * @throws TypeError unless `json` is a string.
+ * @throws TypeError unless `document` is a string.
  */
 export function realtimeVoiceChangerValidatePresetJson(
-  json: string,
+  document: string,
 ): RealtimeVoiceChangerValidatePresetJsonResult {
   return withEntry('realtimeVoiceChangerValidatePresetJson', () => {
-    assertString(json, 'json');
-    return getSonareModule().validateRealtimeVoiceChangerPresetJson(json);
+    assertString(document, 'document');
+    return getSonareModule().validateRealtimeVoiceChangerPresetJson(document);
   });
 }
 

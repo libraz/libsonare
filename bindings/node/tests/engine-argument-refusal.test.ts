@@ -155,12 +155,12 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
 });
 
 describe('RealtimeEngine strip controls refuse an omitted required argument', () => {
-  it('names sceneJson when it is missing', () => {
+  it('names settingsJson when it is missing', () => {
     withEngine((engine) => {
       const native = (engine as unknown as { native: Record<string, (...a: unknown[]) => void> })
         .native;
-      expectRefusal(() => native.setMasterStripJson(undefined), TypeError, /sceneJson/);
-      expectRefusal(() => native.setTrackStripJson(10), TypeError, /sceneJson/);
+      expectRefusal(() => native.setMasterStripJson(undefined), TypeError, /settingsJson/);
+      expectRefusal(() => native.setTrackStripJson(10), TypeError, /settingsJson/);
     });
   });
 

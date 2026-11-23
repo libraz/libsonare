@@ -243,7 +243,7 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "json must be a string").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "document must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // A trailing `withDiagnostics` of true returns { project, diagnostics } instead of the project.
@@ -261,7 +261,7 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
             " (0 = arrangement support not compiled in).");
     return env.Undefined();
   }
-  std::string json = sonare_node::node_narrow_string(env, info[0], "json");
+  std::string json = sonare_node::node_narrow_string(env, info[0], "document");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
   const SonareError err =
@@ -335,7 +335,7 @@ Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   std::string scene;
-  if (!OptionalStringArg(env, info, 0, "sceneJson", "", &scene)) return env.Undefined();
+  if (!OptionalStringArg(env, info, 0, "document", "", &scene)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_mixer_scene_json(project_, scene.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)

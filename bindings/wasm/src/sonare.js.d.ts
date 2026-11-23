@@ -1491,8 +1491,8 @@ export interface WasmRealtimeEngine {
     sourceId: number,
   ) => void;
   setMasterSidechain: (insertIndex: number, sourceKind: number, sourceId: number) => void;
-  setBusStripJson: (busId: number, sceneJson: string) => void;
-  setTrackStripJson: (trackId: number, sceneJson: string) => void;
+  setBusStripJson: (busId: number, settingsJson: string) => void;
+  setTrackStripJson: (trackId: number, settingsJson: string) => void;
   setTrackStripEqBandJson: (trackId: number, bandIndex: number, bandJson: string) => void;
   setBusStripEqBandJson: (busId: number, bandIndex: number, bandJson: string) => void;
   setTrackStripInsertBypassed: (
@@ -1501,7 +1501,7 @@ export interface WasmRealtimeEngine {
     bypassed: boolean,
     resetOnBypass: boolean,
   ) => void;
-  setMasterStripJson: (sceneJson: string) => void;
+  setMasterStripJson: (settingsJson: string) => void;
   setMasterStripEqBandJson: (bandIndex: number, bandJson: string) => void;
   setMasterStripInsertBypassed: (
     insertIndex: number,
@@ -3675,7 +3675,7 @@ export interface SonareModule {
   ) => WasmRealtimeVoiceChanger;
   realtimeVoiceChangerPresetNames: () => string[];
   realtimeVoiceChangerPresetJson: (id: string) => string;
-  validateRealtimeVoiceChangerPresetJson: (json: string) => {
+  validateRealtimeVoiceChangerPresetJson: (document: string) => {
     ok: boolean;
     normalizedJson?: string;
     error?: string;

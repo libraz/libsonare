@@ -675,14 +675,14 @@ Napi::Value RealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info) {
 Napi::Value ValidateRealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsString()) {
-    Napi::TypeError::New(env, "json must be a string").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "document must be a string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   std::string normalized;
   std::string error;
   const bool ok = sonare::editing::voice_changer::validate_realtime_voice_changer_preset_json(
-      node_narrow_string(env, info[0], "presetJson"), &normalized, &error);
+      node_narrow_string(env, info[0], "document"), &normalized, &error);
   Napi::Object out = Napi::Object::New(env);
   out.Set("ok", ok);
   if (ok) {

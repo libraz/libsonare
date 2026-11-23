@@ -388,14 +388,14 @@ export class Project {
    * Deserialize project JSON into a new {@link Project}. Throws if the JSON is
    * malformed, surfacing the joined diagnostic messages.
    */
-  static fromJson(json: string): Project {
+  static fromJson(document: string): Project {
     const project = new Project();
     // Replace the freshly-created empty handle with the deserialized one. If
     // fromJson throws (malformed JSON) the empty handle is released first so no
     // WASM object leaks.
     const restored = (() => {
       try {
-        return projectModule().Project.fromJson(json, undefined);
+        return projectModule().Project.fromJson(document, undefined);
       } catch (error) {
         project.native.delete();
         throw error;
@@ -410,11 +410,11 @@ export class Project {
    * Deserialize project JSON and return native warning diagnostics emitted on
    * successful loads, such as dangling source references preserved for repair.
    */
-  static fromJsonWithDiagnostics(json: string): ProjectDeserializeResult {
+  static fromJsonWithDiagnostics(document: string): ProjectDeserializeResult {
     const project = new Project();
     const restored = (() => {
       try {
-        return projectModule().Project.fromJson(json, true);
+        return projectModule().Project.fromJson(document, true);
       } catch (error) {
         project.native.delete();
         throw error;
@@ -1349,8 +1349,8 @@ export class Project {
    *   recognise (e.g. `unknown key strips[2].faderDB`; `$`- and `x-`-prefixed keys are
    *   exempt); the project's scene is left unchanged.
    */
-  setMixerSceneJson(sceneJson: string): void {
-    this.native.setMixerSceneJson(sceneJson);
+  setMixerSceneJson(document: string): void {
+    this.native.setMixerSceneJson(document);
   }
 
   /**

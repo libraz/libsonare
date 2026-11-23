@@ -47,7 +47,7 @@ export interface EngineStripContext {
   ensureTrackLane(target: string | number): number;
   resolveTargetId(target: string | number): number;
   readStripJson(target: StripJsonTarget): string | undefined;
-  writeStripJson(target: StripJsonTarget, sceneJson: string): void;
+  writeStripJson(target: StripJsonTarget, settingsJson: string): void;
   readonly insertParamOverrides: InsertParamOverrideMap;
   clearInsertAutomationLanes(target: StripJsonTarget): void;
 }
@@ -59,7 +59,7 @@ function trackIdFor(ctx: EngineStripContext, target: string | number): number {
 type SceneEntry = Record<string, unknown>;
 
 /**
- * Folds a setter's change into the strip's cached scene JSON, so the next
+ * Folds a setter's change into the strip's cached settings JSON, so the next
  * syncMixer re-post replays it instead of reverting it on the worklet.
  */
 function mergeStripJson(
@@ -67,12 +67,9 @@ function mergeStripJson(
   target: StripJsonTarget,
   update: (entry: SceneEntry) => void,
 ): void {
-  const scene = JSON.parse(ctx.readStripJson(target) ?? emptyStripJson(target)) as {
-    strips: SceneEntry[];
-    buses: SceneEntry[];
-  };
-  update(target.kind === 'bus' ? scene.buses[0] : scene.strips[0]);
-  ctx.writeStripJson(target, JSON.stringify(scene));
+  const entry = JSON.parse(ctx.readStripJson(target) ?? emptyStripJson(target)) as SceneEntry;
+  update(entry);
+  ctx.writeStripJson(target, JSON.stringify(entry));
 }
 
 function mergeEqBand(
@@ -113,12 +110,12 @@ function setInsertParamByName(
 export function setTrackStripJson(
   ctx: EngineStripContext,
   trackId: number,
-  sceneJson: string,
+  settingsJson: string,
   trackStripJson: Map<number, string>,
 ): { insertBaseResets: StripJsonTarget[]; constructionOverrides: InsertParamOverride[] } {
   const target: StripJsonTarget = { kind: 'track', trackId };
-  const result = replaceStripScene(ctx, target, trackStripJson.get(trackId), sceneJson);
-  trackStripJson.set(trackId, sceneJson);
+  const result = replaceStripScene(ctx, target, trackStripJson.get(trackId), settingsJson);
+  trackStripJson.set(trackId, settingsJson);
   return result;
 }
 

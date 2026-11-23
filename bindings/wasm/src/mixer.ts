@@ -289,15 +289,15 @@ export class Mixer {
   /**
    * Build a mixer from a scene JSON string.
    *
-   * @param json - Scene JSON (strips, buses, sends, connections, inserts)
+   * @param document - Scene JSON (strips, buses, sends, connections, inserts)
    * @param options - Sample rate (required) and block size, see {@link MixerJsonOptions}
-   * @throws TypeError for a non-string `json`, a wrong-typed field or an unknown key;
+   * @throws TypeError for a non-string `document`, a wrong-typed field or an unknown key;
    *   RangeError for a sample rate outside `[8000, 384000]` or a `maxBlockSize` of `0` or below.
    */
-  static fromJson(json: string, options: MixerJsonOptions): Mixer {
-    assertString(json, 'json');
+  static fromJson(document: string, options: MixerJsonOptions): Mixer {
+    assertString(document, 'document');
     const bag = requestObject('Mixer.fromJson', options, 'options', true);
-    adoptedSceneJson = json;
+    adoptedSceneJson = document;
     try {
       return new Mixer({
         sampleRate: bag.sampleRate,

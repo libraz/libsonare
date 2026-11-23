@@ -1020,8 +1020,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           trackStrips: [
             {
               trackId: 7,
-              sceneJson:
-                '{"version":2,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+              settingsJson:
+                '{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}',
             },
           ],
           insertBaseResets: [{ kind: 'track', trackId: 7 }],
@@ -2297,12 +2297,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           trackStrips: [
             {
               trackId: 10,
-              sceneJson:
-                '{"version":2,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
+              settingsJson: '{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}',
             },
           ],
-          masterStripJson:
-            '{"version":2,"strips":[{"id":"master","faderDb":-6,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
+          masterStripJson: '{"id":"master","faderDb":-6,"panLaw":"linear0Db"}',
         });
         processor.receiveMessage({
           type: 'syncTrackStripEqBand',
@@ -2348,10 +2346,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           trackStrips: [
             {
               trackId: 10,
-              sceneJson: `{"version":2,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
+              settingsJson: `{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}`,
             },
           ],
-          masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
+          masterStripJson: `{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}`,
         });
         processor.receiveMessage({
           type: 'syncTrackStripInsertBypassed',
@@ -2399,8 +2397,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           busStrips: [
             {
               busId: 200,
-              sceneJson:
-                '{"version":2,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
+              settingsJson:
+                '{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}',
             },
           ],
         });
@@ -2664,7 +2662,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         processor.receiveMessage({
           type: 'syncMixer',
           lanes: [],
-          masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
+          masterStripJson: `{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}`,
           insertParamOverrides: [
             { kind: 'master', insertIndex: 0, paramName: 'band0.gainDb', value: 6 },
           ],
@@ -3294,16 +3292,16 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             trackStrips: [
               {
                 trackId: 10,
-                sceneJson: `{"version":2,"strips":[{"id":"track-10","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
+                settingsJson: `{"id":"track-10","inserts":[${insertJson}]}`,
               },
             ],
             busStrips: [
               {
                 busId: 200,
-                sceneJson: `{"version":2,"strips":[],"buses":[{"id":"200","inserts":[${insertJson}]}],"connections":[]}`,
+                settingsJson: `{"id":"200","inserts":[${insertJson}]}`,
               },
             ],
-            masterStripJson: `{"version":2,"strips":[{"id":"master","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
+            masterStripJson: `{"id":"master","inserts":[${insertJson}]}`,
           },
         });
         receiveSyncSpy.mockClear();

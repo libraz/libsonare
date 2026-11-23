@@ -74,7 +74,7 @@ MixerWasm::~MixerWasm() {
 
 MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block_size) {
   SonareMixer* mixer =
-      sonare_mixer_from_scene_json(wasmCString(json, "json"), sample_rate, block_size);
+      sonare_mixer_from_scene_json(wasmCString(json, "document"), sample_rate, block_size);
   if (mixer == nullptr) {
     throwLastCError();
   }

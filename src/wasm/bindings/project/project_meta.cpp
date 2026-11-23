@@ -169,7 +169,7 @@ double ProjectWasm::getSampleRate() const {
 
 void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   const SonareError err =
-      sonare_project_set_mixer_scene_json(project_.get(), wasmCString(scene_json, "sceneJson"));
+      sonare_project_set_mixer_scene_json(project_.get(), wasmCString(scene_json, "document"));
   if (err != SONARE_OK) {
     throwCodedCError(err);
   }

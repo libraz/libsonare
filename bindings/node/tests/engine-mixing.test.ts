@@ -210,17 +210,11 @@ describe('RealtimeEngine native binding', () => {
     expect(out.at(-1)).toBeGreaterThan(0.99);
     expect(out.at(-1)).toBeLessThan(1.01);
 
-    let badJsonError: unknown;
-    try {
-      nativeOf(engine).setBusStripJson(1, '{bad json');
-    } catch (error) {
-      badJsonError = error;
-    }
-    expect(isSonareError(badJsonError)).toBe(true);
-    if (!isSonareError(badJsonError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+    // The settings text is a per-call argument, so malformed text is a refused argument.
+    expect(() => nativeOf(engine).setBusStripJson(1, '{bad json')).toThrow(RangeError);
+    expect(() => nativeOf(engine).setBusStripJson(1, '{bad json')).toThrow(
+      /^RealtimeEngine\.setBusStripJson: settings must be valid JSON: /,
+    );
     engine.setBusStrip(
       1,
       sceneBus('{"version":2,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'),
@@ -405,17 +399,11 @@ describe('RealtimeEngine native binding', () => {
     const sceneJson =
       '{"version":2,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
     engine.setStrip(10, sceneStrip(sceneJson));
-    let badJsonError: unknown;
-    try {
-      nativeOf(engine).setTrackStripJson(10, '{bad json');
-    } catch (error) {
-      badJsonError = error;
-    }
-    expect(isSonareError(badJsonError)).toBe(true);
-    if (!isSonareError(badJsonError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+    // The settings text is a per-call argument, so malformed text is a refused argument.
+    expect(() => nativeOf(engine).setTrackStripJson(10, '{bad json')).toThrow(RangeError);
+    expect(() => nativeOf(engine).setTrackStripJson(10, '{bad json')).toThrow(
+      /^RealtimeEngine\.setTrackStripJson: settings must be valid JSON: /,
+    );
     let badProcessorError: unknown;
     try {
       engine.setStrip(
@@ -765,17 +753,11 @@ describe('RealtimeEngine native binding', () => {
     const sceneJson =
       '{"version":2,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
     engine.setStrip('master', sceneStrip(sceneJson));
-    let badJsonError: unknown;
-    try {
-      nativeOf(engine).setMasterStripJson('{bad json');
-    } catch (error) {
-      badJsonError = error;
-    }
-    expect(isSonareError(badJsonError)).toBe(true);
-    if (!isSonareError(badJsonError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+    // The settings text is a per-call argument, so malformed text is a refused argument.
+    expect(() => nativeOf(engine).setMasterStripJson('{bad json')).toThrow(RangeError);
+    expect(() => nativeOf(engine).setMasterStripJson('{bad json')).toThrow(
+      /^RealtimeEngine\.setMasterStripJson: settings must be valid JSON: /,
+    );
     let badParamError: unknown;
     try {
       engine.setStrip(

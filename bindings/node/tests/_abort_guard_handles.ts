@@ -220,9 +220,9 @@ export interface NativeEngine {
     sourceId: unknown,
   ): number;
   canSetMasterSidechain(insertIndex: unknown, sourceKind: unknown, sourceId: unknown): number;
-  setBusStripJson(busId: unknown, sceneJson: unknown): void;
+  setBusStripJson(busId: unknown, settingsJson: unknown): void;
   setBusStripEqBandJson(busId: unknown, bandIndex: unknown, bandJson: unknown): void;
-  setTrackStripJson(trackId: unknown, sceneJson: unknown): void;
+  setTrackStripJson(trackId: unknown, settingsJson: unknown): void;
   setTrackStripEqBandJson(trackId: unknown, bandIndex: unknown, bandJson: unknown): void;
   setTrackStripInsertBypassed(
     trackId: unknown,
@@ -230,7 +230,7 @@ export interface NativeEngine {
     bypassed: unknown,
     resetOnBypass?: unknown,
   ): void;
-  setMasterStripJson(sceneJson: unknown): void;
+  setMasterStripJson(settingsJson: unknown): void;
   setMasterStripEqBandJson(bandIndex: unknown, bandJson: unknown): void;
   setMasterStripInsertBypassed(
     insertIndex: unknown,
@@ -492,26 +492,11 @@ const eqInsert = (gainDb: number) => ({
 });
 
 export const trackStripJson = (gainDb = 0) =>
-  JSON.stringify({
-    version: 2,
-    strips: [{ id: `track-${TRACK_ID}`, inserts: [eqInsert(gainDb)] }],
-    buses: [],
-    connections: [],
-  });
+  JSON.stringify({ id: `track-${TRACK_ID}`, inserts: [eqInsert(gainDb)] });
 
-const busStripJson = JSON.stringify({
-  version: 2,
-  strips: [],
-  buses: [{ id: String(BUS_ID), inserts: [eqInsert(0)] }],
-  connections: [],
-});
+const busStripJson = JSON.stringify({ id: String(BUS_ID), inserts: [eqInsert(0)] });
 
-const masterStripJson = JSON.stringify({
-  version: 2,
-  strips: [{ id: 'master', inserts: [eqInsert(0)] }],
-  buses: [],
-  connections: [],
-});
+const masterStripJson = JSON.stringify({ id: 'master', inserts: [eqInsert(0)] });
 
 export function withConfiguredEngine<T>(body: (engine: NativeEngine) => T): T {
   const engine = new addon.RealtimeEngine(SR, BLOCK) as NativeEngine;

@@ -13,12 +13,12 @@ Napi::Value RealtimeEngineWrap::SetBusStripJson(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
-  std::string scene_json;
+  std::string settings_json;
   if (!RequiredUint32Arg(env, info, 0, "busId", &bus_id) ||
-      !RequiredStringValue(env, info[1], "sceneJson", &scene_json)) {
+      !RequiredStringValue(env, info[1], "settingsJson", &settings_json)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_set_bus_strip_json(engine_, bus_id, scene_json.c_str()));
+  ThrowIfError(env, sonare_engine_set_bus_strip_json(engine_, bus_id, settings_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -46,12 +46,12 @@ Napi::Value RealtimeEngineWrap::SetTrackStripJson(const Napi::CallbackInfo& info
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
-  std::string scene_json;
+  std::string settings_json;
   if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
-      !RequiredStringValue(env, info[1], "sceneJson", &scene_json)) {
+      !RequiredStringValue(env, info[1], "settingsJson", &settings_json)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_set_track_strip_json(engine_, track_id, scene_json.c_str()));
+  ThrowIfError(env, sonare_engine_set_track_strip_json(engine_, track_id, settings_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -99,9 +99,9 @@ Napi::Value RealtimeEngineWrap::SetMasterStripJson(const Napi::CallbackInfo& inf
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  std::string scene_json;
-  if (!RequiredStringValue(env, info[0], "sceneJson", &scene_json)) return env.Undefined();
-  ThrowIfError(env, sonare_engine_set_master_strip_json(engine_, scene_json.c_str()));
+  std::string settings_json;
+  if (!RequiredStringValue(env, info[0], "settingsJson", &settings_json)) return env.Undefined();
+  ThrowIfError(env, sonare_engine_set_master_strip_json(engine_, settings_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

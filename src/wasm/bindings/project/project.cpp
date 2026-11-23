@@ -35,7 +35,7 @@ std::string ProjectWasm::toJson() const {
 val ProjectWasm::fromJson(const std::string& json, const val& with_diagnostics_val) {
   const bool with_diagnostics =
       optionalBool(with_diagnostics_val, "withDiagnostics").value_or(false);
-  wasmRefuseEmbeddedNul(json, "json");
+  wasmRefuseEmbeddedNul(json, "document");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
   const SonareError err =

@@ -62,12 +62,7 @@ function stripScene(width: number, reordered = false, includeTail = true): strin
     : reordered
       ? [{ processor: 'utility.gain', params: { levelDb: 0 } }]
       : [{ slot: 'pre', processor: 'utility.gain', params: gain }];
-  return JSON.stringify({
-    version: 2,
-    strips: [{ id: 'track-10', width, inserts }],
-    buses: [],
-    connections: [],
-  });
+  return JSON.stringify({ id: 'track-10', width, inserts });
 }
 
 function makeSource(constant = false, symmetric = false): [Float32Array, Float32Array] {
@@ -96,7 +91,7 @@ function makeFixture(constantSource = false, includeTail = true, symmetricSource
   }) as unknown as RealtimeEngineType;
   const [left, right] = makeSource(constantSource, symmetricSource);
   engine.setTrackLanes([{ trackId: TRACK_ID }]);
-  engine.setStrip(TRACK_ID, JSON.parse(scene).strips[0]);
+  engine.setStrip(TRACK_ID, JSON.parse(scene));
   engine.setClips([
     {
       id: 1,
@@ -182,9 +177,9 @@ function makeFixture(constantSource = false, includeTail = true, symmetricSource
     resolveTargetId: (target) => (typeof target === 'number' ? target : Number(target)),
     readStripJson: (target) =>
       target.kind === 'track' ? trackStripJson.get(target.trackId) : undefined,
-    writeStripJson: (target, sceneJson) => {
+    writeStripJson: (target, settingsJson) => {
       if (target.kind === 'track') {
-        trackStripJson.set(target.trackId, sceneJson);
+        trackStripJson.set(target.trackId, settingsJson);
       }
     },
     insertParamOverrides,

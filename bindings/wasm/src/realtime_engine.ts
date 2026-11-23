@@ -489,15 +489,13 @@ function programBank(
   };
 }
 
-function sceneStripJson(settings: MixSceneStripInput): string {
-  return stringifyWithinBudget(
-    { strips: [mixSceneStripToNative(settings, 'settings')] },
-    'settings',
-  );
+// The strip setters read the bare strip or bus object, the element a scene holds at strips[i] / buses[i].
+function stripSettingsJson(settings: MixSceneStripInput): string {
+  return stringifyWithinBudget(mixSceneStripToNative(settings, 'settings'), 'settings');
 }
 
-function sceneBusJson(settings: MixSceneBusInput): string {
-  return stringifyWithinBudget({ buses: [mixSceneBusToNative(settings, 'settings')] }, 'settings');
+function busSettingsJson(settings: MixSceneBusInput): string {
+  return stringifyWithinBudget(mixSceneBusToNative(settings, 'settings'), 'settings');
 }
 
 function bandJson(band: unknown): string {
@@ -2105,18 +2103,18 @@ export class RealtimeEngine {
     );
   }
 
-  /** Replaces a bus strip with `settings`; the document is sent as `{ buses: [settings] }`. */
+  /** Replaces a bus strip with `settings`, the object a scene holds at `buses[i]`. */
   setBusStrip(busId: number, settings: MixSceneBusInput): void {
-    this.native.setBusStripJson(busId, sceneBusJson(settings));
+    this.native.setBusStripJson(busId, busSettingsJson(settings));
   }
 
   /**
-   * Replaces a strip (a track's, or the master) with `settings`; the document
-   * is sent as `{ strips: [settings] }`.
+   * Replaces a strip (a track's, or the master) with `settings`, the object a
+   * scene holds at `strips[i]`.
    */
   setStrip(ref: StripRef, settings: MixSceneStripInput): void {
     const target = stripTarget(ref);
-    const json = sceneStripJson(settings);
+    const json = stripSettingsJson(settings);
     if (target.master) {
       this.native.setMasterStripJson(json);
     } else {
