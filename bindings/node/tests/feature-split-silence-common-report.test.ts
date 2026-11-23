@@ -51,7 +51,7 @@ describe('splitSilenceCommonWithReport', () => {
     expect(report.silenceCeilingDb).toBeLessThan(6);
   });
 
-  it('leaves the ceiling absent for takes that never go quiet together', () => {
+  it('reports an unbounded ceiling for takes that never go quiet together', () => {
     // Each take is silent for half its length and the halves do not overlap, so
     // the union covers everything while each take has silence of its own.
     const half = Math.floor(DURATION_SAMPLES / 2);
@@ -63,8 +63,9 @@ describe('splitSilenceCommonWithReport', () => {
     // takes do not share it -- the alignment case. The interval counts do NOT
     // say so: a take that sounds once and stops counts 1, the same as a take
     // with no silence at all, which is why the ceiling carries the verdict.
-    // A take holding an exactly zero frame has no measurable ceiling, so it is absent.
-    expect('silenceCeilingDb' in report).toBe(false);
+    // Each take holds an exactly zero frame under a nonzero peak, which every
+    // threshold calls silent, so the ceiling is unbounded.
+    expect(report.silenceCeilingDb).toBe(Number.POSITIVE_INFINITY);
     expect(report.maxSignalIntervals).toBe(1);
     expect(report.minSignalIntervals).toBe(1);
   });
@@ -95,6 +96,20 @@ describe('splitSilenceCommonWithReport', () => {
     );
     expect(tight.intervals).toBe(2);
     expect(tight.report.minSignalIntervals).toBe(2);
+  });
+
+  it('lets a silent signal constrain nothing, and is absent only when all are silent', () => {
+    const take = toneBurst(0, DURATION_SAMPLES);
+    const quietGain = 10 ** (-40 / 20);
+    for (let i = Math.floor(0.4 * SR); i < Math.floor(0.6 * SR); i++) {
+      take[i] *= quietGain;
+    }
+    const silent = new Float32Array(DURATION_SAMPLES);
+    const alone = reportOf([take], TOP_DB).report.silenceCeilingDb;
+    expect(alone).toBeGreaterThan(30);
+    expect(reportOf([take, silent], TOP_DB).report.silenceCeilingDb).toBe(alone);
+    expect(reportOf([silent, take], TOP_DB).report.silenceCeilingDb).toBe(alone);
+    expect('silenceCeilingDb' in reportOf([silent, silent], TOP_DB).report).toBe(false);
   });
 
   it('returns the intervals the plain entry point does, which takes no report', () => {

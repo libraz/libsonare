@@ -32,6 +32,21 @@ describe('splitSilenceCommonWithReport', () => {
     return samples;
   }
 
+  it('lets a silent signal constrain nothing, and is absent only when all are silent', () => {
+    const ceiling = (signals: Float32Array[]) =>
+      splitSilenceCommonWithReport({ signals, topDb, frameLength, hopLength }).report
+        .silenceCeilingDb;
+    const take = toneWindow(0, 1);
+    for (let i = Math.round(0.4 * sampleRate); i < Math.round(0.6 * sampleRate); i++) {
+      take[i] *= 0.01;
+    }
+    const silent = new Float32Array(sampleRate);
+    const alone = ceiling([take]);
+    expect(alone).toBeGreaterThan(30);
+    expect(ceiling([take, silent])).toBe(alone);
+    expect(ceiling([silent, take])).toBe(alone);
+  });
+
   it('says no threshold can open a gap in a part that never stops', () => {
     const continuous = toneWindow(0, 1);
     const { intervals, report } = splitSilenceCommonWithReport({
@@ -102,14 +117,15 @@ describe('splitSilenceCommonWithReport', () => {
     expect(tight.report.minSignalIntervals).toBe(2);
   });
 
-  it('leaves the ceiling absent when a take holds an exactly zero frame', () => {
+  it('reports an unbounded ceiling when every take holds an exactly zero frame', () => {
     const { report } = splitSilenceCommonWithReport({
       signals: [toneWindow(0, 0.5), toneWindow(0.5, 1)],
       topDb,
       frameLength,
       hopLength,
     });
-    expect('silenceCeilingDb' in report).toBe(false);
+    // An exactly zero frame under a nonzero peak is silent at every threshold.
+    expect(report.silenceCeilingDb).toBe(Number.POSITIVE_INFINITY);
     expect(report.maxSignalIntervals).toBe(1);
     expect(report.minSignalIntervals).toBe(1);
   });

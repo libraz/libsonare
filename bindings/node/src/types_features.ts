@@ -478,8 +478,10 @@ export interface SilenceCommonReport {
    * A frame counts as silent when it sits at least `topDb` under its own
    * signal's peak RMS, so each signal's deepest dip decides whether any
    * threshold can find silence in it, and the union needs all of them quiet at
-   * once — hence the minimum across the signals. Absent when any signal's peak
-   * is 0 or it holds an exactly zero frame, where the depth has no finite value.
+   * once — hence the minimum across the signals. A signal with no peak is
+   * silent everywhere and constrains nothing. Infinity when every signal that
+   * has a level holds an exactly zero frame, which every threshold calls
+   * silent; absent when every signal is silent.
    */
   silenceCeilingDb?: number;
   /**

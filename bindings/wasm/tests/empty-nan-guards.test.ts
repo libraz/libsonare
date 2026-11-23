@@ -169,6 +169,17 @@ describe('NaN/Inf guards (WASM)', () => {
     ).toBe('StreamingEqualizer.match: reference contains a non-finite sample at index 100');
     equalizer.destroy();
   });
+  it('StreamingEqualizer.match refuses a silent source or reference by name', () => {
+    const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
+    const silent = new Float32Array(sine().length);
+    expect(
+      expectRefusalOf(() => equalizer.match(silent, sine(), { maxBands: 4 }), RangeError).message,
+    ).toBe('StreamingEqualizer.match: source has no measurable level');
+    expect(
+      expectRefusalOf(() => equalizer.match(sine(), silent, { maxBands: 4 }), RangeError).message,
+    ).toBe('StreamingEqualizer.match: reference has no measurable level');
+    equalizer.destroy();
+  });
   it('lufs rejects NaN with index', () => {
     expect(() => lufs(withNaN(), SR)).toThrow(
       /lufs: samples contains a non-finite sample at index 100/,

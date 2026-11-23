@@ -106,6 +106,17 @@ describe('NaN/Inf guards (Node)', () => {
     const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
     expect(() => equalizer.match(sine(), withNaN(), { maxBands: 4 })).toThrow();
   });
+  it('StreamingEqualizer.match refuses a silent source or reference by name', () => {
+    const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
+    const silent = new Float32Array(sine().length);
+    expect(() => equalizer.match(silent, sine(), { maxBands: 4 })).toThrow(RangeError);
+    expect(() => equalizer.match(silent, sine(), { maxBands: 4 })).toThrow(
+      'StreamingEqualizer.match: source has no measurable level',
+    );
+    expect(() => equalizer.match(sine(), silent, { maxBands: 4 })).toThrow(
+      'StreamingEqualizer.match: reference has no measurable level',
+    );
+  });
   it('lufs rejects NaN with index', () => {
     expect(() => lufs(withNaN(), SR)).toThrow(
       /lufs: samples contains a non-finite sample at index 100/,

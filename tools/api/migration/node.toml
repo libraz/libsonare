@@ -19044,6 +19044,14 @@ test = "bindings/node/tests/metering-and-scale.test.ts::dynamic range keeps a si
 
 [[entry]]
 kind = "field"
+old = "SilenceCommonReport.silenceCeilingDb"
+changed = "optional: a signal with no peak constrains nothing (was 0 for the whole report); Infinity when every signal that has a level holds an exactly zero frame (was 120); absent when every signal is silent"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/node/tests/feature-split-silence-common-report.test.ts::lets a silent signal constrain nothing, and is absent only when all are silent"
+
+[[entry]]
+kind = "field"
 old = "DeclipOptions.lpcBlend"
 removed = true
 no_replacement = "the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns"
