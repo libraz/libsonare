@@ -1,5 +1,6 @@
 #include <array>
 
+#include "c_api/midi_cc_binding_check.h"
 #include "c_api/midi_input_domains.h"
 #include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
@@ -818,43 +819,6 @@ sonare::midi::Ump ump_from_pod(const SonareMidiEventPod& pod) noexcept {
   return out;
 }
 
-// Refuses a binding row the table cannot hold, naming the row.
-void check_cc_binding(const SonareMidiCcBinding& src, size_t index) {
-  const auto subject = [index](const char* field) {
-    return check::indexed_subject("bindings", index, field);
-  };
-  check::one_of(src.consume, std::array<int, 2>{0, 1}, subject("consume").c_str());
-  if (src.reserved != 0) {
-    check::refuse(subject("reserved").c_str(), "must be 0");
-  }
-  check::integer_within(src.cc_number, sonare_c_detail::kMidiDataByteDomain,
-                        subject("cc_number").c_str());
-  check::integer_within(src.param_id, sonare_c_detail::kMidiTargetParamIdDomain,
-                        subject("param_id").c_str());
-  if (src.kind > SONARE_MIDI_CC_NRPN) {
-    check::refuse(subject("kind").c_str(), sonare::util::refusal::kDeclaredValuePredicate);
-  }
-  if (src.channel != sonare::midi::kCcAnyChannel && src.channel > 15) {
-    check::refuse(subject("channel").c_str(),
-                  "must be an integer in [0, 15] or " +
-                      std::to_string(static_cast<unsigned>(sonare::midi::kCcAnyChannel)));
-  }
-  check::finite_float(src.min_value, subject("min_value").c_str());
-  check::finite_float(src.max_value, subject("max_value").c_str());
-  if (src.max_value < src.min_value) {
-    check::refuse_relation({subject("max_value"), subject("min_value")},
-                           "{0} must be at least {1}");
-  }
-  if (src.kind == SONARE_MIDI_CC_CONTROL_CHANGE_14) {
-    check::integer_within(src.cc_number, sonare_c_detail::kMidiControl14NumberDomain,
-                          subject("cc_number").c_str());
-    if (src.cc_lsb_number != src.cc_number + 32u) {
-      check::refuse_relation({subject("cc_lsb_number"), subject("cc_number")},
-                             "{0} must be {1} + 32");
-    }
-  }
-}
-
 sonare::midi::CcBinding binding_from_c(const SonareMidiCcBinding& src) noexcept {
   sonare::midi::CcBinding binding{};
   binding.kind = static_cast<sonare::midi::CcBindingKind>(src.kind);
@@ -888,7 +852,9 @@ void check_cc_bindings(const SonareMidiCcBinding* bindings, size_t binding_count
   check::integer_in_range(static_cast<long long>(binding_count), 0,
                           static_cast<long long>(sonare::midi::CcMap::kMaxBindings),
                           "binding_count");
-  for (size_t i = 0; i < binding_count; ++i) check_cc_binding(bindings[i], i);
+  for (size_t i = 0; i < binding_count; ++i) {
+    sonare_c_detail::check_midi_cc_binding(bindings[i], "bindings[" + std::to_string(i) + "]");
+  }
 }
 
 // Binds a table that check_cc_bindings accepted; its count never exceeds the map's capacity.

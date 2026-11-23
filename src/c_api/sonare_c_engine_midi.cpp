@@ -11,6 +11,7 @@
 
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
+#include "c_api/midi_cc_binding_check.h"
 #include "engine/realtime_engine.h"
 #include "host/midi_io.h"
 #include "midi/live_push_args.h"
@@ -651,34 +652,9 @@ SonareError sonare_engine_bind_midi_cc(SonareEngine* engine, const SonareMidiCcB
   SONARE_C_REQUIRE_NONNULL(engine);
   SONARE_C_REQUIRE_NONNULL(binding);
   if (const SonareError err = run_validation([&] {
-        util::check::integer_within(binding->cc_number, kEngineMidiControllerDomain,
-                                    "binding.cc_number");
-        if (binding->channel != SONARE_MIDI_CC_ANY_CHANNEL && binding->channel > 15) {
-          util::check::refuse("binding.channel", "must be an integer in [0, 15] or 255");
-        }
-        util::check::one_of(binding->kind, std::array<int, 4>{0, 1, 2, 3}, "binding.kind");
-        util::check::one_of(binding->consume, std::array<int, 2>{0, 1}, "binding.consume");
-        if (binding->reserved != 0) {
-          util::check::refuse("binding.reserved", "must be 0");
-        }
-        util::check::integer_within(binding->param_id, kEngineParameterIdDomain,
-                                    "binding.param_id");
-        util::check::finite_float(binding->min_value, "binding.min_value");
-        util::check::finite_float(binding->max_value, "binding.max_value");
-        if (binding->max_value < binding->min_value) {
-          util::check::refuse_relation({"binding.max_value", "binding.min_value"},
-                                       "{0} must be at least {1}");
-        }
+        check_midi_cc_binding(*binding, "binding");
         if (sonare::engine::RealtimeEngine::parameter_target_reserved(binding->param_id)) {
           util::check::refuse("binding.param_id", "must not be a reserved engine parameter id");
-        }
-        if (binding->kind == SONARE_MIDI_CC_CONTROL_CHANGE_14) {
-          util::check::integer_within(binding->cc_number, kEngineMidiCc14NumberDomain,
-                                      "binding.cc_number");
-          if (binding->cc_lsb_number != binding->cc_number + 32u) {
-            util::check::refuse_relation({"binding.cc_lsb_number", "binding.cc_number"},
-                                         "{0} must be {1} + 32");
-          }
         }
       });
       err != SONARE_OK) {

@@ -22,7 +22,6 @@ _UNROWED: dict[str, str] = {
     "kDecomposeStemsHopLengthDomain": "the C entries check the hop against kStftHopDomain and map the auto hop to 0 first",
     "kEngineBandIndexFloorDomain": "read only in a build without mixing; the same subjects read kEngineBandIndexDomain otherwise",
     "kEngineInsertIndexDomain": "the insert-count relation refuses first; inserts are capped below the domain's bound",
-    "kEngineMidiCc14NumberDomain": "binding.cc_number's row is kEngineMidiControllerDomain; this bound is its below_32_when_14_bit relation",
     "kMultibandDynamicBandCountDomain": "the band-list builders stop at DynamicEq::kMaxBands, so no C entry reaches the bound",
     "kSegmentFeatureRowsDomain": "the C segment entries refuse rows outside kSegmentMatrixExtentDomain first",
     "kSilenceIndexableLengthDomain": "refuses only a buffer longer than INT_MAX samples",

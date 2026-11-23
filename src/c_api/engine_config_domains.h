@@ -80,12 +80,6 @@ inline constexpr sonare::util::check::NumericDomain kEngineMidiChannelDomain =
 /// @brief What a UMP group accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineUmpGroupDomain =
     sonare::util::check::integer_domain(0, 15);
-/// @brief What a MIDI controller number accepts.
-inline constexpr sonare::util::check::NumericDomain kEngineMidiControllerDomain =
-    sonare::util::check::integer_domain(0, 127);
-/// @brief What the MSB controller number of a 14-bit MIDI CC binding accepts.
-inline constexpr sonare::util::check::NumericDomain kEngineMidiCc14NumberDomain =
-    sonare::util::check::integer_domain(0, 31);
 /// @brief What a MIDI clip's loop count accepts.
 inline constexpr sonare::util::check::NumericDomain kEngineMidiClipLoopDomain =
     sonare::util::check::integer_domain_of<int>(0);

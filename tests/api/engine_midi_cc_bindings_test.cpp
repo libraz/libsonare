@@ -125,6 +125,16 @@ TEST_CASE("C MIDI CC bindings name invalid fields", "[c_api][engine][midi_cc]") 
     field = "reserved";
     binding.reserved = 1;
   }
+  SECTION("RPN selector MSB must be a MIDI data byte") {
+    field = "selector_msb";
+    binding.kind = SONARE_MIDI_CC_RPN;
+    binding.selector_msb = 128;
+  }
+  SECTION("NRPN selector LSB must be a MIDI data byte") {
+    field = "selector_lsb";
+    binding.kind = SONARE_MIDI_CC_NRPN;
+    binding.selector_lsb = 128;
+  }
   REQUIRE(sonare_engine_bind_midi_cc(engine.get(), &binding) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(std::string(sonare_last_error_message()).find(std::string("binding.") + field) !=
         std::string::npos);

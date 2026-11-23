@@ -7,6 +7,7 @@
 #include "c_api/effects_config_domains.h"
 #include "c_api/engine_config_domains.h"
 #include "c_api/instrument_config_domains.h"
+#include "c_api/midi_input_domains.h"
 #include "c_api/numeric_domain_row.h"
 #include "c_api/playback_domains.h"
 #include "c_api/ppq_domains.h"
@@ -42,9 +43,8 @@ inline const NumericDomainRow kEffectsDomainRows[] = {
     {"engine_add_parameter", "info.id", kEngineParameterIdDomain, nullptr},
     {"engine_articulation", "channel", kEngineMidiChannelDomain, nullptr},
     {"engine_bind_controller", "binding.index", kEngineControllerBindingIndexDomain, nullptr},
-    {"engine_bind_midi_cc", "binding.cc_number", kEngineMidiControllerDomain,
-     "below_32_when_14_bit"},
-    {"engine_bind_midi_cc", "binding.param_id", kEngineParameterIdDomain, nullptr},
+    {"engine_bind_midi_cc", "binding.cc_number", kMidiDataByteDomain, "below_32_when_14_bit"},
+    {"engine_bind_midi_cc", "binding.param_id", kMidiTargetParamIdDomain, nullptr},
     {"engine_bounce_offline", "options.block_size", kEngineOfflineBlockDomain, nullptr},
     {"engine_bounce_offline", "options.dither_bits", kEngineDitherBitsDomain, nullptr},
     {"engine_bounce_offline", "options.num_channels", kEngineRenderChannelsDomain, nullptr},
