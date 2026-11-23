@@ -461,6 +461,13 @@ bool LayeredInstrument::apply_parameter(unsigned int param_id, float value) noex
   return layers_[index].instrument->apply_parameter(child, value);
 }
 
+bool LayeredInstrument::parameter_value(unsigned int param_id, float* out) const noexcept {
+  const size_t index = param_id / static_cast<unsigned int>(kLayerParamStride);
+  if (index >= layers_.size()) return false;
+  const unsigned int child = param_id % static_cast<unsigned int>(kLayerParamStride);
+  return layers_[index].instrument->parameter_value(child, out);
+}
+
 bool LayeredInstrument::describe_parameter(unsigned int param_id,
                                            automation::ParameterDescription* out) const {
   if (out == nullptr) return false;

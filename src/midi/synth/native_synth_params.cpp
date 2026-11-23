@@ -231,6 +231,23 @@ int NativeSynth::parameter_id_for_key(const std::string& key) const noexcept {
   return -1;
 }
 
+bool NativeSynth::parameter_value(unsigned int param_id, float* out) const noexcept {
+  const auto id = static_cast<NativeSynthParamId>(param_id);
+  if (out == nullptr || find_param_entry(id) == nullptr) return false;
+  if (id == NativeSynthParamId::kGain) {
+    *out = config_.gain;
+    return true;
+  }
+  if (id == NativeSynthParamId::kBusDrive) {
+    *out = config_.bus_drive;
+    return true;
+  }
+  const float* field = patch_field(config_.patch, id);
+  if (field == nullptr) return false;
+  *out = *field;
+  return true;
+}
+
 bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
   const auto id = static_cast<NativeSynthParamId>(param_id);
   const ParamEntry* entry = find_param_entry(id);

@@ -230,7 +230,7 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
     const unsigned int param_id = static_cast<unsigned int>(insert_param_param(target_id));
     switch (target->strip) {
       case InsertStripKind::kMaster:
-        return route_master_insert_param_smoothed(target->insert_index, param_id, value, target_id);
+        return route_master_insert_param_smoothed(target->insert_index, param_id, value);
       case InsertStripKind::kBus:
         return track_mixer_runtime_.route_bus_insert_param_smoothed_by_id(
             target->owner_id, target->insert_index, param_id, value);
@@ -257,6 +257,42 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
 bool RealtimeEngine::route_engine_parameter_thunk(void* context, uint32_t param_id,
                                                   float value) noexcept {
   return static_cast<RealtimeEngine*>(context)->route_engine_parameter(param_id, value);
+}
+
+bool RealtimeEngine::reserved_parameter_value(uint32_t target_id, float* out_value) const noexcept {
+  if (out_value == nullptr || !parameter_target_reserved(target_id)) return false;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (is_instrument_param_id(target_id)) return instrument_parameter_value(target_id, out_value);
+#endif
+  if (is_insert_param_id(target_id)) {
+    const InsertAutomationTarget* target = live_insert_target(target_id);
+    if (target == nullptr || !insert_target_holds(*target)) return false;
+    const unsigned int insert_index = target->insert_index;
+    const unsigned int param_id = static_cast<unsigned int>(insert_param_param(target_id));
+    switch (target->strip) {
+      case InsertStripKind::kMaster:
+        return owned_master_strip_->last_applied_insert_parameter_value(insert_index, param_id,
+                                                                        out_value) ||
+               owned_master_strip_->constructed_insert_parameter_value(insert_index, param_id,
+                                                                       out_value);
+      case InsertStripKind::kBus:
+        return track_mixer_runtime_.bus_insert_parameter_value(target->owner_id, insert_index,
+                                                               param_id, out_value);
+      case InsertStripKind::kTrack:
+        return track_mixer_runtime_.track_insert_parameter_value(target->owner_id, insert_index,
+                                                                 param_id, out_value);
+      case InsertStripKind::kTrackLane:
+        return track_mixer_runtime_.track_lane_parameter_value(target->owner_id, param_id,
+                                                               out_value);
+      case InsertStripKind::kBusLane:
+        return param_id == TrackMixerRuntime::kFaderDb &&
+               track_mixer_runtime_.bus_gain_db_value(target->owner_id, out_value);
+    }
+    return false;
+  }
+  const uint32_t lane = (target_id & kEngineParamLaneMask) >> kEngineParamLaneShift;
+  return lane == kEngineParamLaneMaster &&
+         mixing_runtime_.parameter_value(target_id & kEngineParamKindMask, out_value);
 }
 
 bool RealtimeEngine::describe_reserved_parameter(uint32_t id,

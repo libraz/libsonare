@@ -57,11 +57,16 @@ bool RealtimeEngine::route_instrument_param_smoothed(uint32_t destination_id, un
   free_slot->assigned = true;
   free_slot->destination_id = destination_id;
   free_slot->param_id = param_id;
-  // Snap to the first observed value so the smoother does not glide up from 0
-  // (a cutoff lane starting at 8 kHz must not sweep from 0 Hz on its first
-  // block). Mirrors the master-insert slot table.
+  // The glide starts where the instrument's parameter is now; only an instrument that cannot
+  // say starts at the requested value.
+  float start = value;
+  const midi::MidiInstrument* instrument = instrument_rack_.get(destination_id);
+  if (instrument == nullptr || !instrument->parameter_value(param_id, &start) ||
+      !std::isfinite(start)) {
+    start = value;
+  }
   free_slot->smoother.prepare(sample_rate_, rt::kClickGuardMs);
-  free_slot->smoother.reset(value);
+  free_slot->smoother.reset(start);
   free_slot->smoother.set_target(value);
   return true;
 }
@@ -120,6 +125,18 @@ bool RealtimeEngine::route_instrument_parameter(uint32_t target_id, float value)
   return route_instrument_param_smoothed(destination_id, instrument_param_param(target_id), value);
 }
 
+bool RealtimeEngine::instrument_parameter_value(uint32_t target_id,
+                                                float* out_value) const noexcept {
+  uint32_t destination_id = 0;
+  if (out_value == nullptr || !instrument_auto_destinations_.destination(
+                                  instrument_param_slot(target_id), &destination_id)) {
+    return false;
+  }
+  const midi::MidiInstrument* instrument = instrument_rack_.get(destination_id);
+  return instrument != nullptr &&
+         instrument->parameter_value(instrument_param_param(target_id), out_value);
+}
+
 bool RealtimeEngine::describe_instrument_reserved_parameter(
     uint32_t target_id, automation::ParameterDescription* out) const {
   if (out == nullptr) return false;
@@ -145,6 +162,10 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
 bool RealtimeEngine::route_engine_parameter_thunk(void* context, uint32_t param_id,
                                                   float value) noexcept {
   return static_cast<RealtimeEngine*>(context)->route_engine_parameter(param_id, value);
+}
+
+bool RealtimeEngine::reserved_parameter_value(uint32_t target_id, float* out_value) const noexcept {
+  return is_instrument_param_id(target_id) && instrument_parameter_value(target_id, out_value);
 }
 
 // Mirrors route_engine_parameter's gate split: without the mixing library the

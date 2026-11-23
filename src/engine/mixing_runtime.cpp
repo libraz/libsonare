@@ -54,6 +54,23 @@ bool MixingRuntime::set_parameter_impl(unsigned int param_id, float value) {
   }
 }
 
+bool MixingRuntime::parameter_value(unsigned int param_id, float* out) const noexcept {
+  if (strip_ == nullptr || out == nullptr) return false;
+  switch (param_id) {
+    case kFaderDb:
+      *out = strip_->fader_db();
+      return true;
+    case kPan:
+      *out = strip_->pan();
+      return true;
+    case kWidth:
+      *out = strip_->width();
+      return true;
+    default:
+      return false;
+  }
+}
+
 bool MixingRuntime::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   return is_supported_parameter(param_id);
 }

@@ -69,6 +69,17 @@ class ProbeInstrument final : public sonare::midi::MidiInstrument {
     }
     return false;
   }
+  bool parameter_value(unsigned int param_id, float* out) const noexcept override {
+    if (param_id == 0) {
+      *out = level_;
+      return true;
+    }
+    if (param_id == 1) {
+      *out = tone;
+      return true;
+    }
+    return false;
+  }
 
   float level() const noexcept { return level_; }
   float tone = 0.0f;
@@ -95,7 +106,40 @@ void run_blocks(RealtimeEngine& engine, int block, int blocks) {
   }
 }
 
+void push_value(RealtimeEngine& engine, sonare::rt::CommandType type, uint32_t target,
+                float value) {
+  sonare::rt::Command command{};
+  command.type = type;
+  command.target_id = target;
+  command.arg.f = value;
+  command.sample_time = -1;
+  REQUIRE(engine.push_command(command));
+}
+
 }  // namespace
+
+TEST_CASE("A first smoothed set on an instrument ramps from the value the instrument holds",
+          "[engine][automation]") {
+  constexpr int kBlock = 256;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_param_smoothing_ms(200.0f);
+  ProbeInstrument instrument;
+  instrument.apply_parameter(0, 0.8f);
+  REQUIRE(engine.set_midi_instrument(4, &instrument));
+  const int64_t id = engine.resolve_instrument_automation_id(4, "level");
+  REQUIRE(id >= 0);
+  push_value(engine, sonare::rt::CommandType::kTransportPlay, 0, 0.0f);
+  // No set has reached this id, so the ramp has no recorded base to start from.
+  push_value(engine, sonare::rt::CommandType::kSetParamSmoothed, static_cast<uint32_t>(id), 0.0f);
+  run_blocks(engine, kBlock, 1);
+  // 5 ms into a 200 ms ramp: still near 0.8, where a ramp from the requested value is at 0.
+  CHECK(instrument.level() > 0.7f);
+  engine.set_param_smoothing_ms(0.0f);
+  run_blocks(engine, kBlock, 16);
+  CHECK(instrument.level() < 1.0e-3f);
+  engine.set_midi_instrument(4, nullptr);
+}
 
 TEST_CASE("Instrument-automation ids round-trip slot and param fields", "[engine][automation]") {
   const uint32_t id = make_instrument_param_id(/*slot=*/5, /*param=*/7);
@@ -207,8 +251,8 @@ TEST_CASE("An instrument id resolved on one engine drives a second engine that o
   set.sample_time = -1;
   set.arg.f = 0.5f;
   REQUIRE(processor.push_command(set));
-  run_blocks(processor, kBlock, 4);
-  REQUIRE(processor_b.level() == 0.5f);
+  run_blocks(processor, kBlock, 8);
+  REQUIRE(std::abs(processor_b.level() - 0.5f) < 1.0e-3f);
   REQUIRE(processor_a.level() == 0.0f);
   REQUIRE(processor.resolve_instrument_automation_id(2, "level") == id);
 
@@ -237,9 +281,8 @@ TEST_CASE("An instrument-parameter lane drives the instrument at block precision
   engine.automation().set_lanes({hold_lane(static_cast<uint32_t>(id), 0.25f)});
   run_blocks(engine, kBlock, 8);
 
-  // The first observed value snaps to the lane's target rather than gliding up
-  // from zero, and it stays there.
-  REQUIRE(instrument.level() == 0.25f);
+  // The first value glides from what the instrument holds over the click guard and settles.
+  REQUIRE(std::abs(instrument.level() - 0.25f) < 1.0e-3f);
   REQUIRE_FALSE(instrument.applied_at_process.empty());
 
   // A second lane value follows within a few blocks.
@@ -275,8 +318,8 @@ TEST_CASE("An instrument automation id routes through the one-shot parameter pat
   set.arg.f = 0.5f;
   set.sample_time = -1;
   REQUIRE(engine.push_command(set));
-  run_blocks(engine, kBlock, 2);
-  REQUIRE(instrument.level() == 0.5f);
+  run_blocks(engine, kBlock, 8);
+  REQUIRE(std::abs(instrument.level() - 0.5f) < 1.0e-3f);
 
   sonare::rt::Command smoothed{};
   smoothed.type = sonare::rt::CommandType::kSetParamSmoothed;
@@ -307,8 +350,8 @@ TEST_CASE("An unbound destination makes its automation lane inert, not dangling"
   play.sample_time = -1;
   REQUIRE(engine.push_command(play));
   engine.automation().set_lanes({hold_lane(static_cast<uint32_t>(id), 0.5f)});
-  run_blocks(engine, kBlock, 4);
-  REQUIRE(instrument.level() == 0.5f);
+  run_blocks(engine, kBlock, 8);
+  REQUIRE(std::abs(instrument.level() - 0.5f) < 1.0e-3f);
 
   // Unbind: the lane keeps firing but reaches nothing, and the id still names
   // the same destination afterwards.
@@ -378,6 +421,15 @@ TEST_CASE("NativeSynth exposes its continuous patch fields and rejects structura
   REQUIRE(
       synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kHpCutoffHz), 1.0e9f));
   REQUIRE(synth.patch().hp_cutoff_hz == 22000.0f);
+
+  // The read side reports every id as the patch (or the instrument gain) now holds it.
+  float value = 0.0f;
+  REQUIRE(synth.parameter_value(static_cast<unsigned int>(NativeSynthParamId::kBitDepth), &value));
+  REQUIRE(value == 24.0f);
+  REQUIRE(synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kGain), 0.5f));
+  REQUIRE(synth.parameter_value(static_cast<unsigned int>(NativeSynthParamId::kGain), &value));
+  REQUIRE(value == 0.5f);
+  REQUIRE_FALSE(synth.parameter_value(9999u, &value));
 }
 
 TEST_CASE("A pitch-offset lane reaches a voice that is already sounding", "[engine][automation]") {
@@ -429,8 +481,8 @@ TEST_CASE("An instrument swap retires the previous instrument's automation slots
   play.sample_time = -1;
   REQUIRE(engine.push_command(play));
   engine.automation().set_lanes({hold_lane(static_cast<uint32_t>(id), 0.5f)});
-  run_blocks(engine, kBlock, 4);
-  REQUIRE(first.level() == 0.5f);
+  run_blocks(engine, kBlock, 8);
+  REQUIRE(std::abs(first.level() - 0.5f) < 1.0e-3f);
 
   // Swapping instruments must not push the outgoing instrument's in-flight
   // value into the incoming one before the host re-resolves and re-drives.
@@ -658,6 +710,75 @@ TEST_CASE("parameterInfo stops describing master inserts once another strip is b
   REQUIRE(engine.bind_mixing_strip(&external));
   REQUIRE_FALSE(engine.describe_reserved_parameter(static_cast<uint32_t>(id), &info));
   engine.bind_mixing_strip(nullptr);
+}
+
+TEST_CASE("A first smoothed set on each mixer target ramps from the value its owner holds",
+          "[engine][automation]") {
+  constexpr int kBlock = 256;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_param_smoothing_ms(200.0f);
+  REQUIRE(engine.set_track_lanes({{10}}));
+  REQUIRE(engine.set_track_buses({{1}}));
+  const auto gain_strip = [](const char* level) {
+    sonare::mixing::api::Strip strip;
+    strip.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "utility.gain",
+                             std::string(R"({"levelDb":)") + level + "}"});
+    return strip;
+  };
+  REQUIRE(engine.set_track_strip(10, gain_strip("-3")));
+  sonare::mixing::api::Bus bus;
+  bus.inserts = gain_strip("-6").inserts;
+  REQUIRE(engine.set_bus_strip(1, bus));
+  REQUIRE(engine.set_master_strip(gain_strip("-12")));
+
+  struct Target {
+    const char* name;
+    int64_t id;
+    float start;
+    float end;
+  };
+  using sonare::engine::MixingRuntime;
+  const std::vector<Target> targets = {
+      {"track fader", engine.resolve_track_lane_automation_id(10, "faderDb"), 0.0f, -40.0f},
+      {"track pan", engine.resolve_track_lane_automation_id(10, "pan"), 0.0f, 1.0f},
+      {"bus fader", engine.resolve_bus_automation_id(1, "faderDb"), 0.0f, -40.0f},
+      {"master fader", engine_master_param_target(MixingRuntime::kFaderDb), 0.0f, -40.0f},
+      {"master pan", engine_master_param_target(MixingRuntime::kPan), 0.0f, 1.0f},
+      {"master width", engine_master_param_target(MixingRuntime::kWidth), 1.0f, 0.0f},
+      {"track insert", engine.resolve_track_insert_automation_id(10, 0, "levelDb"), -3.0f, -40.0f},
+      {"bus insert", engine.resolve_bus_insert_automation_id(1, 0, "levelDb"), -6.0f, -40.0f},
+      {"master insert", engine.resolve_master_insert_automation_id(0, "levelDb"), -12.0f, -40.0f},
+  };
+  push_value(engine, sonare::rt::CommandType::kTransportPlay, 0, 0.0f);
+  run_blocks(engine, kBlock, 1);
+  for (const Target& target : targets) {
+    CAPTURE(target.name);
+    REQUIRE(target.id >= 0);
+    const auto id = static_cast<uint32_t>(target.id);
+    float value = 0.0f;
+    REQUIRE(engine.current_parameter_value(id, &value));
+    CHECK(value == target.start);
+    // No set has reached this id, so the ramp has no recorded base to start from.
+    push_value(engine, sonare::rt::CommandType::kSetParamSmoothed, id, target.end);
+  }
+  run_blocks(engine, kBlock, 1);
+  for (const Target& target : targets) {
+    CAPTURE(target.name);
+    float value = 0.0f;
+    REQUIRE(engine.current_parameter_value(static_cast<uint32_t>(target.id), &value));
+    // 5 ms into a 200 ms ramp: under a tenth of the move, where a ramp from the requested
+    // value has arrived.
+    CHECK(std::abs(value - target.start) < 0.1f * std::abs(target.end - target.start));
+  }
+  engine.set_param_smoothing_ms(0.0f);
+  run_blocks(engine, kBlock, 16);
+  for (const Target& target : targets) {
+    CAPTURE(target.name);
+    float value = 0.0f;
+    REQUIRE(engine.current_parameter_value(static_cast<uint32_t>(target.id), &value));
+    CHECK(std::abs(value - target.end) < 1.0e-2f * std::abs(target.end - target.start));
+  }
 }
 
 #endif  // defined(SONARE_WITH_MIXING)

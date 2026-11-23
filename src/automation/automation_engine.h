@@ -118,6 +118,9 @@ class AutomationEngine {
   /// per-lane resolution and RT-safety gating. Returns true on success;
   /// failures bump the same internal counters apply() uses.
   bool set_parameter(uint32_t param_id, float value) noexcept;
+  /// The last value a bound processor took for @p param_id (its construction value before any
+  /// set). False for an engine-namespace id, an unbound id, or a processor that records none.
+  bool parameter_value(uint32_t param_id, float* out) const noexcept;
   void collect_boundaries(double block_start_ppq, double block_end_ppq,
                           AutomationBoundaryList* out) noexcept;
 

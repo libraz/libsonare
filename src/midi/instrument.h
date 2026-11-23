@@ -241,6 +241,15 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
     return false;
   }
 
+  /// AUDIO thread: the value @p param_id holds now, as apply_parameter last left it (after its
+  /// clamp) or as the patch set it. Allocation-free. Returns false for an unknown id.
+  /// Default: nothing is automatable.
+  virtual bool parameter_value(unsigned int param_id, float* out) const noexcept {
+    (void)param_id;
+    (void)out;
+    return false;
+  }
+
   /// CONTROL thread: metadata (name, range, default, unit) for the same id
   /// space apply_parameter addresses, so a host can describe a reserved
   /// automation id without reaching into engine-private state. May allocate

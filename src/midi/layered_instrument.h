@@ -85,6 +85,7 @@ class LayeredInstrument final : public MidiInstrument {
   int tail_samples() const noexcept override;
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;
+  bool parameter_value(unsigned int param_id, float* out) const noexcept override;
   bool describe_parameter(unsigned int param_id,
                           automation::ParameterDescription* out) const override;
 

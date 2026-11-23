@@ -2279,7 +2279,7 @@ TEST_CASE("Queued master insert edits remain the latest manual base after automa
   REQUIRE(output.back() == Catch::Approx(std::pow(10.0f, -6.0f / 20.0f)).margin(0.02f));
 }
 
-TEST_CASE("First master insert touch ramps from the retained manual base",
+TEST_CASE("First master insert touch after a chain replacement ramps from the fresh insert",
           "[engine][realtime][mixing]") {
   constexpr int kBlock = 64;
   sonare::engine::RealtimeEngine engine;
@@ -2292,9 +2292,9 @@ TEST_CASE("First master insert touch ramps from the retained manual base",
   REQUIRE(engine.apply_master_insert_param_by_name_now(0, "levelDb", -6.0f));
   engine.settle_insert_parameters();
 
-  // Replacing the chain clears the assigned smoother slot while retaining the
-  // manual base for the same reserved master id. The next first touch must
-  // start from -6 dB, rather than snapping the fresh strip to its -12 dB target.
+  // Replacing the chain clears the assigned smoother slot while retaining the manual -6 dB
+  // base. The fresh insert sounds at its constructed 0 dB, so the first touch ramps from
+  // there: starting at the retained base would step the output by 6 dB.
   auto replacement = master;
   replacement.inserts.push_back(
       {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
@@ -2307,9 +2307,9 @@ TEST_CASE("First master insert touch ramps from the retained manual base",
   output.fill(1.0f);
   float* io[] = {output.data()};
   engine.process(io, 1, kBlock);
-  const float target_gain = std::pow(10.0f, -12.0f / 20.0f);
-  REQUIRE(output.back() > target_gain + 0.02f);
-  REQUIRE(output.back() < std::pow(10.0f, -6.0f / 20.0f));
+  // One block into the 5 ms guard the gain has left 0 dB but not reached the retained -6 dB.
+  REQUIRE(output.back() < 0.98f);
+  REQUIRE(output.back() > std::pow(10.0f, -6.0f / 20.0f));
 }
 
 TEST_CASE("Master insert edits without a master strip are unknown targets and hold no slot",

@@ -336,6 +336,7 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   bool set_render_path_recorder(RenderPathRecorder* recorder) noexcept;
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;
+  bool parameter_value(unsigned int param_id, float* out) const noexcept override;
   bool describe_parameter(unsigned int param_id,
                           automation::ParameterDescription* out) const override;
 

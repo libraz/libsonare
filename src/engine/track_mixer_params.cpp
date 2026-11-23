@@ -331,6 +331,65 @@ bool TrackMixerRuntime::apply_bus_insert_parameter(size_t bus_index, unsigned in
   return bus->apply_insert_parameter(insert_index, param_id, value);
 }
 
+bool TrackMixerRuntime::insert_parameter_value_at(bool is_bus, size_t index,
+                                                  unsigned int insert_index, unsigned int param_id,
+                                                  float* out_value) const noexcept {
+  if (out_value == nullptr) return false;
+  if (is_bus) {
+    if (index >= bus_states_.size() || bus_states_[index].bus == nullptr) return false;
+    const auto& bus = bus_states_[index].bus->bus();
+    return bus.last_applied_insert_parameter_value(insert_index, param_id, out_value) ||
+           constructed_bus_parameter_value(bus, insert_index, param_id, out_value, 0);
+  }
+  if (index >= lane_states_.size() || lane_states_[index].strip == nullptr) return false;
+  const auto* strip = lane_states_[index].strip;
+  return strip->last_applied_insert_parameter_value(insert_index, param_id, out_value) ||
+         strip->constructed_insert_parameter_value(insert_index, param_id, out_value);
+}
+
+bool TrackMixerRuntime::track_insert_parameter_value(uint32_t track_id, unsigned int insert_index,
+                                                     unsigned int param_id,
+                                                     float* out_value) const noexcept {
+  const int lane_index = lane_index_for_track(track_id);
+  return lane_index >= 0 && insert_parameter_value_at(false, static_cast<size_t>(lane_index),
+                                                      insert_index, param_id, out_value);
+}
+
+bool TrackMixerRuntime::bus_insert_parameter_value(uint32_t bus_id, unsigned int insert_index,
+                                                   unsigned int param_id,
+                                                   float* out_value) const noexcept {
+  const int bus_index = configured_bus_index(bus_id);
+  return bus_index >= 0 && insert_parameter_value_at(true, static_cast<size_t>(bus_index),
+                                                     insert_index, param_id, out_value);
+}
+
+bool TrackMixerRuntime::track_lane_parameter_value(uint32_t track_id, unsigned int param_id,
+                                                   float* out_value) const noexcept {
+  const int lane_index = lane_index_for_track(track_id);
+  if (out_value == nullptr || lane_index < 0 ||
+      static_cast<size_t>(lane_index) >= lane_states_.size()) {
+    return false;
+  }
+  const LaneState& lane = lane_states_[static_cast<size_t>(lane_index)];
+  switch (param_id) {
+    case kFaderDb:
+      *out_value = linear_to_db(lane.fader_gain.target());
+      return true;
+    case kPan:
+      *out_value = lane.pan.target();
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool TrackMixerRuntime::bus_gain_db_value(uint32_t bus_id, float* out_value) const noexcept {
+  const BusState* state = out_value != nullptr ? bus_state_for(bus_id) : nullptr;
+  if (state == nullptr) return false;
+  *out_value = linear_to_db(state->gain.target());
+  return true;
+}
+
 TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
     bool is_bus, size_t index, uint32_t bus_id, unsigned int insert_index, unsigned int param_id,
     float value) noexcept {
@@ -363,16 +422,7 @@ TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
   // value, including scene restores. A retained custom insert without metadata
   // keeps its settled smoother value; a newly claimed one falls back to target.
   float baseline = settled_match != nullptr ? settled_match->smoother.current() : value;
-  bool captured = false;
-  if (is_bus && index < bus_states_.size() && bus_states_[index].bus != nullptr) {
-    const auto& bus = bus_states_[index].bus->bus();
-    captured = bus.last_applied_insert_parameter_value(insert_index, param_id, &baseline) ||
-               constructed_bus_parameter_value(bus, insert_index, param_id, &baseline, 0);
-  } else if (!is_bus && index < lane_states_.size() && lane_states_[index].strip != nullptr) {
-    const auto* strip = lane_states_[index].strip;
-    captured = strip->last_applied_insert_parameter_value(insert_index, param_id, &baseline) ||
-               strip->constructed_insert_parameter_value(insert_index, param_id, &baseline);
-  }
+  const bool captured = insert_parameter_value_at(is_bus, index, insert_index, param_id, &baseline);
   free_slot->smoother.reset(
       (captured || settled_match != nullptr) && std::isfinite(baseline) ? baseline : value);
   return free_slot;

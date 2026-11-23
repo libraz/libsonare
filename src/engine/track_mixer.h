@@ -420,6 +420,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool lane_insert_constructed_parameter_value(uint32_t track_id, unsigned int insert_index,
                                                unsigned int param_id,
                                                float* out_value) const noexcept;
+  /// AUDIO thread: the value a lane insert parameter holds now -- its last applied request, else
+  /// its construction value. False when @p track_id has no prepared lane or the value is unknown.
+  bool track_insert_parameter_value(uint32_t track_id, unsigned int insert_index,
+                                    unsigned int param_id, float* out_value) const noexcept;
+  /// AUDIO thread: a track lane's kFaderDb (dB) or kPan as last requested.
+  bool track_lane_parameter_value(uint32_t track_id, unsigned int param_id,
+                                  float* out_value) const noexcept;
   // Audio-thread application of a resolved insert-parameter change. Allocation
   // free; must run from the audio callback (engine command drain), never
   // concurrently with process().
@@ -442,6 +449,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool bus_insert_constructed_parameter_value(uint32_t bus_id, unsigned int insert_index,
                                               unsigned int param_id,
                                               float* out_value) const noexcept;
+  /// AUDIO thread: the bus counterpart of track_insert_parameter_value.
+  bool bus_insert_parameter_value(uint32_t bus_id, unsigned int insert_index, unsigned int param_id,
+                                  float* out_value) const noexcept;
+  /// AUDIO thread: a bus fader's gain in dB as last requested.
+  bool bus_gain_db_value(uint32_t bus_id, float* out_value) const noexcept;
   // Audio-thread application of a resolved BUS insert-parameter change.
   // Allocation free; mirrors apply_lane_insert_parameter for the bus chain.
   bool apply_bus_insert_parameter(size_t bus_index, unsigned int insert_index,
@@ -1128,6 +1140,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void deliver_lane_sidechains(size_t lane_index, int num_channels, int num_samples) noexcept;
   void snapshot_sidechain_key(size_t lane_index, int num_channels, int num_samples) noexcept;
   int lane_index_for_track(uint32_t track_id) const noexcept;
+  // Last applied, else constructed, value of an insert parameter on the lane or bus at @p index.
+  bool insert_parameter_value_at(bool is_bus, size_t index, unsigned int insert_index,
+                                 unsigned int param_id, float* out_value) const noexcept;
   // Resolves a track id to its bound lane strip via the control-thread binding
   // table (never lane_states_ or acquire_lanes(), both owned by the audio thread
   // while rendering). Returns nullptr if the track has no bound lane strip.

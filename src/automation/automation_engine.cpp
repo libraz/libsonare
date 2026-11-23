@@ -216,6 +216,13 @@ bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
   return true;
 }
 
+bool AutomationEngine::parameter_value(uint32_t param_id, float* out) const noexcept {
+  if (out == nullptr || routes_to_engine(param_id)) return false;
+  const auto targets = targets_.read();
+  const rt::ProcessorBase* processor = target_for(targets.get(), param_id);
+  return processor != nullptr && processor->last_applied_parameter_value(param_id, out);
+}
+
 void AutomationEngine::collect_boundaries(double block_start_ppq, double block_end_ppq,
                                           AutomationBoundaryList* out) noexcept {
   if (!out) return;

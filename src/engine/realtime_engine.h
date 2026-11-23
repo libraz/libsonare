@@ -1023,6 +1023,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// thread's manual-base fallback reads it too. Returns false for a null
   /// output, an unknown target, or a target whose processor no longer exists.
   bool insert_parameter_constructed_value(uint32_t target_id, float* out_value) const noexcept;
+  /// The value @p target_id's owner holds now -- a fader, pan or width, an insert parameter,
+  /// an instrument parameter or a bound processor parameter -- which is where a smoothed set
+  /// with no recorded base starts its ramp. Reads audio-side state without allocating: call it
+  /// on the audio thread or while process() is not running. False for an unknown target.
+  bool current_parameter_value(uint32_t target_id, float* out_value) const noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const mastering::eq::EqBand& band) noexcept;
   bool set_master_eq_band(size_t band_index, const mastering::eq::EqBand& band) noexcept;
@@ -1195,6 +1200,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   static void release_parameter_base_thunk(void* context, uint32_t param_id) noexcept;
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
   bool route_engine_parameter(uint32_t target_id, float value) noexcept;
+  // The read side of route_engine_parameter: the value the routed owner holds now.
+  bool reserved_parameter_value(uint32_t target_id, float* out_value) const noexcept;
   // AutomationEngine::EngineParamRouter trampoline: forwards reserved-namespace
   // automation lane values to route_engine_parameter on @p context.
   static bool route_engine_parameter_thunk(void* context, uint32_t param_id, float value) noexcept;
@@ -1211,6 +1218,8 @@ class RealtimeEngine : private ClipPageRequestSink {
                                        float value) noexcept;
   // Decodes a reserved instrument-param id and forwards it to the slot table.
   bool route_instrument_parameter(uint32_t target_id, float value) noexcept;
+  // Decodes a reserved instrument-param id and reads the instrument's current value.
+  bool instrument_parameter_value(uint32_t target_id, float* out_value) const noexcept;
   // Decodes a reserved instrument-param id and forwards it to the destination
   // instrument's own describe_parameter. Control thread; the read side of
   // route_instrument_parameter.
@@ -1324,9 +1333,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // automation lane. The master insert chain lives outside TrackMixerRuntime, so
   // its automated params get a parallel slot table here, advanced once per
   // sub-block by tick_smoothed_params (same cadence as the lane/bus slots).
-  // @p base_id is the reserved id whose manual base seeds a fresh slot; 0 for none.
+  // A fresh slot ramps from the value the insert last applied.
   bool route_master_insert_param_smoothed(unsigned int insert_index, unsigned int param_id,
-                                          float value, uint32_t base_id = 0) noexcept;
+                                          float value) noexcept;
   // Whether a master strip holds an insert at @p insert_index taking @p param_id live.
   bool master_insert_target_resolves(unsigned int insert_index,
                                      unsigned int param_id) const noexcept;

@@ -556,8 +556,8 @@ bool RealtimeEngine::apply_master_insert_param_by_name_now(unsigned int insert_i
   if (id < 0) return false;
   const int64_t automation_id = resolve_master_insert_automation_id(insert_index, key);
   const uint32_t base_id = automation_id >= 0 ? static_cast<uint32_t>(automation_id) : 0u;
-  const bool applied = route_master_insert_param_smoothed(
-      insert_index, static_cast<unsigned int>(id), value, base_id);
+  const bool applied =
+      route_master_insert_param_smoothed(insert_index, static_cast<unsigned int>(id), value);
   if (applied && base_id != 0) record_parameter_base(base_id, value);
   return applied;
 }
@@ -814,8 +814,8 @@ bool RealtimeEngine::master_insert_target_resolves(unsigned int insert_index,
 }
 
 bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_index,
-                                                        unsigned int param_id, float value,
-                                                        uint32_t base_id) noexcept {
+                                                        unsigned int param_id,
+                                                        float value) noexcept {
   // A missing strip or insert, or a value the processor refuses, is refused before
   // a slot is claimed or a base recorded.
   if (!std::isfinite(value) || !master_insert_target_resolves(insert_index, param_id) ||
@@ -841,7 +841,7 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
     ++master_insert_automation_overflow_count_;
     return false;
   }
-  // Fresh slot: manual base, last applied, construction, target. Settled: last applied, live value.
+  // Fresh slot: last applied, construction, target. Settled: last applied, live value.
   float baseline = value;
   if (settled_match != nullptr) {
     // Retained manual bases must not pull a live settled target back to an older edit.
@@ -853,16 +853,13 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
       baseline = last_applied;
     }
   } else {
-    // The command handler records this call's manual base only afterwards.
-    if (base_id == 0 || !parameter_base_lookup(base_id, &baseline) || !std::isfinite(baseline)) {
-      const bool have_last_applied = owned_master_strip_->last_applied_insert_parameter_value(
-          insert_index, param_id, &baseline);
-      if (!have_last_applied || !std::isfinite(baseline)) {
-        if (!owned_master_strip_->constructed_insert_parameter_value(insert_index, param_id,
-                                                                     &baseline) ||
-            !std::isfinite(baseline)) {
-          baseline = value;
-        }
+    const bool have_last_applied =
+        owned_master_strip_->last_applied_insert_parameter_value(insert_index, param_id, &baseline);
+    if (!have_last_applied || !std::isfinite(baseline)) {
+      if (!owned_master_strip_->constructed_insert_parameter_value(insert_index, param_id,
+                                                                   &baseline) ||
+          !std::isfinite(baseline)) {
+        baseline = value;
       }
     }
   }

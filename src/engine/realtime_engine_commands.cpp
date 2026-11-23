@@ -742,12 +742,22 @@ bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   free_slot->assigned = true;
   free_slot->target_id = target_id;
   // A free slot may have carried an unrelated target previously, so the ramp starts from this
-  // target's recorded base; a target with none takes its first value as the baseline.
+  // target's recorded base, or from the value its owner holds when none was recorded.
   float start = value;
-  (void)parameter_base_lookup(target_id, &start);
+  if (!parameter_base_lookup(target_id, &start) && !current_parameter_value(target_id, &start)) {
+    start = value;
+  }
+  if (!std::isfinite(start)) start = value;
   free_slot->smoother.reset(start);
   free_slot->smoother.set_target(value);
   return true;
+}
+
+bool RealtimeEngine::current_parameter_value(uint32_t target_id, float* out_value) const noexcept {
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
+  if (parameter_target_reserved(target_id)) return reserved_parameter_value(target_id, out_value);
+#endif
+  return automation_.parameter_value(target_id, out_value);
 }
 
 void RealtimeEngine::reseed_smoothed_param(uint32_t target_id, float value) noexcept {
