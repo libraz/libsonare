@@ -121,12 +121,19 @@ class TempoMap {
   int64_t ppq_to_sample(double ppq) const noexcept;
   /// Seconds from ppq 0 to @p ppq, unrounded (ppq_to_sample rounds to a sample).
   double ppq_to_seconds(double ppq) const noexcept;
+  /// PPQ at @p seconds from ppq 0, unrounded.
+  double seconds_to_ppq(double seconds) const noexcept;
+  /// Effective instantaneous tempo at @p ppq.
+  /// Returns the default BPM when unprepared or @p ppq is non-finite.
+  double bpm_at_ppq(double ppq) const noexcept;
   double bpm_at_sample(int64_t sample) const noexcept;
   TimeSignature time_signature_at_ppq(double ppq) const noexcept;
   /// Start of the time-signature segment active at @p ppq, where its bar grid begins.
   double time_signature_start_ppq(double ppq) const noexcept;
   BarBeat ppq_to_bar_beat(double ppq) const noexcept;
   double bar_start_ppq(double ppq) const noexcept;
+  /// PPQ start of the requested zero-based bar.
+  double bar_index_start_ppq(int64_t bar_index) const noexcept;
 
   double sample_rate() const noexcept { return sample_rate_; }
 

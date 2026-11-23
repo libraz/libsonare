@@ -88,6 +88,18 @@ double segment_ppq_at_samples(const TempoSegment& segment, double sample_rate, d
          bpm0 * std::expm1(s * slope / (sample_rate * constants::kSecondsPerMinute)) / slope;
 }
 
+// Inverse of the PPQ-to-seconds integral from a segment's start.
+double segment_ppq_at_seconds(const TempoSegment& segment, double seconds) noexcept {
+  const double bpm0 = effective_start_bpm(segment);
+  const double end_bpm = effective_end_bpm(segment);
+  if (end_bpm == bpm0) {
+    return segment.start_ppq + seconds * bpm0 / constants::kSecondsPerMinute;
+  }
+  const double slope = (end_bpm - bpm0) / (segment.end_ppq - segment.start_ppq);
+  return segment.start_ppq +
+         bpm0 * std::expm1(seconds * slope / constants::kSecondsPerMinute) / slope;
+}
+
 // Saturating double -> int64 conversion. double(INT64_MAX) is 2^63, so a bare
 // static_cast of a value at or above the int64 range is undefined behavior;
 // compare against the exact bounds before converting. Used for bar counts, which
@@ -100,6 +112,42 @@ int64_t saturating_to_int64(double value) noexcept {
   if (value >= kMax) return std::numeric_limits<int64_t>::max();
   if (value <= kMin) return std::numeric_limits<int64_t>::lowest();
   return static_cast<int64_t>(value);
+}
+
+struct BarGridPosition {
+  double index = 0.0;
+  double start_ppq = 0.0;
+  double offset_ppq = 0.0;
+};
+
+// Correct the floor estimate against the same expression used to build grid lines.
+BarGridPosition locate_bar_grid(double origin, double length, double ppq) noexcept {
+  double index = std::floor(std::max(0.0, ppq - origin) / length);
+  double start = origin + index * length;
+  if (start > ppq && index > 0.0 && index - 1.0 < index) {
+    index -= 1.0;
+    start = origin + index * length;
+  } else {
+    const double next_index = index + 1.0;
+    const double next_start = origin + next_index * length;
+    if (next_start <= ppq && next_start > start) {
+      index = next_index;
+      start = next_start;
+    }
+  }
+  return {index, start, std::max(0.0, ppq - start)};
+}
+
+constexpr double kBarEpsilon = 1.0e-9;
+
+// Counts bars started before a signature change, including its partial bar.
+int64_t bars_started_in_segment(const std::vector<TimeSignatureSegment>& time_signatures,
+                                size_t index) noexcept {
+  const double start = time_signatures[index].start_ppq;
+  const double next_start = time_signatures[index + 1].start_ppq;
+  const double length = bar_length_ppq(time_signatures[index].time_sig);
+  const double bars = std::max(0.0, next_start - start) / length;
+  return saturating_to_int64(std::ceil(bars - kBarEpsilon));
 }
 
 template <typename Segment>
@@ -247,6 +295,28 @@ double TempoMap::ppq_to_seconds(double ppq) const noexcept {
   return (segment.start_sample + segment_samples_at_ppq(segment, sample_rate_, ppq)) / sample_rate_;
 }
 
+double TempoMap::seconds_to_ppq(double seconds) const noexcept {
+  const auto segments = segments_.read();
+  if (!segments || segments->empty() || !std::isfinite(seconds)) return 0.0;
+  const size_t index = last_index_at_or_before(
+      *segments, seconds,
+      [this](const TempoSegment& segment) { return segment.start_sample / sample_rate_; });
+  const TempoSegment& segment = (*segments)[index];
+  const double seconds_from_start = seconds - segment.start_sample / sample_rate_;
+  return segment_ppq_at_seconds(segment, seconds_from_start);
+}
+
+double TempoMap::bpm_at_ppq(double ppq) const noexcept {
+  const auto segments = segments_.read();
+  if (!segments || segments->empty() || !std::isfinite(ppq)) return constants::kDefaultBpm;
+  const TempoSegment& segment = (*segments)[segment_index_for_ppq(*segments, ppq)];
+  const double start_bpm = effective_start_bpm(segment);
+  const double end_bpm = effective_end_bpm(segment);
+  if (end_bpm == start_bpm) return start_bpm;
+  const double slope = (end_bpm - start_bpm) / (segment.end_ppq - segment.start_ppq);
+  return std::max(start_bpm + slope * (ppq - segment.start_ppq), kMinEffectiveTempoBpm);
+}
+
 double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
   const auto segments = segments_.read();
   if (!segments || segments->empty()) return constants::kDefaultBpm;
@@ -284,33 +354,24 @@ BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
   const auto& sigs = *time_signatures;
   const size_t sig_index = time_signature_index_for_ppq(sigs, ppq);
   const TimeSignature sig = sigs[sig_index].time_sig;
-  const double start = bar_start_ppq_in(sigs, ppq);
+  const double bar_len = bar_length_ppq(sig);
+  const BarGridPosition bar_grid = locate_bar_grid(sigs[sig_index].start_ppq, bar_len, ppq);
   const double beat_len = note_length_ppq(sig.denominator);
-  const double offset = std::max(0.0, ppq - start);
-  const int beat_index = static_cast<int>(std::floor(offset / beat_len));
+  const BarGridPosition beat_grid = locate_bar_grid(bar_grid.start_ppq, beat_len, ppq);
+  const int max_beat_index = std::max(sig.numerator - 1, 0);
+  const int beat_index =
+      static_cast<int>(std::clamp(beat_grid.index, 0.0, static_cast<double>(max_beat_index)));
+  const double beat_offset = beat_grid.index > max_beat_index
+                                 ? ppq - (bar_grid.start_ppq + beat_index * beat_len)
+                                 : beat_grid.offset_ppq;
+  const double beat_fraction = std::min(beat_offset / beat_len, std::nextafter(1.0, 0.0));
 
   int64_t bar_count = 0;
-  // Tolerance for treating a segment span as a whole number of bars, so a
-  // signature that does fall on the bar grid is not bumped by floating-point
-  // fuzz.
-  constexpr double kBarEpsilon = 1.0e-9;
   for (size_t i = 0; i < sig_index; ++i) {
-    const double next_start = sigs[i + 1].start_ppq;
-    const double len = bar_length_ppq(sigs[i].time_sig);
-    // A signature change that lands off the bar grid leaves a partial bar at the
-    // end of this segment. That partial bar has still STARTED, so count it as a
-    // full bar (ceil): otherwise the next segment's bar 0 would collide with the
-    // partial bar's number, producing duplicate/wrong bar numbers across the
-    // boundary. ceil reduces to floor when the span is an exact bar multiple.
-    const double bars = std::max(0.0, next_start - sigs[i].start_ppq) / len;
-    bar_count =
-        numeric::saturating_add(bar_count, saturating_to_int64(std::ceil(bars - kBarEpsilon)));
+    bar_count = numeric::saturating_add(bar_count, bars_started_in_segment(sigs, i));
   }
-  const double current_len = bar_length_ppq(sig);
-  bar_count = numeric::saturating_add(
-      bar_count, saturating_to_int64(
-                     std::floor(std::max(0.0, ppq - sigs[sig_index].start_ppq) / current_len)));
-  return {bar_count, beat_index + 1, (offset / beat_len) - static_cast<double>(beat_index)};
+  bar_count = numeric::saturating_add(bar_count, saturating_to_int64(bar_grid.index));
+  return {bar_count, beat_index + 1, beat_fraction};
 }
 
 double TempoMap::bar_start_ppq(double ppq) const noexcept {
@@ -319,13 +380,31 @@ double TempoMap::bar_start_ppq(double ppq) const noexcept {
   return bar_start_ppq_in(*time_signatures, ppq);
 }
 
+double TempoMap::bar_index_start_ppq(int64_t bar_index) const noexcept {
+  if (bar_index < 0) return 0.0;
+  const auto time_signatures = time_signatures_.read();
+  if (!time_signatures || time_signatures->empty()) return 0.0;
+  const auto& sigs = *time_signatures;
+  int64_t local_index = bar_index;
+
+  size_t i = 0;
+  for (; i + 1 < sigs.size(); ++i) {
+    const int64_t count = bars_started_in_segment(sigs, i);
+    if (local_index < count || count == std::numeric_limits<int64_t>::max()) break;
+    local_index -= count;
+  }
+  const double length = bar_length_ppq(sigs[i].time_sig);
+  const double ppq = sigs[i].start_ppq + static_cast<double>(local_index) * length;
+  return locate_bar_grid(sigs[i].start_ppq, length, ppq).start_ppq;
+}
+
 double TempoMap::bar_start_ppq_in(const std::vector<TimeSignatureSegment>& time_signatures,
                                   double ppq) noexcept {
   const size_t sig_index = time_signature_index_for_ppq(time_signatures, ppq);
   const TimeSignature sig = time_signatures[sig_index].time_sig;
   const double len = bar_length_ppq(sig);
   const double sig_start = time_signatures[sig_index].start_ppq;
-  return sig_start + std::floor(std::max(0.0, ppq - sig_start) / len) * len;
+  return locate_bar_grid(sig_start, len, ppq).start_ppq;
 }
 
 size_t TempoMap::segment_index_for_sample(const std::vector<TempoSegment>& segments,

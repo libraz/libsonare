@@ -91,6 +91,8 @@ struct TempoEstimate {
   float confidence = 0.0f;
   /// Human-readable label, e.g. "primary", "half", "double".
   const char* label = "primary";
+  /// Detected meter and its confidence, shared by all tempo candidates.
+  TimeSignature meter{4, 4, 0.0f};
 };
 
 /// @brief Runs the bridge and returns ranked tempo/time-signature candidates.

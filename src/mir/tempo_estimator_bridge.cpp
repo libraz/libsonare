@@ -339,6 +339,7 @@ std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,
     est.time_sigs = build_time_sigs(input, config, scale);
     est.confidence = confidence;
     est.label = label;
+    est.meter = input.time_signature;
     apply_lead_in(input, est);
     phase_first_time_signature(est);
     return est;
