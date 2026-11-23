@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <string>
 #include <vector>
 
 #include "util/exception.h"
@@ -251,4 +252,23 @@ TEST_CASE("tempo sync stereo warp rejects analysis geometry past the buffer boun
   REQUIRE_THROWS_AS(sonare::engine::bake_tempo_sync_warp_channels({left.data(), right.data()},
                                                                   kSourceSamples, segments, config),
                     sonare::SonareException);
+}
+
+TEST_CASE("tempo sync warp bake refuses segments whose targets sum past the offline sample limit",
+          "[engine][tempo_sync]") {
+  const std::vector<float> source(4096, 0.5f);
+  const std::vector<sonare::engine::TempoSyncWarpSegment> segments{
+      {0, 2048, 300'000'000},
+      {2048, 2048, 200'000'001},
+  };
+  sonare::engine::TempoSyncWarpBakeConfig config;
+  config.sample_rate = 48000;
+  const std::string refused = "warp_anchors must keep the warped clip within 500000000 elements";
+  CHECK_THROWS_WITH(
+      sonare::engine::bake_tempo_sync_warp_channel(source.data(), source.size(), segments, config),
+      refused);
+  const std::vector<const float*> stereo{source.data(), source.data()};
+  CHECK_THROWS_WITH(
+      sonare::engine::bake_tempo_sync_warp_channels(stereo, source.size(), segments, config),
+      refused);
 }

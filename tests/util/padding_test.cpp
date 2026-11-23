@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <string>
 #include <vector>
 
 #include "util/exception.h"
@@ -185,4 +186,13 @@ TEST_CASE("util.fix_frames matches librosa", "[librosa][util][padding]") {
   for (size_t i = 0; i < out.size(); ++i) {
     REQUIRE(out[i] == expected_arr[i].as_int());
   }
+}
+
+TEST_CASE("pad_center and fix_length refuse a target size past the offline sample limit",
+          "[padding]") {
+  const std::vector<float> x{1.0f, 2.0f};
+  const std::string refused = "target_size must keep the padded output within 500000000 elements";
+  CHECK_THROWS_WITH(pad_center(x, 500'000'001u), refused);
+  CHECK_THROWS_WITH(fix_length(x, 500'000'001u), refused);
+  CHECK_THROWS_WITH(fix_length(nullptr, 0, 500'000'001u), refused);
 }

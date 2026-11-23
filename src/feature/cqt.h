@@ -252,6 +252,10 @@ auto with_derived_cqt_grid(std::string bins_per_octave, std::string rate,
 ///        the largest n_bins that fits.
 void validate_cqt_kernel_bins(int n_bins, int fft_length, std::size_t max_elements);
 
+/// @brief Refuses an inverse request on @p grid whose @p n_frames at its hop would reconstruct
+///        more samples than an offline buffer holds, before any kernel is built.
+void validate_cqt_inverse(const CqtConfig& grid, int n_frames);
+
 }  // namespace detail
 
 /// @brief Computes Constant-Q Transform.

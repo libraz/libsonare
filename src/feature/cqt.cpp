@@ -243,6 +243,9 @@ void validate_cqt_config(const CqtConfig& config) {
   util::check::integer_within<int>(config.hop_length, kCqtHopLengthDomain, "hop_length");
   validate_cqt_fmin(config.fmin);
   util::check::integer_within<int>(config.n_bins, kCqtCountDomain, "n_bins");
+  // Every kernel row spans at least a two-point FFT; bounded before the frequencies are allocated.
+  util::check::element_count(static_cast<std::uint64_t>(config.n_bins), 2u, kMaxCqtKernelElements,
+                             "n_bins", "the filter kernel");
   util::check::integer_within<int>(config.bins_per_octave, kCqtCountDomain, "bins_per_octave");
   util::check::greater_than(config.filter_scale, 0.0, "filter_scale");
 }
@@ -276,6 +279,13 @@ void refuse_cqt_filter_length(int max_length, std::vector<std::string> subjects,
 void validate_cqt_kernel_bins(int n_bins, int fft_length, std::size_t max_elements) {
   const auto most = static_cast<long long>(max_elements / static_cast<std::size_t>(fft_length));
   util::check::integer_in_range(n_bins, 1, most, "n_bins");
+}
+
+void validate_cqt_inverse(const CqtConfig& grid, int n_frames) {
+  validate_cqt_config(grid);
+  util::check::element_count(
+      static_cast<std::uint64_t>(n_frames - 1), static_cast<std::uint64_t>(grid.hop_length),
+      resource::kMaxOfflineAudioSamples, "hop_length", "the reconstructed signal");
 }
 
 }  // namespace detail
@@ -848,6 +858,7 @@ Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const Cqt
   // as the first of two and only its row is used.
   CqtConfig grid = config;
   grid.n_bins = std::max(n_bins, 2);
+  detail::validate_cqt_inverse(grid, n_frames);
   auto cached = get_cached_kernel(sr, grid);
   const CqtKernel& kernel = *cached.kernel;
   const int n_fft = kernel.fft_length();

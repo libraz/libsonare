@@ -6,10 +6,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -132,7 +135,15 @@ std::vector<float> remix(const float* y, std::size_t n,
   const std::vector<std::pair<int, int>> resolved =
       align_remix_intervals(y, n, intervals, align_zeros);
 
+  std::size_t total = 0;
+  for (const auto& iv : resolved) {
+    if (iv.second <= iv.first) continue;
+    total = util::check::element_total(total, static_cast<std::uint64_t>(iv.second - iv.first),
+                                       resource::kMaxOfflineAudioSamples, "intervals",
+                                       "the remixed signal");
+  }
   std::vector<float> out;
+  out.reserve(total);
   for (const auto& iv : resolved) {
     if (iv.second <= iv.first) continue;
     out.insert(out.end(), y + iv.first, y + iv.second);

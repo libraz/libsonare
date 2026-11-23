@@ -171,14 +171,14 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
   // whose element count would overflow int (UB) before iterating.
   const std::size_t n_cells = util::check::element_count(
       static_cast<std::uint64_t>(X_cols), static_cast<std::uint64_t>(Y_cols),
-      std::numeric_limits<int>::max(), "X_cols", "the similarity matrix");
-  util::check::integer_at_least(X_rows, 0, "X_rows");
+      std::numeric_limits<int>::max(), "x_cols", "the similarity matrix");
+  util::check::integer_at_least(X_rows, 0, "x_rows");
   const std::size_t x_count = util::check::element_count(
       static_cast<std::uint64_t>(X_rows), static_cast<std::uint64_t>(X_cols),
-      std::numeric_limits<int>::max(), "X_cols", "the feature matrix");
+      std::numeric_limits<int>::max(), "x_cols", "the feature matrix");
   const std::size_t y_count = util::check::element_count(
       static_cast<std::uint64_t>(Y_rows), static_cast<std::uint64_t>(Y_cols),
-      std::numeric_limits<int>::max(), "Y_cols", "the feature matrix");
+      std::numeric_limits<int>::max(), "y_cols", "the feature matrix");
   require_finite_features(X, x_count);
   if (Y != X || y_count > x_count) require_finite_features(Y, y_count);
 

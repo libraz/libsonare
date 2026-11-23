@@ -1044,6 +1044,15 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                      clip.id, "tempo-sync warp map has an unsupported source/target span");
             continue;
           }
+          // The baked clip runs to the last anchor's warp_sample, lead-in included.
+          if (rounded_nonnegative_sample(rt_warp_map->anchors.back().warp_sample) >
+              resource::kMaxOfflineAudioSamples) {
+            add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                     clip.id,
+                     "tempo-sync warp map must keep the warped clip within " +
+                         std::to_string(resource::kMaxOfflineAudioSamples) + " samples");
+            continue;
+          }
           const int project_sample_rate = static_cast<int>(project_sr);
           bake_config.sample_rate = project_sample_rate;
           // Segments carry durations only; lead in to anchors[0].warp_sample as

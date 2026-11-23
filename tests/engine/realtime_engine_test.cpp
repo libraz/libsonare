@@ -4,6 +4,7 @@
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -569,6 +570,12 @@ TEST_CASE("RealtimeEngine freeze bakes lane latency out of the frozen clip",
   for (size_t i = 0; i < live.size(); ++i) {
     REQUIRE(replay[i] == Catch::Approx(live[i]).margin(1.0e-6f));
   }
+
+  // The latency tail is rendered before it is trimmed, so it counts against the offline limit.
+  const std::string refused = "total_frames must keep the offline render within 500000000 elements";
+  CHECK_THROWS_WITH(engine.freeze_offline(1, 500'000'000 - kLatency + 1, 128, 5, 0.0, 1.0f),
+                    refused);
+  CHECK_THROWS_WITH(engine.freeze_offline(2, 250'000'001, 128, 5, 0.0, 1.0f), refused);
 }
 #endif
 

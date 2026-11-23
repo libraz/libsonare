@@ -4,6 +4,7 @@
 #include <climits>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 
 #include "core/fft.h"
 #include "core/window.h"
@@ -12,7 +13,9 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 #include "util/phase.h"
+#include "util/resource_limits.h"
 #include "util/time_map.h"
 
 namespace sonare::engine {
@@ -244,7 +247,9 @@ size_t validated_target_total(const std::vector<TempoSyncWarpSegment>& segments,
     SONARE_CHECK(segment.source_offset <= source_samples &&
                      segment.source_samples <= source_samples - segment.source_offset,
                  ErrorCode::InvalidParameter);
-    total_target_samples += segment.target_samples;
+    total_target_samples = util::check::element_total(total_target_samples, segment.target_samples,
+                                                      resource::kMaxOfflineAudioSamples,
+                                                      "warp_anchors", "the warped clip");
   }
   return total_target_samples;
 }

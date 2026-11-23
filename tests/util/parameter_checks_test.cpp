@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -454,4 +455,20 @@ TEST_CASE("element_count refuses the scaling argument once the product passes it
         }) == "n_components must keep the activation matrix within 4294967295 elements");
   CHECK(check::element_count<std::uint32_t>(65536u, 65535u, UINT64_MAX, "n_components",
                                             "the activation matrix") == 65536u * 65535u);
+}
+
+TEST_CASE("element_total refuses a running sum once it passes its limit",
+          "[util][parameter_checks]") {
+  CHECK(check::element_total(400u, 600u, 1000u, "intervals", "the remixed signal") == 1000u);
+  CHECK(refusal_text([] {
+          (void)check::element_total(400u, 601u, 1000u, "intervals", "the remixed signal");
+        }) == "intervals must keep the remixed signal within 1000 elements");
+  // A total already past the limit, and a part that would wrap 64 bits, are refused too.
+  CHECK(refusal_text([] {
+          (void)check::element_total(1001u, 0u, 1000u, "intervals", "the remixed signal");
+        }) == "intervals must keep the remixed signal within 1000 elements");
+  CHECK(refusal_text([] {
+          (void)check::element_total(1u, UINT64_MAX, UINT64_MAX, "intervals", "the remixed signal");
+        }) == "intervals must keep the remixed signal within " +
+                  std::to_string(std::numeric_limits<std::size_t>::max()) + " elements");
 }

@@ -314,6 +314,19 @@ Size element_count(std::uint64_t lhs, std::uint64_t rhs, std::uint64_t limit, co
   return count;
 }
 
+/// @brief The running total @p total + @p count, refused in element_count's wording when it
+///        passes @p limit, for a buffer the caller sizes as a sum of parts.
+template <typename Size = std::size_t>
+Size element_total(std::uint64_t total, std::uint64_t count, std::uint64_t limit,
+                   const char* subject, const char* what) {
+  const std::uint64_t bound = std::min<std::uint64_t>(limit, std::numeric_limits<Size>::max());
+  if (total > bound || count > bound - total) {
+    throw SonareParameterRefusal::predicate(ErrorCode::InvalidParameter, subject,
+                                            refusal::element_limit_predicate(what, bound));
+  }
+  return static_cast<Size>(total + count);
+}
+
 /// @brief power_of_two_in_range over a closed integer @p domain, so the range is a named constant.
 inline void power_of_two_within(long long value, const NumericDomain& domain, const char* subject) {
   power_of_two_in_range(value, static_cast<long long>(*domain.lo),

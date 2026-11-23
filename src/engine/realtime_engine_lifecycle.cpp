@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -14,6 +15,7 @@
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
 #include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare::engine {
 
@@ -597,10 +599,16 @@ std::vector<std::vector<float>> RealtimeEngine::render_offline_aligned(int num_c
     throw SonareException(ErrorCode::InvalidParameter, "empty render shape");
   }
   const int64_t latency = static_cast<int64_t>(render_latency_q8(source_layer_render_) >> 8);
-  const int64_t render_frames = total_frames + latency;
-  std::vector<std::vector<float>> channels(
-      static_cast<size_t>(num_channels),
-      std::vector<float>(static_cast<size_t>(render_frames), 0.0f));
+  // The latency tail is rendered and trimmed, so it counts against the offline budget too.
+  const std::size_t render_length = util::check::element_total(
+      static_cast<std::uint64_t>(total_frames), static_cast<std::uint64_t>(latency),
+      resource::kMaxOfflineAudioSamples, "total_frames", "the offline render");
+  util::check::element_count(render_length, static_cast<std::uint64_t>(num_channels),
+                             resource::kMaxOfflineAudioSamples, "total_frames",
+                             "the offline render");
+  const int64_t render_frames = static_cast<int64_t>(render_length);
+  std::vector<std::vector<float>> channels(static_cast<size_t>(num_channels),
+                                           std::vector<float>(render_length, 0.0f));
   std::vector<float*> ptrs;
   ptrs.reserve(channels.size());
   for (auto& channel : channels) ptrs.push_back(channel.data());

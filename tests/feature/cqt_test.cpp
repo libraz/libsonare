@@ -1475,6 +1475,48 @@ TEST_CASE("cqt, pseudo_cqt, hybrid_cqt and vqt refuse a member by its name", "[c
   CHECK_THROWS_WITH(vqt(audio, vqt_config), "n_bins must be an integer in [1, 2147483647]");
 }
 
+TEST_CASE("the constant-Q transforms bound n_bins before allocating its frequencies", "[cqt]") {
+  const Audio audio = generate_sine(440.0f, 0.5f, 22050);
+  CqtConfig config;
+  config.n_bins = 2147483647;
+  const std::string refused = "n_bins must keep the filter kernel within 33554432 elements";
+  CHECK_THROWS_WITH(cqt(audio, config), refused);
+  CHECK_THROWS_WITH(pseudo_cqt(audio, config), refused);
+  CHECK_THROWS_WITH(hybrid_cqt(audio, config), refused);
+  VqtConfig vqt_config;
+  vqt_config.n_bins = 2147483647;
+  CHECK_THROWS_WITH(vqt(audio, vqt_config), refused);
+}
+
+TEST_CASE("the inverse constant-Q transforms bound their output and STFT grid before projecting",
+          "[cqt]") {
+  // 65536 frames at a 32768-sample hop reconstruct 2^31 samples.
+  const std::vector<float> long_hop(static_cast<size_t>(2) * 65536, 0.5f);
+  CqtConfig hop_config;
+  hop_config.hop_length = 32768;
+  const std::string output =
+      "hop_length must keep the reconstructed signal within 500000000 elements";
+  CHECK_THROWS_WITH(griffinlim_cqt(long_hop.data(), 2, 65536, hop_config, 22050, 1), output);
+  VqtConfig vqt_hop;
+  vqt_hop.hop_length = 32768;
+  vqt_hop.gamma = 10.0f;
+  CHECK_THROWS_WITH(griffinlim_vqt(long_hop.data(), 2, 65536, vqt_hop, 22050, 1), output);
+
+  // A 32.7 Hz bin needs a 16384-point kernel FFT, so 70000 one-sample hops lay 8193 x 70000
+  // STFT cells while reconstructing only 70000 samples.
+  const std::vector<float> many_frames(static_cast<size_t>(2) * 70000, 0.5f);
+  CqtConfig grid_config;
+  grid_config.hop_length = 1;
+  const std::string grid = "n_frames must keep the STFT magnitude within 500000000 elements";
+  CHECK_THROWS_WITH(griffinlim_cqt(many_frames.data(), 2, 70000, grid_config, 22050, 1), grid);
+  // gamma widens each band and shortens its filter; at 0.5 Hz the 32.7 Hz bin still needs 9015
+  // samples, so the same 16384-point grid.
+  VqtConfig vqt_grid;
+  vqt_grid.hop_length = 1;
+  vqt_grid.gamma = 0.5f;
+  CHECK_THROWS_WITH(griffinlim_vqt(many_frames.data(), 2, 70000, vqt_grid, 22050, 1), grid);
+}
+
 TEST_CASE("a lone CQT bin takes the bandwidth of its grid spacing on all four transforms",
           "[cqt]") {
   const Audio audio = generate_sine(440.0f, 0.5f, 22050);

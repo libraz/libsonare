@@ -415,6 +415,35 @@ TEST_CASE("invalid project: dangling source ref returns an error and no timeline
   REQUIRE(found);
 }
 
+TEST_CASE("a tempo-sync warp map past the offline sample limit is a diagnostic, not a bake",
+          "[arrangement]") {
+  const auto compile_with_last_anchor = [](double last_warp_sample) {
+    Fixture f = make_fixture();
+    arr::WarpMapRef map;
+    map.id = 7;
+    map.anchors = {{0.0, 0.0}, {last_warp_sample, 24000.0}};
+    REQUIRE(f.project.set_warp_map(map));
+    arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+    REQUIRE(clip != nullptr);
+    clip->warp_mode = arr::WarpMode::kTempoSync;
+    clip->warp_ref_id = map.id;
+    return arr::compile(f.project, f.midi, f.audio);
+  };
+  const std::string refused =
+      "tempo-sync warp map must keep the warped clip within 500000000 samples";
+  const auto has_refusal = [&](const arr::CompileResult& r) {
+    return std::any_of(r.diagnostics.begin(), r.diagnostics.end(), [&](const arr::Diagnostic& d) {
+      return d.code == arr::Diagnostic::Code::kDanglingSourceRef && d.message == refused;
+    });
+  };
+  const arr::CompileResult fits = compile_with_last_anchor(48000.0);
+  CHECK_FALSE(has_refusal(fits));
+  CHECK(fits.timeline.has_value());
+  const arr::CompileResult past = compile_with_last_anchor(500'000'001.0);
+  CHECK(has_refusal(past));
+  CHECK_FALSE(past.timeline.has_value());
+}
+
 TEST_CASE("invalid project: clip source kind must match track kind", "[arrangement]") {
   arr::Project project;
   project.set_sample_rate(kProjectSr);

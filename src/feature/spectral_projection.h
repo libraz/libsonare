@@ -13,9 +13,12 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <vector>
 
 #include "feature/cqt.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare::detail {
 
@@ -56,7 +59,11 @@ inline std::vector<float> project_cqt_magnitude_to_stft(const std::vector<float>
                                                         int n_bins, int n_frames) {
   const int n_freq = n_fft / 2 + 1;
   const float hann_energy = std::sqrt(3.0f / 8.0f) * static_cast<float>(n_fft);
-  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
+  std::vector<float> stft_mag(util::check::element_count(static_cast<std::uint64_t>(n_freq),
+                                                         static_cast<std::uint64_t>(n_frames),
+                                                         resource::kMaxOfflineAudioSamples,
+                                                         "n_frames", "the STFT magnitude"),
+                              0.0f);
   // The CQT bin outermost gives a contiguous run of the projection and one
   // magnitude row reused across every STFT bin.
   std::vector<float> overlap(static_cast<size_t>(n_freq), 0.0f);

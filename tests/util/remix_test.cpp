@@ -4,6 +4,7 @@
 #include "effects/remix.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -140,4 +141,14 @@ TEST_CASE("align_remix_intervals passes intervals through when snapping is off",
   REQUIRE(cuts.size() == 2);
   REQUIRE(cuts[0] == std::pair<int, int>{10, 200});
   REQUIRE(cuts[1] == std::pair<int, int>{0, 1000});
+}
+
+TEST_CASE("remix refuses intervals whose slices sum past the offline sample limit", "[remix]") {
+  const std::vector<float> y(1'000'000, 0.25f);
+  // 501 whole-signal slices add up to 501 million samples.
+  const std::vector<std::pair<int, int>> repeated(501, {0, 1'000'000});
+  CHECK_THROWS_WITH(remix(y, repeated, false),
+                    "intervals must keep the remixed signal within 500000000 elements");
+  const std::vector<std::pair<int, int>> fits(3, {0, 1'000'000});
+  CHECK(remix(y, fits, false).size() == 3'000'000u);
 }

@@ -315,6 +315,7 @@ Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const Vqt
   // A bandwidth needs a neighbour to be measured against, so a lone bin is voiced
   // as the first of two and only its row is used.
   resolved.n_bins = std::max(n_bins, 2);
+  detail::validate_cqt_inverse(resolved.to_cqt_config(), n_frames);
   auto cached = get_cached_vqt_kernel(sr, resolved);
   const VqtKernel& kernel = *cached.kernel;
   const int n_fft = kernel.fft_length();

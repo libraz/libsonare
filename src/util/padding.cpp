@@ -4,11 +4,24 @@
 #include "util/padding.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 
 #include "util/exception.h"
+#include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
+
+namespace {
+
+std::size_t padded_length(std::size_t size) {
+  return util::check::element_count(static_cast<std::uint64_t>(size), 1u,
+                                    resource::kMaxOfflineAudioSamples, "target_size",
+                                    "the padded output");
+}
+
+}  // namespace
 
 std::vector<float> pad_center(const float* x, std::size_t n, std::size_t size, float pad_value) {
   if (size < n) {
@@ -17,7 +30,7 @@ std::vector<float> pad_center(const float* x, std::size_t n, std::size_t size, f
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
-  std::vector<float> out(size, pad_value);
+  std::vector<float> out(padded_length(size), pad_value);
   const std::size_t lpad = (size - n) / 2;
   if (n > 0) {
     std::memcpy(out.data() + lpad, x, n * sizeof(float));
@@ -33,6 +46,7 @@ std::vector<float> fix_length(const float* x, std::size_t n, std::size_t size, f
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "null input with non-zero length");
   }
+  padded_length(size);
   // A null pointer with zero length is a valid empty input.  Return the
   // requested all-padding result directly instead of constructing the
   // [nullptr, nullptr) iterator range used by the equal-length path.
