@@ -238,6 +238,7 @@ SonareError render_last_refusal(const char* const* subjects, const double* scale
         copy_string(respelled_refusal(*refusal, subjects, scales, subject_count).text(surface));
     return SONARE_OK;
   } catch (const sonare::SonareParameterRefusal&) {
+    // Not recorded: recording it would overwrite the refusal this accessor renders.
     return SONARE_ERROR_INVALID_PARAMETER;
   } catch (...) {
     return SONARE_ERROR_OUT_OF_MEMORY;

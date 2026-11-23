@@ -239,8 +239,18 @@ TEST_CASE("the last parameter refusal re-renders with the subjects a binding sup
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_last_refusal_render(flattened, nullptr, 2, SONARE_PRESENCE_SPELLING_C, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
+  const double zero_scale[] = {0.0, 1.0};
+  CHECK(sonare_last_refusal_render(flattened, zero_scale, 2, SONARE_PRESENCE_SPELLING_C, &text) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_last_refusal_render(flattened, nullptr, 2, static_cast<SonarePresenceSpelling>(99),
+                                   &text) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(last_error() == message);
   CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_refusal_subject_count() == 2);
+  REQUIRE(sonare_last_refusal_render(flattened, nullptr, 2, SONARE_PRESENCE_SPELLING_C, &text) ==
+          SONARE_OK);
+  CHECK(std::string(text) == "cutoff_hz does not apply when type is bandPass or notch");
+  sonare_free_string(text);
 
   REQUIRE(sonare_fade(samples.data(), samples.size(), kSampleRate, 0.0f, 0.0f, &out.data,
                       &out.length) == SONARE_OK);
