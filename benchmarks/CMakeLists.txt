@@ -132,7 +132,6 @@ if(BUILD_PLAYBACK)
   )
   if(EMSCRIPTEN)
     target_link_options(sonare_playback_binaural_bench PRIVATE
-      -fexceptions
       -sNODERAWFS=1
       -sALLOW_MEMORY_GROWTH=1
       -sEXIT_RUNTIME=1
