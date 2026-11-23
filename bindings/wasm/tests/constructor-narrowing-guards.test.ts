@@ -404,13 +404,13 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
     // A float holds these, so the refusal comes from the filterbank's band-order
     // rule rather than the reader -- the contrast that shows what the narrowed
     // positions buy.
-    ['2**32 + 5', 'must be greater than fmin'],
-    ['2**32', 'must be greater than fmin'],
-    ['2**53 + 1', 'must be greater than fmin'],
-    ['NaN', 'fmin must be finite and in [-3.4028235e38, 3.4028235e38]'],
-    ['Infinity', 'fmin must be finite and in [-3.4028235e38, 3.4028235e38]'],
+    ['2**32 + 5', 'must be greater than fminHz'],
+    ['2**32', 'must be greater than fminHz'],
+    ['2**53 + 1', 'must be greater than fminHz'],
+    ['NaN', 'fminHz must be finite and in [-3.4028235e38, 3.4028235e38]'],
+    ['Infinity', 'fminHz must be finite and in [-3.4028235e38, 3.4028235e38]'],
     ['1.5', 'constructs'],
-    ['-1', 'fmin must be finite and at least 0'],
+    ['-1', 'fminHz must be finite and at least 0'],
   ];
 
   it('fmin answers each shape as a float position, not as a narrowed one', () => {

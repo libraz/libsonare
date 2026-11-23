@@ -51,19 +51,19 @@ describe('boundary regressions (WASM)', () => {
     const mel = new Float32Array(8 * 4).fill(0.1);
     mel[3] = Number.NaN;
     expect(() => module.melToStft(mel, 8, 4, SR, 256, 0, 0, false)).toThrow(
-      /^melToStft: M contains a non-finite sample at index 3$/,
+      /^melToStft: power contains a non-finite sample at index 3$/,
     );
     expect(() => module.melToAudio(mel, 8, 4, SR, 256, 64, 0, 0, 2, false)).toThrow(
-      /^melToAudio: M contains a non-finite sample at index 3$/,
+      /^melToAudio: power contains a non-finite sample at index 3$/,
     );
 
     const mfcc = new Float32Array(5 * 4).fill(0.1);
     mfcc[7] = Number.POSITIVE_INFINITY;
     expect(() => module.mfccToMel(mfcc, 5, 4, 8, 0)).toThrow(
-      /^mfccToMel: mfcc contains a non-finite sample at index 7$/,
+      /^mfccToMel: coefficients contains a non-finite sample at index 7$/,
     );
     expect(() => module.mfccToAudio(mfcc, 5, 4, 8, SR, 256, 64, 0, 0, 2, false, 0)).toThrow(
-      /^mfccToAudio: mfcc contains a non-finite sample at index 7$/,
+      /^mfccToAudio: coefficients contains a non-finite sample at index 7$/,
     );
 
     const magnitude = new Float32Array(3 * 5).fill(1);

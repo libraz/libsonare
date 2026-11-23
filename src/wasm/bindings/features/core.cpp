@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/sonare_c_internal.h"
 #include "core/convert.h"
 #include "core/spectrum.h"
 #include "core/synthesis.h"
@@ -242,24 +243,30 @@ val js_frame_signal(val samples, const val& frame_length_val, const val& hop_len
 
 val js_tone(const val& frequency_val, const val& sample_rate, const val& duration_val,
             const val& phase_val, const val& amplitude_val) {
-  const float frequency = checkedFloatFromVal(frequency_val, "frequency");
-  const float duration = checkedFloatFromVal(duration_val, "duration");
+  const float frequency = checkedFloatFromVal(frequency_val, "frequencyHz");
+  const float duration = checkedFloatFromVal(duration_val, "durationSec");
   const float phase = checkedFloatFromVal(phase_val, "phase");
   const float amplitude = checkedFloatFromVal(amplitude_val, "amplitude");
-  const Audio audio = tone(
-      frequency, domainNumberFromVal<int>(sample_rate, "sampleRate", kSynthesisSampleRateDomain),
-      duration, phase, amplitude);
+  const int sr = domainNumberFromVal<int>(sample_rate, "sampleRate", kSynthesisSampleRateDomain);
+  const Audio audio = sonare_c_detail::with_c_names(
+      std::array<sonare_c_detail::CName, 3>{
+          {{"frequency", "frequency_hz"}, {"sr", "sample_rate"}, {"duration", "duration_sec"}}},
+      [&] { return tone(frequency, sr, duration, phase, amplitude); });
   return vectorToFloat32Array(audio.data(), audio.size());
 }
 
 val js_chirp(const val& fmin_val, const val& fmax_val, const val& sample_rate,
              const val& duration_val, bool linear) {
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-  const float duration = checkedFloatFromVal(duration_val, "duration");
-  const Audio audio = chirp(
-      fmin, fmax, domainNumberFromVal<int>(sample_rate, "sampleRate", kSynthesisSampleRateDomain),
-      duration, linear);
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
+  const float duration = checkedFloatFromVal(duration_val, "durationSec");
+  const int sr = domainNumberFromVal<int>(sample_rate, "sampleRate", kSynthesisSampleRateDomain);
+  const Audio audio = sonare_c_detail::with_c_names(
+      std::array<sonare_c_detail::CName, 4>{{{"fmin", "fmin_hz"},
+                                             {"fmax", "fmax_hz"},
+                                             {"sr", "sample_rate"},
+                                             {"duration", "duration_sec"}}},
+      [&] { return chirp(fmin, fmax, sr, duration, linear); });
   return vectorToFloat32Array(audio.data(), audio.size());
 }
 
@@ -269,11 +276,15 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val,
       domainNumberFromVal<int>(sample_rate_val, "sampleRate", kSynthesisSampleRateDomain);
   const int length =
       optionalDomainValue<int>(length_val, "length", sonare::kClicksLengthDomain).value_or(0);
-  const float frequency = checkedFloatFromVal(frequency_val, "frequency");
-  const float click_duration = checkedFloatFromVal(click_duration_val, "clickDuration");
+  const float frequency = checkedFloatFromVal(frequency_val, "frequencyHz");
+  const float click_duration = checkedFloatFromVal(click_duration_val, "clickDurationSec");
   std::vector<float> values = float32ArrayToVector(times, "times");
   validateFiniteVector(values, "times");
-  const Audio audio = clicks(values, sample_rate, length, frequency, click_duration);
+  const Audio audio = sonare_c_detail::with_c_names(
+      std::array<sonare_c_detail::CName, 3>{{{"sr", "sample_rate"},
+                                             {"frequency", "frequency_hz"},
+                                             {"click_duration", "click_duration_sec"}}},
+      [&] { return clicks(values, sample_rate, length, frequency, click_duration); });
   return vectorToFloat32Array(audio.data(), audio.size());
 }
 

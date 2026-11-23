@@ -5,9 +5,9 @@
 
 #include "analysis/chord_analyzer.h"
 #include "analysis/key_analyzer.h"
-#include "c_api/sonare_c_internal.h"
 #include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
+#include "wasm/bindings/common/mel_range_names.h"
 
 // ============================================================================
 // Streaming - StreamAnalyzer
@@ -74,10 +74,6 @@ val chordEntryToVal(int root, int quality, float start_time, float confidence,
 bool given(const val& value) { return !value.isUndefined() && !value.isNull(); }
 
 /// @brief JavaScript wrapper for StreamAnalyzer.
-// The core spells the mel range fmin / fmax; the facade keys are fminHz / fmaxHz.
-const std::array<sonare_c_detail::CName, 2> kMelRangeNames{
-    {{"fmin", "fmin_hz"}, {"fmax", "fmax_hz"}}};
-
 class StreamAnalyzerWrapper {
  public:
   StreamAnalyzerWrapper(const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,

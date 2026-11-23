@@ -157,22 +157,22 @@ interface FloatField {
 const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'melSpectrogram',
-    key: 'fmin',
+    key: 'fminHz',
     run: (v) => m().melSpectrogram(threePartials, SR, 512, 256, 16, v, 3600, false),
   },
   {
     entry: 'melSpectrogram',
-    key: 'fmax',
+    key: 'fmaxHz',
     run: (v) => m().melSpectrogram(threePartials, SR, 512, 256, 16, 0, v, false),
   },
   {
     entry: 'mfcc',
-    key: 'fmin',
+    key: 'fminHz',
     run: (v) => m().mfcc(threePartials, SR, 512, 256, 16, 8, v, 3600, false, 0),
   },
   {
     entry: 'mfcc',
-    key: 'fmax',
+    key: 'fmaxHz',
     run: (v) => m().mfcc(threePartials, SR, 512, 256, 16, 8, 0, v, false, 0),
   },
   {

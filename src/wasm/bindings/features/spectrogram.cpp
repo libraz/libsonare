@@ -17,8 +17,16 @@
 #include "util/parameter_checks.h"
 #include "util/refusal_predicates.h"
 #include "wasm/bindings/common/common.h"
+#include "wasm/bindings/common/mel_range_names.h"
 
 namespace {
+
+// The inverse transforms refuse under the core's names; these are the request keys they arrive as.
+const std::array<sonare_c_detail::CName, 5> kInverseNames{{{"sr", "sample_rate"},
+                                                           {"M", "power"},
+                                                           {"mfcc", "coefficients"},
+                                                           {"fmin", "fmin_hz"},
+                                                           {"fmax", "fmax_hz"}}};
 
 void validate_positive(int value, const char* arg_name) {
   if (value <= 0) {
@@ -99,9 +107,9 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kMelBandsDomain);
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-  validate_mel_bounds(fmin, fmax);
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
+  sonare_c_detail::with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   MelConfig config;
@@ -112,7 +120,8 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
   config.fmax = fmax;
   config.htk = htk;
 
-  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  MelSpectrogram mel = sonare_c_detail::with_c_names(
+      kMelRangeNames, [&] { return MelSpectrogram::compute(audio, config); });
 
   val out = val::object();
   out.set("nMels", mel.n_mels());
@@ -143,10 +152,10 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
   const int hop_length = domainNumberFromVal<int>(hop_length_val, "hopLength", kStftHopDomain);
   const int n_mels = domainNumberFromVal<int>(n_mels_val, "nMels", kMelBandsDomain);
   const int n_mfcc = domainNumberFromVal<int>(n_mfcc_val, "nMfcc", kMfccCountDomain);
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
-  validate_mel_bounds(fmin, fmax);
+  sonare_c_detail::with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
   Audio audio = loadValidatedAudio("samples", samples, sample_rate);
 
   MelConfig config;
@@ -157,7 +166,8 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
   config.fmax = fmax;
   config.htk = htk;
 
-  MelSpectrogram mel = MelSpectrogram::compute(audio, config);
+  MelSpectrogram mel = sonare_c_detail::with_c_names(
+      kMelRangeNames, [&] { return MelSpectrogram::compute(audio, config); });
   std::vector<float> mfcc = mel.mfcc(n_mfcc, lifter);
 
   val out = val::object();
@@ -272,10 +282,10 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
   const int sample_rate =
       domainNumberFromVal<int>(sample_rate_val, "sampleRate", kInverseSampleRateDomain);
   const int n_fft = domainNumberFromVal<int>(n_fft_val, "nFft", kMelToStftFftSizeDomain);
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
   std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power");
-  validate_mel_bounds(fmin, fmax);
+  sonare_c_detail::with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -284,7 +294,9 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
   config.fmax = fmax;
   config.htk = htk;
 
-  std::vector<float> stft = mel_to_stft(data.data(), n_mels, n_frames, config, sample_rate);
+  std::vector<float> stft = sonare_c_detail::with_c_names(kInverseNames, [&] {
+    return mel_to_stft(data.data(), n_mels, n_frames, config, sample_rate);
+  });
 
   val out = val::object();
   out.set("nBins", n_fft / 2 + 1);
@@ -305,10 +317,10 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
   std::vector<float> data = load_validated_matrix(mel_power, n_mels, n_frames, "power");
-  validate_mel_bounds(fmin, fmax);
+  sonare_c_detail::with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -318,7 +330,9 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   config.fmax = fmax;
   config.htk = htk;
 
-  Audio result = mel_to_audio(data.data(), n_mels, n_frames, config, n_iter, sample_rate);
+  Audio result = sonare_c_detail::with_c_names(kInverseNames, [&] {
+    return mel_to_audio(data.data(), n_mels, n_frames, config, n_iter, sample_rate);
+  });
   return vectorToFloat32Array(result.data(), result.size());
 }
 
@@ -358,7 +372,8 @@ val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, con
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients");
 
-  std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels, lifter);
+  std::vector<float> mel = sonare_c_detail::with_c_names(
+      kInverseNames, [&] { return mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels, lifter); });
 
   val out = val::object();
   out.set("nMels", n_mels);
@@ -380,11 +395,11 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = resynthesisHopFromVal(hop_length_val);
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float fmin = checkedFloatFromVal(fmin_val, "fminHz");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmaxHz");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   std::vector<float> data = load_validated_matrix(mfcc, n_mfcc, n_frames, "coefficients");
-  validate_mel_bounds(fmin, fmax);
+  sonare_c_detail::with_c_names(kMelRangeNames, [&] { validate_mel_bounds(fmin, fmax); });
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -394,7 +409,9 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   config.fmax = fmax;
   config.htk = htk;
 
-  Audio result = mfcc_to_audio(data.data(), n_mfcc, n_frames, config, n_iter, sample_rate, lifter);
+  Audio result = sonare_c_detail::with_c_names(kInverseNames, [&] {
+    return mfcc_to_audio(data.data(), n_mfcc, n_frames, config, n_iter, sample_rate, lifter);
+  });
   return vectorToFloat32Array(result.data(), result.size());
 }
 
