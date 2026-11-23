@@ -80,6 +80,8 @@ const engine = await SonareRealtimeEngineNode.create(audioContext, { moduleUrl: 
 
 Code that calls `init()` itself inside the worklet passes the same two values: `init({ moduleFactory, wasmBinary })`.
 
+A stock registration needs no entry of your own, and one bundle may register several processors; those started in one realm share one module build. A processor renders silence until it posts `ready`, which resolves the node's `ready`. Port messages sent before then are held, up to 1024, and replayed in order; one more fails the start. A failed start and a render quantum that throws reach the node's `onError`; a failed start or a processor constructor that throws also rejects `ready`; after a throwing quantum the processor renders silence and stops.
+
 An AudioWorklet entry of your own that constructs `SonareRealtimeEngineWorkletProcessor` itself passes every port message it does not handle itself to `receiveMessage`, which routes it and answers a type this build does not know with a `syncError`.
 
 ## Capabilities
