@@ -11199,7 +11199,8 @@
           "placeholder": "voice_change_preset_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "b5fced3a03da9a7afff7d2334f0c12677af521a595018fdcd167799c33275b27"
+          "reference_sha256": "b5fced3a03da9a7afff7d2334f0c12677af521a595018fdcd167799c33275b27",
+          "tolerance_of_peak": 0.001
         }
       }
     },
@@ -12234,7 +12235,8 @@
           "placeholder": "rir_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "3f1e0147860824343bff007511365f84abd91d984b8472fafd35614e23c2b78f"
+          "reference_sha256": "3f1e0147860824343bff007511365f84abd91d984b8472fafd35614e23c2b78f",
+          "tolerance_of_peak": 0.001
         },
         "scaled_placement_wav": {
           "placeholder": "rir_output",

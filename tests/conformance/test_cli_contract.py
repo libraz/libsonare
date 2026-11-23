@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import importlib.util
+import io
 import json
+import struct
 import sys
 import tempfile
 import unittest
+import wave
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -1622,6 +1626,95 @@ class MeasuredLevelSchemaTest(unittest.TestCase):
         ):
             with self.subTest(field=field):
                 self.assertTrue(self._schema_errors({"keys": {"f0": field}}))
+
+
+class WavToleranceArtifactTest(unittest.TestCase):
+    """A tolerance artifact passes a last-bit difference and fails a changed render."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.manifest = CHECKER.load_manifest(CHECKER.DEFAULT_MANIFEST)
+        cls.contract = next(
+            item for item in cls.manifest["active_paths"] if item["path"] == "voice-change"
+        )
+        artifacts = sys.modules["cli_contract_artifacts"]
+        references = json.loads(artifacts.WAV_REFERENCES.read_text(encoding="utf-8"))
+        cls.reference = base64.b64decode(references["voice-change.preset_wav"]["wav_base64"])
+        with wave.open(io.BytesIO(cls.reference), "rb") as source:
+            cls.params = source.getparams()
+            frames = source.readframes(source.getnframes())
+        cls.samples = list(struct.unpack(f"<{len(frames) // 2}h", frames))
+
+    def _report(
+        self, samples: list[int], rate: int | None = None, contract: object = None
+    ) -> list[str]:
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(rate or self.params.framerate)
+            output.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "out.wav"
+            path.write_bytes(buffer.getvalue())
+            report: list[tuple[str, str]] = []
+            CHECKER._check_artifact(
+                "preset_wav",
+                contract or self.contract,
+                None,
+                {"voice_change_preset_output": str(path)},
+                "t",
+                report,
+                "native-bin and python-lib",
+            )
+        return [message for _, message in report]
+
+    def test_the_reference_and_a_last_bit_difference_pass(self) -> None:
+        self.assertEqual(self._report(self.samples), [])
+        nudged = [value + (1 if index % 7 == 0 else 0) for index, value in enumerate(self.samples)]
+        self.assertEqual(self._report(nudged), [])
+
+    def test_a_changed_render_fails_and_names_both_binaries(self) -> None:
+        cases = {
+            "gain": [round(value * 0.99) for value in self.samples],
+            "shift": [0, *self.samples[:-1]],
+        }
+        for name, samples in cases.items():
+            with self.subTest(change=name):
+                messages = self._report(samples)
+                self.assertTrue(any("past the tolerance" in m for m in messages), messages)
+                self.assertTrue(any("native-bin and python-lib" in m for m in messages))
+
+    def test_the_header_is_compared_exactly(self) -> None:
+        for messages in (
+            self._report(self.samples[:-1]),
+            self._report(self.samples, rate=self.params.framerate + 1),
+        ):
+            self.assertTrue(any("does not match reference" in m for m in messages), messages)
+
+    def test_a_reference_that_moved_is_refused(self) -> None:
+        contract = copy.deepcopy(self.contract)
+        contract["artifacts"]["preset_wav"]["reference_sha256"] = "0" * 64
+        messages = self._report(self.samples, contract=contract)
+        self.assertTrue(any("does not match its reference_sha256" in m for m in messages))
+
+    def test_the_tolerance_is_bounded(self) -> None:
+        for tolerance in (0, 0.01, "0.001"):
+            with self.subTest(tolerance=tolerance):
+                candidate = copy.deepcopy(self.manifest)
+                contract = next(
+                    item for item in candidate["active_paths"] if item["path"] == "voice-change"
+                )
+                contract["artifacts"]["preset_wav"]["tolerance_of_peak"] = tolerance
+                errors = CHECKER.validate_manifest(candidate)
+                self.assertTrue(any("tolerance_of_peak" in e for e in errors), errors)
+        candidate = copy.deepcopy(self.manifest)
+        contract = next(
+            item for item in candidate["active_paths"] if item["path"] == "voice-change"
+        )
+        contract["artifacts"]["preset_wav"]["sha256"] = "0" * 64
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertTrue(any("unknown keys sha256" in e for e in errors), errors)
 
 
 if __name__ == "__main__":

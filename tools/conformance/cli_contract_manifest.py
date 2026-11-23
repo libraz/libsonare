@@ -38,6 +38,9 @@ from cli_contract_schema import (
     _validate_text_expectations,
 )
 
+# Builds differ in a WAV's last bit; a tolerance wider than this could hide a moved parameter.
+_MAX_TOLERANCE_OF_PEAK = 0.001
+
 
 def _validate_exit_codes(exit_codes: Any, errors: list[str]) -> None:
     """The named exit codes and the values the contract fixes them at.
@@ -339,13 +342,21 @@ def _validate_active_paths(
                 for artifact_name, artifact in artifacts.items():
                     artifact_label = f"{label}.artifacts.{artifact_name}"
                     if isinstance(artifact, dict) and artifact.get("kind") == "wav":
-                        if not _exact(
-                            artifact,
-                            {"placeholder", "kind", "sample_rate_key", "sha256"},
-                            artifact_label,
-                            errors,
-                        ):
+                        # A tolerance artifact replaces the digest with a committed reference.
+                        tolerant = "tolerance_of_peak" in artifact
+                        wav_keys = {"placeholder", "kind", "sample_rate_key"} | (
+                            {"reference_sha256", "tolerance_of_peak"} if tolerant else {"sha256"}
+                        )
+                        if not _exact(artifact, wav_keys, artifact_label, errors):
                             continue
+                        tolerance = artifact.get("tolerance_of_peak")
+                        if tolerant and not (
+                            _is_number(tolerance) and 0.0 < tolerance <= _MAX_TOLERANCE_OF_PEAK
+                        ):
+                            errors.append(
+                                f"{artifact_label}.tolerance_of_peak: expected a number in "
+                                f"(0, {_MAX_TOLERANCE_OF_PEAK}]"
+                            )
                         for key in ("placeholder", "sample_rate_key"):
                             if not isinstance(artifact[key], str) or not artifact[key]:
                                 errors.append(
@@ -376,14 +387,19 @@ def _validate_active_paths(
                                 errors.append(
                                     f"{artifact_label}.{key}: expected a non-empty string"
                                 )
-                    digest = artifact.get("sha256")
+                    digest_key = (
+                        "reference_sha256"
+                        if isinstance(artifact, dict) and "tolerance_of_peak" in artifact
+                        else "sha256"
+                    )
+                    digest = artifact.get(digest_key)
                     if (
                         not isinstance(digest, str)
                         or len(digest) != 64
                         or any(char not in "0123456789abcdef" for char in digest)
                     ):
                         errors.append(
-                            f"{artifact_label}.sha256: expected a 64-character lowercase SHA-256"
+                            f"{artifact_label}.{digest_key}: expected a 64-character lowercase SHA-256"
                         )
             if isinstance(cases, list) and isinstance(artifacts, dict):
                 for case_index, case in enumerate(cases):

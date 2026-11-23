@@ -549,6 +549,7 @@ def _run_active_cases(
     timeout: float,
     report: list[tuple[str, str]],
     disabled_features: frozenset[str] = frozenset(),
+    compared: str = "",
 ) -> dict[tuple[str, str], Any]:
     payloads: dict[tuple[str, str], Any] = {}
     for contract in manifest["active_paths"]:
@@ -630,7 +631,9 @@ def _run_active_cases(
                 # A case printing text still writes its artifact, and the bytes are
                 # the point of declaring one: without this the declaration sits on
                 # the case and nothing reads it.
-                _check_artifact(case["artifact"], contract, None, normal_paths, label, report)
+                _check_artifact(
+                    case["artifact"], contract, None, normal_paths, label, report, compared
+                )
             else:
                 try:
                     parsed = parse_single_json(result["stdout"])
@@ -639,7 +642,9 @@ def _run_active_cases(
                 if parsed is not None and case["payload"] != "none":
                     _validate_case_payload(path, case, parsed, contract, surface, label, report)
                     payloads[(path, case["id"])] = parsed
-                    _check_artifact(case["artifact"], contract, parsed, normal_paths, label, report)
+                    _check_artifact(
+                        case["artifact"], contract, parsed, normal_paths, label, report, compared
+                    )
     if any(contract["path"] == "analyze" for contract in manifest["active_paths"]):
         _validate_analyze_case_relationships(surface, payloads, manifest, report)
     if any(contract["path"] == "voice-change" for contract in manifest["active_paths"]):
@@ -882,6 +887,8 @@ def main(argv: list[str] | None = None) -> int:
                 _compare_active_inventory_options(
                     native_inventory, python_inventory, manifest, report
                 )
+        python_library = _resolved_python_library(python_executable, args.timeout)
+        compared = f"{native_executable} and {python_library or python_executable}"
         native_payloads = _run_active_cases(
             "native",
             native_executable,
@@ -890,6 +897,7 @@ def main(argv: list[str] | None = None) -> int:
             args.timeout,
             report,
             native_disabled,
+            compared,
         )
         python_payloads = _run_active_cases(
             "python",
@@ -899,6 +907,7 @@ def main(argv: list[str] | None = None) -> int:
             args.timeout,
             report,
             python_disabled,
+            compared,
         )
         for contract in manifest["active_paths"]:
             path = contract["path"]
