@@ -784,7 +784,7 @@ describe('renamed, removed and tightened names', () => {
     ],
     ['MeteringTruePeakRequest.sampleRate', 'rate', 'meteringTruePeakDbtp'],
     ['meteringVectorscope', 'exported', 'meteringVectorscope'],
-    ['WorkletMeterSnapshot.channelCount', 'ringSource'],
+    ['WorkletMeterSnapshot.numChannels', 'ringSource'],
     ['SpectrumOptions.dbAmin', 'zero', 'meteringSpectrum', 'dbAmin'],
     ['SpectrumOptions.dbRef', 'zero', 'meteringSpectrum', 'dbRef'],
     ['SpectrumOptions.nFft', 'zero', 'meteringSpectrum', 'nFft'],
@@ -855,8 +855,8 @@ describe('renamed, removed and tightened names', () => {
           new URL('../../src/worklet/meter-rings.ts', import.meta.url),
           'utf8',
         );
-        expect(source).toContain('numChannels?: number');
-        expect(source).not.toContain('channelCount?: number');
+        expect(source).toContain('numChannels: number');
+        expect(source).not.toMatch(/channelCount\??: number/);
         break;
       }
       default:

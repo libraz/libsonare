@@ -2,7 +2,7 @@
  * What a POSITIONAL `float` parameter is allowed to become on its way into the
  * detailed per-domain quick-analysis entry points
  * (`analyzeBpm` / `analyzeRhythm` / `analyzeDynamics` / `analyzeTimbre`,
- * `src/wasm/bindings/analysis/quick_detailed.cpp`), covering the 8 float fields
+ * `src/wasm/bindings/analysis/quick_detailed.cpp`), covering the 7 float fields
  * converted there. Same defect as `positional-float-guards.test.ts`: embind's
  * float glue SATURATES, so a caller-chosen finite number wider than `FLT_MAX`
  * (~3.4028235e38) used to arrive as an infinity with no exception raised
@@ -164,7 +164,7 @@ describe('every converted quick-detailed float parameter refuses a value the flo
   it('covers one field per formerly-plain-float quick-detailed parameter', () => {
     // A field dropped from the table stops being covered without anything
     // going red, which is the one way this file could quietly shrink.
-    expect(FLOAT_FIELDS).toHaveLength(6);
+    expect(FLOAT_FIELDS).toHaveLength(5);
     const ids = FLOAT_FIELDS.map((field) => `${field.entry}.${field.key}`);
     expect(new Set(ids).size).toBe(ids.length);
   });

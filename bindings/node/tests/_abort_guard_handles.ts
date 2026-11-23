@@ -414,6 +414,7 @@ export interface NativeProject {
   setAssistSidecar(desc: unknown): void;
   getAssistSidecar(index: unknown): unknown;
   setMaxUndoDepth(depth: unknown): void;
+  setDestinationInstrument(destinationId: unknown, instrument?: unknown, options?: unknown): void;
   setMaxHistoryBytes(bytes: unknown): void;
   snapToGrid(ppq: unknown, strength?: unknown, division?: unknown): number;
   autoTempo(

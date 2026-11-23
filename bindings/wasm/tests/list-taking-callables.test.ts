@@ -17,6 +17,8 @@ const EXEMPT: Record<string, string> = {
   'PlaybackRenderer.processPlanar':
     'planes go to the native processPlanar as given; no facade walk',
   'ClipPageProvider.supply': 'channels go to the native supply as given; no facade walk',
+  masteringAnalyzePair:
+    'source and reference hold one or two channels, and a longer list is refused by its count before an entry is read',
   'PolyphonicAnalysis.setNoteEdit':
     'edit is spread one level and amplitudeEnvelope reaches the native setter as given',
   'OfflineWorkerClient.analyze': 'request is structured-cloned to the worker; no facade walk',

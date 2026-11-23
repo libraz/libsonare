@@ -1807,6 +1807,88 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'SonareWrap.encodeAudio',
+    missingRequired: [],
+    // The rate and the settings bag are positional; a wrong-typed one is refused by name.
+    rejectsArgument: [
+      {
+        argument: 'sampleRate',
+        call: () => addon.encodeAudio([samples(8)], 'x', { format: 'wav' }),
+        message: /sampleRate/,
+      },
+      {
+        argument: 'options',
+        call: () => addon.encodeAudio([samples(8)], 22050, 'wav'),
+        message: /options/,
+      },
+    ],
+  },
+  {
+    name: 'SonareWrap.istft',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'magnitude.rows',
+        call: () => addon.istft(readerMatrix, 'x', 2, readerMatrix, 2, 2, 2, 1),
+        message: /magnitude\.rows/,
+      },
+      {
+        argument: 'phase',
+        call: () => addon.istft(readerMatrix, 2, 2, 'x', 2, 2, 2, 1),
+        message: /phase/,
+      },
+    ],
+  },
+  {
+    name: 'SonareWrap.masteringPairAnalyze',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'sampleRate',
+        call: () => addon.masteringPairAnalyze('spectralMatch', readerTone, readerTone, 'x', 22050),
+        message: /sampleRate/,
+      },
+      {
+        argument: 'params',
+        call: () =>
+          addon.masteringPairAnalyze('spectralMatch', readerTone, readerTone, 22050, 22050, 'x'),
+        message: /params/,
+      },
+    ],
+  },
+  {
+    name: 'SonareWrap.masteringPairAnalyzeStereo',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'referenceSampleRate',
+        call: () =>
+          addon.masteringPairAnalyzeStereo(
+            'spectralMatch',
+            readerTone,
+            readerTone,
+            readerTone,
+            readerTone,
+            22050,
+            'x',
+          ),
+        message: /referenceSampleRate/,
+      },
+    ],
+  },
+  {
+    name: 'Project.setDestinationInstrument',
+    missingRequired: [],
+    badProjectArguments: [
+      {
+        argument: 'destinationId',
+        call: ({ project }) =>
+          project.setDestinationInstrument('x', { kind: 'builtin', config: {} }),
+        message: /destinationId/,
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.noteSegments',
     missingRequired: [],
     // The frame rate and the F0 track are positional; a wrong-typed one must be

@@ -14,6 +14,8 @@ const ENTRIES = ['index.ts'];
 const EXEMPT: Record<string, string> = {
   'FileClipPageProvider.supply':
     'inherited unchanged from ClipPageProvider.supply, whose row exercises the shared body',
+  masteringAnalyzePair:
+    'source and reference hold one or two channels, and a longer list is refused by its count before an entry is read',
 };
 
 /** Callables that walk a caller list in the facade with no budget check, by the walking site. */

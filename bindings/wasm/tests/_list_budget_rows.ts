@@ -484,6 +484,24 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
     run: (api, l) => withProject(api, (p) => p.annotateChords(l)),
   },
   {
+    callable: 'Project.annotateSections',
+    message: `Project.annotateSections: ${overBudget('sections')}`,
+    run: (api, l) => withProject(api, (p) => p.annotateSections(l)),
+  },
+  {
+    callable: 'Project.setDestinationInstrument',
+    message: `Project.setDestinationInstrument: ${overBudget('instrument.patch.modRoutings')}`,
+    run: (api, l) =>
+      withProject(api, (p) =>
+        p.setDestinationInstrument(0, { kind: 'synth', patch: { modRoutings: l } } as never),
+      ),
+  },
+  {
+    callable: 'encodeAudio',
+    message: `encodeAudio: ${overBudget('channels')}`,
+    run: (api, l) => api.encodeAudio({ channels: l, sampleRate: 22050, format: 'wav' } as never),
+  },
+  {
     callable: 'Audio.detectKey',
     message: `Audio.detectKey: ${overBudget('modes')}`,
     run: (api, l) => api.Audio.fromBuffer(SAMPLES, 22050).detectKey({ modes: l }),

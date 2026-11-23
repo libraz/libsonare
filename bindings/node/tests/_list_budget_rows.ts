@@ -54,6 +54,7 @@ export const PROJECT_ROWS: ReadonlyArray<Row<Project>> = [
   ['setMidiEvents', 'events', (p, l) => p.setMidiEvents(1, l)],
   ['annotateKeys', 'keys', (p, l) => p.annotateKeys(l)],
   ['annotateChords', 'chords', (p, l) => p.annotateChords(l)],
+  ['annotateSections', 'sections', (p, l) => p.annotateSections(l)],
   [
     'setPartRig',
     'inserts',
@@ -206,6 +207,14 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
     withProject(api, (p) =>
       p.previewMidiFxCount({ clipId: 1, config: { chordIntervals: l } } as never),
     ),
+  ),
+  row('Project.setDestinationInstrument', 'modRoutings', (api, l) =>
+    withProject(api, (p) =>
+      p.setDestinationInstrument(0, { kind: 'synth', patch: { modRoutings: l } } as never),
+    ),
+  ),
+  row('encodeAudio', 'channels', (api, l) =>
+    api.encodeAudio({ channels: l, sampleRate: SR, format: 'wav' } as never),
   ),
   row('detectKey', 'modes', (api, l) =>
     api.detectKey({ samples: X, sampleRate: SR, modes: l } as never),
@@ -514,7 +523,7 @@ export const FACADE_ROWS: ReadonlyArray<FacadeBudgetRow> = [
       input: { channelMap: l },
     } as never),
   ),
-  row('PolyphonicAnalysis.setNoteEdit', 'amplitudeEnvelope', (api, l) =>
+  row('PolyphonicAnalysis.setNoteEdit', 'edit.amplitudeEnvelope', (api, l) =>
     api
       .analyzePolyphonic({
         samples: new Float32Array(22050).map(
