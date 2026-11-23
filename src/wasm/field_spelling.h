@@ -246,30 +246,37 @@ inline std::string_view Unrooted(std::string_view subject, std::string_view c_ro
   return subject;
 }
 
-// The last C refusal with each subject in the wasm caller's spelling, looked up under the
-// refused entry; @p c_root strips a "<c_root>." prefix beyond the object-argument roots.
+// @p refusal with each subject in the wasm caller's spelling, looked up under @p entry (the
+// C entry name without its "sonare_" prefix); @p c_root strips a "<c_root>." prefix beyond the
+// object-argument roots.
+inline sonare::SonareParameterRefusal Spelled(const sonare::SonareParameterRefusal& refusal,
+                                              std::string_view entry,
+                                              std::string_view c_root = {}) {
+  // A document path is already the caller's spelling; only its slot prefix is re-rooted.
+  if (refusal.caller_spelled()) {
+    return refusal.respelled(
+        refusal.code(),
+        [entry](const std::string& subject) {
+          return DocumentRooted(entry, subject).value_or(subject);
+        },
+        true);
+  }
+  return refusal.respelled(
+      refusal.code(),
+      [entry, c_root](const std::string& subject) {
+        if (std::optional<std::string> rooted = DocumentRooted(entry, subject)) return *rooted;
+        return SurfaceSpelling(entry, Unrooted(subject, c_root));
+      },
+      true);
+}
+
+// The last C refusal, spelled as Spelled() spells it under the entry that recorded it.
 inline std::optional<sonare::SonareParameterRefusal> SpelledLastRefusal(
     std::string_view c_root = {}) {
   const sonare::SonareParameterRefusal* refusal = sonare_c_detail::last_parameter_refusal();
   if (refusal == nullptr) return std::nullopt;
   const char* entry = sonare_c_detail::last_refusal_entry();
-  const std::string_view key = entry != nullptr ? entry : "";
-  // A document path is already the caller's spelling; only its slot prefix is re-rooted.
-  if (refusal->caller_spelled()) {
-    return refusal->respelled(
-        refusal->code(),
-        [key](const std::string& subject) {
-          return DocumentRooted(key, subject).value_or(subject);
-        },
-        true);
-  }
-  return refusal->respelled(
-      refusal->code(),
-      [key, c_root](const std::string& subject) {
-        if (std::optional<std::string> rooted = DocumentRooted(key, subject)) return *rooted;
-        return SurfaceSpelling(key, Unrooted(subject, c_root));
-      },
-      true);
+  return Spelled(*refusal, entry != nullptr ? entry : "", c_root);
 }
 
 }  // namespace sonare_field_spelling::wasm
