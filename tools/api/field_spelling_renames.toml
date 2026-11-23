@@ -140,10 +140,7 @@ offset_samples = "record_offset_samples"
 "midi_cc_learn.count" = "events"
 "midi_route_events.count" = "events"
 "playback_loudness_meter_push_interleaved.frames" = "samples"
-"playback_render_interleaved.frames" = "samples"
-"playback_renderer_process_interleaved.frames" = "samples"
 "playback_renderer_process_planar.in_channels" = "planes"
-"playback_renderer_render_offline.frames" = "samples"
 "project_add_automation_lane.point_count" = "points"
 "project_add_clip.audio_frames" = "audio"
 "project_add_loop_recording_takes.audio_frames" = "audio"
@@ -158,7 +155,6 @@ offset_samples = "record_offset_samples"
 "project_set_assist_sidecar.payload_len" = "payload"
 "project_set_midi_events.count" = "events"
 "project_set_warp_map.anchor_count" = "anchors"
-"realtime_voice_changer_process_interleaved.num_frames" = "samples"
 "realtime_voice_changer_process_mono.num_samples" = "samples"
 "render_percussive_events.count" = "events"
 "room_morph.band_absorption_count" = "band_absorption"
@@ -208,9 +204,7 @@ offset_samples = "record_offset_samples"
 "midi_route_events.count" = "events"
 "pitch_correct_timevarying.n_frames" = "f0Hz"
 "playback_loudness_meter_push_interleaved.frames" = "samples"
-"playback_renderer_process_interleaved.frames" = "samples"
 "playback_renderer_process_planar.in_channels" = "planes"
-"playback_renderer_render_offline.frames" = "samples"
 "project_add_automation_lane.point_count" = "points"
 "project_annotate_chords.count" = "chords"
 "project_annotate_keys.count" = "keys"
@@ -274,9 +268,7 @@ offset_samples = "record_offset_samples"
 "midi_route_events.count" = "events"
 "pitch_correct_timevarying.n_frames" = "f0Hz"
 "playback_loudness_meter_push_interleaved.frames" = "samples"
-"playback_renderer_process_interleaved.frames" = "samples"
 "playback_renderer_process_planar.in_channels" = "planes"
-"playback_renderer_render_offline.frames" = "samples"
 "project_add_automation_lane.point_count" = "points"
 "project_annotate_chords.count" = "chords"
 "project_annotate_keys.count" = "keys"
@@ -305,3 +297,17 @@ offset_samples = "record_offset_samples"
 "synthesize_rir.band_absorption_count" = "bandAbsorption"
 "synthesize_rir.band_scattering_count" = "bandScattering"
 "vocal_draft_apply.count" = "operations"
+
+[python.quotient_of]
+"playback_render_interleaved.frames" = ["samples", "num_channels"]
+"playback_renderer_process_interleaved.frames" = ["samples", "num_input_channels"]
+"playback_renderer_render_offline.frames" = ["samples", "num_input_channels"]
+"realtime_voice_changer_process_interleaved.num_frames" = ["samples", "num_channels"]
+
+[node.quotient_of]
+"playback_renderer_process_interleaved.frames" = ["samples", "inChannels"]
+"playback_renderer_render_offline.frames" = ["samples", "inChannels"]
+
+[wasm.quotient_of]
+"playback_renderer_process_interleaved.frames" = ["samples", "inChannels"]
+"playback_renderer_render_offline.frames" = ["samples", "inChannels"]

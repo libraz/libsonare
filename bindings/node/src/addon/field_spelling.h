@@ -100,7 +100,7 @@ inline constexpr std::array<Override, 76> kOverrides = {{
 }};
 
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
-inline constexpr std::array<Override, 64> kLengths = {{
+inline constexpr std::array<Override, 62> kLengths = {{
     {"align_take_to_reference", "reference_len", "reference"},
     {"align_take_to_reference", "take_len", "take"},
     {"chord_functions", "count", "chords"},
@@ -134,9 +134,7 @@ inline constexpr std::array<Override, 64> kLengths = {{
     {"midi_route_events", "count", "events"},
     {"pitch_correct_timevarying", "n_frames", "f0Hz"},
     {"playback_loudness_meter_push_interleaved", "frames", "samples"},
-    {"playback_renderer_process_interleaved", "frames", "samples"},
     {"playback_renderer_process_planar", "in_channels", "planes"},
-    {"playback_renderer_render_offline", "frames", "samples"},
     {"project_add_automation_lane", "point_count", "points"},
     {"project_annotate_chords", "count", "chords"},
     {"project_annotate_keys", "count", "keys"},
@@ -167,19 +165,35 @@ inline constexpr std::array<Override, 64> kLengths = {{
     {"vocal_draft_apply", "count", "operations"},
 }};
 
-template <std::size_t N>
-inline const Override* Find(const std::array<Override, N>& table, std::string_view entry,
-                            std::string_view subject) {
-  const auto it =
-      std::lower_bound(table.begin(), table.end(), Override{entry, subject, {}},
-                       [](const Override& a, const Override& b) {
-                         return a.entry != b.entry ? a.entry < b.entry : a.subject < b.subject;
-                       });
+struct Quotient {
+  std::string_view entry;
+  std::string_view subject;
+  std::string_view spelling;
+  std::string_view divisor;
+};
+
+// (C entry key, C-ABI frame count subject) pairs whose value is the named interleaved array's
+// length over the named channel count, sorted.
+inline constexpr std::array<Quotient, 2> kQuotients = {{
+    {"playback_renderer_process_interleaved", "frames", "samples", "inChannels"},
+    {"playback_renderer_render_offline", "frames", "samples", "inChannels"},
+}};
+
+template <typename Row, std::size_t N>
+inline const Row* Find(const std::array<Row, N>& table, std::string_view entry,
+                       std::string_view subject) {
+  const auto it = std::lower_bound(table.begin(), table.end(), entry,
+                                   [subject](const Row& a, std::string_view key) {
+                                     return a.entry != key ? a.entry < key : a.subject < subject;
+                                   });
   return it != table.end() && it->entry == entry && it->subject == subject ? &*it : nullptr;
 }
 
 // The node caller's spelling of @p subject on C entry @p entry (no sonare_ prefix).
 inline std::string SurfaceSpelling(std::string_view entry, std::string_view subject) {
+  if (const Quotient* quotient = Find(kQuotients, entry, subject)) {
+    return std::string(quotient->spelling) + ".length / " + std::string(quotient->divisor);
+  }
   if (const Override* length = Find(kLengths, entry, subject)) {
     return std::string(length->spelling) + ".length";
   }

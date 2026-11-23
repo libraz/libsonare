@@ -14,7 +14,10 @@ keyword whose length it is, and outranks a rename ruled for that subject; the re
 names it as "<keyword> length" in Python and "<keyword>.length" on Node and WASM. It also
 binds a count the parity extractors fold into its array, which carries no pairing,
 when the C declaration takes it (a struct parameter's fields included) and the facade
-takes the array. A name another C subject already pairs with counts: a second form folded
+takes the array. A ``[<surface>.quotient_of]`` row binds a frame count to an interleaved
+array and the channel count dividing it, both keywords of that entry, and is named
+"<keyword> length / <divisor>" in Python and "<keyword>.length / <divisor>" on Node and
+WASM. A name another C subject already pairs with counts: a second form folded
 into the entry (an ``_ex``) can name the same argument differently. A subject still unbound is reported, not tabled, and a
 ruled rename that binds nowhere fails the run. Every unbound parameter carries a
 reason in ``field_spelling_unbound.toml``; unbound record fields are output records
@@ -63,6 +66,8 @@ class Row:
     spelling: str
     # True when the subject is the length of the array ``spelling`` names (a ``length_of`` row).
     length: bool = False
+    # The keyword dividing that length, for a frame count over an interleaved array.
+    divisor: str = ""
 
 
 @dataclass(frozen=True)
@@ -147,8 +152,10 @@ def derive(
     used: set[tuple[str, str, str]] = set()
 
     lengths = {s: dict(renames.get(s, {}).get("length_of", {})) for s in SURFACES}
+    quotients = {s: dict(renames.get(s, {}).get("quotient_of", {})) for s in SURFACES}
     renames = {
-        s: {k: v for k, v in table.items() if k != "length_of"} for s, table in renames.items()
+        s: {k: v for k, v in table.items() if k not in ("length_of", "quotient_of")}
+        for s, table in renames.items()
     }
 
     def spellings(surface: str, subject: str) -> list[str]:
@@ -172,8 +179,13 @@ def derive(
             r for r in spellings(b.surface, b.c_subject) if r in known or r.split(".")[0] in known
         ]
         array = lengths[b.surface].get(f"{b.c_key}.{b.c_subject}")
+        quotient = quotients[b.surface].get(f"{b.c_key}.{b.c_subject}")
         if b.c_subject in by_canonical:
             bind(b.surface, b.c_key, b.c_subject, by_canonical[b.c_subject])
+        elif quotient is not None and set(quotient) <= known:
+            dividend, divisor = quotient
+            rows[b.surface].add(Row(b.c_key, b.c_subject, dividend, True, divisor))
+            used.add((b.surface, f"quotient_of.{b.c_key}.{b.c_subject}", " / ".join(quotient)))
         elif array is not None and array in known:
             # An entry's own length_of row outranks a rename ruled for the subject on every entry.
             rows[b.surface].add(Row(b.c_key, b.c_subject, array, True))
@@ -197,17 +209,26 @@ def derive(
                 rows[surface].add(Row(key, subject, array, True))
                 used.add((surface, f"length_of.{name}", array))
     unbound.sort(key=lambda u: (u.surface, u.c_key, u.c_subject))
-    idle = sorted(
-        (surface, subject, spelling)
-        for surface, table in renames.items()
-        for subject in table
-        for spelling in spellings(surface, subject)
-        if (surface, subject, spelling) not in used
-    ) + sorted(
-        (surface, f"length_of.{name}", array)
-        for surface, table in lengths.items()
-        for name, array in table.items()
-        if (surface, f"length_of.{name}", array) not in used
+    idle = (
+        sorted(
+            (surface, subject, spelling)
+            for surface, table in renames.items()
+            for subject in table
+            for spelling in spellings(surface, subject)
+            if (surface, subject, spelling) not in used
+        )
+        + sorted(
+            (surface, f"length_of.{name}", array)
+            for surface, table in lengths.items()
+            for name, array in table.items()
+            if (surface, f"length_of.{name}", array) not in used
+        )
+        + sorted(
+            (surface, f"quotient_of.{name}", " / ".join(pair))
+            for surface, table in quotients.items()
+            for name, pair in table.items()
+            if (surface, f"quotient_of.{name}", " / ".join(pair)) not in used
+        )
     )
     return (
         {s: sorted(r, key=lambda x: (x.c_key, x.c_subject)) for s, r in rows.items()},
@@ -221,9 +242,17 @@ def _cpp_array(rows: list[Row]) -> str:
     return body + ("\n" if rows else "")
 
 
+def _cpp_quotients(rows: list[Row]) -> str:
+    body = "".join(
+        f'\n    {{"{r.c_key}", "{r.c_subject}", "{r.spelling}", "{r.divisor}"}},' for r in rows
+    )
+    return body + ("\n" if rows else "")
+
+
 def render_cpp(surface: str, rows: list[Row]) -> str:
     renames = [r for r in rows if not r.length]
-    lengths = [r for r in rows if r.length]
+    lengths = [r for r in rows if r.length and not r.divisor]
+    quotients = [r for r in rows if r.divisor]
     return f"""// Generated by tools/api/gen_field_spelling.py from the parity facts; do not edit.
 #pragma once
 
@@ -251,19 +280,33 @@ inline constexpr std::array<Override, {len(renames)}> kOverrides = {{{{{_cpp_arr
 // (C entry key, C-ABI count subject) pairs whose value is the length of the named array, sorted.
 inline constexpr std::array<Override, {len(lengths)}> kLengths = {{{{{_cpp_array(lengths)}}}}};
 
-template <std::size_t N>
-inline const Override* Find(const std::array<Override, N>& table, std::string_view entry,
-                            std::string_view subject) {{
+struct Quotient {{
+  std::string_view entry;
+  std::string_view subject;
+  std::string_view spelling;
+  std::string_view divisor;
+}};
+
+// (C entry key, C-ABI frame count subject) pairs whose value is the named interleaved array's
+// length over the named channel count, sorted.
+inline constexpr std::array<Quotient, {len(quotients)}> kQuotients = {{{{{_cpp_quotients(quotients)}}}}};
+
+template <typename Row, std::size_t N>
+inline const Row* Find(const std::array<Row, N>& table, std::string_view entry,
+                       std::string_view subject) {{
   const auto it =
-      std::lower_bound(table.begin(), table.end(), Override{{entry, subject, {{}}}},
-                       [](const Override& a, const Override& b) {{
-                         return a.entry != b.entry ? a.entry < b.entry : a.subject < b.subject;
+      std::lower_bound(table.begin(), table.end(), entry,
+                       [subject](const Row& a, std::string_view key) {{
+                         return a.entry != key ? a.entry < key : a.subject < subject;
                        }});
   return it != table.end() && it->entry == entry && it->subject == subject ? &*it : nullptr;
 }}
 
 // The {surface} caller's spelling of @p subject on C entry @p entry (no sonare_ prefix).
 inline std::string SurfaceSpelling(std::string_view entry, std::string_view subject) {{
+  if (const Quotient* quotient = Find(kQuotients, entry, subject)) {{
+    return std::string(quotient->spelling) + ".length / " + std::string(quotient->divisor);
+  }}
   if (const Override* length = Find(kLengths, entry, subject)) {{
     return std::string(length->spelling) + ".length";
   }}
@@ -316,7 +359,12 @@ def _py_dict(rows: list[Row]) -> str:
 
 def render_py(rows: list[Row]) -> str:
     renames = _py_dict([r for r in rows if not r.length])
-    lengths = _py_dict([r for r in rows if r.length])
+    lengths = _py_dict([r for r in rows if r.length and not r.divisor])
+    quotients = "".join(
+        f'\n    ("{r.c_key}", "{r.c_subject}"): ("{r.spelling}", "{r.divisor}"),'
+        for r in rows
+        if r.divisor
+    ) + ("\n" if any(r.divisor for r in rows) else "")
     return f'''"""Generated by tools/api/gen_field_spelling.py from the parity facts; do not edit."""
 
 # (C entry key, C-ABI subject) pairs whose Python keyword is not the C spelling.
@@ -325,9 +373,16 @@ OVERRIDES: dict[tuple[str, str], str] = {{{renames}}}
 # (C entry key, C-ABI count subject) pairs whose value is the length of the named array.
 LENGTHS: dict[tuple[str, str], str] = {{{lengths}}}
 
+# (C entry key, C-ABI frame count subject) pairs whose value is the named interleaved array's
+# length over the named channel count.
+QUOTIENTS: dict[tuple[str, str], tuple[str, str]] = {{{quotients}}}
+
 
 def surface_spelling(entry: str, subject: str) -> str:
     """The Python caller's spelling of ``subject`` on C entry ``entry`` (no sonare_ prefix)."""
+    quotient = QUOTIENTS.get((entry, subject))
+    if quotient is not None:
+        return f"{{quotient[0]}} length / {{quotient[1]}}"
     length = LENGTHS.get((entry, subject))
     if length is not None:
         return f"{{length}} length"

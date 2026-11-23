@@ -269,6 +269,44 @@ class RenderTest(unittest.TestCase):
         self.assertIn("std::array<Override, 0> kOverrides", text)
         self.assertIn('return std::string(length->spelling) + ".length";', text)
 
+    def test_a_frame_count_over_an_interleaved_array_names_both_keywords(self) -> None:
+        facts = [
+            Fact("render", "in", "param", "python", None),
+            Fact("render", "frames", "param", "python", None),
+            Fact("render", None, "param", "python", "samples"),
+            Fact("render", None, "param", "python", "num_input_channels"),
+        ]
+        rule = {"python": {"quotient_of": {"render.frames": ["samples", "num_input_channels"]}}}
+        rows, _, idle = gen.derive(facts, {}, rule)
+        row = gen.Row("render", "frames", "samples", True, "num_input_channels")
+        self.assertEqual(rows["python"], [row])
+        self.assertEqual(idle, [])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "_field_spelling.py"
+            path.write_text(gen.render_py(rows["python"]))
+            spec = importlib.util.spec_from_file_location("_field_spelling", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        self.assertEqual(
+            module.surface_spelling("render", "frames"), "samples length / num_input_channels"
+        )
+        self.assertEqual(module.LENGTHS, {})
+        text = gen.render_cpp("node", [gen.Row("render", "frames", "samples", True, "inChannels")])
+        self.assertIn('kQuotients = {{\n    {"render", "frames", "samples", "inChannels"},', text)
+        self.assertIn("std::array<Override, 0> kLengths", text)
+        self.assertIn('".length / " + std::string(quotient->divisor)', text)
+
+    def test_a_quotient_operand_the_entry_does_not_take_binds_nothing(self) -> None:
+        facts = [
+            Fact("push", "frames", "param", "node", None),
+            Fact("push", None, "param", "node", "samples"),
+        ]
+        rule = {"node": {"quotient_of": {"push.frames": ["samples", "channels"]}}}
+        rows, unbound, idle = gen.derive(facts, {}, rule)
+        self.assertEqual(rows["node"], [])
+        self.assertEqual([u.c_subject for u in unbound], ["frames"])
+        self.assertEqual(idle, [("node", "quotient_of.push.frames", "samples / channels")])
+
     def test_an_entrys_length_of_row_outranks_a_rename_for_the_subject(self) -> None:
         facts = [
             Fact("mix", "channels", "param", "node", "channels"),

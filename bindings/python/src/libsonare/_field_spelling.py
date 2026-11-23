@@ -145,10 +145,7 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("midi_cc_learn", "count"): "events",
     ("midi_route_events", "count"): "events",
     ("playback_loudness_meter_push_interleaved", "frames"): "samples",
-    ("playback_render_interleaved", "frames"): "samples",
-    ("playback_renderer_process_interleaved", "frames"): "samples",
     ("playback_renderer_process_planar", "in_channels"): "planes",
-    ("playback_renderer_render_offline", "frames"): "samples",
     ("project_add_automation_lane", "point_count"): "points",
     ("project_add_clip", "audio_frames"): "audio",
     ("project_add_loop_recording_takes", "audio_frames"): "audio",
@@ -163,7 +160,6 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("project_set_assist_sidecar", "payload_len"): "payload",
     ("project_set_midi_events", "count"): "events",
     ("project_set_warp_map", "anchor_count"): "anchors",
-    ("realtime_voice_changer_process_interleaved", "num_frames"): "samples",
     ("realtime_voice_changer_process_mono", "num_samples"): "samples",
     ("render_percussive_events", "count"): "events",
     ("room_morph", "band_absorption_count"): "band_absorption",
@@ -180,9 +176,21 @@ LENGTHS: dict[tuple[str, str], str] = {
     ("vocal_draft_apply", "count"): "operations",
 }
 
+# (C entry key, C-ABI frame count subject) pairs whose value is the named interleaved array's
+# length over the named channel count.
+QUOTIENTS: dict[tuple[str, str], tuple[str, str]] = {
+    ("playback_render_interleaved", "frames"): ("samples", "num_channels"),
+    ("playback_renderer_process_interleaved", "frames"): ("samples", "num_input_channels"),
+    ("playback_renderer_render_offline", "frames"): ("samples", "num_input_channels"),
+    ("realtime_voice_changer_process_interleaved", "num_frames"): ("samples", "num_channels"),
+}
+
 
 def surface_spelling(entry: str, subject: str) -> str:
     """The Python caller's spelling of ``subject`` on C entry ``entry`` (no sonare_ prefix)."""
+    quotient = QUOTIENTS.get((entry, subject))
+    if quotient is not None:
+        return f"{quotient[0]} length / {quotient[1]}"
     length = LENGTHS.get((entry, subject))
     if length is not None:
         return f"{length} length"
