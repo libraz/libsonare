@@ -26,14 +26,15 @@ describe('boundary regressions (WASM)', () => {
       );
     }
 
-    const budget = 64 * 1024 * 1024;
-    expect(() => module.melToStft(tiny, budget - 1, 1, SR, 2, 0, 0, false)).toThrow(
+    // A shape is bounded by the float32 elements the 2 GiB maximum heap could hold.
+    const capacity = 2 ** 31 / 4;
+    expect(() => module.melToStft(tiny, capacity - 1, 1, SR, 2, 0, 0, false)).toThrow(
       /length must equal/,
     );
-    expect(() => module.melToStft(tiny, budget, 1, SR, 2, 0, 0, false)).toThrow(
+    expect(() => module.melToStft(tiny, capacity, 1, SR, 2, 0, 0, false)).toThrow(
       /length must equal/,
     );
-    expect(() => module.melToStft(tiny, budget + 1, 1, SR, 2, 0, 0, false)).toThrow(
+    expect(() => module.melToStft(tiny, capacity + 1, 1, SR, 2, 0, 0, false)).toThrow(
       /matrix shape exceeds WASM budget/,
     );
 

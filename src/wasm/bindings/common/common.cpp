@@ -5,6 +5,7 @@
 
 #include "common.h"
 
+#include <emscripten/heap.h>
 #include <sonare/sonare_c_project_instruments.h>
 
 #include <algorithm>
@@ -141,8 +142,13 @@ static bool isTypedArray(const val& value) {
   return value.instanceof (typed_array);
 }
 
+std::size_t wasmHeapElementCapacity(std::size_t element_bytes) {
+  return emscripten_get_heap_max() / element_bytes;
+}
+
 // A Proxy over an array passes the type checks and can report any `length`, so
-// the count is still checked as a safe integer before the budget.
+// the count is still checked as a safe integer before the budget. A typed array
+// is bounded only by what the heap could hold; a plain one by the element budget.
 static std::size_t budgetedLength(const val& arr, const char* subject, const char* length_key) {
   const val length_value = arr[length_key];
   const double length = length_value.isNumber() ? length_value.as<double>() : -1.0;
@@ -152,7 +158,14 @@ static std::size_t budgetedLength(const val& arr, const char* subject, const cha
     throw WasmRangeError(std::string(subject) +
                          " length must be an integer in [0, 9007199254740991]");
   }
-  if (length > static_cast<double>(kMaxWasmFloat32Elements)) {
+  if (isTypedArray(arr)) {
+    const double element_bytes = arr["BYTES_PER_ELEMENT"].as<double>();
+    if (length >
+        static_cast<double>(wasmHeapElementCapacity(static_cast<std::size_t>(element_bytes)))) {
+      throw SonareException(ErrorCode::OutOfMemory,
+                            std::string(subject) + " does not fit in the heap");
+    }
+  } else if (length > static_cast<double>(kMaxWasmPlainArrayElements)) {
     throw WasmRangeError(std::string(subject) + " exceeds the input length budget");
   }
   return static_cast<std::size_t>(length);
@@ -195,26 +208,27 @@ std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
   return budgetedLength(arr, subject, "length");
 }
 
-void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts) {
-  std::size_t total = 0;
-  for (const std::size_t count : counts) {
-    if (!sonare::numeric::checked_add(total, count, &total) || total > kMaxWasmFloat32Elements) {
-      throw WasmRangeError("input exceeds the input length budget");
-    }
-  }
-}
-
 std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_subject,
                                              std::size_t* cumulative_count) {
   if (cumulative_count == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "input has no cumulative budget counter");
   }
   const std::size_t count = wasmFloat32ArrayLength(arr, array_subject);
+  if (isTypedArray(arr)) {
+    return count;
+  }
   if (!sonare::numeric::checked_add(*cumulative_count, count, cumulative_count) ||
-      *cumulative_count > kMaxWasmFloat32Elements) {
+      *cumulative_count > kMaxWasmPlainArrayElements) {
     throw WasmRangeError("input exceeds the input length budget");
   }
   return count;
+}
+
+void validatePlainElementBudget(std::initializer_list<std::pair<const val*, const char*>> buffers) {
+  std::size_t cumulative_count = 0;
+  for (const auto& [buffer, subject] : buffers) {
+    accumulateWasmFloat32ArrayLength(*buffer, subject, &cumulative_count);
+  }
 }
 
 void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, const val& second,

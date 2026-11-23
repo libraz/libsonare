@@ -390,11 +390,10 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
                                "sourceRight", true);
   validateWasmFloat32ArrayPair(reference_left_samples, "referenceLeft", reference_right_samples,
                                "referenceRight", true);
-  validateWasmFloat32ElementBudget(
-      {wasmFloat32ArrayLength(source_left_samples, "sourceLeft"),
-       wasmFloat32ArrayLength(source_right_samples, "sourceRight"),
-       wasmFloat32ArrayLength(reference_left_samples, "referenceLeft"),
-       wasmFloat32ArrayLength(reference_right_samples, "referenceRight")});
+  validatePlainElementBudget({{&source_left_samples, "sourceLeft"},
+                              {&source_right_samples, "sourceRight"},
+                              {&reference_left_samples, "referenceLeft"},
+                              {&reference_right_samples, "referenceRight"}});
   std::vector<float> source_left = float32ArrayToVector(source_left_samples, "sourceLeft");
   std::vector<float> source_right = float32ArrayToVector(source_right_samples, "sourceRight");
   std::vector<float> reference_left = float32ArrayToVector(reference_left_samples, "referenceLeft");
@@ -482,11 +481,10 @@ val js_mastering_ab_match_loudness_stereo(val source_left_samples, val source_ri
                                "sourceRight", true);
   validateWasmFloat32ArrayPair(reference_left_samples, "referenceLeft", reference_right_samples,
                                "referenceRight", true);
-  validateWasmFloat32ElementBudget(
-      {wasmFloat32ArrayLength(source_left_samples, "sourceLeft"),
-       wasmFloat32ArrayLength(source_right_samples, "sourceRight"),
-       wasmFloat32ArrayLength(reference_left_samples, "referenceLeft"),
-       wasmFloat32ArrayLength(reference_right_samples, "referenceRight")});
+  validatePlainElementBudget({{&source_left_samples, "sourceLeft"},
+                              {&source_right_samples, "sourceRight"},
+                              {&reference_left_samples, "referenceLeft"},
+                              {&reference_right_samples, "referenceRight"}});
   const auto source_left = loadValidatedAudio("sourceLeft", source_left_samples, sample_rate);
   const auto source_right = loadValidatedAudio("sourceRight", source_right_samples, sample_rate);
   const auto reference_left =

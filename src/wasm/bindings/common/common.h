@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -316,10 +317,11 @@ inline std::vector<std::string> lastDiagnosticMessages() {
                                 "arrangement/MIDI engine is not available in this build");
 }
 
-/// Conservative wasm32 budget for caller-owned Float32Array data copied into
-/// the linear-memory heap. Keeping this below the native offline ceiling leaves
-/// room for the input copy, DSP work buffers, and output arrays.
-inline constexpr std::size_t kMaxWasmFloat32Elements = 64u * 1024u * 1024u;
+/// Element budget for a plain JS array, whose elements are converted one at a
+/// time. A typed array is copied in bulk and is bounded by the heap instead.
+inline constexpr std::size_t kMaxWasmPlainArrayElements = 64u * 1024u * 1024u;
+/// Elements of @p element_bytes each the heap could hold at its maximum size.
+std::size_t wasmHeapElementCapacity(std::size_t element_bytes);
 /// Upper bound on the elements a caller-supplied length may pre-reserve for a
 /// JS array of objects. Larger arrays still work — the destination vector grows
 /// as elements are read and validated — so a fabricated `.length` cannot turn
@@ -405,14 +407,13 @@ std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject);
 std::size_t wasmFloat32OutputLength(const val& arr, const char* subject);
 /// One of the length readers above, for helpers that compare two arguments.
 using WasmLengthReader = std::size_t (*)(const val&, const char*);
-/// Checks a cumulative caller-controlled Float32 element count before any
-/// associated vectors are allocated.
-void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts);
-/// Reads one array length and adds it to a caller-maintained cumulative input
-/// count. Use this for entry points with optional or variable numbers of input
-/// buffers so every length is budgeted before the first vector copy.
+/// Reads one array length and, for a plain array, adds it to a caller-maintained
+/// cumulative plain-element count, so entry points taking several buffers
+/// budget every plain one before the first copy.
 std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_subject,
                                              std::size_t* cumulative_count);
+/// Budgets the plain arrays among several buffers together, before any is copied.
+void validatePlainElementBudget(std::initializer_list<std::pair<const val*, const char*>> buffers);
 /// Preflights both members of an offline pair before either is copied. When
 /// @p require_matching_lengths is true, mismatched stereo planes are rejected
 /// at the same pre-allocation boundary.

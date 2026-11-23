@@ -233,7 +233,7 @@ void ensureStereoPair(const char* left_name, const char* right_name, const val& 
   }
   const std::size_t left_length = wasmFloat32ArrayLength(left, left_name);
   const std::size_t right_length = wasmFloat32ArrayLength(right, right_name);
-  validateWasmFloat32ElementBudget({left_length, right_length});
+  validatePlainElementBudget({{&left, left_name}, {&right, right_name}});
   if (left_length != right_length) {
     throw WasmRangeError("left and right must have the same length");
   }

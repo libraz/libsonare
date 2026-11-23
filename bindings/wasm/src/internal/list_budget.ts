@@ -1,6 +1,6 @@
 import { refuse } from './entry.js';
 
-/** `kMaxWasmFloat32Elements` in src/wasm/bindings/common/common.h, the native setters' list budget. */
+/** `kMaxWasmPlainArrayElements` in src/wasm/bindings/common/common.h, the native setters' list budget. */
 const WASM_LIST_BUDGET = 64 * 1024 * 1024;
 
 /**

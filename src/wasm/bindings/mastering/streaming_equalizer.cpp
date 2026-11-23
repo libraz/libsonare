@@ -170,7 +170,7 @@ class EqualizerWrapper {
   void setSidechainStereo(val left_samples, val right_samples) {
     const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left");
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right");
-    validateWasmFloat32ElementBudget({left_length, right_length});
+    validatePlainElementBudget({{&left_samples, "left"}, {&right_samples, "right"}});
     if (left_length != right_length) {
       throw WasmRangeError("left and right must have the same length");
     }
@@ -218,7 +218,7 @@ class EqualizerWrapper {
   val processStereo(val left_samples, val right_samples) {
     const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left");
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right");
-    validateWasmFloat32ElementBudget({left_length, right_length});
+    validatePlainElementBudget({{&left_samples, "left"}, {&right_samples, "right"}});
     if (left_length != right_length) {
       throw WasmRangeError("left and right must have the same length");
     }

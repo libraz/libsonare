@@ -6,7 +6,7 @@
 
 export declare const SR: number;
 export declare const BLOCK: number;
-export declare const WASM_FLOAT_BUDGET: number;
+export declare const WASM_PLAIN_ARRAY_BUDGET: number;
 
 /** Drain counts that every boundary runner must reject. */
 export declare const INVALID_DRAIN_COUNTS: number[];

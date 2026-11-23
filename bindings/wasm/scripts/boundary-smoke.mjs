@@ -53,7 +53,7 @@ import {
   rms,
   sine,
   SR,
-  WASM_FLOAT_BUDGET,
+  WASM_PLAIN_ARRAY_BUDGET,
 } from '/fixtures.mjs';
 
 function assert(condition, message) {
@@ -97,15 +97,15 @@ window.runBoundarySmoke = async () => {
 
   checked('allocation preflight rejected and recovered', () => {
     expectThrow(
-      () => module.meteringPeakDb({ length: WASM_FLOAT_BUDGET + 1 }, SR),
+      () => module.meteringPeakDb({ length: WASM_PLAIN_ARRAY_BUDGET + 1 }, SR),
       'oversized array-like input',
     );
     expectThrow(
       () =>
         module.masterAudioStereo(
           'pop',
-          { length: WASM_FLOAT_BUDGET / 2 },
-          { length: WASM_FLOAT_BUDGET / 2 + 1 },
+          { length: WASM_PLAIN_ARRAY_BUDGET / 2 },
+          { length: WASM_PLAIN_ARRAY_BUDGET / 2 + 1 },
           SR,
           null,
         ),

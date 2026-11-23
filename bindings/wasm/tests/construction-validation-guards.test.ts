@@ -555,7 +555,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
  * ceiling; there is no JS value that both passes `Array.isArray` and carries
  * a negative or fractional `.length`). Those entry points are driven instead
  * with a real, sparse Array whose `.length` exceeds the WASM budget
- * (kMaxWasmFloat32Elements, 64 Mi) -- legal by the engine's own rules, empty
+ * (kMaxWasmPlainArrayElements, 64 Mi) -- legal by the engine's own rules, empty
  * of real elements, and still refused before any allocation.
  */
 describe('a second batch of array-like `.length` reads refuse a wrapped, negative or fractional count', () => {

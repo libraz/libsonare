@@ -11,7 +11,7 @@
 
 export const SR = 48000;
 export const BLOCK = 128;
-export const WASM_FLOAT_BUDGET = 64 * 1024 * 1024;
+export const WASM_PLAIN_ARRAY_BUDGET = 64 * 1024 * 1024;
 
 /**
  * Frame counts every `drainTailStereo` boundary must reject: zero, above the

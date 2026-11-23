@@ -331,14 +331,15 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   right_inputs.reserve(static_cast<size_t>(count));
 
   size_t length = 0;
-  size_t total_input_elements = 0;
+  size_t plain_input_elements = 0;
   for (int index = 0; index < count; ++index) {
     const std::string at = "[" + std::to_string(index) + "]";
     const std::string left_subject = "leftChannels" + at;
     const std::string right_subject = "rightChannels" + at;
-    const size_t left_length = wasmFloat32ArrayLength(left_channels[index], left_subject.c_str());
-    const size_t right_length =
-        wasmFloat32ArrayLength(right_channels[index], right_subject.c_str());
+    const size_t left_length = accumulateWasmFloat32ArrayLength(
+        left_channels[index], left_subject.c_str(), &plain_input_elements);
+    const size_t right_length = accumulateWasmFloat32ArrayLength(
+        right_channels[index], right_subject.c_str(), &plain_input_elements);
     if (left_length != right_length) {
       const std::string strip = "strips" + at;
       throw WasmRangeError(strip + ".left and " + strip + ".right must have the same length");
@@ -348,14 +349,6 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     } else if (left_length != length) {
       throw WasmRangeError("all strips must have the same length");
     }
-    if (left_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw WasmRangeError("inputs exceed the input length budget");
-    }
-    total_input_elements += left_length;
-    if (right_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw WasmRangeError("inputs exceed the input length budget");
-    }
-    total_input_elements += right_length;
   }
   for (int index = 0; index < count; ++index) {
     left_inputs.push_back(float32ArrayToVector(left_channels[index], "leftChannels"));

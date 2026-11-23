@@ -42,7 +42,7 @@ std::vector<float> load_validated_matrix(val input, int rows, int frames, const 
   std::size_t expected = 0;
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(frames),
-                                             kMaxWasmFloat32Elements, &expected)) {
+                                             wasmHeapElementCapacity(sizeof(float)), &expected)) {
     throw WasmRangeError("matrix shape exceeds WASM budget");
   }
   const std::size_t actual = wasmFloat32ArrayLength(input, data_name);
