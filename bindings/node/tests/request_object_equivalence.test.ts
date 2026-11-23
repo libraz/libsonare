@@ -2625,6 +2625,24 @@ describe('request-object equivalence', () => {
     expect(error.message).toBe('stft: unexpected argument after the request object');
   });
 
+  it('refuses a missing mastering selector before a fractional rate in mono and stereo', async () => {
+    const sampleRate = 22050.5;
+    const mono = { samples: SIG, sampleRate };
+    const stereo = { left: SIG, right: SIG2, sampleRate };
+    for (const [name, call] of [
+      ['masterAudio', () => sonare.masterAudio(mono)],
+      ['masterAudio', () => sonare.masterAudio(SIG, sampleRate)],
+      ['masterAudioStereo', () => sonare.masterAudioStereo(stereo)],
+      ['masterAudioAsync', () => sonare.masterAudioAsync(mono)],
+      ['masterAudioAsync', () => sonare.masterAudioAsync(SIG, sampleRate, {})],
+      ['masterAudioStereoAsync', () => sonare.masterAudioStereoAsync(stereo)],
+    ] as const) {
+      const error = await captureRefusal(call);
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error.message).toBe(`${name}: give preset or overrides`);
+    }
+  });
+
   it.each([
     {
       name: 'mixStereo muted type',

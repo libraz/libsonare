@@ -186,13 +186,21 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
 
 type NativeResult = Record<string, unknown>;
 
-/** Throws `TypeError` unless `onProgress` and `cancel` are each absent or a function. */
-function assertChainCallbacks(request: object): void {
+/** Throws `TypeError` on a non-function callback or when neither `preset` nor `overrides` is given. */
+function assertMasterAudioShape(
+  request: Pick<MasterAudioRequest, 'preset' | 'overrides' | 'onProgress' | 'cancel'>,
+): void {
   for (const name of ['onProgress', 'cancel'] as const) {
-    const callback = (request as Record<string, unknown>)[name];
+    const callback = request[name];
     if (!isAbsent(callback) && typeof callback !== 'function') {
       throw refuseType(`${name} must be a function`);
     }
+  }
+  if (!isAbsent(request.preset)) {
+    assertString(request.preset, 'preset');
+  }
+  if (isAbsent(request.preset) && isAbsent(request.overrides)) {
+    throw refuseType('give preset or overrides');
   }
 }
 
@@ -445,14 +453,7 @@ export function masterAudio(
 ): MasteringChainResult;
 export function masterAudio(...args: unknown[]): MasteringChainResult {
   return withEntry('masterAudio', () => {
-    const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
-    assertChainCallbacks(r);
-    if (!isAbsent(r.preset)) {
-      assertString(r.preset, 'preset');
-    }
-    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-      throw refuseType('give preset or overrides');
-    }
+    const r = sampleOneShot<MasterAudioRequest>('masterAudio', args, assertMasterAudioShape);
     assertAudioInput(r.samples, r.sampleRate, r);
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;
@@ -488,13 +489,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
 export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult {
   return withEntry('masterAudioStereo', () => {
     const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
-    assertChainCallbacks(r);
-    if (!isAbsent(r.preset)) {
-      assertString(r.preset, 'preset');
-    }
-    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-      throw refuseType('give preset or overrides');
-    }
+    assertMasterAudioShape(r);
     assertSampleRate(r.sampleRate);
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');

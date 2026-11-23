@@ -189,6 +189,20 @@ describe('request-object equivalence', () => {
     expect(error.message).toBe('stft: unexpected argument after the request object');
   });
 
+  it('refuses a missing mastering selector before a fractional rate in mono and stereo', async () => {
+    const sampleRate = 22050.5;
+    const stereo = { left: SIG2, right: SIG2, sampleRate };
+    for (const [name, call] of [
+      ['masterAudio', () => sonare.masterAudio({ samples: SIG2, sampleRate })],
+      ['masterAudio', () => sonare.masterAudio(SIG2, sampleRate)],
+      ['masterAudioStereo', () => sonare.masterAudioStereo(stereo)],
+    ] as const) {
+      const error = await captureRefusal(call);
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error.message).toBe(`${name}: give preset or overrides`);
+    }
+  });
+
   const empty = new Float32Array(0);
   const booleanOptions = [
     ['stft', sonare.stft, { db: 'yes' }, 'db'],

@@ -851,6 +851,7 @@ function assertNoExtraArguments(args: readonly unknown[], from: number): void {
 export function sampleOneShot<R extends SampleRequest>(
   requestName: RequestFn,
   args: readonly unknown[],
+  checkShape?: (request: R) => void,
 ): R {
   const first = args[0];
   let request: Record<string, unknown>;
@@ -883,8 +884,10 @@ export function sampleOneShot<R extends SampleRequest>(
   }
   const sampleRate = request.sampleRate;
   assertIntegerType(sampleRate, 'sampleRate');
+  const normalized = request as unknown as R;
+  checkShape?.(normalized);
   assertSampleRateRange(sampleRate);
-  return request as unknown as R;
+  return normalized;
 }
 
 /**

@@ -15,14 +15,24 @@ import { assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 type NativeResult = Record<string, unknown>;
 
-/** Throws `TypeError` unless `onProgress` and `cancel` are each absent or a function. */
-function assertChainCallbacks(request: object): void {
+/** Throws `TypeError` when neither `preset` nor `overrides` is given. */
+function assertChainSelector(request: Pick<MasterAudioRequest, 'preset' | 'overrides'>): void {
+  if (isAbsent(request.preset) && isAbsent(request.overrides)) {
+    throw refuseType('give preset or overrides');
+  }
+}
+
+/** Throws `TypeError` on a non-function callback or when neither `preset` nor `overrides` is given. */
+function assertMasterAudioShape(
+  request: Pick<MasterAudioRequest, 'preset' | 'overrides' | 'onProgress' | 'cancel'>,
+): void {
   for (const name of ['onProgress', 'cancel'] as const) {
-    const callback = (request as Record<string, unknown>)[name];
+    const callback = request[name];
     if (!isAbsent(callback) && typeof callback !== 'function') {
       throw refuseType(`${name} must be a function`);
     }
   }
+  assertChainSelector(request);
 }
 
 /** Request for {@link streamingLoudnessGain}. */
@@ -200,11 +210,7 @@ export function masterAudio(
 ): MasteringChainResult;
 export function masterAudio(...args: unknown[]): MasteringChainResult {
   return withEntry('masterAudio', () => {
-    const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
-    assertChainCallbacks(r);
-    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-      throw refuseType('give preset or overrides');
-    }
+    const r = sampleOneShot<MasterAudioRequest>('masterAudio', args, assertMasterAudioShape);
     assertAudioInput(r.samples, r.sampleRate, r);
     const overrides = chainConfigJson('overrides', r.overrides);
     const preset = r.preset ?? null;
@@ -230,10 +236,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
 export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult {
   return withEntry('masterAudioStereo', () => {
     const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
-    assertChainCallbacks(r);
-    if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-      throw refuseType('give preset or overrides');
-    }
+    assertMasterAudioShape(r);
     assertAudioInput(r.left, r.sampleRate, r, 'left');
     assertAudioInput(r.right, r.sampleRate, r, 'right');
     if (r.left.length !== r.right.length) {
@@ -322,10 +325,11 @@ export function masterAudioAsync(
 export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResult> {
   return withEntry('masterAudioAsync', () => {
     try {
-      const r = sampleOneShot<MasterAudioAsyncRequest>('masterAudioAsync', args);
-      if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-        throw refuseType('give preset or overrides');
-      }
+      const r = sampleOneShot<MasterAudioAsyncRequest>(
+        'masterAudioAsync',
+        args,
+        assertChainSelector,
+      );
       assertAudioInput(r.samples, r.sampleRate, r);
       return addon
         .masterAudioAsync(
@@ -348,9 +352,7 @@ export function masterAudioStereoAsync(
   return withEntry('masterAudioStereoAsync', () => {
     try {
       const r = requestOnly<MasterAudioStereoAsyncRequest>('masterAudioStereoAsync', [request]);
-      if (isAbsent(r.preset) && isAbsent(r.overrides)) {
-        throw refuseType('give preset or overrides');
-      }
+      assertChainSelector(r);
       assertAudioInput(r.left, r.sampleRate, r, 'left');
       assertAudioInput(r.right, r.sampleRate, r, 'right');
       if (r.left.length !== r.right.length) {
