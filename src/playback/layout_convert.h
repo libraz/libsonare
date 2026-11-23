@@ -40,11 +40,6 @@ struct OutputBus {
 /// Bus for a prepared configuration.
 OutputBus make_output_bus(const PrepareConfig& config) noexcept;
 
-/// Validates `input.channel_map`: @p length equals `channel_count(layout)` and
-/// the roles cover the layout's role set exactly once.
-/// @throws SonareException(InvalidParameter) describing the violation.
-void validate_channel_map(ChannelLayout layout, const SpeakerRole* map, int length);
-
 /// Bed a front end hands to the converter: the input layout, or the upmix
 /// output layout when the source is stereo and the bus is not stereo speakers.
 ChannelLayout converted_source_layout(ChannelLayout input, const OutputBus& bus) noexcept;

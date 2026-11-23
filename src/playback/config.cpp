@@ -1,15 +1,15 @@
 #include "playback/config.h"
 
-#include <cmath>
+#include <array>
 #include <initializer_list>
 #include <limits>
 #include <string>
 
-#include "playback/layout_convert.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
 #include "util/json_schema.h"
 #include "util/number_format.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::playback {
 
@@ -18,9 +18,26 @@ namespace {
 using util::json::Value;
 namespace schema = util::json::schema;
 
-[[noreturn]] void fail(const std::string& message) {
-  throw SonareException(ErrorCode::InvalidParameter, message);
+using Refusal = SonareParameterRefusal;
+constexpr ErrorCode kDocumentError = ErrorCode::InvalidFormat;
+constexpr int kRendererConfigVersion = 2;
+
+[[noreturn]] void refuse_at(const std::string& path, const std::string& predicate,
+                            ErrorCode code = kDocumentError) {
+  throw Refusal::predicate(code, path, predicate).as_caller_spelled();
 }
+
+[[noreturn]] void refuse_kind(const std::string& path, schema::Kind kind) {
+  if (path.empty()) throw SonareException(kDocumentError, schema::must_be(path, kind));
+  throw Refusal::wrong_type(kDocumentError, path, std::string("must be ") + schema::kind_text(kind))
+      .as_caller_spelled();
+}
+
+[[noreturn]] void refuse_unknown(const std::string& path) {
+  throw Refusal::unknown(kDocumentError, path).as_caller_spelled();
+}
+
+void validate_renderer_values(const RendererConfig& config, ErrorCode code);
 
 std::string speaker_path(SpeakerRole role) {
   return schema::child_path(schema::child_path(schema::child_path("", "target"), "speakers"),
@@ -69,61 +86,64 @@ constexpr EarlierRole kEarlierRoles[] = {
     {"Rss", "rightSideSurround"},
 };
 
-/// Refuses an earlier role token by name; `path` is where it was written, `current_parent` the
-/// parent path the current spelling would sit under (null when the token is a value).
+/// Refuses an earlier role token, naming the full replacement path for a key.
 void refuse_earlier_role(const std::string& token, const std::string& path,
-                         const std::string* current_parent) {
+                         const std::string* parent) {
   for (const EarlierRole& earlier : kEarlierRoles) {
-    if (token == earlier.old_name) {
-      const std::string current = current_parent != nullptr
-                                      ? schema::child_path(*current_parent, earlier.new_name)
-                                      : std::string(earlier.new_name);
-      fail(schema::refusal(path, "is an earlier spelling; write " + current));
+    if (token != earlier.old_name) continue;
+    if (parent == nullptr) {
+      refuse_at(path, std::string("is an earlier spelling; write ") + earlier.new_name);
     }
+    throw Refusal::relation(kDocumentError, {path, schema::child_path(*parent, earlier.new_name)},
+                            "{0} is an earlier spelling; write {1}")
+        .as_caller_spelled();
   }
 }
 
 void check_keys(const Value& object, const std::string& path,
                 std::initializer_list<const char*> keys) {
-  if (!object.is_object()) fail(schema::must_be(path, schema::Kind::Object));
+  if (!object.is_object()) refuse_kind(path, schema::Kind::Object);
   for (const auto& entry : object.as_object()) {
     bool known = false;
     for (const char* key : keys) known = known || entry.first == key;
     if (known) continue;
+    const std::string at = schema::child_path(path, entry.first);
     for (const EarlierKey& earlier : kEarlierKeys) {
       if (entry.first == earlier.old_key) {
-        fail(schema::refusal(
-            schema::child_path(path, entry.first),
-            "is an earlier spelling; write " + schema::child_path(path, earlier.new_key)));
+        throw Refusal::relation(kDocumentError, {at, schema::child_path(path, earlier.new_key)},
+                                "{0} is an earlier spelling; write {1}")
+            .as_caller_spelled();
       }
     }
-    fail(schema::unknown_key(schema::child_path(path, entry.first)));
+    refuse_unknown(at);
   }
 }
 
 /// A JSON number narrowed to float; a value no float can hold is refused.
 float read_float(const Value& value, const std::string& key) {
-  if (!value.is_number()) fail(schema::must_be(key, schema::Kind::Number));
-  const double number = value.as_number();
-  if (!std::isfinite(number) ||
-      std::fabs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
-    fail(schema::refusal(key, schema::kFloatRangePredicate));
+  if (!value.is_number()) refuse_kind(key, schema::Kind::Number);
+  float converted = 0.0f;
+  if (!numeric::checked_float_cast(value.as_number(), &converted)) {
+    refuse_at(key, schema::kFloatRangePredicate);
   }
-  return static_cast<float>(number);
+  return converted;
 }
 
 bool read_bool(const Value& value, const std::string& key) {
-  if (!value.is_bool()) fail(schema::must_be(key, schema::Kind::Boolean));
+  if (!value.is_bool()) refuse_kind(key, schema::Kind::Boolean);
   return value.as_bool();
 }
 
 std::string read_string(const Value& value, const std::string& key) {
-  if (!value.is_string()) fail(schema::must_be(key, schema::Kind::String));
+  if (!value.is_string()) refuse_kind(key, schema::Kind::String);
   return value.as_string();
 }
 
-void check_range(float value, double lo, double hi, const std::string& key) {
-  if (!(value >= lo && value <= hi)) fail(schema::refusal(key, schema::range_predicate(lo, hi)));
+void check_range(ErrorCode code, float value, double lo, double hi, const std::string& key) {
+  if (!(value >= lo && value <= hi)) {
+    throw Refusal::predicate(code, key, schema::range_predicate(lo, hi), {lo, hi})
+        .as_caller_spelled();
+  }
 }
 
 bool layout_has_speaker(ChannelLayout layout, SpeakerRole role) {
@@ -149,6 +169,26 @@ std::string input_key(const char* field) { return schema::child_path("input", fi
 constexpr const char* kNeedsFixedLayout = "requires a fixed input.layout";
 constexpr const char* kTargetLayoutDomain = "must be one of stereo, 5.1, 7.1";
 
+/// Refuses a channel map that does not name each role of the fixed input layout exactly once.
+void check_channel_map(const PrepareConfig& prepare, ErrorCode code) {
+  const std::string map_path = input_key("channelMap");
+  const ChannelLayout layout = to_channel_layout(prepare.input_layout);
+  const int count = channel_count(layout);
+  // With one entry per channel, distinct roles of the layout cover every role it requires.
+  std::array<bool, kSpeakerRoleCount> allowed{};
+  std::array<bool, kSpeakerRoleCount> seen{};
+  const SpeakerRole* roles = speaker_roles(layout);
+  for (int i = 0; i < count; ++i) allowed[static_cast<size_t>(roles[i])] = true;
+  for (int i = 0; i < count; ++i) {
+    const size_t role = static_cast<size_t>(prepare.channel_map[static_cast<size_t>(i)]);
+    const std::string key = schema::index_path(map_path, static_cast<size_t>(i));
+    if (role >= allowed.size()) refuse_at(key, "must be a speaker role", code);
+    if (!allowed[role]) refuse_at(key, "must be a role of the input layout", code);
+    if (seen[role]) refuse_at(key, "must be distinct from earlier channel roles", code);
+    seen[role] = true;
+  }
+}
+
 void parse_input(const Value& input, PrepareConfig& prepare) {
   check_keys(input, "input", {"layout", "channelMap"});
   if (const Value* layout = input.find("layout")) {
@@ -162,30 +202,30 @@ void parse_input(const Value& input, PrepareConfig& prepare) {
                              : bed == ChannelLayout::FivePointOne ? InputLayout::FivePointOne
                                                                   : InputLayout::SevenPointOne;
     } else {
-      fail(schema::refusal(input_key("layout"), "must be one of auto, mono, stereo, 5.1, 7.1"));
+      refuse_at(input_key("layout"), "must be one of auto, mono, stereo, 5.1, 7.1");
     }
   }
   const Value* map = input.find("channelMap");
   if (map == nullptr) return;
   const std::string map_path = input_key("channelMap");
-  if (!map->is_array()) fail(schema::must_be(map_path, schema::Kind::Array));
-  if (prepare.input_layout == InputLayout::Auto) fail(schema::refusal(map_path, kNeedsFixedLayout));
+  if (!map->is_array()) refuse_kind(map_path, schema::Kind::Array);
+  if (prepare.input_layout == InputLayout::Auto) refuse_at(map_path, kNeedsFixedLayout);
   const ChannelLayout layout = to_channel_layout(prepare.input_layout);
   const auto& items = map->as_array();
   const int length = static_cast<int>(items.size());
   if (length != channel_count(layout)) {
-    fail(schema::refusal(map_path, "must hold " + std::to_string(channel_count(layout)) +
-                                       " entries, one per channel of the layout"));
+    refuse_at(map_path, "must hold " + std::to_string(channel_count(layout)) +
+                            " entries, one per channel of the layout");
   }
   for (int i = 0; i < length; ++i) {
     const std::string key = schema::index_path(map_path, static_cast<size_t>(i));
     SpeakerRole role = SpeakerRole::L;
     const std::string token = read_string(items[static_cast<size_t>(i)], key);
     refuse_earlier_role(token, key, nullptr);
-    if (!parse_speaker_role(token, &role)) fail(schema::refusal(key, "must be a speaker role"));
+    if (!parse_speaker_role(token, &role)) refuse_at(key, "must be a speaker role");
     prepare.channel_map[static_cast<size_t>(i)] = role;
   }
-  validate_channel_map(layout, prepare.channel_map.data(), length);
+  check_channel_map(prepare, kDocumentError);
   prepare.has_channel_map = true;
 }
 
@@ -208,7 +248,7 @@ void parse_speaker(const Value& speaker, SpeakerRole role, RendererConfig& confi
     } else if (text == "small") {
       prepare.size = SpeakerSize::Small;
     } else {
-      fail(schema::refusal(speaker_key(role, "size"), "must be large or small"));
+      refuse_at(speaker_key(role, "size"), "must be large or small");
     }
   }
 }
@@ -223,36 +263,40 @@ void parse_target(const Value& target, RendererConfig& config) {
     } else if (text == "speakers") {
       prepare.target_kind = TargetKind::Speakers;
     } else {
-      fail(schema::refusal(schema::child_path("target", "kind"), "must be headphones or speakers"));
+      refuse_at(schema::child_path("target", "kind"), "must be headphones or speakers");
     }
   }
   const Value* layout = target.find("layout");
   if (prepare.target_kind == TargetKind::Speakers) {
     const std::string layout_path = schema::child_path("target", "layout");
-    if (layout == nullptr) fail(schema::refusal(layout_path, "must be given for speakers"));
+    if (layout == nullptr) {
+      throw Refusal::wrong_type(kDocumentError, layout_path, "must be given for speakers")
+          .as_caller_spelled();
+    }
     const std::string& text = read_string(*layout, layout_path);
     if (!channel_layout_from_string(text, prepare.target_layout) ||
         prepare.target_layout == ChannelLayout::Mono) {
-      fail(schema::refusal(layout_path, kTargetLayoutDomain));
+      refuse_at(layout_path, kTargetLayoutDomain);
     }
   } else if (layout != nullptr) {
-    fail(
-        schema::refusal(schema::child_path("target", "layout"), "must be left out for headphones"));
+    throw Refusal::wrong_type(kDocumentError, schema::child_path("target", "layout"),
+                              "must be left out for headphones")
+        .as_caller_spelled();
   }
 
   if (const Value* speakers = target.find("speakers")) {
     const std::string speakers_path = schema::child_path("target", "speakers");
-    if (!speakers->is_object()) fail(schema::must_be(speakers_path, schema::Kind::Object));
+    if (!speakers->is_object()) refuse_kind(speakers_path, schema::Kind::Object);
     for (const auto& entry : speakers->as_object()) {
       SpeakerRole role = SpeakerRole::L;
       const std::string entry_path = schema::child_path(speakers_path, entry.first);
       refuse_earlier_role(entry.first, entry_path, &speakers_path);
       if (!parse_speaker_role(entry.first, &role) || role == SpeakerRole::LFE) {
-        fail(schema::unknown_key(entry_path));
+        refuse_unknown(entry_path);
       }
       if (prepare.target_kind != TargetKind::Speakers ||
           !layout_has_speaker(prepare.target_layout, role)) {
-        fail(schema::refusal(entry_path, "must be a speaker of the output layout"));
+        refuse_at(entry_path, "must be a speaker of the output layout");
       }
       parse_speaker(entry.second, role, config);
     }
@@ -326,8 +370,8 @@ void parse_sections(const Value& root, RendererConfig& config) {
         }
       }
       if (!found) {
-        fail(schema::refusal(schema::child_path("room", "preset"),
-                             "must be one of none, livingRoom, homeTheater, screeningRoom"));
+        refuse_at(schema::child_path("room", "preset"),
+                  "must be one of none, livingRoom, homeTheater, screeningRoom");
       }
     }
     if (const Value* v = room->find("mixDb"))
@@ -412,43 +456,44 @@ const char* room_preset_name(RoomPreset preset) noexcept {
 }
 
 RendererConfig parse_renderer_config(std::string_view json) {
-  // The field readers and validate_renderer_config also serve callers that hand over a
-  // RendererConfig struct, where a refusal is the caller's argument. Everything refused while
-  // reading this document is its content.
+  Value root;
   try {
-    Value root;
-    try {
-      root = util::json::admit_strict(std::string(json));
-    } catch (const util::json::JsonError& e) {
-      fail(e.what());
-    }
-    if (const Value* version = root.is_object() ? root.find("version") : nullptr) {
-      if (!version->is_number() || version->as_number() != 2.0)
-        fail(schema::refusal("version", "must be 2"));
-    }
-    check_keys(root, "",
-               {"version", "input", "target", "lfeMixDb", "upmix", "dialogueLevelDb", "loudness",
-                "nightMode", "room", "headTracking", "outputLimiter"});
-    RendererConfig config;
-    if (const Value* input = root.find("input")) parse_input(*input, config.prepare);
-    if (const Value* target = root.find("target")) {
-      parse_target(*target, config);
-    } else {
-      parse_target(Value(util::json::Object{}), config);
-    }
-    parse_sections(root, config);
-    validate_renderer_config(config);
-    return config;
-  } catch (const SonareException& e) {
-    if (e.code() != ErrorCode::InvalidParameter) throw;
-    throw SonareException(ErrorCode::InvalidFormat, e.what());
+    root = util::json::admit_strict(std::string(json));
+  } catch (const util::json::JsonDuplicateKeyError& e) {
+    throw SonareException(kDocumentError, e.what());
+  } catch (const util::json::JsonResourceError& e) {
+    throw SonareException(kDocumentError, e.what());
+  } catch (const util::json::JsonError& e) {
+    throw SonareException(
+        kDocumentError,
+        schema::refusal("the document", std::string("must be valid JSON: ") + e.what()));
   }
+  if (const Value* version = root.is_object() ? root.find("version") : nullptr) {
+    if (!version->is_number()) refuse_kind("version", schema::Kind::Number);
+    if (version->as_number() != kRendererConfigVersion) {
+      refuse_at("version", "must be " + std::to_string(kRendererConfigVersion));
+    }
+  }
+  check_keys(root, "",
+             {"version", "input", "target", "lfeMixDb", "upmix", "dialogueLevelDb", "loudness",
+              "nightMode", "room", "headTracking", "outputLimiter"});
+  RendererConfig config;
+  if (const Value* input = root.find("input")) parse_input(*input, config.prepare);
+  if (const Value* target = root.find("target")) {
+    parse_target(*target, config);
+  } else {
+    parse_target(Value(util::json::Object{}), config);
+  }
+  parse_sections(root, config);
+  validate_renderer_values(config, kDocumentError);
+  return config;
 }
 
 std::string serialize_renderer_config(const RendererConfig& config) {
   const PrepareConfig& p = config.prepare;
   const RealtimeConfig& rt = config.realtime;
-  std::string out = "{\"version\":2,\"input\":{\"layout\":\"";
+  std::string out =
+      "{\"version\":" + std::to_string(kRendererConfigVersion) + ",\"input\":{\"layout\":\"";
   out += input_layout_name(p.input_layout);
   out += '"';
   if (p.has_channel_map && p.input_layout != InputLayout::Auto) {
@@ -522,21 +567,15 @@ std::string serialize_renderer_config(const RendererConfig& config) {
   return out;
 }
 
-void validate_renderer_config(const RendererConfig& config) {
+namespace {
+
+void validate_renderer_values(const RendererConfig& config, ErrorCode code) {
   const PrepareConfig& p = config.prepare;
   const RealtimeConfig& rt = config.realtime;
 
-  if (p.has_channel_map) {
-    if (p.input_layout == InputLayout::Auto) {
-      fail(schema::refusal(input_key("channelMap"), kNeedsFixedLayout));
-    }
-    const ChannelLayout layout = to_channel_layout(p.input_layout);
-    validate_channel_map(layout, p.channel_map.data(), channel_count(layout));
-  }
-
   const bool speakers = p.target_kind == TargetKind::Speakers;
   if (speakers && p.target_layout == ChannelLayout::Mono) {
-    fail(schema::refusal(schema::child_path("target", "layout"), kTargetLayoutDomain));
+    refuse_at(schema::child_path("target", "layout"), kTargetLayoutDomain, code);
   }
   for (int r = 0; r < kSpeakerRoleCount; ++r) {
     const auto role = static_cast<SpeakerRole>(r);
@@ -544,44 +583,63 @@ void validate_renderer_config(const RendererConfig& config) {
     const float trim = rt.trim_db[static_cast<size_t>(r)];
     if (!speakers || !layout_has_speaker(p.target_layout, role)) {
       if (sp.has_distance || sp.size != SpeakerSize::Large || trim != 0.0f) {
-        fail(schema::refusal(speaker_path(role), "must be a speaker of the output layout"));
+        refuse_at(speaker_path(role), "must be a speaker of the output layout", code);
       }
       continue;
     }
-    if (sp.has_distance) check_range(sp.distance_m, 0.1, 30.0, speaker_key(role, "distanceM"));
-    check_range(trim, -20.0, 20.0, speaker_key(role, "trimDb"));
+    if (sp.has_distance)
+      check_range(code, sp.distance_m, 0.1, 30.0, speaker_key(role, "distanceM"));
+    check_range(code, trim, -20.0, 20.0, speaker_key(role, "trimDb"));
   }
 
   const BassManagementConfig& bm = p.bass_management;
-  check_range(bm.crossover_hz, 40.0, 200.0, bass_key("crossoverHz"));
-  check_range(rt.lfe_gain_db, -10.0, 15.0, bass_key("lfeGainDb"));
+  check_range(code, bm.crossover_hz, 40.0, 200.0, bass_key("crossoverHz"));
+  check_range(code, rt.lfe_gain_db, -10.0, 15.0, bass_key("lfeGainDb"));
   if (speakers && bm.enabled) {
     if (bm.subwoofer && p.target_layout == ChannelLayout::Stereo) {
-      fail(schema::refusal(bass_key("subwoofer"), "must be false when " +
-                                                      schema::child_path("target", "layout") +
-                                                      " is stereo, which has no LFE plane"));
+      throw Refusal::relation(code, {bass_key("subwoofer"), schema::child_path("target", "layout")},
+                              "{0} must be false when {1} is stereo, which has no LFE plane")
+          .as_caller_spelled();
     }
     const auto size_of = [&](SpeakerRole role) {
       return p.speakers[static_cast<size_t>(role)].size;
     };
     if (!bm.subwoofer && (size_of(SpeakerRole::L) == SpeakerSize::Small ||
                           size_of(SpeakerRole::R) == SpeakerSize::Small)) {
-      fail(schema::refusal(bass_key("subwoofer"),
-                           "must be true unless " + speaker_key(SpeakerRole::L, "size") + " and " +
-                               speaker_key(SpeakerRole::R, "size") + " are large"));
+      throw Refusal::relation(code,
+                              {bass_key("subwoofer"), speaker_key(SpeakerRole::L, "size"),
+                               speaker_key(SpeakerRole::R, "size")},
+                              "{0} must be true unless {1} and {2} are large")
+          .as_caller_spelled();
     }
   }
 
-  check_range(rt.lfe_mix_db, -60.0, 10.0, "lfeMixDb");
-  check_range(rt.upmix_center_width, 0.05, 1.0, schema::child_path("upmix", "centerWidth"));
-  check_range(rt.upmix_front_ambience, 0.0, 1.0, schema::child_path("upmix", "frontAmbience"));
-  check_range(rt.dialogue_level_db, -12.0, 12.0, "dialogueLevelDb");
+  check_range(code, rt.lfe_mix_db, -60.0, 10.0, "lfeMixDb");
+  check_range(code, rt.upmix_center_width, 0.05, 1.0, schema::child_path("upmix", "centerWidth"));
+  check_range(code, rt.upmix_front_ambience, 0.0, 1.0,
+              schema::child_path("upmix", "frontAmbience"));
+  check_range(code, rt.dialogue_level_db, -12.0, 12.0, "dialogueLevelDb");
   if (rt.has_program_lufs)
-    check_range(rt.program_lufs, -70.0, 0.0, schema::child_path("loudness", "programLufs"));
-  check_range(rt.target_lufs, -40.0, -5.0, schema::child_path("loudness", "targetLufs"));
-  check_range(rt.night_amount, 0.0, 1.0, schema::child_path("nightMode", "amount"));
-  check_range(rt.room_mix_db, -30.0, 6.0, schema::child_path("room", "mixDb"));
-  check_range(rt.limiter_ceiling_db, -12.0, 0.0, schema::child_path("outputLimiter", "ceilingDb"));
+    check_range(code, rt.program_lufs, -70.0, 0.0, schema::child_path("loudness", "programLufs"));
+  check_range(code, rt.target_lufs, -40.0, -5.0, schema::child_path("loudness", "targetLufs"));
+  check_range(code, rt.night_amount, 0.0, 1.0, schema::child_path("nightMode", "amount"));
+  check_range(code, rt.room_mix_db, -30.0, 6.0, schema::child_path("room", "mixDb"));
+  check_range(code, rt.limiter_ceiling_db, -12.0, 0.0,
+              schema::child_path("outputLimiter", "ceilingDb"));
+}
+
+}  // namespace
+
+void validate_renderer_config(const RendererConfig& config) {
+  constexpr ErrorCode code = ErrorCode::InvalidParameter;
+  const PrepareConfig& p = config.prepare;
+  if (p.has_channel_map) {
+    if (p.input_layout == InputLayout::Auto) {
+      refuse_at(input_key("channelMap"), kNeedsFixedLayout, code);
+    }
+    check_channel_map(p, code);
+  }
+  validate_renderer_values(config, code);
 }
 
 std::string first_prepare_difference(const PrepareConfig& current, const PrepareConfig& next) {

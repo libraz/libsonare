@@ -176,33 +176,49 @@ TEST_CASE("mono to 5.1 speakers feeds only the centre plane", "[playback][layout
   for (int ch : {0, 1, 3, 4, 5}) CHECK(energy(out[static_cast<size_t>(ch)]) == 0.0);
 }
 
+namespace {
+
+/// Typed 5.1 config carrying @p map as its input channel map.
+RendererConfig mapped_config(const std::array<SpeakerRole, 6>& map) {
+  RendererConfig config;
+  config.prepare.input_layout = InputLayout::FivePointOne;
+  config.prepare.has_channel_map = true;
+  for (size_t i = 0; i < map.size(); ++i) config.prepare.channel_map[i] = map[i];
+  return config;
+}
+
+/// Checks that @p map is refused as an argument at @p subject.
+void check_map_refused(const std::array<SpeakerRole, 6>& map, const char* subject) {
+  try {
+    validate_renderer_config(mapped_config(map));
+    FAIL("expected a channel map refusal");
+  } catch (const sonare::SonareParameterRefusal& e) {
+    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(e.subject() == subject);
+    CHECK(e.form() == sonare::SonareParameterRefusal::Form::Predicate);
+  }
+}
+
+}  // namespace
+
 TEST_CASE("channel map validation rejects a duplicated role", "[playback][layout]") {
-  const std::array<SpeakerRole, 6> map = {SpeakerRole::C,  SpeakerRole::L,  SpeakerRole::R,
-                                          SpeakerRole::Ls, SpeakerRole::Ls, SpeakerRole::LFE};
-  REQUIRE_THROWS_AS(validate_channel_map(ChannelLayout::FivePointOne, map.data(), 6),
-                    sonare::SonareException);
-}
-
-TEST_CASE("channel map validation rejects a missing role", "[playback][layout]") {
-  const std::array<SpeakerRole, 6> map = {SpeakerRole::C,  SpeakerRole::L,  SpeakerRole::R,
-                                          SpeakerRole::Ls, SpeakerRole::Ls, SpeakerRole::LFE};
-  // Duplicates Ls and never states Rs: also a missing-role violation.
-  REQUIRE_THROWS_AS(validate_channel_map(ChannelLayout::FivePointOne, map.data(), 6),
-                    sonare::SonareException);
-}
-
-TEST_CASE("channel map validation rejects the wrong length", "[playback][layout]") {
-  const std::array<SpeakerRole, 5> map = {SpeakerRole::L, SpeakerRole::R, SpeakerRole::C,
-                                          SpeakerRole::Ls, SpeakerRole::Rs};
-  REQUIRE_THROWS_AS(validate_channel_map(ChannelLayout::FivePointOne, map.data(), 5),
-                    sonare::SonareException);
+  // Duplicates Ls and so never states Rs.
+  check_map_refused({SpeakerRole::C, SpeakerRole::L, SpeakerRole::R, SpeakerRole::Ls,
+                     SpeakerRole::Ls, SpeakerRole::LFE},
+                    "input.channelMap[4]");
 }
 
 TEST_CASE("channel map validation rejects a role outside the layout", "[playback][layout]") {
-  const std::array<SpeakerRole, 6> map = {SpeakerRole::C,  SpeakerRole::L,   SpeakerRole::R,
-                                          SpeakerRole::Ls, SpeakerRole::Lss, SpeakerRole::LFE};
-  REQUIRE_THROWS_AS(validate_channel_map(ChannelLayout::FivePointOne, map.data(), 6),
-                    sonare::SonareException);
+  check_map_refused({SpeakerRole::C, SpeakerRole::L, SpeakerRole::R, SpeakerRole::Ls,
+                     SpeakerRole::Lss, SpeakerRole::LFE},
+                    "input.channelMap[4]");
+}
+
+TEST_CASE("channel map validation rejects a value outside the role set", "[playback][layout]") {
+  check_map_refused(
+      {SpeakerRole::C, SpeakerRole::L, SpeakerRole::R, SpeakerRole::Ls,
+       static_cast<SpeakerRole>(sonare::playback::kSpeakerRoleCount), SpeakerRole::LFE},
+      "input.channelMap[4]");
 }
 
 TEST_CASE("AAC-order channel map reorders to the same result as canonical order",
@@ -210,7 +226,7 @@ TEST_CASE("AAC-order channel map reorders to the same result as canonical order"
   // AAC channel configuration 6: C L R Ls Rs LFE.
   const std::array<SpeakerRole, 6> aac_map = {SpeakerRole::C,  SpeakerRole::L,  SpeakerRole::R,
                                               SpeakerRole::Ls, SpeakerRole::Rs, SpeakerRole::LFE};
-  REQUIRE_NOTHROW(validate_channel_map(ChannelLayout::FivePointOne, aac_map.data(), 6));
+  REQUIRE_NOTHROW(validate_renderer_config(mapped_config(aac_map)));
 
   // Content keyed by role, independent of plane order.
   std::mt19937 rng(31u);

@@ -8,9 +8,9 @@
 /// created) or a realtime key (published to the audio thread and adopted at the
 /// next block boundary). The two halves live in separate structs so the
 /// realtime half stays trivially copyable for `rt::RtPublisher`. Parsing fills
-/// omitted keys with the schema defaults and rejects unknown keys, out-of-range
-/// values and cross-field violations with `SonareException(InvalidParameter)`
-/// whose message names the key.
+/// omitted keys with the schema defaults; a document is refused with a
+/// `SonareParameterRefusal` coded InvalidFormat whose subject is the document
+/// path, and `validate_renderer_config` refuses a typed config as InvalidParameter.
 
 #include <array>
 #include <cstdint>
@@ -190,7 +190,8 @@ struct RendererConfig {
 };
 
 /// Parses a complete or partial document; omitted keys take schema defaults.
-/// @throws SonareException(InvalidParameter) naming the offending key.
+/// @throws SonareParameterRefusal(InvalidFormat) naming the offending path, or
+///         SonareException(InvalidFormat) for text that is not admissible JSON.
 RendererConfig parse_renderer_config(std::string_view json);
 
 /// Serializes a complete document (every key present) that parses back to
@@ -198,8 +199,8 @@ RendererConfig parse_renderer_config(std::string_view json);
 std::string serialize_renderer_config(const RendererConfig& config);
 
 /// Cross-field rules (target.layout presence, speakers keys within the output
-/// layout, bass-management destinations, channel_map with auto).
-/// @throws SonareException(InvalidParameter).
+/// layout, bass-management destinations, channel_map roles).
+/// @throws SonareParameterRefusal(InvalidParameter) naming the offending path.
 void validate_renderer_config(const RendererConfig& config);
 
 /// Schema key path of the first prepare key that differs, or empty when equal.

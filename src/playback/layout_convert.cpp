@@ -4,7 +4,6 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <string>
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
@@ -13,7 +12,6 @@
 #include "playback/impulse_tail.h"
 #include "rt/gain_pair_glide.h"
 #include "util/db.h"
-#include "util/exception.h"
 
 namespace sonare::playback {
 
@@ -50,36 +48,6 @@ OutputBus make_output_bus(const PrepareConfig& config) noexcept {
     bus.slots = headphone_slots(config.input_layout);
   }
   return bus;
-}
-
-void validate_channel_map(ChannelLayout layout, const SpeakerRole* map, int length) {
-  const int expected = channel_count(layout);
-  SONARE_CHECK_MSG(length == expected, ErrorCode::InvalidParameter,
-                   "input.channelMap length " + std::to_string(length) +
-                       " does not match layout channel count " + std::to_string(expected));
-
-  std::array<bool, kSpeakerRoleCount> required{};
-  const SpeakerRole* layout_roles = speaker_roles(layout);
-  for (int i = 0; i < expected; ++i) required[static_cast<size_t>(layout_roles[i])] = true;
-
-  std::array<int, kSpeakerRoleCount> seen{};
-  for (int i = 0; i < length; ++i) {
-    const auto role_index = static_cast<size_t>(map[i]);
-    SONARE_CHECK_MSG(role_index < kSpeakerRoleCount, ErrorCode::InvalidParameter,
-                     "input.channelMap: unrecognized role at index " + std::to_string(i));
-    SONARE_CHECK_MSG(required[role_index], ErrorCode::InvalidParameter,
-                     std::string("input.channelMap: role ") + speaker_role_name(map[i]) +
-                         " is not part of the layout");
-    ++seen[role_index];
-    SONARE_CHECK_MSG(seen[role_index] == 1, ErrorCode::InvalidParameter,
-                     std::string("input.channelMap: duplicate role ") + speaker_role_name(map[i]));
-  }
-  for (int r = 0; r < kSpeakerRoleCount; ++r) {
-    SONARE_CHECK_MSG(!required[static_cast<size_t>(r)] || seen[static_cast<size_t>(r)] == 1,
-                     ErrorCode::InvalidParameter,
-                     std::string("input.channelMap: missing role ") +
-                         speaker_role_name(static_cast<SpeakerRole>(r)));
-  }
 }
 
 ChannelLayout converted_source_layout(ChannelLayout input, const OutputBus& bus) noexcept {

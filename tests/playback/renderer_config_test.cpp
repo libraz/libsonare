@@ -100,6 +100,69 @@ TEST_CASE("an unknown key is refused by name", "[playback][config]") {
                  "target.speakers.lfe"));
 }
 
+TEST_CASE("renderer documents carry structured refusals", "[playback][config]") {
+  using Refusal = sonare::SonareParameterRefusal;
+  using Form = Refusal::Form;
+  const struct {
+    const char* json;
+    const char* path;
+    Form form;
+    bool shape_error;
+  } rows[] = {
+      {R"({"upmix":{"width":0.3}})", "upmix.width", Form::UnknownKey, true},
+      {R"({"input":{"layout":"stereo","channelMap":["left",42]}})", "input.channelMap[1]",
+       Form::WrongType, true},
+      {R"({"nightMode":{"amount":1.5}})", "nightMode.amount", Form::Predicate, false},
+      {R"({"target":{"kind":"speakers"}})", "target.layout", Form::WrongType, true},
+      {R"({"target":{"kind":"speakers","layout":"stereo","bassManagement":{"enabled":true}}})",
+       "target.bassManagement.subwoofer", Form::Relation, false},
+      {R"({"input":{"layout":"stereo","channelMap":["left","left"]}})", "input.channelMap[1]",
+       Form::Predicate, false},
+      {R"({"input":{"layout":"stereo","channelMap":["left"]}})", "input.channelMap",
+       Form::Predicate, false},
+      {R"({"input":{"layout":"stereo","channelMap":["left","center"]}})", "input.channelMap[1]",
+       Form::Predicate, false},
+      {R"({"input":{"layout":"stereo","channelMap":["left","Q"]}})", "input.channelMap[1]",
+       Form::Predicate, false},
+      {R"({"version":"2"})", "version", Form::WrongType, true},
+      {R"({"version":3})", "version", Form::Predicate, false},
+  };
+  for (const auto& row : rows) {
+    CAPTURE(row.json);
+    try {
+      parse_renderer_config(row.json);
+      FAIL("expected a structured document refusal");
+    } catch (const Refusal& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK(e.subject() == row.path);
+      CHECK(e.form() == row.form);
+      CHECK(e.shape_error() == row.shape_error);
+      CHECK(e.caller_spelled());
+    }
+  }
+}
+
+TEST_CASE("a document that is not a JSON object is refused without a subject",
+          "[playback][config]") {
+  const std::pair<const char*, const char*> rows[] = {
+      {"[]", "the document must be an object"},
+      {"{", "the document must be valid JSON: "},
+      {R"({"upmix":{"enabled":true,"enabled":false}})", "duplicate key upmix.enabled"},
+  };
+  for (const auto& [json, text] : rows) {
+    CAPTURE(json);
+    try {
+      parse_renderer_config(json);
+      FAIL("expected a document refusal");
+    } catch (const sonare::SonareParameterRefusal&) {
+      FAIL("a whole-document refusal carries no subject");
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK(std::string(e.what()).rfind(text, 0) == 0);
+    }
+  }
+}
+
 TEST_CASE("an out-of-range value is refused by name", "[playback][config]") {
   CHECK(mentions(refusal(R"({"nightMode": {"amount": 1.5}})"), "nightMode.amount"));
   CHECK(mentions(refusal(R"({"room": {"mixDb": 7}})"), "room.mixDb"));
@@ -294,9 +357,23 @@ TEST_CASE("set_config refuses a changed prepare key", "[playback][config]") {
 
 TEST_CASE("the renderer refuses an invalid configuration, rate or block size",
           "[playback][config]") {
+  const auto code_of = [](const RendererConfig& refused) {
+    try {
+      PlaybackRenderer renderer(refused, nullptr, 48000, 512);
+    } catch (const sonare::SonareException& e) {
+      return e.code();
+    }
+    return sonare::ErrorCode::Ok;
+  };
   RendererConfig config = speakers_config(ChannelLayout::FivePointOne);
   config.realtime.night_amount = 2.0f;
-  CHECK_THROWS_AS(PlaybackRenderer(config, nullptr, 48000, 512), sonare::SonareException);
+  CHECK(code_of(config) == sonare::ErrorCode::InvalidParameter);
+  RendererConfig mapped = speakers_config(ChannelLayout::FivePointOne);
+  mapped.prepare.input_layout = InputLayout::Stereo;
+  mapped.prepare.has_channel_map = true;
+  mapped.prepare.channel_map[0] = SpeakerRole::L;
+  mapped.prepare.channel_map[1] = SpeakerRole::L;
+  CHECK(code_of(mapped) == sonare::ErrorCode::InvalidParameter);
   const RendererConfig valid = speakers_config(ChannelLayout::FivePointOne);
   CHECK_THROWS_AS(PlaybackRenderer(valid, nullptr, 0, 512), sonare::SonareException);
   CHECK_THROWS_AS(PlaybackRenderer(valid, nullptr, 48000, 0), sonare::SonareException);
