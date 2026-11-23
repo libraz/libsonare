@@ -93,6 +93,17 @@ SCALAR_HELPERS = {
     "midiCcName",
     "midiCcIndexForName",
     "perNoteControllerName",
+    # MIDI 1.0 <-> 2.0 value scalers: one integer in, one number out.
+    "midiVelocityToMidi2",
+    "midiNoteOnVelocityToMidi2",
+    "midi2VelocityToMidi1",
+    "midi2NoteOnVelocityToMidi1",
+    "midiControlToMidi2",
+    "midiControl14ToMidi2",
+    "midi2ControlToMidi1",
+    "midi2ControlToMidi1Control14",
+    "midiPitchBendToMidi2",
+    "midi2PitchBendToMidi1",
 }
 # Do not add a zero-argument accessor here: the zero-argument clause in
 # exemption() already covers every one of them structurally, and it is the rule
