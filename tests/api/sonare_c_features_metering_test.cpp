@@ -1565,15 +1565,9 @@ TEST_CASE("sonare_vector_normalize refuses a norm_type outside 0..3", "[c_api][f
   }
 }
 
-TEST_CASE("array transforms refuse a non-finite input in the core function they wrap", "[c_api]") {
+TEST_CASE("array transforms refuse a non-finite input", "[c_api]") {
   std::vector<float> input(4096, 0.25f);
   input[100] = std::numeric_limits<float>::quiet_NaN();
-  const auto refused_naming = [](SonareError code, const char* function) {
-    CAPTURE(function);
-    CHECK(code == SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(std::string(sonare_last_error_message()) ==
-          std::string(function) + ": input contains a non-finite sample");
-  };
   const auto refused_as = [](SonareError code, const char* text) {
     CHECK(code == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()) == text);
@@ -1584,19 +1578,19 @@ TEST_CASE("array transforms refuse a non-finite input in the core function they 
   int64_t start = 0;
   int64_t end = 0;
   int n_frames = 0;
-  refused_naming(sonare_preemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
-                 "preemphasis");
-  refused_naming(sonare_deemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
-                 "deemphasis");
+  refused_as(sonare_preemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
+             "input contains a non-finite sample");
+  refused_as(sonare_deemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
+             "input contains a non-finite sample");
   refused_as(sonare_trim_silence(input.data(), input.size(), 60.0f, 2048, 512, &out, &out_length,
                                  &start, &end),
              "x contains a non-finite sample");
   refused_as(
       sonare_split_silence(input.data(), input.size(), 60.0f, 2048, 512, &intervals, &out_length),
       "x contains a non-finite sample");
-  refused_naming(
+  refused_as(
       sonare_frame_signal(input.data(), input.size(), 2048, 512, &out, &out_length, &n_frames),
-      "frame");
+      "input contains a non-finite sample");
   refused_as(sonare_fourier_tempogram(input.data(), 256, 22050, 512, 8, 1, 0, &out, &out_length,
                                       &n_frames),
              "onset_envelope contains a non-finite sample at index 100");
