@@ -176,6 +176,7 @@ This release gives the public interface one set of conventions on every surface 
 - Engine automation is evaluated at each span's timeline offset, so realtime output no longer depends on the host block size.
 - A clip set with no `length_samples` / `lengthSamples` on Node and Python plays to the end of its source from `clipOffsetSamples`, as WASM does.
 - Under the auto input layout a `PlaybackRenderer` whose stream never changes layout reports zero layout switches.
+- Applying an auto-tempo candidate's time signature (`sonare_project_auto_tempo`, and the candidates `analyzeTempo` / `analyze_tempo` report) puts the first signature on the first downbeat's bar phase, at most one bar in, so the bars before the downbeat line up with it and only the opening bar is shortened; a lead-in of a whole number of bars starts the signature at ppq 0.
 - `RealtimeEngine` on WASM refuses 0 or a negative in an engine field whose native 0 is a sentinel (`setMetronome`, `setClips`, `setMidiClips`, `setGraph`, `bounceOffline`, `freezeOffline`) with the range text Node prints, and `clickSamples` is bounded at 384000, `clickSec` at (0, 1] and `ditherBits` at [2, 32].
 
 #### MIDI and synthesizer

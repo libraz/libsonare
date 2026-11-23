@@ -82,7 +82,8 @@ struct TempoEstimate {
   /// Tempo segments (start_ppq, bpm, start_sample, optional end_bpm ramp),
   /// directly consumable by transport::TempoMap::set_segments.
   std::vector<transport::TempoSegment> segments;
-  /// Time-signature segments, consumable by set_time_signatures.
+  /// Time-signature segments, consumable by set_time_signatures. The first starts on the
+  /// first downbeat's bar phase, at most one bar in, so only the opening bar is truncated.
   std::vector<transport::TimeSignatureSegment> time_sigs;
   /// Confidence in [0, 1]. The primary estimate scores highest; half/double
   /// variants are discounted.

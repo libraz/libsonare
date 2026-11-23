@@ -323,8 +323,10 @@ TEST_CASE("mir bridge anchors bar phase to detected downbeat", "[mir]") {
   REQUIRE(dbl != nullptr);
   REQUIRE(half != nullptr);
 
+  // The first signature sits on the downbeat's bar phase: ppq 2, 4 and 1, each reduced by
+  // whole bars, so the double candidate's downbeat at ppq 4 stores it at ppq 0.
   REQUIRE(primary->time_sigs.front().start_ppq == Catch::Approx(2.0));
-  REQUIRE(dbl->time_sigs.front().start_ppq == Catch::Approx(4.0));
+  REQUIRE(dbl->time_sigs.front().start_ppq == 0.0);
   REQUIRE(half->time_sigs.front().start_ppq == Catch::Approx(1.0));
 
   sonare::transport::TempoMap map;
@@ -507,5 +509,68 @@ TEST_CASE("mir bridge places the grid on beats that start after a lead-in", "[mi
               Catch::Approx(want[static_cast<size_t>(k)] + kLeadIn).margin(0.002));
       }
     }
+  }
+}
+
+TEST_CASE("mir bridge puts every bar line before the first downbeat on its phase", "[mir]") {
+  struct Row {
+    const char* name;
+    int numerator;
+    double first_beat_s;  // 120 BPM: one beat is 0.5 s and 1 ppq
+    int downbeat_index;
+    double first_sig_ppq;
+  };
+  const Row rows[] = {
+      // Downbeat at 5 s (ppq 10): bar lines at 1, 3 and 5 s, not 2 and 4 s.
+      {"lead-in of two and a half bars", 4, 0.5, 9, 2.0},
+      {"lead-in shorter than a bar", 4, 0.5, 1, 2.0},
+      {"lead-in of exactly one bar", 4, 0.5, 3, 0.0},
+      {"three-four", 3, 0.5, 7, 2.0},
+      // A lead-in within float fuzz of a whole bar opens no sliver bar.
+      {"lead-in a float step past a whole bar", 4, 1.0 + 1.2e-7, 2, 0.0},
+      {"lead-in a float step short of a whole bar", 4, 1.0 - 1.2e-7, 2, 0.0},
+  };
+  for (const Row& row : rows) {
+    CAPTURE(row.name);
+    BeatAnalysisInput in = make_constant_fixture(120.0, 24);
+    in.time_signature = TimeSignature{row.numerator, 4, 1.0f};
+    for (Beat& beat : in.beats) {
+      beat.time += static_cast<float>(row.first_beat_s);
+      beat.frame = static_cast<int>(std::lround(beat.time * in.sample_rate / in.hop_length));
+    }
+    for (int i = row.downbeat_index; i < static_cast<int>(in.beats.size()); i += row.numerator) {
+      in.downbeat_indices.push_back(i);
+    }
+    const std::vector<TempoEstimate> cands = estimate_tempo(in);
+    REQUIRE_FALSE(cands.empty());
+    const TempoEstimate& est = cands.front();
+    REQUIRE(est.time_sigs.size() == 1);
+    if (row.first_sig_ppq == 0.0) {
+      CHECK(est.time_sigs.front().start_ppq == 0.0);
+    } else {
+      CHECK(est.time_sigs.front().start_ppq == Catch::Approx(row.first_sig_ppq).margin(1e-6));
+    }
+
+    sonare::transport::TempoMap map;
+    map.prepare(in.sample_rate);
+    map.set_segments(est.segments);
+    map.set_time_signatures(est.time_sigs);
+    const double bar_len = sonare::transport::bar_length_ppq(est.time_sigs.front().time_sig);
+    auto beat_ppq = [&](size_t index) {
+      return map.sample_to_ppq(std::llround(in.beats[index].time * in.sample_rate));
+    };
+    const double downbeat = beat_ppq(static_cast<size_t>(row.downbeat_index));
+    // Every detected beat a whole number of bars from the downbeat starts a bar, and the bar
+    // index at the downbeat counts the opening partial bar as one.
+    for (size_t i = 0; i < in.beats.size(); ++i) {
+      const int from_downbeat = static_cast<int>(i) - row.downbeat_index;
+      if (from_downbeat % row.numerator != 0) continue;
+      CAPTURE(i);
+      const double ppq = beat_ppq(i);
+      CHECK(map.bar_start_ppq(ppq + 1e-3) == Catch::Approx(ppq).margin(1e-3));
+    }
+    const int64_t partial_bars = row.first_sig_ppq > 0.0 ? 1 : 0;
+    CHECK(map.ppq_to_bar_beat(downbeat + 1e-3).bar ==
+          partial_bars + std::llround((downbeat - row.first_sig_ppq) / bar_len));
   }
 }

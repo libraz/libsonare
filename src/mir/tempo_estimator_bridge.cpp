@@ -60,9 +60,8 @@ double downbeat_origin_ppq(const BeatAnalysisInput& input, const TempoEstimatorC
   return 0.0;
 }
 
-// Builds time-signature segments. A single segment is emitted at the detected
-// downbeat origin when available; TempoMap uses the segment start as the bar
-// phase anchor. Without downbeats the origin remains ppq 0.
+// Builds time-signature segments: a single segment at the detected downbeat origin when
+// available, else ppq 0. phase_first_time_signature() later moves it back by whole bars.
 std::vector<transport::TimeSignatureSegment> build_time_sigs(const BeatAnalysisInput& input,
                                                              const TempoEstimatorConfig& config,
                                                              double bpm_scale) {
@@ -211,6 +210,19 @@ void apply_lead_in(const BeatAnalysisInput& input, TempoEstimate& est) {
   for (transport::TimeSignatureSegment& sig : est.time_sigs) sig.start_ppq += lead_in_ppq;
 }
 
+// Reduces the first signature's start by whole bars, so the bars before the first downbeat
+// share its phase and only the opening bar is truncated. A start within float fuzz of a bar
+// line is the bar line, which keeps a sliver bar from opening the map.
+void phase_first_time_signature(TempoEstimate& est) {
+  if (est.time_sigs.empty()) return;
+  constexpr double kBarPhaseTolerancePpq = 1e-6;
+  transport::TimeSignatureSegment& first = est.time_sigs.front();
+  const double bar = transport::bar_length_ppq(first.time_sig);
+  double phase = std::fmod(std::max(first.start_ppq, 0.0), bar);
+  if (phase < kBarPhaseTolerancePpq || bar - phase < kBarPhaseTolerancePpq) phase = 0.0;
+  first.start_ppq = phase;
+}
+
 float clamp01(double v) { return static_cast<float>(std::clamp(v, 0.0, 1.0)); }
 
 // Confidence from how tightly the decoded BPM tracks the observed IBIs:
@@ -324,6 +336,7 @@ std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,
     est.confidence = confidence;
     est.label = label;
     apply_lead_in(input, est);
+    phase_first_time_signature(est);
     return est;
   };
 
