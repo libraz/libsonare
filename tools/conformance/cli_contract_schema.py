@@ -85,7 +85,7 @@ _ARRAY_TYPES = {"array:string", "array:number:12"}
 # is accepted only at a path whose token names an end. These tokens are the CLI's
 # null-means list: a null anywhere else is a defect.
 _MEASURED_TOKENS = {"measured", "measured:-inf", "measured:+inf"}
-_PAYLOAD_TYPES = _OPTION_TYPES | _ARRAY_TYPES | _MEASURED_TOKENS | {"null", "any"}
+_PAYLOAD_TYPES = _OPTION_TYPES | _ARRAY_TYPES | _MEASURED_TOKENS | {"null", "any", "map:string"}
 # A level array with gaps: the measured entries under the field's key, and their
 # ascending indices under the sibling key the schema names in `index`.
 _MEASURED_PAIRS = "measured_pairs"

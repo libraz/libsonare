@@ -144,6 +144,102 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertTrue(any("unknown keys extra" in error for error in errors), errors)
         self.assertTrue(any("nested.items[0]" in error for error in errors), errors)
 
+    def test_string_map_keeps_surrounding_records_closed(self) -> None:
+        info = next(item for item in self.manifest["active_paths"] if item["path"] == "info")
+        self.assertEqual(info["payloads"]["success"]["keys"]["tags"], "map:string")
+        schema = {"keys": {"tags": "map:string"}}
+        for tags in ({}, {"Album Artist": "Ada", "comment:1": "Morning"}):
+            self.assertEqual(CHECKER.validate_payload({"tags": tags}, schema, "info"), [])
+        for tags in ([], {"title": None}, {"title": 2}, {"title": {"text": "Morning"}}):
+            with self.subTest(tags=tags):
+                errors = CHECKER.validate_payload({"tags": tags}, schema, "info")
+                self.assertTrue(any("info.tags: expected map:string" in e for e in errors))
+        errors = CHECKER.validate_payload({"tags": {}, "extra": "value"}, schema, "info")
+        self.assertTrue(any("unknown keys extra" in error for error in errors))
+
+        invalid = copy.deepcopy(self.manifest)
+        info = next(item for item in invalid["active_paths"] if item["path"] == "info")
+        info["payloads"]["success"]["keys"]["tags"] = {
+            "type": "object",
+            "additionalProperties": True,
+        }
+        errors = CHECKER.validate_manifest(invalid)
+        self.assertTrue(any("must reject additional properties" in error for error in errors))
+
+    def test_audio_fixtures_preserve_planes_and_riff_tags(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = CHECKER._write_fixtures(Path(directory), self.manifest)
+            for single, pair in (
+                ("audio", "audio_stereo"),
+                ("audio_take_other_rate", "audio_stereo_take_other_rate"),
+            ):
+                with (
+                    self.subTest(pair=pair),
+                    wave.open(paths[single], "rb") as mono,
+                    wave.open(paths[pair], "rb") as stereo,
+                ):
+                    self.assertEqual(stereo.getnchannels(), 2)
+                    self.assertEqual(stereo.getframerate(), mono.getframerate())
+                    frames = mono.getnframes()
+                    self.assertEqual(stereo.getnframes(), frames)
+                    samples = struct.unpack(f"<{frames}h", mono.readframes(frames))
+                    self.assertTrue(any(samples))
+                    planes = struct.unpack(f"<{frames * 2}h", stereo.readframes(frames))
+                    self.assertEqual(planes[::2], samples)
+                    self.assertEqual(planes[1::2], tuple(-value for value in samples))
+            with wave.open(paths["audio_overwide"], "rb") as wide:
+                self.assertGreater(wide.getnchannels(), 2)
+                self.assertGreater(wide.getnframes(), 0)
+
+            plain = Path(paths["audio"]).read_bytes()
+            data = Path(paths["audio_tagged"]).read_bytes()
+            self.assertEqual(struct.unpack_from("<I", data, 4)[0], len(data) - 8)
+            self.assertEqual(data[8 : len(plain)], plain[8:])
+            tags = self.manifest["fixtures"]["audio"]["tags"]
+            info = data[len(plain) :]
+            self.assertEqual(info[:4], b"LIST")
+            self.assertEqual(struct.unpack_from("<I", info, 4)[0], len(info) - 8)
+            self.assertEqual(info[8:16], b"INFOIART")
+            artist = tags["artist"].encode() + b"\0"
+            self.assertEqual(struct.unpack_from("<I", info, 16)[0], len(artist))
+            self.assertEqual(info[20 : 20 + len(artist)], artist)
+            title_start = 20 + len(artist)
+            self.assertEqual(info[title_start : title_start + 5], b"\0INAM")
+            self.assertTrue(info.endswith(tags["title"].encode() + b"\0"))
+
+    def test_audio_case_relationships_reject_downmix_and_lost_tags(self) -> None:
+        mono = {"source_lufs": -20.0, "reference_lufs": -24.0, "gain_to_match_db": -4.0}
+        stereo = {"source_lufs": -16.99, "reference_lufs": -20.99, "gain_to_match_db": -4.0}
+        tagged = {"tags": self.manifest["fixtures"]["audio"]["tags"]}
+        payloads = {
+            ("info", "success"): {"tags": {}},
+            ("info", "tagged"): tagged,
+            ("mastering-pair-analyze", "reference_at_another_rate"): mono,
+            ("mastering-pair-analyze", "stereo_reference_loudness"): stereo,
+        }
+        report: list[tuple[str, str]] = []
+        CHECKER._validate_audio_case_relationships("native", payloads, self.manifest, report)
+        self.assertEqual(report, [])
+        stereo["source_lufs"] = mono["source_lufs"]
+        tagged["tags"] = {}
+        CHECKER._validate_audio_case_relationships("python", payloads, self.manifest, report)
+        self.assertEqual(len(report), 2)
+        self.assertIn("python.info.tagged.tags", report[0][1])
+        self.assertIn(
+            "python.mastering-pair-analyze.stereo_reference_loudness.source_lufs", report[1][1]
+        )
+
+    def test_active_cases_reject_json_null_for_record_payload(self) -> None:
+        info = next(item for item in self.manifest["active_paths"] if item["path"] == "info")
+        manifest = {"active_paths": [{**info, "cases": info["cases"][:1]}]}
+        report: list[tuple[str, str]] = []
+        with mock.patch.object(
+            CHECKER, "_run", return_value={"stdout": "null", "stderr": "", "returncode": 0}
+        ):
+            CHECKER._run_active_cases("native", "sonare", manifest, {}, 1.0, report)
+        self.assertEqual(len(report), 1)
+        self.assertIn("native.info.success: expected object", report[0][1])
+
     def test_analyze_contract_is_active_and_canonical(self) -> None:
         analyze = self.manifest["commands"]["analyze"]
         self.assertEqual(analyze["status"], "active")

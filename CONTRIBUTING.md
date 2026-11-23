@@ -149,6 +149,7 @@ Before merging, the maintainer brings a change here to the following:
 Before merging, the maintainer brings a change here to the following:
 
 - The error class follows the cause, not the layer that refused. A refused argument is a `TypeError` when its shape is wrong (a wrong type, or a key the request object or parameter bag does not declare) and a `RangeError` when a value is outside its domain; Python raises `SonareValueError` for both.
+- A call's shape is checked before its values: on Node and WASM a missing or wrong-typed field, an undeclared key or a surplus argument is a `TypeError` raised before any `RangeError`, whichever call form is used.
 - A JSON input is a document only when the library writes that format or publishes its schema and the entry loads it (a project, a mixer scene, a preset, a playback configuration): the C parameter is `document` and its refusal is `InvalidFormat` at a document path. Any other JSON input is an argument: C spells it `<root>_json`, each facade `<root>`, and every refusal, a parse failure included, is `InvalidParameter` named from `<root>` — also when its shape is part of a written format (`overrides`, a strip's `settings`).
 - A typed object a facade serializes into a document parameter is still an argument: a key or value refused inside it is named from the caller's argument and raised as `TypeError`/`RangeError` (`SonareValueError` in Python).
 - A value in the library's own output that a binding's reader cannot accept (an ordinal or token outside the binding's table, a null that names no infinite end, a result failing the reader's check) is `InvalidFormat` on every surface. `Unknown` is only a failure whose cause has no code.
@@ -181,6 +182,7 @@ Before merging, the maintainer brings a change here to the following:
 - A twin that adds an output is folded into an option on every surface, named after the output (`withMonitor`/`with_monitor`, `withTimeline`, `withResidual`, `db`), with one result type carrying the optional output.
 - Every caller-filled C struct starts with `uint32_t struct_size` and has a `sonare_<struct>_init()`; a NULL options pointer reads as the defaults.
 - An in-memory count is `size_t`, a sample position `int64_t`, a sample rate `int` and a boolean `int32_t`; the auto hop is spelled `0`.
+- A running tally of events since start or arm (xruns, overruns, underruns, overflows, dropped frames or events) is `uint64_t`, in a status record or from a getter named for it, because it outgrows a 32-bit `size_t` in ordinary use.
 - "Not given" is absence on every surface, not a magic value; an optional C float that has no default is NaN.
 - A name carries its unit (`Sec`, `Hz`, `Db`, `Samples`); a bare `peak` or `rms` is a linear amplitude and is listed in `tools/api/dimensionless_names.toml` with class `magnitude`.
 - A bank select is `{ msb, lsb }` on Node and WASM and `bank_msb`/`bank_lsb` in Python.

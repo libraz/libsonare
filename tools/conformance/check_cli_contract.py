@@ -46,6 +46,7 @@ from cli_contract_payload import (
     _compare_payloads,
     _compare_values,
     _validate_analyze_case_relationships,
+    _validate_audio_case_relationships,
     _validate_case_payload,
     _validate_voice_case_relationships,
     parse_single_json,
@@ -634,7 +635,6 @@ def _run_active_cases(
                     )
                 )
             _check_text_expectations(case, result, label, report)
-            parsed: Any = None
             if case["stdout"] in {"empty", "text"}:
                 if case["stdout"] == "empty" and result["stdout"].strip():
                     report.append(
@@ -654,12 +654,14 @@ def _run_active_cases(
                     parsed = parse_single_json(result["stdout"])
                 except ValueError as exc:
                     report.append(("fail", f"{label}: {exc}"))
-                if parsed is not None and case["payload"] != "none":
+                    continue
+                if case["payload"] != "none":
                     _validate_case_payload(path, case, parsed, contract, surface, label, report)
                     payloads[(path, case["id"])] = parsed
                     _check_artifact(
                         case["artifact"], contract, parsed, normal_paths, label, report, compared
                     )
+    _validate_audio_case_relationships(surface, payloads, manifest, report)
     if any(contract["path"] == "analyze" for contract in manifest["active_paths"]):
         _validate_analyze_case_relationships(surface, payloads, manifest, report)
     if any(contract["path"] == "voice-change" for contract in manifest["active_paths"]):

@@ -98,6 +98,7 @@ DEFAULT_HANDLE_PREFIXES = (
     "eq",
     "mixer",
     "engine",
+    "live",
     "strip",
     "stream",
     "streaming",
@@ -152,6 +153,7 @@ _HANDLE_FULL_PREFIXES = (
     ("realtime_voice_changer_", "RealtimeVoiceChanger"),
     ("clip_page_provider_", "ClipPageProvider"),
     ("engine_", "RealtimeEngine"),
+    ("live_session_", "LiveSession"),
     ("mixer_", "Mixer"),
     # A strip is addressed through its owning mixer; no facade exposes it as a
     # type of its own, so ``strip_set_gain`` is ``Mixer.setStripGain``'s job.
@@ -190,10 +192,23 @@ _CORE_COVERAGE: dict[str, tuple[str, tuple[str, ...]]] = {
         ("apply_named_pair_processor",),
     ),
     "mastering_analyze_pair_ex": ("mastering_analyze_pair", ("analyze_named_pair",)),
+    "mastering_analyze_pair_stereo": ("mastering_analyze_pair", ("analyze_named_pair",)),
     "mastering_process": ("mastering_normalize_loudness", ("loudness_optimize",)),
 }
 
+# Most direct-core variants are reached through the native layer on both JS
+# surfaces. A variant can name a narrower route when only one binding bypasses
+# the C entry; other surfaces still use the explicit facade alias below.
+_CORE_COVERAGE_SURFACES: dict[str, tuple[str, ...]] = {
+    "mastering_analyze_pair_stereo": ("wasm",),
+}
+_CORE_COVERAGE_ARITIES: dict[str, int] = {
+    "mastering_analyze_pair_stereo": 10,
+}
+
 _HANDLE_ALIAS_OWNERS = {
+    "live_audio_devices": "LiveSession",
+    "live_midi_sources": "LiveSession",
     "vocal_render_job_begin": "VocalRenderSnapshot",
 }
 
@@ -247,6 +262,9 @@ def _is_lifecycle_key(key: str) -> bool:
 # so one alias serves Python (``data``), Node (``getData``->``get_data``) and
 # WASM (``setConfig``->``set_config``) alike.
 _ALIAS_COVERAGE = {
+    "live_audio_devices": ("audio_devices",),
+    "live_midi_sources": ("midi_sources",),
+    "has_live_devices": ("capabilities",),
     # Vocal handle methods use descriptive facade names for coordinate
     # conversion and snapshot accessors. The render-job begin operation is a
     # factory on VocalRenderSnapshot, while the remaining render-job methods
@@ -326,6 +344,8 @@ _ALIAS_COVERAGE = {
     # takes the taste options and returns a finished config. Renaming either to
     # match the other would put a name on it that its own behaviour contradicts.
     "mastering_repair_dereverb_apply_room_estimate": ("mastering_repair_dereverb_config_for_room",),
+    # Mono and stereo input layouts are one public pair-analysis operation.
+    "mastering_analyze_pair_stereo": ("mastering_analyze_pair", "mastering_pair_analyze"),
     # Correction toward a fixed MIDI target is the time-varying corrector with its
     # default target mode, so every facade reaches it through that one function.
     "pitch_correct_to_midi_timevarying": ("pitch_correct_timevarying",),
@@ -717,18 +737,33 @@ def _core_evidence(
 ) -> tuple[str | None, str | None, str | None]:
     """(core function, native call site, refusal) for a ``_CORE_COVERAGE`` claim."""
     _, core_fns = _CORE_COVERAGE[key]
-    for fn in core_fns:
+    expected_arity = _CORE_COVERAGE_ARITIES.get(key)
+
+    def matching_call(text: str, fn: str) -> tuple[re.Match[str] | None, str]:
+        code = "\n".join(line for _, line in _code_lines("core.cpp", text))
         call = re.compile(rf"\b{re.escape(fn)}\s*\(")
-        if c_body is None or not call.search(c_body):
+        for match in call.finditer(code):
+            args, _ = native_defaults_mod._call_args(code, match.end() - 1)
+            if expected_arity is None or len(args) == expected_arity:
+                return match, code
+        return None, code
+
+    for fn in core_fns:
+        c_match = matching_call(c_body, fn)[0] if c_body is not None else None
+        if c_match is None:
             return (
                 None,
                 None,
-                f"core claim '{fn}' for '{key}' refused: the C entry does not call it",
+                f"core claim '{fn}' for '{key}' refused: the C entry does not call it "
+                f"with {expected_arity} arguments"
+                if expected_arity is not None
+                else f"core claim '{fn}' for '{key}' refused: the C entry does not call it",
             )
         for path, text in sources:
-            for lineno, code in _code_lines(path, text):
-                if call.search(code):
-                    return fn, f"{path}:{lineno}", None
+            match, code = matching_call(text, fn)
+            if match is not None:
+                lineno = code.count("\n", 0, match.start()) + 1
+                return fn, f"{path}:{lineno}", None
     return None, None, None
 
 
@@ -917,7 +952,9 @@ def build_report(
                 # Where a core claim is the route (node / wasm), it decides, so the
                 # report keeps saying which surfaces skip the entry's own validation.
                 core_route = (
-                    key in _CORE_COVERAGE and bool(native_sources) and s in ("node", "wasm")
+                    key in _CORE_COVERAGE
+                    and bool(native_sources)
+                    and s in _CORE_COVERAGE_SURFACES.get(key, ("node", "wasm"))
                 )
                 covered = (
                     bool(aliases) and not core_route and any(a in alias_symbols for a in aliases)
@@ -934,7 +971,12 @@ def build_report(
                     native_sources.get(_CONSTRUCTOR_SOURCES[s], []),
                 )
             core_refused = None
-            if not covered and key in _CORE_COVERAGE and native_sources and s in ("node", "wasm"):
+            if (
+                not covered
+                and key in _CORE_COVERAGE
+                and native_sources
+                and s in _CORE_COVERAGE_SURFACES.get(key, ("node", "wasm"))
+            ):
                 facade = _CORE_COVERAGE[key][0]
                 if facade in indexed.get(s, {}):
                     fn, site, core_refused = _core_evidence(
@@ -1857,6 +1899,35 @@ def _presence_flag_of_optional(name: str, c_names: set[str], optional: set[str])
     return target != name and target in c_names and target in optional
 
 
+def _side_of_declared_planes(name: str, c_rec: RecordShape, declared: set[str]) -> bool:
+    """True for a C ``<x>_l`` / ``<x>_r`` scalar mirroring planes 0 and 1 of a declared ``<x>[]``.
+
+    Both sides and the ``<x>`` array must exist in C, so a lone ``_l`` field or a scalar
+    ``<x>`` never qualifies; the facade reads the side as an element of the plane array.
+    """
+    base, _, side = name.rpartition("_")
+    if side not in ("l", "r") or base not in declared:
+        return False
+    types = {f.name: f.type for f in c_rec.fields}
+    return f"{base}_l" in types and f"{base}_r" in types and types.get(base, "").endswith("[]")
+
+
+def _lifted_members(
+    name: str, c_rec: RecordShape, declared: set[str], c_by_raw: dict[str, RecordShape]
+) -> list[str]:
+    """Core fields of a by-value C struct member ``name`` that the facade lifts onto its record.
+
+    Lifted means the facade declares no ``name`` but declares every core field of the
+    member's struct; a partial lift is still drift, so it returns nothing.
+    """
+    if name in declared:
+        return []
+    member_type = next((f.type for f in c_rec.fields if f.name == name), "")
+    nested = c_by_raw.get(member_type)
+    members = nested.core_field_names() if nested is not None else []
+    return members if members and all(m in declared for m in members) else []
+
+
 def _record_verdict(c_rec: RecordShape, shape: RecordShape | None) -> str:
     """Whole-record verdict for one facade against its C struct oracle."""
     if shape is None:
@@ -1902,6 +1973,7 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
             rep.record_counts[s] = len(extractions[s].records)
 
     c_records = indexed.get("c", {})
+    c_by_raw = {r.raw_name: r for r in c_records.values()}
     facades = [s for s in _RECORD_SURFACES if s in selected and s in indexed]
 
     for key in sorted(c_records):
@@ -1945,6 +2017,8 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
             declared = {f.name for f in shape.fields}
             optional = {f.name for f in shape.fields if f.optional}
             c_names = {x.name for x in c_rec.fields}
+            lifted = {n: _lifted_members(n, c_rec, declared, c_by_raw) for n in c_fields}
+            c_names.update(m for members in lifted.values() for m in members)
             missing: list[str] = []
             extra: list[str] = []
             # Suppressed names are collected rather than dropped, so the
@@ -1952,7 +2026,12 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
             # before a Finding is ever built.
             suppressed: list[str] = []
             for n in c_fields:
-                if n in declared or _presence_flag_of_optional(n, c_names, optional):
+                if (
+                    n in declared
+                    or _presence_flag_of_optional(n, c_names, optional)
+                    or _side_of_declared_planes(n, c_rec, declared)
+                    or lifted[n]
+                ):
                     allow.record_field_ok(key, n, AGREED)
                     continue
                 div = f"[{s}] {shape.raw_name} declares no '{n}' of {c_rec.raw_name}"

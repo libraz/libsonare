@@ -223,9 +223,8 @@ def render_model(smf_bytes: bytes, seconds: float) -> np.ndarray:
         audio = proj.bounce(
             sf2_instruments=[(0, libsonare.Sf2InstrumentConfig())],
             total_frames=int(seconds * SR),
-            sample_rate=SR,
             num_channels=2,
-        )
+        ).channels.T
         manifest = proj.sound_font_manifest()
     finally:
         proj.close()
@@ -271,7 +270,7 @@ def main() -> int:
             sends=(None, None, None),
         )
 
-        audio = render_model(smf_bytes, seconds, SR, rig=True)
+        audio = render_model(smf_bytes, seconds)
         name = f"{program:03d}_{slug}" if program >= 0 else f"drm_{slug}"
         write_wav(out_dir / f"{name}.wav", audio, SR)
         results[name] = metrics(audio, SR)

@@ -469,6 +469,7 @@ lint-static:
 # committed declarations alone, so drift is a static fact.
 	$(CHECK) python3 tools/parity/gen_c_entry_names.py --check
 	$(CHECK) python3 tools/api/gen_field_spelling.py --check
+	$(CHECK) python3 -m unittest -q tools/api/test_gen_integer_domains.py
 	$(CHECK) python3 tools/api/gen_integer_domains.py --check
 # UPGRADING.md renders from the migration ledgers alone; a ledger edit owes it in the same commit.
 	$(CHECK) $(MAKE) upgrade-notes-check
@@ -1062,6 +1063,7 @@ conformance-checks:
 	$(CHECK) python3 tools/conformance/gen_scene_token_cases.py --check
 	$(CHECK) python3 tools/conformance/gen_null_means.py --check
 	$(CHECK) python3 tests/conformance/check_goniometer_capacity_mirrors.py
+	$(CHECK) python3 tests/conformance/check_error_reason_mirrors.py
 	$(CHECK) python3 -m unittest tests/conformance/test_goniometer_capacity_mirrors.py
 	$(CHECK) python3 tests/conformance/check_chord_quality_tables.py
 	$(CHECK) python3 -m unittest tests/conformance/test_chord_quality_tables.py

@@ -303,15 +303,13 @@ def _bounce(libsonare, smf_bytes: bytes, total_seconds: float, sr: int, *, rig: 
             audio = project.bounce(
                 synth_instruments=[(0, preset)],
                 total_frames=round(total_seconds * sr),
-                sample_rate=sr,
-            )
+            ).channels.T
             manifest = None
         else:
             audio = project.bounce(
                 sf2_instruments=[(0, libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig))],
                 total_frames=round(total_seconds * sr),
-                sample_rate=sr,
-            )
+            ).channels.T
             manifest = project.sound_font_manifest()
     finally:
         project.close()

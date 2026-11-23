@@ -11,17 +11,17 @@ The two command-line front-ends get a column each because they are two binaries:
 | domain | C entry points | Python | Node | WASM | CLI (python) | CLI (native) |
 |---|---:|---:|---:|---:|---:|---:|
 | assist | 3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 |
-| core (analysis, IO, conversion) | 61 | 43/61 | 50/61 | 43/61 | 14/61 | 14/61 |
+| core (analysis, IO, conversion) | 67 | 46/67 | 55/67 | 47/67 | 15/67 | 15/67 |
 | creative effects | 57 | 40/57 | 52/57 | 41/57 | 16/57 | 16/57 |
-| feature extraction | 135 | 117/135 | 127/135 | 119/135 | 49/135 | 47/135 |
-| mastering | 134 | 118/134 | 125/134 (1 core) | 118/134 (1 core) | 25/134 | 25/134 |
+| feature extraction | 137 | 118/137 | 130/137 | 121/137 | 49/137 | 47/137 |
+| mastering | 135 | 119/135 | 126/135 (1 core) | 119/135 (2 core) | 26/135 | 26/135 |
 | metering | 38 | 38/38 | 38/38 | 38/38 | 7/38 | 7/38 |
 | mixing & routing | 61 | 58/61 | 60/61 | 60/61 | 2/61 | 2/61 |
 | playback | 26 | 24/26 | 24/26 | 24/26 | 7/26 | 7/26 |
 | polyphony | 14 | 13/14 | 14/14 | 13/14 | 4/14 | 4/14 |
-| project & arrangement | 177 | 164/177 | 173/177 | 173/177 | 12/177 | 9/177 |
+| project & arrangement | 213 | 195/213 | 206/213 | 206/213 | 22/213 | 19/213 |
 | project part rig | 3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 |
-| realtime engine | 190 | 183/190 | 190/190 | 181/190 | 5/190 | 5/190 |
+| realtime engine | 204 | 196/204 | 203/204 | 195/204 | 9/204 | 9/204 |
 | room acoustics | 12 | 7/12 | 7/12 | 7/12 | 5/12 | 5/12 |
 | sample bank | 6 | 6/6 | 6/6 | 6/6 | 2/6 | 2/6 |
 | streaming | 31 | 29/31 | 29/31 | 29/31 | 8/31 | 8/31 |
@@ -29,4 +29,4 @@ The two command-line front-ends get a column each because they are two binaries:
 | vocal edit | 57 | 43/57 | 56/57 | 56/57 | 11/57 | 11/57 |
 | vocal project | 10 | 6/10 | 10/10 | 10/10 | 2/10 | 2/10 |
 | voice changer | 24 | 22/24 | 23/24 | 23/24 | 2/24 | 2/24 |
-| **all domains** | **1043** | **917/1043** | **991/1043 (1 core)** | **948/1043 (1 core)** | **173/1043** | **168/1043** |
+| **all domains** | **1102** | **966/1102** | **1046/1102 (1 core)** | **1002/1102 (2 core)** | **189/1102** | **184/1102** |

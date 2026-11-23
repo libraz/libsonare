@@ -88,6 +88,12 @@ OVERRIDES: dict[str, str] = {
     "roomgeometryestimate": "effects",
     # The generic AudioWorklet base every processor extends.
     "workletprocessor": "engine",
+    # Live device I/O drives the realtime engine; its records sit with it.
+    "liveaudiodevice": "engine",
+    "livemididevice": "engine",
+    "livesession": "engine",
+    "livesessionconfig": "engine",
+    "livesessionstatus": "engine",
     # The MIDI 1.0 <-> 2.0 value scalers sit with the MIDI message packers.
     "midi*tomidi2": "engine",
     "midi2*tomidi1*": "engine",

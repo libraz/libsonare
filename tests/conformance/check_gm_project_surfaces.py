@@ -208,8 +208,7 @@ def _render_python(
             total_frames=TOTAL_FRAMES,
             block_size=BLOCK_SIZE,
             num_channels=NUM_CHANNELS,
-            sample_rate=SAMPLE_RATE,
-        )
+        ).channels.T
     finally:
         project.close()
     return np.asarray(samples, dtype=np.float32).reshape(-1)

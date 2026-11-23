@@ -21,6 +21,7 @@ WASM. A ``[<surface>.document_roots]`` row re-roots the document paths of an ent
 facade wraps the caller's object into a fixed slot of the document it hands the C ABI
 ("strips[0]." under "settings."): the prefix is matched exactly, the rest of the path is
 kept as the caller wrote it, and the row binds only where the entry takes the root keyword.
+A top-level ``[document_roots]`` row supplies the same mapping to every surface.
 A name another C subject already pairs with counts: a second form folded
 into the entry (an ``_ex``) can name the same argument differently. A subject still unbound is reported, not tabled, and a
 ruled rename that binds nowhere fails the run. Every unbound parameter carries a
@@ -177,7 +178,11 @@ def derive(
 
     lengths = {s: dict(renames.get(s, {}).get("length_of", {})) for s in SURFACES}
     quotients = {s: dict(renames.get(s, {}).get("quotient_of", {})) for s in SURFACES}
-    document_roots = {s: dict(renames.get(s, {}).get("document_roots", {})) for s in SURFACES}
+    shared_document_roots = renames.get("document_roots", {})
+    document_roots = {
+        s: {**shared_document_roots, **renames.get(s, {}).get("document_roots", {})}
+        for s in SURFACES
+    }
     resolvers = {s: dict(renames.get(s, {}).get("resolver_of", {})) for s in SURFACES}
     renames = {
         s: {
@@ -186,6 +191,7 @@ def derive(
             if k not in ("length_of", "quotient_of", "document_roots", "resolver_of")
         }
         for s, table in renames.items()
+        if s != "document_roots"
     }
 
     def spellings(surface: str, subject: str) -> list[str]:
@@ -465,9 +471,12 @@ def _py_dict(rows: list[Row]) -> str:
 
 def render_py(rows: list[Row]) -> str:
     renames = _py_dict([r for r in rows if not r.length and not r.document])
-    documents = "".join(
-        f'\n    ("{r.c_key}", "{r.c_subject}", "{r.spelling}"),' for r in rows if r.document
-    ) + ("\n" if any(r.document for r in rows) else "")
+    document_rows = [f'("{r.c_key}", "{r.c_subject}", "{r.spelling}")' for r in rows if r.document]
+    documents = "".join(f"\n    {row}," for row in document_rows) + ("\n" if document_rows else "")
+    # The formatter joins a tuple that fits on its line, so the generated text does the same.
+    inline = f"{document_rows[0]}," if len(document_rows) == 1 else ""
+    if inline and len(f"DOCUMENT_ROOTS: tuple[tuple[str, str, str], ...] = ({inline})") <= 100:
+        documents = inline
     lengths = _py_dict([r for r in rows if r.length and not r.divisor])
     quotients = "".join(
         f'\n    ("{r.c_key}", "{r.c_subject}"): ("{r.spelling}", "{r.divisor}"),'

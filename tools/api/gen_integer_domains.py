@@ -7,7 +7,9 @@ core check; this table lets that refusal state the member's own domain instead o
 type's range. A row is keyed by the public entry name (``_entry``) and the caller's
 keyword. The C entries an entry reaches are the ``sonare_*`` symbols its body names; a C
 subject keeps only its member name and is respelled through ``_field_spelling``, the same
-rendering a core refusal goes through.
+rendering a core refusal goes through. A row exists only for a subject the facade binds: a
+member the field-spelling derivation leaves unbound on Python, or a direct C parameter the
+entry's signature does not take, is a domain no caller value can reach.
 
 Usage: python3 tools/api/gen_integer_domains.py [--check] [--source <json>]
 """
@@ -160,6 +162,53 @@ def named_keywords(package: Path = PACKAGE) -> set[tuple[str, str]]:
     return out
 
 
+def signatures(package: Path = PACKAGE) -> dict[str, frozenset[str]]:
+    """Public entry name -> the parameter names its signature takes.
+
+    An entry taking ``**kwargs`` is left out, since any keyword may reach it.
+    """
+    out: dict[str, set[str]] = {}
+    for entry, node in _decorated_entries(package):
+        a = node.args
+        if a.kwarg is not None:
+            continue
+        out.setdefault(entry, set()).update(x.arg for x in [*a.posonlyargs, *a.args, *a.kwonlyargs])
+    return {entry: frozenset(names) for entry, names in out.items()}
+
+
+def python_unbound() -> set[tuple[str, str]]:
+    """(C entry, C subject) pairs the field-spelling derivation finds no Python binding for."""
+    import tomllib
+
+    sys.path[:0] = [str(ROOT / "tools/api"), str(ROOT / "tools/parity")]
+    import gen_field_spelling as spelling
+
+    renames = tomllib.loads(spelling.RENAMES.read_text(encoding="utf-8"))
+    bindings = spelling.load_bindings()(ROOT)
+    _, unbound, _ = spelling.derive(bindings, {}, renames, spelling.load_c_params(ROOT))
+    return {(u.c_key, u.c_subject) for u in unbound if u.surface == "python"}
+
+
+def _reachable(
+    entry: str,
+    c_entry: str,
+    param: str,
+    keyword: str,
+    taken: dict[str, frozenset[str]] | None,
+    unbound: set[tuple[str, str]],
+) -> bool:
+    """Whether a caller's value can reach a row: the facade binds its subject.
+
+    A member of an array element keeps its path and is judged by neither test.
+    """
+    if "[]" in param:
+        return True
+    path = param.split(".")
+    if (c_entry, path[-1]) in unbound:
+        return False
+    return len(path) > 1 or taken is None or entry not in taken or keyword in taken[entry]
+
+
 def _keyword(param: str, entry: str, spelled: dict[tuple[str, str], str]) -> str:
     """The caller's spelling of a row's subject.
 
@@ -198,6 +247,8 @@ def rows(
     reached: dict[str, frozenset[str]],
     excluded: set[tuple[str, str]] = frozenset(),
     sentinels: set[tuple[str, str]] = frozenset(),
+    taken: dict[str, frozenset[str]] | None = None,
+    unbound: set[tuple[str, str]] = frozenset(),
 ) -> dict[tuple[str, str], Domain]:
     """(entry, keyword) -> (lo, hi, stricter) for every integer domain.
 
@@ -207,22 +258,26 @@ def rows(
     A keyword two reached C entries bound differently gets no row, since the caller's
     value would be refused in either domain's words; nor does a keyword in ``excluded``,
     nor one in ``sentinels`` whose row declares no sentinel, since Python reads a value
-    the core does not as "not given".
+    the core does not as "not given". ``taken`` (entry -> signature parameters) and
+    ``unbound`` (Python-unbound C subjects) drop the rows no caller value reaches.
     """
-    by_c: dict[str, list[tuple[str, Domain]]] = {}
+    by_c: dict[str, list[tuple[str, Domain, bool, str]]] = {}
     for row in domains:
         if row["kind"] != "integer":
             continue
         keyword = _keyword(row["param"], row["entry"], spelled)
         stricter = row["stricter"] if row["stricter"] in _KIND_STRICTER else None
         value = (*_explicit_bounds(row), stricter)
-        by_c.setdefault(row["entry"], []).append((keyword, value, row.get("sentinel") is not None))
+        declared = row.get("sentinel") is not None
+        by_c.setdefault(row["entry"], []).append((keyword, value, declared, row["param"]))
     out: dict[tuple[str, str], Domain] = {}
     split: set[tuple[str, str]] = set()
     undeclared: set[tuple[str, str]] = set()
     for entry, c_entries in reached.items():
         for c_entry in sorted(c_entries):
-            for keyword, value, declared in by_c.get(c_entry, []):
+            for keyword, value, declared, param in by_c.get(c_entry, []):
+                if not _reachable(entry, c_entry, param, keyword, taken, unbound):
+                    continue
                 key = (entry, keyword)
                 if out.get(key, value) != value:
                     split.add(key)
@@ -265,7 +320,16 @@ def render(table: dict[tuple[str, str], Domain]) -> str:
 def main(argv: list[str]) -> int:
     source = Path(argv[argv.index("--source") + 1]) if "--source" in argv else SOURCE
     domains = json.loads(source.read_text())["rows"]
-    text = render(rows(domains, overrides(), entries(), named_keywords(), sentinel_keywords()))
+    table = rows(
+        domains,
+        overrides(),
+        entries(),
+        named_keywords(),
+        sentinel_keywords(),
+        signatures(),
+        python_unbound(),
+    )
+    text = render(table)
     if "--check" in argv:
         if not TARGET.exists() or TARGET.read_text() != text:
             print(f"{TARGET.relative_to(ROOT)} is stale; run tools/api/gen_integer_domains.py")

@@ -594,5 +594,58 @@ def _run_all() -> int:
     return 1 if failed else 0
 
 
+def _typed_c_rec(raw_name: str, **fields: str) -> RecordShape:
+    return RecordShape(
+        key=canonical_record_key(raw_name, "c"),
+        surface="c",
+        raw_name=raw_name,
+        fields=[RecordField(name=n, raw_name=n, type=t) for n, t in fields.items()],
+        file="c.src",
+        line=1,
+    )
+
+
+def test_stereo_sides_mirroring_a_declared_plane_array_are_the_same_data() -> None:
+    c = _typed_c_rec("SonareMeter", peak_db_l="float", peak_db_r="float", peak_db="float[]")
+    rep = _report({"c": _ex("c", c), "node": _ex("node", _rec("node", "Meter", "peakDb"))})
+    assert _active_records(rep) == set(), _active_records(rep)
+
+
+def test_a_side_without_its_pair_or_its_plane_array_is_still_missing() -> None:
+    lone = _typed_c_rec("SonareMeter", peak_db_l="float", peak_db="float[]")
+    scalar = _typed_c_rec("SonareGain", gain_l="float", gain_r="float", gain="float")
+    rep = _report(
+        {
+            "c": _ex("c", lone, scalar),
+            "node": _ex("node", _rec("node", "Meter", "peakDb"), _rec("node", "Gain", "gain")),
+        }
+    )
+    assert _active_records(rep) == {("meter", "node"), ("gain", "node")}, _active_records(rep)
+
+
+def test_a_by_value_member_lifted_onto_the_record_is_the_same_data() -> None:
+    desc = _typed_c_rec("SonareLaneDesc", target_kind="int32_t", points="SonarePoint*")
+    lane = _typed_c_rec("SonareLane", lane_id="uint32_t", desc="SonareLaneDesc")
+    rep = _report(
+        {
+            "c": _ex("c", desc, lane),
+            "node": _ex("node", _rec("node", "Lane", "laneId", "targetKind", "points")),
+        }
+    )
+    assert _active_records(rep) == set(), _active_records(rep)
+
+
+def test_a_partly_lifted_member_is_still_missing() -> None:
+    desc = _typed_c_rec("SonareLaneDesc", target_kind="int32_t", points="SonarePoint*")
+    lane = _typed_c_rec("SonareLane", lane_id="uint32_t", desc="SonareLaneDesc")
+    rep = _report(
+        {
+            "c": _ex("c", desc, lane),
+            "node": _ex("node", _rec("node", "Lane", "laneId", "targetKind")),
+        }
+    )
+    assert ("lane", "node") in _active_records(rep), _active_records(rep)
+
+
 if __name__ == "__main__":
     raise SystemExit(_run_all())

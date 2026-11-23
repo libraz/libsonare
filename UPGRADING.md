@@ -164,6 +164,15 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareChordDetectionOptions.chroma_method` | chroma_method is a SonareChromaMethod (SONARE_CHROMA_METHOD_STFT, _NNLS, _CQT); the ordinals are unchanged |
 | `sonare_vector_normalize(norm_type)` | `sonare_vector_normalize(norm)`: norm_type is a SonareNormType (SONARE_NORM_MAX, _L1, _L2, _POWER); the ordinals are unchanged |
 
+#### Results are typed values, not JSON strings
+
+| 1.x | 2.0.0 |
+|---|---|
+| `sonare_estimate_meter_json(beat_count)` | removed: Set SonareMeterBeats.beat_count. |
+| `sonare_estimate_meter_json(beat_strengths)` | removed: Set SonareMeterBeats.accent to the per-beat accents. |
+| `sonare_estimate_meter_json(beat_times)` | removed: The evidence record uses beat order and needs no timestamps. |
+| `sonare_estimate_meter_json` | takes (const SonareMeterBeats*, const SonareMeterOptions*, char**). Initialize the evidence with sonare_meter_beats_init. |
+
 #### Progress is an onProgress option, not a separate function
 
 | 1.x | 2.0.0 |
@@ -463,6 +472,7 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareAnalyzer` | removed, no replacement: no function created or accepted this handle; drop any declaration that names it |
 | `SonareBpmCandidateRelation` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `SonareSectionResult` | gains an owned char* form, one letter per section in time order, freed by sonare_free_section_result |
+| `sonare_analyze_bpm(start_bpm)` | removed: omit start_bpm and move n_fft, hop_length, max_candidates and out one position earlier. The result reports NaN when no tempo is measured. Apply any fallback in the caller. |
 | `sonare_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_audio_analyze` | removed, no replacement: the flat quick analysis result has no C replacement; sonare_analyze_json returns the full analysis |
 | `sonare_pitch_yin` | drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na |
@@ -1065,8 +1075,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 
 | 1.x | 2.0.0 |
 |---|---|
+| `SonareAutomationLaneDesc.target_param_id` | set to zero for a typed lane. For an opaque lane, set it to the nonzero engine parameter ID |
 | `SonareAutomationLaneDescEx` | removed: use SonareAutomationLaneDesc, which now carries target_kind |
-| `SonareAutomationLaneDesc` | gains target_kind between target_param_id and points; the layout is the former SonareAutomationLaneDescEx |
+| `SonareAutomationLaneDesc` | initialize with sonare_automation_lane_desc_init. The versioned descriptor carries target_kind and typed target fields, and project-assigned lane IDs are separate |
 | `SonareExternalStemImportRequest.struct_version` | removed: the struct leads with uint32_t struct_size instead; initialise it with sonare_external_stem_import_request_init |
 | `SonareProjectBounceOptions` | gains instruments / builtin_instruments / synth_instruments / sf2_instruments and their counts after instrument_latency_samples, so one options record carries the hosted instruments; prepare it with sonare_project_bounce_options_init, after which every field is read literally: total_frames SONARE_PROJECT_BOUNCE_LENGTH_FROM_ARRANGEMENT (-1) derives the length, num_channels SONARE_PROJECT_BOUNCE_CHANNELS_FROM_MASTER (-1) takes the scene master's layout width (2 with no master) and sample_rate SONARE_PROJECT_SAMPLE_RATE_PROJECT (-1) takes the project's rate, while 0 is refused for each and for block_size, which defaults to 128; a NULL options still means those defaults |
 | `SonareProjectMarker` | the record is 16 bytes and carries no name; pass the name to sonare_project_set_marker and read it with sonare_project_marker_name_by_index |
@@ -1096,8 +1107,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareVocalTransition.schema_version` | removed: struct_size and the init function identify the layout; the member is gone |
 | `sonare_align_take_to_reference_ex` | removed: call sonare_align_take_to_reference, which now takes the reference and take sample rates |
 | `sonare_align_take_to_reference` | takes the two sample rates the _ex form took: pass reference_sample_rate after reference_len and take_sample_rate after take_len; a single-rate caller passes the same rate twice |
+| `sonare_project_add_automation_lane(out_target_param_id)` | `sonare_project_add_automation_lane(out_lane_id)` |
 | `sonare_project_add_automation_lane_ex` | removed: call sonare_project_add_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
-| `sonare_project_add_automation_lane` | takes the descriptor that carries target_kind; set target_kind to SONARE_AUTOMATION_TARGET_OPAQUE for a host-defined lane |
+| `sonare_project_add_automation_lane` | returns the project-allocated lane ID through out_lane_id. Initialize desc with sonare_automation_lane_desc_init and describe the lane target in desc |
 | `sonare_project_analyze_tempo_with_options` | removed: call sonare_project_analyze_tempo, which takes the options |
 | `sonare_project_analyze_tempo` | takes a const SonareProjectTempoOptions* (NULL for defaults) before candidates; initialise the options with sonare_project_tempo_options_init |
 | `sonare_project_auto_tempo_ex` | removed: call sonare_project_auto_tempo with NULL options, candidate_index and apply_time_signatures |
@@ -1106,8 +1118,11 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_project_bake_midi_fx_ex` | removed: call sonare_project_bake_midi_fx, which takes the provenance outputs |
 | `sonare_project_bake_midi_fx` | takes the nullable provenance outputs out_source_index, out_capacity and out_count after config_json; pass NULL, 0, NULL when no provenance is wanted; refuses malformed config_json, an unknown or renamed key and an invalid value with SONARE_ERROR_INVALID_PARAMETER instead of SONARE_ERROR_INVALID_FORMAT, naming the key under the root config ('config.velocityGamma must be > 0', 'unknown key config.transpose_semitones (renamed to config.transposeSemitones)') |
 | `sonare_project_bounce` | hosts instruments from SonareProjectBounceOptions: instruments, builtin_instruments, synth_instruments and sf2_instruments, each with its count (NULL with 0 when unused); a destination named twice is refused; out_interleaved is out; out_len, which counted interleaved samples (frames * channels), is size_t* out_frames, which counts sample frames per channel, so a caller sizing the buffer multiplies it by out_channels; out_num_channels is out_channels |
+| `sonare_project_edit_automation_lane(target_param_id)` | `sonare_project_edit_automation_lane(lane_id)` |
 | `sonare_project_edit_automation_lane_ex` | removed: call sonare_project_edit_automation_lane with the SonareAutomationLaneDesc that carries target_kind |
-| `sonare_project_edit_automation_lane` | takes the descriptor that carries target_kind, which is applied to the lane instead of retaining the existing kind; restate the lane's kind in the descriptor |
+| `sonare_project_edit_automation_lane` | takes the lane_id returned by add or the lane reader. The desc supplies the target and breakpoints |
+| `sonare_project_remove_automation_lane(target_param_id)` | `sonare_project_remove_automation_lane(lane_id)` |
+| `sonare_project_remove_automation_lane` | takes the lane_id returned by add or the lane reader |
 | `sonare_project_set_marker_ex` | removed: call sonare_project_set_marker, which takes the SonareProjectMarker |
 | `sonare_project_set_marker` | takes const char* name after marker (copied verbatim, NULL is the empty name) before out_marker_id; set marker.id to 0 to allocate a new id |
 | `sonare_project_snap_to_grid_ex` | removed: call sonare_project_snap_to_grid with a SonareProjectSnapToGridOptions carrying division |
@@ -1357,7 +1372,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | 1.x | 2.0.0 |
 |---|---|
 | `CapabilitiesAbi` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
-| `CapabilitiesDecode` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `CapabilitiesFeatures` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `Capabilities` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
 | `CapabilityCatalogChainList` | a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples |
@@ -1443,6 +1457,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `Audio.pitch_shift(semitones)` | `Audio.pitch_shift(pitch_semitones)`: renamed to pitch_semitones and required |
 
+#### One type name per record on every surface
+
+| 1.x | 2.0.0 |
+|---|---|
+| `CapabilitiesDecode` | `AudioFormatCapabilities`: one frozen dataclass, read by attribute, types both Capabilities.decode and Capabilities.encode; lists are tuples |
+
 #### Each list input takes one item form
 
 | 1.x | 2.0.0 |
@@ -1470,6 +1490,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `Audio.analyze_bpm(start_bpm)` | removed: omit start_bpm. If passed positionally, move n_fft, hop_length and max_candidates one position earlier. The result's bpm is None when no tempo is measured. Apply any fallback in the caller. |
 | `Audio.dynamic_range(high_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `Audio.dynamic_range(low_percentile)` | a rank in [0, 1], low at most high; anything else raises SonareValueError |
 | `Audio.from_buffer(data)` | `Audio.from_buffer(samples)` |
@@ -1765,9 +1786,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `SectionResult` | removed: analyze_sections returns SectionAnalysis, whose .sections is the list[Section] and whose .form is the form label |
 | `TranscribeResult.events` | a list of ProjectMidiEvent records instead of (ppq, data0, data1) tuples |
 | `analyze_sections` | returns SectionAnalysis (.sections: list[Section], .form: str) (1.x: SectionResult with .sections only) |
-| `estimate_meter(beat_strengths)` | removed: pass beats=analysis.beats (Beat records carry time_sec and strength) |
-| `estimate_meter(beat_times)` | `estimate_meter(beats)` |
-| `estimate_meter` | takes beats: Sequence[Beat] (time_sec and strength) instead of parallel beat_times and beat_strengths |
+| `estimate_meter(beat_strengths)` | removed: Pass observations=analysis.beat_observations. |
+| `estimate_meter(beat_times)` | `estimate_meter(observations)` |
+| `estimate_meter` | takes observations: BeatObservations. Pass analysis.beat_observations to score an analysis result. |
 | `split_silence_common_with_report` | returns SplitSilenceCommonWithReportResult(intervals, report) instead of a tuple |
 | `trim_silence` | returns TrimResult(audio, start_sample, end_sample) instead of a tuple |
 
@@ -1777,7 +1798,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `AnalysisBeatObservations.chord_change` | `BeatObservations.chord_change` |
 | `AnalysisBeatObservations.low_frequency_energy` | `BeatObservations.low_frequency_energy` |
-| `AnalysisBeatObservations.onset_strength` | `BeatObservations.onset_strength` |
+| `AnalysisBeatObservations.onset_strength` | removed: Use accent, has_attack and subdivision_accent on BeatObservations. |
 | `AnalysisResult.beat_local_bpm` | float32 ndarray instead of list |
 | `BoundaryResult.n_frames` | removed: read it from the 2-D array's shape |
 | `BoundaryResult.novelty_curve` | float32 ndarray instead of list |
@@ -1962,7 +1983,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `AnalysisBeatObservations.chordChange` | removed: read the BeatObservations.chord_change field |
 | `AnalysisBeatObservations.lowFrequencyEnergy` | removed: read the BeatObservations.low_frequency_energy field |
-| `AnalysisBeatObservations.onsetStrength` | removed: read the BeatObservations.onset_strength field |
+| `AnalysisBeatObservations.onsetStrength` | removed: Use accent, has_attack and subdivision_accent on BeatObservations. |
 | `EqSpectrumSnapshot.bandGainDb` | removed: read band_gain_db |
 | `EqSpectrumSnapshot.lastAutoGainDb` | removed: read last_auto_gain_db |
 | `EqSpectrumSnapshot.postLeft` | removed: read post_left |
@@ -2220,6 +2241,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `StreamFrames.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `StreamFramesI16.feature_flags` | removed: test the feature field itself; a feature not computed is None |
 | `StreamFramesU8.feature_flags` | removed: test the feature field itself; a feature not computed is None |
+| `analyze_bpm(start_bpm)` | removed: omit start_bpm. If passed positionally, move n_fft, hop_length and max_candidates one position earlier. The result's bpm is None when no tempo is measured. Apply any fallback in the caller. |
 | `note_segments` | voicing is voiced= (per-frame flags) or voiced_prob= by keyword, exactly one of them: both or neither raises SonareValueError; frame_rate follows f0_hz |
 | `pitch_yin(fill_na)` | removed: had no effect: YIN reads no fill flag |
 
@@ -2742,7 +2764,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MasteringAssistantProfile.attackDensity` | `MasteringAssistantProfile.attack_per_second`: attackDensity -> attack_per_second |
 | `MasteringAudioProfileDynamics.attackDensity` | `MasteringAudioProfileDynamics.attack_per_second`: attackDensity -> attack_per_second |
 | `MasteringChainStereoResult.output_lra` | `MasteringChainStereoResult.output_loudness_range_lu` |
-| `MixMeterSnapshot.true_peak_db` | `MixMeterSnapshot.true_peak_dbtp` |
 | `mastering(ceiling_db)` | `mastering(ceiling_dbtp)`: the ceiling is held on a true-peak measurement, so the keyword carries dBTP; ceiling_db raises TypeError |
 | `metering_detect_clipping(threshold)` | `metering_detect_clipping(threshold_db)`: threshold -> threshold_db, a level in dBFS in [-120, 0] instead of a linear amplitude (default 20*log10(0.999)); omitted or NaN hands the core its default and a level outside the range raises SonareValueError |
 
@@ -2817,13 +2838,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `MixMeterSnapshot.max_true_peak_db` | `MixMeterSnapshot.max_true_peak_dbtp`: max_true_peak_db -> max_true_peak_dbtp, float \| None: -inf for silence, None when true peak is switched off |
 | `MixMeterSnapshot.momentary_lufs` | float -> float \| None: -inf for silence, None until the window fills |
 | `MixMeterSnapshot.mono_compat_width` | float -> float \| None: None on a zero channel or silence, inf for a silent mid under a nonzero side |
-| `MixMeterSnapshot.peak_db_l` | float -> float \| None: -inf for silence, None when not measured |
-| `MixMeterSnapshot.peak_db_r` | float -> float \| None: -inf for silence, None when not measured |
-| `MixMeterSnapshot.rms_db_l` | float -> float \| None: -inf for silence, None when not measured |
-| `MixMeterSnapshot.rms_db_r` | float -> float \| None: -inf for silence, None when not measured |
 | `MixMeterSnapshot.short_term_lufs` | float -> float \| None: -inf for silence, None until the window fills |
-| `MixMeterSnapshot.true_peak_db_l` | `MixMeterSnapshot.true_peak_dbtp_l`: true_peak_db_l -> true_peak_dbtp_l, float \| None: -inf for silence, None when true peak is switched off |
-| `MixMeterSnapshot.true_peak_db_r` | `MixMeterSnapshot.true_peak_dbtp_r`: true_peak_db_r -> true_peak_dbtp_r, float \| None: -inf for silence, None when true peak is switched off |
 | `PhaseScopeReport.angle_rad` | NaN at a silent point, which has no angle, instead of 0; the array keeps one element per point |
 | `PhaseScopeReport.average_abs_angle_rad` | float \| None: the mean over the non-silent points, None when every point is silent |
 | `PhaseScopeReport.correlation` | float \| None: None when either channel has zero energy, instead of NaN |
@@ -3095,6 +3110,21 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `waveform_peak_pyramid(channels)` | `waveform_peak_pyramid(num_channels)` |
 | `waveform_peaks(channels)` | `waveform_peaks(num_channels)` |
 
+#### Per-channel measurements are arrays sized to numChannels
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MixMeterSnapshot.channel_count` | `MixMeterSnapshot.num_channels`: channel_count -> num_channels; an integer that is 0 before any audio |
+| `MixMeterSnapshot.peak_db_l` | removed: read peak_db[0] |
+| `MixMeterSnapshot.peak_db_r` | removed: read peak_db[1] |
+| `MixMeterSnapshot.peak_db` | a tuple of num_channels values, with None for unmeasured channels and -inf for silence |
+| `MixMeterSnapshot.rms_db_l` | removed: read rms_db[0] |
+| `MixMeterSnapshot.rms_db_r` | removed: read rms_db[1] |
+| `MixMeterSnapshot.rms_db` | a tuple of num_channels values, with None for unmeasured channels and -inf for silence |
+| `MixMeterSnapshot.true_peak_db_l` | removed: read true_peak_dbtp[0] |
+| `MixMeterSnapshot.true_peak_db_r` | removed: read true_peak_dbtp[1] |
+| `MixMeterSnapshot.true_peak_db` | `MixMeterSnapshot.true_peak_dbtp`: true_peak_db -> true_peak_dbtp; a tuple of num_channels values, with None for unmeasured channels and -inf for silence |
+
 #### Pass filters are spelled HighPass, LowPass and BandPass
 
 | 1.x | 2.0.0 |
@@ -3134,7 +3164,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MixMeterSnapshot.channel_count` | `MixMeterSnapshot.num_channels` |
 | `StreamingMasteringChain.constructor(loudness_static_gain_peak_db)` | `StreamingMasteringChain.constructor(loudness_static_gain_peak_dbtp)` |
 | `master_audio(preset_name)` | `master_audio(preset)` |
 | `master_audio_stereo(preset_name)` | `master_audio_stereo(preset)` |
@@ -3419,16 +3448,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `MeterTelemetryRecord.input_peak_db_l` | removed: read input_peak_db[0] |
-| `MeterTelemetryRecord.input_peak_db_r` | removed: read input_peak_db[1] |
-| `MeterTelemetryRecord.peak_db_l` | removed: read peak_db[0] |
-| `MeterTelemetryRecord.peak_db_r` | removed: read peak_db[1] |
-| `MeterTelemetryRecord.rms_db_l` | removed: read rms_db[0] |
-| `MeterTelemetryRecord.rms_db_r` | removed: read rms_db[1] |
-| `MeterTelemetryRecord.true_peak_db_l` | removed: read true_peak_dbtp[0] |
-| `MeterTelemetryRecord.true_peak_db_r` | removed: read true_peak_dbtp[1] |
-| `MeterTelemetryRecordWide` | removed: read MeterTelemetryRecord, which carries the per-channel planes and num_channels |
-| `RealtimeEngine.drain_meter_telemetry_wide` | removed: call RealtimeEngine.drain_meter_telemetry, whose records carry the per-channel planes |
 | `RealtimeEngine.process_with_monitor` | removed: call RealtimeEngine.process(channels, with_monitor=True) |
 | `RealtimeEngine.set_capture_buffer` | `RealtimeEngine.configure_capture`: configure_capture(capacity_frames=..., num_channels=...) sets the whole capture setup; the buffer is reallocated only when its shape changes, and reallocating while armed raises SonareError (INVALID_STATE) |
 | `RealtimeEngine.set_capture_punch(enabled)` | removed: pass configure_capture(..., punch=CapturePunch(...)) to gate capture and omit punch to leave it ungated |
@@ -3461,6 +3480,21 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `PlaybackRenderer.process_interleaved(in_channels)` | `PlaybackRenderer.process_interleaved(num_input_channels)` |
 | `PlaybackRenderer.render_offline(in_channels)` | `PlaybackRenderer.render_offline(num_input_channels)` |
 | `render_playback(channels)` | `render_playback(num_channels)` |
+
+#### Per-channel measurements are arrays sized to numChannels
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MeterTelemetryRecord.input_peak_db_l` | removed: read input_peak_db[0] |
+| `MeterTelemetryRecord.input_peak_db_r` | removed: read input_peak_db[1] |
+| `MeterTelemetryRecord.peak_db_l` | removed: read peak_db[0] |
+| `MeterTelemetryRecord.peak_db_r` | removed: read peak_db[1] |
+| `MeterTelemetryRecord.rms_db_l` | removed: read rms_db[0] |
+| `MeterTelemetryRecord.rms_db_r` | removed: read rms_db[1] |
+| `MeterTelemetryRecord.true_peak_db_l` | removed: read true_peak_dbtp[0] |
+| `MeterTelemetryRecord.true_peak_db_r` | removed: read true_peak_dbtp[1] |
+| `MeterTelemetryRecordWide` | removed: read MeterTelemetryRecord, which carries the per-channel planes and num_channels |
+| `RealtimeEngine.drain_meter_telemetry_wide` | removed: call RealtimeEngine.drain_meter_telemetry, whose records carry the per-channel planes |
 
 #### Mixer strips are addressed by StripRef
 
@@ -3661,7 +3695,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Project.apply_vocal_edit(take_id)` | int \| None, default None: None edits the clip's base source and an explicit 0 raises SonareValueError |
 | `Project.bounce(block_size)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.bounce(num_channels)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
-| `Project.bounce(sample_rate)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
+| `Project.bounce(sample_rate)` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sample_rate reports it. |
 | `Project.bounce(total_frames)` | omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError |
 | `Project.move_clip(new_track_id)` | int \| None, default None: None keeps the clip on its track and an explicit 0 raises SonareValueError |
 | `Project.set_audio_source_metadata(content_hash)` | None clears the field; an empty string raises SonareValueError |
@@ -3703,9 +3737,9 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 |---|---|
 | `BuiltinSynthConfig.waveform` | takes a SynthWaveform token ('sine' default); the SYNTH_WAVEFORM_* ordinals are removed and a number is TypeError |
 | `MidiCcBinding.kind` | a ProjectMidiCcBindingKind token ('controlChange7', 'controlChange14', 'rpn', 'nrpn') instead of an ordinal; a number is TypeError and another spelling raises SonareValueError |
-| `Project.add_automation_lane(target_kind)` | takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan'); 'track-fader-db' and 'track-pan' raise SonareValueError, a number is TypeError, and the AUTOMATION_TARGET_* ordinals are removed |
+| `Project.add_automation_lane(target_kind)` | keyword-only, and takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan', 'trackSendDb', 'trackWidth', 'trackInsertParam'; automation_target_kind_names() lists them); 'track-fader-db' and 'track-pan' raise SonareValueError, a number is TypeError, and the AUTOMATION_TARGET_* ordinals are removed |
 | `Project.add_track(kind)` | takes a ProjectTrackKind token ('audio' default, 'midi', 'aux'); the TRACK_AUDIO / TRACK_MIDI / TRACK_AUX ordinals are removed and a number is TypeError |
-| `Project.edit_automation_lane(target_kind)` | takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan'); 'track-fader-db' and 'track-pan' raise SonareValueError and a number is TypeError |
+| `Project.edit_automation_lane(target_kind)` | keyword-only, and takes a ProjectAutomationTargetKind token as add_automation_lane does; omitted, the edit replaces the points only and keeps the lane's target, and given, it replaces the target with the identity fields passed beside it |
 | `Project.set_clip_fade(fade_in_curve)` | a ProjectFadeCurve token only (linear, equalPower, exponential, logarithmic); separator variants and abbreviations raise, the FADE_CURVE_* ordinals are removed and a number is TypeError |
 | `Project.set_clip_fade(fade_out_curve)` | a ProjectFadeCurve token only (linear, equalPower, exponential, logarithmic); separator variants and abbreviations raise, the FADE_CURVE_* ordinals are removed and a number is TypeError |
 | `Project.set_clip_loop(loop_mode)` | 'off' or 'loop' only; 'on', 'none' and the LOOP_MODE_* ordinals are refused |
@@ -3884,6 +3918,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `create_vocal_edit_session` | removed: construct VocalEditSession(samples, sample_rate, ...) with the same keywords |
 | `restore_vocal_edit_session` | removed: call the classmethod VocalEditSession.restore(samples, sample_rate, state, ...) with the same keywords |
 
+#### Multichannel audio is planar: channels plus sampleRate
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.bounce` | returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate |
+
 #### Channel counts are numChannels
 
 | 1.x | 2.0.0 |
@@ -3907,11 +3947,13 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.add_automation_lane(target_param_id)` | takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None selects the untyped lane |
+| `Project.add_automation_lane(target_param_id)` | keyword-only and given only for an opaque lane (target_kind omitted or 'opaque'); a typed lane names its target with send_id or insert_index, processor and param_name instead. points is the second positional, each point is an AutomationPoint, and a descriptor mapping, a tuple point or a mapping point is TypeError |
+| `Project.add_automation_lane` | returns the project-allocated lane ID, which edit_automation_lane, remove_automation_lane and automation_lanes() use, instead of the target parameter ID |
 | `Project.annotate_keys(keys)` | each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'; an unknown tonic_pc is absent or None, and 255 or any value outside 0..11 raises SonareValueError naming the field |
 | `Project.bake_midi_fx(config_json)` | `Project.bake_midi_fx(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
-| `Project.edit_automation_lane(target_param_id)` | takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None keeps the lane's kind |
+| `Project.edit_automation_lane(target_param_id)` | keyword-only and given only with target_kind='opaque'; the lane is named by lane_id, the second positional, which add_automation_lane returns and automation_lanes() reads. points is the third positional, each point is an AutomationPoint, and a descriptor mapping, a tuple point or a mapping point is TypeError |
 | `Project.preview_midi_fx_count(config_json)` | `Project.preview_midi_fx_count(config)`: a MidiFxConfig mapping with camelCase keys (transposeSemitones, velocityScale, quantizePpq, chordIntervals, ...) instead of JSON text; JSON text raises TypeError, so parse it with json.loads first, and an earlier snake_case key or an unknown key raises SonareError InvalidFormat naming it |
+| `Project.remove_automation_lane(target_param_id)` | `Project.remove_automation_lane(lane_id)` |
 | `Project.set_assist_sidecar(module_id)` | takes module_id and payload positionally and schema_version, target_track_id, region_start_ppq and region_end_ppq as keywords; a descriptor mapping in place of module_id is TypeError |
 | `Project.set_clip_comp_segments(segments)` | each segment is a mapping (a 3- or 4-tuple is TypeError) taking start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key; segments is required and None raises TypeError, pass [] to clear; a take_id absent or None plays the base/active take and 0 raises SonareValueError |
 | `Project.set_clip_takes(takes)` | each take is a mapping (a tuple is TypeError) taking id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key; takes is required and None raises TypeError, pass [] to clear; id is required and non-zero, a source_id absent or None uses the clip's source and 0 raises SonareValueError, a name absent or None leaves the take unnamed, an empty name raises SonareValueError and a non-string name raises TypeError instead of being converted with str() |
@@ -4673,14 +4715,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 |---|---|
 | `AnalysisResult.beatTimes` | removed: Read beats and take timeSec from each Beat: result.beats.map((b) => b.timeSec). |
 | `AnalysisResult.downbeatIndices` | `AnalysisResult.downbeats` |
-| `EstimateMeterRequest.beatStrengths` | removed: Put the strength on each entry of beats: Beat[] ({ timeSec, strength }) in EstimateMeterRequest. |
-| `EstimateMeterRequest.beatTimes` | `EstimateMeterRequest.beats` |
+| `EstimateMeterRequest.beatStrengths` | removed: Pass analysis.beatObservations in EstimateMeterRequest.observations. |
+| `EstimateMeterRequest.beatTimes` | `EstimateMeterRequest.observations` |
 | `splitSilenceCommonWithReport` | returns SplitSilenceCommonWithReportResult |
 
 #### Python arrays are numpy arrays
 
 | 1.x | 2.0.0 |
 |---|---|
+| `BeatObservations.onsetStrength` | removed: Use accent, hasAttack and subdivisionAccent on BeatObservations. |
 | `StreamFramesI16.nChroma` | removed: derive it as chroma.length / nFrames; the arrays are band-major |
 | `StreamFramesI16.nMels` | removed: derive it as mel.length / nFrames; the arrays are band-major |
 | `StreamFramesU8.nChroma` | removed: derive it as chroma.length / nFrames; the arrays are band-major |
@@ -5318,7 +5361,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `StreamAnalyzerStats` | `StreamStats` |
 | `StreamFramesSoa` | `StreamFrames` |
 | `ValuesRequest` | removed: Use the request type of the function, such as PadCenterRequest, FixLengthRequest or VectorNormalizeRequest; each carries values itself. |
-| `estimateMeter` | request type is EstimateMeterRequest |
+| `estimateMeter` | the request takes observations: BeatObservations. Pass analysis.beatObservations to score an analysis result. |
 | `segmentAgglomerative` | request type is SegmentAgglomerativeRequest |
 | `segmentSubsegment` | request type is SegmentSubsegmentRequest |
 | `splitSilenceCommon` | request type is SplitSilenceCommonRequest; an empty signals array is a RangeError instead of a TypeError |
@@ -5356,6 +5399,8 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
+| `AnalyzeBpmOptions.startBpm` | removed: Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior. |
+| `AnalyzeBpmRequest.startBpm` | removed: Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior. |
 | `BpmHypothesis.value` | `AnalysisBpmCandidate.bpm` |
 | `CqtRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
 | `CqtToAudioRequest.hopLength` | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated) |
@@ -5970,9 +6015,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `MasteringStreamingPreviewPlatform.truePeakDb` | `MasteringStreamingPreviewPlatform.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `MixAssistantTrackProfile.truePeakDb` | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
 | `MixMeterSnapshot.maxTruePeakDb` | `MixMeterSnapshot.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `MixMeterSnapshot.truePeakDbL` | `MixMeterSnapshot.truePeakDbtpL`: truePeakDbL -> truePeakDbtpL |
-| `MixMeterSnapshot.truePeakDbR` | `MixMeterSnapshot.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
-| `MixMeterSnapshot.truePeakDb` | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `StreamingLoudnessGainResult.truePeakDb` | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `StreamingMasteringChainConfig.loudnessStaticGainPeakDb` | `StreamingMasteringChainConfig.loudnessStaticGainPeakDbtp` |
 | `StreamingPlatform.ceilingDb` | `StreamingPlatform.ceilingDbtp`: ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused |
@@ -6363,6 +6405,20 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `lufsInterleaved` | `lufsMultichannel`: renamed to lufsMultichannel: lufsMultichannel(request: LufsMultichannelRequest): LufsResult (request-only) |
 | `lufsSeriesInterleaved` | `lufsSeriesMultichannel`: renamed to lufsSeriesMultichannel: lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult (request-only) |
 
+#### Per-channel measurements are arrays sized to numChannels
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MixMeterSnapshot.peakDbL` | removed: read peakDb[0] |
+| `MixMeterSnapshot.peakDbR` | removed: read peakDb[1] |
+| `MixMeterSnapshot.peakDb` | each plane is a number or undefined when unmeasured; -Infinity remains a measured silence |
+| `MixMeterSnapshot.rmsDbL` | removed: read rmsDb[0] |
+| `MixMeterSnapshot.rmsDbR` | removed: read rmsDb[1] |
+| `MixMeterSnapshot.rmsDb` | each plane is a number or undefined when unmeasured; -Infinity remains a measured silence |
+| `MixMeterSnapshot.truePeakDbL` | removed: read truePeakDbtp[0] |
+| `MixMeterSnapshot.truePeakDbR` | removed: read truePeakDbtp[1] |
+| `MixMeterSnapshot.truePeakDb` | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp; each plane is a number or undefined when unmeasured, while -Infinity remains a measured silence |
+
 #### Setters take labelled objects, not positional booleans
 
 | 1.x | 2.0.0 |
@@ -6531,8 +6587,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineMeterTelemetry.maxTruePeakDb` | `EngineMeterTelemetry.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetry.truePeakDbL` | removed: read truePeakDbtp[0] |
-| `EngineMeterTelemetry.truePeakDbR` | removed: read truePeakDbtp[1] |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -6859,6 +6913,21 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RenderPlaybackRequest.channels` | `RenderPlaybackRequest.numChannels` |
 | `RenderPlaybackResult.channels` | `RenderPlaybackResult.numChannels` |
 
+#### Per-channel measurements are arrays sized to numChannels
+
+| 1.x | 2.0.0 |
+|---|---|
+| `EngineMeterTelemetry.inputPeakDbL` | removed: read inputPeakDb[0] |
+| `EngineMeterTelemetry.inputPeakDbR` | removed: read inputPeakDb[1] |
+| `EngineMeterTelemetry.peakDbL` | removed: read peakDb[0] |
+| `EngineMeterTelemetry.peakDbR` | removed: read peakDb[1] |
+| `EngineMeterTelemetry.rmsDbL` | removed: read rmsDb[0] |
+| `EngineMeterTelemetry.rmsDbR` | removed: read rmsDb[1] |
+| `EngineMeterTelemetry.truePeakDbL` | removed: read truePeakDbtp[0] |
+| `EngineMeterTelemetry.truePeakDbR` | removed: read truePeakDbtp[1] |
+| `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
+| `RealtimeEngine.drainMeterTelemetryWide` | removed: use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane |
+
 #### Setters take labelled objects, not positional booleans
 
 | 1.x | 2.0.0 |
@@ -6990,14 +7059,6 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | 1.x | 2.0.0 |
 |---|---|
 | `ClipPageRequest` | `ClipPageSampleRequest` |
-| `EngineMeterTelemetry.inputPeakDbL` | removed: read inputPeakDb[0] |
-| `EngineMeterTelemetry.inputPeakDbR` | removed: read inputPeakDb[1] |
-| `EngineMeterTelemetry.peakDbL` | removed: read peakDb[0] |
-| `EngineMeterTelemetry.peakDbR` | removed: read peakDb[1] |
-| `EngineMeterTelemetry.rmsDbL` | removed: read rmsDb[0] |
-| `EngineMeterTelemetry.rmsDbR` | removed: read rmsDb[1] |
-| `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
-| `RealtimeEngine.drainMeterTelemetryWide` | removed: use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane |
 | `RealtimeEngine.setGraph` | an unknown key at the top level, or inside a node, a connection or a parameter binding, is a TypeError naming its path, and a missing field reads '<path> must be given'; correct the key the message names |
 
 ### Node: Projects, arrangement and vocal editing
@@ -7053,7 +7114,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 
 | 1.x | 2.0.0 |
 |---|---|
-| `Project.addAutomationLane` | targetKind is trackFaderDb / trackPan, not the hyphenated spelling |
+| `Project.addAutomationLane` | returns the project-allocated lane ID instead of the target parameter ID; targetKind is one of automationTargetKindNames() (trackFaderDb / trackPan, not the hyphenated spelling) |
 | `ProjectAutomationCurve='s-curve'` | `ProjectAutomationCurve='sCurve'` |
 | `ProjectAutomationCurve='scurve'` | removed: spell it 'sCurve', the AutomationCurve token; 'scurve' is refused |
 | `ProjectAutomationTargetKind='track-fader-db'` | `ProjectAutomationTargetKind='trackFaderDb'` |
@@ -7192,6 +7253,15 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `Project.midiProgram` | removed: call the module function midiProgram |
 | `Project.midiRouteEvents` | removed: call the module function midiRouteEvents |
 | `Project.perNoteControllerName` | removed: call the module function perNoteControllerName |
+
+#### C extends an operation through an Options struct
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.editAutomationLane(targetParamId)` | `Project.editAutomationLane(laneId)` |
+| `Project.editAutomationLane` | takes the lane ID that addAutomationLane returns and automationLanes() reads, and a ProjectAutomationLaneEditDesc: without targetKind it replaces the points only, and with one it replaces the target with the fields given beside it |
+| `Project.removeAutomationLane(targetParamId)` | `Project.removeAutomationLane(laneId)` |
+| `ProjectAutomationLaneDesc` | a union keyed by targetKind: an opaque lane takes targetParamId, 'trackSendDb' takes sendId, 'trackInsertParam' takes insertIndex, processor and paramName, and the other kinds take no identity; a field the kind does not take is refused |
 
 #### Errors are coded by cause on every surface
 
@@ -8550,15 +8620,16 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `AnalysisResult.beatTimes` | removed: Read beats and take timeSec from each Beat: result.beats.map((b) => b.timeSec). |
 | `AnalysisResult.downbeatIndices` (`./analysis`) | `AnalysisResult.downbeats` |
 | `AnalysisResult.downbeatIndices` | `AnalysisResult.downbeats` |
-| `EstimateMeterRequest.beatStrengths` (`./analysis`) | removed: Put the strength on each entry of beats: Beat[] ({ timeSec, strength }) in EstimateMeterRequest. |
-| `EstimateMeterRequest.beatStrengths` | removed: Put the strength on each entry of beats: Beat[] ({ timeSec, strength }) in EstimateMeterRequest. |
-| `EstimateMeterRequest.beatTimes` (`./analysis`) | `EstimateMeterRequest.beats` |
-| `EstimateMeterRequest.beatTimes` | `EstimateMeterRequest.beats` |
+| `EstimateMeterRequest.beatStrengths` (`./analysis`) | removed: Pass analysis.beatObservations in EstimateMeterRequest.observations. |
+| `EstimateMeterRequest.beatStrengths` | removed: Pass analysis.beatObservations in EstimateMeterRequest.observations. |
+| `EstimateMeterRequest.beatTimes` (`./analysis`) | `EstimateMeterRequest.observations` |
+| `EstimateMeterRequest.beatTimes` | `EstimateMeterRequest.observations` |
 
 #### Python arrays are numpy arrays
 
 | 1.x | 2.0.0 |
 |---|---|
+| `BeatObservations.onsetStrength` (`./analysis`) | removed: Use accent, hasAttack and subdivisionAccent on BeatObservations. |
 | `StreamFramesI16.nChroma` | removed: derive it as chroma.length / nFrames; the arrays are band-major |
 | `StreamFramesI16.nMels` | removed: derive it as mel.length / nFrames; the arrays are band-major |
 | `StreamFramesU8.nChroma` | removed: derive it as chroma.length / nFrames; the arrays are band-major |
@@ -9753,8 +9824,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `analyzeRhythm` | returns RhythmResult |
 | `analyzeTimbre` (`./analysis`) | returns TimbreResult |
 | `analyzeTimbre` | returns TimbreResult |
-| `estimateMeter` (`./analysis`) | request type is EstimateMeterRequest |
-| `estimateMeter` | request type is EstimateMeterRequest |
+| `estimateMeter` (`./analysis`) | the request takes observations: BeatObservations. Pass analysis.beatObservations to score an analysis result. |
+| `estimateMeter` | the request takes observations: BeatObservations. Pass analysis.beatObservations to score an analysis result. |
 | `segmentAgglomerative` (`./analysis`) | request type is SegmentAgglomerativeRequest |
 | `segmentAgglomerative` | request type is SegmentAgglomerativeRequest |
 | `segmentSubsegment` (`./analysis`) | request type is SegmentSubsegmentRequest |
@@ -9818,6 +9889,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `AnalyzeBpmOptions.maxCandidates` (`./analysis`) | a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped) |
 | `AnalyzeBpmOptions.maxCandidates` | a value past Number.MAX_SAFE_INTEGER is a RangeError reading 'analyzeBpm: maxCandidates must be an integer in [0, 9007199254740991]' (it was handed on and wrapped or clamped) |
+| `AnalyzeBpmOptions.startBpm` (`./analysis`) | removed: Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior. |
+| `AnalyzeBpmOptions.startBpm` | removed: Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior. |
+| `AnalyzeBpmRequest.startBpm` (`./analysis`) | removed: Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior. |
+| `AnalyzeBpmRequest.startBpm` | removed: Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior. |
 | `BpmHypothesis.value` (`./analysis`) | `AnalysisBpmCandidate.bpm` |
 | `BpmHypothesis.value` | `AnalysisBpmCandidate.bpm` |
 | `CqtRequest.hopLength` (`./analysis`) | hopLength must be an integer in [1, 65536], the largest hop the transform's FFT length can serve (any positive hop was accepted and then failed or over-allocated); also refused with RangeError: a top bin at or above Nyquist (fminHz * 2^((nBins - 1) / binsPerOctave) must be less than sampleRate / 2) and a filter longer than 131072 samples (naming fminHz, binsPerOctave and filterScale; vqt adds gamma); PseudoCqtRequest, HybridCqtRequest and VqtRequest inherit it |
@@ -10772,14 +10847,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixAssistantTrackProfile.truePeakDb` | `MixAssistantTrackProfile.truePeakDbtp`: truePeakDb -> truePeakDbtp, now optional: `-Infinity` for silence, absent for an input with no samples to measure |
 | `MixMeterSnapshot.maxTruePeakDb` (`./analysis`) | `MixMeterSnapshot.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
 | `MixMeterSnapshot.maxTruePeakDb` | `MixMeterSnapshot.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `MixMeterSnapshot.truePeakDbL` (`./analysis`) | `MixMeterSnapshot.truePeakDbtpL`: truePeakDbL -> truePeakDbtpL |
-| `MixMeterSnapshot.truePeakDbL` | `MixMeterSnapshot.truePeakDbtpL`: truePeakDbL -> truePeakDbtpL |
-| `MixMeterSnapshot.truePeakDbR` (`./analysis`) | `MixMeterSnapshot.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
-| `MixMeterSnapshot.truePeakDbR` | `MixMeterSnapshot.truePeakDbtpR`: truePeakDbR -> truePeakDbtpR |
-| `MixMeterSnapshot.truePeakDb` (`./analysis`) | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp |
-| `MixMeterSnapshot.truePeakDb` | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp |
-| `SonareWorkletMeterSnapshot.truePeakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.truePeakDbtp[0] |
-| `SonareWorkletMeterSnapshot.truePeakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.truePeakDbtp[1] |
 | `SonareWorkletMeterSnapshot.truePeakDb` (`./worklet`) | `WorkletMeterSnapshot.truePeakDbtp` |
 | `StreamingLoudnessGainResult.truePeakDb` (`./analysis`) | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
 | `StreamingLoudnessGainResult.truePeakDb` | `StreamingLoudnessGainResult.truePeakDbtp`: truePeakDb -> truePeakDbtp |
@@ -11336,6 +11403,37 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `lufsSeriesInterleaved` (`./analysis`) | `lufsSeriesMultichannel`: renamed to lufsSeriesMultichannel: lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult (request-only) |
 | `lufsSeriesInterleaved` | `lufsSeriesMultichannel`: renamed to lufsSeriesMultichannel: lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult (request-only) |
 
+#### Per-channel measurements are arrays sized to numChannels
+
+| 1.x | 2.0.0 |
+|---|---|
+| `MixMeterSnapshot.peakDbL` (`./analysis`) | removed: read peakDb[0] |
+| `MixMeterSnapshot.peakDbL` | removed: read peakDb[0] |
+| `MixMeterSnapshot.peakDbR` (`./analysis`) | removed: read peakDb[1] |
+| `MixMeterSnapshot.peakDbR` | removed: read peakDb[1] |
+| `MixMeterSnapshot.peakDb` (`./analysis`) | number[] -> (number \| undefined)[]; undefined when unmeasured, -Infinity for measured silence |
+| `MixMeterSnapshot.peakDb` | number[] -> (number \| undefined)[]; undefined when unmeasured, -Infinity for measured silence |
+| `MixMeterSnapshot.rmsDbL` (`./analysis`) | removed: read rmsDb[0] |
+| `MixMeterSnapshot.rmsDbL` | removed: read rmsDb[0] |
+| `MixMeterSnapshot.rmsDbR` (`./analysis`) | removed: read rmsDb[1] |
+| `MixMeterSnapshot.rmsDbR` | removed: read rmsDb[1] |
+| `MixMeterSnapshot.rmsDb` (`./analysis`) | number[] -> (number \| undefined)[]; undefined when unmeasured, -Infinity for measured silence |
+| `MixMeterSnapshot.rmsDb` | number[] -> (number \| undefined)[]; undefined when unmeasured, -Infinity for measured silence |
+| `MixMeterSnapshot.truePeakDbL` (`./analysis`) | removed: read truePeakDbtp[0] |
+| `MixMeterSnapshot.truePeakDbL` | removed: read truePeakDbtp[0] |
+| `MixMeterSnapshot.truePeakDbR` (`./analysis`) | removed: read truePeakDbtp[1] |
+| `MixMeterSnapshot.truePeakDbR` | removed: read truePeakDbtp[1] |
+| `MixMeterSnapshot.truePeakDb` (`./analysis`) | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp; number[] -> (number \| undefined)[]; undefined when unmeasured, -Infinity for measured silence |
+| `MixMeterSnapshot.truePeakDb` | `MixMeterSnapshot.truePeakDbtp`: truePeakDb -> truePeakDbtp; number[] -> (number \| undefined)[]; undefined when unmeasured, -Infinity for measured silence |
+| `SonareWorkletMeterSnapshot.inputPeakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.inputPeakDb[0] |
+| `SonareWorkletMeterSnapshot.inputPeakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.inputPeakDb[1] |
+| `SonareWorkletMeterSnapshot.peakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.peakDb[0] |
+| `SonareWorkletMeterSnapshot.peakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.peakDb[1] |
+| `SonareWorkletMeterSnapshot.rmsDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.rmsDb[0] |
+| `SonareWorkletMeterSnapshot.rmsDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.rmsDb[1] |
+| `SonareWorkletMeterSnapshot.truePeakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.truePeakDbtp[0] |
+| `SonareWorkletMeterSnapshot.truePeakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.truePeakDbtp[1] |
+
 #### Setters take labelled objects, not positional booleans
 
 | 1.x | 2.0.0 |
@@ -11603,12 +11701,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `MixSceneInsert` | discriminated union over MasteringInsertName: {slot: 'pre' \| 'post', processor: P, params: MasteringProcessorParams<P>, sidechainKey?} |
 | `SoloProcessor` (`./analysis`) | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
 | `SoloProcessor` | generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset |
-| `SonareWorkletMeterSnapshot.inputPeakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.inputPeakDb[0] |
-| `SonareWorkletMeterSnapshot.inputPeakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.inputPeakDb[1] |
-| `SonareWorkletMeterSnapshot.peakDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.peakDb[0] |
-| `SonareWorkletMeterSnapshot.peakDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.peakDb[1] |
-| `SonareWorkletMeterSnapshot.rmsDbL` (`./worklet`) | removed: read WorkletMeterSnapshot.rmsDb[0] |
-| `SonareWorkletMeterSnapshot.rmsDbR` (`./worklet`) | removed: read WorkletMeterSnapshot.rmsDb[1] |
 | `StreamingEqualizer.setBand` | a band key EqBandInput does not declare is a TypeError listing the accepted keys, the 1.x lookaheadMs included; 1.x read any other unknown band key as absent |
 | `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./analysis`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
 | `StreamingMasteringChainConfig.repair.declip.lpcBlend` (`./worklet`) | removed, no replacement: the declipper no longer blends an interpolation into its LPC fill: a run it cannot reconstruct is left clipped and counted in unreconstructedRuns |
@@ -11687,8 +11779,6 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `EngineMeterTelemetry.maxTruePeakDb` | `EngineMeterTelemetry.maxTruePeakDbtp`: maxTruePeakDb -> maxTruePeakDbtp |
-| `EngineMeterTelemetry.truePeakDbL` | removed: read truePeakDbtp[0] |
-| `EngineMeterTelemetry.truePeakDbR` | removed: read truePeakDbtp[1] |
 
 #### A value that is not given is absent, never 0, -1 or ''
 
@@ -12105,6 +12195,21 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `SonareWorkletProcessor.blockSize` (`./worklet`) | `SonareWorkletProcessor.maxBlockSize` |
 | `SonareWorkletProcessorOptions.blockSize` (`./worklet`) | `SonareWorkletProcessorOptions.maxBlockSize` |
 
+#### Per-channel measurements are arrays sized to numChannels
+
+| 1.x | 2.0.0 |
+|---|---|
+| `EngineMeterTelemetry.inputPeakDbL` | removed: read inputPeakDb[0] |
+| `EngineMeterTelemetry.inputPeakDbR` | removed: read inputPeakDb[1] |
+| `EngineMeterTelemetry.peakDbL` | removed: read peakDb[0] |
+| `EngineMeterTelemetry.peakDbR` | removed: read peakDb[1] |
+| `EngineMeterTelemetry.rmsDbL` | removed: read rmsDb[0] |
+| `EngineMeterTelemetry.rmsDbR` | removed: read rmsDb[1] |
+| `EngineMeterTelemetry.truePeakDbL` | removed: read truePeakDbtp[0] |
+| `EngineMeterTelemetry.truePeakDbR` | removed: read truePeakDbtp[1] |
+| `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
+| `RealtimeEngine.drainMeterTelemetryWide` | removed: use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane |
+
 #### Setters take labelled objects, not positional booleans
 
 | 1.x | 2.0.0 |
@@ -12460,18 +12565,10 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 |---|---|
 | `CaptureOptions.bufferFrames` (`./worklet`) | `CaptureOptions.capacityFrames` |
 | `ClipPageRequest` | `ClipPageSampleRequest` |
-| `EngineMeterTelemetry.inputPeakDbL` | removed: read inputPeakDb[0] |
-| `EngineMeterTelemetry.inputPeakDbR` | removed: read inputPeakDb[1] |
-| `EngineMeterTelemetry.peakDbL` | removed: read peakDb[0] |
-| `EngineMeterTelemetry.peakDbR` | removed: read peakDb[1] |
-| `EngineMeterTelemetry.rmsDbL` | removed: read rmsDb[0] |
-| `EngineMeterTelemetry.rmsDbR` | removed: read rmsDb[1] |
-| `EngineMeterTelemetryWide` | removed: use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb) |
 | `Mixer.meterScratchValue` | field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0. Returns number \| undefined: a value not measured (the correlation of silence) is undefined, not NaN |
 | `RealtimeEngine.clipPageRequestScratchClipId` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.clipPageRequestScratchSample` | removed: use popClipPageRequest() and read the fields of the returned ClipPageSampleRequest |
 | `RealtimeEngine.consumeExternalMidiScratch` | removed: use drainExternalMidi(maxRecords), which returns ExternalMidiEvent[] |
-| `RealtimeEngine.drainMeterTelemetryWide` | removed: use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane |
 | `RealtimeEngine.externalMidiScratchByteCount` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |
 | `RealtimeEngine.externalMidiScratchByteWord` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |
 | `RealtimeEngine.externalMidiScratchDestinationId` | removed: use drainExternalMidi(maxRecords) and read the fields of each ExternalMidiEvent |
@@ -12594,7 +12691,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ClipPageProvider.supply` | a channel list that is not array-like is refused with TypeError naming channels instead of a channel-count RangeError |
 | `Project.addMidiClip` | a NaN, infinite or out-of-range startPpq or lengthPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.duplicateClip` | a NaN, infinite or out-of-range newStartPpq is refused with RangeError naming it (1.x passed it through) |
-| `Project.removeAutomationLane` | a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through) |
+| `Project.removeAutomationLane` | takes the lane ID that addAutomationLane returns and automationLanes() reads; a NaN, infinite or out-of-range laneId is refused with RangeError naming it (1.x passed it through) |
 | `Project.snapToGrid` | a NaN, infinite or out-of-range ppq or strength is refused with RangeError naming it (1.x passed it through) |
 | `Project.splitClip` | a NaN, infinite or out-of-range splitPpq is refused with RangeError naming it (1.x passed it through) |
 | `Project.trimClip` | a NaN, infinite or out-of-range newStartPpq or newLengthPpq is refused with RangeError naming it (1.x passed it through) |
@@ -12622,9 +12719,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PROJECT_AUTOMATION_TARGET_OPAQUE` | removed: Pass the string 'opaque' as targetKind; numeric target kinds are refused. |
 | `PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB` | removed: Pass the string 'trackFaderDb' as targetKind; numeric target kinds are refused. |
 | `PROJECT_AUTOMATION_TARGET_TRACK_PAN` | removed: Pass the string 'trackPan' as targetKind; numeric target kinds are refused. |
-| `Project.addAutomationLane` | targetKind is 'opaque' \| 'trackFaderDb' \| 'trackPan' |
+| `Project.addAutomationLane` | returns the project-allocated lane ID instead of the target parameter ID; targetKind is one of automationTargetKindNames(): 'opaque' \| 'trackFaderDb' \| 'trackPan' \| 'trackSendDb' \| 'trackWidth' \| 'trackInsertParam' |
 | `Project.addTrack` | ProjectTrackDesc.kind is 'audio' \| 'midi' \| 'aux'; an ordinal is a TypeError |
-| `Project.editAutomationLane` | targetKind is 'opaque' \| 'trackFaderDb' \| 'trackPan'; a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through) |
+| `Project.editAutomationLane` | takes the lane ID that addAutomationLane returns and automationLanes() reads, and a ProjectAutomationLaneEditDesc: without targetKind it replaces the points only, and with one it replaces the target with the fields given beside it; a NaN, infinite or out-of-range laneId is refused with RangeError naming it (1.x passed it through) |
 | `Project.setClipWarpMode` | setClipWarpMode takes 'off' \| 'repitch' \| 'tempoSync' \| 'timeStretch'; an ordinal is a TypeError |
 | `Project.setOverlapPolicy` | setOverlapPolicy takes 'disallow' \| 'allow'; an ordinal is a TypeError |
 | `Project.setTrackKind` | setTrackKind takes 'audio' \| 'midi' \| 'aux'; an ordinal is a TypeError |
@@ -12782,6 +12879,14 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.midiProgram` | removed: call the module function midiProgram |
 | `Project.midiRouteEvents` | removed: call the module function midiRouteEvents |
 | `Project.perNoteControllerName` | removed: call the module function perNoteControllerName |
+
+#### C extends an operation through an Options struct
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Project.editAutomationLane(targetParamId)` | `Project.editAutomationLane(laneId)` |
+| `Project.removeAutomationLane(targetParamId)` | `Project.removeAutomationLane(laneId)` |
+| `ProjectAutomationLaneDesc` | a union keyed by targetKind: an opaque lane takes targetParamId, 'trackSendDb' takes sendId, 'trackInsertParam' takes insertIndex, processor and paramName, and the other kinds take no identity; a field the kind does not take is refused |
 
 #### Errors are coded by cause on every surface
 
@@ -13414,6 +13519,7 @@ The native `sonare-cli` and the Python `sonare` take the same commands, options 
 
 | 1.x | 2.0.0 |
 |---|---|
+| `mastering-pair-analyze` | analyzes two stereo files as stereo, preserving both channels; analyzes two mono files as mono; refuses unequal channel counts or either input above two channels with exit 3 |
 | `repair` | a stereo input is measured per channel and repaired as a stereo pair, writing a stereo file; it was downmixed to mono; --detect alongside --explain, --preset, --stages, --params or --bits, --stages alongside --preset, --explain alongside --stages or --preset, an unknown or repeated --stages name and a --params key outside repair.* are refused as a usage error (exit 2) before the input is read, rather than as an invalid parameter (exit 3) after it; --explain beside --detect, --preset or --stages is refused on both CLIs as "--explain cannot be combined with <option>"; the JSON noise floor lists band_floor_dbfs for the measured bands beside their indices in band_floor_band, and the hum harmonic_dbfs ends at the last measured harmonic; a repaired peak past full scale lowers the whole output by one gain, reported as output_gain_db in --json and as a stderr note, instead of the gain line on stdout |
 
 #### Historical aliases are removed
@@ -14697,6 +14803,35 @@ Python, 2.0.0:
 
 ```python
 n = meter.num_channels
+```
+
+### Per-channel measurements are arrays sized to numChannels
+
+A meter record carries one array per measurement, `numChannels` (`num_channels`) long and indexed by channel; the per-side `*L` / `*R` (`*_l` / `*_r`) scalars and the separate wide record are gone, so a mono target has one plane and a surround target has all of them. A plane the library did not measure is `undefined` in JavaScript; in Python it is `None` in a mixer snapshot's tuples and NaN in the engine telemetry's float32 arrays.
+
+Node, 1.x:
+
+```ts
+const left = record.peakDbL;
+const right = record.peakDbR;
+```
+
+Node, 2.0.0:
+
+```ts
+const [left, right] = record.peakDb; // record.peakDb.length === record.numChannels
+```
+
+Python, 1.x:
+
+```python
+left, right = record.peak_db_l, record.peak_db_r
+```
+
+Python, 2.0.0:
+
+```python
+left, right = record.peak_db[0], record.peak_db[1]  # len(record.peak_db) == record.num_channels
 ```
 
 ### Setters take labelled objects, not positional booleans

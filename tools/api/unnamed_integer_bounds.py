@@ -107,9 +107,10 @@ def sites(root: Path = ROOT) -> list[tuple[str, int, str, str, str]]:
     return scan(root)[0]
 
 
-def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int]:
-    """The unnamed constant integer bounds, and how many integer checks were read to find them."""
+def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int, int]:
+    """The unnamed bounds, the integer checks read, and the tracked files absent from the tree."""
     scanned = 0
+    skipped = 0
     listed = subprocess.run(
         ["git", "ls-files", "src", "include"], cwd=root, capture_output=True, text=True, check=True
     ).stdout.split()
@@ -118,6 +119,9 @@ def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int]:
         if not path.endswith((".cpp", ".h")) or path.startswith("src/wasm/"):
             continue
         if path.endswith("util/parameter_checks.h"):
+            continue
+        if not (root / path).is_file():
+            skipped += 1
             continue
         text = re.sub(r"//[^\n]*", lambda m: " " * len(m.group()), (root / path).read_text())
 
@@ -136,7 +140,7 @@ def scan(root: Path = ROOT) -> tuple[list[tuple[str, int, str, str, str]], int]:
             if bounds and all(_is_constant(b) for b in bounds):
                 out.append((path, line(m.start()), m.group(1), ", ".join(bounds), args[-1]))
     rows = [(p, n, check, " ".join(b.split()), " ".join(s.split())) for p, n, check, b, s in out]
-    return rows, scanned
+    return rows, scanned, skipped
 
 
 CLASSES = ("enum", "c-only", "facade")
@@ -199,7 +203,7 @@ def classified(root: Path = ROOT) -> list[tuple[str, int, str, str, str, str]]:
 
 
 def main(argv: list[str]) -> int:
-    found, scanned = scan()
+    found, scanned, skipped = scan()
     exposed = facade_names()
     rows = [(*site, classify(site[3], site[4], exposed)) for site in found]
     counts = {name: sum(row[5] == name for row in rows) for name in CLASSES}
@@ -210,7 +214,8 @@ def main(argv: list[str]) -> int:
         for path, line, check, bounds, subject, cls in rows:
             print(f"{path}:{line}\t{cls}\t{check}\t{bounds}\t{subject}")
     print(
-        f"unnamed integer bounds: scanned {scanned} integer checks; "
+        f"unnamed integer bounds: scanned {scanned} integer checks"
+        f" (skipped {skipped} tracked files absent from the tree); "
         + " ".join(f"{name}={counts[name]}" for name in CLASSES),
         file=sys.stderr,
     )

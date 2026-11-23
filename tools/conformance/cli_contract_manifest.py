@@ -505,10 +505,25 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
                 "take_frames",
                 "other_rate_take",
                 "hot_amplitude",
+                "tags",
             },
             "manifest.fixtures.audio",
             errors,
         ):
+            tags = audio["tags"]
+            if _exact(tags, {"artist", "title"}, "manifest.fixtures.audio.tags", errors):
+                for key, value in tags.items():
+                    label = f"manifest.fixtures.audio.tags.{key}"
+                    if not isinstance(value, str) or not value or "\0" in value:
+                        errors.append(f"{label}: expected a non-empty UTF-8 string without NUL")
+                        continue
+                    try:
+                        encoded = value.encode("utf-8")
+                    except UnicodeEncodeError:
+                        errors.append(f"{label}: expected a non-empty UTF-8 string without NUL")
+                    else:
+                        if len(encoded) + 1 > 0xFFFFFFFF:
+                            errors.append(f"{label}: too large for a RIFF INFO value")
             if not _is_int(audio["sample_rate"]) or audio["sample_rate"] <= 0:
                 errors.append("manifest.fixtures.audio.sample_rate: expected a positive integer")
             for key in ("frames", "take_frames"):

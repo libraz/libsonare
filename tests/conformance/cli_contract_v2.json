@@ -5598,6 +5598,24 @@
           }
         },
         {
+          "name": "count-in-bars",
+          "type": "integer",
+          "value": "required",
+          "default": null,
+          "stated_default": "0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 16,
+            "exclusive_maximum": false,
+            "names": []
+          }
+        },
+        {
           "name": "frames",
           "type": "integer",
           "value": "required",
@@ -5628,6 +5646,17 @@
         },
         {
           "name": "json",
+          "type": "boolean",
+          "value": "none",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "metronome",
           "type": "boolean",
           "value": "none",
           "default": false,
@@ -15970,7 +15999,8 @@
             "channels": "integer",
             "samples": "integer",
             "peak_db": "number",
-            "rms_db": "number"
+            "rms_db": "number",
+            "tags": "map:string"
           }
         }
       },
@@ -15986,6 +16016,36 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "tagged",
+          "argv": [
+            "info",
+            "{audio_tagged}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "tagged_text",
+          "argv": [
+            "info",
+            "{audio_tagged}"
+          ],
+          "exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "Duration"
+          ],
+          "stdout_excludes": [
+            "Ada!",
+            "Morning"
+          ]
         }
       ],
       "artifacts": {}
@@ -17684,6 +17744,22 @@
           "stdout": "json"
         },
         {
+          "id": "mono_pair_with_distinct_lengths",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio_take}",
+            "--analysis",
+            "match.estimateReferenceDelaySamples",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "reference_delay",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "reference_at_another_rate",
           "argv": [
             "mastering-pair-analyze",
@@ -17698,6 +17774,77 @@
           "payload": "reference_loudness",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "stereo_reference_loudness",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio_stereo}",
+            "--reference",
+            "{audio_stereo_take_other_rate}",
+            "--analysis",
+            "match.referenceLoudness",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "reference_loudness",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "mismatched_channels",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio_stereo}",
+            "--analysis",
+            "match.referenceLoudness"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr_contains": [
+            "source",
+            "reference"
+          ]
+        },
+        {
+          "id": "overwide_source",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio_overwide}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "match.referenceLoudness"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr_contains": [
+            "source"
+          ]
+        },
+        {
+          "id": "overwide_reference",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio_overwide}",
+            "--analysis",
+            "match.referenceLoudness"
+          ],
+          "exit": 3,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr_contains": [
+            "reference"
+          ]
         },
         {
           "id": "reference_loudness_silent",
@@ -18027,6 +18174,24 @@
           }
         },
         {
+          "name": "count-in-bars",
+          "type": "integer",
+          "value": "required",
+          "default": null,
+          "stated_default": "0",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusive_minimum": false,
+            "maximum": 16,
+            "exclusive_maximum": false,
+            "names": []
+          }
+        },
+        {
           "name": "frames",
           "type": "integer",
           "value": "required",
@@ -18057,6 +18222,17 @@
         },
         {
           "name": "json",
+          "type": "boolean",
+          "value": "none",
+          "default": false,
+          "stated_default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "metronome",
           "type": "boolean",
           "value": "none",
           "default": false,
@@ -18125,6 +18301,7 @@
           "keys": {
             "output": "string",
             "frames": "integer",
+            "count_in_frames": "integer",
             "channels": "integer",
             "sample_rate": "integer",
             "synth": "boolean",
@@ -18143,6 +18320,26 @@
             "128",
             "-o",
             "{bounce_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "count_in_with_metronome",
+          "argv": [
+            "project",
+            "bounce",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--count-in-bars",
+            "1",
+            "--metronome",
             "--json"
           ],
           "exit": 0,
@@ -20270,7 +20467,7 @@
           "stdout": "empty",
           "stderr": "nonempty",
           "stderr_contains": [
-            "argument --platforms: unknown key platforms[0].ceilingDb (expected name, target_lufs, ceiling_dbtp)"
+            "argument --platforms: unknown key platforms[0].ceilingDb (expected ceiling_dbtp, name, target_lufs)"
           ]
         },
         {
@@ -29542,7 +29739,11 @@
         "sample_rate": 32000,
         "frames": 14400
       },
-      "hot_amplitude": 2.0
+      "hot_amplitude": 2.0,
+      "tags": {
+        "artist": "Ada!",
+        "title": "Morning"
+      }
     },
     "melodies": {
       "reference": {

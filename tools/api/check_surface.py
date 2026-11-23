@@ -2266,6 +2266,13 @@ FIXED_LAYOUT_RECORDS = {
 }
 
 
+# A running tally of events since start/arm outgrows a 32-bit size_t in ordinary use, which an
+# in-memory count cannot, so the family is uint64_t: an event word plus a tally suffix.
+_EVENT_TALLY = re.compile(
+    r"(^|_)(xrun|overrun|underrun|overflow|dropped)(_[a-z0-9]+)*_(count|frames|events)$"
+)
+
+
 def chk_c_count_types(ctx):
     cands, bad = 0, []
     fixed: list[str] = []
@@ -2275,7 +2282,16 @@ def chk_c_count_types(ctx):
         if "[" in r.get("type", "") or "(*)" in r.get("type", ""):
             continue
         want = None
-        if n == "length" or n.endswith(("_count", "_length")):
+        # A tally is state held across calls: a record field, or the out_count of a getter
+        # named for it. A tally-named out-parameter of any other call is a per-call count.
+        fn = r["name"].split("(")[0]
+        if r["kind"] == "field":
+            tally = _EVENT_TALLY.search(n) is not None
+        else:
+            tally = n == "out_count" and _EVENT_TALLY.search(fn) is not None
+        if tally:
+            want = "uint64_t"
+        elif n == "length" or n.endswith(("_count", "_length")):
             want = "size_t"
         elif _POS_SAMPLE.search(n):
             want = "int64_t"

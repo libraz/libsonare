@@ -17,7 +17,9 @@ import os
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -173,10 +175,12 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
         def import_smf(self, _data):
             pass
 
-        def bounce(self, *, sf2_instruments, total_frames, sample_rate):
-            seen["bounce_rate"] = sample_rate
+        def bounce(self, *, sf2_instruments, total_frames):
             seen["frames"] = total_frames
-            return [[0.0, 0.0]] * total_frames
+            return SimpleNamespace(
+                channels=np.zeros((2, total_frames), dtype=np.float32),
+                sample_rate=seen["project_rate"],
+            )
 
         def sound_font_manifest(self):
             return {}
@@ -191,12 +195,11 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
     monkeypatch.setattr(render_model, "ensure_lib_path", lambda: None)
     monkeypatch.setattr(render_model, "check_gm_fallback", lambda _m: None)
 
-    render_model.render_model(b"", 0.4, 44100, rig=False)
+    audio = render_model.render_model(b"", 0.4, 44100, rig=False)
 
-    assert seen["project_rate"] == 44100.0
-    # The two have to be the same number, which is the whole of the contract.
-    assert seen["bounce_rate"] == 44100
+    assert seen["project_rate"] == 44100
     assert seen["frames"] == round(0.4 * 44100)
+    assert audio.shape == (seen["frames"], 2)
 
 
 def test_a_request_renders_at_its_own_rig_rate_and_window(monkeypatch):
@@ -232,18 +235,21 @@ def _fake_bounce_library(monkeypatch, tmp_path, *, record: dict | None):
     seen: dict[str, list] = {"dump_paths": []}
 
     class _Project:
-        def set_sample_rate(self, _rate):
-            pass
+        def set_sample_rate(self, rate):
+            self.sample_rate = rate
 
         def import_smf(self, _data):
             pass
 
-        def bounce(self, *, sf2_instruments, total_frames, sample_rate):
+        def bounce(self, *, sf2_instruments, total_frames):
             dump = os.environ.get(render_model.PATH_DUMP_ENV)
             seen["dump_paths"].append(dump)
             if record is not None:
                 Path(dump).write_text(json.dumps(record))
-            return [[0.0, 0.0]] * total_frames
+            return SimpleNamespace(
+                channels=np.zeros((2, total_frames), dtype=np.float32),
+                sample_rate=self.sample_rate,
+            )
 
         def sound_font_manifest(self):
             return {}

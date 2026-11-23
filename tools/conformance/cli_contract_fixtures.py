@@ -12,7 +12,13 @@ from pathlib import Path
 from typing import Any
 
 
-def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
+def _write_wav(
+    path: Path,
+    fixture: dict[str, Any],
+    *,
+    channels: int = 1,
+    tags: dict[str, str] | None = None,
+) -> None:
     sample_rate = int(fixture["sample_rate"])
     frames = int(fixture["frames"])
     frequencies = [
@@ -27,12 +33,34 @@ def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
             for frequency in frequencies
         )
         sample = round(max(-1.0, min(1.0, value)) * 32767.0)
-        samples.extend(struct.pack("<h", sample))
+        if channels == 2:
+            samples.extend(struct.pack("<hh", sample, -sample))
+        else:
+            samples.extend(struct.pack("<" + "h" * channels, *([sample] * channels)))
     with wave.open(str(path), "wb") as output:
-        output.setnchannels(1)
+        output.setnchannels(channels)
         output.setsampwidth(2)
         output.setframerate(sample_rate)
         output.writeframes(bytes(samples))
+    if tags is not None:
+        _append_riff_info_tags(path, tags)
+
+
+def _append_riff_info_tags(path: Path, tags: dict[str, str]) -> None:
+    """Append the fixture's artist and title as padded RIFF LIST/INFO values."""
+    info = bytearray(b"INFO")
+    for key, tag_id in (("artist", b"IART"), ("title", b"INAM")):
+        value = tags[key].encode("utf-8") + b"\0"
+        info.extend(tag_id + struct.pack("<I", len(value)) + value)
+        if len(value) % 2:
+            info.append(0)
+    list_chunk = b"LIST" + struct.pack("<I", len(info)) + bytes(info)
+    if len(info) % 2:
+        list_chunk += b"\0"
+    wav = bytearray(path.read_bytes())
+    riff_size = struct.unpack_from("<I", wav, 4)[0]
+    wav[4:8] = struct.pack("<I", riff_size + len(list_chunk))
+    path.write_bytes(wav + list_chunk)
 
 
 def _write_impulse_wav(path: Path, fixture: dict[str, Any]) -> None:
@@ -122,6 +150,9 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     audio_path = directory / "contract.wav"
     _write_wav(audio_path, fixtures["audio"])
     paths["audio"] = str(audio_path)
+    stereo_path = directory / "contract-stereo.wav"
+    _write_wav(stereo_path, fixtures["audio"], channels=2)
+    paths["audio_stereo"] = str(stereo_path)
     # The same tone at a second length, for the commands that take two recordings
     # of one part. Written from the audio fixture's own descriptor so the pair
     # cannot drift apart in rate or frequency, which is what an alignment needs.
@@ -141,6 +172,23 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         },
     )
     paths["audio_take_other_rate"] = str(other_rate_path)
+    stereo_other_rate_path = directory / "contract-stereo-take-other-rate.wav"
+    _write_wav(
+        stereo_other_rate_path,
+        {
+            **fixtures["audio"],
+            "sample_rate": other_rate["sample_rate"],
+            "frames": other_rate["frames"],
+        },
+        channels=2,
+    )
+    paths["audio_stereo_take_other_rate"] = str(stereo_other_rate_path)
+    overwide_path = directory / "contract-overwide.wav"
+    _write_wav(overwide_path, fixtures["audio"], channels=6)
+    paths["audio_overwide"] = str(overwide_path)
+    tagged_path = directory / "contract-tagged.wav"
+    _write_wav(tagged_path, fixtures["audio"], tags=fixtures["audio"]["tags"])
+    paths["audio_tagged"] = str(tagged_path)
     # A dominant seventh at the tone's rate and length, for the cases whose flag
     # only shows on a chord with more than three pitch classes.
     chord_path = directory / "contract-chord.wav"

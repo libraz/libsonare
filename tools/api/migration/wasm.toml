@@ -9490,19 +9490,19 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "estimateMeter"
-changed = "request type is EstimateMeterRequest"
+changed = "the request takes observations: BeatObservations. Pass analysis.beatObservations to score an analysis result."
 domain = "analysis"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::types"
+test = "bindings/wasm/tests/surface/analysis-music.test.ts::estimateMeter takes beat observations"
 
 [[entry]]
 kind = "function"
 old = "estimateMeter"
-changed = "request type is EstimateMeterRequest"
+changed = "the request takes observations: BeatObservations. Pass analysis.beatObservations to score an analysis result."
 domain = "analysis"
 rule = "type-names"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-music.test.ts::types"
+test = "bindings/wasm/tests/surface/analysis-music.test.ts::estimateMeter takes beat observations"
 
 [[entry]]
 kind = "function"
@@ -11816,6 +11816,36 @@ entry = "./analysis"
 
 [[entry]]
 kind = "field"
+old = "AnalyzeBpmOptions.startBpm"
+removed = "Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior."
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmOptions.startBpm"
+removed = "Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior."
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.startBpm"
+removed = "Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior."
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.startBpm"
+removed = "Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior."
+domain = "analysis"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
 old = "AnalyzeBpmOptions.bpmMax"
 changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
@@ -12917,14 +12947,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "EstimateMeterRequest.beatStrengths"
-removed = "Put the strength on each entry of beats: Beat[] ({ timeSec, strength }) in EstimateMeterRequest."
+removed = "Pass analysis.beatObservations in EstimateMeterRequest.observations."
 domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "EstimateMeterRequest.beatStrengths"
-removed = "Put the strength on each entry of beats: Beat[] ({ timeSec, strength }) in EstimateMeterRequest."
+removed = "Pass analysis.beatObservations in EstimateMeterRequest.observations."
 domain = "analysis"
 rule = "typed-results"
 entry = "./analysis"
@@ -12932,14 +12962,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "EstimateMeterRequest.beatTimes"
-new = "EstimateMeterRequest.beats"
+new = "EstimateMeterRequest.observations"
 domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "EstimateMeterRequest.beatTimes"
-new = "EstimateMeterRequest.beats"
+new = "EstimateMeterRequest.observations"
 domain = "analysis"
 rule = "typed-results"
 entry = "./analysis"
@@ -21111,7 +21141,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::bounces to planar channels"
 [[entry]]
 kind = "method"
 old = "Project.addAutomationLane"
-changed = "targetKind is 'opaque' | 'trackFaderDb' | 'trackPan'"
+changed = "returns the project-allocated lane ID instead of the target parameter ID; targetKind is one of automationTargetKindNames(): 'opaque' | 'trackFaderDb' | 'trackPan' | 'trackSendDb' | 'trackWidth' | 'trackInsertParam'"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets in lowerCamel"
@@ -21119,7 +21149,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp mo
 [[entry]]
 kind = "method"
 old = "Project.editAutomationLane"
-changed = "targetKind is 'opaque' | 'trackFaderDb' | 'trackPan'; a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through)"
+changed = "takes the lane ID that addAutomationLane returns and automationLanes() reads, and a ProjectAutomationLaneEditDesc: without targetKind it replaces the points only, and with one it replaces the target with the fields given beside it; a NaN, infinite or out-of-range laneId is refused with RangeError naming it (1.x passed it through)"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets in lowerCamel"
@@ -24236,58 +24266,144 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.m
 kind = "field"
 old = "MixMeterSnapshot.truePeakDb"
 to = "MixMeterSnapshot.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp; number[] -> (number | undefined)[]; undefined when unmeasured, -Infinity for measured silence"
 domain = "mastering"
-rule = "loudness-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDb"
+rule = "channel-planes"
+test = "bindings/wasm/tests/mixer-meter-channel-arrays.test.ts::arrays contain exactly the measured planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDb"
 to = "MixMeterSnapshot.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp; number[] -> (number | undefined)[]; undefined when unmeasured, -Infinity for measured silence"
 domain = "mastering"
-rule = "loudness-names"
+rule = "channel-planes"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDb"
+test = "bindings/wasm/tests/mixer-meter-channel-arrays.test.ts::arrays contain exactly the measured planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbL"
-to = "MixMeterSnapshot.truePeakDbtpL"
-changed = "truePeakDbL -> truePeakDbtpL"
+removed = "read truePeakDbtp[0]"
 domain = "mastering"
-rule = "loudness-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbL"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbL"
-to = "MixMeterSnapshot.truePeakDbtpL"
-changed = "truePeakDbL -> truePeakDbtpL"
+removed = "read truePeakDbtp[0]"
 domain = "mastering"
-rule = "loudness-names"
+rule = "channel-planes"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbL"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbR"
-to = "MixMeterSnapshot.truePeakDbtpR"
-changed = "truePeakDbR -> truePeakDbtpR"
+removed = "read truePeakDbtp[1]"
 domain = "mastering"
-rule = "loudness-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbR"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbR"
-to = "MixMeterSnapshot.truePeakDbtpR"
-changed = "truePeakDbR -> truePeakDbtpR"
+removed = "read truePeakDbtp[1]"
 domain = "mastering"
-rule = "loudness-names"
+rule = "channel-planes"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbR"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDbL"
+removed = "read peakDb[0]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDbL"
+removed = "read peakDb[0]"
+domain = "mastering"
+rule = "channel-planes"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDbR"
+removed = "read peakDb[1]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDbR"
+removed = "read peakDb[1]"
+domain = "mastering"
+rule = "channel-planes"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDbL"
+removed = "read rmsDb[0]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDbL"
+removed = "read rmsDb[0]"
+domain = "mastering"
+rule = "channel-planes"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDbR"
+removed = "read rmsDb[1]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDbR"
+removed = "read rmsDb[1]"
+domain = "mastering"
+rule = "channel-planes"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDb"
+changed = "number[] -> (number | undefined)[]; undefined when unmeasured, -Infinity for measured silence"
+domain = "mastering"
+rule = "channel-planes"
+test = "bindings/wasm/tests/mixer-meter-channel-arrays.test.ts::arrays contain exactly the measured planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDb"
+changed = "number[] -> (number | undefined)[]; undefined when unmeasured, -Infinity for measured silence"
+domain = "mastering"
+rule = "channel-planes"
+entry = "./analysis"
+test = "bindings/wasm/tests/mixer-meter-channel-arrays.test.ts::arrays contain exactly the measured planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDb"
+changed = "number[] -> (number | undefined)[]; undefined when unmeasured, -Infinity for measured silence"
+domain = "mastering"
+rule = "channel-planes"
+test = "bindings/wasm/tests/mixer-meter-channel-arrays.test.ts::arrays contain exactly the measured planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDb"
+changed = "number[] -> (number | undefined)[]; undefined when unmeasured, -Infinity for measured silence"
+domain = "mastering"
+rule = "channel-planes"
+entry = "./analysis"
+test = "bindings/wasm/tests/mixer-meter-channel-arrays.test.ts::arrays contain exactly the measured planes"
 
 [[entry]]
 kind = "field"
@@ -26455,14 +26571,14 @@ kind = "field"
 old = "EngineMeterTelemetry.truePeakDbL"
 removed = "read truePeakDbtp[0]"
 domain = "engine"
-rule = "loudness-names"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbR"
 removed = "read truePeakDbtp[1]"
 domain = "engine"
-rule = "loudness-names"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
@@ -26478,7 +26594,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.truePeakDbL"
 removed = "read WorkletMeterSnapshot.truePeakDbtp[0]"
 domain = "mastering"
-rule = "loudness-names"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -26486,7 +26602,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.truePeakDbR"
 removed = "read WorkletMeterSnapshot.truePeakDbtp[1]"
 domain = "mastering"
-rule = "loudness-names"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -26494,7 +26610,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.peakDbL"
 removed = "read WorkletMeterSnapshot.peakDb[0]"
 domain = "mastering"
-rule = "individual"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -26502,7 +26618,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.peakDbR"
 removed = "read WorkletMeterSnapshot.peakDb[1]"
 domain = "mastering"
-rule = "individual"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -26510,7 +26626,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.rmsDbL"
 removed = "read WorkletMeterSnapshot.rmsDb[0]"
 domain = "mastering"
-rule = "individual"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -26518,7 +26634,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.rmsDbR"
 removed = "read WorkletMeterSnapshot.rmsDb[1]"
 domain = "mastering"
-rule = "individual"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -26526,7 +26642,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.inputPeakDbL"
 removed = "read WorkletMeterSnapshot.inputPeakDb[0]"
 domain = "mastering"
-rule = "individual"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -26534,7 +26650,7 @@ kind = "field"
 old = "SonareWorkletMeterSnapshot.inputPeakDbR"
 removed = "read WorkletMeterSnapshot.inputPeakDb[1]"
 domain = "mastering"
-rule = "individual"
+rule = "channel-planes"
 entry = "./worklet"
 
 [[entry]]
@@ -35485,56 +35601,56 @@ kind = "field"
 old = "EngineMeterTelemetry.peakDbL"
 removed = "read peakDb[0]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.peakDbR"
 removed = "read peakDb[1]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.rmsDbL"
 removed = "read rmsDb[0]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.rmsDbR"
 removed = "read rmsDb[1]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.inputPeakDbL"
 removed = "read inputPeakDb[0]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.inputPeakDbR"
 removed = "read inputPeakDb[1]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "type"
 old = "EngineMeterTelemetryWide"
 removed = "use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb)"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.drainMeterTelemetryWide"
 removed = "use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "method"
@@ -35587,7 +35703,7 @@ test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments ref
 [[entry]]
 kind = "method"
 old = "Project.removeAutomationLane"
-changed = "a NaN, infinite or out-of-range targetParamId is refused with RangeError naming it (1.x passed it through)"
+changed = "takes the lane ID that addAutomationLane returns and automationLanes() reads; a NaN, infinite or out-of-range laneId is refused with RangeError naming it (1.x passed it through)"
 domain = "project"
 rule = "finite-or-refused"
 test = "bindings/wasm/tests/raw-scalar-refusal.test.ts::raw scalar arguments refuse non-finite values by name"
@@ -37031,3 +37147,33 @@ changed = "a stretchRatio that would make the stretched note longer than 2147483
 domain = "effects"
 rule = "work-size-limit"
 test = "bindings/wasm/tests/work-size-limit.test.ts::noteStretch refuses stretchRatio by name"
+
+[[entry]]
+kind = "field"
+old = "BeatObservations.onsetStrength"
+removed = "Use accent, hasAttack and subdivisionAccent on BeatObservations."
+domain = "analysis"
+rule = "array-results"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "Project.editAutomationLane(targetParamId)"
+new = "Project.editAutomationLane(laneId)"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "option"
+old = "Project.removeAutomationLane(targetParamId)"
+new = "Project.removeAutomationLane(laneId)"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "ProjectAutomationLaneDesc"
+changed = "a union keyed by targetKind: an opaque lane takes targetParamId, 'trackSendDb' takes sendId, 'trackInsertParam' takes insertIndex, processor and paramName, and the other kinds take no identity; a field the kind does not take is refused"
+domain = "project"
+rule = "options-struct"
+test = "bindings/wasm/tests/project-lane-and-reader.test.ts::uses C target names and names typed parameter and unknown lane refusals"

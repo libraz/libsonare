@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 import re
 from typing import Any
 
@@ -63,6 +64,10 @@ def _payload_type(value: Any, token: str) -> bool:
         return True
     if token == "array:string":
         return isinstance(value, list) and all(isinstance(item, str) for item in value)
+    if token == "map:string":
+        return isinstance(value, dict) and all(
+            isinstance(key, str) and isinstance(item, str) for key, item in value.items()
+        )
     if token == "array:number:12":
         return (
             isinstance(value, list) and len(value) == 12 and all(_is_number(item) for item in value)
@@ -814,6 +819,48 @@ def _validate_case_payload(
                         f"{label}.normalized_json: expected exactly one of dsp or macros",
                     )
                 )
+
+
+def _validate_audio_case_relationships(
+    surface: str,
+    payloads: dict[tuple[str, str], Any],
+    manifest: dict[str, Any],
+    report: list[tuple[str, str]],
+) -> None:
+    """Pin real tags and the additional energy of the antiphase stereo pair."""
+    for case_id in ("success", "tagged"):
+        info = payloads.get(("info", case_id))
+        if isinstance(info, dict):
+            expected = manifest["fixtures"]["audio"]["tags"] if case_id == "tagged" else {}
+            if info.get("tags") != expected:
+                report.append(("fail", f"{surface}.info.{case_id}.tags: expected {expected!r}"))
+
+    mono = payloads.get(("mastering-pair-analyze", "reference_at_another_rate"))
+    stereo = payloads.get(("mastering-pair-analyze", "stereo_reference_loudness"))
+    if not isinstance(stereo, dict) or not isinstance(mono, dict):
+        return
+    # Each stereo file has the mono samples in one channel and their inverse in the other.
+    channel_sum_db = 10.0 * math.log10(2.0)
+    for field, offset in (
+        ("source_lufs", channel_sum_db),
+        ("reference_lufs", channel_sum_db),
+        ("gain_to_match_db", 0.0),
+    ):
+        stereo_value, mono_value = stereo.get(field), mono.get(field)
+        if (
+            not _is_number(stereo_value)
+            or not _is_number(mono_value)
+            or not math.isclose(stereo_value, mono_value + offset, abs_tol=0.01, rel_tol=0.0)
+        ):
+            report.append(
+                (
+                    "fail",
+                    (
+                        f"{surface}.mastering-pair-analyze.stereo_reference_loudness.{field}: "
+                        f"expected mono {mono_value!r} plus {offset:.3f} dB, got {stereo_value!r}"
+                    ),
+                )
+            )
 
 
 def _validate_analyze_case_relationships(

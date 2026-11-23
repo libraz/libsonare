@@ -196,6 +196,34 @@ def test_handle_op_covered_by_alias_is_silent() -> None:
     assert ("project_serialize", "python") not in _active(rep), _active(rep)
 
 
+def test_live_session_instance_and_static_ops_are_scoped_to_the_class() -> None:
+    cases = {
+        "live_audio_devices": "audio_devices",
+        "live_midi_sources": "midi_sources",
+        "live_session_captured_midi": "captured_midi",
+        "live_session_status": "status",
+    }
+    c = _c(*cases)
+    for surface in ("python", "node", "wasm"):
+        for owner in ("LiveSession", "UnrelatedHandle"):
+            ex = Extraction(surface=surface)
+            ex.functions = [
+                FunctionSig(
+                    key=method,
+                    surface=surface,
+                    raw_name=f"{owner}.{method}",
+                    file="facade",
+                    line=1,
+                )
+                for method in cases.values()
+            ]
+            rep = compare.build_report(
+                {"c": c, surface: ex}, allowlist_mod.Allowlist(), ["c", surface]
+            )
+            expected = set() if owner == "LiveSession" else {(key, surface) for key in cases}
+            assert _active(rep) == expected, (surface, owner, _active(rep))
+
+
 def test_vocal_render_job_uses_the_canonical_c_prefix() -> None:
     """Render-job methods are owned by ``VocalRenderJob`` under the C prefix."""
     rep = _report(
@@ -331,7 +359,10 @@ def test_vocal_threadlocal_error_helper_is_explicitly_allowlisted() -> None:
     assert ("project_apply_vocal_edit", "python") in _active(unrelated), _active(unrelated)
 
 
-_ADDITIVE_DSP_ALIASES = (("normalize_rms", "normalize"),)
+_ADDITIVE_DSP_ALIASES = (
+    ("normalize_rms", "normalize"),
+    ("mastering_analyze_pair_stereo", "mastering_analyze_pair"),
+)
 
 
 def test_additive_dsp_aliases_are_explicit_and_required() -> None:
@@ -342,6 +373,74 @@ def test_additive_dsp_aliases_are_explicit_and_required() -> None:
 
         missing = _report(_c(c_key), _py())
         assert (c_key, "python") in _active(missing), _active(missing)
+
+
+def test_stereo_pair_alias_uses_the_wasm_core_overload() -> None:
+    """WASM folds the C stereo variant only when its direct core route exists."""
+    wasm = Extraction(surface="wasm")
+    wasm.functions = [
+        FunctionSig(
+            key="mastering_analyze_pair",
+            surface="wasm",
+            raw_name="masteringAnalyzePair",
+            file="mastering.ts",
+            line=1,
+        )
+    ]
+    c_body = (
+        "SonareError sonare_mastering_analyze_pair_stereo() { "
+        "return sonare::mastering::api::analyze_named_pair(analysis, source_left, "
+        "source_right, source_length, reference_left, reference_right, reference_length, "
+        "sample_rate, reference_sample_rate, params); }\n"
+    )
+
+    def report(wasm_source: str):
+        return compare.build_report(
+            {"c": _c("mastering_analyze_pair_stereo"), "wasm": wasm},
+            allowlist_mod.Allowlist(),
+            ["c", "wasm"],
+            native_sources={
+                "c": [("mastering.cpp", c_body)],
+                "wasm": [("bindings.cpp", wasm_source)],
+            },
+        )
+
+    reached = report(
+        "auto result = sonare::mastering::api::analyze_named_pair(analysis, source_left, "
+        "source_right, source_length, reference_left, reference_right, reference_length, "
+        "sample_rate, reference_sample_rate, params);\n"
+    )
+    assert ("mastering_analyze_pair_stereo", "wasm") not in _active(reached), _active(reached)
+    assert reached.core_reached == [
+        ("mastering_analyze_pair_stereo", "wasm", "analyze_named_pair", "bindings.cpp:1")
+    ]
+
+    missing = report(
+        "auto result = sonare::mastering::api::analyze_named_pair(analysis, source, "
+        "reference, source_length, reference_length, sample_rate, reference_sample_rate, "
+        "params);\n"
+    )
+    assert ("mastering_analyze_pair_stereo", "wasm") in _active(missing), _active(missing)
+
+
+def test_stereo_pair_alias_reaches_the_cli_command_name() -> None:
+    """Both CLI front-ends name the folded operation ``mastering_pair_analyze``."""
+    cli = Extraction(surface="cli")
+    cli.functions = [
+        FunctionSig(
+            key="mastering_pair_analyze",
+            surface="cli",
+            raw_name="mastering-pair-analyze",
+            file="cli.py",
+            line=1,
+        )
+    ]
+    report = compare.build_report(
+        {"c": _c("mastering_analyze_pair_stereo"), "cli": cli},
+        allowlist_mod.Allowlist(),
+        ["c", "cli"],
+    )
+    assert ("mastering_analyze_pair_stereo", "cli") not in _active(report), _active(report)
 
 
 def test_alias_does_not_match_unrelated_member() -> None:

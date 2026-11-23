@@ -2944,6 +2944,47 @@ class FixedLayoutRecords(CheckerCase):
         self.assertTrue(added[0].startswith("not compared: 2 count member(s) of fixed-layout"))
 
 
+def _c_option(fn, param, type):
+    return _rec("c", "option", f"{fn}({param})", owner=fn, member=param, type=type)
+
+
+class EventTallies(CheckerCase):
+    """A running event tally is uint64_t: a record field, or the out_count of a getter named
+    for it. A tally-named out-parameter of any other call is a per-call count."""
+
+    def _added(self, *records):
+        _, before = self.run_check("--check", "c-count-types")
+        self.add(*records)
+        _, lines = self.run_check("--check", "c-count-types")
+        return sorted(x.strip() for x in set(lines) - set(before) if x.startswith("    "))
+
+    def test_a_size_t_tally_is_refused_in_a_record_and_a_named_getter(self):
+        added = self._added(
+            _field("c", "SonareDevStat", "xrun_count", "size_t"),
+            _field("c", "SonareDevStat", "input_overrun_frames", "size_t"),
+            _field("c", "SonareDevStat", "dropped_midi_events", "size_t"),
+            _c_option("sonare_thing_overflow_count", "out_count", "size_t*"),
+        )
+        self.assertEqual(
+            added,
+            [
+                "c field SonareDevStat.dropped_midi_events: dropped_midi_events is uint64_t, not size_t",
+                "c field SonareDevStat.input_overrun_frames: input_overrun_frames is uint64_t, not size_t",
+                "c field SonareDevStat.xrun_count: xrun_count is uint64_t, not size_t",
+                "c option sonare_thing_overflow_count(out_count): out_count is uint64_t, not size_t",
+            ],
+        )
+
+    def test_a_uint64_tally_and_a_per_call_overflow_count_pass(self):
+        added = self._added(
+            _field("c", "SonareDevStat", "xrun_count", "uint64_t"),
+            _field("c", "SonareDevStat", "input_underrun_frames", "uint64_t"),
+            _c_option("sonare_route", "out_overflow_count", "size_t*"),
+            _c_option("sonare_thing_count", "out_count", "size_t*"),
+        )
+        self.assertEqual(added, [])
+
+
 class SecondFormExtensions(CheckerCase):
     """A C function named as another plus an extension is a second form unless it names
     what it acts on or is allowlisted as a distinct operation."""

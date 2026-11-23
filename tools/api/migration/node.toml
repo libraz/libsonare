@@ -5068,10 +5068,10 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "function"
 old = "estimateMeter"
-changed = "request type is EstimateMeterRequest"
+changed = "the request takes observations: BeatObservations. Pass analysis.beatObservations to score an analysis result."
 domain = "analysis"
 rule = "type-names"
-test = "bindings/node/tests/surface/analysis-music.test.ts::estimateMeter takes beats"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scores beat observations"
 
 [[entry]]
 kind = "function"
@@ -5833,6 +5833,13 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 
 [[entry]]
 kind = "field"
+old = "AnalyzeBpmOptions.startBpm"
+removed = "Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior."
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
 old = "AnalyzeBpmRequest.bpmMax"
 changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
@@ -5846,6 +5853,13 @@ changed = "absent = 60 / 200 BPM (was 30 / 300), the library default"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.startBpm"
+removed = "Omit startBpm. The result omits bpm when no tempo is measured. Apply any fallback in the caller. Full and rhythm analysis still accept the beat-tracking prior."
+domain = "analysis"
+rule = "individual"
 
 [[entry]]
 kind = "field"
@@ -6335,14 +6349,14 @@ rule = "loudness-names"
 [[entry]]
 kind = "field"
 old = "EstimateMeterRequest.beatStrengths"
-removed = "Put the strength on each entry of beats: Beat[] ({ timeSec, strength }) in EstimateMeterRequest."
+removed = "Pass analysis.beatObservations in EstimateMeterRequest.observations."
 domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "EstimateMeterRequest.beatTimes"
-new = "EstimateMeterRequest.beats"
+new = "EstimateMeterRequest.observations"
 domain = "analysis"
 rule = "typed-results"
 
@@ -11250,7 +11264,7 @@ test = "bindings/node/tests/surface/project.test.ts::spells fade curves, warp mo
 [[entry]]
 kind = "method"
 old = "Project.addAutomationLane"
-changed = "targetKind is trackFaderDb / trackPan, not the hyphenated spelling"
+changed = "returns the project-allocated lane ID instead of the target parameter ID; targetKind is one of automationTargetKindNames() (trackFaderDb / trackPan, not the hyphenated spelling)"
 domain = "project"
 rule = "token-case"
 test = "bindings/node/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets"
@@ -12755,28 +12769,68 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.m
 kind = "field"
 old = "MixMeterSnapshot.truePeakDb"
 to = "MixMeterSnapshot.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+changed = "truePeakDb -> truePeakDbtp; each plane is a number or undefined when unmeasured, while -Infinity remains a measured silence"
 domain = "mastering"
-rule = "loudness-names"
-test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDb"
+rule = "channel-planes"
+test = "bindings/node/tests/surface/mastering-mixing.test.ts::keeps unmeasured planes optional in the meter array types"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDbL"
+removed = "read peakDb[0]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDbR"
+removed = "read peakDb[1]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDbL"
+removed = "read rmsDb[0]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDbR"
+removed = "read rmsDb[1]"
+domain = "mastering"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peakDb"
+changed = "each plane is a number or undefined when unmeasured; -Infinity remains a measured silence"
+domain = "mastering"
+rule = "channel-planes"
+test = "bindings/node/tests/surface/mastering-mixing.test.ts::keeps unmeasured planes optional in the meter array types"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rmsDb"
+changed = "each plane is a number or undefined when unmeasured; -Infinity remains a measured silence"
+domain = "mastering"
+rule = "channel-planes"
+test = "bindings/node/tests/surface/mastering-mixing.test.ts::keeps unmeasured planes optional in the meter array types"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbL"
-to = "MixMeterSnapshot.truePeakDbtpL"
-changed = "truePeakDbL -> truePeakDbtpL"
+removed = "read truePeakDbtp[0]"
 domain = "mastering"
-rule = "loudness-names"
-test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbL"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbR"
-to = "MixMeterSnapshot.truePeakDbtpR"
-changed = "truePeakDbR -> truePeakDbtpR"
+removed = "read truePeakDbtp[1]"
 domain = "mastering"
-rule = "loudness-names"
-test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbR"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
@@ -14339,14 +14393,14 @@ kind = "field"
 old = "EngineMeterTelemetry.truePeakDbL"
 removed = "read truePeakDbtp[0]"
 domain = "engine"
-rule = "loudness-names"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbR"
 removed = "read truePeakDbtp[1]"
 domain = "engine"
-rule = "loudness-names"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
@@ -18926,56 +18980,56 @@ kind = "field"
 old = "EngineMeterTelemetry.peakDbL"
 removed = "read peakDb[0]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.peakDbR"
 removed = "read peakDb[1]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.rmsDbL"
 removed = "read rmsDb[0]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.rmsDbR"
 removed = "read rmsDb[1]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.inputPeakDbL"
 removed = "read inputPeakDb[0]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.inputPeakDbR"
 removed = "read inputPeakDb[1]"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "type"
 old = "EngineMeterTelemetryWide"
 removed = "use EngineMeterTelemetry, which now carries every plane (numChannels, per-plane peakDb / rmsDb / truePeakDbtp / inputPeakDb)"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.drainMeterTelemetryWide"
 removed = "use drainMeterTelemetry(maxRecords), whose EngineMeterTelemetry records carry every plane"
 domain = "engine"
-rule = "individual"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
@@ -19601,3 +19655,40 @@ changed = "a stretchRatio that would make the stretched note longer than 2147483
 domain = "effects"
 rule = "work-size-limit"
 test = "bindings/node/tests/work-size-limit.test.ts::noteStretch refuses stretchRatio by name"
+
+[[entry]]
+kind = "field"
+old = "BeatObservations.onsetStrength"
+removed = "Use accent, hasAttack and subdivisionAccent on BeatObservations."
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "method"
+old = "Project.editAutomationLane"
+changed = "takes the lane ID that addAutomationLane returns and automationLanes() reads, and a ProjectAutomationLaneEditDesc: without targetKind it replaces the points only, and with one it replaces the target with the fields given beside it"
+domain = "project"
+rule = "options-struct"
+test = "bindings/node/tests/project-automation-lanes-readers.test.ts::reads all target kinds and preserves identity through a no-op edit"
+
+[[entry]]
+kind = "option"
+old = "Project.editAutomationLane(targetParamId)"
+new = "Project.editAutomationLane(laneId)"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "option"
+old = "Project.removeAutomationLane(targetParamId)"
+new = "Project.removeAutomationLane(laneId)"
+domain = "project"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "ProjectAutomationLaneDesc"
+changed = "a union keyed by targetKind: an opaque lane takes targetParamId, 'trackSendDb' takes sendId, 'trackInsertParam' takes insertIndex, processor and paramName, and the other kinds take no identity; a field the kind does not take is refused"
+domain = "project"
+rule = "options-struct"
+test = "bindings/node/tests/project-automation-lanes-readers.test.ts::names invalid lane identities and refuses a typed target parameter id"

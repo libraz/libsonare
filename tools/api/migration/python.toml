@@ -161,9 +161,10 @@ rule = "snake-case-only"
 [[entry]]
 kind = "type"
 old = "CapabilitiesDecode"
-changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+to = "AudioFormatCapabilities"
+changed = "one frozen dataclass, read by attribute, types both Capabilities.decode and Capabilities.encode; lists are tuples"
 domain = "core"
-rule = "frozen-results"
+rule = "type-names"
 test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
 
 [[entry]]
@@ -670,6 +671,20 @@ changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "sample-rate-required"
 test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_bpm(start_bpm)"
+removed = "omit start_bpm. If passed positionally, move n_fft, hop_length and max_candidates one position earlier. The result's bpm is None when no tempo is measured. Apply any fallback in the caller."
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "Audio.analyze_bpm(start_bpm)"
+removed = "omit start_bpm. If passed positionally, move n_fft, hop_length and max_candidates one position earlier. The result's bpm is None when no tempo is measured. Apply any fallback in the caller."
+domain = "core"
+rule = "individual"
 
 [[entry]]
 kind = "option"
@@ -3425,24 +3440,24 @@ test = "bindings/python/tests/test_surface_analysis.py::test_analyze_sections_re
 [[entry]]
 kind = "option"
 old = "estimate_meter(beat_times)"
-new = "estimate_meter(beats)"
+new = "estimate_meter(observations)"
 domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
 kind = "option"
 old = "estimate_meter(beat_strengths)"
-removed = "pass beats=analysis.beats (Beat records carry time_sec and strength)"
+removed = "Pass observations=analysis.beat_observations."
 domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
 kind = "function"
 old = "estimate_meter"
-changed = "takes beats: Sequence[Beat] (time_sec and strength) instead of parallel beat_times and beat_strengths"
+changed = "takes observations: BeatObservations. Pass analysis.beat_observations to score an analysis result."
 domain = "analysis"
 rule = "typed-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_estimate_meter_takes_the_beats_of_an_analysis"
+test = "bindings/python/tests/test_surface_analysis.py::test_estimate_meter_takes_the_observations_of_an_analysis"
 
 [[entry]]
 kind = "type"
@@ -3470,7 +3485,7 @@ rule = "type-names"
 [[entry]]
 kind = "field"
 old = "AnalysisBeatObservations.onset_strength"
-new = "BeatObservations.onset_strength"
+removed = "Use accent, has_attack and subdivision_accent on BeatObservations."
 domain = "analysis"
 rule = "array-results"
 
@@ -7422,20 +7437,16 @@ rule = "unit-in-name"
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.true_peak_db_l"
-changed = "true_peak_db_l -> true_peak_dbtp_l, float | None: -inf for silence, None when true peak is switched off"
-to = "MixMeterSnapshot.true_peak_dbtp_l"
+removed = "read true_peak_dbtp[0]"
 domain = "mastering"
-rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.true_peak_db_r"
-changed = "true_peak_db_r -> true_peak_dbtp_r, float | None: -inf for silence, None when true peak is switched off"
-to = "MixMeterSnapshot.true_peak_dbtp_r"
+removed = "read true_peak_dbtp[1]"
 domain = "mastering"
-rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
@@ -7449,16 +7460,20 @@ test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_s
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.true_peak_db"
-new = "MixMeterSnapshot.true_peak_dbtp"
+to = "MixMeterSnapshot.true_peak_dbtp"
+changed = "true_peak_db -> true_peak_dbtp; a tuple of num_channels values, with None for unmeasured channels and -inf for silence"
 domain = "mastering"
-rule = "unit-in-name"
+rule = "channel-planes"
+test = "bindings/python/tests/test_absent_measurements.py::test_mixer_meter_arrays_are_channel_sized_and_convert_nan_to_none"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.channel_count"
-new = "MixMeterSnapshot.num_channels"
+changed = "channel_count -> num_channels; an integer that is 0 before any audio"
+to = "MixMeterSnapshot.num_channels"
 domain = "mastering"
-rule = "individual"
+rule = "channel-planes"
+test = "bindings/python/tests/test_absent_measurements.py::test_a_meter_that_has_seen_no_audio_has_zero_channels"
 
 [[entry]]
 kind = "field"
@@ -9500,7 +9515,7 @@ test = "bindings/python/tests/test_enum_ordinal_domain.py::test_a_refused_warp_m
 [[entry]]
 kind = "option"
 old = "Project.add_automation_lane(target_kind)"
-changed = "takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan'); 'track-fader-db' and 'track-pan' raise SonareValueError, a number is TypeError, and the AUTOMATION_TARGET_* ordinals are removed"
+changed = "keyword-only, and takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan', 'trackSendDb', 'trackWidth', 'trackInsertParam'; automation_target_kind_names() lists them); 'track-fader-db' and 'track-pan' raise SonareValueError, a number is TypeError, and the AUTOMATION_TARGET_* ordinals are removed"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_project_edit_ops.py::test_automation_lane_rejects_invalid_target_kind_without_mutation"
@@ -9508,7 +9523,7 @@ test = "bindings/python/tests/test_project_edit_ops.py::test_automation_lane_rej
 [[entry]]
 kind = "option"
 old = "Project.edit_automation_lane(target_kind)"
-changed = "takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan'); 'track-fader-db' and 'track-pan' raise SonareValueError and a number is TypeError"
+changed = "keyword-only, and takes a ProjectAutomationTargetKind token as add_automation_lane does; omitted, the edit replaces the points only and keeps the lane's target, and given, it replaces the target with the identity fields passed beside it"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_enum_ordinal_domain.py::test_an_ordinal_or_a_bool_is_a_type_error"
@@ -9580,7 +9595,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.add_automation_lane(target_param_id)"
-changed = "takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None selects the untyped lane"
+changed = "keyword-only and given only for an opaque lane (target_kind omitted or 'opaque'); a typed lane names its target with send_id or insert_index, processor and param_name instead. points is the second positional, each point is an AutomationPoint, and a descriptor mapping, a tuple point or a mapping point is TypeError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
@@ -9588,7 +9603,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_d
 [[entry]]
 kind = "option"
 old = "Project.edit_automation_lane(target_param_id)"
-changed = "takes the target id, points and target_kind as arguments (a descriptor mapping is refused) and each point is an AutomationPoint, as RealtimeEngine.set_automation_lane takes; a tuple or a mapping is TypeError, and target_kind=None keeps the lane's kind"
+changed = "keyword-only and given only with target_kind='opaque'; the lane is named by lane_id, the second positional, which add_automation_lane returns and automation_lanes() reads. points is the third positional, each point is an AutomationPoint, and a descriptor mapping, a tuple point or a mapping point is TypeError"
 domain = "project"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
@@ -9904,10 +9919,17 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_
 [[entry]]
 kind = "option"
 old = "Project.bounce(sample_rate)"
-changed = "omitted (None) takes the library default; the 0 sentinel default is gone and an explicit 0 raises SonareValueError"
+removed = "Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sample_rate reports it."
 domain = "project"
 rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_block_size_absence.py::test_a_project_bounce_takes_none_for_every_omitted_size_and_refuses_zero"
+
+[[entry]]
+kind = "method"
+old = "Project.bounce"
+changed = "returns a frozen ProjectBounceResult(channels, sample_rate) in place of a (frames, channels) ndarray: channels is planar float32 of shape (num_channels, frames), so channels.T is the old layout, and sample_rate is the project's rate"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/python/tests/test_project_bounce.py::test_bounce_is_bit_exact_across_two_renders"
 
 [[entry]]
 kind = "option"
@@ -13597,7 +13619,7 @@ rule = "snake-case-only"
 [[entry]]
 kind = "method"
 old = "AnalysisBeatObservations.onsetStrength"
-removed = "read the BeatObservations.onset_strength field"
+removed = "Use accent, has_attack and subdivision_accent on BeatObservations."
 domain = "analysis"
 rule = "snake-case-only"
 
@@ -13753,70 +13775,70 @@ kind = "method"
 old = "RealtimeEngine.drain_meter_telemetry_wide"
 removed = "call RealtimeEngine.drain_meter_telemetry, whose records carry the per-channel planes"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "type"
 old = "MeterTelemetryRecordWide"
 removed = "read MeterTelemetryRecord, which carries the per-channel planes and num_channels"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.peak_db_l"
 removed = "read peak_db[0]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.peak_db_r"
 removed = "read peak_db[1]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.rms_db_l"
 removed = "read rms_db[0]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.rms_db_r"
 removed = "read rms_db[1]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.true_peak_db_l"
 removed = "read true_peak_dbtp[0]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.true_peak_db_r"
 removed = "read true_peak_dbtp[1]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.input_peak_db_l"
 removed = "read input_peak_db[0]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MeterTelemetryRecord.input_peak_db_r"
 removed = "read input_peak_db[1]"
 domain = "engine"
-rule = "one-entry-per-operation"
+rule = "channel-planes"
 
 [[entry]]
 kind = "method"
@@ -14191,34 +14213,46 @@ test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mastering_r
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.peak_db_l"
-changed = "float -> float | None: -inf for silence, None when not measured"
+removed = "read peak_db[0]"
 domain = "mastering"
-rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.peak_db_r"
-changed = "float -> float | None: -inf for silence, None when not measured"
+removed = "read peak_db[1]"
 domain = "mastering"
-rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.rms_db_l"
-changed = "float -> float | None: -inf for silence, None when not measured"
+removed = "read rms_db[0]"
 domain = "mastering"
-rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+rule = "channel-planes"
 
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.rms_db_r"
-changed = "float -> float | None: -inf for silence, None when not measured"
+removed = "read rms_db[1]"
 domain = "mastering"
-rule = "silence-is-infinite"
-test = "bindings/python/tests/test_level_unmeasured_scalars.py::test_mix_meter_snapshot_reads_silence"
+rule = "channel-planes"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.peak_db"
+changed = "a tuple of num_channels values, with None for unmeasured channels and -inf for silence"
+domain = "mastering"
+rule = "channel-planes"
+test = "bindings/python/tests/test_absent_measurements.py::test_mixer_meter_arrays_are_channel_sized_and_convert_nan_to_none"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.rms_db"
+changed = "a tuple of num_channels values, with None for unmeasured channels and -inf for silence"
+domain = "mastering"
+rule = "channel-planes"
+test = "bindings/python/tests/test_absent_measurements.py::test_mixer_meter_arrays_are_channel_sized_and_convert_nan_to_none"
 
 [[entry]]
 kind = "field"
@@ -14830,3 +14864,18 @@ changed = "a intervals that would make the remixed signal larger than 500000000 
 domain = "effects"
 rule = "work-size-limit"
 test = "bindings/python/tests/test_work_size_limit.py::test_remix_refuses_past_the_work_size_limit"
+
+[[entry]]
+kind = "method"
+old = "Project.add_automation_lane"
+changed = "returns the project-allocated lane ID, which edit_automation_lane, remove_automation_lane and automation_lanes() use, instead of the target parameter ID"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_edit_ops.py::test_automation_lane_add_edit_remove_uses_lane_id"
+
+[[entry]]
+kind = "option"
+old = "Project.remove_automation_lane(target_param_id)"
+new = "Project.remove_automation_lane(lane_id)"
+domain = "project"
+rule = "one-input-form"
