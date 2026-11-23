@@ -24,13 +24,12 @@ namespace sonare {
 namespace {
 
 size_t checked_spectrogram_size(int n_bins, int n_frames) {
-  size_t size = 0;
-  SONARE_CHECK(n_bins > 0 && n_frames > 0 &&
-                   numeric::checked_size_product(
-                       static_cast<size_t>(n_bins), static_cast<size_t>(n_frames),
-                       std::min(kMaxAudioBufferSize, static_cast<size_t>(INT_MAX)), &size),
-               ErrorCode::InvalidParameter);
-  return size;
+  util::check::integer_at_least(n_bins, 1, "n_bins");
+  util::check::integer_at_least(n_frames, 1, "n_frames");
+  return util::check::element_count(
+      static_cast<std::uint64_t>(n_bins), static_cast<std::uint64_t>(n_frames),
+      std::min(kMaxAudioBufferSize, static_cast<std::size_t>(INT_MAX)), "n_frames",
+      "the spectrogram");
 }
 
 /// @brief Sliding window median filter using a sorted flat array.
@@ -150,8 +149,10 @@ void median_filter_line(const float* in, float* out, int n, int kernel_size, Sli
 
 /// Rejects a null spectrogram, an even or non-positive kernel, and one above the maximum.
 void check_median_kernel(const float* magnitude, int kernel_size) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
+  util::check::non_null(magnitude, "magnitude");
+  if (!(kernel_size > 0 && kernel_size % 2 == 1)) {
+    util::check::refuse("kernel_size", "must be a positive odd integer");
+  }
   SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
                    "kernel_size " + std::to_string(kernel_size) + " exceeds the maximum " +
                        std::to_string(kMaxHpssKernelSize));
@@ -277,11 +278,9 @@ void validate_mask_config(const HpssConfig& config) {
                                     "kernel_size_harmonic");
   util::check::odd_integer_in_range(config.kernel_size_percussive, 1, kMaxHpssKernelSize,
                                     "kernel_size_percussive");
-  SONARE_CHECK_MSG(std::isfinite(config.power) && config.power > 0.0f, ErrorCode::InvalidParameter,
-                   "HPSS power must be finite and positive");
-  SONARE_CHECK_MSG(std::isfinite(config.margin_harmonic) && config.margin_harmonic >= 0.0f &&
-                       std::isfinite(config.margin_percussive) && config.margin_percussive >= 0.0f,
-                   ErrorCode::InvalidParameter, "HPSS margins must be finite and non-negative");
+  util::check::greater_than(config.power, 0.0, "power");
+  util::check::at_least(config.margin_harmonic, 0.0, "margin_harmonic");
+  util::check::at_least(config.margin_percussive, 0.0, "margin_percussive");
 }
 
 /// @brief Median-filters a spectrogram's magnitude along time (harmonic) and frequency
@@ -400,7 +399,7 @@ Spectrogram masked_spectrogram(const Spectrogram& spec, const std::vector<float>
 ///          reconstruction, and against a fixed heap ceiling the extra growth
 ///          costs more than the saving returns.
 Spectrogram hpss_component(const Spectrogram& spec, const HpssConfig& config, HpssComponent want) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
 
   const int n_bins = spec.n_bins();
   const int n_frames = spec.n_frames();
@@ -424,7 +423,7 @@ StftConfig resynthesis_framing(StftConfig config) {
 /// Audio-level single-component separation.
 Audio hpss_component_audio(const Audio& audio, const HpssConfig& config,
                            const StftConfig& requested, HpssComponent component) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const StftConfig stft_config = resynthesis_framing(requested);
 
   const Spectrogram spec = Spectrogram::compute(audio, stft_config);
@@ -434,7 +433,7 @@ Audio hpss_component_audio(const Audio& audio, const HpssConfig& config,
 }  // namespace
 
 HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
@@ -455,7 +454,7 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
 }
 
 HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const StftConfig stft_config = resynthesis_framing(requested);
 
   /// Compute the STFT and separate it. The analysis spectrogram is passed as a
@@ -489,7 +488,7 @@ Audio percussive(const Audio& audio, const HpssConfig& config, const StftConfig&
 
 HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
                                                      const HpssConfig& config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
   validate_mask_config(config);
 
   int n_bins = spec.n_bins();
@@ -552,7 +551,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 
 HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssConfig& config,
                                                const StftConfig& requested) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const StftConfig stft_config = resynthesis_framing(requested);
 
   /// Compute the STFT and separate it. Passing the analysis spectrogram as a
@@ -571,7 +570,7 @@ HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssCon
 }
 
 Audio residual(const Audio& audio, const HpssConfig& config, const StftConfig& requested) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const StftConfig stft_config = resynthesis_framing(requested);
 
   /// Only the residual is reconstructed. Routing through the audio-level

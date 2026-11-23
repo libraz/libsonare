@@ -8,8 +8,10 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -313,10 +315,32 @@ TEST_CASE("StreamingPhaseVocoder locks rate until reset", "[phase_vocoder][strea
 
   StreamingPhaseVocoder streamer(config);
   streamer.process(audio.data(), 512, 0.9f);
-  REQUIRE_THROWS(streamer.process(audio.data(), 512, 1.1f));
+  REQUIRE_THROWS_WITH(
+      streamer.process(audio.data(), 512, 1.1f),
+      Catch::Matchers::ContainsSubstring("rate must remain unchanged after output frames"));
 
   streamer.reset();
   REQUIRE_NOTHROW(streamer.process(audio.data(), 512, 1.1f));
+}
+
+TEST_CASE("StreamingPhaseVocoder names its pointer, rate and output arguments",
+          "[phase_vocoder][streaming][validation]") {
+  StreamingPhaseVocoderConfig config;
+  config.sample_rate = 22050;
+  StreamingPhaseVocoder streamer(config);
+  CHECK_THROWS_WITH(streamer.push(nullptr, 1), Catch::Matchers::ContainsSubstring(
+                                                   "samples must not be NULL when count is not 0"));
+
+  const Audio wrong_rate = Audio::from_vector({0.0f}, 44100);
+  const std::string rate_message = "audio.sample_rate must match config.sample_rate";
+  CHECK_THROWS_WITH(streamer.push(wrong_rate), Catch::Matchers::ContainsSubstring(rate_message));
+  CHECK_THROWS_WITH(streamer.process(wrong_rate, 1.0f),
+                    Catch::Matchers::ContainsSubstring(rate_message));
+
+  const std::vector<float> samples(4096, 0.0f);
+  StreamingPhaseVocoder output_streamer(config);
+  CHECK_THROWS_WITH(output_streamer.process_into(samples.data(), samples.size(), 1.0f, nullptr, 0),
+                    Catch::Matchers::ContainsSubstring("out must not be NULL"));
 }
 
 TEST_CASE("StreamingPhaseVocoder process_into uses caller-owned output",
@@ -579,12 +603,14 @@ TEST_CASE("compute_instantaneous_frequency rejects degenerate parameters",
     FAIL("expected SonareException for n_bins == 1");
   } catch (const SonareException& e) {
     REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(std::string(e.what()).find("n_bins") != std::string::npos);
   }
   try {
     compute_instantaneous_frequency(phase.data(), prev.data(), 3, 512, 0);
     FAIL("expected SonareException for sample_rate == 0");
   } catch (const SonareException& e) {
     REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(std::string(e.what()).find("sample_rate") != std::string::npos);
   }
 
   /// A valid call (n_bins >= 2, sample_rate > 0, hop_length > 0) still succeeds
@@ -593,6 +619,28 @@ TEST_CASE("compute_instantaneous_frequency rejects degenerate parameters",
       compute_instantaneous_frequency(phase.data(), prev.data(), 3, 512, 22050);
   REQUIRE(freq.size() == 3);
   for (float v : freq) REQUIRE(std::isfinite(v));
+}
+
+TEST_CASE("phase vocoder names its spectrogram and synthesizer inputs",
+          "[phase_vocoder][validation]") {
+  const Spectrogram empty;
+  CHECK_THROWS_WITH(phase_vocoder(empty, 1.0f),
+                    Catch::Matchers::ContainsSubstring("spec must not be empty"));
+  CHECK_THROWS_WITH(phase_vocoder_analysis(Audio(), 1024, 256),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+
+  const Audio one_frame_audio = Audio::from_vector(std::vector<float>(16, 0.0f), 22050);
+  StftConfig stft;
+  stft.n_fft = 16;
+  stft.hop_length = 16;
+  stft.center = false;
+  const Spectrogram one_frame = Spectrogram::compute(one_frame_audio, stft);
+  CHECK(one_frame.n_frames() == 1);
+  CHECK_THROWS_WITH(phase_vocoder(one_frame, 1.0f),
+                    Catch::Matchers::ContainsSubstring("spec must have at least 2 frames"));
+
+  CHECK_THROWS_WITH(PhaseVocoderSynthesizer(16, 4, 0, WindowType::Hann, 16, false),
+                    Catch::Matchers::ContainsSubstring("sample_rate"));
 }
 
 TEST_CASE("phase_vocoder short-signal rate change still produces finite output",

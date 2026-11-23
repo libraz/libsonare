@@ -51,8 +51,8 @@ StreamingPhaseVocoderConfig normalized_streaming_config(StreamingPhaseVocoderCon
 Spectrogram stretch_spectrogram(const Spectrogram& spec, float rate,
                                 const PhaseVocoderConfig& config, bool phase_lock) {
   validate_stretch_rate(rate);
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
+  if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
+  if (spec.n_frames() < 2) util::check::refuse("spec", "must have at least 2 frames");
 
   const int n_bins = spec.n_bins();
   const int n_frames_in = spec.n_frames();
@@ -100,7 +100,7 @@ Spectrogram stretch_spectrogram(const Spectrogram& spec, float rate,
 PhaseVocoderSynthesizer::PhaseVocoderSynthesizer(int n_fft, int hop_length, int sample_rate,
                                                  WindowType window, int win_length, bool phase_lock)
     : n_fft_(n_fft), n_bins_(n_fft / 2 + 1), sample_rate_(sample_rate), phase_lock_(phase_lock) {
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
   validate_cola_geometry(n_fft, hop_length, window, win_length);
   time_step_ = static_cast<double>(hop_length) / static_cast<double>(sample_rate);
   const size_t bins = static_cast<size_t>(n_bins_);
@@ -157,8 +157,11 @@ void PhaseVocoderSynthesizer::next_frame(const std::complex<float>* frame0,
 
 std::vector<float> compute_instantaneous_frequency(const float* phase, const float* prev_phase,
                                                    int n_bins, int hop_length, int sample_rate) {
-  SONARE_CHECK(phase != nullptr && prev_phase != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins >= 2 && sample_rate > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  util::check::non_null(phase, "phase");
+  util::check::non_null(prev_phase, "prev_phase");
+  util::check::integer_at_least(n_bins, 2, "n_bins");
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  util::check::integer_at_least(hop_length, 1, "hop_length");
 
   std::vector<float> inst_freq(n_bins);
 
@@ -212,12 +215,14 @@ void StreamingPhaseVocoder::reserve(size_t max_input_samples, size_t max_output_
 
 void StreamingPhaseVocoder::push(const float* samples, size_t count) {
   if (count == 0) return;
-  SONARE_CHECK(samples != nullptr, ErrorCode::InvalidParameter);
+  util::check::non_null_when_count(samples, count, "samples", "count");
   input_.insert(input_.end(), samples, samples + count);
 }
 
 void StreamingPhaseVocoder::push(const Audio& audio) {
-  SONARE_CHECK(audio.sample_rate() == config_.sample_rate, ErrorCode::InvalidParameter);
+  if (audio.sample_rate() != config_.sample_rate) {
+    util::check::refuse_relation({"audio.sample_rate", "config.sample_rate"}, "{0} must match {1}");
+  }
   push(audio.data(), audio.size());
 }
 
@@ -233,7 +238,9 @@ void StreamingPhaseVocoder::bind_rate(float rate) {
     }
     // Two constant maps' single pieces coincide only at the same rate, so a
     // changed rate cannot agree over a frame already synthesized.
-    SONARE_CHECK(!map_bound_ || next_output_frame_ <= 0, ErrorCode::InvalidParameter);
+    if (map_bound_ && next_output_frame_ > 0) {
+      util::check::refuse("rate", "must remain unchanged after output frames are synthesized");
+    }
     active_map_.assign(rate);
     map_bound_ = true;
     return;
@@ -472,7 +479,7 @@ size_t StreamingPhaseVocoder::undelivered_samples(bool final) const {
 size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capacity) {
   const size_t available = undelivered_samples(final);
   if (available == 0) return 0;
-  SONARE_CHECK(out != nullptr || available == 0, ErrorCode::InvalidParameter);
+  util::check::non_null(out, "out");
   const size_t to_write = std::min(available, out_capacity);
   for (size_t i = 0; i < to_write; ++i) {
     out[i] = normalized_output_sample(emitted_output_samples_ + i);
@@ -495,7 +502,9 @@ Audio StreamingPhaseVocoder::process(const float* samples, size_t count, float r
 }
 
 Audio StreamingPhaseVocoder::process(const Audio& audio, float rate) {
-  SONARE_CHECK(audio.sample_rate() == config_.sample_rate, ErrorCode::InvalidParameter);
+  if (audio.sample_rate() != config_.sample_rate) {
+    util::check::refuse_relation({"audio.sample_rate", "config.sample_rate"}, "{0} must match {1}");
+  }
   return process(audio.data(), audio.size(), rate);
 }
 
@@ -535,7 +544,7 @@ Audio StreamingPhaseVocoder::finish(float rate) {
 }
 
 Spectrogram phase_vocoder_analysis(const Audio& audio, int n_fft, int hop_length) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   StftConfig stft_config;
   stft_config.n_fft = n_fft;
   stft_config.hop_length = hop_length;

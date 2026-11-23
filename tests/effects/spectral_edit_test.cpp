@@ -308,7 +308,8 @@ TEST_CASE("spectral_edit rejects invalid parameters", "[spectral_edit]") {
 
   SECTION("empty audio") {
     Audio empty;
-    REQUIRE_THROWS_AS(spectral_edit(empty, default_config(), nullptr, 0), SonareException);
+    REQUIRE_THROWS_WITH(spectral_edit(empty, default_config(), nullptr, 0),
+                        Catch::Matchers::ContainsSubstring("audio must not be empty"));
   }
   SECTION("n_fft not a power of two") {
     SpectralEditConfig cfg = default_config();
@@ -343,7 +344,24 @@ TEST_CASE("spectral_edit rejects invalid parameters", "[spectral_edit]") {
     REQUIRE_THROWS_AS(spectral_edit(audio, cfg, nullptr, 0), SonareException);
   }
   SECTION("null ops with non-zero count") {
-    REQUIRE_THROWS_AS(spectral_edit(audio, default_config(), nullptr, 3), SonareException);
+    REQUIRE_THROWS_WITH(spectral_edit(audio, default_config(), nullptr, 3),
+                        Catch::Matchers::ContainsSubstring("ops must not be NULL"));
+  }
+  SECTION("config leaves are named") {
+    SpectralEditConfig config = default_config();
+    config.heal_radius_frames = 0;
+    REQUIRE_THROWS_WITH(spectral_edit(audio, config, nullptr, 0),
+                        Catch::Matchers::ContainsSubstring("heal_radius_frames must be"));
+  }
+  SECTION("gain_db names its array row and derived overflow") {
+    op.mode = SpectralEditMode::Gain;
+    op.gain_db = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE_THROWS_WITH(spectral_edit(audio, default_config(), &op, 1),
+                        Catch::Matchers::ContainsSubstring("ops[0].gain_db must be finite"));
+    op.gain_db = 1000.0f;
+    REQUIRE_THROWS_WITH(
+        spectral_edit(audio, default_config(), &op, 1),
+        Catch::Matchers::ContainsSubstring("ops[0].gain_db must produce a finite linear gain"));
   }
   SECTION("valid call with the same audio succeeds") {
     REQUIRE_NOTHROW(spectral_edit(audio, default_config(), &op, 1));

@@ -2,6 +2,7 @@
 /// @brief Every resynthesizing call runs an absent hop as a quarter of n_fft.
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <vector>
 
@@ -17,6 +18,7 @@
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 
@@ -189,4 +191,25 @@ TEST_CASE("an absent hop equals the explicit quarter hop on every resynthesizing
     CHECK(samples_of(spectral_edit(audio, absent, &op, 1)) ==
           samples_of(spectral_edit(audio, given, &op, 1)));
   }
+}
+
+TEST_CASE("decompose stem entries name their audio and channel arguments",
+          "[effects][decompose][validation]") {
+  const DecomposeStemsConfig config;
+  const std::vector<float> samples(8, 0.0f);
+  const float* channels[] = {samples.data()};
+  const float* missing_channel[] = {nullptr};
+
+  CHECK_THROWS_WITH(decompose_stems(nullptr, samples.size(), kSampleRate, config),
+                    Catch::Matchers::ContainsSubstring("samples must not be NULL"));
+  CHECK_THROWS_WITH(decompose_stems_linked(nullptr, 1, samples.size(), kSampleRate, config),
+                    Catch::Matchers::ContainsSubstring("channels must not be NULL"));
+  CHECK_THROWS_WITH(decompose_stems_linked(channels, 0, samples.size(), kSampleRate, config),
+                    Catch::Matchers::ContainsSubstring("num_channels must be"));
+  CHECK_THROWS_WITH(decompose_stems_linked(missing_channel, 1, samples.size(), kSampleRate, config),
+                    Catch::Matchers::ContainsSubstring("channels[0] must not be NULL"));
+  CHECK_THROWS_WITH(decompose_stems_linked(channels, 1, 0, kSampleRate, config),
+                    Catch::Matchers::ContainsSubstring("length must be"));
+  CHECK_THROWS_WITH(decompose_stems_linked(channels, 1, samples.size(), 0, config),
+                    Catch::Matchers::ContainsSubstring("sample_rate must be"));
 }

@@ -6,15 +6,18 @@
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
 #include "core/window.h"
 #include "support/alloc_guard.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -94,6 +97,26 @@ TEST_CASE("FormantWarpStream frame and order follow the rate", "[effects][forman
   CHECK(sonare::formant_warp_lpc_order(48000) == 50);
   CHECK(sonare::formant_warp_lpc_order(22050) == 24);
   CHECK(sonare::formant_warp_frame_size(48000) == prepared_stream(48000, 1.2f).latency_samples());
+}
+
+TEST_CASE("FormantWarp refusals name the caller fields", "[effects][formant][validation]") {
+  const sonare::Audio audio = voiced_tone(1, 48000);
+  sonare::FormantWarpConfig config;
+  config.factor = std::numeric_limits<float>::quiet_NaN();
+  CHECK_THROWS_WITH(sonare::FormantWarp(config).process(audio),
+                    Catch::Matchers::ContainsSubstring("factor must be finite"));
+
+  config.factor = 1.0f;
+  config.lpc_order = -1;
+  CHECK_THROWS_WITH(sonare::FormantWarp(config).process(audio),
+                    Catch::Matchers::ContainsSubstring("lpc_order must be"));
+  CHECK_THROWS_WITH(sonare::FormantWarp().process(sonare::Audio()),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+
+  sonare::FormantWarpStream stream;
+  CHECK_THROWS_WITH(
+      stream.prepare(14, 2),
+      Catch::Matchers::ContainsSubstring("frame_size must be a multiple of 4 and at least 16"));
 }
 
 TEST_CASE("FormantWarp periodic Hann keeps quarter-hop squared COLA", "[effects][formant]") {

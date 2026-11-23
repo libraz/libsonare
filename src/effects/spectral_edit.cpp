@@ -181,20 +181,19 @@ void apply_op(std::vector<std::complex<float>>& buf, int n_frames, int n_fft, in
 }  // namespace
 
 void validate_spectral_region_op(const SpectralRegionOp& op) {
-  SONARE_CHECK_MSG(numeric::finite(op.low_hz) && numeric::finite(op.high_hz),
-                   ErrorCode::InvalidParameter, "low_hz and high_hz must be finite");
-  SONARE_CHECK_MSG(numeric::finite(op.gain_db), ErrorCode::InvalidParameter,
-                   "gain_db must be finite");
+  util::check::finite(op.low_hz, "low_hz");
+  util::check::finite(op.high_hz, "high_hz");
+  util::check::finite(op.gain_db, "gain_db");
   const bool applies_gain =
       op.mode == SpectralEditMode::Gain || op.mode == SpectralEditMode::Attenuate;
-  SONARE_CHECK_MSG(
-      !applies_gain || numeric::finite(db_to_linear(op.gain_db)), ErrorCode::InvalidParameter,
-      "gain_db " + std::to_string(op.gain_db) + " is past the float range as a linear gain");
+  if (applies_gain && !numeric::finite(db_to_linear(op.gain_db))) {
+    util::check::refuse("gain_db", "must produce a finite linear gain");
+  }
 }
 
 Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
                     const SpectralRegionOp* ops, std::size_t n_ops) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   // Stricter than the shared even-size rule: this entry point has always documented a
   // power-of-two nFft (spectral_edit.h) and every surface already enforces it. It is checked
   // first so a size the shared rule would also refuse is reported against this one.
@@ -202,9 +201,12 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
   util::check::power_of_two_within(config.n_fft, kSpectralEditNFftDomain, "n_fft");
   const int hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
   validate_cola_geometry(config.n_fft, hop_length);
-  SONARE_CHECK(config.heal_radius_frames >= 1, ErrorCode::InvalidParameter);
-  SONARE_CHECK(ops != nullptr || n_ops == 0, ErrorCode::InvalidParameter);
-  for (std::size_t i = 0; i < n_ops; ++i) validate_spectral_region_op(ops[i]);
+  util::check::integer_at_least(config.heal_radius_frames, 1, "heal_radius_frames");
+  util::check::non_null_when_count(ops, n_ops, "ops", "n_ops");
+  for (std::size_t i = 0; i < n_ops; ++i) {
+    util::check::under_member("ops[" + std::to_string(i) + "]",
+                              [&]() { validate_spectral_region_op(ops[i]); });
+  }
 
   StftConfig stft_config;
   stft_config.n_fft = config.n_fft;

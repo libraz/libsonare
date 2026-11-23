@@ -488,13 +488,19 @@ DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
                                                   const DecomposeStemsConfig& config) {
   DecomposeStemsConfig checked = Validated<DecomposeStemsConfig>::make(config).get();
   checked.hop_length = resolve_resynthesis_hop(checked.hop_length, checked.n_fft);
-  SONARE_CHECK(channels != nullptr && channel_count > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(channel_count <= kMaxDecomposeStemsLinkedChannels, ErrorCode::InvalidParameter);
+  util::check::non_null(channels, "channels");
+  util::check::integer_within(
+      channel_count,
+      util::check::integer_domain(1, static_cast<long long>(kMaxDecomposeStemsLinkedChannels)),
+      "num_channels");
   for (std::size_t c = 0; c < channel_count; ++c) {
-    SONARE_CHECK(channels[c] != nullptr, ErrorCode::InvalidParameter);
+    const std::string subject = "channels[" + std::to_string(c) + "]";
+    util::check::non_null(channels[c], subject.c_str());
   }
-  SONARE_CHECK(n > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  if (n == 0) {
+    util::check::refuse_outside(util::check::integer_domain_at_least(1), "length");
+  }
+  util::check::integer_at_least(sample_rate, 1, "sample_rate");
 
   const StftConfig stft_config = make_stft_config(checked.n_fft, checked.hop_length);
   std::vector<Audio> audio;
@@ -567,6 +573,10 @@ DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
 
 DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sample_rate,
                                      const DecomposeStemsConfig& config) {
+  if (samples == nullptr) {
+    validate_config(config);
+    util::check::non_null(samples, "samples");
+  }
   const float* channels[1] = {samples};
   DecomposeStemsLinkedResult linked = decompose_stems_linked(channels, 1, n, sample_rate, config);
 

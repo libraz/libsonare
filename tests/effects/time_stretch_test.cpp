@@ -10,6 +10,7 @@
 #include <limits>
 #include <vector>
 
+#include "effects/native_spectral_stretch.h"
 #include "effects/phase_vocoder.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -397,4 +398,12 @@ TEST_CASE("time_stretch and phase_vocoder refuse the rate by its name", "[time_s
   const Spectrogram spec = Spectrogram::compute(audio, StftConfig());
   CHECK_THROWS_WITH(phase_vocoder(spec, 0.0f), expected);
   CHECK_THROWS_WITH(phase_vocoder_phaselocked(spec, 0.0f), expected);
+}
+
+TEST_CASE("time stretch names empty audio arguments", "[time_stretch][validation]") {
+  const Audio empty;
+  CHECK_THROWS_WITH(time_stretch(empty, 1.0f),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+  CHECK_THROWS_WITH(native_spectral_time_stretch(empty, 1.0f),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
 }

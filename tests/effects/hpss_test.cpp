@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -1513,9 +1514,62 @@ TEST_CASE("HPSS refuses a mask power or margin outside its domain", "[hpss]") {
     config.power = power;
     INFO("power " << power);
     REQUIRE_THROWS_AS(hpss(spec, config), SonareException);
+    REQUIRE_THROWS_WITH(hpss(spec, config), Catch::Matchers::ContainsSubstring("power must be"));
     REQUIRE_THROWS_AS(hpss_with_residual(spec, config), SonareException);
   }
   HpssConfig config;
   config.margin_harmonic = -1.0f;
-  REQUIRE_THROWS_AS(hpss(spec, config), SonareException);
+  REQUIRE_THROWS_WITH(hpss(spec, config),
+                      Catch::Matchers::ContainsSubstring("margin_harmonic must be"));
+  config.margin_harmonic = 1.0f;
+  config.margin_percussive = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS_WITH(hpss(spec, config),
+                      Catch::Matchers::ContainsSubstring("margin_percussive must be"));
+}
+
+TEST_CASE("HPSS names empty audio and spectrogram arguments", "[hpss][validation]") {
+  const Audio empty_audio;
+  const Spectrogram empty_spec;
+  const HpssConfig config;
+  const StftConfig stft;
+
+  CHECK_THROWS_WITH(hpss(empty_spec, config),
+                    Catch::Matchers::ContainsSubstring("spec must not be empty"));
+  CHECK_THROWS_WITH(harmonic(empty_spec, config),
+                    Catch::Matchers::ContainsSubstring("spec must not be empty"));
+  CHECK_THROWS_WITH(percussive(empty_spec, config),
+                    Catch::Matchers::ContainsSubstring("spec must not be empty"));
+  CHECK_THROWS_WITH(hpss_with_residual(empty_spec, config),
+                    Catch::Matchers::ContainsSubstring("spec must not be empty"));
+
+  CHECK_THROWS_WITH(hpss(empty_audio, config, stft),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+  CHECK_THROWS_WITH(harmonic(empty_audio, config, stft),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+  CHECK_THROWS_WITH(percussive(empty_audio, config, stft),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+  CHECK_THROWS_WITH(hpss_with_residual(empty_audio, config, stft),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+  CHECK_THROWS_WITH(residual(empty_audio, config, stft),
+                    Catch::Matchers::ContainsSubstring("audio must not be empty"));
+}
+
+TEST_CASE("the median filters name their pointer, dimensions and kernel", "[hpss][validation]") {
+  const float sample = 1.0f;
+  const auto filter = [&](bool vertical, const float* magnitude, int n_bins, int n_frames,
+                          int kernel_size) {
+    return vertical ? median_filter_vertical(magnitude, n_bins, n_frames, kernel_size)
+                    : median_filter_horizontal(magnitude, n_bins, n_frames, kernel_size);
+  };
+  for (const bool vertical : {false, true}) {
+    CAPTURE(vertical);
+    CHECK_THROWS_WITH(filter(vertical, nullptr, 1, 1, 3),
+                      Catch::Matchers::ContainsSubstring("magnitude must not be NULL"));
+    CHECK_THROWS_WITH(filter(vertical, &sample, 0, 1, 3),
+                      Catch::Matchers::ContainsSubstring("n_bins must be"));
+    CHECK_THROWS_WITH(filter(vertical, &sample, 1, 500000001, 3),
+                      Catch::Matchers::ContainsSubstring("n_frames must keep the spectrogram"));
+    CHECK_THROWS_WITH(filter(vertical, &sample, 1, 1, 2),
+                      Catch::Matchers::ContainsSubstring("kernel_size must be"));
+  }
 }

@@ -11,6 +11,7 @@
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -65,7 +66,9 @@ FormantWarpStream::FormantWarpStream(FormantWarpStream&&) noexcept = default;
 FormantWarpStream& FormantWarpStream::operator=(FormantWarpStream&&) noexcept = default;
 
 void FormantWarpStream::prepare(int frame_size, int lpc_order) {
-  SONARE_CHECK(frame_size >= 16 && frame_size % 4 == 0, ErrorCode::InvalidParameter);
+  if (!(frame_size >= 16 && frame_size % 4 == 0)) {
+    util::check::refuse("frame_size", "must be a multiple of 4 and at least 16");
+  }
   frame_size_ = frame_size;
   hop_size_ = frame_size / 4;
   order_ = std::max(2, std::min(lpc_order, frame_size - 1));
@@ -275,9 +278,9 @@ void FormantWarpStream::process(const float* input, float* output, int num_sampl
 FormantWarp::FormantWarp(FormantWarpConfig config) : config_(config) {}
 
 Audio FormantWarp::process(const Audio& audio) const {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config_.factor), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config_.lpc_order >= 0, ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
+  util::check::finite_float(config_.factor, "factor");
+  util::check::integer_at_least(config_.lpc_order, 0, "lpc_order");
 
   const int sr = audio.sample_rate();
   const int frame_size =

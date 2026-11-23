@@ -14,7 +14,7 @@
 namespace sonare {
 
 Audio time_stretch(const Audio& audio, float rate, const TimeStretchConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   std::size_t expected_size = 0;
   constexpr std::size_t kMaxOutputSamples =
       std::min<std::size_t>(kMaxAudioBufferSize, static_cast<std::size_t>(INT_MAX));
