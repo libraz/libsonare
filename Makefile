@@ -1047,6 +1047,8 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py tests/conformance/test_wasm_pointer_return_scope.py
 	$(CHECK) python3 tests/conformance/check_python_narrowing_scope.py
 	$(CHECK) python3 -m unittest tests/conformance/test_python_narrowing_scope.py
+	$(CHECK) python3 tests/conformance/check_python_narrowing_labels.py
+	$(CHECK) python3 -m unittest tests/conformance/test_python_narrowing_labels.py
 	$(CHECK) python3 tests/conformance/check_public_integer_domains.py
 	$(CHECK) python3 -m unittest tests/conformance/test_public_integer_domains.py
 	$(CHECK) python3 tests/conformance/check_zero_sentinel_filter.py

@@ -1,0 +1,1156 @@
+{
+  "floor": {
+    "labels_read": 1500,
+    "wide_counts": 180
+  },
+  "records": [
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.absorption",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.height_m",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.length_m",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.listener.x",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.listener.y",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.listener.z",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.source.x",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.source.y",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.source.z",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_acoustic.py",
+      "function": "room_geometry_from_estimate",
+      "label": "config.width_m",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_analysis_detection.py",
+      "function": "_detect_key_options",
+      "label": "mode_count",
+      "state": "bounded",
+      "reason": "the length _to_c_int_array returned for the caller's `modes`; 64-bit"
+    },
+    {
+      "file": "_analysis_detection.py",
+      "function": "_detect_key_options",
+      "label": "tuning_auto",
+      "state": "bounded",
+      "reason": "0 or 1 from _tuning_arg"
+    },
+    {
+      "file": "_analysis_reports.py",
+      "function": "analyze_impulse_response",
+      "label": "n_octave_bands_value",
+      "state": "bounded",
+      "reason": "already narrowed to [0, INT_MAX] under the caller's `n_octave_bands`"
+    },
+    {
+      "file": "_conversions.py",
+      "function": "pcen",
+      "label": "n_bins",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_conversions.py",
+      "function": "pcen",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_conversions.py",
+      "function": "tempogram",
+      "label": "mode_id",
+      "state": "bounded",
+      "reason": "an ordinal from a fixed token table (or -1 for absent); always in range"
+    },
+    {
+      "file": "_conversions.py",
+      "function": "tonnetz",
+      "label": "n_chroma",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_conversions.py",
+      "function": "tonnetz",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_effects_polyphony.py",
+      "function": "_envelope_count",
+      "label": "count",
+      "state": "bounded",
+      "reason": "sized from a count the handle reports (note_count / frame_count); the reader cannot refuse it"
+    },
+    {
+      "file": "_effects_polyphony.py",
+      "function": "_note_curve",
+      "label": "capacity",
+      "state": "bounded",
+      "reason": "sized from a count the handle reports (note_count / frame_count); the reader cannot refuse it"
+    },
+    {
+      "file": "_effects_polyphony.py",
+      "function": "_note_curve",
+      "label": "index",
+      "state": "bounded",
+      "reason": "already narrowed under the caller's `note` by _note_set_index"
+    },
+    {
+      "file": "_effects_polyphony.py",
+      "function": "note_inharmonicity",
+      "label": "capacity",
+      "state": "bounded",
+      "reason": "sized from a count the handle reports (note_count / frame_count); the reader cannot refuse it"
+    },
+    {
+      "file": "_effects_polyphony.py",
+      "function": "notes",
+      "label": "count",
+      "state": "bounded",
+      "reason": "sized from a count the handle reports (note_count / frame_count); the reader cannot refuse it"
+    },
+    {
+      "file": "_effects_polyphony.py",
+      "function": "polyphony",
+      "label": "capacity",
+      "state": "bounded",
+      "reason": "sized from a count the handle reports (note_count / frame_count); the reader cannot refuse it"
+    },
+    {
+      "file": "_effects_polyphony.py",
+      "function": "set_note_edit",
+      "label": "index",
+      "state": "bounded",
+      "reason": "already narrowed under the caller's `note` by _note_set_index"
+    },
+    {
+      "file": "_effects_repair_dereverb.py",
+      "function": "mastering_repair_dereverb_config_for_room",
+      "label": "config.attenuation",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_effects_repair_dereverb.py",
+      "function": "mastering_repair_dereverb_config_for_room",
+      "label": "config.late_delay_ms",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_effects_repair_dereverb.py",
+      "function": "mastering_repair_dereverb_config_for_room",
+      "label": "config.over_subtraction",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_effects_repair_dereverb.py",
+      "function": "mastering_repair_dereverb_config_for_room",
+      "label": "config.spectral_floor",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_effects_repair_dereverb.py",
+      "function": "mastering_repair_dereverb_config_for_room",
+      "label": "config.t60_sec",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_effects_repair_dereverb.py",
+      "function": "mastering_repair_dereverb_config_for_room",
+      "label": "config.threshold",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_effects_repair_dereverb.py",
+      "function": "mastering_repair_dereverb_config_for_room",
+      "label": "config.wpe_strength",
+      "state": "open",
+      "reason": "the caller passed the field as a keyword argument; the label prefixes a config the caller never built"
+    },
+    {
+      "file": "_effects_voice.py",
+      "function": "_process_interleaved",
+      "label": "block_frames",
+      "state": "bounded",
+      "reason": "a block length cut from the caller's array (min(step, remaining)); 64-bit"
+    },
+    {
+      "file": "_effects_voice.py",
+      "function": "_process_interleaved",
+      "label": "ch",
+      "state": "bounded",
+      "reason": "the handle's channel count, or num_channels already narrowed under its own name"
+    },
+    {
+      "file": "_effects_voice.py",
+      "function": "_process_mono",
+      "label": "length",
+      "state": "bounded",
+      "reason": "a block length cut from the caller's array (min(step, remaining)); 64-bit"
+    },
+    {
+      "file": "_effects_voice.py",
+      "function": "_process_planar",
+      "label": "length",
+      "state": "bounded",
+      "reason": "a block length cut from the caller's array (min(step, remaining)); 64-bit"
+    },
+    {
+      "file": "_engine_conversions.py",
+      "function": "_clips_to_c",
+      "label": "clip.gain",
+      "state": "open",
+      "reason": "the caller wrote clips[i].gain"
+    },
+    {
+      "file": "_engine_conversions.py",
+      "function": "_clips_to_c",
+      "label": "clip.start_ppq",
+      "state": "open",
+      "reason": "the caller wrote clips[i].start_ppq"
+    },
+    {
+      "file": "_engine_conversions.py",
+      "function": "_clips_to_c",
+      "label": "source_sample",
+      "state": "open",
+      "reason": "the caller wrote clips[i].warp_anchors[j]"
+    },
+    {
+      "file": "_engine_conversions.py",
+      "function": "_clips_to_c",
+      "label": "warp_sample",
+      "state": "open",
+      "reason": "the caller wrote clips[i].warp_anchors[j]"
+    },
+    {
+      "file": "_engine_conversions.py",
+      "function": "_marker_to_c",
+      "label": "marker.ppq",
+      "state": "open",
+      "reason": "the caller wrote markers[i].ppq"
+    },
+    {
+      "file": "_engine_io.py",
+      "function": "process",
+      "label": "frame_count",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_engine_io.py",
+      "function": "process",
+      "label": "num_channels",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_engine_io.py",
+      "function": "render_offline",
+      "label": "num_channels",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "_marshal_sends",
+      "label": "level_db",
+      "state": "open",
+      "reason": "the caller wrote <strip>.sends[i].level_db"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "_strip_target",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "apply_strip_insert_param_now",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "can_set_strip_sidechain",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "clear_strip_insert_parameter_bases",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "resolve_strip_automation_id",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "resolve_strip_insert_automation_id",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "restore_strip_insert_param",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_channel_delay_samples",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_dual_pan",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_eq_band",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_insert_bypassed",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_insert_param",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_pan",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_pan_law",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_pan_mode",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_sidechain",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_strip_surround_pan",
+      "label": "strip",
+      "state": "open",
+      "reason": "the caller passed `ref`; the label names the resolved handle"
+    },
+    {
+      "file": "_engine_mixing.py",
+      "function": "set_track_buses",
+      "label": "gain_db",
+      "state": "open",
+      "reason": "the caller wrote buses[i].gain_db"
+    },
+    {
+      "file": "_engine_pages.py",
+      "function": "supply",
+      "label": "num_channels",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_core.py",
+      "function": "mel_delta",
+      "label": "n_features",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_core.py",
+      "function": "mel_delta",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_metering.py",
+      "function": "lufs_interleaved",
+      "label": "frames",
+      "state": "bounded",
+      "reason": "total // num_channels over the caller's array length; 64-bit"
+    },
+    {
+      "file": "_features_metering.py",
+      "function": "lufs_series_interleaved",
+      "label": "frames",
+      "state": "bounded",
+      "reason": "total // num_channels over the caller's array length; 64-bit"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_agglomerative",
+      "label": "cols",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_agglomerative",
+      "label": "rows",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_cross_similarity",
+      "label": "x_cols",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_cross_similarity",
+      "label": "x_rows",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_cross_similarity",
+      "label": "y_cols",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_cross_similarity",
+      "label": "y_rows",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_lag_to_recurrence",
+      "label": "n_lags",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_lag_to_recurrence",
+      "label": "n_rows",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_path_enhance",
+      "label": "n",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_recurrence_matrix",
+      "label": "cols",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_recurrence_matrix",
+      "label": "rows",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_recurrence_to_lag",
+      "label": "n",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_subsegment",
+      "label": "cols",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_segmentation.py",
+      "function": "segment_subsegment",
+      "label": "rows",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "cqt_to_audio",
+      "label": "n_bins",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "cqt_to_audio",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "griffin_lim",
+      "label": "n_bins",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "griffin_lim",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mel_to_audio",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mel_to_audio",
+      "label": "n_mels",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mel_to_stft",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mel_to_stft",
+      "label": "n_mels",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mfcc_to_audio",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mfcc_to_audio",
+      "label": "n_mfcc",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mfcc_to_mel",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "mfcc_to_mel",
+      "label": "n_mfcc",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "vqt_to_audio",
+      "label": "n_bins",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_features_transforms.py",
+      "function": "vqt_to_audio",
+      "label": "n_frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "function": "flush_mono",
+      "label": "capacity",
+      "state": "bounded",
+      "reason": "the handle's max_block_size"
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "function": "flush_stereo",
+      "label": "capacity",
+      "state": "bounded",
+      "reason": "the handle's max_block_size"
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "function": "magnitude_response",
+      "label": "ordinal",
+      "state": "bounded",
+      "reason": "an ordinal from a fixed token table (or -1 for absent); always in range"
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "function": "process_mono",
+      "label": "length",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "function": "process_stereo",
+      "label": "left_length",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "function": "set_sidechain_mono",
+      "label": "length",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "function": "set_sidechain_stereo",
+      "label": "left_length",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_mixing.py",
+      "function": "drain_tail_stereo",
+      "label": "count",
+      "state": "bounded",
+      "reason": "already narrowed to [1, INT_MAX] under the caller's `num_samples`"
+    },
+    {
+      "file": "_mixing.py",
+      "function": "mix_stereo",
+      "label": "length",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_mixing.py",
+      "function": "read_goniometer_latest",
+      "label": "capped",
+      "state": "bounded",
+      "reason": "min of max_points (narrowed under its own name) and the goniometer read cap"
+    },
+    {
+      "file": "_mixing.py",
+      "function": "set_pan",
+      "label": "mode",
+      "state": "bounded",
+      "reason": "an ordinal from a fixed token table (or -1 for absent); always in range"
+    },
+    {
+      "file": "_mixing.py",
+      "function": "strip_by_id",
+      "label": "index",
+      "state": "bounded",
+      "reason": "a loop index below the mixer's strip_count"
+    },
+    {
+      "file": "_playback.py",
+      "function": "process_interleaved",
+      "label": "frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_playback.py",
+      "function": "process_interleaved",
+      "label": "num_output_channels",
+      "state": "bounded",
+      "reason": "the handle's own output channel count"
+    },
+    {
+      "file": "_playback.py",
+      "function": "process_planar",
+      "label": "frames",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_playback.py",
+      "function": "process_planar",
+      "label": "num_input_channels",
+      "state": "open",
+      "reason": "a 32-bit dimension of the caller's array, reachable at 2**31 elements; names the C dimension"
+    },
+    {
+      "file": "_playback.py",
+      "function": "process_planar",
+      "label": "num_output_channels",
+      "state": "bounded",
+      "reason": "the handle's own output channel count"
+    },
+    {
+      "file": "_playback.py",
+      "function": "process_silence",
+      "label": "num_output_channels",
+      "state": "bounded",
+      "reason": "the handle's own output channel count"
+    },
+    {
+      "file": "_project_edit.py",
+      "function": "edit_automation_lane",
+      "label": "target_id",
+      "state": "bounded",
+      "reason": "already narrowed under the caller's `target_param_id` by _automation_target_param_id_value"
+    },
+    {
+      "file": "_project_edit.py",
+      "function": "remove_automation_lane",
+      "label": "target_id",
+      "state": "bounded",
+      "reason": "already narrowed under the caller's `target_param_id` by _automation_target_param_id_value"
+    },
+    {
+      "file": "_project_edit.py",
+      "function": "set_max_history_bytes",
+      "label": "value",
+      "state": "bounded",
+      "reason": "already narrowed to [0, SIZE_MAX] under the caller's `bytes`"
+    },
+    {
+      "file": "_project_edit.py",
+      "function": "unresolved_audio_source_ids",
+      "label": "index",
+      "state": "bounded",
+      "reason": "a loop index below a count the library returned"
+    },
+    {
+      "file": "_project_edit.py",
+      "function": "unresolved_audio_sources",
+      "label": "index",
+      "state": "bounded",
+      "reason": "a loop index below a count the library returned"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "_audio_source_uri",
+      "label": "source_id",
+      "state": "bounded",
+      "reason": "the id field of a record the library returned"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "_source_from_raw",
+      "label": "source_id",
+      "state": "bounded",
+      "reason": "the id field of a record the library returned"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "annotate_chords",
+      "label": "end_ppq",
+      "state": "open",
+      "reason": "the caller wrote chords[i].end_ppq"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "annotate_chords",
+      "label": "start_ppq",
+      "state": "open",
+      "reason": "the caller wrote chords[i].start_ppq"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "set_tempo_segments",
+      "label": "bpm",
+      "state": "open",
+      "reason": "the caller wrote segments[i].bpm"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "set_tempo_segments",
+      "label": "end_bpm",
+      "state": "open",
+      "reason": "the caller wrote segments[i].end_bpm"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "set_tempo_segments",
+      "label": "start_ppq",
+      "state": "open",
+      "reason": "the caller wrote segments[i].start_ppq"
+    },
+    {
+      "file": "_project_inspection.py",
+      "function": "set_time_signatures",
+      "label": "start_ppq",
+      "state": "open",
+      "reason": "the caller wrote segments[i].start_ppq"
+    },
+    {
+      "file": "_project_instruments.py",
+      "function": "_to_c",
+      "label": "routing.depth",
+      "state": "open",
+      "reason": "the field path omits the owning instrument record the caller built"
+    },
+    {
+      "file": "_project_midi.py",
+      "function": "bake_midi_fx",
+      "label": "expected",
+      "state": "bounded",
+      "reason": "the count preview_midi_fx_count returned"
+    },
+    {
+      "file": "_project_midi.py",
+      "function": "set_program",
+      "label": "bank",
+      "state": "bounded",
+      "reason": "(msb << 7) | lsb over bank_msb / bank_lsb narrowed to [0, 127], or -1"
+    },
+    {
+      "file": "_project_model.py",
+      "function": "_automation_target_param_id_value",
+      "label": "target_param_id",
+      "state": "caller",
+      "reason": "both callers (edit/remove_automation_lane) name the argument target_param_id"
+    },
+    {
+      "file": "_project_model.py",
+      "function": "_cc_binding_to_c",
+      "label": "cc_lsb_number",
+      "state": "open",
+      "reason": "the caller wrote binding.cc_lsb_number (bindings[i].cc_lsb_number for a list)"
+    },
+    {
+      "file": "_project_model.py",
+      "function": "_cc_binding_to_c",
+      "label": "cc_number",
+      "state": "open",
+      "reason": "the caller wrote binding.cc_number (bindings[i].cc_number for a list)"
+    },
+    {
+      "file": "_project_model.py",
+      "function": "_cc_binding_to_c",
+      "label": "selector_lsb",
+      "state": "open",
+      "reason": "the caller wrote binding.selector_lsb (bindings[i].selector_lsb for a list)"
+    },
+    {
+      "file": "_project_model.py",
+      "function": "_cc_binding_to_c",
+      "label": "selector_msb",
+      "state": "open",
+      "reason": "the caller wrote binding.selector_msb (bindings[i].selector_msb for a list)"
+    },
+    {
+      "file": "_project_render.py",
+      "function": "sound_font_manifest",
+      "label": "count",
+      "state": "bounded",
+      "reason": "a count or id the library returned; the reader cannot refuse it"
+    },
+    {
+      "file": "_project_synth.py",
+      "function": "synth_enum_tables",
+      "label": "kind",
+      "state": "bounded",
+      "reason": "an ordinal from a fixed token table (or -1 for absent); always in range"
+    },
+    {
+      "file": "_runtime.py",
+      "function": "_last_diagnostics",
+      "label": "index",
+      "state": "bounded",
+      "reason": "a loop index below a count the library returned"
+    },
+    {
+      "file": "_runtime.py",
+      "function": "_render_as_given",
+      "label": "count",
+      "state": "bounded",
+      "reason": "a count or id the library returned; the reader cannot refuse it"
+    },
+    {
+      "file": "_runtime.py",
+      "function": "_render_as_given",
+      "label": "index",
+      "state": "bounded",
+      "reason": "a loop index below a count the library returned"
+    },
+    {
+      "file": "_vocal_edit_marshal.py",
+      "function": "_transition_to_c",
+      "label": "left_window_samples",
+      "state": "open",
+      "reason": "the caller wrote operation.transition.left_window_samples"
+    },
+    {
+      "file": "_vocal_edit_marshal.py",
+      "function": "_transition_to_c",
+      "label": "right_window_samples",
+      "state": "open",
+      "reason": "the caller wrote operation.transition.right_window_samples"
+    },
+    {
+      "file": "engine.py",
+      "function": "markers",
+      "label": "index",
+      "state": "bounded",
+      "reason": "a loop index below a count the library returned"
+    },
+    {
+      "file": "engine.py",
+      "function": "parameters",
+      "label": "index",
+      "state": "bounded",
+      "reason": "a loop index below a count the library returned"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_midi_clips",
+      "label": "EngineMidiEvent.group",
+      "state": "open",
+      "reason": "the caller wrote clips[i].events[j].group"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_midi_clips",
+      "label": "EngineMidiEvent.word_count",
+      "state": "open",
+      "reason": "the caller wrote clips[i].events[j].word_count"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_midi_clips",
+      "label": "clip.gain",
+      "state": "open",
+      "reason": "the caller wrote clips[i].gain"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_midi_clips",
+      "label": "clip.start_ppq",
+      "state": "open",
+      "reason": "the caller wrote clips[i].start_ppq"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_tempo_segments",
+      "label": "bpm",
+      "state": "open",
+      "reason": "the caller wrote segments[i].bpm"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_tempo_segments",
+      "label": "end_bpm",
+      "state": "open",
+      "reason": "the caller wrote segments[i].end_bpm"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_tempo_segments",
+      "label": "start_ppq",
+      "state": "open",
+      "reason": "the caller wrote segments[i].start_ppq"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_time_signature_segments",
+      "label": "start_ppq",
+      "state": "open",
+      "reason": "the caller wrote segments[i].start_ppq"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_track_monitor_mode",
+      "label": "lane_index",
+      "state": "bounded",
+      "reason": "an index into the engine's own lane list (_lane_index_of)"
+    },
+    {
+      "file": "engine.py",
+      "function": "set_track_solo_mute",
+      "label": "lane_index",
+      "state": "bounded",
+      "reason": "an index into the engine's own lane list (_lane_index_of)"
+    },
+    {
+      "file": "mixing_assistant.py",
+      "function": "_build_track_arrays",
+      "label": "sample_rates",
+      "state": "open",
+      "reason": "the caller wrote tracks[i].sample_rate"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_apply_project_vocal_edit",
+      "label": "sve1_size",
+      "state": "bounded",
+      "reason": "len() of the caller's bytes; below 2**63, inside the uint64 range"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_rehydrate_project_vocal_edits",
+      "label": "original_count",
+      "state": "open",
+      "reason": "the caller wrote `originals`; reachable past 2**28 items"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_token_to_c",
+      "label": "render_token.draft_id",
+      "state": "caller",
+      "reason": "_apply_project_vocal_edit, the one caller, names the argument render_token"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_token_to_c",
+      "label": "render_token.generation",
+      "state": "caller",
+      "reason": "_apply_project_vocal_edit, the one caller, names the argument render_token"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_token_to_c",
+      "label": "render_token.profile_id",
+      "state": "caller",
+      "reason": "_apply_project_vocal_edit, the one caller, names the argument render_token"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_token_to_c",
+      "label": "render_token.request_id",
+      "state": "caller",
+      "reason": "_apply_project_vocal_edit, the one caller, names the argument render_token"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_token_to_c",
+      "label": "render_token.revision",
+      "state": "caller",
+      "reason": "_apply_project_vocal_edit, the one caller, names the argument render_token"
+    },
+    {
+      "file": "vocal_project.py",
+      "function": "_token_to_c",
+      "label": "render_token.session_epoch",
+      "state": "caller",
+      "reason": "_apply_project_vocal_edit, the one caller, names the argument render_token"
+    }
+  ]
+}
