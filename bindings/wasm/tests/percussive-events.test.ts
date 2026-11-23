@@ -689,7 +689,10 @@ describe('extractPercussiveEvents', () => {
       { hpssKernelHarmonic: 32 },
       { hpssKernelPercussive: 2 },
     ]) {
-      expectCoreRefusal(() => extractPercussiveEvents({ ...base, ...options }));
+      expectCoreRefusal(
+        () => extractPercussiveEvents({ ...base, ...options }),
+        `extractPercussiveEvents: ${Object.keys(options)[0]} must be an odd integer in [1, 524288]`,
+      );
     }
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
@@ -1030,7 +1033,10 @@ describe('renderPercussiveEvents', () => {
       );
     }
     for (const options of [{ hpssKernelHarmonic: 4 }, { hpssKernelPercussive: 4 }]) {
-      expectCoreRefusal(() => render([edited(4410, 15435)], options));
+      expectCoreRefusal(
+        () => render([edited(4410, 15435)], options),
+        `renderPercussiveEvents: ${Object.keys(options)[0]} must be an odd integer in [1, 524288]`,
+      );
     }
 
     // An omitted fade is the default, and the span it is applied to still renders.

@@ -354,6 +354,13 @@ inline constexpr std::array<sonare::util::check::MemberKey, 4> kChirpRequestKeys
     {{"fmin", "fminHz"}, {"fmax", "fmaxHz"}, {"sr", "sampleRate"}, {"duration", "durationSec"}}};
 inline constexpr std::array<sonare::util::check::MemberKey, 3> kClicksRequestKeys{
     {{"sr", "sampleRate"}, {"frequency", "frequencyHz"}, {"click_duration", "clickDurationSec"}}};
+/// The HPSS core names for the two median kernels, as hpss() spells them.
+inline constexpr std::array<sonare::util::check::MemberKey, 2> kHpssRequestKeys{
+    {{"kernel_size_harmonic", "kernelHarmonic"}, {"kernel_size_percussive", "kernelPercussive"}}};
+/// The same kernels as the percussive-event requests spell them.
+inline constexpr std::array<sonare::util::check::MemberKey, 2> kPercussiveSeparationKeys{
+    {{"kernel_size_harmonic", "hpssKernelHarmonic"},
+     {"kernel_size_percussive", "hpssKernelPercussive"}}};
 /// The core names for the mel range, as the mel requests spell them.
 inline constexpr std::array<sonare::util::check::MemberKey, 2> kMelRangeKeys{
     {{"fmin", "fminHz"}, {"fmax", "fmaxHz"}}};

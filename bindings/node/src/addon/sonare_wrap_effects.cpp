@@ -40,6 +40,12 @@
 
 using namespace sonare_node;
 
+namespace {
+// The HPSS core names for the two median kernels, as hpss() spells them.
+constexpr std::array<sonare::util::check::MemberKey, 2> kHpssRequestKeys{
+    {{"kernel_size_harmonic", "kernelHarmonic"}, {"kernel_size_percussive", "kernelPercussive"}}};
+}  // namespace
+
 Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
@@ -76,14 +82,15 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   // The plain split stays on sonare::hpss, as the C entry does, so withResidual never moves it.
   if (with_residual) {
-    sonare::HpssAudioResultWithResidual result =
-        sonare::hpss_with_residual(audio, config, stft_config);
+    sonare::HpssAudioResultWithResidual result = sonare::util::check::with_camel_paths(
+        [&] { return sonare::hpss_with_residual(audio, config, stft_config); }, kHpssRequestKeys);
     out.Set("harmonic", copy_out(result.harmonic));
     out.Set("percussive", copy_out(result.percussive));
     out.Set("residual", copy_out(result.residual));
     out.Set("sampleRate", Napi::Number::New(env, result.harmonic.sample_rate()));
   } else {
-    sonare::HpssAudioResult result = sonare::hpss(audio, config, stft_config);
+    sonare::HpssAudioResult result = sonare::util::check::with_camel_paths(
+        [&] { return sonare::hpss(audio, config, stft_config); }, kHpssRequestKeys);
     out.Set("harmonic", copy_out(result.harmonic));
     out.Set("percussive", copy_out(result.percussive));
     out.Set("sampleRate", Napi::Number::New(env, result.harmonic.sample_rate()));

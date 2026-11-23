@@ -102,8 +102,10 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
 
   Audio audio = loadValidatedAudio("samples", samples, rate);
   val out = val::array();
-  for (const PercussiveEvent& event :
-       editing::event_model::extract_percussive_events(audio, config)) {
+  const std::vector<PercussiveEvent> events = sonare::util::check::with_camel_paths(
+      [&] { return editing::event_model::extract_percussive_events(audio, config); },
+      kPercussiveSeparationKeys);
+  for (const PercussiveEvent& event : events) {
     out.call<void>("push", percussiveEventToVal(event));
   }
   return out;
@@ -124,7 +126,9 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
   }
 
   Audio audio = loadValidatedAudio("samples", samples, rate);
-  Audio result = editing::event_model::render_percussive_events(audio, core_events, config);
+  Audio result = sonare::util::check::with_camel_paths(
+      [&] { return editing::event_model::render_percussive_events(audio, core_events, config); },
+      kPercussiveSeparationKeys);
   return vectorToFloat32Array(result.data(), result.size());
 }
 

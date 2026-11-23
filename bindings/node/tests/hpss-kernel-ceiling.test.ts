@@ -1,10 +1,9 @@
 /**
  * Kernel-size boundary tests for the HPSS entry points of the Node addon.
  *
- * The two median filters each guard their kernel twice with the same error
- * code: once for odd-and-positive, which carries that code's generic message,
- * and once for the ceiling, which names the filter and the ceiling's value.
- * Separating the two is the point — an oversized kernel used to reach the
+ * The core refuses both kernels once, at the separation's entry, as an odd
+ * integer inside a ceiling, and the refusal names the kernel as the caller
+ * spelled it. An oversized kernel used to reach the
  * per-worker allocations, where the refusal depended on whether the host
  * overcommitted, so `OutOfMemory` / `Unknown` are exactly what must never come
  * back and a bare "it throws" would accept them.
@@ -111,8 +110,8 @@ type Direction = 'harmonic' | 'percussive';
 
 const directions: Direction[] = ['harmonic', 'percussive'];
 
-const filterFor = (direction: Direction): string =>
-  direction === 'harmonic' ? 'median_filter_horizontal' : 'median_filter_vertical';
+const hpssKey = (direction: Direction): string =>
+  direction === 'harmonic' ? 'kernelHarmonic' : 'kernelPercussive';
 
 /** Kernel arguments with `direction` set to `value` and the other left at 31. */
 const kernels = (direction: Direction, value: number) => ({
@@ -139,12 +138,10 @@ function expectParameterRefusal(caught: unknown): Error {
   return caught as Error;
 }
 
-/** The refusal names the filter, the value passed, and the ceiling. */
-function expectCeilingRefusal(caught: unknown, direction: Direction, kernel: number): void {
+/** The refusal names the entry, the kernel as the caller spelled it, and the ceiling. */
+function expectKernelRefusal(caught: unknown, entry: string, key: string): void {
   const error = expectParameterRefusal(caught);
-  expect(error.message).toContain(
-    `${filterFor(direction)}: kernel_size ${kernel} exceeds the maximum ${CEILING}`,
-  );
+  expect(error.message).toBe(`${entry}: ${key} must be an odd integer in [1, ${CEILING}]`);
 }
 
 const entries = [
@@ -167,23 +164,23 @@ describe('HPSS kernel ceiling', () => {
         // Each filter carries its own copy of the guard, so one direction says
         // nothing about the other, and each entry point reaches both.
         it(`${entry.label} refuses ${direction} kernel ${kernel} by naming the ceiling`, () => {
-          expectCeilingRefusal(
+          expectKernelRefusal(
             capture(() => entry.run(kernels(direction, kernel))),
-            direction,
-            kernel,
+            'hpss',
+            hpssKey(direction),
           );
         });
       }
 
       for (const kernel of [INT_MAX_MINUS_ONE, CEILING]) {
-        // INT_MAX - 1 and the ceiling's own value are both even, so both die on
-        // odd-and-positive before magnitude is ever considered. The message must
-        // not carry the ceiling, or a test could pass by tripping the wrong guard.
+        // INT_MAX - 1 and the ceiling's own value are both even, and one guard
+        // refuses parity and magnitude together, so they read as the ceiling does.
         it(`${entry.label} refuses even ${direction} kernel ${kernel} for parity`, () => {
-          const error = expectParameterRefusal(
+          expectKernelRefusal(
             capture(() => entry.run(kernels(direction, kernel))),
+            'hpss',
+            hpssKey(direction),
           );
-          expect(error.message).not.toContain('exceeds the maximum');
         });
       }
 
@@ -197,7 +194,7 @@ describe('HPSS kernel ceiling', () => {
           expect(error.message).toContain(
             `${entry.name}: kernel${direction === 'harmonic' ? 'Harmonic' : 'Percussive'} must be an integer in [-2147483648, 2147483647]`,
           );
-          expect(error.message).not.toContain('exceeds the maximum');
+          expect(error.message).not.toContain('must be an odd integer');
         });
 
         it(`${entry.label} never separates a ${direction} kernel of ${passed} as ${wrapsTo}`, () => {
@@ -275,7 +272,7 @@ describe('percussive-event separation kernel', () => {
         expect(error.message).toContain(
           `extractPercussiveEvents: ${key} must be an integer in [-2147483648, 2147483647]`,
         );
-        expect(error.message).not.toContain('exceeds the maximum');
+        expect(error.message).not.toContain('must be an odd integer');
       });
 
       it(`never separates a ${direction} kernel of ${passed} as ${wrapsTo}`, () => {
@@ -293,21 +290,22 @@ describe('percussive-event separation kernel', () => {
 
     for (const kernel of [INT_MAX, FIRST_ABOVE_CEILING]) {
       it(`refuses ${direction} kernel ${kernel} by naming the ceiling`, () => {
-        expectCeilingRefusal(
+        expectKernelRefusal(
           capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: kernel })),
-          direction,
-          kernel,
+          'extractPercussiveEvents',
+          key,
         );
       });
     }
 
     it(`refuses an even ${direction} kernel for parity`, () => {
-      const error = expectParameterRefusal(
+      expectKernelRefusal(
         capture(() =>
           extractPercussiveEvents({ samples: hits, sampleRate, [key]: INT_MAX_MINUS_ONE }),
         ),
+        'extractPercussiveEvents',
+        key,
       );
-      expect(error.message).not.toContain('exceeds the maximum');
     });
 
     it(`refuses a negative ${direction} kernel`, () => {

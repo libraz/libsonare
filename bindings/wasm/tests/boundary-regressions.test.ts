@@ -75,10 +75,10 @@ describe('boundary regressions (WASM)', () => {
     const cq = new Float32Array(12 * 4).fill(0.5);
     cq[5] = Number.NaN;
     expect(() => module.cqtToAudio(cq, 12, 4, 8000, 128, 130.8128, 12, 1)).toThrow(
-      /griffinlim_cqt: magnitude contains a non-finite value/,
+      /cqtToAudio: magnitude contains a non-finite value/,
     );
     expect(() => module.vqtToAudio(cq, 12, 4, 8000, 128, 130.8128, 12, 24, 1)).toThrow(
-      /griffinlim_vqt: magnitude contains a non-finite value/,
+      /vqtToAudio: magnitude contains a non-finite value/,
     );
   });
 
