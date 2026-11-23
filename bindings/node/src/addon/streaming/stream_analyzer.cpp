@@ -152,6 +152,25 @@ bool ParseWindowOption(const Napi::Object& options, Napi::Env env, sonare::Windo
   return true;
 }
 
+// A stream root of -1 is the core's "unknown"; any other value outside the twelve has no name.
+int StreamPitchClass(Napi::Env env, int root) {
+  if (root < -1 || root > static_cast<int>(sonare::PitchClass::B)) {
+    throw MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                          "unknown pitch class ordinal: " + std::to_string(root));
+  }
+  return root;
+}
+
+// The symbol of a stream chord the core wrote, refusing a root or quality it cannot name; a
+// root of -1 is no chord, whose quality the core may leave at -1.
+Napi::String StreamChordName(Napi::Env env, int root, int quality) {
+  if (StreamPitchClass(env, root) >= 0 && (quality < 0 || quality >= sonare::kChordQualityCount)) {
+    throw MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                          "unknown chord quality ordinal: " + std::to_string(quality));
+  }
+  return Napi::String::New(env, sonare::chord_symbol(root, quality));
+}
+
 }  // namespace
 
 Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
@@ -397,7 +416,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   estimate.Set("key", Napi::Number::New(env, est.key));
   estimate.Set("keyMinor", Napi::Boolean::New(env, est.key_minor));
   estimate.Set("keyConfidence", Napi::Number::New(env, est.key_confidence));
-  if (est.key >= 0) {
+  if (StreamPitchClass(env, est.key) >= 0) {
     estimate.Set("keyName",
                  Napi::String::New(env, sonare::key_name(est.key, est.key_minor, false)));
     estimate.Set("keyShortName",
@@ -406,8 +425,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     estimate.Set("keyName", env.Null());
     estimate.Set("keyShortName", env.Null());
   }
-  estimate.Set("chordName",
-               Napi::String::New(env, sonare::chord_symbol(est.chord_root, est.chord_quality)));
+  estimate.Set("chordName", StreamChordName(env, est.chord_root, est.chord_quality));
   estimate.Set("chordRoot", Napi::Number::New(env, est.chord_root));
   estimate.Set("chordQuality", Napi::Number::New(env, est.chord_quality));
   estimate.Set("chordConfidence", Napi::Number::New(env, est.chord_confidence));
@@ -421,7 +439,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("quality", Napi::Number::New(env, chord.quality));
     c.Set("startSec", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
-    c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
+    c.Set("name", StreamChordName(env, chord.root, chord.quality));
     chordProgression.Set(static_cast<uint32_t>(i), c);
   }
   estimate.Set("chordProgression", chordProgression);
@@ -435,7 +453,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("quality", Napi::Number::New(env, chord.quality));
     c.Set("startSec", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
-    c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
+    c.Set("name", StreamChordName(env, chord.root, chord.quality));
     barChordProgression.Set(static_cast<uint32_t>(i), c);
   }
   estimate.Set("barChordProgression", barChordProgression);
@@ -451,7 +469,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("quality", Napi::Number::New(env, chord.quality));
     c.Set("startSec", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
-    c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
+    c.Set("name", StreamChordName(env, chord.root, chord.quality));
     votedPattern.Set(static_cast<uint32_t>(i), c);
   }
   estimate.Set("votedPattern", votedPattern);

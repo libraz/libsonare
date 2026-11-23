@@ -54,6 +54,26 @@ QuantizeConfig quantizeConfigFromVal(const val& config) {
   return qconfig;
 }
 
+/// @brief A stream root of -1 is the core's "unknown"; any other value outside the twelve has no
+/// name.
+int streamPitchClass(int root) {
+  if (root < -1 || root > static_cast<int>(PitchClass::B)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "unknown pitch class ordinal: " + std::to_string(root));
+  }
+  return root;
+}
+
+/// @brief The symbol of a stream chord the core wrote, refusing a root or quality it cannot name;
+/// a root of -1 is no chord, whose quality the core may leave at -1.
+std::string streamChordName(int root, int quality) {
+  if (streamPitchClass(root) >= 0 && (quality < 0 || quality >= sonare::kChordQualityCount)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "unknown chord quality ordinal: " + std::to_string(quality));
+  }
+  return chord_symbol(root, quality);
+}
+
 /// @brief Builds a chord entry; barIndex, when given, is set first.
 val chordEntryToVal(int root, int quality, float start_time, float confidence,
                     const int* bar_index = nullptr) {
@@ -65,7 +85,7 @@ val chordEntryToVal(int root, int quality, float start_time, float confidence,
   c.set("quality", quality);
   c.set("startSec", start_time);
   c.set("confidence", confidence);
-  c.set("name", chord_symbol(root, quality));
+  c.set("name", streamChordName(root, quality));
   return c;
 }
 
@@ -279,14 +299,14 @@ class StreamAnalyzerWrapper {
     estimate.set("key", s.estimate.key);
     estimate.set("keyMinor", s.estimate.key_minor);
     estimate.set("keyConfidence", s.estimate.key_confidence);
-    if (s.estimate.key >= 0) {
+    if (streamPitchClass(s.estimate.key) >= 0) {
       estimate.set("keyName", key_name(s.estimate.key, s.estimate.key_minor, false));
       estimate.set("keyShortName", key_name(s.estimate.key, s.estimate.key_minor, true));
     } else {
       estimate.set("keyName", val::null());
       estimate.set("keyShortName", val::null());
     }
-    estimate.set("chordName", chord_symbol(s.estimate.chord_root, s.estimate.chord_quality));
+    estimate.set("chordName", streamChordName(s.estimate.chord_root, s.estimate.chord_quality));
     estimate.set("chordRoot", s.estimate.chord_root);
     estimate.set("chordQuality", s.estimate.chord_quality);
     estimate.set("chordConfidence", s.estimate.chord_confidence);
