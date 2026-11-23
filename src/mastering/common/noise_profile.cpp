@@ -130,67 +130,51 @@ LinkedSpectra LinkedSpectra::compute(const Audio* const* channels, std::size_t c
 
   LinkedSpectra linked;
   linked.spectra_.reserve(channel_count);
+  std::vector<float> channel_power;
   for (size_t c = 0; c < channel_count; ++c) {
-    linked.spectra_.push_back(Spectrogram::compute(*channels[c], config));
-  }
-  if (linked.spectra_.front().empty()) return linked;
-
-  const size_t cells = linked.spectra_.front().power().size();
-  linked.summed_power_.assign(cells, 0.0f);
-  for (const Spectrogram& spectrum : linked.spectra_) {
-    const std::vector<float>& channel_power = spectrum.power();
-    for (size_t i = 0; i < cells; ++i) linked.summed_power_[i] += channel_power[i];
+    Spectrogram spectrum = Spectrogram::compute(*channels[c], config);
+    if (c == 0) {
+      if (spectrum.empty()) {
+        linked.spectra_.resize(channel_count);
+        return linked;
+      }
+      linked.n_bins_ = spectrum.n_bins();
+      linked.n_frames_ = spectrum.n_frames();
+      linked.n_fft_ = spectrum.n_fft();
+      linked.hop_length_ = spectrum.hop_length();
+      linked.sample_rate_ = spectrum.sample_rate();
+      linked.win_length_ = spectrum.win_length();
+      linked.center_ = spectrum.center();
+      linked.window_ = spectrum.window();
+    }
+    linked.spectra_.push_back(std::move(spectrum).release_complex());
+    // The same power the spectrogram would cache, summed and dropped rather than kept per channel.
+    detail::fill_power_cache(linked.spectra_.back(), {}, channel_power);
+    if (c == 0) linked.summed_power_.assign(channel_power.size(), 0.0f);
+    for (size_t i = 0; i < channel_power.size(); ++i) linked.summed_power_[i] += channel_power[i];
   }
   return linked;
 }
 
-bool LinkedSpectra::empty() const { return spectra_.empty() || spectra_.front().empty(); }
-
-int LinkedSpectra::n_bins() const { return spectra_.empty() ? 0 : spectra_.front().n_bins(); }
-
-int LinkedSpectra::n_frames() const { return spectra_.empty() ? 0 : spectra_.front().n_frames(); }
-
-std::vector<double> LinkedSpectra::magnitude_power_sum() const {
-  if (empty()) return {};
-  const size_t cells = summed_power_.size();
-  std::vector<double> sum(cells, 0.0);
-  for (const Spectrogram& spectrum : spectra_) {
-    const std::complex<float>* data = spectrum.complex_data();
-    for (size_t i = 0; i < cells; ++i) {
-      const double magnitude = std::abs(data[i]);
-      sum[i] += magnitude * magnitude;
+std::vector<std::vector<std::complex<float>>> LinkedSpectra::take_masked(const double* gains) {
+  if (empty() || gains == nullptr) return {};
+  for (std::vector<std::complex<float>>& channel : spectra_) {
+    for (size_t i = 0; i < channel.size(); ++i) {
+      channel[i] = {static_cast<float>(channel[i].real() * gains[i]),
+                    static_cast<float>(channel[i].imag() * gains[i])};
     }
   }
-  return sum;
-}
-
-std::vector<std::vector<std::complex<float>>> LinkedSpectra::masked(const double* gains) const {
-  std::vector<std::vector<std::complex<float>>> out;
-  if (empty() || gains == nullptr) return out;
-  const size_t cells = summed_power_.size();
-  out.reserve(spectra_.size());
-  for (const Spectrogram& spectrum : spectra_) {
-    const std::complex<float>* data = spectrum.complex_data();
-    std::vector<std::complex<float>> channel(cells);
-    for (size_t i = 0; i < cells; ++i) {
-      channel[i] = {static_cast<float>(data[i].real() * gains[i]),
-                    static_cast<float>(data[i].imag() * gains[i])};
-    }
-    out.push_back(std::move(channel));
-  }
-  return out;
+  return std::move(spectra_);
 }
 
 std::vector<Audio> LinkedSpectra::resynthesize(
-    const std::vector<std::vector<std::complex<float>>>& spectra, int out_length) const {
+    std::vector<std::vector<std::complex<float>>>&& spectra, int out_length) const {
   std::vector<Audio> out;
   out.reserve(spectra.size());
-  for (size_t c = 0; c < spectra.size(); ++c) {
-    const Spectrogram& reference = spectra_[c];
-    const Spectrogram clean = Spectrogram::from_complex(
-        spectra[c].data(), reference.n_bins(), reference.n_frames(), reference.n_fft(),
-        reference.hop_length(), reference.sample_rate(), reference.window(), reference.center(),
-        reference.win_length());
+  for (std::vector<std::complex<float>>& spectrum : spectra) {
+    const Spectrogram clean =
+        Spectrogram::from_complex(std::move(spectrum), n_bins_, n_frames_, n_fft_, hop_length_,
+                                  sample_rate_, window_, center_, win_length_);
     out.push_back(clean.to_audio(out_length));
   }
   return out;

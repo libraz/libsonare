@@ -455,6 +455,15 @@ MatrixView<std::complex<float>> Spectrogram::complex_view() const {
 
 const std::complex<float>* Spectrogram::complex_data() const { return data_.data(); }
 
+std::vector<std::complex<float>> Spectrogram::release_complex() && {
+  std::vector<std::complex<float>> data = std::move(data_);
+  data_.clear();
+  std::vector<float>().swap(magnitude_cache_);
+  std::vector<float>().swap(power_cache_);
+  n_frames_ = 0;
+  return data;
+}
+
 const std::vector<float>& Spectrogram::magnitude() const {
   if (magnitude_cache_.empty() && !data_.empty()) {
     detail::fill_magnitude_cache(data_, power_cache_, magnitude_cache_);

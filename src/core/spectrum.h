@@ -301,6 +301,11 @@ class Spectrogram {
   /// @details Computed lazily and cached.
   const std::vector<float>& power() const;
 
+  /// @brief Moves the complex spectrum out, the counterpart of the owning @ref from_complex.
+  /// @details For a caller that edits the spectrum in place rather than copying it; this
+  ///          spectrogram is left empty, with no frames, data or caches.
+  std::vector<std::complex<float>> release_complex() &&;
+
   /// @brief Runs @p fn over the magnitude spectrum in bounded frame tiles.
   /// @details Lets a single-pass consumer read magnitude without materializing the
   ///          whole [n_bins x n_frames] array, which for a full track is the larger

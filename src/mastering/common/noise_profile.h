@@ -97,33 +97,37 @@ class LinkedSpectra {
   static LinkedSpectra compute(const Audio* const* channels, std::size_t channel_count,
                                const StftConfig& config);
 
-  bool empty() const;
+  bool empty() const { return n_bins_ == 0 || n_frames_ == 0; }
   std::size_t channel_count() const noexcept { return spectra_.size(); }
-  int n_bins() const;
-  int n_frames() const;
-  const Spectrogram& channel(std::size_t index) const { return spectra_[index]; }
+  int n_bins() const { return n_bins_; }
+  int n_frames() const { return n_frames_; }
 
-  /// @brief Sum over channels of each channel's cached re^2 + im^2 power.
+  /// @brief Sum over channels of each channel's re^2 + im^2 power.
   const std::vector<float>& summed_power() const noexcept { return summed_power_; }
 
-  /// @brief Sum over channels of |z|^2, squared from the magnitude.
-  /// @details Not derivable from @ref summed_power: `abs(z)^2` and `re^2 + im^2`
-  ///   part company in the last bits, and the denoiser's gain recursion is
-  ///   defined by the first while its noise estimator reads the second.
-  std::vector<double> magnitude_power_sum() const;
-
-  /// @brief Applies one real gain per (bin, frame) to every channel's spectrum.
+  /// @brief Applies one real gain per (bin, frame) to every channel's spectrum and hands the
+  ///   spectra over.
+  /// @details Masks in place rather than copying, since a full-track spectrum is the largest
+  ///   buffer a repair holds; the set keeps its geometry and summed power but no spectra.
   /// @param gains [bins x frames] bin-major, same layout as @ref summed_power.
   /// @return One masked complex spectrum per channel.
-  std::vector<std::vector<std::complex<float>>> masked(const double* gains) const;
+  std::vector<std::vector<std::complex<float>>> take_masked(const double* gains);
 
-  /// @brief Resynthesizes per-channel spectra back to @p out_length samples.
-  std::vector<Audio> resynthesize(const std::vector<std::vector<std::complex<float>>>& spectra,
+  /// @brief Resynthesizes per-channel spectra back to @p out_length samples, consuming them.
+  std::vector<Audio> resynthesize(std::vector<std::vector<std::complex<float>>>&& spectra,
                                   int out_length) const;
 
  private:
-  std::vector<Spectrogram> spectra_;
+  std::vector<std::vector<std::complex<float>>> spectra_;
   std::vector<float> summed_power_;
+  int n_bins_ = 0;
+  int n_frames_ = 0;
+  int n_fft_ = 0;
+  int hop_length_ = 0;
+  int sample_rate_ = 0;
+  int win_length_ = 0;
+  bool center_ = true;
+  WindowType window_ = WindowType::Hann;
 };
 
 }  // namespace sonare::mastering::common
