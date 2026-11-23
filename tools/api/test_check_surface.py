@@ -597,6 +597,24 @@ class Conventions(CheckerCase):
                 lines,
             )
 
+    def test_zero_candidates_from_an_excluded_surface_is_not_applicable(self):
+        # record-input-pair judges Python but takes its candidates from Node and WASM.
+        zero = "    FAIL record-input-pair: no candidates on the selected surfaces; its extractor found nothing"
+        _, lines = self.run_check("--surface", "python")
+        self.assertIn("  check record-input-pair: checked 0, violations 0", lines)
+        self.assertNotIn(zero, lines)
+        self.assertIn(
+            "    not compared: record-input-pair (not applicable to the selected surfaces:"
+            " its candidates come from node, wasm)",
+            lines,
+        )
+        # A full run reaching no candidates still fails.
+        for surface in ("node", "wasm"):
+            self.drop(surface, "type", "BpmMarkerInput")
+        code, lines = self.run_check()
+        self.assertEqual(code, 1)
+        self.assertIn(zero, lines)
+
     def test_unused_allowlist_entry_fails_audit(self):
         allow = self.write(
             "allow.toml",

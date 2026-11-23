@@ -2975,6 +2975,8 @@ class Check:
     id: str
     surfaces: tuple[str, ...]
     fn: object
+    # Surfaces the candidates are drawn from, when not the surfaces judged.
+    reads: tuple[str, ...] | None = None
 
 
 # Checks that judge a name; a member mirroring a platform interface keeps the platform's name.
@@ -3006,7 +3008,7 @@ CHECKS: tuple[Check, ...] = (
     Check("teardown:python", ("python",), chk_teardown_python),
     Check("no-internal-types", ("wasm",), chk_no_internal_types),
     Check("worklet-scope", JS, chk_worklet_scope),
-    Check("record-input-pair", ("python",), chk_record_input_pair),
+    Check("record-input-pair", ("python",), chk_record_input_pair, reads=JS),
     Check("progress-callback", LANG, chk_progress_callback),
     Check("options-struct:suffix", ("c",), chk_options_suffix),
     Check("options-struct:struct-size", ("c",), chk_options_struct_size),
@@ -3462,8 +3464,14 @@ def run(args) -> tuple[int, list[str], dict]:
         out += [f"    platform mirror: {m}" for m in sorted(mirrored)]
         if chk.id == "doc-comments":
             out.append(f"    metadata-only doc: {sum(v['message'] == _META_ONLY for v in viol)}")
+        unread = sorted(set(chk.reads) - set(selected)) if chk.reads else []
         if n == 0 and narrowed:
             out.append(f"    not compared: {chk.id} (no candidates under this filter)")
+        elif n == 0 and unread:
+            out.append(
+                f"    not compared: {chk.id} (not applicable to the selected surfaces:"
+                f" its candidates come from {', '.join(unread)})"
+            )
         elif n == 0:
             out.append(
                 f"    FAIL {chk.id}: no candidates on the selected surfaces; its extractor found nothing"
