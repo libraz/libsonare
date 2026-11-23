@@ -1,10 +1,21 @@
 /**
  * `voiced` and `voicedProb` are two spellings of one input, so every entry reading a voicing track
- * refuses both given together and both omitted, worded as the C ABI words the relation.
+ * refuses both given together, worded as the C ABI words the relation. The note entries also refuse
+ * both omitted; pitch correction reads that as every frame voiced.
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractNotes, mergeNotes, noteSegments, splitNote } from '../src/index.js';
+import {
+  extractNotes,
+  mergeNotes,
+  noteSegments,
+  pitchCorrectTimevarying,
+  splitNote,
+} from '../src/index.js';
+import { addon } from '../src/native.js';
+
+/* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
+const native = addon as any;
 
 const caught = (run: () => unknown): Error => {
   try {
@@ -56,5 +67,46 @@ describe('voiced and voicedProb are one input', () => {
   it.each(entries)('%s reads either one alone', (_entry, call) => {
     expect(() => call({ voiced })).not.toThrow();
     expect(() => call({ voicedProb })).not.toThrow();
+  });
+});
+
+describe('pitch correction takes at most one of voiced and voicedProb', () => {
+  const correct = (voicing: Voicing) =>
+    pitchCorrectTimevarying({
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      f0Hz,
+      hopLength: 512,
+      ...voicing,
+    } as never);
+
+  it('refuses both given together', () => {
+    const error = caught(() => correct({ voiced, voicedProb }));
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error.message).toBe(
+      'pitchCorrectTimevarying: voiced must be omitted when voicedProb is given',
+    );
+  });
+
+  it('reads every frame as voiced when both are omitted, and either one alone', () => {
+    expect(correct({})).toHaveLength(track.samples.length);
+    expect(correct({ voiced })).toEqual(correct({}));
+    expect(correct({ voicedProb })).toEqual(correct({}));
+  });
+
+  it('refuses both on the raw MIDI-target entry, which bypasses the C ABI', () => {
+    const error = caught(() =>
+      native.pitchCorrectToMidiTimevarying(
+        track.samples,
+        track.sampleRate,
+        f0Hz,
+        69,
+        512,
+        voiced,
+        voicedProb,
+      ),
+    );
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error.message).toMatch(/voiced must be omitted when voicedProb is given$/);
   });
 });

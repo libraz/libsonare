@@ -193,9 +193,9 @@ export function pitchCorrectToMidi(...args: unknown[]): Float32Array {
  * voiced frame, so vibrato/drift in the source is tracked rather than flattened.
  * `targetMode` selects a fixed-MIDI target (`'midi'`, default; `targetMidi`) or
  * scale quantisation (`'scale'`). For a constant transpose use
- * {@link pitchCorrectToMidi}. When `voiced` is supplied (truthy = voiced), it
- * takes precedence over `voicedProb`; omitting it or passing `null` uses the
- * probability array. When both are omitted, every frame is treated as voiced.
+ * {@link pitchCorrectToMidi}. At most one of `voiced` (truthy = voiced)
+ * and `voicedProb` is given; both together is a TypeError, and with neither
+ * every frame is treated as voiced.
  * An `f0Hz` NaN is accepted only for a frame marked unvoiced, matching pYIN
  * output; the `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be
  * passed through directly.
@@ -233,7 +233,7 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
     const nativeOptions = {
       ...rest,
       voiced: voicedF32,
-      voicedProb: r.voiced == null ? (voicedProb ?? undefined) : undefined,
+      voicedProb: voicedProb ?? undefined,
     };
     return getSonareModule().pitchCorrectTimevarying(
       r.samples,

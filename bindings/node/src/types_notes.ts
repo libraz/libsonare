@@ -54,14 +54,13 @@ export interface PitchCorrectOptions {
   /** Corrections below this are bypassed to preserve vibrato (cents). Default 20. */
   vibratoThresholdCents?: number;
   /**
-   * Per-frame voiced flags (truthy = voiced). Explicit flags take precedence
-   * over `voicedProb`; omit it to use that probability array, and
-   * with both omitted every frame is treated as voiced.
+   * Per-frame voiced flags (truthy = voiced). Give at most one of `voiced` and
+   * `voicedProb`: both together is a TypeError, and with both omitted every
+   * frame is treated as voiced.
    */
   voiced?: VoicedFlags;
   /**
-   * Per-frame voicing probability in `[0, 1]`. It is read only when `voiced`
-   * is omitted, and is ignored when explicit flags are supplied.
+   * Per-frame voicing probability in `[0, 1]`, given in place of `voiced`.
    */
   voicedProb?: Float32Array;
 }
@@ -134,8 +133,8 @@ export interface NoteExtractorOptions {
   /** Reference pitch the `medianCents` of each note is measured against. Default 440. */
   referenceHz?: number;
   /**
-   * Value of `voicedProb` at or above which a frame counts as voiced. Read only
-   * when `voiced` is omitted. Default 0.5.
+   * Value of `voicedProb` at or above which a frame counts as voiced. Applies
+   * to `voicedProb` only. Default 0.5.
    *
    * pYIN's `voicedProb` is a frame's voiced observation mass and rises with F0
    * for a fixed frame length, so this default silently drops low registers —

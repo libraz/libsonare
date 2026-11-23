@@ -17,6 +17,7 @@
 #include "editing/pitch_editor/note_segmenter.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -145,8 +146,7 @@ editing::pitch_editor::F0Track buildF0Track(int sample_rate, int hop_length,
   track.voiced.resize(n_frames);
   track.voiced_prob.resize(n_frames);
   for (size_t i = 0; i < n_frames; ++i) {
-    // Absent both voiced and voicedProb, every frame defaults to voiced,
-    // matching the C ABI's is_voiced_frame fallback chain.
+    // Absent both voiced and voicedProb, every frame defaults to voiced, as in the C ABI.
     const bool is_voiced =
         has_voiced ? (voiced_vec[i] != 0.0f) : (has_prob ? (prob_vec[i] >= 0.5f) : true);
     track.voiced[i] = is_voiced;
@@ -164,9 +164,12 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   const float target_midi = checkedFloatFromVal(target_midi_val, "targetMidi");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
-  // Explicit voiced flags own the decision; do not inspect or copy the
-  // companion probability array when they are present.
-  const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  // Two spellings of one input, worded as the C ABI words it; neither reads every frame as voiced.
+  if (has_voiced && has_prob) {
+    sonare::util::check::refuse_relation({"voicedProb", "voiced"},
+                                         "{1} {must_be_absent} when {0} {is_present}");
+  }
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);
   accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", &cumulative_count);
@@ -212,7 +215,12 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     voiced = options["voiced"];
     voiced_prob = options["voicedProb"];
     has_voiced = !voiced.isUndefined() && !voiced.isNull();
-    has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
+    has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  }
+  // Two spellings of one input, worded as the C ABI words it; neither reads every frame as voiced.
+  if (has_voiced && has_prob) {
+    sonare::util::check::refuse_relation({"voicedProb", "voiced"},
+                                         "{1} {must_be_absent} when {0} {is_present}");
   }
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(samples, "samples", &cumulative_count);

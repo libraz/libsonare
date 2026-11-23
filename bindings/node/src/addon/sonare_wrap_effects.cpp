@@ -36,6 +36,7 @@
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/constants.h"
+#include "util/parameter_checks.h"
 
 using namespace sonare_node;
 
@@ -265,10 +266,12 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   track.voiced_prob.resize(n_frames);
 
   const bool has_voiced = info.Length() > 5 && IsInt32Array(info[5]);
-  // An explicit voiced track owns the decision and makes voicedProb irrelevant;
-  // leave the ignored array untouched so malformed values and lengths cannot
-  // leak into the core validator.
-  const bool has_prob = !has_voiced && info.Length() > 6 && IsFloat32Array(info[6]);
+  const bool has_prob = info.Length() > 6 && IsFloat32Array(info[6]);
+  // Two spellings of one input, worded as the C ABI words it; neither reads every frame as voiced.
+  if (has_voiced && has_prob) {
+    sonare::util::check::refuse_relation({"voicedProb", "voiced"},
+                                         "{1} {must_be_absent} when {0} {is_present}");
+  }
   Napi::Int32Array voiced_arr;
   Napi::Float32Array prob_arr;
   if (has_voiced) voiced_arr = info[5].As<Napi::Int32Array>();
@@ -280,11 +283,8 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
     return env.Undefined();
   }
   for (size_t i = 0; i < n_frames; ++i) {
-    // voiced wins when present; absent that, voicedProb decides (>= 0.5 is
-    // voiced, matching sonare_note_segments' own voiced_threshold default);
-    // with neither, every frame defaults to voiced. Matches the C ABI's
-    // sonare_pitch_correct_to_midi_timevarying, which this direct core call
-    // otherwise bypasses.
+    // voiced or voicedProb (>= 0.5 is voiced) decides; with neither every frame is voiced, as in
+    // sonare_pitch_correct_to_midi_timevarying, which this direct core call otherwise bypasses.
     const bool is_voiced =
         has_voiced ? (voiced_arr[i] != 0) : (has_prob ? (prob_arr[i] >= 0.5f) : true);
     track.voiced[i] = is_voiced;
@@ -370,15 +370,18 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
                     sonare_node::ElementData(arr) + arr.ElementLength());
       voiced_ptr = sonare_node::ElementData(voiced);
     }
-    if (!voiced_ptr && opts.Has("voicedProb") && IsFloat32Array(opts.Get("voicedProb"))) {
+    if (opts.Has("voicedProb") && IsFloat32Array(opts.Get("voicedProb"))) {
       auto arr = opts.Get("voicedProb").As<Napi::Float32Array>();
-      if (arr.ElementLength() != n_frames) {
+      if (!voiced_ptr && arr.ElementLength() != n_frames) {
         Napi::RangeError::New(env, "voicedProb must match f0Hz length")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
       voiced_prob.assign(sonare_node::ElementData(arr),
                          sonare_node::ElementData(arr) + arr.ElementLength());
+      // Beside voiced the core refuses the pair before reading either, so the length is not
+      // checked.
+      voiced_prob.resize(n_frames);
       prob_ptr = sonare_node::ElementData(voiced_prob);
     }
   }

@@ -129,16 +129,16 @@ describe('editing effects', () => {
     expect(result.length).toBe(tone.length);
     expect(result.every((x) => Number.isFinite(x))).toBe(true);
 
-    // Optional voiced / voicedProb arrays are accepted.
+    // An optional voiced or voicedProb array is accepted, one at a time.
     const voiced = new Int32Array(nFrames).fill(1);
     const voicedProb = new Float32Array(nFrames).fill(1);
-    const result2 = midiCorrection(tone, f0, 71, SR, hop, voiced, voicedProb);
-    expect(result2.length).toBe(tone.length);
+    expect(midiCorrection(tone, f0, 71, SR, hop, voiced)).toHaveLength(tone.length);
+    expect(midiCorrection(tone, f0, 71, SR, hop, undefined, voicedProb)).toHaveLength(tone.length);
 
     // pYIN emits NaN F0 for unvoiced frames by default.
     f0[0] = Number.NaN;
     voiced[0] = 0;
-    const pyinResult = midiCorrection(tone, f0, 71, SR, hop, voiced, voicedProb);
+    const pyinResult = midiCorrection(tone, f0, 71, SR, hop, voiced);
     expect(pyinResult.every((x) => Number.isFinite(x))).toBe(true);
   });
 
@@ -294,29 +294,27 @@ describe('editing effects', () => {
     );
   });
 
-  it('explicit voiced flags ignore invalid voicedProb shape and values', () => {
+  it('refuses any voicedProb beside explicit voiced flags, before reading it', () => {
     const hop = 512;
     const nFrames = Math.floor(tone.length / hop) + 1;
     const f0 = new Float32Array(nFrames).fill(440);
     const voiced = new Int32Array(nFrames).fill(1);
-    const withoutProb = midiCorrection(tone, f0, 71, SR, hop, voiced);
-    const generalWithoutProb = contourCorrection(tone, f0, SR, hop, { voiced });
-
-    // Once voiced is supplied, voicedProb is ignored completely, including its
-    // shape and value-domain checks.
-    const invalidProbabilities = [
+    const probabilities = [
+      new Float32Array(nFrames).fill(1),
       new Float32Array(nFrames + 1).fill(Number.NaN),
       new Float32Array(nFrames).fill(-0.1),
       new Float32Array(nFrames).fill(1.1),
     ];
-    for (const invalidProb of invalidProbabilities) {
-      const withInvalidProb = midiCorrection(tone, f0, 71, SR, hop, voiced, invalidProb);
-      const generalWithInvalidProb = contourCorrection(tone, f0, SR, hop, {
-        voiced,
-        voicedProb: invalidProb,
-      });
-      expect(Array.from(withInvalidProb)).toEqual(Array.from(withoutProb));
-      expect(Array.from(generalWithInvalidProb)).toEqual(Array.from(generalWithoutProb));
+    for (const voicedProb of probabilities) {
+      for (const call of [
+        () => midiCorrection(tone, f0, 71, SR, hop, voiced, voicedProb),
+        () => contourCorrection(tone, f0, SR, hop, { voiced, voicedProb }),
+      ]) {
+        expect(call).toThrow(TypeError);
+        expect(call).toThrow(
+          'pitchCorrectTimevarying: voiced must be omitted when voicedProb is given',
+        );
+      }
     }
 
     // With no explicit flags, invalid probabilities remain rejected.

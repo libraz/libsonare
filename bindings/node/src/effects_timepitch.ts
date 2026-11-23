@@ -193,10 +193,9 @@ export function pitchCorrectToMidi(...args: unknown[]): Float32Array {
  * `targetMidi`) or scale quantisation (`'scale'`); the retune knobs
  * (`retuneAmount`, `maxCorrectionSemitones`, `retuneSpeedMs`,
  * `vibratoThresholdCents`) shape natural-vs-robotic correction. For a constant
- * transpose use {@link pitchCorrectToMidi}. When `voiced` is supplied (truthy =
- * voiced), it takes precedence over `voicedProb`; omitting it or passing `null`
- * uses the probability array. When both are omitted, every frame is treated as
- * voiced. A false `voiced` entry suppresses a positive F0 candidate, while a
+ * transpose use {@link pitchCorrectToMidi}. At most one of `voiced` (truthy =
+ * voiced) and `voicedProb` is given; both together is a TypeError, and with
+ * neither every frame is treated as voiced. A false `voiced` entry suppresses a positive F0 candidate, while a
  * voiced frame whose F0 is non-positive or non-finite is rejected as an invalid
  * parameter. An `f0Hz` NaN is accepted only for a frame marked unvoiced. The
  * `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be passed

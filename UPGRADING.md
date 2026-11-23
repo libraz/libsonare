@@ -5557,6 +5557,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `PhaseVocoderRequest.hopLength` | an omitted hopLength runs as nFft / 4, rounded down, like the other resynthesizing effects (was a fixed 512); nFft is refused outside the even integers in [4, 2147483646] with 'nFft must be an even integer in [4, 2147483646]' before the core |
 | `PitchCorrectOptions.mode` | `PitchCorrectOptions.targetMode`: mode -> targetMode (type PitchTargetMode = 'midi'\|'scale') |
 | `PitchCorrectOptions.referenceMidi` | `PitchCorrectOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
+| `PitchCorrectOptions.voiced` | voicedProb given beside voiced is a TypeError on pitchCorrectTimevarying (voiced was read and voicedProb ignored); with neither, every frame still reads as voiced |
 | `PitchCorrectTimevaryingRequest.mode` | `PitchCorrectTimevaryingRequest.targetMode` |
 | `PitchCorrectTimevaryingRequest.referenceMidi` | `PitchCorrectTimevaryingRequest.scaleReferenceMidi` |
 | `PitchCorrectToMidiRequest.currentMidi` | optional -> required |
@@ -10198,6 +10199,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `PitchCorrectOptions.mode` | `PitchCorrectOptions.targetMode`: mode -> targetMode (type PitchTargetMode = 'midi'\|'scale') |
 | `PitchCorrectOptions.referenceMidi` (`./analysis`) | `PitchCorrectOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
 | `PitchCorrectOptions.referenceMidi` | `PitchCorrectOptions.scaleReferenceMidi`: referenceMidi -> scaleReferenceMidi |
+| `PitchCorrectOptions.voiced` | voicedProb given beside voiced is a TypeError on pitchCorrectTimevarying (voiced was read and voicedProb ignored); with neither, every frame still reads as voiced |
 | `PitchCorrectTimevaryingRequest.mode` | `PitchCorrectTimevaryingRequest.targetMode` |
 | `PitchCorrectTimevaryingRequest.referenceMidi` | `PitchCorrectTimevaryingRequest.scaleReferenceMidi` |
 | `PitchCorrectToMidiRequest.currentMidi` | optional -> required |

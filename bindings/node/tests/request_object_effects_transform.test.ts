@@ -45,12 +45,11 @@ describe('effects transform request-object compatibility', () => {
     const hopLength = 512;
     const f0Hz = new Float32Array(Math.floor(samples.length / hopLength) + 1).fill(440);
     const voiced = new Int32Array(f0Hz.length).fill(1);
-    const voicedProb = new Float32Array(f0Hz.length).fill(1);
 
     expect(pitchCorrectToMidi({ samples, sampleRate, currentMidi: 69, targetMidi: 71 })).toEqual(
       pitchCorrectToMidi(samples, sampleRate, { currentMidi: 69, targetMidi: 71 }),
     );
-    const voicedRequest = { f0Hz, targetMidi: 71, hopLength, voiced, voicedProb };
+    const voicedRequest = { f0Hz, targetMidi: 71, hopLength, voiced };
     expect(pitchCorrectTimevarying({ samples, sampleRate, ...voicedRequest })).toEqual(
       pitchCorrectTimevarying(samples, sampleRate, voicedRequest),
     );
