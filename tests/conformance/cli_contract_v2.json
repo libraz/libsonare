@@ -9998,7 +9998,7 @@
       "payloads": {
         "success": {
           "keys": {
-            "bpm": "number",
+            "bpm": "measured",
             "bpm_confidence": "number",
             "key": {
               "keys": {
@@ -10053,11 +10053,11 @@
             },
             "timbre": {
               "keys": {
-                "brightness": "number",
-                "warmth": "number",
-                "density": "number",
-                "roughness": "number",
-                "complexity": "number"
+                "brightness": "measured",
+                "warmth": "measured",
+                "density": "measured",
+                "roughness": "measured",
+                "complexity": "measured"
               }
             },
             "dynamics": {
@@ -10070,9 +10070,9 @@
             },
             "rhythm": {
               "keys": {
-                "syncopation": "number",
+                "syncopation": "measured",
                 "groove_type": "string",
-                "pattern_regularity": "number"
+                "pattern_regularity": "measured"
               }
             },
             "form": "string"
@@ -12351,7 +12351,7 @@
       "payloads": {
         "success": {
           "keys": {
-            "bpm": "number",
+            "bpm": "measured",
             "time_signature": {
               "keys": {
                 "numerator": "integer",
@@ -12360,9 +12360,9 @@
               }
             },
             "groove_type": "string",
-            "syncopation": "number",
-            "pattern_regularity": "number",
-            "tempo_stability": "number",
+            "syncopation": "measured",
+            "pattern_regularity": "measured",
+            "tempo_stability": "measured",
             "beat_intervals": {
               "keys": {
                 "count": "integer",
@@ -15105,7 +15105,7 @@
       "payloads": {
         "success": {
           "keys": {
-            "bpm": "number"
+            "bpm": "measured"
           }
         }
       },
@@ -16083,11 +16083,11 @@
       "payloads": {
         "success": {
           "keys": {
-            "brightness": "number",
-            "warmth": "number",
-            "density": "number",
-            "roughness": "number",
-            "complexity": "number",
+            "brightness": "measured",
+            "warmth": "measured",
+            "density": "measured",
+            "roughness": "measured",
+            "complexity": "measured",
             "spectral_centroid": {
               "keys": {
                 "count": "integer",
@@ -19780,7 +19780,7 @@
       "payloads": {
         "success": {
           "keys": {
-            "bpm": "number",
+            "bpm": "measured",
             "bpm_confidence": "number",
             "duration_sec": "number",
             "dynamics": "any",
@@ -21425,7 +21425,7 @@
             "profile": {
               "keys": {
                 "attack_per_second": "number",
-                "bpm": "number",
+                "bpm": "measured",
                 "bpm_confidence": "number",
                 "crest_factor_db": "number",
                 "duration_sec": "number",
@@ -26769,10 +26769,10 @@
       "payloads": {
         "success": {
           "keys": {
-            "pitch_range_octaves": "number",
-            "mean_frequency_hz": "number",
-            "pitch_stability": "number",
-            "vibrato_rate_hz": "number",
+            "pitch_range_octaves": "measured",
+            "mean_frequency_hz": "measured",
+            "pitch_stability": "measured",
+            "vibrato_rate_hz": "measured",
             "pitch_count": "integer"
           }
         }

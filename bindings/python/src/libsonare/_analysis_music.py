@@ -27,6 +27,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _mapping_keys,
+    _measured,
     _mode_value,
     _section_type_token,
     _to_c_float,
@@ -571,10 +572,10 @@ def analyze_melody(
                 )
                 for i in range(out.point_count)
             ],
-            pitch_range_octaves=float(out.pitch_range_octaves),
-            pitch_stability=float(out.pitch_stability),
-            mean_frequency_hz=float(out.mean_frequency_hz),
-            vibrato_rate_hz=float(out.vibrato_rate_hz),
+            pitch_range_octaves=_measured(out.pitch_range_octaves),
+            pitch_stability=_measured(out.pitch_stability),
+            mean_frequency_hz=_measured(out.mean_frequency_hz),
+            vibrato_rate_hz=_measured(out.vibrato_rate_hz),
         )
     finally:
         lib.sonare_free_melody_result(ctypes.byref(out))

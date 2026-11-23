@@ -40,6 +40,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _measured,
     _measured_level,
     _narrow_int,
     _optional_from_c_float_array,
@@ -223,7 +224,8 @@ def analyze(
     Returns:
         :class:`libsonare.AnalysisResult` with all fields:
 
-        - ``bpm`` (``float``) and ``bpm_confidence`` (``float`` in ``[0, 1]``)
+        - ``bpm`` (``float``, ``None`` when no tempo was found) and
+          ``bpm_confidence`` (``float`` in ``[0, 1]``)
         - ``key`` (:class:`Key`), ``time_signature`` (:class:`TimeSignature`)
         - ``beats`` (``list[Beat]``) — each with ``time_sec`` and a raw
           onset-envelope ``strength`` sampled at the beat's own frame. Not
@@ -552,6 +554,8 @@ def analyze_bpm(
     every other tempo entry point; widen it to list half-tempo candidates or
     very slow material. A range other than the default is searched as given,
     and the unconstrained estimate is preferred when it lies inside it.
+    ``start_bpm`` only seeds the search: with no tempo found ``bpm`` is ``None``
+    and ``candidates`` is empty.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -571,7 +575,7 @@ def analyze_bpm(
     _check(rc)
     try:
         return BpmAnalysisResult(
-            bpm=float(out.bpm),
+            bpm=_measured(out.bpm),
             confidence=float(out.confidence),
             candidates=[
                 BpmCandidate(
@@ -707,7 +711,9 @@ def analyze_rhythm(
     at ``sample_rate``. ``n_fft`` is the analysis window length in samples at
     22050 Hz, rescaled to the input sample rate; ``hop_length`` is in samples
     of the input buffer. The tempo search spans 60-200 BPM by default, as on
-    every other tempo entry point.
+    every other tempo entry point. ``bpm`` is ``None`` when neither the search nor
+    the tracked beats give a tempo, and the three rhythm measures are ``None``
+    below the beats each needs (see :class:`RhythmResult`).
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -727,16 +733,16 @@ def analyze_rhythm(
     groove_names = {0: "straight", 1: "shuffle", 2: "swing"}
     try:
         return RhythmResult(
-            bpm=float(out.bpm),
+            bpm=_measured(out.bpm),
             time_signature=TimeSignature(
                 numerator=int(out.time_signature.numerator),
                 denominator=int(out.time_signature.denominator),
                 confidence=float(out.time_signature.confidence),
             ),
             groove_type=groove_names.get(int(out.groove_type), "straight"),
-            syncopation=float(out.syncopation),
-            pattern_regularity=float(out.pattern_regularity),
-            tempo_stability=float(out.tempo_stability),
+            syncopation=_measured(out.syncopation),
+            pattern_regularity=_measured(out.pattern_regularity),
+            tempo_stability=_measured(out.tempo_stability),
             beat_intervals=_from_c_float_array(out.beat_intervals, out.beat_interval_count),
         )
     finally:
@@ -817,11 +823,11 @@ def analyze_timbre(
     _check(rc)
     try:
         return TimbreResult(
-            brightness=float(out.brightness),
-            warmth=float(out.warmth),
-            density=float(out.density),
-            roughness=float(out.roughness),
-            complexity=float(out.complexity),
+            brightness=_measured(out.brightness),
+            warmth=_measured(out.warmth),
+            density=_measured(out.density),
+            roughness=_measured(out.roughness),
+            complexity=_measured(out.complexity),
             spectral_centroid=_from_c_float_array(
                 out.spectral_centroid, out.spectral_centroid_count
             ),
@@ -831,11 +837,11 @@ def analyze_timbre(
             spectral_rolloff=_from_c_float_array(out.spectral_rolloff, out.spectral_rolloff_count),
             timbre_over_time=[
                 TimbreFrame(
-                    brightness=float(out.timbre_over_time[i].brightness),
-                    warmth=float(out.timbre_over_time[i].warmth),
-                    density=float(out.timbre_over_time[i].density),
-                    roughness=float(out.timbre_over_time[i].roughness),
-                    complexity=float(out.timbre_over_time[i].complexity),
+                    brightness=_measured(out.timbre_over_time[i].brightness),
+                    warmth=_measured(out.timbre_over_time[i].warmth),
+                    density=_measured(out.timbre_over_time[i].density),
+                    roughness=_measured(out.timbre_over_time[i].roughness),
+                    complexity=_measured(out.timbre_over_time[i].complexity),
                 )
                 for i in range(out.timbre_over_time_count)
             ],

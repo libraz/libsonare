@@ -7361,16 +7361,20 @@ test = "bindings/python/tests/test_absent_measurements.py::test_an_unvoiced_melo
 [[entry]]
 kind = "field"
 old = "MelodyResult.mean_frequency"
-new = "MelodyResult.mean_frequency_hz"
+changed = "mean_frequency -> mean_frequency_hz, float | None: None until a point is voiced, instead of 0"
+to = "MelodyResult.mean_frequency_hz"
 domain = "analysis"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
 
 [[entry]]
 kind = "field"
 old = "MelodyResult.vibrato_rate"
-new = "MelodyResult.vibrato_rate_hz"
+changed = "vibrato_rate -> vibrato_rate_hz, float | None: None until a point is voiced, instead of 0; 0 once one is and no vibrato is found"
+to = "MelodyResult.vibrato_rate_hz"
 domain = "analysis"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
 
 [[entry]]
 kind = "field"
@@ -14217,3 +14221,219 @@ changed = "NaN at a silent point, which has no angle, instead of 0; the array ke
 domain = "mastering"
 rule = "silence-is-infinite"
 test = "bindings/python/tests/test_stereo_and_spectrum.py::test_phase_scope_over_silence_reports_no_angle"
+
+[[entry]]
+kind = "function"
+old = "detect_bpm"
+changed = "returns float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_detect_bpm_with_silence"
+
+[[entry]]
+kind = "method"
+old = "Audio.detect_bpm"
+changed = "returns float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "core"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_audio_detect_bpm"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.bpm"
+changed = "float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_analyze_with_silence"
+
+[[entry]]
+kind = "field"
+old = "BpmAnalysisResult.bpm"
+changed = "float | None: None when no tempo is found, and candidates is then empty; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.bpm"
+changed = "float | None: None when neither the search nor the tracked beats give a tempo; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.bpm"
+changed = "float | None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "mastering"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.syncopation"
+changed = "float | None: None below four tracked beats, with silent accents, or without both a strong- and a weak-position beat, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_rhythm_measures_need_enough_beats_on_audible_input"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.pattern_regularity"
+changed = "float | None: None below two beat intervals, instead of 0 with none and 1 with one"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_rhythm_measures_need_enough_beats_on_audible_input"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.tempo_stability"
+changed = "float | None: None below two positive beat intervals, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_rhythm_measures_need_enough_beats_on_audible_input"
+
+[[entry]]
+kind = "field"
+old = "AnalysisRhythm.syncopation"
+changed = "float | None: None below four tracked beats, with silent accents, or without both a strong- and a weak-position beat, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_rhythm_measures_need_enough_beats_on_audible_input"
+
+[[entry]]
+kind = "field"
+old = "AnalysisRhythm.pattern_regularity"
+changed = "float | None: None below two beat intervals, instead of 0 with none and 1 with one"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_rhythm_measures_need_enough_beats_on_audible_input"
+
+[[entry]]
+kind = "field"
+old = "AnalysisRhythm.tempo_stability"
+changed = "float | None: None below two positive beat intervals, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_rhythm_measures_need_enough_beats_on_audible_input"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.brightness"
+changed = "float | None: None when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.warmth"
+changed = "float | None: None when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.density"
+changed = "float | None: None when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.roughness"
+changed = "float | None: None when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.complexity"
+changed = "float | None: None when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.brightness"
+changed = "float | None: None for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.warmth"
+changed = "float | None: None for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.density"
+changed = "float | None: None for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.roughness"
+changed = "float | None: None for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "TimbreFrame.complexity"
+changed = "float | None: None for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitch_range_octaves"
+changed = "float | None: None until a point is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.pitch_stability"
+changed = "float | None: None until a point is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.median_f0"
+changed = "float | None: None when no frame is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.mean_f0"
+changed = "float | None: None when no frame is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_analyzer_core.py::test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence"
+
+[[entry]]
+kind = "field"
+old = "PercussiveEvent.percussive_ratio"
+changed = "float | None: None for an event over a silent span, instead of 0; such an event is kept only when min_percussive_ratio is not given"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "bindings/python/tests/test_percussive_events.py::test_a_silent_span_reports_no_percussive_ratio"

@@ -388,6 +388,35 @@ def test_stereo_and_phase_leave_unmeasured_values_out_over_silence(tmp_path: Pat
     assert "Correlation:  -" in _run_cli(["stereo", *argv]).stdout
 
 
+def test_tempo_rhythm_timbre_and_pitch_leave_unmeasured_values_out_over_silence(
+    tmp_path: Path,
+) -> None:
+    silence = str(_write(tmp_path / "silence.wav", [0.0] * FRAMES))
+    assert _json(_run_cli(["bpm", silence, "--json"])) == {}
+    rhythm = _json(_run_cli(["rhythm", silence, "--json"]))
+    for key in ("bpm", "syncopation", "pattern_regularity", "tempo_stability"):
+        assert key not in rhythm, key
+    assert _json(_run_cli(["timbre", silence, "--json"])).keys() == {
+        "spectral_centroid",
+        "spectral_flatness",
+        "spectral_rolloff",
+    }
+    analysis = _json(_run_cli(["analyze", silence, "--json"]))
+    assert "bpm" not in analysis
+    assert analysis["timbre"] == {}
+    assert analysis["rhythm"] == {"groove_type": "straight"}
+    melody = _json(_run_cli(["melody", silence, "--json"]))
+    assert melody.keys() == {"pitch_count"}
+    pitch = _json(_run_cli(["pitch", silence, "--json"]))
+    assert "median_f0" not in pitch and "mean_f0" not in pitch
+    assert "BPM: -" in _run_cli(["bpm", silence]).stdout
+    rhythm_text = _run_cli(["rhythm", silence]).stdout
+    assert "Syncopation:        -" in rhythm_text
+    assert "Tempo stability:    -" in rhythm_text
+    assert "Brightness: -" in _run_cli(["timbre", silence]).stdout
+    assert "Median F0: -" in _run_cli(["pitch", silence]).stdout
+
+
 @pytest.mark.parametrize("command", ["stereo", "phase"])
 def test_reference_is_needed_after_the_input_is_read(command: str, source: Path) -> None:
     result = _run_cli([command, str(source)])

@@ -499,7 +499,7 @@ test = "tests/api/sonare_c_core_test.cpp::C VQT reads NaN as automatic gamma and
 [[entry]]
 kind = "function"
 old = "sonare_detect_bpm"
-changed = "takes bpm_min and bpm_max before out_bpm; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER"
+changed = "takes bpm_min and bpm_max before out_bpm; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER; out_bpm is NaN (not measured) when no tempo is found, where 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
 domain = "analysis"
 rule = "tempo-range"
 test = "tests/api/sonare_c_core_test.cpp::sonare_detect_bpm"
@@ -515,7 +515,7 @@ test = "tests/api/sonare_c_core_test.cpp::sonare_detect_beats"
 [[entry]]
 kind = "function"
 old = "sonare_audio_detect_bpm"
-changed = "takes bpm_min and bpm_max before out_bpm, as sonare_detect_bpm does"
+changed = "takes bpm_min and bpm_max before out_bpm, as sonare_detect_bpm does; out_bpm is NaN (not measured) when no tempo is found, where 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
 domain = "analysis"
 rule = "tempo-range"
 test = "tests/api/sonare_c_core_test.cpp::sonare_audio_detect_bpm and sonare_audio_detect_beats take the search range"
@@ -1123,16 +1123,20 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "SonareMelodyResult.mean_frequency"
-new = "SonareMelodyResult.mean_frequency_hz"
+changed = "mean_frequency -> mean_frequency_hz, NaN (not measured) until a point is voiced, instead of 0"
+to = "SonareMelodyResult.mean_frequency_hz"
 domain = "analysis"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
 
 [[entry]]
 kind = "field"
 old = "SonareMelodyResult.vibrato_rate"
-new = "SonareMelodyResult.vibrato_rate_hz"
+changed = "vibrato_rate -> vibrato_rate_hz, NaN (not measured) until a point is voiced, instead of 0; 0 once one is and no vibrato is found"
+to = "SonareMelodyResult.vibrato_rate_hz"
 domain = "analysis"
-rule = "unit-in-name"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
 
 [[entry]]
 kind = "field"
@@ -5261,3 +5265,163 @@ changed = "the mean over the non-silent points; NaN (not measured) when every po
 domain = "mastering"
 rule = "silence-is-infinite"
 test = "tests/api/sonare_c_features_metering_test.cpp::sonare_metering stereo wrappers"
+
+[[entry]]
+kind = "field"
+old = "SonareBpmAnalysisResult.bpm"
+changed = "NaN (not measured) when no tempo is found, and candidate_count is then 0; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareRhythmResult.bpm"
+changed = "NaN (not measured) when neither the search nor the tracked beats give a tempo; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareRhythmResult.syncopation"
+changed = "NaN (not measured) below four tracked beats, with silent accents, or without both a strong- and a weak-position beat, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareRhythmResult.pattern_regularity"
+changed = "NaN (not measured) below two beat intervals, instead of 0 with none and 1 with one"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareRhythmResult.tempo_stability"
+changed = "NaN (not measured) below two positive beat intervals, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreResult.brightness"
+changed = "NaN (not measured) when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreResult.warmth"
+changed = "NaN (not measured) when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreResult.density"
+changed = "NaN (not measured) when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreResult.roughness"
+changed = "NaN (not measured) when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreResult.complexity"
+changed = "NaN (not measured) when no frame carries spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreFrame.brightness"
+changed = "NaN (not measured) for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreFrame.warmth"
+changed = "NaN (not measured) for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreFrame.density"
+changed = "NaN (not measured) for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreFrame.roughness"
+changed = "NaN (not measured) for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareTimbreFrame.complexity"
+changed = "NaN (not measured) for a window with no frame carrying spectral energy, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareMelodyResult.pitch_range_octaves"
+changed = "NaN (not measured) until a point is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonareMelodyResult.pitch_stability"
+changed = "NaN (not measured) until a point is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonarePitchResult.median_f0"
+changed = "NaN (not measured) when no frame is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonarePitchResult.mean_f0"
+changed = "NaN (not measured) when no frame is voiced, instead of 0"
+domain = "analysis"
+rule = "silence-is-infinite"
+test = "tests/api/sonare_c_core_test.cpp::silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured"
+
+[[entry]]
+kind = "field"
+old = "SonarePercussiveEvent.percussive_ratio"
+changed = "NaN (not measured) for an event over a silent span, instead of 0; such an event is kept only when min_percussive_ratio is 0"
+domain = "effects"
+rule = "silence-is-infinite"
+test = "tests/editing/percussive_event_test.cpp::extract_percussive_events holds its contract across its config space"

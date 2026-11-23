@@ -340,7 +340,7 @@ def detect_bpm(
     *,
     bpm_min: float | None = None,
     bpm_max: float | None = None,
-) -> float: ...
+) -> float | None: ...
 def detect_key(
     samples: FloatSamples,
     sample_rate: int,

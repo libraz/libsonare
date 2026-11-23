@@ -996,11 +996,11 @@ class MelodyResult:
 
     points: list[MelodyPoint]
     """Contour points in time order."""
-    pitch_range_octaves: float
-    """Pitch range of the contour, in octaves."""
-    pitch_stability: float
-    """Stability of the pitch over the contour."""
-    mean_frequency_hz: float
-    """Mean fundamental frequency over voiced points, in Hz."""
-    vibrato_rate_hz: float
-    """Vibrato rate in Hz."""
+    pitch_range_octaves: float | None
+    """Pitch range of the contour, in octaves; ``None`` until a point is voiced."""
+    pitch_stability: float | None
+    """Stability of the pitch over the contour; ``None`` until a point is voiced."""
+    mean_frequency_hz: float | None
+    """Mean fundamental frequency over voiced points, in Hz; ``None`` until a point is voiced."""
+    vibrato_rate_hz: float | None
+    """Vibrato rate in Hz; 0 with no vibrato, ``None`` until a point is voiced."""

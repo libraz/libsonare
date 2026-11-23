@@ -161,6 +161,7 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
 ///        @ref sonare_analyze_bpm. Pass 60 and 200 for the search the other
 ///        public tempo entries default to. Any other range is searched as given,
 ///        and the 60-200 estimate is kept when it lies inside it.
+/// @param out_bpm Receives the tempo, or NaN (not measured) when none was found.
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                               float bpm_max, float* out_bpm);
 /// @brief Options for sonare_detect_key and sonare_detect_key_candidates. Boolean fields are 0/1.

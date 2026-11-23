@@ -284,12 +284,11 @@ def test_unsupported_format_error_is_actionable() -> None:
 
 
 def test_detect_bpm_with_silence() -> None:
-    """detect_bpm does not crash on silent audio."""
+    """detect_bpm finds no tempo in silence rather than reporting its search seed."""
     from libsonare import detect_bpm
 
     silence = [0.0] * 22050  # 1 second of silence
-    bpm = detect_bpm(silence, sample_rate=22050)
-    assert isinstance(bpm, float)
+    assert detect_bpm(silence, sample_rate=22050) is None
 
 
 def test_detect_key_with_silence() -> None:
@@ -312,7 +311,7 @@ def test_analyze_with_silence() -> None:
 
     silence = [0.0] * 22050
     result = analyze(silence, sample_rate=22050)
-    assert isinstance(result.bpm, float)
+    assert result.bpm is None
     assert isinstance(result.bpm_confidence, float)
     # Silence has no tonal content: detect_key falls back to C major.
     assert result.key.root == PitchClass.C
@@ -411,12 +410,43 @@ def test_plp_omitted_tempo_bounds_are_the_core_range() -> None:
 
 
 def test_audio_detect_bpm() -> None:
-    """Audio.detect_bpm returns a float."""
+    """Audio.detect_bpm finds no tempo in silence."""
     from libsonare import Audio
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
-    bpm = audio.detect_bpm()
-    assert isinstance(bpm, float)
+    assert audio.detect_bpm() is None
+
+
+def test_tempo_rhythm_timbre_melody_and_pitch_are_not_measured_on_silence() -> None:
+    """Nothing to measure reads as None, never as a seed tempo or a 0 descriptor."""
+    import libsonare
+
+    silence = np.zeros(22050 * 3, dtype=np.float32)
+    bpm = libsonare.analyze_bpm(silence, 22050)
+    assert (bpm.bpm, bpm.candidates) == (None, [])
+    rhythm = libsonare.analyze_rhythm(silence, 22050)
+    assert (rhythm.bpm, rhythm.syncopation, rhythm.pattern_regularity) == (None, None, None)
+    assert rhythm.tempo_stability is None
+    timbre = libsonare.analyze_timbre(silence, 22050)
+    for frame in (timbre, *timbre.timbre_over_time):
+        assert (frame.brightness, frame.warmth, frame.density) == (None, None, None)
+        assert (frame.roughness, frame.complexity) == (None, None)
+    melody = libsonare.analyze_melody(silence, 22050)
+    assert (melody.pitch_range_octaves, melody.pitch_stability) == (None, None)
+    assert (melody.mean_frequency_hz, melody.vibrato_rate_hz) == (None, None)
+    for track in (libsonare.pitch_yin(silence, 22050), libsonare.pitch_pyin(silence, 22050)):
+        assert (track.median_f0, track.mean_f0) == (None, None)
+
+
+def test_rhythm_measures_need_enough_beats_on_audible_input() -> None:
+    """A clip too short to hold two beat intervals has no regularity or stability."""
+    import libsonare
+
+    t = np.arange(int(22050 * 0.4)) / 22050
+    tone = (0.3 * np.sin(2 * np.pi * 440.0 * t)).astype(np.float32)
+    rhythm = libsonare.analyze_rhythm(tone, 22050)
+    assert rhythm.syncopation is None
+    assert (rhythm.pattern_regularity, rhythm.tempo_stability) == (None, None)
 
 
 def test_audio_detect_key() -> None:

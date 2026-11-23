@@ -834,7 +834,8 @@ typedef struct {
   /// Measured on the signal @c gain_db scales rather than on the source.
   float peak_amplitude;
   /// Share of the span's energy the separation assigned to percussion, in
-  /// [0, 1]. 0 when the span is silent.
+  /// [0, 1]. NaN (not measured) when the span is silent; such an event is kept only
+  /// when @c min_percussive_ratio is 0.
   ///
   /// It describes the span rather than the onset that opened it. An isolated hit
   /// sits near 1, but a real hit over a loud sustain sits near 0, because the

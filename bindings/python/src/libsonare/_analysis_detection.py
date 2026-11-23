@@ -23,6 +23,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _key_mode_token,
+    _measured,
     _mode_values,
     _out_float_array,
     _profile_value,
@@ -77,7 +78,7 @@ def detect_bpm(
     *,
     bpm_min: float | None = None,
     bpm_max: float | None = None,
-) -> float:
+) -> float | None:
     """Detect the BPM (tempo) of audio samples.
 
     One-shot wrapper for raw sample input. When you load from a file or call
@@ -95,7 +96,8 @@ def detect_bpm(
             estimate is preferred when it lies inside it.
 
     Returns:
-        Detected BPM as a ``float``. For confidence, use :func:`analyze`.
+        Detected BPM as a ``float``, or ``None`` when no tempo was found (silence,
+        or nothing periodic). For confidence, use :func:`analyze`.
 
     Raises:
         SonareValueError: If the range is non-finite, non-positive or inverted.
@@ -113,7 +115,7 @@ def detect_bpm(
         ctypes.byref(out_bpm),
     )
     _check(rc)
-    return float(out_bpm.value)
+    return _measured(out_bpm.value)
 
 
 def _detect_key_options(
@@ -572,14 +574,14 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             )
         )
 
-    # Timbre, dynamics, rhythm and melody are always written by the core.
+    # Timbre, dynamics, rhythm and melody are always written; a value not measured is left out.
     timbre_d = data["timbre"]
     timbre = TimbreFrame(
-        brightness=float(timbre_d["brightness"]),
-        warmth=float(timbre_d["warmth"]),
-        density=float(timbre_d["density"]),
-        roughness=float(timbre_d["roughness"]),
-        complexity=float(timbre_d["complexity"]),
+        brightness=_optional_float(timbre_d.get("brightness")),
+        warmth=_optional_float(timbre_d.get("warmth")),
+        density=_optional_float(timbre_d.get("density")),
+        roughness=_optional_float(timbre_d.get("roughness")),
+        complexity=_optional_float(timbre_d.get("complexity")),
     )
     dyn_d = data["dynamics"]
     dynamics = AnalysisDynamics(
@@ -598,10 +600,10 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             denominator=int(rts_d["denominator"]),
             confidence=float(rts_d["confidence"]),
         ),
-        syncopation=float(rhy_d["syncopation"]),
+        syncopation=_optional_float(rhy_d.get("syncopation")),
         groove_type=str(rhy_d["grooveType"]),
-        pattern_regularity=float(rhy_d["patternRegularity"]),
-        tempo_stability=float(rhy_d["tempoStability"]),
+        pattern_regularity=_optional_float(rhy_d.get("patternRegularity")),
+        tempo_stability=_optional_float(rhy_d.get("tempoStability")),
     )
     mel_d = data["melody"]
     melody = MelodyResult(
@@ -614,14 +616,14 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             )
             for p in mel_d["pitches"]
         ],
-        pitch_range_octaves=float(mel_d["pitchRangeOctaves"]),
-        pitch_stability=float(mel_d["pitchStability"]),
-        mean_frequency_hz=float(mel_d["meanFrequencyHz"]),
-        vibrato_rate_hz=float(mel_d["vibratoRateHz"]),
+        pitch_range_octaves=_optional_float(mel_d.get("pitchRangeOctaves")),
+        pitch_stability=_optional_float(mel_d.get("pitchStability")),
+        mean_frequency_hz=_optional_float(mel_d.get("meanFrequencyHz")),
+        vibrato_rate_hz=_optional_float(mel_d.get("vibratoRateHz")),
     )
 
     return AnalysisResult(
-        bpm=float(data.get("bpm", 0.0)),
+        bpm=_optional_float(data.get("bpm")),
         bpm_confidence=float(data.get("bpmConfidence", 0.0)),
         key=key,
         time_signature=time_signature,

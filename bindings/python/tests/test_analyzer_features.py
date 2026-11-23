@@ -15,7 +15,7 @@ def test_audio_analyze() -> None:
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     result = audio.analyze()
-    assert isinstance(result.bpm, float)
+    assert result.bpm is None
     # Silence has no tonal content, so detect_key falls back to C major.
     assert result.key.root == PitchClass.C
     assert result.key.mode == "major"

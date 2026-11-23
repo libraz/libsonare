@@ -44,30 +44,30 @@ def cmd_rhythm(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "bpm": r.bpm,
+                    "bpm": _absent_if_none(r.bpm),
                     "time_signature": {
                         "numerator": r.time_signature.numerator,
                         "denominator": r.time_signature.denominator,
                         "confidence": r.time_signature.confidence,
                     },
                     "groove_type": r.groove_type,
-                    "syncopation": r.syncopation,
-                    "pattern_regularity": r.pattern_regularity,
-                    "tempo_stability": r.tempo_stability,
+                    "syncopation": _absent_if_none(r.syncopation),
+                    "pattern_regularity": _absent_if_none(r.pattern_regularity),
+                    "tempo_stability": _absent_if_none(r.tempo_stability),
                     "beat_intervals": _native_array_stats(r.beat_intervals.tolist()),
                 }
             )
         )
     else:
         print("  Rhythm:")
-        print(f"    BPM:                {r.bpm:.2f}")
+        print(f"    BPM:                {_fmt_optional(r.bpm, '.2f')}")
         print(
             f"    Time signature:     {r.time_signature.numerator}/{r.time_signature.denominator}"
         )
         print(f"    Groove:             {r.groove_type}")
-        print(f"    Syncopation:        {r.syncopation:.4f}")
-        print(f"    Pattern regularity: {r.pattern_regularity:.4f}")
-        print(f"    Tempo stability:    {r.tempo_stability:.4f}")
+        print(f"    Syncopation:        {_fmt_optional(r.syncopation, '.4f')}")
+        print(f"    Pattern regularity: {_fmt_optional(r.pattern_regularity, '.4f')}")
+        print(f"    Tempo stability:    {_fmt_optional(r.tempo_stability, '.4f')}")
         print(f"    Beat intervals:     {len(r.beat_intervals)}")
     return 0
 
@@ -127,11 +127,11 @@ def cmd_timbre(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "brightness": r.brightness,
-                    "warmth": r.warmth,
-                    "density": r.density,
-                    "roughness": r.roughness,
-                    "complexity": r.complexity,
+                    "brightness": _absent_if_none(r.brightness),
+                    "warmth": _absent_if_none(r.warmth),
+                    "density": _absent_if_none(r.density),
+                    "roughness": _absent_if_none(r.roughness),
+                    "complexity": _absent_if_none(r.complexity),
                     "spectral_centroid": _array_stats(r.spectral_centroid.tolist()),
                     "spectral_flatness": _array_stats(r.spectral_flatness.tolist()),
                     "spectral_rolloff": _array_stats(r.spectral_rolloff.tolist()),
@@ -140,11 +140,11 @@ def cmd_timbre(args: argparse.Namespace) -> int:
         )
     else:
         print("  Timbre:")
-        print(f"    Brightness: {r.brightness:.4f}")
-        print(f"    Warmth:     {r.warmth:.4f}")
-        print(f"    Density:    {r.density:.4f}")
-        print(f"    Roughness:  {r.roughness:.4f}")
-        print(f"    Complexity: {r.complexity:.4f}")
+        print(f"    Brightness: {_fmt_optional(r.brightness, '.4f')}")
+        print(f"    Warmth:     {_fmt_optional(r.warmth, '.4f')}")
+        print(f"    Density:    {_fmt_optional(r.density, '.4f')}")
+        print(f"    Roughness:  {_fmt_optional(r.roughness, '.4f')}")
+        print(f"    Complexity: {_fmt_optional(r.complexity, '.4f')}")
     return 0
 
 

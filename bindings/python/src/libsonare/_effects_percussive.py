@@ -23,6 +23,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _measured,
     _out_float_array,
     _resolve_sample_bound,
     _resolve_time_offset,
@@ -119,7 +120,7 @@ class PercussiveEvent:
         peak_amplitude: Peak absolute sample of the percussive component over the
             span, linear. This is the signal ``edit.gain_db`` scales.
         percussive_ratio: Share of the span's energy the separation assigned to
-            percussion, in ``[0, 1]``; 0 when the span is silent. It describes the
+            percussion, in ``[0, 1]``; ``None`` when the span is silent. It describes the
             *span*, not the onset that opened it: an isolated hit sits near 1, but
             a real hit under a loud sustain sits near 0, because the sustain owns
             the span's energy. So it is not a test for whether a hit is there.
@@ -131,7 +132,7 @@ class PercussiveEvent:
     offset_sample: int
     strength: float
     peak_amplitude: float
-    percussive_ratio: float
+    percussive_ratio: float | None
     edit: PercussiveEventEdit = dataclasses.field(default_factory=PercussiveEventEdit)
 
 
@@ -194,7 +195,7 @@ def _percussive_event_from_c(row: SonarePercussiveEvent) -> PercussiveEvent:
         offset_sample=int(row.offset_sample),
         strength=float(row.strength),
         peak_amplitude=float(row.peak_amplitude),
-        percussive_ratio=float(row.percussive_ratio),
+        percussive_ratio=_measured(row.percussive_ratio),
         edit=PercussiveEventEdit(
             time_offset_samples=int(row.edit.time_offset_samples),
             gain_db=float(row.edit.gain_db),

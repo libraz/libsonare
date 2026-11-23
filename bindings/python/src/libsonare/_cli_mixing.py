@@ -186,7 +186,7 @@ _cli_scalar_type(_tempo_bpm_arg, "string")
 _cli_domain(_tempo_bpm_arg, minimum=0.0, exclusive_minimum=True)
 
 
-def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float, list[Any]]:
+def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float | None, list[Any]]:
     """Read ``--tempo-bpm``, detecting it from the first track when asked to.
 
     ``auto`` measures the first ``--input`` rather than the whole set: a tempo is
@@ -194,8 +194,8 @@ def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float, lis
     the track the caller listed first keeps which file was measured visible in
     the command instead of hidden in an averaging rule. It is measured on the
     track already loaded for the scene, folded to mono by the decoder's own
-    stereo rule, so the file is decoded once. Returns the tempo and the tracks
-    loaded to reach it.
+    stereo rule, so the file is decoded once. Returns the tempo (``None`` when
+    none was found) and the tracks loaded to reach it.
     """
     import numpy as np
 
@@ -213,7 +213,7 @@ def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float, lis
         mono = np.float32(0.5) * (
             np.asarray(left, dtype=np.float32) + np.asarray(right, dtype=np.float32)
         )
-    return float(detect_bpm(mono, sample_rate=first.sample_rate)), tracks
+    return detect_bpm(mono, sample_rate=first.sample_rate), tracks
 
 
 def cmd_suggest_mix(args: argparse.Namespace) -> int:
@@ -222,7 +222,10 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
     tracks: list[Any] = []
     options = _mix_assistant_options(_parse_kv_params(args.params) if args.params else {})
     if args.tempo_bpm is not None:
-        options["tempo_bpm"], tracks = _resolve_tempo_bpm(args.tempo_bpm, args.input)
+        tempo_bpm, tracks = _resolve_tempo_bpm(args.tempo_bpm, args.input)
+        # No tempo found leaves it unset, so the assistant takes its transport fallback.
+        if tempo_bpm is not None:
+            options["tempo_bpm"] = tempo_bpm
     tracks += _mix_assistant_tracks(args.input[len(tracks) :])
     result = mixing_assistant_suggest(tracks, sample_rate=args.sample_rate, **options)
     if args.scene_out:

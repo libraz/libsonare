@@ -128,7 +128,7 @@ _ANALYZE_DYNAMICS_KEYS = {
 _ANALYZE_RHYTHM_KEYS = {"syncopation", "groove_type", "pattern_regularity"}
 _RHYTHM_PAYLOAD_SCHEMA = {
     "keys": {
-        "bpm": "number",
+        "bpm": "measured",
         "time_signature": {
             "keys": {
                 "numerator": "integer",
@@ -137,9 +137,9 @@ _RHYTHM_PAYLOAD_SCHEMA = {
             }
         },
         "groove_type": "string",
-        "syncopation": "number",
-        "pattern_regularity": "number",
-        "tempo_stability": "number",
+        "syncopation": "measured",
+        "pattern_regularity": "measured",
+        "tempo_stability": "measured",
         "beat_intervals": {
             "keys": {
                 "count": "integer",

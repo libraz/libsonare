@@ -19,6 +19,7 @@ from ._runtime import (
     _from_c_float_matrix,
     _get_lib,
     _guard_buffer,
+    _measured,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -232,8 +233,8 @@ def _pitch_result(out: SonarePitchResult) -> PitchResult:
         f0=_from_c_float_array(out.f0, n),
         voiced_prob=_from_c_float_array(out.voiced_prob, n),
         voiced_flag=flags,
-        median_f0=float(out.median_f0),
-        mean_f0=float(out.mean_f0),
+        median_f0=_measured(out.median_f0),
+        mean_f0=_measured(out.mean_f0),
     )
 
 

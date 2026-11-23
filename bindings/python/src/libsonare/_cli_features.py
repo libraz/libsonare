@@ -68,23 +68,24 @@ def cmd_melody(args: argparse.Namespace) -> int:
         **_given(args, "threshold", "hop_length", "f0_min_hz", "f0_max_hz"),
     )
     # The contour measures come from voiced frames; with none there is no melody.
-    voiced = bool(result.points) and result.mean_frequency_hz > 0.0
+    voiced = bool(result.points) and result.mean_frequency_hz is not None
     if args.json:
         payload: dict[str, Any] = {}
         if voiced:
-            payload["pitch_range_octaves"] = result.pitch_range_octaves
-            payload["mean_frequency_hz"] = result.mean_frequency_hz
-            payload["pitch_stability"] = result.pitch_stability
-            payload["vibrato_rate_hz"] = result.vibrato_rate_hz
+            payload["pitch_range_octaves"] = _absent_if_none(result.pitch_range_octaves)
+            payload["mean_frequency_hz"] = _absent_if_none(result.mean_frequency_hz)
+            payload["pitch_stability"] = _absent_if_none(result.pitch_stability)
+            payload["vibrato_rate_hz"] = _absent_if_none(result.vibrato_rate_hz)
         payload["pitch_count"] = len(result.points)
         print(_strict_json_dumps(payload))
     else:
         _print_file_heading(args, "Melody Analysis:", _CYAN)
         if voiced:
-            print(f"    Pitch Range:     {result.pitch_range_octaves:.2f} octaves")
-            print(f"    Mean Frequency:  {result.mean_frequency_hz:.1f} Hz")
-            print(f"    Pitch Stability: {result.pitch_stability:.2f}")
-            print(f"    Vibrato Rate:    {result.vibrato_rate_hz:.1f} Hz")
+            octaves = _fmt_optional(result.pitch_range_octaves, ".2f", " octaves")
+            print(f"    Pitch Range:     {octaves}")
+            print(f"    Mean Frequency:  {_fmt_optional(result.mean_frequency_hz, '.1f', ' Hz')}")
+            print(f"    Pitch Stability: {_fmt_optional(result.pitch_stability, '.2f')}")
+            print(f"    Vibrato Rate:    {_fmt_optional(result.vibrato_rate_hz, '.1f', ' Hz')}")
         else:
             print("    no melody")
         print(f"    Pitch Points:    {len(result.points)}")

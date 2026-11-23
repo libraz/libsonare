@@ -32,6 +32,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _measured,
     _out_float_array,
     _to_c_float,
     _to_c_float_array,
@@ -546,7 +547,9 @@ class Audio:
         return float(self._lib.sonare_audio_duration_sec(self._require_handle()))
 
     @_entry("Audio.detect_bpm")
-    def detect_bpm(self, *, bpm_min: float | None = None, bpm_max: float | None = None) -> float:
+    def detect_bpm(
+        self, *, bpm_min: float | None = None, bpm_max: float | None = None
+    ) -> float | None:
         """Detect BPM (tempo).
 
         Each ``detect_*`` call runs its own analysis; nothing is cached, so
@@ -559,18 +562,21 @@ class Audio:
                 unconstrained estimate is preferred when it lies inside it.
 
         Returns:
-            Estimated tempo in beats per minute. For confidence and time
-            signature, use :func:`libsonare.analyze` instead.
+            Estimated tempo in beats per minute, or ``None`` when no tempo was
+            found. For confidence and time signature, use
+            :func:`libsonare.analyze` instead.
 
         Raises:
             SonareValueError: If the range is non-finite, non-positive or inverted.
             RuntimeError: If the audio has been closed.
         """
-        return self._audio_float(
-            "sonare_audio_detect_bpm",
-            self._require_handle(),
-            _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
-            _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
+        return _measured(
+            self._audio_float(
+                "sonare_audio_detect_bpm",
+                self._require_handle(),
+                _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
+                _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
+            )
         )
 
     @_entry("Audio.detect_key")

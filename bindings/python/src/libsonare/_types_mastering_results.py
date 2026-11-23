@@ -87,8 +87,8 @@ class MasteringAudioProfile:
 
     duration_sec: float
     """Input duration in seconds."""
-    bpm: float
-    """Estimated tempo in BPM."""
+    bpm: float | None
+    """Estimated tempo in BPM; ``None`` when no tempo was found."""
     bpm_confidence: float
     """Confidence of the tempo estimate."""
     loudness: MasteringAudioProfileLoudness
@@ -135,8 +135,8 @@ class MasteringAssistantProfile:
 
     duration_sec: float
     """Input duration in seconds."""
-    bpm: float
-    """Estimated tempo in BPM."""
+    bpm: float | None
+    """Estimated tempo in BPM; ``None`` when no tempo was found."""
     bpm_confidence: float
     """Confidence of the tempo estimate."""
     integrated_lufs: float

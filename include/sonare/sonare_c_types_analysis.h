@@ -123,8 +123,10 @@ typedef struct {
   float* f0;           ///< n_frames
   float* voiced_prob;  ///< n_frames
   int* voiced_flag;    ///< n_frames (0 or 1)
-  float median_f0;     ///< Median f0 of the voiced frames in Hz; 0 when no frame is voiced.
-  float mean_f0;       ///< Mean f0 of the voiced frames in Hz; 0 when no frame is voiced.
+  /// Median f0 of the voiced frames in Hz; NaN (not measured) when no frame is voiced.
+  float median_f0;
+  /// Mean f0 of the voiced frames in Hz; NaN (not measured) when no frame is voiced.
+  float mean_f0;
 } SonarePitchResult;
 
 /// HPSS result
@@ -189,11 +191,12 @@ typedef struct {
 
 /// @brief Tempo estimate with its candidates and the curves it was derived from.
 typedef struct {
-  float bpm;  ///< Estimated tempo in BPM.
+  float bpm;  ///< Estimated tempo in BPM; NaN (not measured) when the search finds no tempo.
   /** Winning tempo cluster's vote share within [bpm_min, bpm_max], searched at the input rate;
      differs from sonare_analyze_json's tempo confidence, which searches 60-200 BPM at 22050 Hz. */
   float confidence;
-  /** Chosen tempo first (candidates[0].bpm == bpm), then other bins by descending vote share. */
+  /** Chosen tempo first (candidates[0].bpm == bpm), then other bins by descending vote share;
+     empty when no tempo was found. */
   SonareBpmCandidate* candidates;
   size_t candidate_count;  ///< Entries in candidates.
   /// Autocorrelation of the onset evidence over lag; autocorrelation_count entries.
@@ -205,12 +208,16 @@ typedef struct {
 
 /// @brief Rhythm characteristics; free with sonare_free_rhythm_result.
 typedef struct {
-  float bpm;                           ///< Tempo in BPM.
+  float bpm;                           ///< Tempo in BPM; NaN (not measured) when none was found.
   SonareTimeSignature time_signature;  ///< Detected meter.
   SonareGrooveType groove_type;        ///< Detected groove.
-  float syncopation;                   ///< Syncopation level, [0, 1].
-  float pattern_regularity;            ///< Rhythmic regularity, [0, 1]; 0 with no beat interval.
-  float tempo_stability;       ///< Tempo stability over time, [0, 1]; 0 below two beat intervals.
+  /// Syncopation level, [0, 1]. NaN (not measured) below four tracked beats, with silent
+  /// accents, or without both a strong- and a weak-position beat observed.
+  float syncopation;
+  /// Rhythmic regularity, [0, 1]; NaN (not measured) below two beat intervals.
+  float pattern_regularity;
+  /// Tempo stability over time, [0, 1]; NaN (not measured) below two positive beat intervals.
+  float tempo_stability;
   float* beat_intervals;       ///< Seconds between consecutive beats; beat_interval_count entries.
   size_t beat_interval_count;  ///< Entries in beat_intervals.
 } SonareRhythmResult;
@@ -230,19 +237,21 @@ typedef struct {
 } SonareDynamicsResult;
 
 /// @brief Timbre metrics for one analysis window.
+/// @details Every field is NaN (not measured) for a window with no frame carrying spectral energy.
 typedef struct {
   float brightness;  ///< Spectral brightness, [0, 1]; high is bright.
   float warmth;      ///< Spectral warmth, [0, 1]; high is warm.
-  float density;     ///< Spectral density, [0, 1]; 0 without spectral energy.
+  float density;     ///< Spectral density, [0, 1].
   float roughness;   ///< Spectral roughness, [0, 1]; high is rough.
   float complexity;  ///< Harmonic complexity, [0, 1].
 } SonareTimbreFrame;
 
 /// @brief Timbre of the whole input plus per-frame spectral curves.
+/// @details The five summary fields are NaN (not measured) when no frame carries spectral energy.
 typedef struct {
   float brightness;                ///< Overall spectral brightness, [0, 1]; high is bright.
   float warmth;                    ///< Overall spectral warmth, [0, 1]; high is warm.
-  float density;                   ///< Overall spectral density, [0, 1]; 0 without spectral energy.
+  float density;                   ///< Overall spectral density, [0, 1].
   float roughness;                 ///< Overall spectral roughness, [0, 1]; high is rough.
   float complexity;                ///< Overall harmonic complexity, [0, 1].
   float* spectral_centroid;        ///< Spectral centroid in Hz, one per frame.
@@ -406,6 +415,7 @@ typedef struct {
 } SonareMelodyPoint;
 
 /// @brief Melody contour and its summary; free with sonare_free_melody_result.
+/// @details The four summary fields are NaN (not measured) until a point is voiced.
 typedef struct {
   SonareMelodyPoint* points;  ///< free with sonare_free_melody_result
   size_t point_count;         ///< Entries in points.

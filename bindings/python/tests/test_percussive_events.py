@@ -16,6 +16,8 @@ in play.
 
 from __future__ import annotations
 
+import ctypes
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
@@ -294,6 +296,21 @@ def test_percussive_ratio_describes_the_span_not_the_hit() -> None:
 def test_extract_percussive_events_reports_silence_as_an_empty_set() -> None:
     # Nothing detected is a measurement that came up empty, not a bad argument.
     assert libsonare.extract_percussive_events(np.zeros(SR, dtype=np.float32), SR) == []
+
+
+def test_a_silent_span_reports_no_percussive_ratio() -> None:
+    # The core writes NaN for a span with no energy; the record reads it as not measured.
+    from libsonare._effects_percussive import _percussive_event_from_c
+    from libsonare._ffi import SonarePercussiveEvent
+
+    row = SonarePercussiveEvent()
+    row.offset_sample = 10
+    # The record refuses a NaN assignment, so it is written the way the core writes it.
+    ratio = ctypes.c_float.from_buffer(row, SonarePercussiveEvent.percussive_ratio.offset)
+    ratio.value = float("nan")
+    assert _percussive_event_from_c(row).percussive_ratio is None
+    ratio.value = 0.25
+    assert _percussive_event_from_c(row).percussive_ratio == 0.25
 
 
 # --- Every keyword argument reaches the C struct ----------------------------

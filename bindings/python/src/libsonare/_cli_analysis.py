@@ -17,6 +17,7 @@ from ._cli_common import (
     PITCH_NAMES,
     _absent_if_none,
     _color_enabled,
+    _fmt_optional,
     _format_time,
     _measured_pairs,
     _parse_key_profile,
@@ -103,9 +104,9 @@ def cmd_bpm(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     bpm = detect_bpm(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps({"bpm": bpm}))
+        print(_strict_json_dumps({"bpm": _absent_if_none(bpm)}))
     else:
-        print(f"  BPM: {bpm:.2f}")
+        print(f"  BPM: {_fmt_optional(bpm, '.2f')}")
     return 0
 
 
@@ -377,7 +378,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "bpm": r.bpm,
+                    "bpm": _absent_if_none(r.bpm),
                     "bpm_confidence": r.bpm_confidence,
                     "key": {
                         "root": r.key.root.value,
@@ -396,11 +397,11 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                     "chords": chords,
                     "sections": sections,
                     "timbre": {
-                        "brightness": timbre.brightness,
-                        "warmth": timbre.warmth,
-                        "density": timbre.density,
-                        "roughness": timbre.roughness,
-                        "complexity": timbre.complexity,
+                        "brightness": _absent_if_none(timbre.brightness),
+                        "warmth": _absent_if_none(timbre.warmth),
+                        "density": _absent_if_none(timbre.density),
+                        "roughness": _absent_if_none(timbre.roughness),
+                        "complexity": _absent_if_none(timbre.complexity),
                     },
                     "dynamics": {
                         "dynamic_range_db": _absent_if_none(dynamics.dynamic_range_db),
@@ -409,9 +410,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                         "is_compressed": dynamics.is_compressed,
                     },
                     "rhythm": {
-                        "syncopation": rhythm.syncopation,
+                        "syncopation": _absent_if_none(rhythm.syncopation),
                         "groove_type": rhythm.groove_type,
-                        "pattern_regularity": rhythm.pattern_regularity,
+                        "pattern_regularity": _absent_if_none(rhythm.pattern_regularity),
                     },
                     "form": r.form,
                 }
@@ -425,7 +426,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         key_style = _MAGENTA + _BOLD if use_color else ""
         reset = _RESET if use_color else ""
         print(
-            f"\n  {bpm_style}> Estimated BPM : {r.bpm:.2f} BPM  "
+            f"\n  {bpm_style}> Estimated BPM : {_fmt_optional(r.bpm, '.2f', ' BPM')}  "
             f"(conf {r.bpm_confidence * 100:.1f}%){reset}"
         )
         print(
@@ -596,8 +597,8 @@ def cmd_pitch(args: argparse.Namespace) -> int:
             "n_frames": n_frames,
             "voiced_count": voiced_count,
             "voiced_ratio": voiced_ratio,
-            "median_f0": result.median_f0,
-            "mean_f0": result.mean_f0,
+            "median_f0": _absent_if_none(result.median_f0),
+            "mean_f0": _absent_if_none(result.mean_f0),
         }
         # The contour is opt-in: one value per frame. An unvoiced frame has no f0,
         # so f0 lists the voiced frames' values beside their frame indices.
@@ -610,8 +611,8 @@ def cmd_pitch(args: argparse.Namespace) -> int:
     else:
         print(f"  Pitch Tracking ({algo}):")
         print(f"    Frames:    {len(result.f0)}")
-        print(f"    Median F0: {result.median_f0:.1f} Hz")
-        print(f"    Mean F0:   {result.mean_f0:.1f} Hz")
+        print(f"    Median F0: {_fmt_optional(result.median_f0, '.1f', ' Hz')}")
+        print(f"    Mean F0:   {_fmt_optional(result.mean_f0, '.1f', ' Hz')}")
     return 0
 
 

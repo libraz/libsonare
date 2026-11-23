@@ -700,6 +700,62 @@ TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
   }
 }
 
+TEST_CASE("silence leaves tempo, rhythm, timbre, melody and pitch summaries not measured",
+          "[c_api]") {
+  const std::vector<float> silence(22050 * 3, 0.0f);
+  const float* x = silence.data();
+  const size_t n = silence.size();
+
+  float bpm = 0.0f;
+  REQUIRE(sonare_detect_bpm(x, n, 22050, 60.0f, 200.0f, &bpm) == SONARE_OK);
+  CHECK(std::isnan(bpm));
+
+  SonareBpmAnalysisResult tempo{};
+  REQUIRE(sonare_analyze_bpm(x, n, 22050, 60.0f, 200.0f, 120.0f, 2048, 512, 5, &tempo) ==
+          SONARE_OK);
+  CHECK(std::isnan(tempo.bpm));
+  CHECK(tempo.candidate_count == 0);
+  sonare_free_bpm_analysis_result(&tempo);
+
+  SonareRhythmResult rhythm{};
+  REQUIRE(sonare_analyze_rhythm(x, n, 22050, 60.0f, 200.0f, 120.0f, 2048, 512, &rhythm) ==
+          SONARE_OK);
+  CHECK(std::isnan(rhythm.bpm));
+  CHECK(std::isnan(rhythm.syncopation));
+  CHECK(std::isnan(rhythm.pattern_regularity));
+  CHECK(std::isnan(rhythm.tempo_stability));
+  sonare_free_rhythm_result(&rhythm);
+
+  SonareTimbreResult timbre{};
+  REQUIRE(sonare_analyze_timbre(x, n, 22050, 2048, 512, 128, 13, 0.5f, &timbre) == SONARE_OK);
+  CHECK(std::isnan(timbre.brightness));
+  CHECK(std::isnan(timbre.warmth));
+  CHECK(std::isnan(timbre.density));
+  CHECK(std::isnan(timbre.roughness));
+  CHECK(std::isnan(timbre.complexity));
+  REQUIRE(timbre.timbre_over_time_count > 0);
+  for (size_t i = 0; i < timbre.timbre_over_time_count; ++i) {
+    CHECK(std::isnan(timbre.timbre_over_time[i].brightness));
+    CHECK(std::isnan(timbre.timbre_over_time[i].complexity));
+  }
+  sonare_free_timbre_result(&timbre);
+
+  SonareMelodyResult melody{};
+  REQUIRE(sonare_analyze_melody(x, n, 22050, 65.0f, 2093.0f, 2048, 256, 0.1f, nullptr, &melody) ==
+          SONARE_OK);
+  CHECK(std::isnan(melody.pitch_range_octaves));
+  CHECK(std::isnan(melody.pitch_stability));
+  CHECK(std::isnan(melody.mean_frequency_hz));
+  CHECK(std::isnan(melody.vibrato_rate_hz));
+  sonare_free_melody_result(&melody);
+
+  SonarePitchResult pitch{};
+  REQUIRE(sonare_pitch_yin(x, n, 22050, 2048, 512, 65.0f, 2093.0f, 0.1f, &pitch) == SONARE_OK);
+  CHECK(std::isnan(pitch.median_f0));
+  CHECK(std::isnan(pitch.mean_f0));
+  sonare_free_pitch_result(&pitch);
+}
+
 TEST_CASE("sonare_detect_bpm", "[c_api]") {
   SECTION("detects BPM from samples") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);

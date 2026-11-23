@@ -100,8 +100,6 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `SonareMelResult.fmax` | `SonareMelResult.fmax_hz` |
 | `SonareMelResult.fmin` | `SonareMelResult.fmin_hz` |
 | `SonareMelodyPoint.frequency` | `SonareMelodyPoint.frequency_hz` |
-| `SonareMelodyResult.mean_frequency` | `SonareMelodyResult.mean_frequency_hz` |
-| `SonareMelodyResult.vibrato_rate` | `SonareMelodyResult.vibrato_rate_hz` |
 | `SonareStreamConfig.tuning_ref_hz` | `SonareStreamConfig.reference_hz` |
 | `sonare_reference_hz_to_tuning(a4)` | `sonare_reference_hz_to_tuning(a4_hz)` |
 | `sonare_reference_hz_to_tuning(hz)` | `sonare_reference_hz_to_tuning(reference_hz)` |
@@ -133,6 +131,32 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 |---|---|
 | `SonareMeterOptions.compound_subdivision_threshold` | the threshold is read on a new scale, the mean accent between the beats as a fraction of the mean accent on them with only a midpoint holding an attack contributing, and its default moves from 0.85 to 0.5, the one calibrated point between the scales; a value set explicitly has to be chosen again on the new scale, not converted by formula |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonareBpmAnalysisResult.bpm` | NaN (not measured) when no tempo is found, and candidate_count is then 0; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
+| `SonareMelodyResult.mean_frequency` | `SonareMelodyResult.mean_frequency_hz`: mean_frequency -> mean_frequency_hz, NaN (not measured) until a point is voiced, instead of 0 |
+| `SonareMelodyResult.pitch_range_octaves` | NaN (not measured) until a point is voiced, instead of 0 |
+| `SonareMelodyResult.pitch_stability` | NaN (not measured) until a point is voiced, instead of 0 |
+| `SonareMelodyResult.vibrato_rate` | `SonareMelodyResult.vibrato_rate_hz`: vibrato_rate -> vibrato_rate_hz, NaN (not measured) until a point is voiced, instead of 0; 0 once one is and no vibrato is found |
+| `SonarePitchResult.mean_f0` | NaN (not measured) when no frame is voiced, instead of 0 |
+| `SonarePitchResult.median_f0` | NaN (not measured) when no frame is voiced, instead of 0 |
+| `SonareRhythmResult.bpm` | NaN (not measured) when neither the search nor the tracked beats give a tempo; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
+| `SonareRhythmResult.pattern_regularity` | NaN (not measured) below two beat intervals, instead of 0 with none and 1 with one |
+| `SonareRhythmResult.syncopation` | NaN (not measured) below four tracked beats, with silent accents, or without both a strong- and a weak-position beat, instead of 0 |
+| `SonareRhythmResult.tempo_stability` | NaN (not measured) below two positive beat intervals, instead of 0 |
+| `SonareTimbreFrame.brightness` | NaN (not measured) for a window with no frame carrying spectral energy, instead of 0 |
+| `SonareTimbreFrame.complexity` | NaN (not measured) for a window with no frame carrying spectral energy, instead of 0 |
+| `SonareTimbreFrame.density` | NaN (not measured) for a window with no frame carrying spectral energy, instead of 0 |
+| `SonareTimbreFrame.roughness` | NaN (not measured) for a window with no frame carrying spectral energy, instead of 0 |
+| `SonareTimbreFrame.warmth` | NaN (not measured) for a window with no frame carrying spectral energy, instead of 0 |
+| `SonareTimbreResult.brightness` | NaN (not measured) when no frame carries spectral energy, instead of 0 |
+| `SonareTimbreResult.complexity` | NaN (not measured) when no frame carries spectral energy, instead of 0 |
+| `SonareTimbreResult.density` | NaN (not measured) when no frame carries spectral energy, instead of 0 |
+| `SonareTimbreResult.roughness` | NaN (not measured) when no frame carries spectral energy, instead of 0 |
+| `SonareTimbreResult.warmth` | NaN (not measured) when no frame carries spectral energy, instead of 0 |
+
 #### Closed sets are string unions, not numbers or IntEnums
 
 | 1.x | 2.0.0 |
@@ -153,9 +177,9 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | 1.x | 2.0.0 |
 |---|---|
 | `sonare_audio_detect_beats` | takes bpm_min and bpm_max before out_times, as sonare_detect_beats does |
-| `sonare_audio_detect_bpm` | takes bpm_min and bpm_max before out_bpm, as sonare_detect_bpm does |
+| `sonare_audio_detect_bpm` | takes bpm_min and bpm_max before out_bpm, as sonare_detect_bpm does; out_bpm is NaN (not measured) when no tempo is found, where 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
 | `sonare_detect_beats` | takes bpm_min and bpm_max before out_times; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER |
-| `sonare_detect_bpm` | takes bpm_min and bpm_max before out_bpm; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER |
+| `sonare_detect_bpm` | takes bpm_min and bpm_max before out_bpm; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER; out_bpm is NaN (not measured) when no tempo is found, where 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
 
 #### C extends an operation through an Options struct
 
@@ -468,6 +492,12 @@ Configuration structs carry `struct_size` and are seeded by their `*_init` funct
 | `sonare_pitch_correct_to_midi_timevarying` | at most one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win; both NULL still reads every frame as voiced |
 | `sonare_split_note` | exactly one of voiced_prob and voiced is non-NULL: both together is refused with SONARE_ERROR_INVALID_PARAMETER where voiced used to win |
 | `sonare_streaming_retune_prepare` | max_block_size 0 is refused; pass the largest block the stream will process |
+
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `SonarePercussiveEvent.percussive_ratio` | NaN (not measured) for an event over a silent span, instead of 0; such an event is kept only when min_percussive_ratio is 0 |
 
 #### A number outside its domain is refused, never passed through
 
@@ -1194,6 +1224,12 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `Audio.pitch_correct_to_midi(current_midi)` | current_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 | `Audio.pitch_correct_to_midi(target_midi)` | target_midi is required (1.x substituted MIDI 69, which nothing measured); pass the note the audio sits on and the note to move it to |
 
+#### Silence is an infinite level; a measurement that was not taken is absent
+
+| 1.x | 2.0.0 |
+|---|---|
+| `Audio.detect_bpm` | returns float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
+
 #### Closed sets are string unions, not numbers or IntEnums
 
 | 1.x | 2.0.0 |
@@ -1491,8 +1527,6 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `KeyDetection.tuning` | `KeyDetection.tuning_cents` |
 | `MelodyPoint.frequency` | `MelodyPoint.frequency_hz`: None for an unvoiced point (was 0.0) |
 | `MelodyPoint.time` | `MelodyPoint.time_sec` |
-| `MelodyResult.mean_frequency` | `MelodyResult.mean_frequency_hz` |
-| `MelodyResult.vibrato_rate` | `MelodyResult.vibrato_rate_hz` |
 | `Section.end` | `Section.end_sec` |
 | `Section.start` | `Section.start_sec` |
 | `StreamAnalyzer.set_tuning_ref_hz(ref_hz)` | `StreamAnalyzer.set_reference_hz(reference_hz)` |
@@ -1554,6 +1588,11 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `AnalysisDynamics.dynamic_range_db` | float -> float \| None: None for a silent input |
 | `AnalysisDynamics.peak_db` | -inf for a silent input |
 | `AnalysisDynamics.rms_db` | -inf for a silent input |
+| `AnalysisResult.bpm` | float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
+| `AnalysisRhythm.pattern_regularity` | float \| None: None below two beat intervals, instead of 0 with none and 1 with one |
+| `AnalysisRhythm.syncopation` | float \| None: None below four tracked beats, with silent accents, or without both a strong- and a weak-position beat, instead of 0 |
+| `AnalysisRhythm.tempo_stability` | float \| None: None below two positive beat intervals, instead of 0 |
+| `BpmAnalysisResult.bpm` | float \| None: None when no tempo is found, and candidates is then empty; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
 | `DynamicsResult.crest_factor` | float -> float \| None: None when not measured (silence) |
 | `DynamicsResult.dynamic_range_db` | float -> float \| None: None when not measured (silence) |
 | `DynamicsResult.loudness_range_db` | `DynamicsResult.loudness_range_lu`: loudness_range_db -> loudness_range_lu, float \| None: None when not measured (silence) |
@@ -1565,7 +1604,28 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `LufsResult.max_short_term_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
 | `LufsResult.momentary_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
 | `LufsResult.short_term_lufs` | float -> float \| None: -inf for zero energy, None when the signal is shorter than one window |
+| `MelodyResult.mean_frequency` | `MelodyResult.mean_frequency_hz`: mean_frequency -> mean_frequency_hz, float \| None: None until a point is voiced, instead of 0 |
+| `MelodyResult.pitch_range_octaves` | float \| None: None until a point is voiced, instead of 0 |
+| `MelodyResult.pitch_stability` | float \| None: None until a point is voiced, instead of 0 |
+| `MelodyResult.vibrato_rate` | `MelodyResult.vibrato_rate_hz`: vibrato_rate -> vibrato_rate_hz, float \| None: None until a point is voiced, instead of 0; 0 once one is and no vibrato is found |
+| `PitchResult.mean_f0` | float \| None: None when no frame is voiced, instead of 0 |
+| `PitchResult.median_f0` | float \| None: None when no frame is voiced, instead of 0 |
+| `RhythmResult.bpm` | float \| None: None when neither the search nor the tracked beats give a tempo; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
+| `RhythmResult.pattern_regularity` | float \| None: None below two beat intervals, instead of 0 with none and 1 with one |
+| `RhythmResult.syncopation` | float \| None: None below four tracked beats, with silent accents, or without both a strong- and a weak-position beat, instead of 0 |
+| `RhythmResult.tempo_stability` | float \| None: None below two positive beat intervals, instead of 0 |
 | `SilenceCommonReport.silence_ceiling_db` | float -> float \| None: None (not measured) when every signal is silent; +inf when every signal with a level holds an exactly zero frame |
+| `TimbreFrame.brightness` | float \| None: None for a window with no frame carrying spectral energy, instead of 0 |
+| `TimbreFrame.complexity` | float \| None: None for a window with no frame carrying spectral energy, instead of 0 |
+| `TimbreFrame.density` | float \| None: None for a window with no frame carrying spectral energy, instead of 0 |
+| `TimbreFrame.roughness` | float \| None: None for a window with no frame carrying spectral energy, instead of 0 |
+| `TimbreFrame.warmth` | float \| None: None for a window with no frame carrying spectral energy, instead of 0 |
+| `TimbreResult.brightness` | float \| None: None when no frame carries spectral energy, instead of 0 |
+| `TimbreResult.complexity` | float \| None: None when no frame carries spectral energy, instead of 0 |
+| `TimbreResult.density` | float \| None: None when no frame carries spectral energy, instead of 0 |
+| `TimbreResult.roughness` | float \| None: None when no frame carries spectral energy, instead of 0 |
+| `TimbreResult.warmth` | float \| None: None when no frame carries spectral energy, instead of 0 |
+| `detect_bpm` | returns float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
 
 #### Every call scans its input for non-finite values
 
@@ -2238,6 +2298,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `HumDetection.harmonic_dbfs` | ends before the first harmonic at or past Nyquist instead of reading the dB floor; a harmonic with no energy is -inf |
 | `NoiseDetection.band_floor_dbfs` | holds only the bands an analysis bin lands in, so it can be shorter than 32; the new band_floor_band names each entry's band, and an empty band is no longer a sentinel entry |
 | `NoiseDetection.floor_dbfs` | float -> float \| None: -inf for digital silence, None when there is nothing to measure from |
+| `PercussiveEvent.percussive_ratio` | float \| None: None for an event over a silent span, instead of 0; such an event is kept only when min_percussive_ratio is not given |
 | `normalize_stereo` | a silent pair is refused with SonareValueError ('has no measurable level') instead of coming back untouched |
 
 #### Every call scans its input for non-finite values
@@ -2615,6 +2676,7 @@ Keyword arguments and attributes are snake_case, records are frozen dataclasses 
 | `LoudnessMatch.source_lufs` | `LoudnessMatchResult.source_lufs`: a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness |
 | `MasteringAssistantProfile.crestFactorDb` | `MasteringAssistantProfile.crest_factor_db`: crestFactorDb -> crest_factor_db, float \| None: None for a silent take |
 | `MasteringAssistantProfile.integratedLufs` | `MasteringAssistantProfile.integrated_lufs`: integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None |
+| `MasteringAudioProfile.bpm` | float \| None: None when no tempo is found; 1.10.0 returned the 120 BPM search seed as if it were a measured tempo, on silence among others |
 | `MasteringAudioProfileLoudness.crestFactorDb` | `MasteringAudioProfileLoudness.crest_factor_db`: crestFactorDb -> crest_factor_db, float \| None: None for a silent take |
 | `MasteringAudioProfileLoudness.integratedLufs` | `MasteringAudioProfileLoudness.integrated_lufs`: integratedLufs -> integrated_lufs: -inf for a silent or below-gate take, never None |
 | `MasteringChainResult.output_lra` | `MasteringChainResult.output_loudness_range_lu`: output_lra -> output_loudness_range_lu, float \| None: None when not measured (a take shorter than 3 s, or silence) |

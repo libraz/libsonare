@@ -150,14 +150,18 @@ class AnalysisRhythm:
 
     time_signature: TimeSignature
     """Estimated time signature."""
-    syncopation: float
-    """Syncopation level, in ``[0, 1]``."""
+    syncopation: float | None
+    """Syncopation level, in ``[0, 1]``.
+
+    ``None`` below four tracked beats, with silent accents, or without both a
+    strong- and a weak-position beat observed.
+    """
     groove_type: str
     """Rhythmic feel of the track, as a groove token."""
-    pattern_regularity: float
-    """Regularity of the beat intervals, in ``[0, 1]``; 0 with no beat interval."""
-    tempo_stability: float
-    """Tempo stability over time, in ``[0, 1]``; 0 below two beat intervals."""
+    pattern_regularity: float | None
+    """Regularity of the beat intervals, in ``[0, 1]``; ``None`` below two intervals."""
+    tempo_stability: float | None
+    """Tempo stability over time, in ``[0, 1]``; ``None`` below two positive intervals."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -209,8 +213,8 @@ class AnalysisResult:
     rate, so the two can differ on an input at another rate.
     """
 
-    bpm: float
-    """Global tempo, in beats per minute."""
+    bpm: float | None
+    """Global tempo, in beats per minute; ``None`` when no tempo was found."""
     bpm_confidence: float
     """Winning tempo cluster's vote share, in ``[0, 1]`` (see the class note)."""
     key: Key
@@ -354,8 +358,11 @@ class BpmAnalysisResult:
     descending vote share.
     """
 
-    bpm: float
-    """Chosen tempo, in beats per minute."""
+    bpm: float | None
+    """Chosen tempo, in beats per minute.
+
+    ``None`` when no tempo was found, and then ``candidates`` is empty.
+    """
     confidence: float
     """Winning tempo cluster's vote share, in ``[0, 1]`` (see the class note)."""
     candidates: list[BpmCandidate]
@@ -566,18 +573,22 @@ class EqSpectrumSnapshot:
 class RhythmResult:
     """Rhythm analysis primitives."""
 
-    bpm: float
-    """The beat tracker's own tempo, in beats per minute."""
+    bpm: float | None
+    """The beat tracker's own tempo, in beats per minute; ``None`` when no tempo was found."""
     time_signature: TimeSignature
     """Estimated time signature."""
     groove_type: str
     """Rhythmic feel of the track, as a groove token."""
-    syncopation: float
-    """Syncopation level, in ``[0, 1]``."""
-    pattern_regularity: float
-    """Regularity of the beat intervals, in ``[0, 1]``; 0 with no beat interval."""
-    tempo_stability: float
-    """Tempo stability over time, in ``[0, 1]``; 0 below two beat intervals."""
+    syncopation: float | None
+    """Syncopation level, in ``[0, 1]``.
+
+    ``None`` below four tracked beats, with silent accents, or without both a
+    strong- and a weak-position beat observed.
+    """
+    pattern_regularity: float | None
+    """Regularity of the beat intervals, in ``[0, 1]``; ``None`` below two intervals."""
+    tempo_stability: float | None
+    """Tempo stability over time, in ``[0, 1]``; ``None`` below two positive intervals."""
     beat_intervals: npt.NDArray[np.float32]
     """Intervals between consecutive beats, in seconds."""
 
@@ -612,32 +623,34 @@ class DynamicsResult:
 class TimbreFrame:
     """Timbre metrics for one analysis window in TimbreResult.timbre_over_time."""
 
-    brightness: float
+    brightness: float | None
     """Spectral brightness, in ``[0, 1]``; high is bright."""
-    warmth: float
+    warmth: float | None
     """Spectral warmth, in ``[0, 1]``; high is warm."""
-    density: float
+    density: float | None
     """Spectral density, in ``[0, 1]``; high is rich."""
-    roughness: float
+    roughness: float | None
     """Spectral roughness, in ``[0, 1]``; high is rough."""
-    complexity: float
-    """Harmonic complexity, in ``[0, 1]``; high is complex."""
+    complexity: float | None
+    """Harmonic complexity, in ``[0, 1]``; high is complex. Every timbre field is ``None`` where
+    no frame carries spectral energy."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class TimbreResult:
     """Timbre and spectral-shape analysis primitives."""
 
-    brightness: float
+    brightness: float | None
     """Spectral brightness, in ``[0, 1]``; high is bright."""
-    warmth: float
+    warmth: float | None
     """Spectral warmth, in ``[0, 1]``; high is warm."""
-    density: float
+    density: float | None
     """Spectral density, in ``[0, 1]``; high is rich."""
-    roughness: float
+    roughness: float | None
     """Spectral roughness, in ``[0, 1]``; high is rough."""
-    complexity: float
-    """Harmonic complexity, in ``[0, 1]``; high is complex."""
+    complexity: float | None
+    """Harmonic complexity, in ``[0, 1]``; high is complex. Every timbre field is ``None`` where
+    no frame carries spectral energy."""
     spectral_centroid: npt.NDArray[np.float32]
     """Spectral centroid per frame."""
     spectral_flatness: npt.NDArray[np.float32]
@@ -923,10 +936,10 @@ class PitchResult:
     """Per-frame voiced observation mass (see above)."""
     voiced_flag: NDArray[np.bool_]
     """Per-frame voicing decision."""
-    median_f0: float
-    """Median fundamental frequency over the track, in Hz."""
-    mean_f0: float
-    """Mean fundamental frequency over the track, in Hz."""
+    median_f0: float | None
+    """Median fundamental frequency of the voiced frames, in Hz; ``None`` when none is voiced."""
+    mean_f0: float | None
+    """Mean fundamental frequency of the voiced frames, in Hz; ``None`` when none is voiced."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
