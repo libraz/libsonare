@@ -57,19 +57,18 @@ int tempo_evidence_lag(int sr, int hop_length, float bpm_min);
 
 /// @brief Calls @p visit(const TempoPeak&) for each peak of @p autocorr from three times
 ///        @p bpm_max down to half of @p bpm_min, the span beat evidence is read from.
-/// @details A peak is in range inside [bpm_min, bpm_max] and below lag(bpm_min); the last two
-///          lags of that range are evidence only. Allocation free.
+/// @details A peak is in range when its refined tempo lies inside [bpm_min, bpm_max]; every other
+///          peak is evidence only. Allocation free.
 template <typename Visit>
 void for_each_tempo_peak(const float* autocorr, int size, int sr, int hop_length, float bpm_min,
                          float bpm_max, Visit&& visit) {
-  const int range_lags = std::min(bpm_to_lag(bpm_min, sr, hop_length), size);
   const int lag_first = std::max(1, bpm_to_lag(3.0f * bpm_max, sr, hop_length));
   const int lag_last = std::min(size - 2, tempo_evidence_lag(sr, hop_length, bpm_min));
   for (int lag = lag_first; lag <= lag_last; ++lag) {
     TempoPeak peak;
     if (!measure_tempo_peak(autocorr, lag, sr, hop_length, peak)) continue;
     if (peak.bpm < 0.5f * bpm_min || peak.bpm > 3.0f * bpm_max) continue;
-    peak.in_range = peak.bpm >= bpm_min && peak.bpm <= bpm_max && lag <= range_lags - 2;
+    peak.in_range = peak.bpm >= bpm_min && peak.bpm <= bpm_max;
     visit(peak);
   }
 }

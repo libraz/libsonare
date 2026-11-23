@@ -311,8 +311,9 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
                                            int hop_length, float bpm_min, float bpm_max) {
   std::vector<BpmCandidate> candidates;
 
+  // One lag past lag(bpm_min), which truncates, can still refine to a tempo inside the range.
   int lag_min = bpm_to_lag(bpm_max, sr, hop_length);
-  int lag_max = bpm_to_lag(bpm_min, sr, hop_length);
+  int lag_max = bpm_to_lag(bpm_min, sr, hop_length) + 1;
 
   lag_min = std::max(1, lag_min);
   lag_max = std::min(static_cast<int>(autocorr.size()) - 2, lag_max);
@@ -513,7 +514,8 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
   autocorr_.assign(evidence_autocorr.begin(), evidence_autocorr.begin() + max_lag);
 
   /// Find all tempo peaks
-  candidates_ = find_tempo_peaks(autocorr_, sr, hop_length, config_.bpm_min, config_.bpm_max);
+  candidates_ =
+      find_tempo_peaks(evidence_autocorr, sr, hop_length, config_.bpm_min, config_.bpm_max);
 
   if (candidates_.empty()) {
     const float local_median = median_bpm(local_bpm_curve_);

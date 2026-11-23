@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file tempo_synth.h
-/// @brief Synthetic tempo material: a duple kick and hat groove, a 6/8 groove.
+/// @brief Synthetic tempo material: a noise click, a duple kick and hat groove, a 6/8 groove.
 
 #include <cmath>
 #include <cstdint>
@@ -49,6 +49,17 @@ inline void add_kick(std::vector<float>& y, int sr, double t) {
 }
 
 }  // namespace tempo_synth_detail
+
+/// @brief A short decaying noise burst on every beat; no subdivision.
+inline Audio make_noise_click(float bpm, int sr, float duration) {
+  std::vector<float> y(static_cast<size_t>(duration * static_cast<float>(sr)), 0.0f);
+  tempo_synth_detail::Noise noise;
+  const double beat = 60.0 / bpm;
+  for (double t = 0.0; t < duration; t += beat) {
+    tempo_synth_detail::add_burst(y, sr, t, 0.8f, 0.008f, 0.05f, noise);
+  }
+  return Audio::from_vector(std::move(y), sr);
+}
 
 /// @brief Kick on every beat, snare on 2 and 4, hats on the eighths.
 inline Audio make_kick_hat_groove(float bpm, int sr, float duration) {

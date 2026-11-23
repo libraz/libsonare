@@ -590,3 +590,12 @@ TEST_CASE("A constrained tempo search returns the unconstrained estimate inside 
   // The default range spelled out is the default search, not a constraint.
   CHECK(detect_in(groove, 60.0f, 200.0f) == unconstrained);
 }
+
+TEST_CASE("A tempo just above the lower bound of the range can be chosen", "[bpm_analyzer]") {
+  // lag(bpm_min) truncates, so the last lags of a range hold its slowest tempos; they are
+  // candidates like any other lag, read from the autocorrelation that extends past them.
+  const Audio groove = test::make_kick_hat_groove(120.0f, 22050, 30.0f);
+  CHECK_THAT(detect_in(groove, 58.0f, 100.0f), WithinRel(60.0f, 0.03f));
+  const Audio click = test::make_noise_click(61.0f, 22050, 30.0f);
+  CHECK_THAT(detect_bpm(click), WithinRel(61.0f, 0.02f));
+}
