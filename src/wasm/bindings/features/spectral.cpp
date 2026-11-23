@@ -6,7 +6,6 @@
 #include "feature/spectral.h"
 
 #include "c_api/segment_input_domains.h"
-#include "c_api/sonare_c_internal.h"
 #include "core/spectrum.h"
 #include "feature/onset.h"
 #include "wasm/bindings/common/common.h"
@@ -172,9 +171,9 @@ val js_spectral_contrast(val samples, const val& sample_rate_val, const val& n_f
   config.hop_length = hop_length;
 
   Spectrogram spec = Spectrogram::compute(audio, config);
-  std::vector<float> contrast = sonare_c_detail::with_c_names(
-      std::array<sonare_c_detail::CName, 2>{{{"fmin", "fmin_hz"}, {"sr", "sample_rate"}}},
-      [&] { return spectral_contrast(spec, sample_rate, n_bands, fmin, quantile); });
+  std::vector<float> contrast = util::check::with_camel_paths(
+      [&] { return spectral_contrast(spec, sample_rate, n_bands, fmin, quantile); },
+      kCqtRequestKeys);
 
   const int rows = n_bands + 1;
   const int cols = rows > 0 ? static_cast<int>(contrast.size()) / rows : 0;

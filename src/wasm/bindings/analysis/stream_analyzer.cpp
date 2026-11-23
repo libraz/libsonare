@@ -7,7 +7,6 @@
 #include "analysis/key_analyzer.h"
 #include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
-#include "wasm/bindings/common/mel_range_names.h"
 
 // ============================================================================
 // Streaming - StreamAnalyzer
@@ -144,8 +143,8 @@ class StreamAnalyzerWrapper {
     config.output_format = OutputFormat::Float32;
     config_ = config;
     // The core refuses its mel range under its own member names; the facade keys carry the unit.
-    sonare_c_detail::with_c_names(kMelRangeNames,
-                                  [&] { analyzer_ = std::make_unique<StreamAnalyzer>(config); });
+    util::check::with_camel_paths([&] { analyzer_ = std::make_unique<StreamAnalyzer>(config); },
+                                  kMelRangeKeys);
   }
 
   /// @brief Returns the sample rate.
