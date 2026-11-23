@@ -27,6 +27,9 @@ namespace sonare {
 
 namespace {
 
+constexpr util::check::NumericDomain kCqtKernelSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Cache key for CQT kernel
 struct CqtKernelCacheKey {
   int sample_rate;
@@ -307,7 +310,7 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config,
                                              const CqtKernel* donor, int host_concurrency) {
   validate_cqt_config(config);
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within(sr, kCqtKernelSampleRateDomain, "sr");
   auto kernel = std::unique_ptr<CqtKernel>(new CqtKernel());
 
   // Center frequencies for all bins.

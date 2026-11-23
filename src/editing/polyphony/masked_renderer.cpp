@@ -22,7 +22,9 @@ Audio render_masked_notes(const Spectrogram& spec, const NoteMaskSet& masks,
     check::refuse_relation({"notes", "masks.notes"},
                            "{0} must have the same number of entries as {1}");
   }
-  check::integer_at_least(length, 0, "length");
+  constexpr check::NumericDomain kOutputLengthDomain =
+      check::integer_domain_of<decltype(length)>(0);
+  check::integer_within(length, kOutputLengthDomain, "length");
   note_model::validate_render_config(config);
   // Length 0 takes the framing's own count, known only once an inverse has run.
   const int64_t span_bound = length > 0 ? length : -1;

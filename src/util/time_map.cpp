@@ -17,6 +17,8 @@ namespace {
 
 constexpr size_t kMaxCount =
     std::min<size_t>(resource::kMaxOfflineAudioSamples, static_cast<size_t>(INT_MAX));
+constexpr util::check::NumericDomain kTimeMapHopDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kHoldFrameCountDomain = util::check::integer_domain_of<int>(1);
 
 /// Refuses a stretched length past kMaxCount, naming the speed ratio that scales it.
 [[noreturn]] void refuse_stretched_length() {
@@ -160,7 +162,7 @@ int TimeStretchMap::output_frame_count(int input_frame_count) const {
 }
 
 size_t TimeStretchMap::output_sample_count(size_t input_sample_count, int hop_length) const {
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(hop_length, kTimeMapHopDomain, "hop_length");
   if (constant()) {
     size_t count = 0;
     if (!numeric::checked_projected_count(input_sample_count, segments_[0].rate, kMaxCount,
@@ -214,7 +216,7 @@ std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds
     const HoldRange& hold = holds[i];
     if (hold.frame_count <= 0) {
       const std::string subject = util::check::indexed_subject("holds", i, "frame_count");
-      util::check::integer_at_least(hold.frame_count, 1, subject.c_str());
+      util::check::integer_within(hold.frame_count, kHoldFrameCountDomain, subject.c_str());
     }
     if (hold.first_frame < cursor) {
       const std::string subject = util::check::indexed_subject("holds", i, "first_frame");

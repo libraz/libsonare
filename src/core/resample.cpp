@@ -12,9 +12,14 @@
 
 namespace sonare {
 
+namespace {
+constexpr util::check::NumericDomain kRawResampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+}  // namespace
+
 std::vector<float> resample(const float* samples, size_t size, int src_sr, int target_sr) {
-  util::check::integer_at_least(src_sr, 1, "sample_rate");
-  util::check::integer_at_least(target_sr, 1, "target_sample_rate");
+  util::check::integer_within(src_sr, kRawResampleRateDomain, "sample_rate");
+  util::check::integer_within(target_sr, kRawResampleRateDomain, "target_sample_rate");
   // Reject null + size>0 before either the copy or resampler path can dereference it.
   // A null pointer with size==0 is treated as an empty input (valid).
   SONARE_CHECK_MSG(samples != nullptr || size == 0, ErrorCode::InvalidParameter,
@@ -172,7 +177,7 @@ std::vector<float> resample_impulse_response(const float* samples, size_t size, 
 
 Audio resample(const Audio& audio, int target_sr) {
   if (audio.empty()) {
-    util::check::integer_at_least(target_sr, 1, "target_sample_rate");
+    util::check::integer_within(target_sr, kRawResampleRateDomain, "target_sample_rate");
     return Audio::from_buffer(nullptr, 0, target_sr);
   }
 

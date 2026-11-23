@@ -21,6 +21,9 @@ namespace sonare {
 
 namespace {
 
+constexpr util::check::NumericDomain kDecomposeStemsSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+
 // Divide-by-amplitude / near-zero guard (== sonare::constants::kAmpEpsilon, 1e-9f).
 constexpr float kEps = sonare::constants::kAmpEpsilon;
 
@@ -500,7 +503,7 @@ DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
   if (n == 0) {
     util::check::refuse_outside(util::check::integer_domain_at_least(1), "length");
   }
-  util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  util::check::integer_within(sample_rate, kDecomposeStemsSampleRateDomain, "sample_rate");
 
   const StftConfig stft_config = make_stft_config(checked.n_fft, checked.hop_length);
   std::vector<Audio> audio;

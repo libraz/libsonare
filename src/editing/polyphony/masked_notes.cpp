@@ -88,7 +88,10 @@ std::vector<note_model::NoteObject> make_notes_over(const StftGeometry& geometry
       check::refuse_relation({mask_path + ".n_frames", ridge_path + ".f0_hz"},
                              "{0} must equal the length of {1}");
     }
-    check::integer_at_least(ridge.frame_start, 0, (ridge_path + ".frame_start").c_str());
+    constexpr check::NumericDomain kRidgeFrameStartDomain =
+        check::integer_domain_of<decltype(ridge.frame_start)>(0);
+    check::integer_within(ridge.frame_start, kRidgeFrameStartDomain,
+                          (ridge_path + ".frame_start").c_str());
     if (ridge.frame_end() > track.n_frames) {
       check::refuse_relation({ridge_path + ".frame_start", ridge_path + ".f0_hz", "track.n_frames"},
                              "{0} plus the length of {1} must be at most {2}");
@@ -106,7 +109,9 @@ std::vector<note_model::NoteObject> make_notes_over(const StftGeometry& geometry
   if (!(config.segmenter.reference_hz > 0.0f)) {
     check::refuse("config.segmenter.reference_hz", "must be greater than 0");
   }
-  check::integer_at_least(length, 0, "length");
+  constexpr check::NumericDomain kOutputLengthDomain =
+      check::integer_domain_of<decltype(length)>(0);
+  check::integer_within(length, kOutputLengthDomain, "length");
 
   // The length the full-length inverse would have.
   const int64_t whole = length > 0

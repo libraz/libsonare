@@ -19,6 +19,9 @@ using sonare::constants::kSpectrumEpsilon;
 
 namespace {
 
+constexpr util::check::NumericDomain kFormantWarpLpcOrderDomain =
+    util::check::integer_domain_of<int>(0);
+
 constexpr int kFrameRateReference = 48000;
 constexpr float kUnityTolerance = 1.0e-6f;
 
@@ -280,7 +283,7 @@ FormantWarp::FormantWarp(FormantWarpConfig config) : config_(config) {}
 Audio FormantWarp::process(const Audio& audio) const {
   if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   util::check::finite_float(config_.factor, "factor");
-  util::check::integer_at_least(config_.lpc_order, 0, "lpc_order");
+  util::check::integer_within(config_.lpc_order, kFormantWarpLpcOrderDomain, "lpc_order");
 
   const int sr = audio.sample_rate();
   const int frame_size =

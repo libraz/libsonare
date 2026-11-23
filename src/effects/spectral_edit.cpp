@@ -21,6 +21,9 @@ static_assert(kSpectralEditMaxNFft <= kMaxStftNFft,
 
 namespace {
 
+constexpr util::check::NumericDomain kSpectralEditHealRadiusDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Resolved bin/frame window for one region op (inclusive on both edges).
 struct RegionWindow {
   int bin_lo;
@@ -201,7 +204,8 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
   util::check::power_of_two_within(config.n_fft, kSpectralEditNFftDomain, "n_fft");
   const int hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
   validate_cola_geometry(config.n_fft, hop_length);
-  util::check::integer_at_least(config.heal_radius_frames, 1, "heal_radius_frames");
+  util::check::integer_within(config.heal_radius_frames, kSpectralEditHealRadiusDomain,
+                              "heal_radius_frames");
   util::check::non_null_when_count(ops, n_ops, "ops", "n_ops");
   for (std::size_t i = 0; i < n_ops; ++i) {
     util::check::under_member("ops[" + std::to_string(i) + "]",

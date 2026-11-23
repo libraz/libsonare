@@ -255,8 +255,11 @@ void validate_note_for_render_fields(const NoteObject& note, int64_t audio_sampl
 void validate_note_span_and_edit(const NoteObject& note, int64_t audio_samples,
                                  const std::string& subject_prefix) {
   const auto subject = [&subject_prefix](const char* field) { return subject_prefix + field; };
+  constexpr util::check::NumericDomain kNoteOnsetSampleDomain =
+      util::check::integer_domain_of<decltype(note.onset_sample)>(0);
   if (note.onset_sample < 0) {
-    util::check::integer_at_least(note.onset_sample, 0, subject("onset_sample").c_str());
+    util::check::integer_within(note.onset_sample, kNoteOnsetSampleDomain,
+                                subject("onset_sample").c_str());
   }
   if (!(note.offset_sample > note.onset_sample)) {
     util::check::refuse_relation({subject("offset_sample"), subject("onset_sample")},

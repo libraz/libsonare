@@ -23,9 +23,11 @@ namespace sonare {
 
 namespace {
 
+constexpr util::check::NumericDomain kHpssDimensionDomain = util::check::integer_domain_of<int>(1);
+
 size_t checked_spectrogram_size(int n_bins, int n_frames) {
-  util::check::integer_at_least(n_bins, 1, "n_bins");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
+  util::check::integer_within(n_bins, kHpssDimensionDomain, "n_bins");
+  util::check::integer_within(n_frames, kHpssDimensionDomain, "n_frames");
   return util::check::element_count(
       static_cast<std::uint64_t>(n_bins), static_cast<std::uint64_t>(n_frames),
       std::min(kMaxAudioBufferSize, static_cast<std::size_t>(INT_MAX)), "n_frames",

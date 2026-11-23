@@ -10,6 +10,9 @@
 namespace sonare::metering {
 namespace {
 
+constexpr util::check::NumericDomain kWaveformChannelCountDomain =
+    util::check::integer_domain_of<int>(1);
+
 struct MinMax {
   float min;
   float max;
@@ -53,7 +56,7 @@ void validate_samples_per_bucket(size_t samples_per_bucket) {
 WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int channels,
                                    size_t samples_per_bucket) {
   util::check::non_null_when_count(samples, frames, "samples", "frames");
-  util::check::integer_at_least(channels, 1, "num_channels");
+  util::check::integer_within<int>(channels, kWaveformChannelCountDomain, "num_channels");
   validate_samples_per_bucket(samples_per_bucket);
   const size_t channel_count = static_cast<size_t>(channels);
   SONARE_CHECK(frames <= std::numeric_limits<size_t>::max() / channel_count,

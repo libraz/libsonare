@@ -14,6 +14,11 @@ namespace sonare {
 
 namespace {
 
+constexpr util::check::NumericDomain kChromaSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kChromaFftSizeDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kChromaCountDomain = util::check::integer_domain_of<int>(1);
+
 /// @brief Snaps a float key field to a fixed grid so bitwise-different but
 /// logically-equal UI inputs (e.g. 32.70 vs 32.7000007) collapse to the same
 /// value before the key is hashed/compared. Quantizing at key construction is
@@ -101,9 +106,9 @@ float hz_to_chroma(float hz, float tuning) {
 }
 
 std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilterConfig& config) {
-  util::check::integer_at_least(sr, 1, "sample_rate");
-  util::check::integer_at_least(n_fft, 1, "n_fft");
-  util::check::integer_at_least(config.n_chroma, 1, "n_chroma");
+  util::check::integer_within<int>(sr, kChromaSampleRateDomain, "sample_rate");
+  util::check::integer_within<int>(n_fft, kChromaFftSizeDomain, "n_fft");
+  util::check::integer_within<int>(config.n_chroma, kChromaCountDomain, "n_chroma");
 
   // Direct port of librosa.filters.chroma: Gaussian bumps per FFT bin, an
   // optional per-octave Gaussian envelope (ctroct/octwidth), column (axis=0)

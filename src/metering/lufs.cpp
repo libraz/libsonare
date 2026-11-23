@@ -32,6 +32,9 @@ constexpr size_t kChunkFrames = 1u << 17;
 constexpr float kMaxBlockOverlap = 0.99f;
 constexpr util::check::NumericDomain kLufsBlockOverlapDomain =
     util::check::real_domain(0.0, true, 1.0, false);
+constexpr util::check::NumericDomain kLufsSampleRateDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kLufsChannelCountDomain =
+    util::check::integer_domain_of<int>(1);
 
 // Energies are accumulated in double, so a quiet block keeps its full range; only zero energy
 // has no measurable loudness (-inf), which the gates below then drop as the standard says.
@@ -290,8 +293,8 @@ LufsResult measure_lufs(const float* samples, size_t frames, int channels, int s
                         const LufsConfig& config, std::vector<float>* momentary_out,
                         std::vector<float>* short_term_out) {
   validate_config(config);
-  util::check::integer_at_least(sample_rate, 1, "sample_rate");
-  util::check::integer_at_least(channels, 1, "num_channels");
+  util::check::integer_within<int>(sample_rate, kLufsSampleRateDomain, "sample_rate");
+  util::check::integer_within<int>(channels, kLufsChannelCountDomain, "num_channels");
   util::check::non_null_when_count(samples, frames, "samples", "frames");
 
   const WeightedBlockEnergies blocks =
@@ -322,8 +325,8 @@ LufsGainToTarget gain_to_integrated_lufs(const float* samples, size_t frames, in
                                          int sample_rate, float target_lufs,
                                          const LufsConfig& config) {
   validate_config(config);
-  util::check::integer_at_least(sample_rate, 1, "sample_rate");
-  util::check::integer_at_least(channels, 1, "num_channels");
+  util::check::integer_within<int>(sample_rate, kLufsSampleRateDomain, "sample_rate");
+  util::check::integer_within<int>(channels, kLufsChannelCountDomain, "num_channels");
   util::check::non_null_when_count(samples, frames, "samples", "frames");
 
   const std::vector<double> energies =

@@ -212,7 +212,9 @@ MultiF0Estimator::MultiF0Estimator(const CentAxis& spectrum_axis, const MultiF0C
     : kernel_(spectrum_axis, search_range(config.salience)), config_(config) {
   // Bounded above as well as below because the iteration count is derived from
   // it; what 64 refuses is on MultiF0Config::max_polyphony.
-  util::check::integer_in_range(config.max_polyphony, 1, kMaxPolyphonyVoices, "max_polyphony");
+  constexpr util::check::NumericDomain kMaxPolyphonyDomain =
+      util::check::integer_domain(1, kMaxPolyphonyVoices);
+  util::check::integer_within(config.max_polyphony, kMaxPolyphonyDomain, "max_polyphony");
   // The last bin an axis ending at the configured ceiling would have carried.
   report_max_hz_ =
       kernel_.f0_axis().hz_at(std::ceil(kernel_.f0_axis().bin_at(config.salience.f0_max_hz)));
@@ -353,8 +355,12 @@ int MultiF0Estimator::explaining_subharmonic(int peak, float peak_hz,
 
 std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>& frames,
                                      int hop_length, int sample_rate, const RidgeConfig& config) {
-  util::check::integer_at_least(hop_length, 1, "hop_length");
-  util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  constexpr util::check::NumericDomain kRidgeHopLengthDomain =
+      util::check::integer_domain_of<decltype(hop_length)>(1);
+  constexpr util::check::NumericDomain kRidgeSampleRateDomain =
+      util::check::integer_domain_of<decltype(sample_rate)>(1);
+  util::check::integer_within(hop_length, kRidgeHopLengthDomain, "hop_length");
+  util::check::integer_within(sample_rate, kRidgeSampleRateDomain, "sample_rate");
   util::check::greater_than(config.max_jump_cents, 0.0, "max_jump_cents");
   util::check::in_range(config.min_ridge_peak_ratio, 0.0, 1.0, "min_ridge_peak_ratio");
   util::check::at_least(config.min_duration_ms, 0.0, "min_duration_ms");

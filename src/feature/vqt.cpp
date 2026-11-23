@@ -22,6 +22,8 @@ using sonare::constants::kTwoPi;
 
 namespace {
 
+constexpr util::check::NumericDomain kVqtSampleRateDomain = util::check::integer_domain_of<int>(1);
+
 /// @brief Cache key for VQT kernel
 struct VqtKernelCacheKey {
   int sample_rate;
@@ -111,7 +113,7 @@ std::vector<float> vqt_frequencies(float fmin, int n_bins, int bins_per_octave) 
 
 std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bins_per_octave,
                                   float gamma) {
-  util::check::integer_at_least(bins_per_octave, 1, "bins_per_octave");
+  util::check::integer_within(bins_per_octave, kCqtCountDomain, "bins_per_octave");
   util::check::within(gamma, kVqtGammaDomain, "gamma");
   const size_t n = frequencies.size();
   std::vector<float> bandwidths(n);
@@ -134,7 +136,7 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
 
 std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   validate_cqt_config(config.to_cqt_config());
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within(sr, kVqtSampleRateDomain, "sr");
   util::check::within(config.gamma, kVqtGammaDomain, "gamma");
   auto kernel = std::unique_ptr<VqtKernel>(new VqtKernel());
 

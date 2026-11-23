@@ -165,7 +165,9 @@ float CentAxis::bin_at(float hz) const {
 }
 
 std::vector<float> tonality_weights(const float* inst_freq_hz, int n_bins, float bin_hz) {
-  util::check::integer_at_least(n_bins, 2, "n_bins");
+  constexpr util::check::NumericDomain kTonalityBinCountDomain =
+      util::check::integer_domain_of<decltype(n_bins)>(2);
+  util::check::integer_within(n_bins, kTonalityBinCountDomain, "n_bins");
   util::check::greater_than(bin_hz, 0.0, "bin_hz");
 
   std::vector<float> weights(static_cast<size_t>(n_bins));
@@ -195,7 +197,9 @@ float* CentSpectrum::column(int frame) {
 }
 
 CentSpectrum compute_cent_spectrum(const Spectrogram& spec, const CentSpectrumConfig& config) {
-  util::check::integer_at_least(spec.n_frames(), 2, "spec.n_frames");
+  constexpr util::check::NumericDomain kCentSpectrumFrameCountDomain =
+      util::check::integer_domain_of<decltype(spec.n_frames())>(2);
+  util::check::integer_within(spec.n_frames(), kCentSpectrumFrameCountDomain, "spec.n_frames");
   // Named rather than bare: these three are set straight through from every
   // binding, so the refusal is the only place a caller learns the bound.
   util::check::greater_than(config.ref_hz, 0.0, "ref_hz");
@@ -274,10 +278,16 @@ CentSpectrum compute_cent_spectrum(const Spectrogram& spec, const CentSpectrumCo
 }
 
 SalienceKernel::SalienceKernel(const CentAxis& spectrum_axis, const SalienceConfig& config) {
-  util::check::integer_at_least(spectrum_axis.n_bins, 1, "spectrum_axis.n_bins");
+  constexpr util::check::NumericDomain kSalienceAxisBinCountDomain =
+      util::check::integer_domain_of<decltype(spectrum_axis.n_bins)>(1);
+  constexpr util::check::NumericDomain kSalienceAxisBoundedBinCountDomain =
+      util::check::integer_domain(1, kMaxAxisBins);
+  util::check::integer_within(spectrum_axis.n_bins, kSalienceAxisBinCountDomain,
+                              "spectrum_axis.n_bins");
   util::check::greater_than(spectrum_axis.ref_hz, 0.0, "spectrum_axis.ref_hz");
   util::check::at_least(spectrum_axis.cents_per_bin, 1.0, "spectrum_axis.cents_per_bin");
-  util::check::integer_in_range(spectrum_axis.n_bins, 1, kMaxAxisBins, "spectrum_axis.n_bins");
+  util::check::integer_within(spectrum_axis.n_bins, kSalienceAxisBoundedBinCountDomain,
+                              "spectrum_axis.n_bins");
   util::check::integer_in_range(config.n_harmonics, 1, kMaxSalienceHarmonics, "n_harmonics");
   util::check::finite_float(config.f0_min_hz, "f0_min_hz");
   if (!(std::isfinite(config.f0_max_hz) && config.f0_max_hz > config.f0_min_hz)) {
@@ -393,8 +403,13 @@ const float* SalienceSurface::column(int frame) const {
 }
 
 SalienceSurface compute_salience(const CentSpectrum& spectrum, const SalienceConfig& config) {
-  util::check::integer_at_least(spectrum.n_frames, 1, "spectrum.n_frames");
-  util::check::integer_at_least(spectrum.axis.n_bins, 1, "spectrum.axis.n_bins");
+  constexpr util::check::NumericDomain kSalienceFrameCountDomain =
+      util::check::integer_domain_of<decltype(spectrum.n_frames)>(1);
+  constexpr util::check::NumericDomain kSalienceAxisBinCountDomain =
+      util::check::integer_domain_of<decltype(spectrum.axis.n_bins)>(1);
+  util::check::integer_within(spectrum.n_frames, kSalienceFrameCountDomain, "spectrum.n_frames");
+  util::check::integer_within(spectrum.axis.n_bins, kSalienceAxisBinCountDomain,
+                              "spectrum.axis.n_bins");
   if (spectrum.values.size() !=
       static_cast<size_t>(spectrum.n_frames) * static_cast<size_t>(spectrum.axis.n_bins)) {
     util::check::refuse("spectrum.values", "must have one entry per frame and axis bin");

@@ -35,6 +35,8 @@ using Complexd = std::complex<double>;
 /// note's own decay and drift have stopped reading as a fixed set of poles.
 constexpr int kMinWindowFrames = 4;
 constexpr int kMaxWindowFrames = 64;
+constexpr check::NumericDomain kSharedBinWindowFramesDomain =
+    check::integer_domain(kMinWindowFrames, kMaxWindowFrames);
 
 /// The assignment enumerates the orders, so one claimant past this is a hang and
 /// not a slower answer. The default window admits 4, so this is unreachable there.
@@ -77,8 +79,7 @@ double refine_ceiling_hz(const SharedBinConfig& config, double sample_rate, doub
 }
 
 void check_config(const SharedBinConfig& config) {
-  check::integer_in_range(config.window_frames, kMinWindowFrames, kMaxWindowFrames,
-                          "config.window_frames");
+  check::integer_within(config.window_frames, kSharedBinWindowFramesDomain, "config.window_frames");
   check::in_interval(config.min_partial_separation, 0.0, false, kPi, true,
                      "config.min_partial_separation");
   check::in_interval(config.max_fit_residual, 0.0, false, 1.0, true, "config.max_fit_residual");
@@ -93,9 +94,18 @@ void check_inputs(const StftGeometry& geometry, const NoteMaskSet& masks, const 
   if (geometry.empty()) {
     check::refuse(geometry_subject.c_str(), "must not be empty");
   }
-  check::integer_at_least(geometry.n_fft, 1, (geometry_subject + ".n_fft").c_str());
-  check::integer_at_least(geometry.hop_length, 1, (geometry_subject + ".hop_length").c_str());
-  check::integer_at_least(geometry.sample_rate, 1, (geometry_subject + ".sample_rate").c_str());
+  constexpr check::NumericDomain kGeometryFftSizeDomain =
+      check::integer_domain_of<decltype(geometry.n_fft)>(1);
+  constexpr check::NumericDomain kGeometryHopLengthDomain =
+      check::integer_domain_of<decltype(geometry.hop_length)>(1);
+  constexpr check::NumericDomain kGeometrySampleRateDomain =
+      check::integer_domain_of<decltype(geometry.sample_rate)>(1);
+  check::integer_within(geometry.n_fft, kGeometryFftSizeDomain,
+                        (geometry_subject + ".n_fft").c_str());
+  check::integer_within(geometry.hop_length, kGeometryHopLengthDomain,
+                        (geometry_subject + ".hop_length").c_str());
+  check::integer_within(geometry.sample_rate, kGeometrySampleRateDomain,
+                        (geometry_subject + ".sample_rate").c_str());
   // The hop and the rate as well as the sizes: a set from another framing indexes
   // the same array while meaning different times.
   if (masks.n_bins != geometry.n_bins) {
@@ -147,7 +157,10 @@ void check_inputs(const StftGeometry& geometry, const NoteMaskSet& masks, const 
   for (size_t i = 0; i < track.ridges.size(); ++i) {
     const F0Ridge& ridge = track.ridges[i];
     const std::string ridge_path = "track.ridges[" + std::to_string(i) + "]";
-    check::integer_at_least(ridge.frame_start, 0, (ridge_path + ".frame_start").c_str());
+    constexpr check::NumericDomain kRidgeFrameStartDomain =
+        check::integer_domain_of<decltype(ridge.frame_start)>(0);
+    check::integer_within(ridge.frame_start, kRidgeFrameStartDomain,
+                          (ridge_path + ".frame_start").c_str());
     if (ridge.f0_hz.empty()) check::refuse((ridge_path + ".f0_hz").c_str(), "must not be empty");
     if (ridge.frame_end() > geometry.n_frames) {
       check::refuse_relation(

@@ -13,6 +13,9 @@ namespace sonare {
 
 namespace {
 
+constexpr util::check::NumericDomain kOnsetSpectrogramDimensionDomain =
+    util::check::integer_domain_of<int>(1);
+
 // librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
 constexpr float kAmin = constants::kEpsilon;
 
@@ -243,8 +246,8 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
 
 std::vector<float> spectral_flux(const float* magnitude, int n_bins, int n_frames, int lag) {
   util::check::non_null(magnitude, "magnitude");
-  util::check::integer_at_least(n_bins, 1, "n_bins");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
+  util::check::integer_within(n_bins, kOnsetSpectrogramDimensionDomain, "n_bins");
+  util::check::integer_within(n_frames, kOnsetSpectrogramDimensionDomain, "n_frames");
   util::check::integer_within<int>(lag, kOnsetCountDomain, "lag");
 
   std::vector<float> flux(n_frames, 0.0f);

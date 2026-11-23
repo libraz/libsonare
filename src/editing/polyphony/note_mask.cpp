@@ -73,10 +73,22 @@ void check_geometry(const StftGeometry& geometry, const NoteMaskConfig& config,
   }
   // A partial is a frequency read at one bin spacing over one lobe, so a
   // spectrogram carrying neither is not an input this can read.
-  check::integer_at_least(geometry.n_fft, 1, (geometry_subject + ".n_fft").c_str());
-  check::integer_at_least(geometry.win_length, 1, (geometry_subject + ".win_length").c_str());
-  check::integer_at_least(geometry.hop_length, 1, (geometry_subject + ".hop_length").c_str());
-  check::integer_at_least(geometry.sample_rate, 1, (geometry_subject + ".sample_rate").c_str());
+  constexpr check::NumericDomain kGeometryFftSizeDomain =
+      check::integer_domain_of<decltype(geometry.n_fft)>(1);
+  constexpr check::NumericDomain kGeometryWindowLengthDomain =
+      check::integer_domain_of<decltype(geometry.win_length)>(1);
+  constexpr check::NumericDomain kGeometryHopLengthDomain =
+      check::integer_domain_of<decltype(geometry.hop_length)>(1);
+  constexpr check::NumericDomain kGeometrySampleRateDomain =
+      check::integer_domain_of<decltype(geometry.sample_rate)>(1);
+  check::integer_within(geometry.n_fft, kGeometryFftSizeDomain,
+                        (geometry_subject + ".n_fft").c_str());
+  check::integer_within(geometry.win_length, kGeometryWindowLengthDomain,
+                        (geometry_subject + ".win_length").c_str());
+  check::integer_within(geometry.hop_length, kGeometryHopLengthDomain,
+                        (geometry_subject + ".hop_length").c_str());
+  check::integer_within(geometry.sample_rate, kGeometrySampleRateDomain,
+                        (geometry_subject + ".sample_rate").c_str());
   check::integer_in_range(config.n_harmonics, 1, kMaxNoteMaskHarmonics, "config.n_harmonics");
   check::in_interval(config.claim_lobes, 0.0, false, kMaxClaimLobes, true, "config.claim_lobes");
   check::at_least(config.inharmonicity, 0.0, "config.inharmonicity");
@@ -101,8 +113,12 @@ void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames, const std:
 }
 
 void check_set_shape(const NoteMaskSet& masks) {
-  check::integer_at_least(masks.n_bins, 1, "masks.n_bins");
-  check::integer_at_least(masks.n_frames, 1, "masks.n_frames");
+  constexpr check::NumericDomain kMaskBinCountDomain =
+      check::integer_domain_of<decltype(masks.n_bins)>(1);
+  constexpr check::NumericDomain kMaskFrameCountDomain =
+      check::integer_domain_of<decltype(masks.n_frames)>(1);
+  check::integer_within(masks.n_bins, kMaskBinCountDomain, "masks.n_bins");
+  check::integer_within(masks.n_frames, kMaskFrameCountDomain, "masks.n_frames");
   for (size_t i = 0; i < masks.notes.size(); ++i) {
     const std::string subject = "masks.notes[" + std::to_string(i) + "]";
     check_mask_shape(masks.notes[i], masks.n_bins, masks.n_frames, subject, "masks.n_frames");
@@ -200,7 +216,10 @@ NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& t
   for (size_t i = 0; i < track.ridges.size(); ++i) {
     const F0Ridge& ridge = track.ridges[i];
     const std::string ridge_path = "track.ridges[" + std::to_string(i) + "]";
-    check::integer_at_least(ridge.frame_start, 0, (ridge_path + ".frame_start").c_str());
+    constexpr check::NumericDomain kRidgeFrameStartDomain =
+        check::integer_domain_of<decltype(ridge.frame_start)>(0);
+    check::integer_within(ridge.frame_start, kRidgeFrameStartDomain,
+                          (ridge_path + ".frame_start").c_str());
     if (ridge.frame_end() > geometry.n_frames) {
       check::refuse_relation(
           {ridge_path + ".frame_start", ridge_path + ".f0_hz", "geometry.n_frames"},
@@ -334,7 +353,9 @@ NoteSegment invert_cells(const StftGeometry& geometry, const NoteMask& mask, int
     check::refuse(geometry_subject.c_str(), "must not be empty");
   }
   check_mask_shape(mask, geometry.n_bins, geometry.n_frames, mask_subject, frame_count_subject);
-  check::integer_at_least(length, 0, "length");
+  constexpr check::NumericDomain kOutputLengthDomain =
+      check::integer_domain_of<decltype(length)>(0);
+  check::integer_within(length, kOutputLengthDomain, "length");
 
   const int n_bins = geometry.n_bins;
   const int n_frames = geometry.n_frames;

@@ -605,11 +605,20 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   return Audio::from_vector(std::move(output), sample_rate_);
 }
 
+namespace {
+constexpr util::check::NumericDomain kGriffinLimBinCountDomain =
+    util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kGriffinLimFrameCountDomain =
+    util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kGriffinLimSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+}  // namespace
+
 Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, int hop_length,
                   int sample_rate, const GriffinLimConfig& config) {
   util::check::non_null(magnitude, "magnitude");
-  util::check::integer_at_least(n_bins, 1, "n_bins");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
+  util::check::integer_within(n_bins, kGriffinLimBinCountDomain, "n_bins");
+  util::check::integer_within(n_frames, kGriffinLimFrameCountDomain, "n_frames");
   if (n_bins != n_fft / 2 + 1) {
     util::check::refuse_relation({"n_bins", "n_fft"}, "{0} must equal {1} / 2 + 1");
   }
@@ -702,7 +711,9 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // re-analysis can return to and no phase estimate can change, so every
   // iteration count yields the same reconstruction as none.
   const int iterations = n_frames > 1 ? config.n_iter : 0;
-  if (iterations > 0) util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  if (iterations > 0) {
+    util::check::integer_within(sample_rate, kGriffinLimSampleRateDomain, "sample_rate");
+  }
   for (int iter = 0; iter < iterations; ++iter) {
     griffin_lim_synthesize(spectrum.data(), n_bins, n_frames, n_fft, hop_length, synthesis_window,
                            window_product_vec, fft, frame_spectrum, frame, output, window_sum);
@@ -783,6 +794,9 @@ MagPhase magphase(const Spectrogram& spec, float power) {
 
 namespace {
 
+constexpr util::check::NumericDomain kReassignmentFftSizeDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Builds the three windows used by reassignment.
 /// @details `padded_window` is the analysis window, zero-padded to n_fft.
 ///          `t_window` is the time-weighted window `(t - half) * w(t)`.
@@ -835,8 +849,8 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   // inherit that path's n_fft/hop_length > 0 guard. Without this check,
   // hop_length == 0 divides by zero in the workspace frame-count math
   // (SIGFPE) instead of returning a recoverable error.
-  util::check::integer_at_least(n_fft, 1, "n_fft");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(n_fft, kReassignmentFftSizeDomain, "n_fft");
+  util::check::integer_within(hop_length, kStftHopDomain, "hop_length");
   const int win_length = config.actual_win_length();
   if (win_length > n_fft) {
     util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");
@@ -907,8 +921,8 @@ std::vector<float> reassign_axis(const Audio& audio, const StftConfig& config, f
   if (audio.empty()) util::check::refuse("audio", util::refusal::kNonEmptyPredicate);
   const int n_fft = config.n_fft;
   const int hop_length = config.hop_length;
-  util::check::integer_at_least(n_fft, 1, "n_fft");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(n_fft, kReassignmentFftSizeDomain, "n_fft");
+  util::check::integer_within(hop_length, kStftHopDomain, "hop_length");
   const int win_length = config.actual_win_length();
   if (win_length > n_fft) {
     util::check::refuse_relation({"win_length", "n_fft"}, "{0} must be at most {1}");

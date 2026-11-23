@@ -19,6 +19,7 @@ namespace sonare::editing::note_model {
 namespace {
 
 using sonare::constants::kCentsPerOctave;
+constexpr util::check::NumericDomain kFrameStartDomain = util::check::integer_domain_of<int>(0);
 
 int64_t frame_to_sample(int frame, double samples_per_frame, int64_t n_samples) noexcept {
   if (frame <= 0 || !(samples_per_frame > 0.0)) return 0;
@@ -73,11 +74,13 @@ ResolvedTrack resolve_track(int sample_rate, int64_t n_samples, const pitch_edit
   const auto subject = [track_name](const char* field) {
     return std::string(track_name) + "." + field;
   };
+  constexpr util::check::NumericDomain kSampleCountDomain =
+      util::check::integer_domain_of<decltype(n_samples)>(1);
   if (n_samples <= 0) {
     if (sample_count_is_audio) {
       util::check::refuse(sample_count_subject, "must not be empty");
     }
-    util::check::integer_at_least(n_samples, 1, sample_count_subject);
+    util::check::integer_within(n_samples, kSampleCountDomain, sample_count_subject);
   }
   if (track.n_frames() <= 0) {
     util::check::refuse(subject("f0_hz").c_str(), "must have a positive frame count");
@@ -329,7 +332,7 @@ NoteObject make_note(const Audio& audio, const pitch_editor::F0Track& track, int
   const ResolvedTrack resolved_track = resolve_track(audio.sample_rate(), n_samples, track, config,
                                                      "audio", true, "audio.sample_rate");
   const pitch_editor::F0Track& resolved = resolved_track.get();
-  if (frame_start < 0) util::check::integer_at_least(frame_start, 0, "frame_start");
+  if (frame_start < 0) util::check::integer_within(frame_start, kFrameStartDomain, "frame_start");
   if (!(frame_start < frame_end)) {
     util::check::refuse_relation({"frame_start", "frame_end"}, "{0} must be less than {1}");
   }
@@ -348,7 +351,7 @@ NoteObject make_note(const Audio& segment, int64_t segment_start, int64_t n_samp
   const ResolvedTrack resolved_track = resolve_track(
       segment.sample_rate(), n_samples, track, config, "n_samples", false, "segment.sample_rate");
   const pitch_editor::F0Track& resolved = resolved_track.get();
-  if (frame_start < 0) util::check::integer_at_least(frame_start, 0, "frame_start");
+  if (frame_start < 0) util::check::integer_within(frame_start, kFrameStartDomain, "frame_start");
   if (!(frame_start < frame_end)) {
     util::check::refuse_relation({"frame_start", "frame_end"}, "{0} must be less than {1}");
   }

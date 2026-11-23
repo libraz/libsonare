@@ -12,6 +12,13 @@ namespace sonare {
 
 namespace {
 
+constexpr util::check::NumericDomain kMelSampleRateDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kMelFftSizeDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kMelBinCountDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kMelFrameCountDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kMelApplyBandCountDomain =
+    util::check::integer_domain_of<int>(1);
+
 /// @brief Cache key for Mel filterbank.
 struct MelFilterbankCacheKey {
   int sample_rate;
@@ -68,8 +75,8 @@ std::vector<float> mel_frequency_points(int n_points, float fmin, float fmax, bo
 }
 
 std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfig& config) {
-  util::check::integer_at_least(sr, 1, "sample_rate");
-  util::check::integer_at_least(n_fft, 1, "n_fft");
+  util::check::integer_within<int>(sr, kMelSampleRateDomain, "sample_rate");
+  util::check::integer_within<int>(n_fft, kMelFftSizeDomain, "n_fft");
   util::check::integer_within<int>(config.n_mels, kMelBandsDomain, "n_mels");
 
   int n_bins = n_fft / 2 + 1;
@@ -166,9 +173,9 @@ std::vector<float> apply_mel_filterbank(const float* power, int n_bins, int n_fr
                                         const float* filterbank, int n_mels) {
   util::check::non_null(power, "power");
   util::check::non_null(filterbank, "filterbank");
-  util::check::integer_at_least(n_bins, 1, "n_bins");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
-  util::check::integer_at_least(n_mels, 1, "n_mels");
+  util::check::integer_within<int>(n_bins, kMelBinCountDomain, "n_bins");
+  util::check::integer_within<int>(n_frames, kMelFrameCountDomain, "n_frames");
+  util::check::integer_within<int>(n_mels, kMelApplyBandCountDomain, "n_mels");
 
   // Output: [n_mels x n_frames], extent in size_t so a long signal cannot wrap it.
   std::vector<float> mel_spec(static_cast<size_t>(n_mels) * static_cast<size_t>(n_frames));

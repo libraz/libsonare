@@ -195,6 +195,9 @@ namespace {
 // Octave span of the chroma CQT grid, matching ChromaCqtConfig's default
 // (252 bins at 36 bins/octave) and the binding-level chroma entry points.
 constexpr int kChromaOctaves = 7;
+constexpr util::check::NumericDomain kChromaDtwHopDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kChromaDtwBinsPerOctaveDomain =
+    util::check::integer_domain(1, std::numeric_limits<int>::max() / kChromaOctaves);
 
 // Strictly-monotonic de-duplication of anchors sorted by warp_sample. Drops any
 // anchor that does not strictly advance BOTH axes relative to the kept anchor,
@@ -550,14 +553,13 @@ ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
                                  const ChromaDtwConfig& config) {
   if (reference.empty()) util::check::refuse("reference", util::refusal::kNonEmptyPredicate);
   if (target.empty()) util::check::refuse("target", util::refusal::kNonEmptyPredicate);
-  util::check::integer_at_least(config.hop_length, 1, "config.hop_length");
+  util::check::integer_within(config.hop_length, kChromaDtwHopDomain, "config.hop_length");
   util::check::integer_at_least(config.coarse_max_frames, 1, "config.coarse_max_frames");
   util::check::integer_at_least(config.max_full_frames, 0, "config.max_full_frames");
   util::check::integer_at_least(config.scale_factor, 2, "config.scale_factor");
   util::check::integer_at_least(config.band_radius, 0, "config.band_radius");
-  util::check::integer_in_range(config.bins_per_octave, 1,
-                                std::numeric_limits<int>::max() / kChromaOctaves,
-                                "config.bins_per_octave");
+  util::check::integer_within(config.bins_per_octave, kChromaDtwBinsPerOctaveDomain,
+                              "config.bins_per_octave");
 
   // n_bins is a bin count, not an octave span, so it has to move with
   // bins_per_octave. ChromaCqtConfig defaults to 7 octaves at 36 bins/octave;

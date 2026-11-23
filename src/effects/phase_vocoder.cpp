@@ -25,6 +25,11 @@ using sonare::constants::kTwoPiD;
 
 namespace {
 
+constexpr util::check::NumericDomain kPhaseVocoderSampleRateDomain =
+    util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kInstantaneousFrequencyBinCountDomain =
+    util::check::integer_domain_of<int>(2);
+
 float instantaneous_frequency_for_bin(float current_phase, float previous_phase, int bin, int n_fft,
                                       int sample_rate, float time_step) noexcept {
   const float bin_freq =
@@ -100,7 +105,7 @@ Spectrogram stretch_spectrogram(const Spectrogram& spec, float rate,
 PhaseVocoderSynthesizer::PhaseVocoderSynthesizer(int n_fft, int hop_length, int sample_rate,
                                                  WindowType window, int win_length, bool phase_lock)
     : n_fft_(n_fft), n_bins_(n_fft / 2 + 1), sample_rate_(sample_rate), phase_lock_(phase_lock) {
-  util::check::integer_at_least(sample_rate, 1, "sample_rate");
+  util::check::integer_within(sample_rate, kPhaseVocoderSampleRateDomain, "sample_rate");
   validate_cola_geometry(n_fft, hop_length, window, win_length);
   time_step_ = static_cast<double>(hop_length) / static_cast<double>(sample_rate);
   const size_t bins = static_cast<size_t>(n_bins_);
@@ -159,9 +164,9 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
                                                    int n_bins, int hop_length, int sample_rate) {
   util::check::non_null(phase, "phase");
   util::check::non_null(prev_phase, "prev_phase");
-  util::check::integer_at_least(n_bins, 2, "n_bins");
-  util::check::integer_at_least(sample_rate, 1, "sample_rate");
-  util::check::integer_at_least(hop_length, 1, "hop_length");
+  util::check::integer_within(n_bins, kInstantaneousFrequencyBinCountDomain, "n_bins");
+  util::check::integer_within(sample_rate, kPhaseVocoderSampleRateDomain, "sample_rate");
+  util::check::integer_within(hop_length, kStftHopDomain, "hop_length");
 
   std::vector<float> inst_freq(n_bins);
 

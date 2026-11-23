@@ -14,6 +14,14 @@
 
 namespace sonare {
 
+namespace {
+
+constexpr util::check::NumericDomain kMelSampleRateDomain = util::check::integer_domain_of<int>(1);
+constexpr util::check::NumericDomain kMelFeatureDimensionDomain =
+    util::check::integer_domain_of<int>(1);
+
+}  // namespace
+
 using sonare::constants::kPi;
 
 MelSpectrogram::MelSpectrogram() : n_mels_(0), n_frames_(0), sample_rate_(0), hop_length_(0) {}
@@ -38,7 +46,7 @@ MelSpectrogram MelSpectrogram::compute(const Audio& audio, const MelConfig& conf
 MelSpectrogram MelSpectrogram::from_spectrogram(const Spectrogram& spec, int sr,
                                                 const MelFilterConfig& mel_config) {
   if (spec.empty()) util::check::refuse("spec", util::refusal::kNonEmptyPredicate);
-  util::check::integer_at_least(sr, 1, "sr");
+  util::check::integer_within(sr, kMelSampleRateDomain, "sr");
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
@@ -129,8 +137,8 @@ std::vector<float> MelSpectrogram::mfcc(int n_mfcc, float lifter) const {
 std::vector<float> MelSpectrogram::delta(const float* features, int n_features, int n_frames,
                                          int width) {
   util::check::non_null(features, "features");
-  util::check::integer_at_least(n_features, 1, "n_features");
-  util::check::integer_at_least(n_frames, 1, "n_frames");
+  util::check::integer_within(n_features, kMelFeatureDimensionDomain, "n_features");
+  util::check::integer_within(n_frames, kMelFeatureDimensionDomain, "n_frames");
   util::check::odd_within(width, kMelDeltaWidthDomain, "width");
   // The regression below spreads one non-finite element across every frame
   // whose window covers it, so a NaN input yields a mostly-NaN delta that is
