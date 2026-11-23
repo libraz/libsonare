@@ -997,6 +997,9 @@ export function automationPointValue(
   point: ProjectAutomationPoint,
   index: number,
 ): NativeAutomationPoint {
+  if (typeof point !== 'object' || point === null) {
+    throw refuseType(`points[${index}] must be an object`);
+  }
   assertDeclaredKeys(point, AUTOMATION_POINT_KEYS, `points[${index}]`);
   const curveToNext = isAbsent(point.curveToNext)
     ? AUTOMATION_CURVE_VALUES.linear

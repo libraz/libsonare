@@ -107,13 +107,13 @@ describe('Sonare WASM part rig', () => {
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
           TypeError,
         ).message,
-      ).toBe('Project.setPartRig: insertsJson must be omitted unless mode is chain');
+      ).toBe('Project.setPartRig: inserts must be omitted unless mode is chain');
       expect(
         expectRefusalOf(
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
           TypeError,
         ).message,
-      ).toBe('Project.setPartRig: insertsJson must be given when mode is chain');
+      ).toBe('Project.setPartRig: inserts must be given when mode is chain');
       expect(
         expectRefusalOf(
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [] }),
@@ -207,7 +207,7 @@ describe('Sonare WASM part rig', () => {
           () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
           TypeError,
         ).message,
-      ).toBe('RealtimeEngine.setPartRig: insertsJson must be given when mode is chain');
+      ).toBe('RealtimeEngine.setPartRig: inserts must be given when mode is chain');
       expect(
         expectRefusalOf(
           () =>
@@ -354,7 +354,7 @@ describe('Sonare WASM part rig request form', () => {
           () => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
           TypeError,
         ).message,
-      ).toBe('RealtimeEngine.setPartRig: insertsJson must be omitted unless mode is chain');
+      ).toBe('RealtimeEngine.setPartRig: inserts must be omitted unless mode is chain');
       expect(() =>
         engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', extra: 1 } as never),
       ).toThrow(TypeError);

@@ -43,18 +43,12 @@ bool ReadControllerBinding(Napi::Env env, const Napi::Value& value, SonareContro
   // Both are required rather than defaulted: an omitted input would bind
   // control-change CC0, which the C ABI accepts as a binding that listens to
   // the wrong gesture.
-  if (!sonare_node::SynthFieldPresent(obj, "input") ||
-      !sonare_node::SynthFieldPresent(obj, "axis")) {
-    Napi::TypeError::New(env, "controller binding requires an input and an axis")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
   int input = 0;
   int axis = 0;
-  if (!sonare_node::SynthEnumProperty(env, obj, "input", kControllerInputs,
-                                      SONARE_CONTROLLER_INPUT_COUNT, "controller input", &input) ||
-      !sonare_node::SynthEnumProperty(env, obj, "axis", kControllerAxes,
-                                      SONARE_CONTROLLER_AXIS_COUNT, "controller axis", &axis)) {
+  if (!sonare_node::SynthEnumValue(env, obj.Get("input"), kControllerInputs,
+                                   SONARE_CONTROLLER_INPUT_COUNT, "controller input", &input) ||
+      !sonare_node::SynthEnumValue(env, obj.Get("axis"), kControllerAxes,
+                                   SONARE_CONTROLLER_AXIS_COUNT, "controller axis", &axis)) {
     return false;
   }
   out->input = static_cast<uint8_t>(input);

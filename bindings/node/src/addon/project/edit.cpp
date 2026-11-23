@@ -116,15 +116,14 @@ bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
   const uint32_t input_count = sonare_node::node_list_length(input, "automation lane points");
   points->reserve(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
-    Napi::Value entry = input.Get(i);
-    if (!entry.IsObject()) {
-      Napi::TypeError::New(env, "automation point must be an object").ThrowAsJavaScriptException();
+    Napi::Object obj;
+    std::string at;
+    SonareAutomationPoint point{};
+    if (!sonare_node::RequiredElementObject(env, input, i, "points", &obj, &at) ||
+        !sonare_node::RequiredDoubleValue(env, obj.Get("ppq"), at + ".ppq", &point.ppq) ||
+        !sonare_node::RequiredFloatValue(env, obj.Get("value"), at + ".value", &point.value)) {
       return false;
     }
-    Napi::Object obj = entry.As<Napi::Object>();
-    SonareAutomationPoint point{};
-    if (!RequiredDoubleProperty(env, obj, "ppq", &point.ppq)) return false;
-    if (!RequiredFloatProperty(env, obj, "value", &point.value)) return false;
     const Napi::Value curve = obj.Get("curveToNext");
     if (env.IsExceptionPending()) return false;
     point.curve_to_next =
@@ -224,15 +223,16 @@ bool FillWarpMapDesc(Napi::Env env, const Napi::Object& obj,
   const uint32_t input_count = sonare_node::node_list_length(input, "warp map anchors");
   anchors->reserve(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
-    Napi::Value entry = input.Get(i);
-    if (!entry.IsObject()) {
-      Napi::TypeError::New(env, "warp map anchor must be an object").ThrowAsJavaScriptException();
+    Napi::Object anchor;
+    std::string at;
+    SonareProjectWarpAnchor out{};
+    if (!sonare_node::RequiredElementObject(env, input, i, "anchors", &anchor, &at) ||
+        !sonare_node::RequiredDoubleValue(env, anchor.Get("warpSample"), at + ".warpSample",
+                                          &out.warp_sample) ||
+        !sonare_node::RequiredDoubleValue(env, anchor.Get("sourceSample"), at + ".sourceSample",
+                                          &out.source_sample)) {
       return false;
     }
-    Napi::Object anchor = entry.As<Napi::Object>();
-    SonareProjectWarpAnchor out{};
-    if (!RequiredDoubleProperty(env, anchor, "warpSample", &out.warp_sample)) return false;
-    if (!RequiredDoubleProperty(env, anchor, "sourceSample", &out.source_sample)) return false;
     anchors->push_back(out);
   }
   desc->anchors = anchors->empty() ? nullptr : anchors->data();

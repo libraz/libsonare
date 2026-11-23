@@ -112,12 +112,13 @@ void RealtimeEngineWasm::setGraph(val spec) {
   }
   const int num_channels = intProperty(spec, "numChannels", 2);
   for (int i = 0; i < node_count; ++i) {
-    val node = nodes[i];
+    const val node = requiredElementObject(nodes, i, "nodes");
+    const std::string node_at = elementAt("nodes", i);
+    const std::string id = requiredStringElementProperty(node, "id", node_at);
     auto processor = makeWasmGraphProcessor(node);
     if (!processor) {
       throw WasmRangeError("unsupported graph node type");
     }
-    const std::string id = stringProperty(node, "id", "");
     // The C ABI holds a node id in a fixed field; the same id is refused on every surface.
     constexpr size_t kMaxNodeIdBytes = sizeof(SonareEngineGraphNode{}.id) - 1;
     if (id.size() > kMaxNodeIdBytes) {
@@ -125,7 +126,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
                            " bytes");
     }
     // An omitted numPorts takes the spec's channel count; a written one is read in its domain.
-    const std::string ports_subject = "spec.nodes[" + std::to_string(i) + "].numPorts";
+    const std::string ports_subject = "spec." + elementField(node_at, "numPorts");
     const int ports = optionalDomainValue<int>(node["numPorts"], ports_subject.c_str(),
                                                sonare_c_detail::kEngineGraphNodePortsDomain)
                           .value_or(num_channels);
@@ -136,12 +137,17 @@ void RealtimeEngineWasm::setGraph(val spec) {
   val connections = spec["connections"];
   const int connection_count = static_cast<int>(wasmArrayLength(connections, "connections"));
   for (int i = 0; i < connection_count; ++i) {
-    val connection = connections[i];
+    const val connection = requiredElementObject(connections, i, "connections");
+    const std::string at = elementAt("connections", i);
     sonare::graph::Connection graph_connection{};
-    graph_connection.source_node = stringProperty(connection, "sourceNode", "");
-    graph_connection.source_port = intProperty(connection, "sourcePort", 0);
-    graph_connection.dest_node = stringProperty(connection, "destNode", "");
-    graph_connection.dest_port = intProperty(connection, "destPort", 0);
+    graph_connection.source_node = requiredStringElementProperty(connection, "sourceNode", at);
+    graph_connection.source_port =
+        checkedIntFromVal(requiredNumberElementProperty(connection, "sourcePort", at),
+                          elementField(at, "sourcePort").c_str());
+    graph_connection.dest_node = requiredStringElementProperty(connection, "destNode", at);
+    graph_connection.dest_port =
+        checkedIntFromVal(requiredNumberElementProperty(connection, "destPort", at),
+                          elementField(at, "destPort").c_str());
     // 0 = Replace, 1 = Add (the default when omitted); anything else is refused, not read as Add.
     const int mix = intProperty(connection, "mix", 1);
     if (mix != 0 && mix != 1) {
@@ -166,9 +172,13 @@ void RealtimeEngineWasm::setGraph(val spec) {
     const int binding_count = static_cast<int>(wasmArrayLength(bindings, "parameterBindings"));
     parameter_bindings.reserve(static_cast<size_t>(std::max(binding_count, 0)));
     for (int i = 0; i < binding_count; ++i) {
-      val binding = bindings[i];
+      const val binding = requiredElementObject(bindings, i, "parameterBindings");
+      const std::string at = elementAt("parameterBindings", i);
+      const uint32_t param_id =
+          checkedUintFromVal(requiredNumberElementProperty(binding, "paramId", at),
+                             elementField(at, "paramId").c_str());
       parameter_bindings.push_back(
-          {uintProperty(binding, "paramId", 0), stringProperty(binding, "nodeId", "")});
+          {param_id, requiredStringElementProperty(binding, "nodeId", at)});
     }
   }
   if (!engine_.swap_graph(std::move(graph), wasmCString(input_node, "inputNode"),

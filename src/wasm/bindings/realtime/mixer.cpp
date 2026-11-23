@@ -72,7 +72,10 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
   const int send_count = static_cast<int>(wasmArrayLength(sends, "sends"));
   out.reserve(static_cast<size_t>(send_count));
   for (int send_index = 0; send_index < send_count; ++send_index) {
-    val send = sends[send_index];
+    const val send = requiredElementObject(sends, send_index, "sends");
+    const std::string at = elementAt("sends", send_index);
+    const uint32_t bus_id = checkedUintFromVal(requiredNumberElementProperty(send, "busId", at),
+                                               elementField(at, "busId").c_str());
     const sonare::engine::TrackLaneConfig::Send defaults{};
     // Wire timing is 0 = post-fader, 1 = pre-fader, the reverse of the core enum's order.
     const int timing_value = intProperty(
@@ -83,8 +86,7 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
     const sonare::mixing::SendTiming timing = timing_value == 1
                                                   ? sonare::mixing::SendTiming::PreFader
                                                   : sonare::mixing::SendTiming::PostFader;
-    out.push_back({uintProperty(send, "busId", 0),
-                   floatProperty(send, "levelDb", defaults.level_db),
+    out.push_back({bus_id, floatProperty(send, "levelDb", defaults.level_db),
                    boolProperty(send, "enabled", true), timing});
   }
   return out;
@@ -142,7 +144,10 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     if (lane_val.typeOf().as<std::string>() == "number") {
       track_id = checkedUintFromVal(lane_val, "trackId");
     } else {
-      track_id = uintProperty(lane_val, "trackId", 0);
+      lane_val = requiredElementObject(lanes, i, "lanes");
+      const std::string at = elementAt("lanes", i);
+      track_id = checkedUintFromVal(requiredNumberElementProperty(lane_val, "trackId", at),
+                                    elementField(at, "trackId").c_str());
     }
     sonare::engine::TrackLaneConfig config{track_id};
     if (lane_val.typeOf().as<std::string>() == "object") {
@@ -260,7 +265,10 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
   std::vector<sonare::engine::TrackBusConfig> configs;
   configs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {
-    val bus = buses[i];
+    const val bus = requiredElementObject(buses, i, "buses");
+    const std::string at = elementAt("buses", i);
+    const uint32_t bus_id = checkedUintFromVal(requiredNumberElementProperty(bus, "busId", at),
+                                               elementField(at, "busId").c_str());
     const int layout_value = intProperty(bus, "channelLayout", 1);
     // The full-range bound is checked BEFORE narrowing to uint8_t, the same
     // way the lane sourceChannelLayout check above does: narrowing first
@@ -271,8 +279,7 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
       throw WasmRangeError("invalid bus channel layout");
     }
     sonare::engine::TrackBusConfig config{
-        uintProperty(bus, "busId", 0),
-        floatProperty(bus, "gainDb", sonare::engine::TrackBusConfig{}.gain_db),
+        bus_id, floatProperty(bus, "gainDb", sonare::engine::TrackBusConfig{}.gain_db),
         static_cast<sonare::ChannelLayout>(layout_value)};
     config.output_bus_id = uintProperty(bus, "outputBusId", config.output_bus_id);
     config.sends = readOptionalSends(bus);

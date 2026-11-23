@@ -692,21 +692,25 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
     [
       'onsetSample absent',
       { offsetSample: 8192, edit: { gainDb: -20 } },
-      'onsetSample must be given',
+      'onsetSample must be a number',
     ],
     [
       'offsetSample absent',
       { onsetSample: 4096, edit: { gainDb: -20 } },
-      'offsetSample must be given',
+      'offsetSample must be a number',
     ],
     // Present-but-undefined and present-but-null read as absent here, so the
     // three spellings of "not given" land on one answer instead of three.
     [
       'onsetSample undefined',
       { onsetSample: undefined, offsetSample: 8192 },
-      'onsetSample must be given',
+      'onsetSample must be a number',
     ],
-    ['offsetSample null', { onsetSample: 4096, offsetSample: null }, 'offsetSample must be given'],
+    [
+      'offsetSample null',
+      { onsetSample: 4096, offsetSample: null },
+      'offsetSample must be a number',
+    ],
     [
       'onsetSample a string',
       { onsetSample: '4096', offsetSample: 8192 },
@@ -738,7 +742,7 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
     it(`refuses a note whose ${name}, naming the field`, () => {
       const caught = render(note);
       // A missing or wrong-typed bound is a TypeError; a bound out of its domain a RangeError.
-      const kind = /must be given|must be a number/.test(fragment) ? TypeError : RangeError;
+      const kind = /must be a number/.test(fragment) ? TypeError : RangeError;
       const error = expectArgumentRefusal(caught, kind, name);
       // The field, not merely "something threw". A refusal for an unrelated
       // reason is indistinguishable from this one without it, which is exactly

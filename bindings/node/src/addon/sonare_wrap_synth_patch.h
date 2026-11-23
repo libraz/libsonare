@@ -251,21 +251,19 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
     // matrix; omitting the key keeps it.
     patch->present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS;
     for (uint32_t i = 0; i < count; ++i) {
-      Napi::Value entry = arr.Get(i);
-      if (!entry.IsObject()) {
-        Napi::TypeError::New(env, "mod routings must be objects").ThrowAsJavaScriptException();
-        return false;
-      }
-      Napi::Object routing = entry.As<Napi::Object>();
+      Napi::Object routing;
+      std::string at;
+      if (!RequiredElementObject(env, arr, i, "modRoutings", &routing, &at)) return false;
       SonareSynthModRouting& out = patch->mod_routings[i];
-      if (!SynthEnumProperty(env, routing, "source", kSynthModSources,
-                             SONARE_SYNTH_MOD_SOURCE_COUNT, "mod source", &out.source) ||
-          !SynthEnumProperty(env, routing, "destination", kSynthModDestinations,
-                             SONARE_SYNTH_MOD_DESTINATION_COUNT, "mod destination",
-                             &out.destination)) {
+      // An absent selector is refused as a wrong type is, not read as the enum's first member.
+      if (!SynthEnumValue(env, routing.Get("source"), kSynthModSources,
+                          SONARE_SYNTH_MOD_SOURCE_COUNT, "mod source", &out.source) ||
+          !SynthEnumValue(env, routing.Get("destination"), kSynthModDestinations,
+                          SONARE_SYNTH_MOD_DESTINATION_COUNT, "mod destination",
+                          &out.destination) ||
+          !RequiredFloatValue(env, routing.Get("depth"), at + ".depth", &out.depth)) {
         return false;
       }
-      out.depth = FloatProperty(routing, "depth", 0.0f);
     }
   }
   return true;

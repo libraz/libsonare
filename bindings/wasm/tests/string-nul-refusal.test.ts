@@ -587,7 +587,7 @@ describe('embedded NUL refusal, scan', () => {
     {
       file: 'realtime/transport.cpp',
       text: '(prefix + "',
-      count: 6,
+      count: 3,
       reason: 'refusal name built from a literal list name, a segment index and a literal key',
     },
     {
@@ -631,6 +631,66 @@ describe('embedded NUL refusal, scan', () => {
       text: 'elementField(at, "paramId").c_str()',
       count: 1,
       reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'common/synth_patch_val.h',
+      text: 'elementField(at, "',
+      count: 1,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'editing/vocal_edit.cpp',
+      text: 'elementField(at, "',
+      count: 2,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'project/project_arrange.cpp',
+      text: 'elementField(at, "',
+      count: 2,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'project/project_edit.cpp',
+      text: 'elementField(at, "',
+      count: 2,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'realtime/mixer.cpp',
+      text: 'elementField(at, "',
+      count: 3,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'realtime/params.cpp',
+      text: 'elementField(at, "',
+      count: 1,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'realtime/processing.cpp',
+      text: 'elementField(at, "',
+      count: 3,
+      reason: 'refusal name built from a literal key under a literal list name and an index',
+    },
+    {
+      file: 'project/project_meta.cpp',
+      text: '(at + ".',
+      count: 2,
+      reason: 'refusal name built from a literal list name, a segment index and a literal key',
+    },
+    {
+      file: 'realtime/transport.cpp',
+      text: '(at + ".',
+      count: 3,
+      reason: 'refusal name built from a literal list name, a segment index and a literal key',
+    },
+    {
+      file: 'common/common.cpp',
+      text: 'stringFromVal(value, elementField(at, key).c_str())',
+      count: 1,
+      reason: 'refusal name built from a literal key under a list-element path',
     },
   ];
 

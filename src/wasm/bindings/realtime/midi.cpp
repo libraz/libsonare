@@ -69,7 +69,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
   std::vector<sonare::midi::MidiClipSchedule> clips;
   clips.reserve(count);
   for (uint32_t i = 0; i < count; ++i) {
-    val clip_val = clips_val[i];
+    const val clip_val = requiredElementObject(clips_val, i, "clips");
     sonare::midi::MidiClipSchedule clip;
     clip.id = uintProperty(clip_val, "id", clip.id);
     clip.track_id = uintProperty(clip_val, "trackId", clip.track_id);

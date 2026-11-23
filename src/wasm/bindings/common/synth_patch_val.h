@@ -91,12 +91,6 @@ inline emscripten::val synthEnumTablesToVal() {
   return out;
 }
 
-/// enumProperty for a field that has no "keep base" reading, so absence is
-/// refused rather than defaulted: where ordinal 0 is itself a working value, a
-/// caller who omitted the key would get a selection they never asked for.
-inline void requiredEnumProperty(emscripten::val object, const char* subject, const char* key,
-                                 const char* const* names, int count, const char* what, int* out);
-
 /// Resolves an enum value accepting the C ordinal or a name; throws on an
 /// unknown name and on an ordinal outside [0, @p count). Shared with @ref
 /// enumProperty so a standalone argument and an object field read a spelling on
@@ -138,14 +132,6 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
                          int count, const char* what, int* out) {
   if (!hasProperty(object, key)) return;
   *out = enumFromVal(object[key], names, count, what);
-}
-
-inline void requiredEnumProperty(emscripten::val object, const char* subject, const char* key,
-                                 const char* const* names, int count, const char* what, int* out) {
-  if (!hasProperty(object, key)) {
-    throw WasmTypeError(std::string(subject) + "." + key + " must be given");
-  }
-  enumProperty(object, key, names, count, what, out);
 }
 
 // An empty name is never the init patch (omission is), and a name is refused rather than cut.
@@ -325,13 +311,16 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
       // base matrix; omitting the key keeps it.
       patch.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS;
       for (size_t i = 0; i < count; ++i) {
-        emscripten::val routing = routings[i];
+        const emscripten::val routing = requiredElementObject(routings, i, "modRoutings");
+        const std::string at = elementAt("modRoutings", i);
         SonareSynthModRouting& out = patch.mod_routings[i];
-        enumProperty(routing, "source", kModSources, SONARE_SYNTH_MOD_SOURCE_COUNT, "mod source",
-                     &out.source);
-        enumProperty(routing, "destination", kModDestinations, SONARE_SYNTH_MOD_DESTINATION_COUNT,
-                     "mod destination", &out.destination);
-        out.depth = floatProperty(routing, "depth", 0.0f);
+        // An absent selector is refused as a wrong type is, not read as the enum's first member.
+        out.source = enumFromVal(routing["source"], kModSources, SONARE_SYNTH_MOD_SOURCE_COUNT,
+                                 "mod source");
+        out.destination = enumFromVal(routing["destination"], kModDestinations,
+                                      SONARE_SYNTH_MOD_DESTINATION_COUNT, "mod destination");
+        out.depth = checkedFloatFromVal(requiredNumberElementProperty(routing, "depth", at),
+                                        elementField(at, "depth").c_str());
       }
     }
   }

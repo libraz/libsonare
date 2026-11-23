@@ -1880,6 +1880,10 @@ export class RealtimeEngine {
       requireListBudget(sends, 'sends');
     }
     return sends.map((send, i) => {
+      // A non-object send reaches the native reader, which refuses it by its index.
+      if (typeof send !== 'object' || send === null) {
+        return send;
+      }
       const { sendTiming, ...rest } = send;
       return sendTiming === undefined
         ? rest

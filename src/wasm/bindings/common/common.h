@@ -480,6 +480,17 @@ inline std::string elementAt(const char* list_name, std::size_t index) {
 ///        states the domain: absent, null or not a number is a WasmTypeError
 ///        "<at>.<key> must be a number"; NaN and the infinities pass to that check.
 double requiredDomainDoubleProperty(const val& object, const char* key, const std::string& at);
+/// @brief A required number field of a list element, type-only: absent, null or not a number is
+///        a WasmTypeError "<at>.<key> must be a number". The caller narrows the returned value
+///        with the checked reader that owns the field's domain, named by the same subject.
+val requiredNumberElementProperty(const val& object, const char* key, const std::string& at);
+/// @brief @ref requiredNumberElementProperty for a field whose domain is an integer range:
+///        the type refusal says "must be an integer", as the domain's own text does.
+val requiredDomainIntProperty(const val& object, const char* key, const std::string& at);
+/// @brief A required string field of a list element: absent, null or not a string is a
+///        WasmTypeError "<at>.<key> must be a string".
+std::string requiredStringElementProperty(const val& object, const char* key,
+                                          const std::string& at);
 /// @brief Optional sibling of @ref requiredDomainDoubleProperty: absent or null takes
 ///        @p fallback.
 double optionalDomainDoubleProperty(const val& object, const char* key, double fallback,

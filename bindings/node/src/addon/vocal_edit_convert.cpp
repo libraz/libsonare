@@ -137,12 +137,13 @@ bool ReadVocalNoteEdit(Napi::Env env, const Napi::Value& value, SonareVocalNoteE
     double previous = -std::numeric_limits<double>::infinity();
     for (uint32_t i = 0; i < point_count; ++i) {
       Napi::Object point;
-      if (!RequiredObjectValue(env, points.Get(i), "edit.pitch.target.points[]", &point))
-        return false;
+      std::string at;
       double source_sample = 0.0;
       double midi = 0.0;
-      if (!RequiredDoubleProperty(env, point, "sourceSample", &source_sample) ||
-          !RequiredDoubleProperty(env, point, "midi", &midi))
+      if (!RequiredElementObject(env, points, i, "edit.pitch.target.points", &point, &at) ||
+          !RequiredDoubleValue(env, point.Get("sourceSample"), at + ".sourceSample",
+                               &source_sample) ||
+          !RequiredDoubleValue(env, point.Get("midi"), at + ".midi", &midi))
         return false;
       if (!std::isfinite(source_sample)) {
         Napi::RangeError::New(env, "sourceSample must be finite").ThrowAsJavaScriptException();

@@ -91,12 +91,9 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
   std::vector<std::vector<SonareEngineMidiEvent>> event_storage(input_count);
   std::vector<SonareEngineMidiClipSchedule> clips(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
-    Napi::Value item = input.Get(i);
-    if (!item.IsObject()) {
-      Napi::TypeError::New(env, "MIDI clips must be objects").ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    Napi::Object obj = item.As<Napi::Object>();
+    Napi::Object obj;
+    std::string at;
+    if (!RequiredElementObject(env, input, i, "clips", &obj, &at)) return env.Undefined();
     event_storage[i] =
         ReadEngineMidiEvents(env, obj.Has("events") ? obj.Get("events") : env.Null());
     if (env.IsExceptionPending()) return env.Undefined();

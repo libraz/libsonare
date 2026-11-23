@@ -19306,3 +19306,11 @@ changed = "optional; absent when either channel has zero energy (was a required 
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/metering-not-measured.test.ts::omits the phase scope correlation when either channel is silent"
+
+[[entry]]
+kind = "field"
+old = "SynthModRouting.depth"
+changed = "required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'mod source must be a number or string' (1.x read each as its default)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/list-element-readers.test.ts::an absent depth"

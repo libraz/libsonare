@@ -196,14 +196,12 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
   // Required rather than defaulted: ordinal 0 is a working value on both enums
   // (`control-change`, `none`), so an omitted key would bind something the
   // caller never asked for.
-  int input = 0;
-  int axis = 0;
-  sonare_wasm_synth::requiredEnumProperty(
-      binding, "binding", "input", sonare_wasm_synth::kControllerInputs,
-      SONARE_CONTROLLER_INPUT_COUNT, "controller input", &input);
-  sonare_wasm_synth::requiredEnumProperty(binding, "binding", "axis",
-                                          sonare_wasm_synth::kControllerAxes,
-                                          SONARE_CONTROLLER_AXIS_COUNT, "controller axis", &axis);
+  const int input =
+      sonare_wasm_synth::enumFromVal(binding["input"], sonare_wasm_synth::kControllerInputs,
+                                     SONARE_CONTROLLER_INPUT_COUNT, "controller input");
+  const int axis =
+      sonare_wasm_synth::enumFromVal(binding["axis"], sonare_wasm_synth::kControllerAxes,
+                                     SONARE_CONTROLLER_AXIS_COUNT, "controller axis");
   entry.input = static_cast<sonare::midi::ControllerInput>(input);
   entry.axis = static_cast<sonare::midi::ControllerAxis>(axis);
   const int index = intProperty(binding, "index", 0);
@@ -446,12 +444,12 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
   const bool has_inserts = !inserts_json.isUndefined() && !inserts_json.isNull();
   if ((rig.mode == sonare::midi::PartRigMode::kChain) != has_inserts) {
     sonare::util::check::refuse_relation(
-        {"insertsJson", "mode"}, has_inserts ? sonare::util::refusal::kAbsentUnlessChainRelation
-                                             : sonare::util::refusal::kPresentWhenChainRelation);
+        {"inserts", "mode"}, has_inserts ? sonare::util::refusal::kAbsentUnlessChainRelation
+                                         : sonare::util::refusal::kPresentWhenChainRelation);
   }
   if (has_inserts) {
     const std::string json = inserts_json.as<std::string>();
-    rig.stages = sonare_c_detail::read_part_rig_inserts(wasmCString(json, "insertsJson"));
+    rig.stages = sonare_c_detail::read_part_rig_inserts(wasmCString(json, "inserts"));
   }
   if (!sonare::midi::validate_part_rig(static_cast<uint8_t>(part), rig)) {
     sonare_c_detail::refuse_part_rig_stage_count();

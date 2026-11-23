@@ -1070,7 +1070,7 @@ describe('RealtimeEngine native binding', () => {
     expectRefusal(
       () => engine.setStripInsertParam(10, 0, { name: 'bogusParam', value: 1 }),
       RangeError,
-      /^RealtimeEngine\.setStripInsertParam: paramName must be the name of a parameter of the insert that can be set while running$/,
+      /^RealtimeEngine\.setStripInsertParam: param\.name must be the name of a parameter of the insert that can be set while running$/,
     );
 
     engine.play();

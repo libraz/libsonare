@@ -6295,6 +6295,7 @@ The Node addon and the WASM package share one vocabulary, so a name in this sect
 | `RealtimeEngine.setTrackOutputBus` | setTrackOutputBus(trackId, busId: number \| null); null is the master mix and 0 is a RangeError |
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
+| `SynthModRouting.depth` | required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'mod source must be a number or string' (1.x read each as its default) |
 
 #### A number outside its domain is refused, never passed through
 
@@ -11327,33 +11328,43 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 
 | 1.x | 2.0.0 |
 |---|---|
+| `EngineAutomationPoint.value` | required: an absent value is refused with TypeError naming points[i].value (1.x read it as 0) |
 | `EngineBounceOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `EngineBounceOptions.ditherBits` | with dither set, an integer in [2, 32]: 0, 1 and 33 are a RangeError reading 'options.ditherBits must be an integer in [2, 32]' (0 used to select 16) |
 | `EngineBounceOptions.ditherSeed` | 0 is the seed 0; omit it for the default seed (1.x read 0 as the default seed) |
 | `EngineBounceOptions.numChannels` | required; no channel count is assumed |
 | `EngineBounceOptions.sourceSampleRate` | absent means the engine rate; an explicit 0 is a RangeError |
 | `EngineBounceOptions.targetSampleRate` | absent keeps the source rate; an explicit 0 is a RangeError |
+| `EngineBus.busId` | required: an absent busId is refused with TypeError naming buses[i].busId (1.x read it as 0) |
 | `EngineBus.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
 | `EngineCapturePunchRequest.enabled` | removed: a punch window is active while CaptureOptions.punch is given; omit punch to record without one |
 | `EngineClip.lengthSamples` | omit it to play to the end of the source; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select the end of the source) |
 | `EngineFreezeOptions.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `EngineFreezeOptions.clipId` | omit it for the default clip id; an explicit 0 is a RangeError reading 'RealtimeEngine.freezeOffline: clipId must not be 0; omit it for the default', any other value an integer in [1, 4294967295] |
 | `EngineFreezeOptions.numChannels` | required; no channel count is assumed |
+| `EngineGraphSpec.connections` | every connection field is required: an absent sourceNode, sourcePort, destNode or destPort is refused with TypeError naming connections[i].<field> (1.x read a port as 0 and a node as the empty string), and a connection that is not an object is a TypeError 'connections[i] must be an object' |
+| `EngineGraphSpec.nodes` | a node that is not an object is refused with TypeError 'nodes[i] must be an object', and an absent id with TypeError naming nodes[i].id (1.x read a non-object as a node with an empty id) |
+| `EngineGraphSpec.parameterBindings` | every binding field is required: an absent paramId or nodeId is refused with TypeError naming parameterBindings[i].<field> (1.x read them as 0 and the empty string), and a binding that is not an object is a TypeError 'parameterBindings[i] must be an object' |
 | `EngineMetronomeConfig.clickSamples` | clickSamples and clickSec are both optional: omit both for the click length derived from the click duration; an explicit 0 on either is a RangeError (clickSamples in [1, 384000], clickSec in (0, 1]), and giving both is a RangeError |
 | `EngineMidiClipSchedule.lengthSamples` | omit it for an open-ended clip; an explicit 0 is a RangeError reading 'clips[i].lengthSamples must be an integer of at least 1' (0 used to select open-ended) |
 | `EngineMidiClipSchedule.loopLengthSamples` | an integer of at least 1, required on a looping clip; an explicit 0 is a RangeError reading 'clips[i].loopLengthSamples must be an integer of at least 1' |
 | `EngineTempoSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
 | `EngineTimeSignatureSegment.startPpq` | required: an absent startPpq is refused with TypeError naming segments[i].startPpq (1.x read it as 0) |
 | `EngineTrackLane.outputBusId` | absent routes to the master mix; an explicit 0 is a RangeError |
+| `EngineTrackLane.trackId` | required in the object form: an absent trackId is refused with TypeError naming lanes[i].trackId (1.x read it as 0) |
+| `EngineTrackSend.busId` | required: an absent busId is refused with TypeError naming sends[i].busId (1.x read it as 0) |
 | `Mixer` | maxBlockSize: the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `PlaybackRendererOptions.maxBlockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `RealtimeEngine.metronome` | returns EngineMetronomeConfig carrying only the click-length spelling that was set |
 | `RealtimeEngine.popClipPageRequest` | returns undefined (was null) when no request is queued |
 | `RealtimeEngine.primeOfflineParameters` | blockSize is optional: omit it for the library default; an explicit 0 is a RangeError |
+| `RealtimeEngine.setAutomationLane` | a point that is not an object is refused with TypeError 'points[i] must be an object' (1.x read it as a point with every field absent) |
+| `RealtimeEngine.setMidiClips` | a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent) |
 | `RealtimeEngine.setTrackOutputBus` | setTrackOutputBus(trackId, busId: number \| null): null routes to the master mix and 0 is a RangeError |
 | `RenderOfflineRequest.blockSize` | the 1.x default value is gone: omit it for the library default; an explicit 0 is a RangeError |
 | `SidechainCheck.reason` | T \| null -> optional: a value the result cannot give is an absent field, never null |
 | `SonareEngine.setTrackOutputBus` (`./worklet`) | setTrackOutputBus(target, busId: number \| null): null routes to the master, 0 is a RangeError |
+| `SynthModRouting.depth` | required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'Expected mod source to be a number or string' (1.x read each as its default) |
 
 #### A number outside its domain is refused, never passed through
 
@@ -12188,6 +12199,9 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `Project.setMarker(name)` | removed: pass name as a field of ProjectMarkerInput |
 | `Project.setMarker(ppq)` | removed: pass ppq as a field of ProjectMarkerInput |
 | `Project.setMarker` | setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError |
+| `Project.setWarpMap` | an anchor that is not an object is refused with TypeError 'anchors[i] must be an object' (1.x read it as an anchor at 0, 0) |
+| `ProjectAutomationPoint.ppq` | required: an absent ppq is refused with TypeError naming points[i].ppq (1.x read it as 0) |
+| `ProjectAutomationPoint.value` | required: an absent value is refused with TypeError naming points[i].value (1.x read it as 0) |
 | `ProjectBounceOptions.numChannels` | an omitted width follows the scene master's layout (2 with no master) instead of always 2; the result's channels.length is the width used |
 | `ProjectBounceOptions.sampleRate` | removed: Omit it; a bounce always renders at the project sample rate and ProjectBounceResult.sampleRate reports it. |
 | `ProjectMidiRouteConfig.filterChannel` | filterChannel is typed number, not number \| null; a null at runtime still reads as absent |
@@ -12201,6 +12215,8 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | `ProjectVocalEditApplyResult.takeId` | absent when the base source was edited (was 0) |
 | `ProjectVocalEditDependency.takeId` | absent when the base source was edited (was 0) |
 | `ProjectVocalRehydrateItem.takeId` | absent when the base source was edited (was 0) |
+| `ProjectWarpAnchor.sourceSample` | required: an absent sourceSample is refused with TypeError naming anchors[i].sourceSample (1.x read it as 0) |
+| `ProjectWarpAnchor.warpSample` | required: an absent warpSample is refused with TypeError naming anchors[i].warpSample (1.x read it as 0) |
 | `VocalApplyRequest.expectedGeneration` | now optional; omitted means the draft's current generation |
 
 #### A number outside its domain is refused, never passed through
@@ -12404,6 +12420,7 @@ Names are listed with the package entry point that exports them: `@libraz/libson
 | 1.x | 2.0.0 |
 |---|---|
 | `Project.setTempoSegments` | a segment that is not an object is refused with TypeError naming segments[i] (1.x read its fields as 0 and refused it with RangeError) |
+| `ProjectAutomationLaneDesc.targetParamId` | an absent targetParamId is a TypeError 'targetParamId must be an integer', as on Node (1.x read it as 0 and refused it with RangeError 'targetParamId must be an integer in [1, 4294967295]') |
 | `ProjectTempoSegment.bpm` | an absent bpm is refused with TypeError naming segments[i].bpm (1.x read it as 0 and refused it with RangeError) |
 | `VocalEditWorkerClient` | constructor without a Worker throws SonareError NotSupported instead of Error; a draft or session misuse inside the Worker (no open draft, a second draft, undo/redo/export with a draft open, an unknown or reused session id) rejects with SonareError InvalidState instead of Unknown |
 | `VocalEditWorkerStaleResultError` | removed: Catch a SonareError and test isSonareError(e) && e.code === ErrorCode.StaleResult. |

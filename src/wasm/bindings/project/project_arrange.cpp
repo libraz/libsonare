@@ -65,7 +65,7 @@ uint32_t ProjectWasm::addClip(val desc) {
                             ? checkedIntFromVal(desc["audioSampleRate"], "audioSampleRate")
                             : 0;
   if (hasProperty(desc, "audio")) {
-    d.audio_channels = requireIntProperty(desc, "audioChannels", "descriptor");
+    d.audio_channels = requireIntProperty(desc, "audioChannels", "");
     audio = float32ArrayToVector(desc["audio"], "audio");
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
       throw WasmRangeError("audio length must be a multiple of audioChannels");
@@ -92,8 +92,8 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   d.start_ppq = doubleProperty(desc, "startPpq", 0.0);
   d.loop_length_ppq = doubleProperty(desc, "loopLengthPpq", 0.0);
   // The capture's format is a fact about the recording, so neither has a default.
-  d.audio_channels = requireIntProperty(desc, "audioChannels", "descriptor");
-  d.audio_sample_rate = requireIntProperty(desc, "audioSampleRate", "descriptor");
+  d.audio_channels = requireIntProperty(desc, "audioChannels", "");
+  d.audio_sample_rate = requireIntProperty(desc, "audioSampleRate", "");
   const std::string partial_tail = stringProperty(desc, "partialTail", "keep");
   if (partial_tail == "drop") {
     d.flags = SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL;
@@ -185,10 +185,14 @@ void ProjectWasm::setWarpMap(val desc) {
       hasProperty(desc, "anchors") ? wasmArrayLength(desc["anchors"], "anchors") : 0;
   anchors.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    val anchor = desc["anchors"][static_cast<unsigned>(i)];
+    const val anchor = requiredElementObject(desc["anchors"], i, "anchors");
+    const std::string at = elementAt("anchors", i);
     SonareProjectWarpAnchor out{};
-    out.warp_sample = doubleProperty(anchor, "warpSample", 0.0);
-    out.source_sample = doubleProperty(anchor, "sourceSample", 0.0);
+    out.warp_sample = checkedDoubleFromVal(requiredNumberElementProperty(anchor, "warpSample", at),
+                                           elementField(at, "warpSample").c_str());
+    out.source_sample =
+        checkedDoubleFromVal(requiredNumberElementProperty(anchor, "sourceSample", at),
+                             elementField(at, "sourceSample").c_str());
     anchors.push_back(out);
   }
   std::string name = stringProperty(desc, "name", "");

@@ -116,6 +116,14 @@ const INLINE_READ_ALLOWLIST: ReadonlyMap<string, string> = new Map();
 
 const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
   [
+    '_synthPatchRoundTrip',
+    'Stateless round-trip probe of the synth patch reader; it owns no project or engine state to compare, and a refused patch field is driven by synth-patch.test.ts and list-element-readers.test.ts.',
+  ],
+  [
+    'bounce',
+    'Reaches the synth patch reader only through an instrument descriptor, which is read before the bounce renders anything; a refused patch field is driven by synth-patch.test.ts and list-element-readers.test.ts.',
+  ],
+  [
     'midiCcLearn',
     'Stateless free function over an event array; it owns no project or engine state to compare, and its argument rejection is driven by public-input-conformance.test.ts.',
   ],

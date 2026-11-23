@@ -927,15 +927,6 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       }),
   },
   {
-    jsName: 'setAutomationLane',
-    invoke: (o) =>
-      withEngine((engine) => {
-        engine.addParameter({ id: 1, name: 'p', minValue: 0, maxValue: 1, defaultValue: 0 });
-        engine.setAutomationLane(1, [{ ...o, ppq: 0, value: 0.5 }]);
-        return engine.parameters().length;
-      }),
-  },
-  {
     jsName: 'addParameter',
     invoke: (o) =>
       withEngine((engine) => {

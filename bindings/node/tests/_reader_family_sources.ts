@@ -143,12 +143,14 @@ export const READER_FAMILIES: Readonly<
     hasProperty: 'out-of-scope',
     objectProperty: 'out-of-scope',
     optionAt: 'out-of-scope',
-    requiredEnumProperty: 'out-of-scope',
     requireIntProperty: 'out-of-scope',
     requireInt64Property: 'out-of-scope',
     requireNumberProperty: 'out-of-scope',
     requireTypedProperty: 'out-of-scope',
     requiredDomainDoubleProperty: 'out-of-scope',
+    requiredDomainIntProperty: 'out-of-scope',
+    requiredNumberElementProperty: 'out-of-scope',
+    requiredStringElementProperty: 'out-of-scope',
   },
 };
 

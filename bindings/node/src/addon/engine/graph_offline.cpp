@@ -89,21 +89,20 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
   const uint32_t node_count = sonare_node::node_list_length(node_input, "spec.nodes");
   nodes.reserve(node_count);
   for (uint32_t i = 0; i < node_count; ++i) {
-    Napi::Value entry = node_input.Get(i);
-    if (!entry.IsObject()) {
-      Napi::TypeError::New(env, "graph node must be an object").ThrowAsJavaScriptException();
+    Napi::Object obj;
+    std::string at;
+    if (!RequiredElementObject(env, node_input, i, "nodes", &obj, &at)) {
       return env.Undefined();
     }
-    Napi::Object obj = entry.As<Napi::Object>();
     SonareEngineGraphNode node{};
     sonare_engine_graph_node_init(&node);
-    if (!RequiredStringProperty(env, obj, "id", &text)) return env.Undefined();
+    if (!RequiredStringValue(env, obj.Get("id"), at + ".id", &text)) return env.Undefined();
     if (!CopyString(env, node.id, sizeof(node.id), text, "graph node id")) return env.Undefined();
     node.type = IntProperty(obj, "type", node.type);
     node.gain_db = FloatProperty(obj, "gainDb", node.gain_db);
     const Napi::Value ports = obj.Get("numPorts");
     if (!ports.IsUndefined() && !ports.IsNull()) {
-      const std::string ports_subject = "spec.nodes[" + std::to_string(i) + "].numPorts";
+      const std::string ports_subject = "spec." + at + ".numPorts";
       if (!sonare_node::RequiredDomainValue(env, ports, ports_subject.c_str(),
                                             sonare_c_detail::kEngineGraphNodePortsDomain,
                                             &node.num_ports)) {
@@ -121,27 +120,34 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
       sonare_node::node_list_length(connection_input, "spec.connections");
   connections.reserve(connection_count);
   for (uint32_t i = 0; i < connection_count; ++i) {
-    Napi::Value entry = connection_input.Get(i);
-    if (!entry.IsObject()) {
-      Napi::TypeError::New(env, "graph connection must be an object").ThrowAsJavaScriptException();
+    Napi::Object obj;
+    std::string at;
+    if (!RequiredElementObject(env, connection_input, i, "connections", &obj, &at)) {
       return env.Undefined();
     }
-    Napi::Object obj = entry.As<Napi::Object>();
     SonareEngineGraphConnection connection{};
-    if (!RequiredStringProperty(env, obj, "sourceNode", &text)) return env.Undefined();
+    if (!RequiredStringValue(env, obj.Get("sourceNode"), at + ".sourceNode", &text)) {
+      return env.Undefined();
+    }
     if (!CopyString(env, connection.source_node, sizeof(connection.source_node), text,
                     "graph connection sourceNode")) {
       return env.Undefined();
     }
-    if (!RequiredIntProperty(env, obj, "sourcePort", &connection.source_port)) {
+    if (!sonare_node::RequiredIntValue(env, obj.Get("sourcePort"), at + ".sourcePort",
+                                       &connection.source_port)) {
       return env.Undefined();
     }
-    if (!RequiredStringProperty(env, obj, "destNode", &text)) return env.Undefined();
+    if (!RequiredStringValue(env, obj.Get("destNode"), at + ".destNode", &text)) {
+      return env.Undefined();
+    }
     if (!CopyString(env, connection.dest_node, sizeof(connection.dest_node), text,
                     "graph connection destNode")) {
       return env.Undefined();
     }
-    if (!RequiredIntProperty(env, obj, "destPort", &connection.dest_port)) return env.Undefined();
+    if (!sonare_node::RequiredIntValue(env, obj.Get("destPort"), at + ".destPort",
+                                       &connection.dest_port)) {
+      return env.Undefined();
+    }
     connection.mix = IntProperty(obj, "mix", 1);
     if (env.IsExceptionPending()) return env.Undefined();
     connections.push_back(connection);
@@ -160,16 +166,19 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
         sonare_node::node_list_length(binding_input, "spec.parameterBindings");
     parameter_bindings.reserve(binding_count);
     for (uint32_t i = 0; i < binding_count; ++i) {
-      Napi::Value entry = binding_input.Get(i);
-      if (!entry.IsObject()) {
-        Napi::TypeError::New(env, "graph parameter binding must be an object")
-            .ThrowAsJavaScriptException();
+      Napi::Object obj;
+      std::string at;
+      if (!RequiredElementObject(env, binding_input, i, "parameterBindings", &obj, &at)) {
         return env.Undefined();
       }
-      Napi::Object obj = entry.As<Napi::Object>();
       SonareEngineGraphParameterBinding binding{};
-      if (!RequiredUint32Property(env, obj, "paramId", &binding.param_id)) return env.Undefined();
-      if (!RequiredStringProperty(env, obj, "nodeId", &text)) return env.Undefined();
+      if (!sonare_node::RequiredUint32Value(env, obj.Get("paramId"), at + ".paramId",
+                                            &binding.param_id)) {
+        return env.Undefined();
+      }
+      if (!RequiredStringValue(env, obj.Get("nodeId"), at + ".nodeId", &text)) {
+        return env.Undefined();
+      }
       if (!CopyString(env, binding.node_id, sizeof(binding.node_id), text,
                       "graph parameter binding nodeId")) {
         return env.Undefined();

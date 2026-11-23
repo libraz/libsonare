@@ -63,14 +63,16 @@ bool ReadSends(Napi::Env env, const Napi::Array& sends,
   const uint32_t send_count = sonare_node::node_list_length(sends, "sends");
   out_sends->reserve(send_count);
   for (uint32_t send_index = 0; send_index < send_count; ++send_index) {
-    const Napi::Value send_value = sends.Get(send_index);
-    if (!send_value.IsObject()) {
-      Napi::TypeError::New(env, "send must be an object").ThrowAsJavaScriptException();
+    Napi::Object send_obj;
+    std::string at;
+    if (!sonare_node::RequiredElementObject(env, sends, send_index, "sends", &send_obj, &at)) {
       return false;
     }
-    Napi::Object send_obj = send_value.As<Napi::Object>();
     SonareEngineTrackSend send{};
-    if (!RequiredUint32Property(env, send_obj, "busId", &send.bus_id)) return false;
+    if (!sonare_node::RequiredUint32Value(env, send_obj.Get("busId"), at + ".busId",
+                                          &send.bus_id)) {
+      return false;
+    }
     send.level_db = FloatProperty(send_obj, "levelDb", send.level_db);
     send.enabled = BoolProperty(send_obj, "enabled", true) ? 1 : 0;
     // Default to post-fader when sendTiming is absent to preserve the
@@ -292,7 +294,11 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
       lane.track_id = node_narrow_uint32(value.Env(), value, "trackId");
     } else if (value.IsObject()) {
       Napi::Object obj = value.As<Napi::Object>();
-      if (!RequiredUint32Property(env, obj, "trackId", &lane.track_id)) return env.Undefined();
+      if (!sonare_node::RequiredUint32Value(env, obj.Get("trackId"),
+                                            "lanes[" + std::to_string(i) + "].trackId",
+                                            &lane.track_id)) {
+        return env.Undefined();
+      }
       lane.output_bus_id = Uint32Property(obj, "outputBusId", lane.output_bus_id);
       // The full-range value is checked BEFORE narrowing to the uint8_t C-ABI
       // field: narrowing first would let e.g. 257 wrap to 1 (a valid Stereo)
@@ -322,7 +328,7 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
         lane.send_count = send_storage.back().size();
       }
     } else {
-      Napi::TypeError::New(env, "track lane must be a number or object")
+      Napi::TypeError::New(env, "lanes[" + std::to_string(i) + "] must be an object")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
@@ -421,13 +427,15 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
   buses.reserve(input_count);
   send_storage.reserve(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
-    if (!input.Get(i).IsObject()) {
-      Napi::TypeError::New(env, "track bus must be an object").ThrowAsJavaScriptException();
+    Napi::Object obj;
+    std::string at;
+    if (!sonare_node::RequiredElementObject(env, input, i, "buses", &obj, &at)) {
       return env.Undefined();
     }
-    Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareEngineBus bus{};
-    if (!RequiredUint32Property(env, obj, "busId", &bus.bus_id)) return env.Undefined();
+    if (!sonare_node::RequiredUint32Value(env, obj.Get("busId"), at + ".busId", &bus.bus_id)) {
+      return env.Undefined();
+    }
     bus.gain_db = FloatProperty(obj, "gainDb", bus.gain_db);
     // Zero-init leaves channel_layout at 0 (mono); default to stereo so existing
     // callers that omit it keep the prior stereo behavior. The full-range

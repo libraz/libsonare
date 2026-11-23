@@ -1253,7 +1253,7 @@ describe('v1.2 feature additions (WASM)', () => {
           RangeError,
         ).message,
       ).toBe(
-        'RealtimeEngine.setAutomationLane: value must be finite and in [-3.4028235e38, 3.4028235e38]',
+        'RealtimeEngine.setAutomationLane: points[0].value must be finite and in [-3.4028235e38, 3.4028235e38]',
       );
       expect(engine.automationLaneCount).toBe(1);
       engine.destroy();

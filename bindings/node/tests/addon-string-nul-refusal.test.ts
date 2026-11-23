@@ -157,7 +157,7 @@ describe('embedded NUL refusal, by reader', () => {
         inputNode: id,
         outputNode: id,
       });
-      expectNulRefusal(() => engine.setGraph(graph(`a${NUL}b`)), 'id');
+      expectNulRefusal(() => engine.setGraph(graph(`a${NUL}b`)), 'nodes\\[0\\]\\.id');
     });
   });
 

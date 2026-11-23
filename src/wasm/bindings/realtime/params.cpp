@@ -121,9 +121,11 @@ void RealtimeEngineWasm::setAutomationLane(double param_id_number, val points) {
   const size_t count = wasmArrayLength(points, "points");
   breakpoints.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (size_t i = 0; i < count; ++i) {
-    val point = points[i];
-    const double ppq = numberFromVal(objectProperty(point, "ppq"), "ppq");
-    const float value = floatProperty(point, "value", 0.0f);
+    const val point = requiredElementObject(points, i, "points");
+    const std::string at = elementAt("points", i);
+    const double ppq = requiredDomainDoubleProperty(point, "ppq", at);
+    const float value = checkedFloatFromVal(requiredNumberElementProperty(point, "value", at),
+                                            elementField(at, "value").c_str());
     const int curve = intProperty(point, "curveToNext",
                                   static_cast<int>(sonare::automation::Breakpoint{}.curve_to_next));
     // Match the C ABI: reject non-finite automation breakpoints (WASM bypasses the C-ABI guard).

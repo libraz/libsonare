@@ -410,9 +410,7 @@ val requireTypedProperty(const val& object, const char* key, const char* subject
                          const char* js_type, const char* article_type) {
   namespace schema = sonare::util::json::schema;
   val value = objectProperty(object, key);
-  if (value.isUndefined())
-    throw WasmTypeError(schema::missing_key(schema::child_path(subject, key)));
-  if (value.typeOf().as<std::string>() != js_type) {
+  if (value.isUndefined() || value.typeOf().as<std::string>() != js_type) {
     throw WasmTypeError(
         schema::refusal(schema::child_path(subject, key), std::string("must be ") + article_type));
   }
@@ -726,6 +724,25 @@ double requiredDomainDoubleProperty(const val& object, const char* key, const st
   const val value = objectProperty(object, key);
   if (!value.isNumber()) throw WasmTypeError(elementField(at, key) + " must be a number");
   return value.as<double>();
+}
+
+val requiredNumberElementProperty(const val& object, const char* key, const std::string& at) {
+  const val value = objectProperty(object, key);
+  if (!value.isNumber()) throw WasmTypeError(elementField(at, key) + " must be a number");
+  return value;
+}
+
+val requiredDomainIntProperty(const val& object, const char* key, const std::string& at) {
+  const val value = objectProperty(object, key);
+  if (!value.isNumber()) throw WasmTypeError(elementField(at, key) + " must be an integer");
+  return value;
+}
+
+std::string requiredStringElementProperty(const val& object, const char* key,
+                                          const std::string& at) {
+  const val value = objectProperty(object, key);
+  if (!value.isString()) throw WasmTypeError(elementField(at, key) + " must be a string");
+  return stringFromVal(value, elementField(at, key).c_str());
 }
 
 double optionalDomainDoubleProperty(const val& object, const char* key, double fallback,

@@ -457,17 +457,14 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
   const uint32_t input_count = sonare_node::node_list_length(input, "points");
   points.reserve(input_count);
   for (uint32_t i = 0; i < input_count; ++i) {
-    if (!input.Get(i).IsObject()) {
-      Napi::TypeError::New(env, "automation point must be an object").ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    Napi::Object obj = input.Get(i).As<Napi::Object>();
+    Napi::Object obj;
+    std::string at;
     SonareAutomationPoint point{};
-    if (!RequiredDoubleProperty(env, obj, "ppq", &point.ppq)) return env.Undefined();
-    const Napi::Value point_value = obj.Get("value");
-    node_require_property_type(env, point_value.IsNumber(), "value", "a number");
-    point.value = node_narrow_float(env, point_value, "value");
-    if (!RequiredIntProperty(env, obj, "curveToNext", &point.curve_to_next)) {
+    if (!sonare_node::RequiredElementObject(env, input, i, "points", &obj, &at) ||
+        !sonare_node::RequiredDoubleValue(env, obj.Get("ppq"), at + ".ppq", &point.ppq) ||
+        !sonare_node::RequiredFloatValue(env, obj.Get("value"), at + ".value", &point.value) ||
+        !sonare_node::RequiredIntValue(env, obj.Get("curveToNext"), at + ".curveToNext",
+                                       &point.curve_to_next)) {
       return env.Undefined();
     }
     if (env.IsExceptionPending()) return env.Undefined();

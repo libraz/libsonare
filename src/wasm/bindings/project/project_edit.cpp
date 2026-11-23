@@ -234,10 +234,13 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
   const size_t count = wasmArrayLength(points, "points");
   out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (size_t i = 0; i < count; ++i) {
-    val point = points[i];
+    const val point = requiredElementObject(points, i, "points");
+    const std::string at = elementAt("points", i);
     SonareAutomationPoint p{};
-    p.ppq = doubleProperty(point, "ppq", 0.0);
-    p.value = floatProperty(point, "value", 0.0f);
+    p.ppq = checkedDoubleFromVal(requiredNumberElementProperty(point, "ppq", at),
+                                 elementField(at, "ppq").c_str());
+    p.value = checkedFloatFromVal(requiredNumberElementProperty(point, "value", at),
+                                  elementField(at, "value").c_str());
     p.curve_to_next = hasProperty(point, "curveToNext")
                           ? automationCurveFromVal(point["curveToNext"])
                           : SONARE_CURVE_LINEAR;
@@ -252,9 +255,9 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
   if (desc.isUndefined() || desc.isNull()) {
     throw WasmTypeError("desc must be given");
   }
-  d.target_param_id = optionalDomainValue<uint32_t>(desc["targetParamId"], "targetParamId",
-                                                    sonare_c_detail::kAutomationTargetParamIdDomain)
-                          .value_or(0);
+  d.target_param_id = domainNumberFromVal<uint32_t>(
+      requiredDomainIntProperty(desc, "targetParamId", ""), "targetParamId",
+      sonare_c_detail::kAutomationTargetParamIdDomain);
   *storage = automationPointsFromVal(hasProperty(desc, "points") ? desc["points"] : val::array());
   d.points = storage->empty() ? nullptr : storage->data();
   d.point_count = storage->size();

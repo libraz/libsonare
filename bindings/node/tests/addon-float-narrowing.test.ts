@@ -1884,6 +1884,7 @@ const UNCONTROLLED_SITES = [
  * refusal, but not part of the `node_narrow_float` call-site population.
  */
 const BAILOUT_READER_SITES = new Set([
+  'sonare_wrap_engine.cpp SetAutomationLane value',
   'sonare_wrap_features.cpp NoteSegments frameRate',
   'features/conversion.cpp TimeToFrames time',
   'analysis/metering.cpp ParseScaleArgs midi',

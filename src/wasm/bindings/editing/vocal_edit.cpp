@@ -200,9 +200,13 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     storage->points.reserve(count);
     double previous = -std::numeric_limits<double>::infinity();
     for (std::size_t i = 0; i < count; ++i) {
-      const val point = points[static_cast<unsigned>(i)];
-      const double source = doubleProperty(point, "sourceSample", 0.0);
-      const double midi = doubleProperty(point, "midi", 0.0);
+      const val point = requiredElementObject(points, i, "edit.pitch.target.points");
+      const std::string at = elementAt("edit.pitch.target.points", i);
+      const double source =
+          checkedDoubleFromVal(requiredNumberElementProperty(point, "sourceSample", at),
+                               elementField(at, "sourceSample").c_str());
+      const double midi = checkedDoubleFromVal(requiredNumberElementProperty(point, "midi", at),
+                                               elementField(at, "midi").c_str());
       if (source <= previous) {
         throw WasmRangeError("target.points must be strictly increasing");
       }

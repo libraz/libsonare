@@ -36156,3 +36156,131 @@ changed = "optional; absent when either channel has zero energy (was a required 
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/metering-not-measured.test.ts::omits the phase scope correlation when either channel is silent"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackSend.busId"
+changed = "required: an absent busId is refused with TypeError naming sends[i].busId (1.x read it as 0)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent send bus"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackLane.trackId"
+changed = "required in the object form: an absent trackId is refused with TypeError naming lanes[i].trackId (1.x read it as 0)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent lane track"
+
+[[entry]]
+kind = "field"
+old = "EngineBus.busId"
+changed = "required: an absent busId is refused with TypeError naming buses[i].busId (1.x read it as 0)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent bus id"
+
+[[entry]]
+kind = "field"
+old = "EngineAutomationPoint.value"
+changed = "required: an absent value is refused with TypeError naming points[i].value (1.x read it as 0)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent value"
+
+[[entry]]
+kind = "field"
+old = "ProjectAutomationPoint.ppq"
+changed = "required: an absent ppq is refused with TypeError naming points[i].ppq (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent position"
+
+[[entry]]
+kind = "field"
+old = "ProjectAutomationPoint.value"
+changed = "required: an absent value is refused with TypeError naming points[i].value (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent value"
+
+[[entry]]
+kind = "field"
+old = "ProjectWarpAnchor.warpSample"
+changed = "required: an absent warpSample is refused with TypeError naming anchors[i].warpSample (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent warp sample"
+
+[[entry]]
+kind = "field"
+old = "ProjectWarpAnchor.sourceSample"
+changed = "required: an absent sourceSample is refused with TypeError naming anchors[i].sourceSample (1.x read it as 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent source sample"
+
+[[entry]]
+kind = "field"
+old = "SynthModRouting.depth"
+changed = "required, as are source and destination: an absent depth is refused with TypeError naming modRoutings[i].depth, and an absent source or destination with TypeError 'Expected mod source to be a number or string' (1.x read each as its default)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent depth"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphSpec.connections"
+changed = "every connection field is required: an absent sourceNode, sourcePort, destNode or destPort is refused with TypeError naming connections[i].<field> (1.x read a port as 0 and a node as the empty string), and a connection that is not an object is a TypeError 'connections[i] must be an object'"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent source port"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphSpec.parameterBindings"
+changed = "every binding field is required: an absent paramId or nodeId is refused with TypeError naming parameterBindings[i].<field> (1.x read them as 0 and the empty string), and a binding that is not an object is a TypeError 'parameterBindings[i] must be an object'"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent parameter id"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphSpec.nodes"
+changed = "a node that is not an object is refused with TypeError 'nodes[i] must be an object', and an absent id with TypeError naming nodes[i].id (1.x read a non-object as a node with an empty id)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::a non-object node"
+
+[[entry]]
+kind = "field"
+old = "ProjectAutomationLaneDesc.targetParamId"
+changed = "an absent targetParamId is a TypeError 'targetParamId must be an integer', as on Node (1.x read it as 0 and refused it with RangeError 'targetParamId must be an integer in [1, 4294967295]')"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/list-element-readers.test.ts::an absent target"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMidiClips"
+changed = "a clip that is not an object is refused with TypeError 'clips[i] must be an object' (1.x read it as a clip with every field absent)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::refuses a non-object clip by its index"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setAutomationLane"
+changed = "a point that is not an object is refused with TypeError 'points[i] must be an object' (1.x read it as a point with every field absent)"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::a non-object point"
+
+[[entry]]
+kind = "method"
+old = "Project.setWarpMap"
+changed = "an anchor that is not an object is refused with TypeError 'anchors[i] must be an object' (1.x read it as an anchor at 0, 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/list-element-readers.test.ts::a non-object anchor"

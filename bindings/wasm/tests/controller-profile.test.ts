@@ -226,13 +226,13 @@ describe('Sonare WASM controller profile', () => {
         // @ts-expect-error input is required
         engine.bindController(0, { axis: 'excitation' });
       expect(expectRefusalOf(noInput, TypeError).message).toBe(
-        'RealtimeEngine.bindController: binding.input must be given',
+        'RealtimeEngine.bindController: Expected controller input to be a number or string',
       );
       const noAxis = () =>
         // @ts-expect-error axis is required
         engine.bindController(0, { input: 'controlChange' });
       expect(expectRefusalOf(noAxis, TypeError).message).toBe(
-        'RealtimeEngine.bindController: binding.axis must be given',
+        'RealtimeEngine.bindController: Expected controller axis to be a number or string',
       );
     });
   });
