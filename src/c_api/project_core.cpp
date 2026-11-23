@@ -96,13 +96,17 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 namespace {
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+// One line per diagnostic: "<code>: <message>" for the diagnostics out-parameter, the message
+// alone for the error text a refused load leaves, which names no internal code.
 std::string serialize_deserialize_diagnostics(
-    const std::vector<sonare::serialize::Diagnostic>& diagnostics) {
+    const std::vector<sonare::serialize::Diagnostic>& diagnostics, bool with_codes = true) {
   std::string joined;
   for (size_t i = 0; i < diagnostics.size(); ++i) {
     if (i > 0) joined += '\n';
-    joined += diagnostics[i].code;
-    joined += ": ";
+    if (with_codes) {
+      joined += diagnostics[i].code;
+      joined += ": ";
+    }
     joined += diagnostics[i].message;
   }
   return joined;
@@ -136,6 +140,7 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
   SONARE_C_REQUIRE_NONNULL(json);
   SONARE_C_REQUIRE_NONNULL(out);
   if (len > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, "JSON byte budget exceeded");
     return SONARE_ERROR_INVALID_FORMAT;
   }
   SONARE_C_TRY
@@ -145,6 +150,8 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
     if (out_diag) {
       *out_diag = copy_string(serialize_deserialize_diagnostics(result.diagnostics));
     }
+    const std::string message = serialize_deserialize_diagnostics(result.diagnostics, false);
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, message.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
   auto handle = std::make_unique<SonareProject>();

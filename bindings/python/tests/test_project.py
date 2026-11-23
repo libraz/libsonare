@@ -12,6 +12,7 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import json
+from collections.abc import Callable
 from typing import Any, get_args
 
 import numpy as np
@@ -376,14 +377,32 @@ def test_from_json_refuses_any_version_but_the_current_one(version: int) -> None
         project.close()
     assert document["version"] == 7
     document["version"] = version
-    with raises_coded(ErrorCode.INVALID_FORMAT, match="unsupported_schema_version"):
+    with raises_coded(ErrorCode.INVALID_FORMAT, match=f"project schema version {version} is "):
         Project.from_json(json.dumps(document))
+
+
+def test_a_refused_load_names_no_diagnostic_code() -> None:
+    project = Project()
+    try:
+        document = json.loads(project.to_json())
+    finally:
+        project.close()
+    document["bogus"] = 1
+    loads: list[tuple[str, Callable[[str], object]]] = [
+        ("Project.from_json", Project.from_json),
+        ("Project.from_json_with_diagnostics", Project.from_json_with_diagnostics),
+    ]
+    for entry, load in loads:
+        with pytest.raises(SonareError) as caught:
+            load(json.dumps(document))
+        assert str(caught.value) == f"[{ErrorCode.INVALID_FORMAT}] {entry}: unknown key bogus"
 
 
 def test_from_json_with_diagnostics_returns_success_warnings() -> None:
     result = Project.from_json_with_diagnostics(dangling_source_json())
     try:
-        assert "dangling_clip_source" in result.diagnostics
+        # Warnings keep their code, one "<code>: <message>" line each.
+        assert result.diagnostics.startswith("dangling_clip_source: ")
         assert len(result.project.tracks()) == 1
     finally:
         result.project.close()

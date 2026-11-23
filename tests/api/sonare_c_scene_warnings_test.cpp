@@ -72,6 +72,8 @@ TEST_CASE("sonare_project_deserialize refuses unknown scene keys", "[c_api][proj
   const std::string report = take_diagnostics(diagnostics);
   CHECK(loaded == nullptr);
   CHECK(report.find("invalid_format: unknown key scene.strips[0].faderDB") != std::string::npos);
+  // The error text carries the message alone; the diagnostics keep the code.
+  CHECK(last_error() == "unknown key scene.strips[0].faderDB");
   CHECK(report.find("unknown_scene_key") == std::string::npos);
   CHECK(report.find("x-note") == std::string::npos);
 
