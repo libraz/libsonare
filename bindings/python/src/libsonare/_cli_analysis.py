@@ -406,7 +406,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                     "dynamics": {
                         "dynamic_range_db": _absent_if_none(dynamics.dynamic_range_db),
                         "loudness_range_lu": _absent_if_none(dynamics.loudness_range_lu),
-                        "crest_factor": dynamics.crest_factor,
+                        "crest_factor": _absent_if_none(dynamics.crest_factor),
                         "is_compressed": dynamics.is_compressed,
                     },
                     "rhythm": {

@@ -282,6 +282,19 @@ def test_the_writer_holds_the_native_level_convention() -> None:
     }
 
 
+def test_array_stats_over_silent_frames_write_the_floor_and_leave_the_spread_out() -> None:
+    from libsonare._cli_common import _array_stats, _strict_json_dumps
+
+    silent = [float("-inf")] * 3
+    assert json.loads(_strict_json_dumps({"loudness": _array_stats(silent)})) == {
+        "loudness": {"count": 3, "mean": None, "min": None, "max": None}
+    }
+    mixed = _array_stats([float("-inf"), -20.0, -10.0])
+    assert json.loads(_strict_json_dumps({"loudness": mixed})) == {
+        "loudness": {"count": 3, "mean": None, "min": None, "max": -10.0}
+    }
+
+
 @pytest.mark.parametrize("entry", [float("nan"), "absent"])
 def test_an_array_cannot_carry_a_not_measured_value(entry: object) -> None:
     from libsonare._cli_common import _absent_if_none, _strict_json_dumps

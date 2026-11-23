@@ -773,12 +773,15 @@ def _array_stats(vals: list[float], *, with_count: bool = True) -> dict[str, flo
         if with_count:
             return {"count": 0, **stats}
         return stats
-    stats = {
-        "mean": statistics.mean(vals),
-        "std": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
-        "min": min(vals),
-        "max": max(vals),
-    }
+    if all(math.isfinite(v) for v in vals):
+        mean = statistics.mean(vals)
+        std = statistics.pstdev(vals) if len(vals) > 1 else 0.0
+    else:
+        # statistics refuses an infinity; float arithmetic gives the native writer's
+        # result: -inf for a mean over silent frames (null), NaN for its spread (absent).
+        mean = sum(vals) / len(vals)
+        std = math.nan
+    stats = {"mean": mean, "std": std, "min": min(vals), "max": max(vals)}
     if with_count:
         return {"count": len(vals), **stats}
     return stats

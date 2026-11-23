@@ -99,7 +99,7 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
                     "dynamic_range_db": _absent_if_none(r.dynamic_range_db),
                     "peak_db": r.peak_db,
                     "rms_db": r.rms_db,
-                    "crest_factor": r.crest_factor,
+                    "crest_factor": _absent_if_none(r.crest_factor),
                     "loudness_range_lu": _absent_if_none(r.loudness_range_lu),
                     "is_compressed": r.is_compressed,
                     "loudness": _array_stats(r.loudness_rms_db.tolist()),
