@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
@@ -57,25 +58,33 @@ std::vector<float> fixture(float seconds, float gain, std::uint32_t seed) {
 }
 
 struct PeakLine {
-  double slope;        // bytes held per input byte
-  double fixed_bytes;  // bytes held independently of the input length
+  double slope;          // bytes held per input byte, from the first to the last length
+  double fixed_bytes;    // bytes held independently of the input length
+  double first_slope;    // slope between the first two lengths
+  double last_slope;     // slope between the last two lengths
+  double longest_input;  // bytes of the longest input
 };
 
 /// @p make_input builds the input for a length in seconds outside the measurement; @p run takes it
 /// and returns its size in bytes. The peak covers the whole call, its result included.
-template <typename MakeInput, typename Run>
-PeakLine measure(const float (&lengths)[2], MakeInput make_input, Run run) {
-  double peaks[2] = {};
-  double inputs[2] = {};
-  for (int i = 0; i < 2; ++i) {
+template <std::size_t N, typename MakeInput, typename Run>
+PeakLine measure(const float (&lengths)[N], MakeInput make_input, Run run) {
+  static_assert(N >= 2, "a line needs two lengths");
+  double peaks[N] = {};
+  double inputs[N] = {};
+  for (std::size_t i = 0; i < N; ++i) {
     const auto input = make_input(lengths[i]);
     PeakLiveBytesGuard guard;
     inputs[i] = run(input);
     peaks[i] = static_cast<double>(guard.peak());
   }
   REQUIRE(peaks[0] > 0.0);
-  const double slope = (peaks[1] - peaks[0]) / (inputs[1] - inputs[0]);
-  return {slope, peaks[0] - slope * inputs[0]};
+  const auto slope_between = [&](std::size_t i, std::size_t j) {
+    return (peaks[j] - peaks[i]) / (inputs[j] - inputs[i]);
+  };
+  const double slope = slope_between(0, N - 1);
+  return {slope, peaks[0] - slope * inputs[0], slope_between(0, 1), slope_between(N - 2, N - 1),
+          inputs[N - 1]};
 }
 
 std::vector<std::vector<float>> stereo_input(float seconds) {
@@ -87,31 +96,45 @@ std::vector<Audio> stereo_audio(float seconds) {
           Audio::from_vector(fixture(seconds, 0.83f, 2u), kSampleRate)};
 }
 
-/// Bytes held per input byte, mono or stereo, measured plus headroom at the lengths below. A preset
-/// not named here holds the result beside one whole-input copy in the chain and measures 2.0.
+/// Bytes held per input byte for the two presets the default run measures, plus headroom.
 double preset_slope_bound(const std::string& name) {
-  if (name == "aiMusic" || name == "fieldRecording" || name == "voiceMemo" || name == "vinyl" ||
-      name == "shellac78" || name == "audiobook") {
-    return 8.75;  // 8.01
-  }
-  if (name == "tapeHiss" || name == "speech" || name == "podcast") return 3.5;  // 3.0
-  return 2.25;
+  return name == "fieldRecording" ? 8.75 : 2.25;  // 7.0 and 1.0 at the short lengths
 }
 
-/// The chain's fixed state and a whole-input stage peak at different times, so where the fixed part
-/// is the larger the slope reads the wrong line and a regression in that stage passes. The
-/// mastering chain carries about 10 MB of fixed state: a preset whose only whole-input holder is
-/// the chain passes it beyond about 23 s, one with a spectrum stage much sooner. The case checks it
-/// is passed.
-const float (&preset_lengths(const std::string& name))[2] {
-  static constexpr float kNoChainState[2] = {10.0f, 20.0f};
-  static constexpr float kChainState[2] = {24.0f, 48.0f};
-  const bool short_enough = name == "aiMusic" || name == "fieldRecording" || name == "voiceMemo" ||
-                            name == "vinyl" || name == "shellac78" || name == "tapeHiss";
-  return short_enough ? kNoChainState : kChainState;
-}
+/// A preset with a stage of its own, measured at three lengths. The chain's fixed state and a
+/// whole-input stage peak at different times, so where the fixed part is the larger the slope reads
+/// the wrong line and a regression in the stage passes; the lengths start past that crossover and
+/// the case checks the line is straight across them. The mastering chain carries about 10 MB of
+/// fixed state, which a preset holding nothing beyond the chain's copies passes after about 23 s
+/// in stereo and between 24 and 30 s in mono.
+struct LinedPreset {
+  const char* name;
+  double slope_bound;  // measured plus headroom
+  float lengths[3];
+};
 
-PeakLine stereo_preset_line(sonare::mastering::api::Preset preset, const float (&lengths)[2]) {
+constexpr LinedPreset kLinedPresets[] = {
+    {"pop", 2.25, {30.0f, 36.0f, 42.0f}},          // 2.0: the result beside a whole-input copy
+    {"speech", 3.5, {20.0f, 25.0f, 30.0f}},        // 3.0
+    {"podcast", 3.5, {20.0f, 25.0f, 30.0f}},       // 3.0
+    {"audiobook", 8.75, {10.0f, 15.0f, 20.0f}},    // 8.0
+    {"aiMusic", 8.75, {8.0f, 12.0f, 16.0f}},       // 8.0
+    {"fieldRecording", 8.75, {2.0f, 3.0f, 4.0f}},  // 8.0; no chain state
+    {"voiceMemo", 8.75, {2.0f, 3.0f, 4.0f}},       // 8.0
+    {"vinyl", 8.75, {2.0f, 3.0f, 4.0f}},           // 8.0
+    {"shellac78", 8.75, {2.0f, 3.0f, 4.0f}},       // 8.0
+    {"tapeHiss", 4.5, {2.0f, 3.0f, 4.0f}},         // 4.0
+};
+
+// Segment slopes of a straight line agree within this fraction of the larger.
+constexpr double kStraightLineTolerance = 0.05;
+// The chain-only presets measured identical to pop's line; one extra whole-input copy at the
+// single length adds 8.5 MB.
+constexpr float kChainOnlyLength = 24.0f;
+constexpr double kChainOnlyToleranceBytes = 1.0 * kMegabyte;
+
+template <std::size_t N>
+PeakLine stereo_preset_line(sonare::mastering::api::Preset preset, const float (&lengths)[N]) {
   return measure(lengths, stereo_input, [&](const std::vector<std::vector<float>>& in) {
     const auto result = sonare::mastering::api::master_audio_stereo(
         preset, in[0].data(), in[1].data(), in[0].size(), kSampleRate);
@@ -120,7 +143,8 @@ PeakLine stereo_preset_line(sonare::mastering::api::Preset preset, const float (
   });
 }
 
-PeakLine mono_preset_line(sonare::mastering::api::Preset preset, const float (&lengths)[2]) {
+template <std::size_t N>
+PeakLine mono_preset_line(sonare::mastering::api::Preset preset, const float (&lengths)[N]) {
   return measure(
       lengths, [](float seconds) { return fixture(seconds, 1.0f, 1u); },
       [&](const std::vector<float>& in) {
@@ -149,21 +173,39 @@ TEST_CASE("an exciter preset and a repair preset hold a bounded heap per input b
 TEST_CASE("mastering presets hold a bounded heap per input byte", "[mastering][memory][.][slow]") {
   if (!kLiveBytesMeasured) SKIP("live heap bytes are not measured on this platform");
   using namespace sonare::mastering::api;
+  PeakLine pop_stereo{};
+  std::vector<std::string> lined;
+  for (const LinedPreset& shape : kLinedPresets) {
+    CAPTURE(shape.name);
+    lined.emplace_back(shape.name);
+    const auto preset = preset_from_string(shape.name);
+    for (const bool stereo : {true, false}) {
+      CAPTURE(stereo);
+      const PeakLine line = stereo ? stereo_preset_line(preset, shape.lengths)
+                                   : mono_preset_line(preset, shape.lengths);
+      CAPTURE(line.slope, line.fixed_bytes / kMegabyte, line.first_slope, line.last_slope);
+      CHECK(std::abs(line.first_slope - line.last_slope) <=
+            kStraightLineTolerance * std::max(line.first_slope, line.last_slope));
+      CHECK(line.slope * line.longest_input > line.fixed_bytes);
+      CHECK(line.slope <= shape.slope_bound);
+      CHECK(line.fixed_bytes <= kFixedBoundBytes);
+      if (stereo && std::string(shape.name) == "pop") pop_stereo = line;
+    }
+  }
+  REQUIRE(pop_stereo.slope > 0.0);
   for (const auto& name : preset_names()) {
+    if (std::find(lined.begin(), lined.end(), name) != lined.end()) continue;
     CAPTURE(name);
-    const auto preset = preset_from_string(name);
-    const auto& lengths = preset_lengths(name);
-    const PeakLine stereo = stereo_preset_line(preset, lengths);
-    const PeakLine mono = mono_preset_line(preset, lengths);
-    CAPTURE(stereo.slope, stereo.fixed_bytes / kMegabyte, mono.slope, mono.fixed_bytes / kMegabyte);
-    // The slope is only a measurement where the variable part dominates the longer run.
-    const double long_frames = static_cast<double>(kSampleRate) * lengths[1];
-    CHECK(stereo.slope * 2.0 * long_frames * sizeof(float) > stereo.fixed_bytes);
-    CHECK(mono.slope * long_frames * sizeof(float) > mono.fixed_bytes);
-    CHECK(stereo.slope <= preset_slope_bound(name));
-    CHECK(mono.slope <= preset_slope_bound(name));
-    CHECK(stereo.fixed_bytes <= kFixedBoundBytes);
-    CHECK(mono.fixed_bytes <= kFixedBoundBytes);
+    const auto input = stereo_input(kChainOnlyLength);
+    PeakLiveBytesGuard guard;
+    const auto result = master_audio_stereo(preset_from_string(name), input[0].data(),
+                                            input[1].data(), input[0].size(), kSampleRate);
+    const double peak = static_cast<double>(guard.peak());
+    REQUIRE(result.left.size() == input[0].size());
+    const double bytes = 2.0 * static_cast<double>(input[0].size() * sizeof(float));
+    const double on_pop_line = pop_stereo.fixed_bytes + pop_stereo.slope * bytes;
+    CAPTURE(peak / kMegabyte, on_pop_line / kMegabyte);
+    CHECK(peak <= on_pop_line + kChainOnlyToleranceBytes);
   }
 }
 
