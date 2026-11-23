@@ -131,7 +131,7 @@ describe('Sonare WASM part rig', () => {
             }),
           RangeError,
         ).message,
-      ).toBe('Project.setPartRig: inserts[0].processor must name a processor that can be built');
+      ).toBe('Project.setPartRig: inserts[0].processor must name an insert processor');
       expect(
         expectRefusalOf(
           () =>
@@ -219,9 +219,7 @@ describe('Sonare WASM part rig', () => {
             }),
           RangeError,
         ).message,
-      ).toBe(
-        'RealtimeEngine.setPartRig: inserts[0].processor must name a processor that can be built',
-      );
+      ).toBe('RealtimeEngine.setPartRig: inserts[0].processor must name an insert processor');
     } finally {
       engine.destroy();
     }

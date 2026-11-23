@@ -127,7 +127,7 @@ describe('part rig on a project', () => {
     refused(
       { mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] },
       RangeError,
-      'inserts[0].processor must name a processor that can be built',
+      'inserts[0].processor must name an insert processor',
     );
     expect(set({ mode: 'none', inserts: chain })).toThrow(RangeError);
     expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();

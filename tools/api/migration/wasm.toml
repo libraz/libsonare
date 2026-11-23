@@ -15830,7 +15830,7 @@ test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination i
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setPartRig"
-changed = "request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat"
+changed = "request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/engine.test.ts::sets a part rig from one request"
@@ -20894,7 +20894,7 @@ test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part r
 [[entry]]
 kind = "method"
 old = "Project.setPartRig"
-changed = "the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); inside a loaded project document a wrong type stays InvalidFormat"
+changed = "the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest; inserts the library refuses are a TypeError (wrong shape: a wrong type, a missing processor or an unknown key inside an insert) or a RangeError (out of domain) instead of SonareError InvalidFormat, naming the place under inserts ('inserts must hold 1 to 8 entries for a chain rig'); a params key the processor does not read is refused as a TypeError ('unknown key inserts[0].params.drive (expected aliasing, ceiling, driveDb, mix)') and an unknown processor reads 'inserts[0].processor must name an insert processor'; inside a loaded project document a wrong type and a chain no player can build are InvalidFormat instead of dropping the entry"
 domain = "project"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
