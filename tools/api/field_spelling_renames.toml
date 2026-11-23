@@ -322,3 +322,11 @@ offset_samples = "record_offset_samples"
 [wasm.quotient_of]
 "playback_renderer_process_interleaved.frames" = ["samples", "inChannels"]
 "playback_renderer_render_offline.frames" = ["samples", "inChannels"]
+
+# A C entry the facade calls only to resolve another of its arguments refuses under its own
+# key; the row names that argument, and binds where the surface binds it on the same handle class.
+[node.resolver_of]
+"mixer_strip_at.index" = "strip"
+
+[wasm.resolver_of]
+"mixer_strip_at.index" = "strip"

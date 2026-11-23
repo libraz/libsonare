@@ -140,6 +140,13 @@ def entry_keys(entry: str) -> set[str]:
     return keys
 
 
+def _handle_class(key: str) -> str | None:
+    """The facade class whose C prefix ``key`` carries, or None for a free function."""
+    from compare import _HANDLE_FULL_PREFIXES
+
+    return next((cls for prefix, cls in _HANDLE_FULL_PREFIXES if key.startswith(prefix)), None)
+
+
 def derive(
     bindings: Iterable,
     request_fields: dict[str, list[dict]] | None = None,
@@ -171,11 +178,12 @@ def derive(
     lengths = {s: dict(renames.get(s, {}).get("length_of", {})) for s in SURFACES}
     quotients = {s: dict(renames.get(s, {}).get("quotient_of", {})) for s in SURFACES}
     document_roots = {s: dict(renames.get(s, {}).get("document_roots", {})) for s in SURFACES}
+    resolvers = {s: dict(renames.get(s, {}).get("resolver_of", {})) for s in SURFACES}
     renames = {
         s: {
             k: v
             for k, v in table.items()
-            if k not in ("length_of", "quotient_of", "document_roots")
+            if k not in ("length_of", "quotient_of", "document_roots", "resolver_of")
         }
         for s, table in renames.items()
     }
@@ -230,6 +238,25 @@ def derive(
             if (surface, key, subject) not in paired and subject in declared and takes_array:
                 rows[surface].add(Row(key, subject, array, True))
                 used.add((surface, f"length_of.{name}", array))
+    # A C entry the facade calls to resolve another argument (a strip index into a strip
+    # handle) refuses under its own key; its subject is that argument where the surface binds
+    # the argument on an entry of the same handle class.
+    for surface, table in resolvers.items():
+        for name, argument in table.items():
+            key, _, subject = name.partition(".")
+            owner = _handle_class(key)
+            if (
+                subject in c_params.get(key, set())
+                and owner is not None
+                and any(
+                    b.surface == surface
+                    and b.surface_spelling == argument
+                    and _handle_class(b.c_key) == owner
+                    for b in bindings
+                )
+            ):
+                rows[surface].add(Row(key, subject, argument))
+                used.add((surface, f"resolver_of.{name}", argument))
     for surface, table in document_roots.items():
         for key, (prefix, root) in table.items():
             if root.endswith(".") and root[:-1] in names[(surface, key)]:
@@ -255,6 +282,12 @@ def derive(
             for surface, table in quotients.items()
             for name, pair in table.items()
             if (surface, f"quotient_of.{name}", " / ".join(pair)) not in used
+        )
+        + sorted(
+            (surface, f"resolver_of.{name}", argument)
+            for surface, table in resolvers.items()
+            for name, argument in table.items()
+            if (surface, f"resolver_of.{name}", argument) not in used
         )
         + sorted(
             (surface, f"document_roots.{key}", f"{prefix} -> {root}")

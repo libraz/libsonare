@@ -340,6 +340,22 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(rows["node"], [])
         self.assertEqual(idle, [("node", "document_roots.set_strip", "strips[0]. -> settings.")])
 
+    def test_a_resolver_subject_takes_the_argument_its_handle_class_binds(self) -> None:
+        facts = [Fact("strip_set_fader_db", "strip", "param", "node", "strip")]
+        rule = {"node": {"resolver_of": {"mixer_strip_at.index": "strip"}}}
+        c_params = {"mixer_strip_at": {"mixer", "index"}}
+        rows, unbound, idle = gen.derive(facts, {}, rule, c_params)
+        self.assertEqual(rows["node"], [gen.Row("mixer_strip_at", "index", "strip")])
+        self.assertEqual((unbound, idle), ([], []))
+
+    def test_a_resolver_argument_no_entry_of_its_class_binds_stays_idle(self) -> None:
+        facts = [Fact("engine_set_tempo", "bpm", "param", "node", "strip")]
+        rule = {"node": {"resolver_of": {"mixer_strip_at.index": "strip"}}}
+        c_params = {"mixer_strip_at": {"mixer", "index"}}
+        rows, _, idle = gen.derive(facts, {}, rule, c_params)
+        self.assertNotIn("mixer_strip_at", [row.c_key for row in rows["node"]])
+        self.assertEqual(idle, [("node", "resolver_of.mixer_strip_at.index", "strip")])
+
     def test_a_quotient_operand_the_entry_does_not_take_binds_nothing(self) -> None:
         facts = [
             Fact("push", "frames", "param", "node", None),
