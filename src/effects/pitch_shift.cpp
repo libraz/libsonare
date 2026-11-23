@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -11,8 +12,8 @@
 #include "effects/native_spectral_stretch.h"
 #include "effects/time_stretch.h"
 #include "util/constants.h"
-#include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/parameter_checks.h"
 
 namespace sonare {
 
@@ -62,16 +63,37 @@ Audio resample_pitch_shifted(const Audio& stretched, const PitchShiftPlan& plan,
 }
 
 Audio pitch_shift(const Audio& audio, float semitones, const PitchShiftConfig& config) {
+  if (audio.empty()) util::check::refuse("audio", "must be a non-empty buffer");
+  if (audio.size() > kMaxAudioBufferSize) {
+    util::check::refuse("audio",
+                        "must hold at most " + std::to_string(kMaxAudioBufferSize) + " samples");
+  }
+  util::check::finite_float(semitones, "pitch_semitones");
+
   PitchShiftPlan plan;
-  SONARE_CHECK_MSG(make_pitch_shift_plan(audio.size(), audio.sample_rate(), semitones, &plan),
-                   ErrorCode::InvalidParameter, kPitchShiftPlanError);
+  if (!make_pitch_shift_plan(audio.size(), audio.sample_rate(), semitones, &plan)) {
+    util::check::refuse(
+        "pitch_semitones",
+        "must produce a finite positive ratio and a resampler-compatible shifted sample rate, "
+        "with a stretched intermediate within the audio buffer limit");
+  }
   return pitch_shift_ratio(audio, plan.ratio, config);
 }
 
 Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig& config) {
+  if (audio.empty()) util::check::refuse("audio", "must be a non-empty buffer");
+  if (audio.size() > kMaxAudioBufferSize) {
+    util::check::refuse("audio",
+                        "must hold at most " + std::to_string(kMaxAudioBufferSize) + " samples");
+  }
+  util::check::greater_than(ratio, 0.0, "ratio");
+
   PitchShiftPlan plan;
-  SONARE_CHECK_MSG(make_pitch_shift_ratio_plan(audio.size(), audio.sample_rate(), ratio, &plan),
-                   ErrorCode::InvalidParameter, kPitchShiftPlanError);
+  if (!make_pitch_shift_ratio_plan(audio.size(), audio.sample_rate(), ratio, &plan)) {
+    util::check::refuse("ratio",
+                        "must produce a resampler-compatible shifted sample rate and a stretched "
+                        "intermediate within the audio buffer limit");
+  }
 
   const int hop_length = resolve_resynthesis_hop(config.hop_length, config.n_fft);
   if (config.backend == StretchBackend::NativeSpectral) {

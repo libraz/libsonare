@@ -49,6 +49,29 @@ TEST_CASE("pitch_shift zero semitones", "[pitch_shift]") {
   REQUIRE_THAT(shifted.duration(), WithinRel(audio.duration(), 0.3f));
 }
 
+TEST_CASE("pitch_shift refusal names pitch_semitones", "[pitch_shift][refusal]") {
+  const Audio audio = create_test_audio(440.0f, 22050, 0.25f);
+
+  try {
+    (void)pitch_shift(audio, -120.0f);
+    FAIL("expected a refusal");
+  } catch (const SonareParameterRefusal& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(e.subject() == "pitch_semitones");
+    REQUIRE(std::string(e.what()).find("pitch_semitones must produce a finite positive ratio") ==
+            0);
+  }
+
+  try {
+    (void)pitch_shift(Audio{}, 0.0f);
+    FAIL("expected a refusal");
+  } catch (const SonareParameterRefusal& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(e.subject() == "audio");
+    REQUIRE(std::string(e.what()).find("audio must be a non-empty buffer") == 0);
+  }
+}
+
 TEST_CASE("pitch_shift up", "[pitch_shift]") {
   Audio audio = create_test_audio(440.0f, 22050, 0.5f);
 
@@ -96,7 +119,7 @@ TEST_CASE("pitch_shift_ratio basic", "[pitch_shift]") {
 }
 
 TEST_CASE("pitch_shift_ratio refuses only the shifted-rate floor and the int ceiling",
-          "[pitch_shift]") {
+          "[pitch_shift][refusal]") {
   Audio audio = create_test_audio(440.0f, 22050, 0.25f);
   PitchShiftConfig config;
   config.n_fft = 1024;
@@ -106,9 +129,19 @@ TEST_CASE("pitch_shift_ratio refuses only the shifted-rate floor and the int cei
   try {
     (void)pitch_shift_ratio(audio, 0.04f, config);
     FAIL("expected a refusal");
-  } catch (const SonareException& e) {
+  } catch (const SonareParameterRefusal& e) {
     REQUIRE(e.code() == ErrorCode::InvalidParameter);
-    REQUIRE(std::string(e.what()).find("pitch shift needs") != std::string::npos);
+    REQUIRE(e.subject() == "ratio");
+    REQUIRE(std::string(e.what()).find("ratio must produce a resampler-compatible shifted") == 0);
+  }
+
+  try {
+    (void)pitch_shift_ratio(Audio{}, 1.0f, config);
+    FAIL("expected a refusal");
+  } catch (const SonareParameterRefusal& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(e.subject() == "audio");
+    REQUIRE(std::string(e.what()).find("audio must be a non-empty buffer") == 0);
   }
   // 22050 * 20 = 441000 Hz is a valid rate for the resampler, so it is applied.
   REQUIRE(pitch_shift_ratio(audio, 20.0f, config).size() == audio.size());
