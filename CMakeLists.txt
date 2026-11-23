@@ -107,6 +107,15 @@ endif()
 option(SONARE_USE_PFFFT "Use the SIMD PFFFT backend where the transform length allows"
        ${SONARE_PFFFT_DEFAULT})
 
+# Native Wasm exception handling on every unit of both modules, so a throw runs the destructors of
+# every frame it leaves and memory a failed call held returns to the heap. Every archive must share
+# the mode; it is set here, before any target, rather than per target. The legacy instruction set is
+# named explicitly: the standardized one needs engines newer than the package's Node floor.
+if(BUILD_WASM)
+  add_compile_options(-fwasm-exceptions -sWASM_LEGACY_EXCEPTIONS=1)
+  add_link_options(-fwasm-exceptions -sWASM_LEGACY_EXCEPTIONS=1)
+endif()
+
 # Development-only: expose the synth voices' `SONARE_TUNABLE` calibration
 # constants as runtime-overridable knobs (see src/util/tunable.h), so a fitter
 # can sweep one without a rebuild per candidate value. The macro changes what a

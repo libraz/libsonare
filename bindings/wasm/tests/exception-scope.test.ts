@@ -2,13 +2,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { init, noteToHz, RealtimeEngine } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
-// emscripten defaults to DISABLE_EXCEPTION_CATCHING=1, which elides landing
-// pads while compiling, so a `catch` in a unit built without -fexceptions is
-// deleted outright. The loss is silent -- not a compile error, not a link
-// error, not a test failure -- and what reaches JS is whatever the throw was,
-// rather than the value the catch promised. These cases assert the promise
-// from the JS side, one per mechanism, so the flag going missing from a unit
-// again shows up as behaviour rather than only as a build-database check.
+// A `catch` compiled without exception support is deleted outright, silently:
+// no compile error, no link error, and what reaches JS is whatever the throw
+// was rather than the value the catch promised. These cases assert the promise
+// from the JS side, one per mechanism, so a unit losing exception support shows
+// up as behaviour.
 describe('WASM exception scope', () => {
   beforeAll(async () => {
     await init();

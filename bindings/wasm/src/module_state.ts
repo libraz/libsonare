@@ -48,19 +48,33 @@ interface NativeExceptionInfo {
   refusal?: RefusalRecord;
 }
 
+/** The runtime helpers a module built with native Wasm exceptions exports for reading a throw. */
+interface WasmExceptionHelpers {
+  getCppExceptionTag?: () => WebAssembly.Tag;
+  getCppExceptionThrownObjectFromWebAssemblyException?: (error: WebAssembly.Exception) => number;
+}
+
 /**
  * Recover the native exception-object pointer from a value thrown across the
- * WASM boundary. emscripten surfaces a C++ throw in two shapes depending on the
- * toolchain/exception mode:
- *   - a raw pointer number (older / classic surfacing), or
- *   - a `CppException` object exposing the pointer as `excPtr` (emscripten with
- *     `-fexceptions`).
- * Returns null when the thrown value is neither (a genuine JS error), so the
- * caller rethrows it unchanged.
+ * WASM boundary. The module is built with native Wasm exception handling, so a
+ * C++ throw reaches JS as a `WebAssembly.Exception` carrying the C++ tag, and
+ * the module's own helper reads the thrown object's address out of it. A raw
+ * pointer number and a `CppException` exposing `excPtr` (JS-emulated
+ * exceptions) are still read for a module built the older way.
+ * Returns null when the thrown value is none of these (a genuine JS error, or a
+ * Wasm exception some other tag raised), so the caller rethrows it unchanged.
  */
-export function nativeExceptionPtr(error: unknown): number | null {
+export function nativeExceptionPtr(module: SonareModule, error: unknown): number | null {
   if (typeof error === 'number') {
     return error;
+  }
+  if (typeof WebAssembly.Exception === 'function' && error instanceof WebAssembly.Exception) {
+    const helpers = module as unknown as WasmExceptionHelpers;
+    const tag = helpers.getCppExceptionTag?.();
+    if (tag === undefined || !error.is(tag)) {
+      return null;
+    }
+    return helpers.getCppExceptionThrownObjectFromWebAssemblyException?.(error) ?? null;
   }
   if (error !== null && typeof error === 'object') {
     const ptr = (error as { excPtr?: unknown }).excPtr;
@@ -124,8 +138,8 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
 }
 
 /**
- * Wrap the embind module so a native C++ exception (which surfaces as a raw
- * pointer number or a `CppException` carrying one) is rethrown as a
+ * Wrap the embind module so a native C++ exception (a `WebAssembly.Exception`
+ * carrying the C++ tag, see {@link nativeExceptionPtr}) is rethrown as a
  * {@link SonareError}. Only function-valued
  * members are wrapped, and the wrapper is cached per member so repeated access
  * stays cheap; non-function members (typed-array heap views, etc.) pass through
@@ -135,7 +149,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
   const cache = new Map<PropertyKey, unknown>();
   const objectCache = new WeakMap<object, unknown>();
   const translate = (error: unknown): unknown => {
-    const ptr = nativeExceptionPtr(error);
+    const ptr = nativeExceptionPtr(raw, error);
     if (ptr !== null) {
       return makeSonareError(raw, ptr);
     }

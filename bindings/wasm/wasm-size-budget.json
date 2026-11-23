@@ -1,28 +1,28 @@
 {
   "artifacts": {
     "sonare-analysis.js": {
-      "gzip": 10560,
-      "raw": 54395,
-      "sha256": "03027ee1e0c0c3a7b14630fa4774a822a42c82f079e6b55faec44fbb5a9b102e"
+      "gzip": 9323,
+      "raw": 39089,
+      "sha256": "1ea5412fa6629aad2bd33e679c8dded21438d80fc017f9ba4d1046ac8eb98524"
     },
     "sonare-analysis.wasm": {
-      "code": 1070973,
-      "data": 90993,
-      "gzip": 450429,
-      "raw": 1167926,
-      "sha256": "a04c5e8edc762f7adec0915819c12a514358d32c991e5269eac877904b124ac8"
+      "code": 1057892,
+      "data": 93475,
+      "gzip": 457202,
+      "raw": 1155267,
+      "sha256": "b6e2839a9179d2310cc9976c7c4cc239fe271a856b766b25174bcc5932b67d33"
     },
     "sonare.js": {
-      "gzip": 17439,
-      "raw": 122423,
-      "sha256": "6dad3d884c01264a59c17e1524fa7b12a8c5cc5e8ea3a60f0032b9eaadb68b47"
+      "gzip": 15347,
+      "raw": 83842,
+      "sha256": "1eca2947f93bb489ea37d0655a1c75f69e3bc940dc0a1bce387a24116718c9d8"
     },
     "sonare.wasm": {
-      "code": 7464396,
-      "data": 820084,
-      "gzip": 2875679,
-      "raw": 8314534,
-      "sha256": "cd3862ed18018a3e460f4e4118d06b079b108431821f4eea552cb3c16434dc5d"
+      "code": 6874666,
+      "data": 825459,
+      "gzip": 2835622,
+      "raw": 7720210,
+      "sha256": "b7246723b08e17eed315d332655d9ae5276b3b0f121057f0435e85ed7654e0f5"
     }
   },
   "format": 1,

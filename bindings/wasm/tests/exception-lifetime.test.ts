@@ -1,8 +1,8 @@
 /**
  * Lifetime of a native exception object surfaced across the WASM boundary.
  *
- * emscripten's `__cxa_throw` takes a reference on the exception object and
- * rethrows the raw pointer into JS. No C++ frame catches it, so that reference
+ * `__cxa_throw` takes a reference on the exception object and the throw
+ * reaches JS uncaught. No C++ frame catches it, so that reference
  * is the only one and nothing drops it on its own — the module wrapper has to.
  * Without the release, every rejected input leaks its exception object for the
  * lifetime of the module, and rejection-as-control-flow (re-validating markers
@@ -71,11 +71,11 @@ function reject(module: SonareModule): unknown {
 
 /**
  * Rejects on the UNWRAPPED module; the caller owns the returned reference.
- * Decoded by the wrapper's own reader, since the toolchain decides whether the
- * pointer arrives bare or inside a `CppException`.
+ * Decoded by the wrapper's own reader, since the exception mode decides whether the
+ * pointer arrives bare or inside a `WebAssembly.Exception`.
  */
 function throwUnwrapped(): number {
-  const ptr = nativeExceptionPtr(reject(raw));
+  const ptr = nativeExceptionPtr(raw, reject(raw));
   expect(ptr, 'an unwrapped native throw carries the exception pointer').not.toBeNull();
   return ptr as number;
 }

@@ -614,22 +614,11 @@ jobs:
       # the refusals it provokes name a field in C spelling than the ratchet allows.
       - name: Refusal spelling ratchet (WASM)
         run: make refusal-spelling-check REFUSAL_SPELLING_SURFACES=wasm
-      # Reads the built compile_commands.json, so it has to follow the build. A
-      # catch compiled without -fexceptions is deleted silently: no compile
-      # error, no link error, no failing test, just a throw that walks past its
-      # handler. One invocation over both configurations, not two: a dead flag
-      # is one that reaches no catch in every configuration, and a single build
-      # dir cannot tell that from a flag a feature gate idled here alone.
-      - name: Check WASM exception scope
-        run: |
-          python3 tests/conformance/check_wasm_exception_scope.py \
-            --build-dir bindings/wasm/build-wasm \
-            --build-dir bindings/wasm/build-wasm-analysis
       # A feature flag is read as a promise about the shipped binary, and until
       # this ran nothing held it to one: the analysis module links three units
-      # from subsystems it turned off, each deliberate and each now named. Same
-      # two build directories, for the same reason -- a residue only appears in
-      # the configuration whose gate is off.
+      # from subsystems it turned off, each deliberate and each now named. Both
+      # build directories, because a residue only appears in the configuration
+      # whose gate is off.
       - name: Check WASM feature gate scope
         run: |
           python3 tests/conformance/check_wasm_feature_gate_scope.py \

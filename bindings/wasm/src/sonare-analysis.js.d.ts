@@ -60,6 +60,8 @@ export type SonareAnalysisModule = Pick<
   | 'frameSignal'
   | 'framesToSamples'
   | 'framesToTime'
+  | 'getCppExceptionTag'
+  | 'getCppExceptionThrownObjectFromWebAssemblyException'
   | 'griffinLim'
   | 'hybridCqt'
   | 'hzToMel'

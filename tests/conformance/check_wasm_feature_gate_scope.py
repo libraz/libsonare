@@ -18,7 +18,7 @@ Two things this deliberately does not do:
   attest the same 1082 files and it cannot answer this question at all.
 
 What it reads instead is the link line the build actually issued, through
-``check_wasm_exception_scope.module_objects()``, and the configured flag values
+``wasm_link_objects.module_objects()``, and the configured flag values
 out of the build directory's own ``CMakeCache.txt``.  Both are properties of the
 build that produced the objects, so neither can drift from it.
 
@@ -40,7 +40,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_wasm_exception_scope import module_objects
+from wasm_link_objects import module_objects
 
 ROOT = Path(__file__).resolve().parents[2]
 CMAKELISTS = ROOT / "src/CMakeLists.txt"

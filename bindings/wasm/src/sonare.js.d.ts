@@ -3707,15 +3707,19 @@ export interface SonareModule {
     blockSize: number | undefined,
   ) => WasmMixer;
 
-  // Decodes a thrown native exception-object pointer (emscripten classic EH
-  // surfaces a C++ throw as the raw pointer number) into a structured error.
+  // Decodes a thrown native exception-object pointer into a structured error.
   // Consumed by the module-error wrapper in module_state.ts.
   sonareExceptionInfo: (ptr: number) => { code: number; codeName: string; message: string };
 
-  // Drops the reference emscripten's __cxa_throw took on the exception object
-  // before rethrowing its pointer into JS. Nothing else ever drops it, so the
-  // module-error wrapper releases every pointer it surfaces.
+  // Drops the reference __cxa_throw took on the exception object. No C++ frame
+  // catches a throw that reaches JS, so the module-error wrapper releases every
+  // pointer it surfaces.
   sonareReleaseException: (ptr: number) => void;
+
+  // Native Wasm exception helpers: the C++ tag, and the thrown object's address
+  // inside a WebAssembly.Exception carrying it.
+  getCppExceptionTag: () => WebAssembly.Tag;
+  getCppExceptionThrownObjectFromWebAssemblyException: (error: WebAssembly.Exception) => number;
   renderRefusal: (
     refusal: unknown,
     subjects: string[],

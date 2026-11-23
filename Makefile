@@ -1038,7 +1038,7 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_cli_contract.py tests/conformance/test_cli_artifact_defaults.py
 	$(CHECK) python3 -m unittest tests/conformance/test_c_error_codes.py
 	$(CHECK) python3 -m unittest tests/conformance/test_playback_cli.py
-	$(CHECK) python3 -m unittest tests/conformance/test_wasm_exception_scope.py
+	$(CHECK) python3 -m unittest tests/conformance/test_wasm_link_objects.py
 	$(CHECK) python3 -m unittest tools/abi/test_check_c_exports.py tools/abi/test_check_abi_bumps.py
 	$(CHECK) python3 -m unittest tests/conformance/test_wasm_feature_gate_scope.py
 	$(CHECK) python3 -m unittest tests/conformance/test_capability_feature_gates.py
