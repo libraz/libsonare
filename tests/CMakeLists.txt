@@ -469,6 +469,8 @@ if(BUILD_MIXING)
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
     engine/track_lane_width_send_test.cpp
+    engine/live_input_track_test.cpp
+    api/engine_input_track_test.cpp
     engine/track_mixer_concurrency_test.cpp
     engine/track_mixer_routing_test.cpp
     mixing/downmix_test.cpp
