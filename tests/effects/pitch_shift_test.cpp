@@ -108,7 +108,7 @@ TEST_CASE("pitch_shift_ratio refuses only the shifted-rate floor and the int cei
     FAIL("expected a refusal");
   } catch (const SonareException& e) {
     REQUIRE(e.code() == ErrorCode::InvalidParameter);
-    REQUIRE(std::string(e.what()).find("pitch_shift") != std::string::npos);
+    REQUIRE(std::string(e.what()).find("pitch shift needs") != std::string::npos);
   }
   // 22050 * 20 = 441000 Hz is a valid rate for the resampler, so it is applied.
   REQUIRE(pitch_shift_ratio(audio, 20.0f, config).size() == audio.size());

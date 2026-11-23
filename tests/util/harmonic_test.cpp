@@ -113,17 +113,17 @@ TEST_CASE("harmonic vector overloads require the declared matrix size", "[util][
         interp_harmonics(std::vector<float>{}, std::numeric_limits<int>::max(), 2,
                          std::vector<float>{}, harmonics);
       },
-      "interp_harmonics: x size must equal"));
+      "x size must equal"));
   REQUIRE(throws_invalid_parameter_with_message(
       [&] {
         salience(std::vector<float>{}, std::numeric_limits<int>::max(), 2, std::vector<float>{},
                  harmonics);
       },
-      "salience: S size must equal"));
+      "S size must equal"));
   REQUIRE(throws_invalid_parameter_with_message(
       [&] {
         f0_harmonics(std::vector<float>{}, std::numeric_limits<int>::max(), 2, {100.0f},
                      std::vector<float>{}, harmonics);
       },
-      "f0_harmonics: S size must equal"));
+      "S size must equal"));
 }

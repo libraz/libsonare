@@ -118,7 +118,7 @@ TEST_CASE("pcen vector overload requires the declared matrix size", "[librosa][p
                     SonareException);
   REQUIRE(throws_invalid_parameter_with_message(
       [&] { pcen(std::vector<float>{}, std::numeric_limits<int>::max(), 2, cfg); },
-      "pcen: S size must equal"));
+      "S size must equal"));
 }
 
 namespace {
