@@ -1,12 +1,10 @@
 """Kernel-size boundary tests for the HPSS entry points of the Python facade.
 
-The two median filters each guard their kernel twice with the same error code:
-once for odd-and-positive, which carries that code's generic message, and once
-for the ceiling, which carries a message naming the filter and the ceiling's
-value. Separating the two is the whole point -- an oversized kernel used to
-reach the per-worker allocations, where the refusal depended on whether the host
-overcommitted, so ``OutOfMemory`` / ``Unknown`` are exactly what must never come
-back and a bare "it raises" would accept them.
+The core refuses a kernel that is not an odd integer in [1, 524288] with one
+refusal naming the kernel and that domain, an even kernel included. An oversized
+kernel used to reach the per-worker allocations, where the refusal depended on
+whether the host overcommitted, so ``OutOfMemory`` / ``Unknown`` are exactly what
+must never come back and a bare "it raises" would accept them.
 
 Two of the three entry points here validate the kernel in the binding before the
 call, and the third does not, so the same input produces a different refusal on
@@ -100,13 +98,10 @@ def _assert_parameter_refusal(error: SonareError) -> None:
     assert error.code != int(ErrorCode.UNKNOWN)
 
 
-def _assert_names_ceiling(error: SonareError, direction: str, kernel: int) -> None:
-    """The refusal names the filter, the value passed, and the ceiling."""
+def _assert_names_ceiling(error: SonareError, arg_name: str) -> None:
+    """The refusal names the caller's kernel argument and the core's domain, ceiling included."""
     _assert_parameter_refusal(error)
-    filter_name = (
-        "median_filter_horizontal" if direction == "harmonic" else "median_filter_vertical"
-    )
-    assert f"{filter_name}: kernel_size {kernel} exceeds the maximum {CEILING}" in str(error)
+    assert f"{arg_name} must be an odd integer in [1, {CEILING}]" in str(error)
 
 
 def _kernels(direction: str, value: int) -> dict[str, int]:
@@ -144,14 +139,13 @@ def _event_outcome(hits, **separation) -> str:
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 @pytest.mark.parametrize("kernel", [INT_MAX, FIRST_ABOVE_CEILING])
 def test_oversized_odd_kernel_is_refused_by_name(entry, direction, kernel, tone) -> None:
-    """An odd kernel above the ceiling is refused by the filter it would drive.
+    """An odd kernel above the ceiling is refused under the caller's argument name.
 
-    Each filter carries its own copy of the guard, so one direction says nothing
-    about the other, and each entry point reaches both filters independently.
+    Each direction is checked on its own, so one says nothing about the other.
     """
     with pytest.raises(SonareError) as raised:
         entry(tone, SR, **_kernels(direction, kernel))
-    _assert_names_ceiling(raised.value, direction, kernel)
+    _assert_names_ceiling(raised.value, f"kernel_{direction}")
 
 
 @pytest.mark.parametrize("entry", HPSS_ENTRIES)
@@ -202,7 +196,7 @@ def test_a_wrapping_kernel_is_refused_by_name(entry, direction, passed, truncate
         entry(tone, SR, **_kernels(direction, passed))
     _assert_parameter_refusal(raised.value)
     assert f"kernel_{direction} must be an odd integer in [1, 2147483647]" in str(raised.value)
-    assert "exceeds the maximum" not in str(raised.value)
+    assert str(CEILING) not in str(raised.value)
 
 
 @pytest.mark.parametrize("entry", HPSS_ENTRIES)
@@ -261,12 +255,12 @@ def test_percussive_events_oversized_kernel_reaches_the_ceiling_guard(
     """This facade passes the kernel straight through, so the core refuses it.
 
     The separation fields are a versioned config rather than keyword-validated
-    arguments, so unlike ``hpss`` the refusal here comes back from the filter
-    itself and names the ceiling.
+    arguments, so unlike ``hpss`` the refusal comes back from the core and names
+    the ceiling under the caller's field name.
     """
     with pytest.raises(SonareError) as raised:
         extract_percussive_events(hits, SR, **{f"hpss_kernel_{direction}": kernel})
-    _assert_names_ceiling(raised.value, direction, kernel)
+    _assert_names_ceiling(raised.value, f"hpss_kernel_{direction}")
 
 
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
@@ -281,7 +275,7 @@ def test_percussive_events_refuse_a_wrapping_kernel_by_name(
         extract_percussive_events(hits, SR, **{arg_name: passed})
     _assert_parameter_refusal(raised.value)
     assert f"{arg_name} must be an integer in [1, 2147483647]" in str(raised.value)
-    assert "exceeds the maximum" not in str(raised.value)
+    assert str(CEILING) not in str(raised.value)
 
 
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
@@ -305,15 +299,10 @@ def test_percussive_events_never_separate_on_the_truncated_kernel(
 
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 def test_percussive_events_even_kernel_trips_the_core_parity_guard(direction, hits) -> None:
-    """Nothing pre-validates parity here either, so the core's own guard answers.
-
-    It shares the ceiling guard's error code and carries the generic message for
-    it, which is what tells the two refusals apart from the caller's side.
-    """
+    """Nothing pre-validates parity here either, so the core's one kernel refusal answers."""
     with pytest.raises(SonareError) as raised:
         extract_percussive_events(hits, SR, **{f"hpss_kernel_{direction}": INT_MAX_MINUS_ONE})
-    _assert_parameter_refusal(raised.value)
-    assert "exceeds the maximum" not in str(raised.value)
+    _assert_names_ceiling(raised.value, f"hpss_kernel_{direction}")
 
 
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
