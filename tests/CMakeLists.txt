@@ -972,6 +972,7 @@ if(BUILD_ARRANGEMENT)
     api/sonare_c_project_timeline_test.cpp
     api/sonare_c_project_tempo_test.cpp
     api/sonare_c_project_midi_meter_test.cpp
+    api/sonare_c_midi_scaling_test.cpp
     api/sonare_c_scene_warnings_test.cpp
     bindings/project_bounce_overflow_test.cpp
     bindings/project_bounce_tail_channel_test.cpp

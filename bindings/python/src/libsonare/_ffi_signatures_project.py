@@ -700,6 +700,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_bytes.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
 
     _configure_midi_naming_signatures(lib)
+    _configure_midi_scaling_signatures(lib)
     _configure_sample_bank_signatures(lib)
     _configure_project_extra_signatures(lib)
 
@@ -734,6 +735,26 @@ def _configure_sample_bank_signatures(lib: ctypes.CDLL) -> None:
         _fn = getattr(lib, _name)
         _fn.restype = ctypes.c_int32
         _fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+
+
+def _configure_midi_scaling_signatures(lib: ctypes.CDLL) -> None:
+    # MIDI 1.0 <-> MIDI 2.0 value scalers: (value, out) with the out width of the result.
+    _u8, _u16, _u32 = ctypes.c_uint8, ctypes.c_uint16, ctypes.c_uint32
+    for _name, (_arg, _out) in {
+        "sonare_midi_velocity_to_midi2": (_u8, _u16),
+        "sonare_midi_note_on_velocity_to_midi2": (_u8, _u16),
+        "sonare_midi2_velocity_to_midi1": (_u16, _u8),
+        "sonare_midi2_note_on_velocity_to_midi1": (_u16, _u8),
+        "sonare_midi_control_to_midi2": (_u8, _u32),
+        "sonare_midi_control14_to_midi2": (_u16, _u32),
+        "sonare_midi2_control_to_midi1": (_u32, _u8),
+        "sonare_midi2_control_to_midi1_control14": (_u32, _u16),
+        "sonare_midi_pitch_bend_to_midi2": (_u16, _u32),
+        "sonare_midi2_pitch_bend_to_midi1": (_u32, _u16),
+    }.items():
+        _fn = getattr(lib, _name)
+        _fn.restype = ctypes.c_int32
+        _fn.argtypes = [_arg, ctypes.POINTER(_out)]
 
 
 def _configure_midi_naming_signatures(lib: ctypes.CDLL) -> None:

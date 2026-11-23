@@ -1,6 +1,7 @@
 #include "c_api/midi_input_domains.h"
 #include "c_api/ppq_domains.h"
 #include "c_api/project_internal.h"
+#include "midi/control_value.h"
 #include "util/parameter_checks.h"
 
 using sonare::constants::kDefaultBpm;
@@ -498,6 +499,160 @@ SonareError sonare_midi2_per_note_management(double ppq, uint8_t group, uint8_t 
 #else
   return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, ppq, group,
                                                  channel, note, detach, reset, out);
+#endif
+}
+
+// ============================================================================
+// MIDI 1.0 <-> MIDI 2.0 value scaling
+// ============================================================================
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+// Refuses through `check`, then `out` being NULL, then writes what `scale` returns into `out`.
+template <typename Out, typename Check, typename Scale>
+SonareError emit_scaled(Out* out, Check&& check_value, Scale&& scale) {
+  SONARE_C_TRY
+  if (const SonareError err = run_validation(check_value); err != SONARE_OK) return err;
+  SONARE_C_REQUIRE_NONNULL(out);
+  *out = scale();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void no_check() {}
+
+}  // namespace
+#endif
+
+SonareError sonare_midi_velocity_to_midi2(uint8_t velocity, uint16_t* out_velocity16) {
+  SONARE_C_API_ENTRY;
+  if (out_velocity16) *out_velocity16 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(
+      out_velocity16, [&] { check_u7(velocity, "velocity"); },
+      [&] { return sonare::midi::Velocity16::from7(velocity).raw; });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, velocity,
+                                                 out_velocity16);
+#endif
+}
+
+SonareError sonare_midi_note_on_velocity_to_midi2(uint8_t velocity, uint16_t* out_velocity16) {
+  SONARE_C_API_ENTRY;
+  if (out_velocity16) *out_velocity16 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(
+      out_velocity16,
+      [&] {
+        check::integer_within(velocity, sonare_c_detail::kMidiNoteOnVelocityDomain, "velocity");
+      },
+      [&] { return sonare::midi::Velocity16::from7(velocity).raw; });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, velocity,
+                                                 out_velocity16);
+#endif
+}
+
+SonareError sonare_midi2_velocity_to_midi1(uint16_t velocity16, uint8_t* out_velocity) {
+  SONARE_C_API_ENTRY;
+  if (out_velocity) *out_velocity = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(out_velocity, no_check,
+                     [&] { return sonare::midi::scale_velocity_16_to_7(velocity16); });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, velocity16,
+                                                 out_velocity);
+#endif
+}
+
+SonareError sonare_midi2_note_on_velocity_to_midi1(uint16_t velocity16, uint8_t* out_velocity) {
+  SONARE_C_API_ENTRY;
+  if (out_velocity) *out_velocity = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(out_velocity, no_check,
+                     [&] { return sonare::midi::scale_note_on_velocity_16_to_7(velocity16); });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, velocity16,
+                                                 out_velocity);
+#endif
+}
+
+SonareError sonare_midi_control_to_midi2(uint8_t value, uint32_t* out_value32) {
+  SONARE_C_API_ENTRY;
+  if (out_value32) *out_value32 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(
+      out_value32, [&] { check_u7(value, "value"); },
+      [&] { return sonare::midi::Control32::from7(value).raw; });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, value,
+                                                 out_value32);
+#endif
+}
+
+SonareError sonare_midi_control14_to_midi2(uint16_t value14, uint32_t* out_value32) {
+  SONARE_C_API_ENTRY;
+  if (out_value32) *out_value32 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(
+      out_value32,
+      [&] {
+        check::integer_within(value14, sonare_c_detail::kMidiControl14ValueDomain, "value14");
+      },
+      [&] { return sonare::midi::Control32::from14_mcm(value14).raw; });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, value14,
+                                                 out_value32);
+#endif
+}
+
+SonareError sonare_midi2_control_to_midi1(uint32_t value32, uint8_t* out_value) {
+  SONARE_C_API_ENTRY;
+  if (out_value) *out_value = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(out_value, no_check, [&] { return sonare::midi::scale_cc_32_to_7(value32); });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, value32,
+                                                 out_value);
+#endif
+}
+
+SonareError sonare_midi2_control_to_midi1_control14(uint32_t value32, uint16_t* out_value14) {
+  SONARE_C_API_ENTRY;
+  if (out_value14) *out_value14 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(out_value14, no_check,
+                     [&] { return sonare::midi::scale_cc_32_to_14(value32); });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, value32,
+                                                 out_value14);
+#endif
+}
+
+SonareError sonare_midi_pitch_bend_to_midi2(uint16_t bend14, uint32_t* out_bend32) {
+  SONARE_C_API_ENTRY;
+  if (out_bend32) *out_bend32 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(
+      out_bend32,
+      [&] { check::integer_within(bend14, sonare_c_detail::kMidiPitchBend14Domain, "bend14"); },
+      [&] { return sonare::midi::Bend32::from14(bend14).raw; });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bend14,
+                                                 out_bend32);
+#endif
+}
+
+SonareError sonare_midi2_pitch_bend_to_midi1(uint32_t bend32, uint16_t* out_bend14) {
+  SONARE_C_API_ENTRY;
+  if (out_bend14) *out_bend14 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return emit_scaled(out_bend14, no_check,
+                     [&] { return sonare::midi::scale_bend_32_to_14(bend32); });
+#else
+  return sonare_c_detail::refuse_not_compiled_in(sonare_c_detail::Feature::kArrangement, bend32,
+                                                 out_bend14);
 #endif
 }
 

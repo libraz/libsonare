@@ -81,6 +81,18 @@ from ._project import (
 )
 from ._project_edit import PART_RIG_ALL_PARTS, PART_RIG_MODES
 from ._project_instruments import GsEfxRealization
+from ._project_midi import (
+    midi2_control_to_midi1,
+    midi2_control_to_midi1_control14,
+    midi2_note_on_velocity_to_midi1,
+    midi2_pitch_bend_to_midi1,
+    midi2_velocity_to_midi1,
+    midi_control14_to_midi2,
+    midi_control_to_midi2,
+    midi_note_on_velocity_to_midi2,
+    midi_pitch_bend_to_midi2,
+    midi_velocity_to_midi2,
+)
 from ._project_model import (
     ProjectCompileResult,
     ProjectDiagnostic,
@@ -1279,6 +1291,16 @@ __all__ = [
     "mixing_scene_preset_names",
     "mixing_assistant_suggest",
     "midi_to_hz",
+    "midi2_control_to_midi1",
+    "midi2_control_to_midi1_control14",
+    "midi2_note_on_velocity_to_midi1",
+    "midi2_pitch_bend_to_midi1",
+    "midi2_velocity_to_midi1",
+    "midi_control14_to_midi2",
+    "midi_control_to_midi2",
+    "midi_note_on_velocity_to_midi2",
+    "midi_pitch_bend_to_midi2",
+    "midi_velocity_to_midi2",
     "momentary_lufs",
     "nn_filter",
     "nnls_chroma",

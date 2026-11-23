@@ -24,6 +24,12 @@ inline constexpr sonare::util::check::NumericDomain kMidiChannelDomain =
 /// @brief What a UMP group accepts.
 inline constexpr sonare::util::check::NumericDomain kMidiUmpGroupDomain =
     sonare::util::check::integer_domain(0, 15);
+/// @brief What a MIDI 1.0 note-on velocity accepts; 0 is a note-off.
+inline constexpr sonare::util::check::NumericDomain kMidiNoteOnVelocityDomain =
+    sonare::util::check::integer_domain(1, 127);
+/// @brief What a 14-bit controller value accepts.
+inline constexpr sonare::util::check::NumericDomain kMidiControl14ValueDomain =
+    sonare::util::check::integer_domain(0, 16383);
 /// @brief What a 14-bit pitch bend value accepts.
 inline constexpr sonare::util::check::NumericDomain kMidiPitchBend14Domain =
     sonare::util::check::integer_domain(0, 16383);

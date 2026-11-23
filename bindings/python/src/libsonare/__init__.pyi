@@ -75,6 +75,16 @@ from ._project import synth_preset_patch as synth_preset_patch
 from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
 from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
 from ._project_instruments import GsEfxRealization as GsEfxRealization
+from ._project_midi import midi2_control_to_midi1 as midi2_control_to_midi1
+from ._project_midi import midi2_control_to_midi1_control14 as midi2_control_to_midi1_control14
+from ._project_midi import midi2_note_on_velocity_to_midi1 as midi2_note_on_velocity_to_midi1
+from ._project_midi import midi2_pitch_bend_to_midi1 as midi2_pitch_bend_to_midi1
+from ._project_midi import midi2_velocity_to_midi1 as midi2_velocity_to_midi1
+from ._project_midi import midi_control14_to_midi2 as midi_control14_to_midi2
+from ._project_midi import midi_control_to_midi2 as midi_control_to_midi2
+from ._project_midi import midi_note_on_velocity_to_midi2 as midi_note_on_velocity_to_midi2
+from ._project_midi import midi_pitch_bend_to_midi2 as midi_pitch_bend_to_midi2
+from ._project_midi import midi_velocity_to_midi2 as midi_velocity_to_midi2
 from ._project_model import ProjectCompileResult as ProjectCompileResult
 from ._project_model import ProjectDiagnostic as ProjectDiagnostic
 from ._project_model import ProjectDiagnosticCode as ProjectDiagnosticCode

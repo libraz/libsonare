@@ -1204,3 +1204,103 @@ class _ProjectMidiMixin:
         return _midi_event_from_c(out_event)
 
     # -- MIR ----------------------------------------------------------------
+
+
+def _scaled(name: str, value: ctypes._SimpleCData, out_type: type[ctypes._SimpleCData]) -> int:
+    """Call the C scaler ``name`` on an already narrowed ``value`` and return its result."""
+    out = out_type(0)
+    _check(getattr(_get_lib(), name)(value, ctypes.byref(out)))
+    return int(out.value)
+
+
+@_entry("midi_velocity_to_midi2")
+def midi_velocity_to_midi2(velocity: int) -> int:
+    """Widen a MIDI 1.0 velocity (0..127) to MIDI 2.0's 16 bits; 0 stays 0.
+
+    Widening is min-center-max: 64 becomes 0x8000 and 127 becomes 0xFFFF.
+    """
+    return _scaled(
+        "sonare_midi_velocity_to_midi2", _to_c_uint8(velocity, "velocity"), ctypes.c_uint16
+    )
+
+
+@_entry("midi_note_on_velocity_to_midi2")
+def midi_note_on_velocity_to_midi2(velocity: int) -> int:
+    """Widen a MIDI 1.0 note-on velocity (1..127) to MIDI 2.0's 16 bits.
+
+    0 is refused: a MIDI 1.0 note-on with velocity 0 is a note-off.
+    """
+    return _scaled(
+        "sonare_midi_note_on_velocity_to_midi2",
+        _to_c_uint8(velocity, "velocity"),
+        ctypes.c_uint16,
+    )
+
+
+@_entry("midi2_velocity_to_midi1")
+def midi2_velocity_to_midi1(velocity16: int) -> int:
+    """Narrow a MIDI 2.0 velocity to MIDI 1.0's 7 bits by truncation (the top 7 bits)."""
+    return _scaled(
+        "sonare_midi2_velocity_to_midi1", _to_c_uint16(velocity16, "velocity16"), ctypes.c_uint8
+    )
+
+
+@_entry("midi2_note_on_velocity_to_midi1")
+def midi2_note_on_velocity_to_midi1(velocity16: int) -> int:
+    """Narrow a MIDI 2.0 note-on velocity to MIDI 1.0's 7 bits; a result of 0 reads 1.
+
+    Every MIDI 2.0 note-on sounds, and a MIDI 1.0 note-on with velocity 0 would be a note-off.
+    """
+    return _scaled(
+        "sonare_midi2_note_on_velocity_to_midi1",
+        _to_c_uint16(velocity16, "velocity16"),
+        ctypes.c_uint8,
+    )
+
+
+@_entry("midi_control_to_midi2")
+def midi_control_to_midi2(value: int) -> int:
+    """Widen a 7-bit controller value (0..127) to MIDI 2.0's 32 bits; 64 is 0x80000000."""
+    return _scaled("sonare_midi_control_to_midi2", _to_c_uint8(value, "value"), ctypes.c_uint32)
+
+
+@_entry("midi_control14_to_midi2")
+def midi_control14_to_midi2(value14: int) -> int:
+    """Widen a 14-bit controller value (0..16383) to MIDI 2.0's 32 bits; 8192 is 0x80000000."""
+    return _scaled(
+        "sonare_midi_control14_to_midi2", _to_c_uint16(value14, "value14"), ctypes.c_uint32
+    )
+
+
+@_entry("midi2_control_to_midi1")
+def midi2_control_to_midi1(value32: int) -> int:
+    """Narrow a MIDI 2.0 controller value to 7 bits by truncation (the top 7 bits)."""
+    return _scaled(
+        "sonare_midi2_control_to_midi1", _to_c_uint32(value32, "value32"), ctypes.c_uint8
+    )
+
+
+@_entry("midi2_control_to_midi1_control14")
+def midi2_control_to_midi1_control14(value32: int) -> int:
+    """Narrow a MIDI 2.0 controller value to 14 bits by truncation (the top 14 bits)."""
+    return _scaled(
+        "sonare_midi2_control_to_midi1_control14",
+        _to_c_uint32(value32, "value32"),
+        ctypes.c_uint16,
+    )
+
+
+@_entry("midi_pitch_bend_to_midi2")
+def midi_pitch_bend_to_midi2(bend14: int) -> int:
+    """Widen a 14-bit pitch bend (0..16383) to MIDI 2.0's 32 bits; the center 8192 is 0x80000000."""
+    return _scaled(
+        "sonare_midi_pitch_bend_to_midi2", _to_c_uint16(bend14, "bend14"), ctypes.c_uint32
+    )
+
+
+@_entry("midi2_pitch_bend_to_midi1")
+def midi2_pitch_bend_to_midi1(bend32: int) -> int:
+    """Narrow a MIDI 2.0 pitch bend to 14 bits by truncation (the top 14 bits)."""
+    return _scaled(
+        "sonare_midi2_pitch_bend_to_midi1", _to_c_uint32(bend32, "bend32"), ctypes.c_uint16
+    )

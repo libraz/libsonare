@@ -302,6 +302,13 @@ reason = "Inverts a CQT magnitude to audio; sonare_cqt computes one."
 [[allow]]
 check = "options-struct:suffix"
 surface = "c"
+name = "sonare_midi*_to_midi[12]*"
+category = "distinct-operation"
+reason = "Rescales one MIDI 1.0 or 2.0 value to the other width, where sonare_midi_note_on, sonare_midi_pitch_bend and their MIDI 2.0 forms pack a whole message."
+
+[[allow]]
+check = "options-struct:suffix"
+surface = "c"
 name = "sonare_vqt_to_audio"
 category = "distinct-operation"
 reason = "Inverts a VQT magnitude to audio; sonare_vqt computes one."

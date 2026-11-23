@@ -287,6 +287,51 @@ SonareError sonare_midi2_per_note_management(double ppq, uint8_t group, uint8_t 
                                              uint8_t note, int detach, int reset,
                                              SonareMidiEventPod* out);
 
+// MIDI 1.0 <-> MIDI 2.0 value scaling, the conversions the packers above and SMF
+// import/export apply. Widening is min-center-max: a value at or below the
+// center (64, or 8192 for 14-bit) is a pure left shift, so the center lands on
+// exactly 0x8000 / 0x80000000, and a value above it repeats its low bits to
+// reach all ones at the maximum. Narrowing truncates to the top bits, so
+// widen-then-narrow returns the input exactly while narrow-then-widen does not.
+// Each zeroes its out parameter first and returns SONARE_ERROR_INVALID_PARAMETER
+// for a NULL out parameter or a value outside its stated range; no input is masked.
+
+/// @brief Widens a MIDI 1.0 velocity (0..127) to MIDI 2.0's 16 bits; 0 stays 0.
+SonareError sonare_midi_velocity_to_midi2(uint8_t velocity, uint16_t* out_velocity16);
+
+/// @brief Widens a MIDI 1.0 note-on velocity (1..127) to MIDI 2.0's 16 bits.
+/// @details 0 is refused: a MIDI 1.0 note-on with velocity 0 is a note-off, so it
+///          has no note-on velocity to widen.
+SonareError sonare_midi_note_on_velocity_to_midi2(uint8_t velocity, uint16_t* out_velocity16);
+
+/// @brief Narrows a MIDI 2.0 velocity to MIDI 1.0's 7 bits (the top 7 bits).
+SonareError sonare_midi2_velocity_to_midi1(uint16_t velocity16, uint8_t* out_velocity);
+
+/// @brief Narrows a MIDI 2.0 note-on velocity to MIDI 1.0's 7 bits.
+/// @details A result of 0 reads 1: every MIDI 2.0 note-on sounds, and a MIDI 1.0
+///          note-on with velocity 0 would be a note-off.
+SonareError sonare_midi2_note_on_velocity_to_midi1(uint16_t velocity16, uint8_t* out_velocity);
+
+/// @brief Widens a 7-bit controller value (0..127) to MIDI 2.0's 32 bits; 64 is 0x80000000.
+SonareError sonare_midi_control_to_midi2(uint8_t value, uint32_t* out_value32);
+
+/// @brief Widens a 14-bit controller value (0..16383) to MIDI 2.0's 32 bits; 8192 is
+///        0x80000000.
+SonareError sonare_midi_control14_to_midi2(uint16_t value14, uint32_t* out_value32);
+
+/// @brief Narrows a MIDI 2.0 controller value to 7 bits (the top 7 bits).
+SonareError sonare_midi2_control_to_midi1(uint32_t value32, uint8_t* out_value);
+
+/// @brief Narrows a MIDI 2.0 controller value to 14 bits (the top 14 bits).
+SonareError sonare_midi2_control_to_midi1_control14(uint32_t value32, uint16_t* out_value14);
+
+/// @brief Widens a 14-bit pitch bend (0..16383) to MIDI 2.0's 32 bits; the center 8192 is
+///        0x80000000.
+SonareError sonare_midi_pitch_bend_to_midi2(uint16_t bend14, uint32_t* out_bend32);
+
+/// @brief Narrows a MIDI 2.0 pitch bend to 14 bits (the top 14 bits).
+SonareError sonare_midi2_pitch_bend_to_midi1(uint32_t bend32, uint16_t* out_bend14);
+
 /// @brief Returns the General MIDI Level 1 instrument name for @p program.
 /// @details The returned pointer is a static table entry owned by libsonare; it remains valid for
 ///          the program lifetime, nothing invalidates it, and it must never be

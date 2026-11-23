@@ -4401,6 +4401,28 @@
       "sentinel": null
     },
     {
+      "entry": "midi_control14_to_midi2",
+      "param": "value14",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 16383,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_control_to_midi2",
+      "param": "value",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
       "entry": "midi_note_off",
       "param": "channel",
       "kind": "integer",
@@ -4504,6 +4526,17 @@
       "param": "velocity",
       "kind": "integer",
       "lo": 0,
+      "hi": 127,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_note_on_velocity_to_midi2",
+      "param": "velocity",
+      "kind": "integer",
+      "lo": 1,
       "hi": 127,
       "lo_included": true,
       "hi_included": true,
@@ -4604,6 +4637,17 @@
       "kind": "real",
       "lo": 0,
       "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_pitch_bend_to_midi2",
+      "param": "bend14",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 16383,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
@@ -4725,6 +4769,17 @@
       "kind": "real",
       "lo": 0,
       "hi": 1000000000000,
+      "lo_included": true,
+      "hi_included": true,
+      "stricter": null,
+      "sentinel": null
+    },
+    {
+      "entry": "midi_velocity_to_midi2",
+      "param": "velocity",
+      "kind": "integer",
+      "lo": 0,
+      "hi": 127,
       "lo_included": true,
       "hi_included": true,
       "stricter": null,
