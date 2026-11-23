@@ -166,15 +166,16 @@ class TestNormalizeStereoSilence:
         ],
     )
     def test_a_silent_pair_is_refused(self, call: object, target_db: float) -> None:
-        # Silence has no level to scale toward, so no gain is a guess.
+        # Silence has no level to scale toward, so no gain is a guess. The pair is measured as
+        # one, so the refusal names both channels.
         silence = np.zeros(512, dtype=np.float32)
-        with pytest.raises(SonareValueError, match="audio has no measurable level"):
+        with pytest.raises(SonareValueError, match=r": left and right have no measurable level$"):
             call(silence, silence, SR, target_db=target_db)  # type: ignore[operator]
 
     @pytest.mark.parametrize("mode", ["peak", "rms"])
     def test_a_silent_take_is_refused_in_each_mono_mode(self, mode: str) -> None:
         silence = np.zeros(512, dtype=np.float32)
-        with pytest.raises(SonareValueError, match="normalize: audio has no measurable level"):
+        with pytest.raises(SonareValueError, match=r"^normalize: samples has no measurable level$"):
             libsonare.normalize(silence, SR, mode=mode)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize(

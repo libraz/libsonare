@@ -668,7 +668,11 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
   const Audio reference_audio =
       Audio::from_buffer(reference, reference_length, reference_sample_rate);
   const Audio source_audio = Audio::from_buffer(source, source_length, sample_rate);
-  const auto matched = sonare::mastering::match::ab_match_loudness(reference_audio, source_audio);
+  // The core names the reference `a` and the matched side `b`.
+  const std::array<CName, 2> names{{{"a", "reference"}, {"b", "source"}}};
+  const auto matched = with_c_names(names, [&] {
+    return sonare::mastering::match::ab_match_loudness(reference_audio, source_audio);
+  });
   if (out_match) {
     *out_match = SonareLoudnessMatch{matched.reference_lufs, matched.source_lufs,
                                      matched.applied_gain_db, matched.matched_true_peak_dbtp};
@@ -702,7 +706,10 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
   const sonare::mastering::match::StereoAudioPair source{
       Audio::from_buffer(source_left, source_length, sample_rate),
       Audio::from_buffer(source_right, source_length, sample_rate)};
-  const auto matched = sonare::mastering::match::ab_match_loudness_stereo(reference, source);
+  const std::array<CPairName, 2> pairs{{{"reference", "reference_left", "reference_right"},
+                                        {"source", "source_left", "source_right"}}};
+  const auto matched = with_c_pair_names(
+      pairs, [&] { return sonare::mastering::match::ab_match_loudness_stereo(reference, source); });
   const std::size_t length = matched.b.left.size();
   std::unique_ptr<float[]> left;
   std::unique_ptr<float[]> right;

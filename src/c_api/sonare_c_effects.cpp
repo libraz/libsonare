@@ -36,6 +36,8 @@ using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
+// The level normalizers name the buffer they measure "audio"; the mono entries call it `samples`.
+const std::array<CName, 1> kNormalizeNames{{{"audio", "samples"}}};
 // The core spells the STFT framing bare; at a folded entry they are members of `options`.
 const std::array<CName, 2> kStftOptionNames{
     {{"n_fft", "options.n_fft"}, {"hop_length", "options.hop_length"}}};
@@ -323,8 +325,10 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
   }
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
-  return run_mono_prevalidated(samples, length, sample_rate, out, out_length,
-                               [target_db](const Audio& a) { return normalize(a, target_db); });
+  return run_mono_prevalidated(
+      samples, length, sample_rate, out, out_length, [target_db](const Audio& a) {
+        return with_c_names(kNormalizeNames, [&] { return normalize(a, target_db); });
+      });
 }
 
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
@@ -338,8 +342,9 @@ SonareError sonare_normalize_rms(const float* samples, size_t length, int sample
   SONARE_C_REQUIRE_NONNULL(out);
   SONARE_C_REQUIRE_NONNULL(out_length);
   return run_mono_prevalidated(
-      samples, length, sample_rate, out, out_length,
-      [target_db](const Audio& a) { return normalize_rms(a, target_db, true); });
+      samples, length, sample_rate, out, out_length, [target_db](const Audio& a) {
+        return with_c_names(kNormalizeNames, [&] { return normalize_rms(a, target_db, true); });
+      });
 }
 
 SonareError sonare_fade(const float* samples, size_t length, int sample_rate, float fade_in_sec,
@@ -491,8 +496,11 @@ SonareError run_normalize_stereo(const char* left_name, const char* right_name, 
   SONARE_C_REQUIRE_NONNULL(out_length);
 
   SONARE_C_TRY
-  const auto result = normalize_pair(Audio::from_buffer(left, length, sample_rate),
-                                     Audio::from_buffer(right, length, sample_rate));
+  const std::array<CPairName, 1> pair{{{"audio", left_name, right_name}}};
+  const auto result = with_c_pair_names(pair, [&] {
+    return normalize_pair(Audio::from_buffer(left, length, sample_rate),
+                          Audio::from_buffer(right, length, sample_rate));
+  });
   copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), out_left,
                        out_right, out_length);
   return SONARE_OK;

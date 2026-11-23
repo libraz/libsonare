@@ -7920,7 +7920,7 @@ to = "LoudnessMatchResult.reference_lufs"
 changed = "a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness"
 domain = "mastering"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_as_having_no_loudness_to_match"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_naming_it"
 
 [[entry]]
 kind = "field"
@@ -7929,7 +7929,7 @@ to = "LoudnessMatchResult.source_lufs"
 changed = "a silent or below-gate take is refused with SonareValueError ('has no measurable loudness') instead of reading a non-finite loudness"
 domain = "mastering"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_as_having_no_loudness_to_match"
+test = "bindings/python/tests/test_mastering_ab_match.py::test_a_silent_take_is_refused_naming_it"
 
 [[entry]]
 kind = "field"
@@ -13941,10 +13941,10 @@ test = "bindings/python/tests/test_streaming_loudness_gain.py::test_silence_leav
 [[entry]]
 kind = "field"
 old = "SilenceCommonReport.silence_ceiling_db"
-changed = "float -> float | None: None when any signal's peak is 0 or it holds an exactly zero frame"
+changed = "float -> float | None: None (not measured) when every signal is silent; +inf when every signal with a level holds an exactly zero frame"
 domain = "analysis"
 rule = "silence-is-infinite"
-test = "bindings/python/tests/test_split_silence_common.py::test_report_leaves_the_ceiling_unmeasured"
+test = "bindings/python/tests/test_split_silence_common.py::test_report_leaves_the_ceiling_unmeasured_when_every_signal_is_silent"
 
 [[entry]]
 kind = "field"

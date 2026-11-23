@@ -157,6 +157,32 @@ auto with_c_names(const std::array<CName, N>& names, Call&& call) -> decltype(ca
         e.caller_spelled());
   }
 }
+/// @brief A core refusal subject that two C parameters carry together ("audio" -> "left",
+///        "right" for a stereo pair measured as one).
+struct CPairName {
+  const char* core;
+  const char* first;
+  const char* second;
+};
+/// @brief Runs @p call, rethrowing a predicate refusal of a subject @p names lists as the relation
+///        "<first> and <second> <predicate>", so a cause both parameters carry names them both.
+template <std::size_t N, typename Call>
+auto with_c_pair_names(const std::array<CPairName, N>& names, Call&& call) -> decltype(call()) {
+  try {
+    return call();
+  } catch (const sonare::SonareParameterRefusal& e) {
+    if (e.form() != sonare::SonareParameterRefusal::Form::Predicate) throw;
+    for (const CPairName& row : names) {
+      if (e.subject() != row.core) continue;
+      std::string predicate = e.predicate();
+      if (predicate.compare(0, 4, "has ") == 0) predicate.replace(0, 3, "have");
+      if (predicate.compare(0, 3, "is ") == 0) predicate.replace(0, 2, "are");
+      throw sonare::SonareParameterRefusal::relation(e.code(), {row.first, row.second},
+                                                     "{0} and {1} " + predicate);
+    }
+    throw;
+  }
+}
 /// @brief Records @p code with @p msg, a string with static storage duration.
 /// @details Never allocates: the message is read through the fallback pointer
 ///          instead of being copied, so a refusal made before any buffer exists

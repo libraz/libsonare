@@ -17,6 +17,7 @@ from libsonare import (
     SonareValueError,
     lufs,
     mastering_ab_match_loudness,
+    mastering_ab_match_loudness_stereo,
 )
 
 from ._helpers import LIB_AVAILABLE, sine
@@ -59,10 +60,31 @@ def test_reported_peak_is_the_matched_take_not_the_source() -> None:
     assert result.matched_true_peak_dbtp > 20.0 * np.log10(float(np.max(np.abs(SOURCE))))
 
 
-def test_a_silent_take_is_refused_as_having_no_loudness_to_match() -> None:
+@pytest.mark.parametrize("silent_role", ["source", "reference"])
+def test_a_silent_take_is_refused_naming_it(silent_role: str) -> None:
     silent = np.zeros(SR // 2, dtype=np.float32)
-    with pytest.raises(SonareValueError, match="has no measurable loudness"):
-        mastering_ab_match_loudness(silent, REFERENCE, SR)
+    takes = {"source": SOURCE, "reference": REFERENCE, silent_role: silent}
+    with pytest.raises(
+        SonareValueError,
+        match=rf"^mastering_ab_match_loudness: {silent_role} has no measurable loudness$",
+    ):
+        mastering_ab_match_loudness(takes["source"], takes["reference"], SR)
+
+
+@pytest.mark.parametrize("silent_role", ["source", "reference"])
+def test_a_silent_stereo_take_is_refused_naming_both_its_channels(silent_role: str) -> None:
+    silent = np.zeros(SR // 2, dtype=np.float32)
+    takes = {"source": SOURCE, "reference": REFERENCE, silent_role: silent}
+    with pytest.raises(
+        SonareValueError,
+        match=(
+            rf"^mastering_ab_match_loudness_stereo: {silent_role}_left and {silent_role}_right "
+            r"have no measurable loudness$"
+        ),
+    ):
+        mastering_ab_match_loudness_stereo(
+            takes["source"], takes["source"], takes["reference"], takes["reference"], SR
+        )
 
 
 def test_invalid_sample_rate_is_rejected_by_the_c_abi() -> None:

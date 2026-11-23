@@ -183,6 +183,7 @@ Before merging, the maintainer brings a change here to the following:
 - A bank select is `{ msb, lsb }` on Node and WASM and `bank_msb`/`bank_lsb` in Python.
 - A type that mirrors part of a platform interface carries `@mirrors <Interface>` (for example `@mirrors AudioContext`); the members the interface also declares keep the platform's names, and the surface check lists them instead of flagging them.
 - A refusal names the real parameter (`options.<member>`, `config.<member>`) and is raised as `TypeError`/`RangeError` (`SonareValueError` in Python) or a coded `SonareError` by cause.
+- A cause two parameters share names both (`left and right have no measurable level`); `make test-python` fails on a refusal whose subject is no parameter of its entry.
 - `make surface-check` returns rc=0 on a change that touches a public name, token, default or flag; CI runs it too.
 - A renamed, removed or reshaped public name has its row in the surface's ledger under `tools/api/migration/`, rendered by `make upgrade-notes`.
 - `UPGRADING.md` is generated from the ledgers, and `make lint` (through `make lint-static`, which CI runs) fails while the tracked file differs from the render, so a ledger edit and `make upgrade-notes` land in one commit. A row that quotes the member's new signature (`arm(id, state?)`) matches its declaration on Node, WASM and Python.
