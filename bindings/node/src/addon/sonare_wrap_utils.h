@@ -24,6 +24,10 @@ namespace sonare_node {
 ///        generic text for @p err.
 std::string ErrorMessageForCode(SonareError err);
 
+/// @brief A parameter refusal's text as a JS caller reads it, its presence tokens worded as
+///        "omitted" / "given" rather than the C spelling's NULL.
+std::string RefusalText(const sonare::SonareParameterRefusal& refusal);
+
 /// The exception text without a leading C-entry prefix, which the public entry replaces; a
 /// parameter refusal is rendered in request keys from its subjects.
 std::string ExceptionMessage(const std::exception& e);

@@ -252,6 +252,11 @@ val js_capabilities() {
 // here instead of reaching JS as Unknown/99.
 namespace {
 
+// A refusal's text as a JS caller reads it, its presence tokens worded "omitted" / "given".
+std::string refusal_text(const sonare::SonareParameterRefusal& refusal) {
+  return refusal.text(sonare::PresenceSpelling::kJs);
+}
+
 // A refusal as the plain parts a facade hands back to renderRefusal; text is what the caller read.
 val refusal_object(const sonare::SonareParameterRefusal& refusal) {
   const sonare_c_detail::RefusalParts parts = sonare_c_detail::refusal_parts(refusal);
@@ -263,7 +268,7 @@ val refusal_object(const sonare::SonareParameterRefusal& refusal) {
   out.set("renamedTo", parts.renamed_to);
   out.set("expected", parts.expected);
   out.set("callerSpelled", parts.caller_spelled);
-  out.set("text", std::string(refusal.what()));
+  out.set("text", refusal_text(refusal));
   if (parts.domain) {
     val domain = val::object();
     if (parts.domain->lo) domain.set("lo", *parts.domain->lo);
@@ -320,7 +325,7 @@ val js_render_refusal(const val& refusal, const val& names, const val& scales) {
   const sonare::SonareParameterRefusal rendered = sonare_c_detail::respelled_refusal(
       parsed, pointers.data(), factors.empty() ? nullptr : factors.data(), pointers.size());
   val out = val::object();
-  out.set("message", std::string(rendered.what()));
+  out.set("message", refusal_text(rendered));
   out.set("refusal", refusal_object(rendered));
   return out;
 }
@@ -339,7 +344,7 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
     // A core refusal not yet in the caller's spelling is rendered in request-object keys.
     if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(base)) {
       const sonare::SonareParameterRefusal shown = sonare::util::check::camel_spelled(*refusal);
-      message = shown.what();
+      message = refusal_text(shown);
       val record = refusal_object(shown);
       const auto* from_c = dynamic_cast<const CEntryRefusal*>(refusal);
       record.set("cEntry", from_c != nullptr && !from_c->c_entry().empty() ? val(from_c->c_entry())

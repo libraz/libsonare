@@ -107,13 +107,13 @@ describe('Sonare WASM part rig', () => {
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
           RangeError,
         ).message,
-      ).toBe('Project.setPartRig: insertsJson must be NULL unless mode is chain');
+      ).toBe('Project.setPartRig: insertsJson must be omitted unless mode is chain');
       expect(
         expectRefusalOf(
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain' }),
           RangeError,
         ).message,
-      ).toBe('Project.setPartRig: insertsJson must not be NULL when mode is chain');
+      ).toBe('Project.setPartRig: insertsJson must be given when mode is chain');
       expect(
         expectRefusalOf(
           () => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [] }),

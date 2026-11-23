@@ -26,11 +26,15 @@ namespace sonare_node {
 
 using sonare::constants::kDefaultNFft;
 
+std::string RefusalText(const sonare::SonareParameterRefusal& refusal) {
+  return refusal.text(sonare::PresenceSpelling::kJs);
+}
+
 std::string ErrorMessageForCode(SonareError err) {
   // A recorded parameter refusal is rendered in request keys from its subjects, never parsed.
   if (const std::optional<sonare::SonareParameterRefusal> shown =
           sonare_field_spelling::node::SpelledLastRefusal()) {
-    return shown->what();
+    return RefusalText(*shown);
   }
   const char* detail = sonare_last_error_message();
   if (detail != nullptr && detail[0] != '\0') {
@@ -41,7 +45,7 @@ std::string ErrorMessageForCode(SonareError err) {
 
 std::string ExceptionMessage(const std::exception& e) {
   if (const auto* refusal = dynamic_cast<const sonare::SonareParameterRefusal*>(&e)) {
-    return sonare::util::check::camel_spelled(*refusal).what();
+    return RefusalText(sonare::util::check::camel_spelled(*refusal));
   }
   const char* what = dynamic_cast<const sonare::SonareException*>(&e) != nullptr
                          ? e.what()
@@ -82,7 +86,7 @@ Napi::Object RefusalObject(Napi::Env env, const sonare::SonareParameterRefusal& 
   out.Set("renamedTo", parts.renamed_to);
   out.Set("expected", parts.expected);
   out.Set("callerSpelled", parts.caller_spelled);
-  out.Set("text", std::string(refusal.what()));
+  out.Set("text", RefusalText(refusal));
   if (parts.domain) {
     Napi::Object domain = Napi::Object::New(env);
     if (parts.domain->lo) domain.Set("lo", *parts.domain->lo);
@@ -177,7 +181,7 @@ Napi::Value RenderRefusal(const Napi::CallbackInfo& info) {
   const sonare::SonareParameterRefusal rendered = sonare_c_detail::respelled_refusal(
       refusal, pointers.data(), scales.empty() ? nullptr : scales.data(), pointers.size());
   Napi::Object out = Napi::Object::New(env);
-  out.Set("message", std::string(rendered.what()));
+  out.Set("message", RefusalText(rendered));
   out.Set("refusal", RefusalObject(env, rendered));
   return out;
   SONARE_NODE_CATCH(env)
@@ -274,7 +278,7 @@ void ThrowSonareErrorFlattening(Napi::Env env, SonareError err, const char* c_ro
     ThrowSonareError(env, err);
     return;
   }
-  Napi::Error error = MakeSonareError(env, err, shown->what(), shown->shape_error());
+  Napi::Error error = MakeSonareError(env, err, RefusalText(*shown), shown->shape_error());
   AttachRefusal(env, error.Value(), *shown, LastRefusalEntry());
   error.ThrowAsJavaScriptException();
 }
