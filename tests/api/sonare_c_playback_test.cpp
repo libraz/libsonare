@@ -564,6 +564,13 @@ TEST_CASE("playback loudness meter integrates pushed frames", "[playback][capi]"
 
   float lufs = 0.0f;
   CHECK(sonare_playback_loudness_meter_integrated_lufs(meter, &lufs) == SONARE_OK);
+  // 4096 frames is 85 ms, short of the 400 ms window the first gating block needs.
+  CHECK(std::isnan(lufs));
+
+  for (int push = 0; push < 5; ++push) {
+    CHECK(sonare_playback_loudness_meter_push_interleaved(meter, block.data(), 4096) == SONARE_OK);
+  }
+  CHECK(sonare_playback_loudness_meter_integrated_lufs(meter, &lufs) == SONARE_OK);
   CHECK(std::isfinite(lufs));
   CHECK(lufs < 0.0f);
 
