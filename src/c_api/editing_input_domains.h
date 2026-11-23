@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "util/parameter_checks.h"
+#include "util/resource_limits.h"
 
 namespace sonare_c_detail {
 
@@ -22,9 +23,11 @@ inline constexpr sonare::util::check::NumericDomain kVocalCreateFrameLengthDomai
 /// @brief What the pitch analysis hop of a vocal session's create options accepts.
 inline constexpr sonare::util::check::NumericDomain kVocalCreateHopLengthDomain =
     sonare::util::check::integer_domain_of<uint32_t>(1);
-/// @brief What a given spectrum-meter FFT size accepts; 0 selects the library default.
+/// @brief What a given spectrum-meter FFT size accepts; 0 selects the library default. The
+///        ceiling is the spectrum meter's FFT resource limit.
 inline constexpr sonare::util::check::NumericDomain kSpectrumNFftDomain =
-    sonare::util::check::integer_domain(1, 1LL << 30);
+    sonare::util::check::integer_domain(
+        2, static_cast<long long>(sonare::resource::kDefaultSpectrumResourceLimits.max_fft_size));
 /// @brief What a given spectrum-meter octave-smoothing fraction accepts; 0 selects the default.
 inline constexpr sonare::util::check::NumericDomain kSpectrumOctaveFractionDomain =
     sonare::util::check::integer_domain_of<int>(1);

@@ -1067,3 +1067,20 @@ TEST_CASE("a mastering value inside its row's domain is not refused under the ro
           "[numeric_domains][c_api]") {
   require_inside_accepted(built_table(), probes(), mastering_inside_value);
 }
+
+TEST_CASE("a spectrum FFT size is accepted up to the meter's resource limit and refused past it",
+          "[numeric_domains][c_api]") {
+  constexpr double kLimit = 4194304.0;
+  const std::map<std::string, Probe> entries = probes();
+  for (const char* entry :
+       {"audio_spectrum", "audio_spectrum_frame", "metering_spectrum", "metering_spectrum_frame"}) {
+    INFO(entry);
+    const Probe& probe = entries.at(entry);
+    CHECK(probe("n_fft", kLimit) == SONARE_OK);
+    REQUIRE(probe("n_fft", kLimit * 2.0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(last_subject() == "n_fft");
+    CHECK(std::string(sonare_last_error_message())
+              .find(sonare::util::refusal::power_of_two_predicate(2, 4194304)) !=
+          std::string::npos);
+  }
+}
