@@ -82,4 +82,12 @@ describe('acoustic values that were not measured', () => {
     }
     expect(() => roomGeometryFromEstimate({ estimate })).toThrow(/no measurable dimensions/);
   });
+
+  it('reads a lone impulse, whose direct sound leaves nothing outside its window, as an infinite DRR', () => {
+    const samples = new Float32Array(48000);
+    samples[100] = 1;
+    const estimate = estimateRoom(samples, 48000);
+    expect('drrDb' in estimate).toBe(true);
+    expect(estimate.drrDb).toBe(Number.POSITIVE_INFINITY);
+  });
 });
